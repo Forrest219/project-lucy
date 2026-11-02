@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RowPolicyDnfPreview } from "../components/admin/RowPolicyDnfPreview";
 import { RoleRowPolicyPanel } from "../components/RoleRowPolicyPanel";
@@ -224,6 +225,49 @@ describe("RowPolicyDnfPreview — 可选 prop（呈现修订 Spec §5.4）", () 
     render(<RowPolicyDnfPreview effectiveRowGrant={TWO_ARMS} />);
     expect(screen.getByTestId("row-policy-dnf-union-arm-0")).toHaveTextContent("region 等于 East");
     expect(screen.queryByText("或")).not.toBeInTheDocument();
+  });
+
+  it("SC-25／SC-27：来源角色在标题下的次要行；默认标题与 stack 不变", () => {
+    render(
+      <RowPolicyDnfPreview effectiveRowGrant={{ kind: "all" }} roleIds={["east_role"]} />
+    );
+    const heading = screen.getByRole("heading", { name: "最终行约束（角色并集）" });
+    expect(heading).not.toHaveTextContent("来源角色");
+    expect(screen.getByTestId("row-policy-dnf-source-roles")).toHaveTextContent("来源角色：east_role");
+  });
+
+  it("SC-26／SC-27：subjectRowLayout=columns 时 Agent 两列；默认无 subject-row 网格", () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <RowPolicyDnfPreview
+          subjectRowLayout="columns"
+          finalRowsByAgent={[
+            {
+              agentId: "agent_a",
+              finalRows: { kind: "all" },
+              summaryHref: "/admin/authorization-summary?kind=agent&id=agent_a"
+            }
+          ]}
+        />
+      </MemoryRouter>
+    );
+    const row = screen.getByTestId("row-policy-dnf-agent-agent_a");
+    const columns = within(row).getByTestId("row-policy-view-subject-row");
+    expect(columns.className).toMatch(/grid/);
+    expect(within(columns).getByText("agent_a")).toBeInTheDocument();
+    expect(within(columns).getByRole("link", { name: "授权摘要" })).toBeInTheDocument();
+    unmount();
+
+    render(
+      <RowPolicyDnfPreview
+        finalRowsByAgent={[{ agentId: "agent_a", finalRows: { kind: "all" } }]}
+      />
+    );
+    expect(
+      within(screen.getByTestId("row-policy-dnf-agent-agent_a")).queryByTestId(
+        "row-policy-view-subject-row"
+      )
+    ).not.toBeInTheDocument();
   });
 });
 

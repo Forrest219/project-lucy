@@ -2,19 +2,19 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 呈现修订 / **v0.2 已定稿待实施** |
+| 文档类型 / 版本 | 呈现修订 / **v0.2 功能合同已收口** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号。不升 Spec 187 版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（图面几何）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.2 已定稿待实施**（2026-11-01）。交叉审阅意见已按委托人裁定修订并定稿。本条收口不表示可上线 |
+| 状态 | **v0.2 功能合同已收口**（2026-11-01）。细柱、`labelBlock`、刻度封顶、四态面积流带、计量/命中解耦与按对端 y 分槽已落地。SC-01–SC-16 全部有出处（自动化 SC-01–SC-15 全绿；SC-16 桌面截图已落盘）。实施记录见 [`docs/reviews/2026-11-01-access-map-geometry-implementation-notes.md`](../reviews/2026-11-01-access-map-geometry-implementation-notes.md)。本条收口不表示可上线 |
 | 决策来源 | 2026-11-01 几何复盘结论（委托人批准）＋交叉审阅 [`inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md`](../../inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md)；修订裁定接受阻断项与桌面截图最低视觉出口，拒绝「取消刻度封顶、撑满槽位放大 unit」 |
 | 需求来源 | 治理台访问关系图的流带厚度须可比较、节点不得喧宾夺主；稀疏图不得被撑成粉肉块，也不得缩成槽位里的迷你图顶条 |
 | 实施主体 | Lucy WebUI `AccessMapCanvas` 布局与绘制（`webui/src/components/admin/AccessMapCanvas.tsx` 及对应测试）。不修改 KTX，不修改 `/api/admin/access-map` |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」 |
 | 与既有 Spec 的关系 | **再修订** quiet-reading [`lucy-20261030-access-map-quiet-reading-spec.md`](lucy-20261030-access-map-quiet-reading-spec.md) **§5.4**，以及 chart-first [`lucy-20261101-access-map-chart-first-spec.md`](lucy-20261101-access-map-chart-first-spec.md) 对卡片规则的沿用句。**保持** quiet-reading §5.3 着色 token、chart-first 页壳。权威语义 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md) 不变 |
 | 实施计划 | [`docs/plans/lucy-20261101-access-map-geometry-plan.md`](../plans/lucy-20261101-access-map-geometry-plan.md) |
-| 审阅 | 交叉审阅 v0.1 → 本 v0.2 定稿 |
+| 审阅 | 交叉审阅 v0.1 → 本 v0.2 定稿 → 实施收口 |
 
-> v0.2 已定稿待实施（2026-11-01）。D1–D12 按 §4 拍板。本条收口不表示可上线。
+> v0.2 功能合同已收口（2026-11-01）。D1–D12 按 §4 拍板，未在实施中改写。SC-01–SC-16 全部有出处并通过。本条收口不表示可上线。
 
 ## 闭口层级
 

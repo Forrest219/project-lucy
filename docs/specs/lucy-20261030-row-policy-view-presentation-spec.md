@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 呈现修订 / **v0.3 功能合同已收口** |
+| 文档类型 / 版本 | 呈现修订 / **v0.5 详情分层与对齐（已落地）** |
 | 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号。功能编号待 PM 指派，不占用 `L25-*`，不升父 Spec 版本号 |
 | 功能编号 / 优先级 | **待 PM 指派** / **P1** |
-| 状态 | **v0.4 答案优先双栏（2026-11-01）**：在 v0.3 收口之上增补 SC-19–SC-23（左清单／右结论、诊断折叠、详情三区标题）。v0.3 的 SC-01–SC-18 仍成立；闭口证据见 [`docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`](../reviews/2026-11-01-row-policy-view-presentation-closure.md)。**本条收口不表示可上线**——浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入不在本条出口；父 Spec 的 RTV-01–RTV-08 不在本条出口 |
+| 状态 | **v0.5 详情分层与对齐已落地（2026-11-01）**：在 v0.4 双栏之上增补 §5.5 与 SC-24–SC-27（右栏身份／结论并重、角色与 Agent 两列对齐）。SC-01–SC-27 自动化已关闭；闭口证据见 [`docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`](../reviews/2026-11-01-row-policy-view-presentation-closure.md)（至 SC-23）与 §7.1（SC-24–SC-27）。配套 Plan：[`docs/plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md`](../plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md)。**本条收口不表示可上线**——浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入不在本条出口；父 Spec 的 RTV-01–RTV-08 不在本条出口 |
 | 决策来源 | 2026-10-30 对 `http://127.0.0.1:55176/admin/row-policies` 的页面探查。12 张表的有效行授予都是「行权限：全部行」。点开 `superstore_orders` 后清单收成 1 行；再勾「仅看受限表」，地址栏丢掉 `sourceName`，表名框仍显示 `superstore_orders`，清单变成「空筛选」 |
 | 开工授权 | 2026-10-30 PM 书面授权：按本文与配套 Plan 完成开发落地。D1–D10 全部通过，没有否决项。不存在「只做 D3」或「不做 D8／D10」的退路。功能编号仍待 PM 指派 |
 | 需求来源 | 行权限视图要先回答「这张表实际受什么行约束」，再允许换一张表。筛选、选表、快照哈希不再挤在同一条阅读流里 |
@@ -13,7 +13,7 @@
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：仓库级呈现修订落 `docs/specs/` |
 | 与既有 Spec 的关系 | **修订父 Spec 的呈现，不修订其语义。** 权威仍是 [`docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md`](lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) §6.2、RTV-01–RTV-08。深链参数名、只读、四种空态互斥、OR-of-AND 不拍平，沿用该文。本 Spec 获批后，父 Spec §6.2 加一行交叉引用，指向本 Spec §5 |
 | 筛选输入 | 文本筛选遵守 [`docs/specs/lucy-20261029-url-driven-input-ime-composition-spec.md`](lucy-20261029-url-driven-input-ime-composition-spec.md) §5，使用 `useUrlMirroredField` |
-| 实施计划 | [`docs/plans/2026-10-30-lucy-row-policy-view-presentation-plan.md`](../plans/2026-10-30-lucy-row-policy-view-presentation-plan.md) |
+| 实施计划 | 基线：[`docs/plans/2026-10-30-lucy-row-policy-view-presentation-plan.md`](../plans/2026-10-30-lucy-row-policy-view-presentation-plan.md)（SC-01–SC-23）。§5.5 增量：[`docs/plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md`](../plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md)（SC-24–SC-27） |
 
 > **开工记录（2026-10-30）**：S0 审阅已通过。D1–D10 按原文冻结，没有否决项，也没有退路。本文的呈现规格 §5 与配套 Plan §4 的 S1–S4 是本次授权的全部实现口径。实现完成不等于验收通过——SC-01–SC-18 的执行状态见 §7 与 Plan 文首。
 
@@ -43,9 +43,9 @@ New terms:
 | 复制 | 复制表身份 | 成功 toast「已复制表身份」。失败沿用 `CLIPBOARD_COPY_FAILED_MESSAGE` |
 | 诊断摘要 | 快照部分可用 · {n} 条解析失败 | `state !== "ok"` 时默认折叠；展开后仍列失败集合。机器值 `partial` 不进可见主文案 |
 | 无选中空态 | 选择左侧一张表，查看实际生效的行约束。 | 深链三参数不全时右栏显示 |
-| 详情结论区 | 有效行授予 | 右栏第一阅读焦点；替换并集小节可见标题「最终行约束（角色并集）」 |
-| 详情角色区 | 角色贡献 | 替换「角色分支」 |
-| 详情 Agent 区 | 各 Agent 最终行约束 | 替换「最终行约束（与个人行限制相交）」 |
+| 详情结论区 | 有效行授予 | 与身份／状态区并重的上半阅读焦点；替换并集小节可见标题「最终行约束（角色并集）」 |
+| 详情角色区 | 角色贡献 | 替换「角色分支」；属下半溯源区 |
+| 详情 Agent 区 | 各 Agent 最终行约束 | 替换「最终行约束（与个人行限制相交）」；属下半溯源区 |
 
 Forbidden terms:
 
@@ -82,6 +82,8 @@ Forbidden terms:
 - [ ] 不做窄屏重排。宽表只在网格滚动层内横向滚动
 - [ ] 主体为答案优先双栏工作台：左清单 `pl-panel`、右详情 `pl-panel`；筛选为顶栏工具条
 - [ ] 诊断默认折叠，不与主结论争抢首屏
+- [ ] 右栏详情按 §5.5 分身份／状态、结论、溯源三层；不新增颜色 token，不新增卡片壳
+- [ ] 角色与 Agent 溯源行用两列网格对齐；不做窄屏重排
 
 ### Exceptions (If Any)
 
@@ -172,26 +174,22 @@ Page Header
   其下弱提示：本页只读。修改请到角色权限。（「角色权限」链到 /admin/roles）
   诊断（仅 state !== "ok" 或 failures 非空时出现）
     默认折叠 details，data-testid="row-policy-view-diagnostics"
+    外框：warning 软底 + 边框，summary 与正文用顶部分隔线分层
     summary 可见文案用中文（如「快照部分可用 · {n} 条解析失败」），不含机器词 partial
-    展开后：既有 list-state / list-failures test id 与失败条目仍在 DOM
+    展开后：说明句单独一段；失败条目各占一块（主体 id + 次行 reason）
+    既有 list-state / list-failures / list-state-badge test id 仍在 DOM
 
 工作台 data-testid="row-policy-view-workspace"
-  xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]
+  xl:grid-cols-[minmax(24rem,34rem)_minmax(0,1fr)]
   左 pl-panel data-testid="row-policy-view-list-panel" 标题「表清单」+ {n} 张表
-    网格列：表、角色数、Agent 数、有效行授予
+    网格列：表、角色数、Agent 数、有效行授予；单元格加大纵向 padding；授予列 nowrap
     表列主文是 sourceName，次行是「{connectionId} · {schema}」
     按钮 aria-label 为「{connectionId}/{schema}/{sourceName}」
     选中行 aria-current="true"，背景 bg-bg-muted，并带左边强调（如 border-l）
   右 pl-panel data-testid="row-policy-view-detail"（三参数齐全）或空态
     无三参数：选择左侧一张表，查看实际生效的行约束。
       data-testid="row-policy-view-detail-empty"
-    有三参数：
-      身份、复制、状态徽章、目录中文标签
-      若清单已返回且其中没有这一行：当前表不在筛选结果中。
-      有效行授予（结论 / DNF；可见标题「有效行授予」）
-      边界句
-      角色贡献（原角色分组；可见标题「角色贡献」）
-      各 Agent 最终行约束
+    有三参数：分层与对齐以 §5.5 为准（身份／状态 ∥ 结论 → 角色／Agent 溯源）
 ```
 
 加载中、读取失败的 test id 与句子保持既有实现。清单部分失败改走工具条诊断折叠，不再插在清单标题与表格之间抢结论注意力。
@@ -232,9 +230,12 @@ Page Header
 - 本页可选标题 prop（角色编辑页不传，默认保持旧文案）：
   - `unionHeading="有效行授予"`（默认仍是「最终行约束（角色并集）」）
   - `agentsHeading="各 Agent 最终行约束"`（默认仍是「最终行约束（与个人行限制相交）」）
+- 本页可选对齐 prop（角色编辑页不传）：
+  - `subjectRowLayout="columns"`（默认 `"stack"`）：Agent 行与本页角色行统一为「左主体 / 右结论」两列。见 §5.5。
 - 角色分组外层可见标题为本页的「角色贡献」（`h3`）；组内标题仍是参与并集／不授予该表／编译失败。
+- 「来源角色：…」不得再塞进并集标题同行主文案；改到结论区次要行（见 §5.5）。
 
-角色编辑页不传上述可选 prop。默认仍是边界句在上、没有中间插槽、Agent 不折叠、旧标题。
+角色编辑页不传上述可选 prop。默认仍是边界句在上、没有中间插槽、Agent 不折叠、旧标题、主体行 `"stack"`。
 
 角色分三组，空组不渲染标题：
 
@@ -254,6 +255,51 @@ DNF 多分支时，本页传 `predicateLayout="stacked"`：一支一块，支与
 复制按钮调用 `copyTextWithToast("{connectionId}/{schema}/{sourceName}")`。
 
 目录标签按术语表映射。`data-catalog-status` 保留机器值。有 `reason` 时，reason 仍以翻译防御原文跟在标签后。
+
+### 5.5 单表详情分层与对齐（v0.5）
+
+> **拍板（2026-11-01）**：整块右栏重分层；身份／状态与有效行授予结论并重；角色与 Agent 为溯源；溯源行两列对齐（左主体、右结论）。不改语义、深链、DNF 代数、阅读顺序（结论 → 边界句 → 角色 → Agent）。
+
+右栏 `row-policy-view-detail` 固定三层（空态与加载／错误句不变）：
+
+```text
+单表详情 (h2)
+│
+├─ 身份与状态  data-testid="row-policy-view-detail-identity"
+│    主行：表身份（较强字重／字号） + 复制（次要 icon／ghost）
+│    次行：RowPolicyStateBadge + 目录中文标签（弱）
+│    可选：当前表不在筛选结果中。；failures 列表（警告色，仍弱于结论）
+│
+├─ 有效行授予（结论区，与上区并重）
+│    标题「有效行授予」单独成行（h2／既有 pl-panel-title 级别均可，但不得与来源角色混排）
+│    次行弱文案：来源角色：{roleIds}（无贡献角色则省略整行）
+│    主结论：行权限：全部行 / stacked DNF / 不可用句（字重高于溯源区正文）
+│    边界句 footnote（既有原文与 test id）
+│
+└─ 溯源
+     角色贡献
+       组标题（参与并集／不授予该表／编译失败）
+       每行：grid 两列
+         左：角色 id 链接
+         右：行权限文案；授权摘要链接；模板／内联条件／编写徽章／error（叠在右列）
+     各 Agent 最终行约束
+       统一全部行折叠句（若适用）保留
+       展开后／非折叠时每行：同上两列（左 agentId，右最终行约束 + 授权摘要）
+```
+
+对齐合同：
+
+| 区 | 必须 | 禁止 |
+|---|---|---|
+| 身份与状态 | 表身份是该区视觉主信号；徽章与目录不得与身份同级抢视线 | 身份、复制、徽章、目录再挤成一条自由 `flex-wrap` 主行 |
+| 结论 | 「有效行授予」标题与结论正文可扫读；来源角色为次要 | 「来源角色」嵌进标题字符串或标题同行主文案 |
+| 角色／Agent | 同一列表内左列主体、右列结论纵向对齐 | 主体名、结论、授权摘要再 `flex-wrap` 成无列对齐的芯片流 |
+
+实现落点：
+
+- 身份区与角色两列：`RowPolicyView.tsx`。
+- 结论标题／来源角色拆行、Agent 两列：`RowPolicyDnfPreview.tsx` 可选 prop（默认保持角色编辑页今日行为）。
+- 不新增设计系统章节；不新增产品术语；不改 `ROW_POLICY_PREVIEW_BOUNDARY` 原文。
 
 ## 6. 核心流程（伪代码）
 
@@ -281,16 +327,22 @@ detailRequest(url):
     render no detail
 
 renderDetail(detail, list):
-  show identity, copy, status badge, catalog label
+  identity zone:
+    primary: table identity + copy
+    secondary: status badge + catalog label
   if list loaded and no row equals the detail triple:
     show 「当前表不在筛选结果中。」
-  show union
+  conclusion zone:
+    heading 「有效行授予」 alone
+    secondary line: 来源角色（when roleIds non-empty）
+    grant body (emphasized)
   show boundary sentence
-  show role groups
-  if every agent finalRows.kind is all and there is at least one agent:
-    show the uniform sentence, agents hidden until expand
-  else:
-    show each agent
+  provenance zone:
+    role groups as two-column rows (subject | access + summary + extras)
+    if every agent finalRows.kind is all and there is at least one agent:
+      show the uniform sentence, agents hidden until expand
+    else:
+      show each agent as two-column rows
 
 renderGrantCell(row):
   switch row.grantStatus:
@@ -335,8 +387,12 @@ renderListEmpty(status):
 | SC-21 | `state=partial` 时诊断默认折叠：summary 含「快照部分可用」，不含可见主文案 `partial`；展开后 `row-policy-view-list-failures` 仍列出失败 |
 | SC-22 | 详情可见标题含「有效行授予」「角色贡献」「各 Agent 最终行约束」；角色编辑页未传 prop 时仍用旧 DNF 标题 |
 | SC-23 | 选中清单行带 `aria-current="true"`，且 class 含左边强调（如 `border-l`） |
+| SC-24 | 详情身份区 `row-policy-view-detail-identity` 存在：表身份为主信号；状态徽章与目录标签在次行或次要槽，不再与身份同级挤在一条主 `flex-wrap` 行 |
+| SC-25 | 「有效行授予」标题行不含「来源角色」主文案；有贡献角色时来源角色出现在结论区次要行；结论正文可见且字重／层级高于溯源区角色行正文 |
+| SC-26 | 角色贡献与各 Agent（展开后）行均为两列：左主体链接／id，右行结论（及授权摘要等）；同列表内左列纵向对齐 |
+| SC-27 | 角色编辑页未传 `subjectRowLayout`／未改既有调用时，`RowPolicyDnfPreview` 仍为 stack、旧标题、边界句在上、Agent 不折叠 |
 
-SC-01–SC-23 的自动化证据见 §7.1。**实现完成不等于验收通过**——下列证据只说明断言存在且通过，验收仍待 PM 做出。
+SC-01–SC-23 的自动化证据见 §7.1。SC-24–SC-27 的落地证据见增量 Plan，收口前补入 §7.1。**实现完成不等于验收通过**——下列证据只说明断言存在且通过，验收仍待 PM 做出。
 
 ### 7.1 落地状态与自动化证据（2026-10-30）
 
@@ -367,6 +423,10 @@ S1–S4 已按配套 Plan §4 实施完毕，D1–D10 全部落地，没有走�
 | SC-21 | 页面测试「SC-21 诊断默认折叠，展开后仍见失败集合」 |
 | SC-22 | 页面测试「SC-22 详情三区标题」＋ DNF 预览测试默认旧标题 |
 | SC-23 | 页面测试「SC-23 选中行左边强调」 |
+| SC-24 | 页面测试「SC-24 详情身份区分层」 |
+| SC-25 | 页面测试「SC-25 结论标题与来源角色拆行」＋ DNF「SC-25／SC-27：来源角色在标题下的次要行」 |
+| SC-26 | 页面测试「SC-26 角色与 Agent 两列对齐」＋ DNF「SC-26／SC-27：subjectRowLayout=columns」 |
+| SC-27 | DNF「默认：边界句在上…」＋「SC-25／SC-27」＋「SC-26／SC-27」默认无 subject-row 网格 |
 
 实现备注：
 
@@ -377,8 +437,8 @@ S1–S4 已按配套 Plan §4 实施完毕，D1–D10 全部落地，没有走�
 ### 7.2 闭口层级
 
 - 层级：功能合同
-- 本条承诺：行权限视图把「这张表实际受什么行约束」讲清楚——点表只打开详情，清单筛选与当前表解耦，授权状态四态互斥且不混用文案，页面只读。
-- 本条出口：SC-01–SC-23 的自动化用例（页面测试 `webui/src/__tests__/row-policy-view.test.tsx`、DNF 预览测试 `webui/src/__tests__/row-policy-dnf-preview.test.tsx`、服务端 `webui/server/__tests__/p1-row-policy-views.test.ts`），加 `npm run lint:terminology`。
+- 本条承诺：行权限视图把「这张表实际受什么行约束」讲清楚——点表只打开详情，清单筛选与当前表解耦，授权状态四态互斥且不混用文案，页面只读；单表详情身份／结论并重且溯源两列对齐。
+- 本条出口：SC-01–SC-27 的自动化用例（页面测试 `webui/src/__tests__/row-policy-view.test.tsx`、DNF 预览测试 `webui/src/__tests__/row-policy-dnf-preview.test.tsx`、服务端 `webui/server/__tests__/p1-row-policy-views.test.ts`），加 `npm run lint:terminology`。其中 SC-01–SC-23 已有 §7.1 证据；SC-24–SC-27 随增量 Plan 落地后补证。
 - 不在本条出口：浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入；父 Spec（行策略模板与按表反查）的 RTV-01–RTV-08。
 - 上线关系：本条收口不表示可上线
 

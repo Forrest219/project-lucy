@@ -258,3 +258,120 @@ export async function assertEndpointGate(
   const text = await readFile(path.join(root, "ktx.yaml"), "utf8");
   return decideEndpointGate(storedConnections(parse(text)), input, flags);
 }
+
+/** Flags for Spec lucy-20261101-connection-endpoint-edit (not Spec 160 create). */
+export type EndpointEditFlags = {
+  acknowledgeSharedEndpoint?: boolean;
+  acknowledgeSameServerDifferentDatabase?: boolean;
+};
+
+export type EndpointEditCandidate = {
+  driver: string;
+  engine?: string;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+};
+
+export class EndpointEditConflictError extends Error {
+  code = "ENDPOINT_EDIT_CONFLICT";
+  statusCode = 409;
+  detail: {
+    reason: "shared_endpoint" | "multiple" | "same_server_different_database";
+    matches: EndpointMatch[];
+    requestedDatabase?: string;
+  };
+
+  constructor(message: string, detail: EndpointEditConflictError["detail"]) {
+    super(message);
+    this.name = "EndpointEditConflictError";
+    this.detail = detail;
+  }
+}
+
+export type EndpointEditGateDecision = {
+  action: "allow";
+  acknowledgedSharedEndpoint?: boolean;
+  acknowledgedSameServerDifferentDatabase?: boolean;
+};
+
+/**
+ * Edit-path soft gate: reuses Spec 160 match keys, excludes `connId`, never calls
+ * `conflictSchema` / create decision branches.
+ */
+export function decideEndpointEditGate(
+  connections: StoredConnection[],
+  connId: string,
+  candidate: EndpointEditCandidate,
+  flags: EndpointEditFlags = {}
+): EndpointEditGateDecision {
+  if (candidate.driver === "sqlite" || candidate.driver === "athena") {
+    return { action: "allow" };
+  }
+
+  const asCreateInput: CreateConnectionInput = {
+    id: connId,
+    driver: candidate.driver as CreateConnectionInput["driver"],
+    ...(candidate.engine ? { engine: candidate.engine } : {}),
+    host: candidate.host,
+    port: candidate.port,
+    database: candidate.database,
+    username: candidate.username,
+    schemas: []
+  };
+
+  const others = connections.filter((row) => row.id !== connId);
+  const endpoint = others.filter((row) => endpointMatches(row, asCreateInput));
+
+  if (endpoint.length === 1) {
+    if (flags.acknowledgeSharedEndpoint === true) {
+      return { action: "allow", acknowledgedSharedEndpoint: true };
+    }
+    throw new EndpointEditConflictError("新服务器地址与另一条连接相同。", {
+      reason: "shared_endpoint",
+      matches: endpoint.map(publicMatch)
+    });
+  }
+
+  if (endpoint.length > 1) {
+    if (flags.acknowledgeSharedEndpoint === true) {
+      return { action: "allow", acknowledgedSharedEndpoint: true };
+    }
+    throw new EndpointEditConflictError("新服务器地址与多条连接相同。", {
+      reason: "multiple",
+      matches: endpoint.map(publicMatch)
+    });
+  }
+
+  const sameServerHits = others.filter((row) => sameServer(row, asCreateInput));
+  if (sameServerHits.length > 0) {
+    if (flags.acknowledgeSameServerDifferentDatabase === true) {
+      return { action: "allow", acknowledgedSameServerDifferentDatabase: true };
+    }
+    throw new EndpointEditConflictError(
+      "新服务器地址与另一条连接位于同一主机端口但 database 不同。",
+      {
+        reason: "same_server_different_database",
+        matches: sameServerHits.map(publicMatch),
+        requestedDatabase: candidate.database.trim()
+      }
+    );
+  }
+
+  return { action: "allow" };
+}
+
+export async function assertEndpointEditGate(
+  root: string,
+  connId: string,
+  candidate: EndpointEditCandidate,
+  flags: EndpointEditFlags = {}
+): Promise<EndpointEditGateDecision> {
+  const text = await readFile(path.join(root, "ktx.yaml"), "utf8");
+  return decideEndpointEditGate(storedConnections(parse(text)), connId, candidate, flags);
+}
+
+export function loadStoredConnectionsFromYaml(text: string): StoredConnection[] {
+  return storedConnections(parse(text));
+}

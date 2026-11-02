@@ -1,5 +1,5 @@
 import { constants as fsConstants } from "node:fs";
-import { lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { mirrorContentFileToProjectRoot } from "./content-mirror";
@@ -591,6 +591,76 @@ export async function safeWriteNewSecretPassword(
   }
 
   await withDisplayWriteBarrier(["C", "L"], () => writeFile(target, passwordPlaintext, { encoding: "utf8", mode: 0o600 }));
+  return { relPath: normalized };
+}
+
+/**
+ * Spec lucy-20261101-connection-endpoint-edit — read canonical secret bytes for
+ * rollback backup. Never follows symlinks. Returns null on ENOENT.
+ */
+export async function safeReadSecretPasswordBytesIfExists(
+  projectRoot: string,
+  relPath: string
+): Promise<Buffer | null> {
+  const { target, normalized } = await resolveNewSecretPasswordTarget(projectRoot, relPath);
+  try {
+    const existing = await lstat(target);
+    if (existing.isSymbolicLink()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a symlink`);
+    }
+    if (existing.isDirectory()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a directory`);
+    }
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  return readFile(target);
+}
+
+/**
+ * Spec lucy-20261101-connection-endpoint-edit — overwrite an existing (or create)
+ * canonical connection password file via temp + rename. Does not weaken
+ * {@link safeWriteNewSecretPassword} new-only semantics.
+ */
+export async function safeOverwriteSecretPassword(
+  projectRoot: string,
+  relPath: string,
+  passwordPlaintext: string
+): Promise<{ relPath: string }> {
+  if (typeof passwordPlaintext !== "string" || passwordPlaintext.length === 0) {
+    throw new ForbiddenPathError("Connection password must be a non-empty string");
+  }
+
+  const { secretsDirReal, target, normalized } = await resolveNewSecretPasswordTarget(
+    projectRoot,
+    relPath
+  );
+
+  try {
+    const existing = await lstat(target);
+    if (existing.isSymbolicLink()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a symlink`);
+    }
+    if (existing.isDirectory()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a directory`);
+    }
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  const fileName = path.basename(normalized);
+  const tmp = path.join(secretsDirReal, `.${fileName}.${randomUUID()}.tmp`);
+  await withDisplayWriteBarrier(["C", "L"], async () => {
+    await writeFile(tmp, passwordPlaintext, { encoding: "utf8", mode: 0o600 });
+    await rename(tmp, target);
+  });
   return { relPath: normalized };
 }
 

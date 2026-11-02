@@ -208,7 +208,7 @@ Page Header
 
 > **本节已被取代（2026-11-01）。** 定宽卡片、`max(两行字高, …)` 的高度地板、卡片内名称、
 > 「流带只画在列与列之间」这些几何约定，已由
-> [`lucy-20261101-access-map-geometry-spec.md`](lucy-20261101-access-map-geometry-spec.md)（v0.2）
+> [`lucy-20261101-access-map-geometry-spec.md`](lucy-20261101-access-map-geometry-spec.md)（**v0.2 功能合同已收口**）
 > §5.1–§5.4 取代：节点改为**细柱 + 外标块**，计量柱高 = 流量 × 刻度（无高度地板），
 > 流带改为**面积填充**，刻度按 `MAX_PX_PER_PATH` 封顶。
 > **§5.3 流带着色继续有效**（geometry Spec §5.7 明确保持 quiet-reading §5.3 的 token 与判定顺序），

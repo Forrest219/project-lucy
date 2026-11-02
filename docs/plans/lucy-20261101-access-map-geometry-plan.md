@@ -6,11 +6,11 @@
 |---|---|
 | 文档版本 / 日期 | **v0.2** / 2026-11-01 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号无，不进入 v0.25 登记册 |
-| 主 Spec | [访问关系图几何语言修订 Spec](../specs/lucy-20261101-access-map-geometry-spec.md)（**v0.2 已定稿待实施**） |
+| 主 Spec | [访问关系图几何语言修订 Spec](../specs/lucy-20261101-access-map-geometry-spec.md)（**v0.2 功能合同已收口**） |
 | 权威语义 | [Spec 187](../../webui/docs/187-access-relation-sankey-spec.md)。不改 API、边状态、URL 值、两档措辞、路径守恒 |
 | 前序呈现 | [quiet-reading](../specs/lucy-20261030-access-map-quiet-reading-spec.md)；[chart-first](../specs/lucy-20261101-access-map-chart-first-spec.md) |
-| 状态 | **v0.2 已定稿待实施（2026-11-01）**。已吸收交叉审阅并定稿。本条收口不表示可上线 |
-| 授权边界 | 本轮文档定稿可改 Spec/Plan/索引。改 `webui/src` 须用户开发授权。不镜像构建、不部署、不 `git commit`/`push`（除非另授） |
+| 状态 | **v0.2 实施完成（2026-11-01）**。S0–S4 全部落地，SC-01–SC-16 均有出处并通过。实施记录见 [`docs/reviews/2026-11-01-access-map-geometry-implementation-notes.md`](../reviews/2026-11-01-access-map-geometry-implementation-notes.md)。本条收口不表示可上线 |
+| 授权边界 | 改 `AccessMapCanvas` 布局/绘制与对应测试、selector-contract 必要行、quiet-reading / chart-first / Spec 187 的交叉引用句。**不涉及**构建镜像、部署、`git commit` / `git push`（除非用户另授）、完整发布走查 |
 | 验收 | Spec SC-01–SC-16；映射见 §5。完整发布走查 / Playwright 套件不在出口；SC-16 为 demo 桌面截图人工验收 |
 | 实施主体 | Lucy WebUI `webui/src`。不修改 KTX，不修改 `webui/server/admin/access-map.ts` |
 | 审阅 | [`inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md`](../../inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md) → v0.2 |
@@ -43,9 +43,9 @@
 |---|---|---|
 | P1 | Spec v0.2 已定稿，D1–D12 已拍板 | **满足**（2026-11-01） |
 | P2 | 用户批准按审阅修订意见定稿 | **满足**（「接受你的修订意见，请修正后定稿」） |
-| P3 | 开发授权（改 `webui/src`） | **待用户下一句授权** |
+| P3 | 开发授权（改 `webui/src`） | **满足**（2026-11-01 实施轮） |
 
-S0 仅文档；直至 P3 才改 `webui/src`。
+S0 仅文档；P3 满足后执行 S1–S4。
 
 ## 3. 文件落点
 
@@ -80,35 +80,35 @@ S0 仅文档；直至 P3 才改 `webui/src`。
 
 ### S1 布局几何与避碰
 
-1. 导出常量：`PILLAR_WIDTH=16`、`MAX_PX_PER_PATH=24`、`NODE_GAP=16`、`MIN_HIT_PX=8`。
-2. 重写步进与 `labelBlock`（首左/中上/末右）；计量柱高 = `flow*unitPx`。
-3. `DEMO_SPARSE_9` 夹具；稀疏居中或缩槽（不抬 `unitPx`）。
-4. 槽位按对端 y 分配；计量宽度无地板。
-5. 布局测试：SC-01–SC-04、SC-06、SC-08–SC-10。
+- [x] 导出常量：`PILLAR_WIDTH=16`、`MAX_PX_PER_PATH=24`、`NODE_GAP=16`、`MIN_HIT_PX=8`。
+- [x] 重写步进与 `labelBlock`（首左/中上/末右）；计量柱高 = `flow*unitPx`。
+- [x] `DEMO_SPARSE_9` 夹具；稀疏居中或缩槽（不抬 `unitPx`）。
+- [x] 槽位按对端 y 分配；计量宽度无地板。
+- [x] 布局测试：SC-01–SC-04、SC-06、SC-08–SC-10。
 
 **出口**：上列 SC 自动化绿。不把「肉眼看一眼」当作本阶段正式出口（正式视觉出口在 S4）。
 
 ### S2 四态面积带与交互
 
-1. 面积 fill path；needs_review 虚线中线；overflow 夹紧 + danger 轮廓。
-2. 可见 hit：dormant 授权面积、needs_review 独立带、normal/overflow 面积可点。
-3. 悬停浮层覆盖 dormant。
-4. 组件测试：SC-05、SC-07、SC-11–SC-14。
+- [x] 面积 fill path；needs_review 虚线中线；overflow 夹紧 + danger 轮廓。
+- [x] 可见 hit：dormant 授权面积、needs_review 独立带、normal/overflow 面积可点。
+- [x] 悬停浮层覆盖 dormant。
+- [x] 组件测试：SC-05、SC-07、SC-11–SC-14。
 
 **出口**：上列 SC 自动化绿。
 
 ### S3 交叉引用与门禁
 
-1. **必须**更新 quiet-reading、chart-first、Spec 187 指针。
-2. `npm run lint:terminology`、`npm run lint:spec-docs` → SC-15。
+- [x] **必须**更新 quiet-reading、chart-first、Spec 187 指针。
+- [x] `npm run lint:terminology`、`npm run lint:spec-docs` → SC-15。
 
 **出口**：SC-15；三处指针一致。
 
 ### S4 桌面截图（SC-16）
 
-1. 当前 demo（或等价 `DEMO_SPARSE_9` 实页）桌面视口截图。
-2. 核对：占比/留白、三列外标、四态（可用测试夹具补异常态截图）、悬停与点击。
-3. 记录写入 `docs/reviews/` 或 `inbox/`，收口时引用。
+- [x] 当前 demo（或等价 `DEMO_SPARSE_9` 实页）桌面视口截图。
+- [x] 核对：占比/留白、三列外标、四态（可用测试夹具补异常态截图）、悬停与点击。
+- [x] 记录写入 `docs/reviews/` 或 `inbox/`，收口时引用。
 
 **出口**：SC-16 有据；**本条功能合同可收口**（仍不表示可上线）。
 
@@ -169,3 +169,18 @@ cd .. && npm run lint:terminology && npm run lint:spec-docs
 | 索引 | `docs/README.md`、`docs/plans/README.md` |
 | v0.1 `lint:spec-docs` | 通过（2026-11-01） |
 | v0.2 `lint:spec-docs` | **通过**（2026-11-01）：exit 0；356 files scanned。WARN 仅他条未跟踪 `*-prompt.md` |
+| 实施记录 | [`docs/reviews/2026-11-01-access-map-geometry-implementation-notes.md`](../reviews/2026-11-01-access-map-geometry-implementation-notes.md) |
+
+## 9. 实施轮记录（2026-11-01）
+
+S1–S4 实施完成。命令与结果如下，SC-01–SC-16 的逐条落点见
+[`docs/reviews/2026-11-01-access-map-geometry-implementation-notes.md`](../reviews/2026-11-01-access-map-geometry-implementation-notes.md)
+（委托方指定路径的同内容副本在 `inbox/2026-11-01-access-map-geometry-IMPLEMENTATION_NOTES.md`）。
+
+| 项 | 结果 |
+|---|---|
+| `cd webui && npx vitest run src/__tests__/access-map.test.tsx src/__tests__/access-map-layout.test.tsx` | **通过**：2 files / 57 tests passed，0 failed |
+| `npm run lint:terminology` | **通过**：exit 0；1097 files scanned |
+| `npm run lint:spec-docs` | **通过**：exit 0；358 files scanned（WARN 仅他线未跟踪 `*-prompt.md`） |
+| SC-16 桌面截图 | **有据**：5 张落盘 `docs/reviews/assets/2026-11-01-access-map-geometry/`（夹具负载 + 真实页壳/组件；见实施记录 §六） |
+| 浏览器发布走查 / 镜像构建 / 部署 / `git commit` / `git push` | **未执行**（不在本条出口） |

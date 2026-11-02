@@ -47,6 +47,7 @@ export const CHANGE_TYPE_OPTIONS: ChangeTypeOption[] = [
   { value: "schema_add", label: "新增 Schema", assetKinds: ["governance"] },
   { value: "schema_remove", label: "移除 Schema", assetKinds: ["governance"] },
   { value: "connection_create", label: "新建连接", assetKinds: ["governance"] },
+  { value: "connection_endpoint_update", label: "编辑连接", assetKinds: ["governance"] },
   { value: "connection_delete", label: "删除连接", assetKinds: ["governance"] },
   { value: "semantic_table_save", label: "表语义保存", assetKinds: ["semantic"] },
   { value: "semantic_table_import", label: "表语义导入", assetKinds: ["semantic"] },

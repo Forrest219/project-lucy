@@ -1,6 +1,6 @@
 # Database Connection Operations Runbook Spec
 
-> **产品边界更新（Spec 124 · 2026-08-24）**：WebUI **新建连接**设计见 `webui/docs/124-connection-create-admin-spec.md`；Phase A（`POST /api/connections`）与 Phase B（`CreateConnectionDrawer` / 概览 CTA）可已落地。本文档下文「WebUI 不负责新建物理数据库连接 / 不在 WebUI 实现新建连接表单」等 Non-Goal **正文仍待 Phase C 按 §5.5 / §8.3 翻转**——在此之前以 Spec 124 与实现为准。密码持久态仍为 `file:` 引用；手工 `ktx.yaml` + secrets 路径保留为高级 / 灾备路径。
+> **产品边界更新（Spec 124 · 2026-08-24；endpoint 编辑 · 2026-11-01）**：WebUI **新建连接**见 `webui/docs/124-connection-create-admin-spec.md`。WebUI **编辑服务器地址**见 [`docs/specs/lucy-20261101-connection-endpoint-edit-spec.md`](../../docs/specs/lucy-20261101-connection-endpoint-edit-spec.md)。本文档下文「不创建 / 不编辑 host/port…」等历史 Non-Goal 以上述后继 Spec 与实现为准。密码持久态仍为 `file:` 引用；手工 `ktx.yaml` + secrets 路径保留为高级 / 灾备路径。
 
 | 元数据 | 内容 |
 |---|---|
@@ -45,8 +45,9 @@
 
 | 非目标 | 理由 |
 |---|---|
-| 不在 WebUI 实现新建连接表单 | 当前安全边界不允许 WebUI 接管 host / port / user / password |
-| 不实现 secret 管理 UI | `.ktx/secrets/**` 是硬边界，WebUI 不读写 secret 内容 |
+| 不在 WebUI 实现新建连接表单 | 历史 Non-Goal；**已被 Spec 124 翻转**（WebUI 可新建）。本手册正文若仍写「只能改 ktx.yaml」，以实现后手册为准 |
+| 不在 WebUI 编辑已有连接 host / port / user / password | 历史 Non-Goal；**后继** [`lucy-20261101-connection-endpoint-edit-spec.md`](../../docs/specs/lucy-20261101-connection-endpoint-edit-spec.md) 允许就地编辑服务器地址（密码可选覆盖，仍不读回明文） |
+| 不实现 secret 管理 UI | `.ktx/secrets/**` 是硬边界，WebUI 不读写 secret 内容（创建/编辑仅受控写入约定文件名） |
 | 不自动推断所有数据库 driver | 手册只记录当前已知稳定形态；新 driver 由 KTX 能力和后续 spec 承接 |
 | 不把 StarRocks 直接升级为 release-verified | StarRocks 仍遵守 R1 P1 gated / pending live certification 约束 |
 | 不把 Catalog Reload 描述成物理库扫描 | Catalog Reload 只读本地 YAML；物理扫描或 manifest 生成由 KTX ingest / 受控上传完成 |

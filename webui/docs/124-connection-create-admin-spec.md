@@ -21,12 +21,14 @@
 | 状态 | **已实现**。本行原为「Designed（未实现）」，是设计轮状态；Phase B 已由提交 `81f26e39` `feat(webui): Phase B Create Connection drawer and overview CTA` 落地。实现落点 `webui/src/components/CreateConnectionDrawer.tsx` ＋ `webui/server/project.ts` 的 `createConnection` |
 | 日期 | 2026-08-20 |
 | 范围 | WebUI 新建物理连接配置（host/port/user + 一次性密码落盘）；**不**做编辑凭据、**不**引入 WebUI 登录鉴权。删除连接见 Spec 127。 |
+| 后继 | **编辑已有连接的 host/port/username/password** 已由 [`docs/specs/lucy-20261101-connection-endpoint-edit-spec.md`](../../docs/specs/lucy-20261101-connection-endpoint-edit-spec.md) 承接（2026-11-01）。本 Spec §3「不编辑已有连接…」与 §12「编辑连接 / 轮换密码」开放项在该后继 Spec 范围内被取代；新建连接合同本身不变 |
 
 ### Changelog
 
 | 版本 | 变更 |
 |---|---|
 | v0.1 | 初稿：产品边界翻转评估、API/UX 设计、受影响面、工作量与风险 |
+| v0.1+后继注记 | 2026-11-01：指向 `lucy-20261101-connection-endpoint-edit`（不改本 Spec 已实现合同） |
 
 ## 1. 背景
 
@@ -57,7 +59,7 @@
 | 非目标 | 理由 |
 |---|---|
 | 不引入 WebUI 登录 / SSO / Admin token 门禁 | Q1=B；单独立项 |
-| 不编辑已有连接的 host/port/user/password | 降低半成品与凭据漂移风险；本单仅 Create |
+| 不编辑已有连接的 host/port/user/password | 降低半成品与凭据漂移风险；本单仅 Create。**后继**：编辑 endpoint 见 `lucy-20261101-connection-endpoint-edit-spec` |
 | 不删除连接 | 已由 Spec 127 交付；本单仍不包含删除 |
 | 不提供 secrets 列表 / 读取 / 轮换 UI | 只允许本单约定路径的一次性写入 |
 | 不自动 ingest / 不自动改 `access.yaml` ACL | 保持与 Spec 26 runbook 后半段人工闭环 |
@@ -372,5 +374,5 @@ safeRemoveSecretPasswordIfExists(projectRoot, connId): Promise<void> // 仅回�
 ## 12. 开放依赖（不阻塞本设计，阻塞生产加固）
 
 1. WebUI Admin 鉴权（登录或 mTLS / 反向代理鉴权）——Q1=B 明确外包。
-2. 编辑连接 / 轮换密码——后续独立 Spec。删除连接见 Spec 127。
+2. 编辑连接 / 轮换密码——**已开独立 Spec**：[`lucy-20261101-connection-endpoint-edit-spec.md`](../../docs/specs/lucy-20261101-connection-endpoint-edit-spec.md)。删除连接见 Spec 127。
 3. 创建后一键同步 `access.yaml` role allow.connections——可选增强，默认仍手工。

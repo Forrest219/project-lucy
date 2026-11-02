@@ -12,7 +12,7 @@ import { ROW_POLICY_PREVIEW_BOUNDARY } from "../components/admin/RowPolicyDnfPre
  *
  * Authority: docs/specs/lucy-20261030-row-policy-view-presentation-spec.md
  *   §5.1（页面骨架）, §5.2（URL）, §5.3（清单授予列）, §5.4（详情）; D1–D10;
- *   SC-01 … SC-23.
+ *   SC-01 … SC-27.
  *
  * The page has TWO parameter families and they must not mix:
  *   - 当前表：`connectionId` / `schema` / `sourceName`（深链三参数，只打开详情）
@@ -661,17 +661,23 @@ describe("行权限视图的清单授予列与详情顺序（Spec §5.3 / §5.4�
     await waitFor(() => expect(screen.getByTestId("row-policy-view-diagnostics")).toBeInTheDocument());
     const diagnostics = screen.getByTestId("row-policy-view-diagnostics");
     expect(diagnostics).not.toHaveAttribute("open");
+    expect(diagnostics.className).toMatch(/bg-warning-soft/);
     expect(diagnostics).toHaveTextContent("快照部分可用");
     expect(diagnostics).toHaveTextContent("1 条解析失败");
     // 机器词 partial 不得出现在折叠摘要的可见主文案里。
     const summary = diagnostics.querySelector("summary");
     expect(summary?.textContent ?? "").not.toContain("partial");
-    // 展开前失败列表仍在 DOM（details 内容），但结论区不被 partial 徽章挤走。
     fireEvent.click(summary!);
-    expect(screen.getByTestId("row-policy-view-list-failures")).toHaveTextContent("east_role");
-    expect(screen.getByTestId("row-policy-view-list-failures")).toHaveTextContent(
-      "role_resolution_failed"
+    expect(screen.getByTestId("row-policy-view-list-state")).toHaveTextContent(
+      "下列清单只覆盖已解析的部分。"
     );
+    expect(screen.getByTestId("row-policy-view-list-state-badge")).toHaveAttribute(
+      "data-snapshot-state",
+      "partial"
+    );
+    const failures = screen.getByTestId("row-policy-view-list-failures");
+    expect(failures).toHaveTextContent("east_role");
+    expect(failures).toHaveTextContent("role_resolution_failed");
   });
 
   it("SC-22 详情三区标题", async () => {
@@ -692,6 +698,51 @@ describe("行权限视图的清单授予列与详情顺序（Spec §5.3 / §5.4�
     const row = screen.getByTestId("row-policy-view-table-warehouse-fin-fin_ledger");
     expect(row).toHaveAttribute("aria-current", "true");
     expect(row.className).toMatch(/border-l/);
+  });
+
+  it("SC-24 详情身份区分层", async () => {
+    renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
+    await waitFor(() => expect(screen.getByTestId("row-policy-view-detail-identity")).toBeInTheDocument());
+    const identity = screen.getByTestId("row-policy-view-detail-identity");
+    expect(within(identity).getByText("warehouse/fin/fin_ledger")).toBeInTheDocument();
+    expect(within(identity).getByTestId("row-policy-view-copy-identity")).toBeInTheDocument();
+    const primary = within(identity).getByTestId("row-policy-view-detail-identity-primary");
+    const secondary = within(identity).getByTestId("row-policy-view-detail-identity-secondary");
+    expect(primary).toHaveTextContent("warehouse/fin/fin_ledger");
+    expect(primary).not.toHaveTextContent("目录已加载");
+    expect(secondary).toHaveTextContent("目录已加载");
+    expect(secondary).not.toHaveTextContent("warehouse/fin/fin_ledger");
+  });
+
+  it("SC-25 结论标题与来源角色拆行", async () => {
+    renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "有效行授予" })).toBeInTheDocument());
+    const heading = screen.getByRole("heading", { name: "有效行授予" });
+    expect(heading).not.toHaveTextContent("来源角色");
+    expect(screen.getByTestId("row-policy-dnf-source-roles")).toHaveTextContent("来源角色");
+    // 结论区 DNF 正文 text-sm；溯源区角色访问标签 text-xs，层级更弱。
+    expect(screen.getByTestId("row-policy-dnf-union-arm-0").className).toMatch(/text-sm/);
+    const roleAccess = screen.getAllByTestId("row-policy-view-role-access")[0];
+    expect(roleAccess.className).toMatch(/text-xs/);
+    expect(roleAccess.className).not.toMatch(/font-semibold/);
+  });
+
+  it("SC-26 角色与 Agent 两列对齐", async () => {
+    renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
+    await waitFor(() => expect(screen.getByTestId("row-policy-view-role-east_role")).toBeInTheDocument());
+    const roleRow = screen.getByTestId("row-policy-view-role-east_role");
+    const roleColumns = within(roleRow).getByTestId("row-policy-view-subject-row");
+    expect(roleColumns.className).toMatch(/grid/);
+    expect(within(roleColumns).getByRole("link", { name: "east_role" })).toBeInTheDocument();
+    expect(within(roleColumns).getByTestId("row-policy-view-role-access")).toHaveTextContent("受限行授予");
+    expect(within(roleColumns).getByRole("link", { name: "授权摘要" })).toBeInTheDocument();
+
+    // DETAIL 夹具的 Agent 是 scoped，不会走统一全部行折叠。
+    const agentRow = screen.getByTestId("row-policy-dnf-agent-agent_a");
+    const agentColumns = within(agentRow).getByTestId("row-policy-view-subject-row");
+    expect(agentColumns.className).toMatch(/grid/);
+    expect(within(agentColumns).getByText("agent_a")).toBeInTheDocument();
+    expect(within(agentColumns).getByRole("link", { name: "授权摘要" })).toBeInTheDocument();
   });
 
   it("详情顺序是结论 → 边界句 → 角色 → Agent", async () => {

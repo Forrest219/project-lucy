@@ -6,7 +6,7 @@
 |---|---|
 | 文档版本 / 日期 | **v0.2** / 2026-11-01 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号无，不进入 v0.25 登记册 |
-| 主 Spec | [访问关系图图优先呈现 Spec](../specs/lucy-20261101-access-map-chart-first-spec.md)（**v0.1 已定稿待实施**） |
+| 主 Spec | [访问关系图图优先呈现 Spec](../specs/lucy-20261101-access-map-chart-first-spec.md)（**v0.2 功能合同已收口**） |
 | 权威语义 | [Spec 187](../../webui/docs/187-access-relation-sankey-spec.md)。本 Plan 不改其 API、边状态、URL 值、两档措辞。Spec 187 的 SC-01–SC-14 不在本条出口 |
 | 前序呈现 | [quiet-reading Spec](../specs/lucy-20261030-access-map-quiet-reading-spec.md) / [Plan](2026-10-30-lucy-access-map-quiet-reading-plan.md)。本条**取代**其页壳三卡+双折叠；**保持**着色、抽屉、表 |
 | 状态 | **v0.2 实施完成（2026-11-01）**。用户已批准方案 A′ 与 Spec/Plan 落盘。S1–S3 全部落地，SC-01–SC-14 均有自动化断言并通过。本条收口不表示可上线 |

@@ -574,46 +574,64 @@ export function RowPolicyView() {
           机器 state 只进 data-snapshot-state，summary 用中文。
         */}
         {showDiagnostics ? (
-          <details data-testid="row-policy-view-diagnostics" className="grid gap-2">
-            <summary className="cursor-pointer text-sm text-warning-strong">
+          <details
+            data-testid="row-policy-view-diagnostics"
+            className="rounded-md border border-warning-strong/40 bg-warning-soft px-3 py-2"
+          >
+            <summary className="cursor-pointer text-sm font-medium text-warning-strong">
               {diagnosticsSummary(listQuery.data!.state, listQuery.data!.failures.length)}
             </summary>
-            {listQuery.data!.state !== "ok" ? (
-              <div className="flex flex-wrap items-center gap-2" data-testid="row-policy-view-list-state">
-                <span
-                  className="pl-status-badge pl-status-validation_failed"
-                  data-testid="row-policy-view-list-state-badge"
+            <div className="mt-3 grid gap-3 border-t border-warning-strong/25 pt-3">
+              {listQuery.data!.state !== "ok" ? (
+                <div
+                  className="grid gap-1"
+                  data-testid="row-policy-view-list-state"
                   data-snapshot-state={listQuery.data!.state}
                 >
-                  {SNAPSHOT_STATE_LABELS[listQuery.data!.state] ?? `快照状态：${listQuery.data!.state}`}
-                </span>
-                {listQuery.data!.snapshot.problem ? (
-                  <span className="text-xs text-warning-strong notranslate" translate="no">
-                    {listQuery.data!.snapshot.problem}
+                  {/*
+                    徽章只承载机器态（data-snapshot-state 同步在外层），
+                    可见主文案已在 summary，这里不再重复「快照部分可用」。
+                  */}
+                  <span
+                    className="sr-only"
+                    data-testid="row-policy-view-list-state-badge"
+                    data-snapshot-state={listQuery.data!.state}
+                  >
+                    {SNAPSHOT_STATE_LABELS[listQuery.data!.state] ?? `快照状态：${listQuery.data!.state}`}
                   </span>
-                ) : null}
-                <p className="text-xs text-warning-strong">下列清单只覆盖已解析的部分。</p>
-              </div>
-            ) : null}
-            {listQuery.data!.failures.length > 0 ? (
-              <ul className="grid gap-1 text-xs text-warning-strong" data-testid="row-policy-view-list-failures">
-                {listQuery.data!.failures.map((failure) => (
-                  <li key={failure.subjectId} className="notranslate" translate="no">
-                    {failure.subjectId} · {failure.reason}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+                  <p className="text-sm text-warning-strong">下列清单只覆盖已解析的部分。</p>
+                  {listQuery.data!.snapshot.problem ? (
+                    <p className="text-xs text-fg-muted notranslate" translate="no">
+                      {listQuery.data!.snapshot.problem}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {listQuery.data!.failures.length > 0 ? (
+                <ul className="grid gap-2" data-testid="row-policy-view-list-failures">
+                  {listQuery.data!.failures.map((failure) => (
+                    <li
+                      key={failure.subjectId}
+                      className="grid gap-0.5 rounded-md border border-warning-strong/25 bg-bg-surface px-3 py-2 notranslate"
+                      translate="no"
+                    >
+                      <span className="text-sm font-medium text-fg-default">{failure.subjectId}</span>
+                      <span className="text-xs text-fg-muted">{failure.reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           </details>
         ) : null}
       </section>
 
       <div
-        className="grid gap-4 xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]"
+        className="grid gap-4 xl:grid-cols-[minmax(24rem,34rem)_minmax(0,1fr)]"
         data-testid="row-policy-view-workspace"
       >
         <section className="pl-panel mb-0 min-w-0" data-testid="row-policy-view-list-panel">
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-4 flex items-baseline gap-2">
             <h2 className="pl-panel-title mb-0">表清单</h2>
             <span className="text-xs text-fg-muted">{tables.length} 张表</span>
           </div>
@@ -639,18 +657,25 @@ export function RowPolicyView() {
           ) : (
             <div className="pl-data-grid-frame min-w-0 max-w-full">
               <div className="pl-data-grid-scroll w-full min-w-0 max-w-full">
-                <table className="pl-data-grid pl-data-table" data-testid="row-policy-view-table-list">
+                <table
+                  className="pl-data-grid pl-data-table [&_td]:align-top [&_td]:px-3 [&_td]:py-3 [&_th]:px-3 [&_th]:py-2.5"
+                  data-testid="row-policy-view-table-list"
+                >
                   <thead>
                     <tr className="text-xs text-fg-muted">
                       <th scope="col">表</th>
-                      <th scope="col">角色数</th>
-                      <th scope="col">
+                      <th scope="col" className="whitespace-nowrap text-right">
+                        角色数
+                      </th>
+                      <th scope="col" className="whitespace-nowrap text-right">
                         <span className="notranslate" translate="no">
                           Agent
                         </span>{" "}
                         数
                       </th>
-                      <th scope="col">有效行授予</th>
+                      <th scope="col" className="whitespace-nowrap">
+                        有效行授予
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -664,12 +689,13 @@ export function RowPolicyView() {
                         <tr
                           key={`${table.connectionId}/${table.schema}/${table.sourceName}`}
                           className={clsx(
+                            "border-b border-border-default last:border-b-0",
                             selected && "border-l-2 border-l-fg-default bg-bg-muted font-medium"
                           )}
                           aria-current={selected ? "true" : undefined}
                           data-testid={`row-policy-view-table-${table.connectionId}-${table.schema}-${table.sourceName}`}
                         >
-                          <td>
+                          <td className="min-w-[10rem]">
                             <button
                               type="button"
                               className="underline notranslate"
@@ -679,17 +705,17 @@ export function RowPolicyView() {
                             >
                               {table.sourceName}
                             </button>
-                            <p className="text-xs text-fg-muted notranslate" translate="no">
+                            <p className="mt-1 text-xs text-fg-muted notranslate" translate="no">
                               {table.connectionId} · {table.schema}
                             </p>
                           </td>
-                          <td>{table.roleCount}</td>
-                          <td>{table.agentCount}</td>
+                          <td className="whitespace-nowrap text-right tabular-nums">{table.roleCount}</td>
+                          <td className="whitespace-nowrap text-right tabular-nums">{table.agentCount}</td>
                           <td
                             data-testid="row-policy-view-table-grant"
                             title={cell.reason}
                             translate={cell.reason ? "no" : undefined}
-                            className={clsx(cell.reason && "notranslate")}
+                            className={clsx("whitespace-nowrap", cell.reason && "notranslate")}
                           >
                             {cell.text}
                           </td>
@@ -713,55 +739,63 @@ export function RowPolicyView() {
             ) : !detail ? (
               <p className="text-sm text-fg-muted">读取单表详情中…</p>
             ) : (
-              <div className="grid gap-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-sm notranslate" translate="no">
-                    {tableIdentity}
-                  </span>
-                  <button
-                    type="button"
-                    className="pl-icon-btn pl-btn pl-btn--ghost text-xs"
-                    aria-label="复制表身份"
-                    title="复制表身份"
-                    data-testid="row-policy-view-copy-identity"
-                    onClick={() => {
-                      void copyTextWithToast(tableIdentity, { successMessage: "已复制表身份" });
-                    }}
+              <div className="grid gap-4">
+                <div className="grid gap-1" data-testid="row-policy-view-detail-identity">
+                  <div
+                    className="flex flex-wrap items-center gap-2"
+                    data-testid="row-policy-view-detail-identity-primary"
                   >
-                    复制
-                  </button>
-                  <RowPolicyStateBadge status={detail.status} reason={detail.reason} />
-                  <span className="text-xs text-fg-muted">
-                    <span
-                      className="notranslate"
-                      translate="no"
-                      data-catalog-status={detail.catalog.status}
-                    >
-                      {CATALOG_LABELS[detail.catalog.status] ?? detail.catalog.status}
+                    <span className="text-sm font-medium notranslate" translate="no">
+                      {tableIdentity}
                     </span>
-                    {detail.catalog.reason ? (
-                      <span className="notranslate" translate="no">
-                        {` · ${detail.catalog.reason}`}
+                    <button
+                      type="button"
+                      className="pl-icon-btn pl-btn pl-btn--ghost text-xs"
+                      aria-label="复制表身份"
+                      title="复制表身份"
+                      data-testid="row-policy-view-copy-identity"
+                      onClick={() => {
+                        void copyTextWithToast(tableIdentity, { successMessage: "已复制表身份" });
+                      }}
+                    >
+                      复制
+                    </button>
+                  </div>
+                  <div
+                    className="flex flex-wrap items-center gap-2"
+                    data-testid="row-policy-view-detail-identity-secondary"
+                  >
+                    <RowPolicyStateBadge status={detail.status} reason={detail.reason} />
+                    <span className="text-xs text-fg-muted">
+                      <span
+                        className="notranslate"
+                        translate="no"
+                        data-catalog-status={detail.catalog.status}
+                      >
+                        {CATALOG_LABELS[detail.catalog.status] ?? detail.catalog.status}
                       </span>
-                    ) : null}
-                  </span>
+                      {detail.catalog.reason ? (
+                        <span className="notranslate" translate="no">
+                          {` · ${detail.catalog.reason}`}
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                  {currentOutsideFilter ? (
+                    <p className="text-xs text-fg-muted" data-testid="row-policy-view-outside-filter">
+                      当前表不在筛选结果中。
+                    </p>
+                  ) : null}
+                  {detail.failures.length > 0 ? (
+                    <ul className="grid gap-1 text-xs text-warning-strong" data-testid="row-policy-view-failures">
+                      {detail.failures.map((failure) => (
+                        <li key={failure.subjectId} className="notranslate" translate="no">
+                          {failure.subjectId} · {failure.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
-
-                {currentOutsideFilter ? (
-                  <p className="text-xs text-fg-muted" data-testid="row-policy-view-outside-filter">
-                    当前表不在筛选结果中。
-                  </p>
-                ) : null}
-
-                {detail.failures.length > 0 ? (
-                  <ul className="grid gap-1 text-xs text-warning-strong" data-testid="row-policy-view-failures">
-                    {detail.failures.map((failure) => (
-                      <li key={failure.subjectId} className="notranslate" translate="no">
-                        {failure.subjectId} · {failure.reason}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
 
                 <RowPolicyDnfPreview
                   effectiveRowGrant={asDnfGrant(detail.effectiveRowGrant)}
@@ -777,6 +811,7 @@ export function RowPolicyView() {
                   boundaryPlacement="footnote"
                   predicateLayout="stacked"
                   collapseUniformAllRows
+                  subjectRowLayout="columns"
                   unionHeading="有效行授予"
                   agentsHeading="各 Agent 最终行约束"
                 >
@@ -798,7 +833,10 @@ export function RowPolicyView() {
                                   className="grid gap-1"
                                   data-testid={`row-policy-view-role-${role.roleId}`}
                                 >
-                                  <div className="flex flex-wrap items-center gap-2">
+                                  <div
+                                    className="grid grid-cols-[minmax(7rem,11rem)_minmax(0,1fr)] items-start gap-x-3 gap-y-1"
+                                    data-testid="row-policy-view-subject-row"
+                                  >
                                     <Link
                                       className="text-sm underline notranslate"
                                       translate="no"
@@ -806,55 +844,59 @@ export function RowPolicyView() {
                                     >
                                       {role.roleId}
                                     </Link>
-                                    <span
-                                      className="text-xs text-fg-muted"
-                                      data-testid="row-policy-view-role-access"
-                                    >
-                                      {role.rowAccess === "all"
-                                        ? "行权限：全部行"
-                                        : role.rowAccess === "scoped"
-                                          ? "受限行授予"
-                                          : "不授予该表"}
-                                    </span>
-                                    <Link
-                                      className="text-xs underline"
-                                      to={`/admin/authorization-summary?kind=role&id=${encodeURIComponent(role.roleId)}`}
-                                    >
-                                      授权摘要
-                                    </Link>
+                                    <div className="grid gap-1">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span
+                                          className="text-xs text-fg-muted"
+                                          data-testid="row-policy-view-role-access"
+                                        >
+                                          {role.rowAccess === "all"
+                                            ? "行权限：全部行"
+                                            : role.rowAccess === "scoped"
+                                              ? "受限行授予"
+                                              : "不授予该表"}
+                                        </span>
+                                        <Link
+                                          className="text-xs underline"
+                                          to={`/admin/authorization-summary?kind=role&id=${encodeURIComponent(role.roleId)}`}
+                                        >
+                                          授权摘要
+                                        </Link>
+                                      </div>
+                                      {role.templateRefs.length > 0 ? (
+                                        <p
+                                          className="text-xs notranslate"
+                                          translate="no"
+                                          data-testid="row-policy-view-role-templates"
+                                        >
+                                          引用模板：{role.templateRefs.join("、")}
+                                        </p>
+                                      ) : null}
+                                      {role.templateRefs.length > 0 || role.inlinePredicates.length > 0 ? (
+                                        <RowPolicyAuthoringModeBadge
+                                          templateName={role.templateRefs[0]}
+                                          inlinePredicateCount={role.inlinePredicates.length}
+                                        />
+                                      ) : null}
+                                      {role.inlinePredicates.length > 0 ? (
+                                        <ul className="grid gap-0.5 text-xs notranslate" translate="no">
+                                          {role.inlinePredicates.map((predicate, index) => (
+                                            <li key={index}>
+                                              {predicate.field}{" "}
+                                              {predicate.op === "eq"
+                                                ? `等于 ${String(predicate.value ?? "")}`
+                                                : `属于 ${(predicate.values ?? []).map((item) => String(item)).join("、")}`}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      ) : null}
+                                      {role.error ? (
+                                        <p className="text-xs text-warning-strong notranslate" translate="no">
+                                          {role.error}
+                                        </p>
+                                      ) : null}
+                                    </div>
                                   </div>
-                                  {role.templateRefs.length > 0 ? (
-                                    <p
-                                      className="text-xs notranslate"
-                                      translate="no"
-                                      data-testid="row-policy-view-role-templates"
-                                    >
-                                      引用模板：{role.templateRefs.join("、")}
-                                    </p>
-                                  ) : null}
-                                  {role.templateRefs.length > 0 || role.inlinePredicates.length > 0 ? (
-                                    <RowPolicyAuthoringModeBadge
-                                      templateName={role.templateRefs[0]}
-                                      inlinePredicateCount={role.inlinePredicates.length}
-                                    />
-                                  ) : null}
-                                  {role.inlinePredicates.length > 0 ? (
-                                    <ul className="grid gap-0.5 text-xs notranslate" translate="no">
-                                      {role.inlinePredicates.map((predicate, index) => (
-                                        <li key={index}>
-                                          {predicate.field}{" "}
-                                          {predicate.op === "eq"
-                                            ? `等于 ${String(predicate.value ?? "")}`
-                                            : `属于 ${(predicate.values ?? []).map((item) => String(item)).join("、")}`}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  ) : null}
-                                  {role.error ? (
-                                    <p className="text-xs text-warning-strong notranslate" translate="no">
-                                      {role.error}
-                                    </p>
-                                  ) : null}
                                 </li>
                               ))}
                             </ul>

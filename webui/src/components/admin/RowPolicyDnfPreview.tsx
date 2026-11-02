@@ -101,6 +101,12 @@ export interface RowPolicyDnfPreviewProps {
    * 「最终行约束（与个人行限制相交）」.
    */
   agentsHeading?: string;
+  /**
+   * How each Agent row lays out the subject and the conclusion. `"stack"`
+   * (default) keeps today's flex wrap; `"columns"` is the row-policy view's
+   * left-subject / right-conclusion grid (Spec §5.5).
+   */
+  subjectRowLayout?: "stack" | "columns";
 }
 
 function formatValue(value: unknown): string {
@@ -191,7 +197,8 @@ export function RowPolicyDnfPreview({
   collapseUniformAllRows = false,
   predicateLayout = "inline",
   unionHeading = "最终行约束（角色并集）",
-  agentsHeading = "最终行约束（与个人行限制相交）"
+  agentsHeading = "最终行约束（与个人行限制相交）",
+  subjectRowLayout = "stack"
 }: RowPolicyDnfPreviewProps) {
   const [agentsExpanded, setAgentsExpanded] = useState(false);
   const hasReason = Boolean(unavailableReason);
@@ -221,14 +228,12 @@ export function RowPolicyDnfPreview({
       ) : null}
 
       <section className="grid gap-1" data-testid="row-policy-dnf-union-section">
-        <h2 className="pl-panel-title text-base">
-          {unionHeading}
-          {roleIds && roleIds.length > 0 ? (
-            <span className="ml-2 text-xs font-normal text-fg-muted">
-              来源角色：{roleIds.join("、")}
-            </span>
-          ) : null}
-        </h2>
+        <h2 className="pl-panel-title text-base">{unionHeading}</h2>
+        {roleIds && roleIds.length > 0 ? (
+          <p className="text-xs text-fg-muted notranslate" translate="no" data-testid="row-policy-dnf-source-roles">
+            来源角色：{roleIds.join("、")}
+          </p>
+        ) : null}
         {hasReason ? (
           <p className="text-sm text-fg-muted" data-testid="row-policy-dnf-union-unavailable">
             目录或编译状态未知，未展示并集结果。
@@ -277,21 +282,46 @@ export function RowPolicyDnfPreview({
                   className="grid gap-1"
                   data-testid={`row-policy-dnf-agent-${row.agentId}`}
                 >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-xs text-fg-muted notranslate" translate="no">
-                      {row.agentId}
-                    </p>
-                    {row.summaryHref ? (
-                      <Link className="text-xs underline" to={row.summaryHref}>
-                        授权摘要
-                      </Link>
-                    ) : null}
-                  </div>
-                  <DnfGrantBody
-                    grant={row.finalRows}
-                    testId={`row-policy-dnf-agent-${row.agentId}-rows`}
-                    layout={predicateLayout}
-                  />
+                  {subjectRowLayout === "columns" ? (
+                    <div
+                      className="grid grid-cols-[minmax(7rem,11rem)_minmax(0,1fr)] items-start gap-x-3 gap-y-1"
+                      data-testid="row-policy-view-subject-row"
+                    >
+                      <p className="text-sm notranslate" translate="no">
+                        {row.agentId}
+                      </p>
+                      <div className="grid gap-1">
+                        {row.summaryHref ? (
+                          <Link className="justify-self-start text-xs underline" to={row.summaryHref}>
+                            授权摘要
+                          </Link>
+                        ) : null}
+                        <DnfGrantBody
+                          grant={row.finalRows}
+                          testId={`row-policy-dnf-agent-${row.agentId}-rows`}
+                          layout={predicateLayout}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-fg-muted notranslate" translate="no">
+                          {row.agentId}
+                        </p>
+                        {row.summaryHref ? (
+                          <Link className="text-xs underline" to={row.summaryHref}>
+                            授权摘要
+                          </Link>
+                        ) : null}
+                      </div>
+                      <DnfGrantBody
+                        grant={row.finalRows}
+                        testId={`row-policy-dnf-agent-${row.agentId}-rows`}
+                        layout={predicateLayout}
+                      />
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

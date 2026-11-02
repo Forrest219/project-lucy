@@ -62,6 +62,7 @@ import { catalogReloadsQueryOptions, mcpRuntimeStatusQueryOptions, projectQueryO
 const AddSchemaDrawer = lazy(() => import("../../components/AddSchemaDrawer").then((m) => ({ default: m.AddSchemaDrawer })));
 const PrepareSchemaStructureDrawer = lazy(() => import("../../components/SchemaStructurePrep").then((m) => ({ default: m.PrepareSchemaStructureDrawer })));
 const CreateConnectionDrawer = lazy(() => import("../../components/CreateConnectionDrawer").then((m) => ({ default: m.CreateConnectionDrawer })));
+const EditConnectionDrawer = lazy(() => import("../../components/connections/EditConnectionDrawer").then((m) => ({ default: m.EditConnectionDrawer })));
 const DeleteConnectionDrawer = lazy(() => import("../../components/DeleteConnectionDrawer").then((m) => ({ default: m.DeleteConnectionDrawer })));
 const RemoveSchemaDrawer = lazy(() => import("../../components/RemoveSchemaDrawer").then((m) => ({ default: m.RemoveSchemaDrawer })));
 const SetupAssistantModal = lazy(() => import("../../components/onboarding").then((m) => ({ default: m.SetupAssistantModal })));
@@ -586,6 +587,7 @@ export function ConnectionOverview() {
   const [assistantConnId, setAssistantConnId] = useState("");
   const [removeTarget, setRemoveTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ConnectionInfo | null>(null);
+  const [editTarget, setEditTarget] = useState<ConnectionInfo | null>(null);
   const [reloadRunsByConnection, setReloadRunsByConnection] = useState<Record<string, CatalogReloadRun>>({});
   const [reloadErrorsByConnection, setReloadErrorsByConnection] = useState<Record<string, Error | null>>({});
   const [reloadingConnections, setReloadingConnections] = useState<Record<string, boolean>>({});
@@ -746,7 +748,7 @@ export function ConnectionOverview() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="pl-btn pl-btn--primary"
+              className="pl-btn pl-btn--secondary"
               onClick={() => {
                 setAssistantConnId("");
                 setAssistantStep(1);
@@ -758,7 +760,7 @@ export function ConnectionOverview() {
             </button>
             <button
               type="button"
-              className="pl-btn pl-btn--secondary"
+              className="pl-btn pl-btn--primary"
               onClick={() => setCreateOpen(true)}
               data-testid="create-connection-btn"
             >
@@ -1170,6 +1172,30 @@ export function ConnectionOverview() {
                           </p>
                         </div>
                         <div className="pl-connection-more-separator" role="separator" />
+                        <button
+                          type="button"
+                          className="pl-row-action-link pl-connection-more-action notranslate"
+                          onClick={() => {
+                            closeMore();
+                            setEditTarget(conn);
+                          }}
+                          data-testid={`edit-connection-${conn.id}`}
+                          translate="no"
+                          disabled={
+                            conn.id === OPS_EVIDENCE_CONNECTION_ID ||
+                            conn.driver === "sqlite" ||
+                            conn.driver === "athena" ||
+                            !conn.host
+                          }
+                          aria-disabled={
+                            conn.id === OPS_EVIDENCE_CONNECTION_ID ||
+                            conn.driver === "sqlite" ||
+                            conn.driver === "athena" ||
+                            !conn.host
+                          }
+                        >
+                          编辑连接
+                        </button>
                         {/* Spec 149 §10 — 运维问数连接不可删除：入口不可用。 */}
                         <button
                           type="button"
@@ -1653,6 +1679,13 @@ export function ConnectionOverview() {
           open={createOpen}
           onClose={() => setCreateOpen(false)}
           existingIds={connections.map((conn) => conn.id)}
+        />
+      ) : null}
+      {editTarget ? (
+        <EditConnectionDrawer
+          open
+          connection={editTarget}
+          onClose={() => setEditTarget(null)}
         />
       ) : null}
       {structureTarget ? (

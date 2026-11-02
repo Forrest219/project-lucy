@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   assertReadable,
   ForbiddenPathError,
+  safeOverwriteSecretPassword,
+  safeReadSecretPasswordBytesIfExists,
   safeRemoveSecretPasswordIfExists,
   safeWrite,
   safeWriteNewSecretPassword,
@@ -98,6 +100,22 @@ describe("safeWriteNewSecretPassword (Spec 124 Phase A)", () => {
     } finally {
       await rm(outside, { recursive: true, force: true });
     }
+  });
+});
+
+describe("safeOverwriteSecretPassword (endpoint edit)", () => {
+  it("overwrites existing secret bytes and create new-only still rejects", async () => {
+    const relPath = ".ktx/secrets/demo-mysql-password";
+    await safeWriteNewSecretPassword(projectRoot, relPath, "first");
+    await safeOverwriteSecretPassword(projectRoot, relPath, "second");
+    await expect(readFile(path.join(projectRoot, relPath), "utf8")).resolves.toBe("second");
+    const mode = (await stat(path.join(projectRoot, relPath))).mode & 0o777;
+    expect(mode).toBe(0o600);
+    await expect(safeWriteNewSecretPassword(projectRoot, relPath, "third")).rejects.toBeInstanceOf(
+      SecretAlreadyExistsError
+    );
+    const bytes = await safeReadSecretPasswordBytesIfExists(projectRoot, relPath);
+    expect(bytes?.toString("utf8")).toBe("second");
   });
 });
 

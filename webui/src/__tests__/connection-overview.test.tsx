@@ -927,6 +927,22 @@ describe("ConnectionOverview", () => {
     expect(screen.getByRole("heading", { name: "新建连接" })).toBeInTheDocument();
   });
 
+  it("SC-13 PageHeader 唯一实心 primary 仍为新建连接；编辑连接不是 primary", async () => {
+    stubOverviewFetch();
+    renderOverview();
+
+    const createBtn = await screen.findByTestId("create-connection-btn");
+    expect(createBtn).toHaveClass("pl-btn--primary");
+    expect(createBtn).toHaveTextContent("新建连接");
+    expect(screen.getByTestId("start-onboarding-assistant-btn")).not.toHaveClass("pl-btn--primary");
+
+    fireEvent.click(await screen.findByTestId("connection-more-mysql-aliyun"));
+    const editBtn = await screen.findByTestId("edit-connection-mysql-aliyun");
+    expect(editBtn).toHaveTextContent("编辑连接");
+    expect(editBtn).not.toHaveClass("pl-btn--primary");
+    expect(editBtn).toHaveClass("pl-row-action-link");
+  });
+
   it("shows project API errors", async () => {
     stubOverviewFetch({ projectError: true });
     renderOverview();
