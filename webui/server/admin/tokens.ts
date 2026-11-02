@@ -664,12 +664,12 @@ export function registerTokenRoutes(app: FastifyInstance) {
         }
       }
 
-      // Repair: disk already equals requested expiry (ack/runtime recovery / body.repair).
-      // Ordinary path must strictly extend; equal without repair semantics → still allowed as repair
-      // when disk matches (Spec SC-22). Non-equal shorter/equal effective end → NOT_EXTENDED.
+      // Repair is only the ack/runtime retry: disk already equals the request AND
+      // the client sets body.repair. An equal expiry without that flag is not an
+      // extension (SC-14) and must not succeed as an empty write.
       const diskEqualsRequested = expiryNormalizedEqual(token.expires_at ?? null, expires_at);
-      const isRepair = diskEqualsRequested || repairRequested;
-      if (!diskEqualsRequested) {
+      const isRepair = diskEqualsRequested && repairRequested;
+      if (!isRepair) {
         try {
           assertStrictExtension(token.expires_at ?? null, expires_at);
         } catch (error) {
@@ -704,7 +704,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
               label,
               expires_at,
               old_expires_at: oldExpires,
-              repair: isRepair && diskEqualsRequested
+              repair: isRepair
             }
           }
         };
@@ -767,7 +767,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
               label,
               hashPrefix: token.hash.slice(0, 19),
               expires_at,
-              repair: diskEqualsRequested
+              repair: isRepair
             }
           });
           invalidateAccessConfigCache();
@@ -796,7 +796,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
             label,
             old_expires_at: oldExpires,
             expires_at,
-            repair: diskEqualsRequested,
+            repair: isRepair,
             ...runtime,
             gate
           }
