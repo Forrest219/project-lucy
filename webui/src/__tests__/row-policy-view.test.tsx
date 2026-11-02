@@ -12,7 +12,7 @@ import { ROW_POLICY_PREVIEW_BOUNDARY } from "../components/admin/RowPolicyDnfPre
  *
  * Authority: docs/specs/lucy-20261030-row-policy-view-presentation-spec.md
  *   §5.1（页面骨架）, §5.2（URL）, §5.3（清单授予列）, §5.4（详情）; D1–D10;
- *   SC-01 … SC-27.
+ *   SC-01 … SC-30.
  *
  * The page has TWO parameter families and they must not mix:
  *   - 当前表：`connectionId` / `schema` / `sourceName`（深链三参数，只打开详情）
@@ -635,6 +635,28 @@ describe("行权限视图的清单授予列与详情顺序（Spec §5.3 / §5.4�
     expect(within(workspace).getByTestId("row-policy-view-list-panel")).toBeInTheDocument();
     expect(within(workspace).getByTestId("row-policy-view-detail")).toBeInTheDocument();
     expect(screen.getByTestId("row-policy-view-toolbar")).toBeInTheDocument();
+  });
+
+  it("SC-28 工作台左栏轨道为 24–34rem", async () => {
+    renderView();
+    await waitFor(() => expect(screen.getByTestId("row-policy-view-table-list")).toBeInTheDocument());
+    expect(screen.getByTestId("row-policy-view-workspace").className).toContain(
+      "xl:grid-cols-[minmax(24rem,34rem)_minmax(0,1fr)]"
+    );
+  });
+
+  it("SC-29 计量列表头与单元格 nowrap", async () => {
+    renderView();
+    const list = await screen.findByTestId("row-policy-view-table-list");
+    const headers = within(list).getAllByRole("columnheader");
+    expect(headers[1]?.className).toContain("whitespace-nowrap");
+    expect(headers[2]?.className).toContain("whitespace-nowrap");
+    expect(headers[3]?.className).toContain("whitespace-nowrap");
+    const row = screen.getByTestId("row-policy-view-table-warehouse-fin-fin_ledger");
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[1]?.className).toContain("whitespace-nowrap");
+    expect(cells[2]?.className).toContain("whitespace-nowrap");
+    expect(cells[3]?.className).toContain("whitespace-nowrap");
   });
 
   it("SC-20 深链打开详情；无三参数时右栏空态", async () => {

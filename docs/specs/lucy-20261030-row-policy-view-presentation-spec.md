@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 呈现修订 / **v0.5 详情分层与对齐（已落地）** |
+| 文档类型 / 版本 | 呈现修订 / **v0.6 表清单列密度（已落地）** |
 | 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号。功能编号待 PM 指派，不占用 `L25-*`，不升父 Spec 版本号 |
 | 功能编号 / 优先级 | **待 PM 指派** / **P1** |
-| 状态 | **v0.5 详情分层与对齐已落地（2026-11-01）**：在 v0.4 双栏之上增补 §5.5 与 SC-24–SC-27（右栏身份／结论并重、角色与 Agent 两列对齐）。SC-01–SC-27 自动化已关闭；闭口证据见 [`docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`](../reviews/2026-11-01-row-policy-view-presentation-closure.md)（至 SC-23）与 §7.1（SC-24–SC-27）。配套 Plan：[`docs/plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md`](../plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md)。**本条收口不表示可上线**——浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入不在本条出口；父 Spec 的 RTV-01–RTV-08 不在本条出口 |
+| 状态 | **v0.6 表清单列密度已落地（2026-11-02）**：§5.1 左栏 `24–34rem` + 计量列 nowrap；SC-28–SC-29 组件测试关闭；SC-30 三档 CSS 视口取证通过（MBA13／MBP14／Ext1080）。SC-01–SC-27 仍成立。配套 Plan：[`docs/plans/lucy-20261102-row-policy-list-density-plan.md`](../plans/lucy-20261102-row-policy-list-density-plan.md)。历史：v0.5 见 [`docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`](../reviews/2026-11-01-row-policy-view-presentation-closure.md)。**本条收口不表示可上线**——除 SC-30 外，移动窄屏验证、客户环境验证、真实实例写入不在本条出口；父 Spec 的 RTV-01–RTV-08 不在本条出口 |
 | 决策来源 | 2026-10-30 对 `http://127.0.0.1:55176/admin/row-policies` 的页面探查。12 张表的有效行授予都是「行权限：全部行」。点开 `superstore_orders` 后清单收成 1 行；再勾「仅看受限表」，地址栏丢掉 `sourceName`，表名框仍显示 `superstore_orders`，清单变成「空筛选」 |
 | 开工授权 | 2026-10-30 PM 书面授权：按本文与配套 Plan 完成开发落地。D1–D10 全部通过，没有否决项。不存在「只做 D3」或「不做 D8／D10」的退路。功能编号仍待 PM 指派 |
 | 需求来源 | 行权限视图要先回答「这张表实际受什么行约束」，再允许换一张表。筛选、选表、快照哈希不再挤在同一条阅读流里 |
@@ -13,7 +13,8 @@
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：仓库级呈现修订落 `docs/specs/` |
 | 与既有 Spec 的关系 | **修订父 Spec 的呈现，不修订其语义。** 权威仍是 [`docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md`](lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) §6.2、RTV-01–RTV-08。深链参数名、只读、四种空态互斥、OR-of-AND 不拍平，沿用该文。本 Spec 获批后，父 Spec §6.2 加一行交叉引用，指向本 Spec §5 |
 | 筛选输入 | 文本筛选遵守 [`docs/specs/lucy-20261029-url-driven-input-ime-composition-spec.md`](lucy-20261029-url-driven-input-ime-composition-spec.md) §5，使用 `useUrlMirroredField` |
-| 实施计划 | 基线：[`docs/plans/2026-10-30-lucy-row-policy-view-presentation-plan.md`](../plans/2026-10-30-lucy-row-policy-view-presentation-plan.md)（SC-01–SC-23）。§5.5 增量：[`docs/plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md`](../plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md)（SC-24–SC-27） |
+| 实施计划 | 基线：[`docs/plans/2026-10-30-lucy-row-policy-view-presentation-plan.md`](../plans/2026-10-30-lucy-row-policy-view-presentation-plan.md)（SC-01–SC-23）。§5.5 增量：[`docs/plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md`](../plans/lucy-20261101-row-policy-view-detail-hierarchy-plan.md)（SC-24–SC-27）。§5.1 列密度增量：[`docs/plans/lucy-20261102-row-policy-list-density-plan.md`](../plans/lucy-20261102-row-policy-list-density-plan.md)（SC-28–SC-30） |
+| 密度增量授权 | 2026-11-02 PM：「方案 1」+「批准执行」。增量修订本 Spec §5.1 / SC-28–SC-30；配套 Plan `lucy-20261102-row-policy-list-density`；含 demo 平滑升级与三档视口浏览器取证 |
 
 > **开工记录（2026-10-30）**：S0 审阅已通过。D1–D10 按原文冻结，没有否决项，也没有退路。本文的呈现规格 §5 与配套 Plan §4 的 S1–S4 是本次授权的全部实现口径。实现完成不等于验收通过——SC-01–SC-18 的执行状态见 §7 与 Plan 文首。
 
@@ -84,6 +85,7 @@ Forbidden terms:
 - [ ] 诊断默认折叠，不与主结论争抢首屏
 - [ ] 右栏详情按 §5.5 分身份／状态、结论、溯源三层；不新增颜色 token，不新增卡片壳
 - [ ] 角色与 Agent 溯源行用两列网格对齐；不做窄屏重排
+- [ ] 表清单计量列（角色数、Agent 数、有效行授予）表头与单元格 `whitespace-nowrap`；溢出只在 `pl-data-grid-scroll` 横滑，不逐字竖折
 
 ### Exceptions (If Any)
 
@@ -182,8 +184,11 @@ Page Header
 工作台 data-testid="row-policy-view-workspace"
   xl:grid-cols-[minmax(24rem,34rem)_minmax(0,1fr)]
   左 pl-panel data-testid="row-policy-view-list-panel" 标题「表清单」+ {n} 张表
-    网格列：表、角色数、Agent 数、有效行授予；单元格加大纵向 padding；授予列 nowrap
-    表列主文是 sourceName，次行是「{connectionId} · {schema}」
+    网格列：表、角色数、Agent 数、有效行授予；单元格加大纵向 padding
+    角色数 / Agent 数 / 有效行授予：th 与 td 均 whitespace-nowrap（禁止中文逐字竖折）
+    表列 min-w 至少 10rem；主文是 sourceName，次行是「{connectionId} · {schema}」
+    内容超出左栏时只在 pl-data-grid-scroll 内横滑；不把左栏轨道加到超过 34rem
+    若 nowrap 后仍竖折，允许给表增加 min-width 触发横滑，不改轨道上限
     按钮 aria-label 为「{connectionId}/{schema}/{sourceName}」
     选中行 aria-current="true"，背景 bg-bg-muted，并带左边强调（如 border-l）
   右 pl-panel data-testid="row-policy-view-detail"（三参数齐全）或空态
@@ -191,6 +196,22 @@ Page Header
       data-testid="row-policy-view-detail-empty"
     有三参数：分层与对齐以 §5.5 为准（身份／状态 ∥ 结论 → 角色／Agent 溯源）
 ```
+
+#### 5.1.1 列密度视口取证（v0.6）
+
+在已登录的 `/admin/row-policies` 且表清单非空时，用下列 **CSS 视口**（`window.innerWidth × innerHeight`）取证。不要求真实物理机型，允许 DevTools / 自动化等比缩放：
+
+| 标签 | CSS 视口 | 代表 |
+|---|---|---|
+| MBA13 | 1440×900 | MacBook Air 13 寸常用逻辑分辨率 |
+| MBP14 | 1512×982 | MacBook Pro 14 寸常用逻辑分辨率 |
+| Ext1080 | 1920×1080 | 1080p 外接显示器 100% 缩放 |
+
+每档通过条件（SC-30）：
+
+1. 「角色数」「Agent 数」「有效行授予」表头单行可读（不得逐字竖排）。
+2. 授予列可见文案（如「行权限：全部行」）单行可读，不得逐字竖折。
+3. 允许出现横向滚动条；不允许为了塞进左栏而取消 nowrap。
 
 加载中、读取失败的 test id 与句子保持既有实现。清单部分失败改走工具条诊断折叠，不再插在清单标题与表格之间抢结论注意力。
 
@@ -391,8 +412,11 @@ renderListEmpty(status):
 | SC-25 | 「有效行授予」标题行不含「来源角色」主文案；有贡献角色时来源角色出现在结论区次要行；结论正文可见且字重／层级高于溯源区角色行正文 |
 | SC-26 | 角色贡献与各 Agent（展开后）行均为两列：左主体链接／id，右行结论（及授权摘要等）；同列表内左列纵向对齐 |
 | SC-27 | 角色编辑页未传 `subjectRowLayout`／未改既有调用时，`RowPolicyDnfPreview` 仍为 stack、旧标题、边界句在上、Agent 不折叠 |
+| SC-28 | `row-policy-view-workspace` 的 class 含 `xl:grid-cols-[minmax(24rem,34rem)_minmax(0,1fr)]` |
+| SC-29 | 清单表中「角色数」「Agent 数」「有效行授予」对应 th，以及角色数／Agent 数／授予 td，class 均含 `whitespace-nowrap` |
+| SC-30 | §5.1.1 三档 CSS 视口（MBA13 / MBP14 / Ext1080）下表头与授予列均单行可读，无逐字竖折；允许横滑 |
 
-SC-01–SC-23 的自动化证据见 §7.1。SC-24–SC-27 的落地证据见增量 Plan，收口前补入 §7.1。**实现完成不等于验收通过**——下列证据只说明断言存在且通过，验收仍待 PM 做出。
+SC-01–SC-27 的自动化证据见 §7.1。SC-28–SC-30 的落地证据见密度增量 Plan，收口前补入 §7.1。**实现完成不等于验收通过**——下列证据只说明断言存在且通过，验收仍待 PM 做出。
 
 ### 7.1 落地状态与自动化证据（2026-10-30）
 
@@ -427,19 +451,22 @@ S1–S4 已按配套 Plan §4 实施完毕，D1–D10 全部落地，没有走�
 | SC-25 | 页面测试「SC-25 结论标题与来源角色拆行」＋ DNF「SC-25／SC-27：来源角色在标题下的次要行」 |
 | SC-26 | 页面测试「SC-26 角色与 Agent 两列对齐」＋ DNF「SC-26／SC-27：subjectRowLayout=columns」 |
 | SC-27 | DNF「默认：边界句在上…」＋「SC-25／SC-27」＋「SC-26／SC-27」默认无 subject-row 网格 |
+| SC-28 | 页面测试「SC-28 工作台左栏轨道为 24–34rem」 |
+| SC-29 | 页面测试「SC-29 计量列表头与单元格 nowrap」 |
+| SC-30 | `inbox/row-policy-list-density-viewports/NOTES.md`（MBA13／MBP14／Ext1080 全通过；截图同目录） |
 
 实现备注：
 
 - 清单行随 `grantStatus` 一并带出机器 reason（`grantStatusReason`），页面只把它放进单元格的 `title`，不写成可见主文案（§5.3）。
 - `webui/scripts/check-selector-contract.mjs`（`npm run e2e:selector-contract`）对本轮三个实现文件**无告警**；该门禁当前整体仍为红，报出的 139 条 UNREGISTERED 全部来自与本轮无关的既有组件，不是本轮引入。
-- 浏览器点击验收不在本轮范围内，未做窄屏与 Playwright 验证。
+- SC-01–SC-27 未要求全页浏览器点击验收。v0.6 仅把 §5.1.1 三档 CSS 视口取证纳入 SC-30；移动窄屏仍不在出口。
 
 ### 7.2 闭口层级
 
 - 层级：功能合同
-- 本条承诺：行权限视图把「这张表实际受什么行约束」讲清楚——点表只打开详情，清单筛选与当前表解耦，授权状态四态互斥且不混用文案，页面只读；单表详情身份／结论并重且溯源两列对齐。
-- 本条出口：SC-01–SC-27 的自动化用例（页面测试 `webui/src/__tests__/row-policy-view.test.tsx`、DNF 预览测试 `webui/src/__tests__/row-policy-dnf-preview.test.tsx`、服务端 `webui/server/__tests__/p1-row-policy-views.test.ts`），加 `npm run lint:terminology`。其中 SC-01–SC-23 已有 §7.1 证据；SC-24–SC-27 随增量 Plan 落地后补证。
-- 不在本条出口：浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入；父 Spec（行策略模板与按表反查）的 RTV-01–RTV-08。
+- 本条承诺：行权限视图把「这张表实际受什么行约束」讲清楚——点表只打开详情，清单筛选与当前表解耦，授权状态四态互斥且不混用文案，页面只读；单表详情身份／结论并重且溯源两列对齐；表清单计量列在约定左栏宽度下可读、不逐字竖折。
+- 本条出口：SC-01–SC-29 的自动化用例（页面测试 `webui/src/__tests__/row-policy-view.test.tsx`、DNF 预览测试 `webui/src/__tests__/row-policy-dnf-preview.test.tsx`、服务端 `webui/server/__tests__/p1-row-policy-views.test.ts`），加 `npm run lint:terminology`；以及 SC-30 的 §5.1.1 三档 CSS 视口浏览器取证。SC-01–SC-30 证据见 §7.1。
+- 不在本条出口：移动窄屏验证、客户环境验证、真实实例写入；父 Spec（行策略模板与按表反查）的 RTV-01–RTV-08。demo 平滑升级是本增量 Plan 的过程步骤，不是客户交付取证。
 - 上线关系：本条收口不表示可上线
 
 ## 8. 落盘清单
