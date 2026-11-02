@@ -947,7 +947,9 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
               ) : null}
               <label className="grid gap-1" htmlFor="role-id-input">
                 <span className="text-sm font-medium">角色标识</span>
-                <input id="role-id-input" className="pl-input notranslate" translate="no" value={draft.roleId} disabled={isReadOnlyTemplate || (mode === "edit" || mode === "delete")} onChange={(event) => updateDraft({ ...draft, roleId: event.target.value })} placeholder="例：poc_data_engineer" />
+                {/* 删除深链（?mode=delete）解析后落在 edit 模式——PageMode 只有 create/edit/copy，
+                    删除意图由 deleteIntent 单独承载。所以只读判定只需覆盖 edit。 */}
+                <input id="role-id-input" className="pl-input notranslate" translate="no" value={draft.roleId} disabled={isReadOnlyTemplate || mode === "edit"} onChange={(event) => updateDraft({ ...draft, roleId: event.target.value })} placeholder="例：poc_data_engineer" />
                 <span className="text-xs text-fg-muted">供 <span className="notranslate" translate="no">Agent</span> 引用的技术标识；仅字母、数字、下划线和连字符，最多 64 位。</span>
               </label>
               <label className="grid gap-1" htmlFor="role-description-input">

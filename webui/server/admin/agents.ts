@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { stringify, parse } from "yaml";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { writeAccessConfigFileWithAuditClosure } from "./access-config.js";
+import { writeAccessConfigFileWithAuditClosure, type YamlRole } from "./access-config.js";
 import { resolveProjectRoot } from "../project.js";
 import { previewDiff } from "../diff.js";
 import { getAuditDb, type ConfigAuditActorType } from "./audit.js";
@@ -119,29 +119,18 @@ export interface YamlUser {
   constraints?: unknown;
 }
 
-export interface YamlRole {
-  description?: string;
-  permission_model_version?: 1 | 2;
-  allow?: {
-    connections?: string[];
-    source_scope?: "catalog_bound";
-    tableSelectors?: Array<
-      | { connection?: string; schema: string; names: string[]; row_access?: "all" | "scoped"; row_policy?: { predicates: unknown[] } }
-      | { connection?: string; schema: string; prefix: string; row_access?: "all" | "scoped"; row_policy?: { predicates: unknown[] } }
-    >;
-    tools?: string[];
-    /**
-     * L25-16 — 控制面授权维度（Spec §3.2.1）。与 `tools`（数据面）完全独立。
-     * 形状：`{ tools: string[]; asset_kinds: string[]; connections?: string[]; instance_scope?: "read_only" }[]`
-     */
-    ops?: Array<{
-      tools: string[];
-      asset_kinds: string[];
-      connections?: string[];
-      instance_scope?: "read_only";
-    }>;
-  };
-}
+/**
+ * Role shape of `access.yaml`.
+ *
+ * There is ONE definition of the Role body: `access-config.ts` owns it (it owns
+ * the persistence), and this module re-exports it. The two copies used to
+ * drift — this one predated the row-policy template (`row_policy.template`),
+ * so it still declared `row_policy.predicates` as a required `unknown[]`, while
+ * the persisted format allows a template reference and no inline predicates.
+ * A template-expanded Role was therefore not assignable to the canonical Role,
+ * which broke every caller that mixes a YAML Role with a template Role.
+ */
+export type { YamlRole };
 
 export interface YamlAccessConfig {
   roles?: Record<string, YamlRole>;
@@ -1638,7 +1627,11 @@ export function registerAgentRoutes(app: FastifyInstance) {
     if (parsedRoles.touched && "error" in parsedRoles) {
       return reply.status(400).send({ ok: false, error: parsedRoles.error });
     }
-    let nextRoleIds = resolveRoleIds(existingUser).ok ? resolveRoleIds(existingUser).roleIds : [];
+    // One call, one narrowing: the two `resolveRoleIds(existingUser)` calls in
+    // the ternary are two different expressions, so the compiler cannot carry
+    // the `ok` check of the first one over to the second.
+    const resolvedExistingRoles = resolveRoleIds(existingUser);
+    let nextRoleIds = resolvedExistingRoles.ok ? resolvedExistingRoles.roleIds : [];
     if (parsedRoles.touched && !("error" in parsedRoles)) {
       if (parsedRoles.ids.length === 0 && !existingUser.allow) {
         return reply.status(400).send({ ok: false, error: { code: "ROLE_REQUIRED", message: "At least one role is required" } });

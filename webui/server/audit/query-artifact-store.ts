@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveProjectRoot } from "../project.js";
+import { resolveContentPaths } from "../paths.js";
 import { resolveWritable, assertReadable } from "../fs-safe.js";
 import {
   decryptQueryArtifactPayload,
@@ -87,14 +88,19 @@ export async function writeQueryArtifact(
   };
 
   const projectRoot = await resolveProjectRoot();
+  const contentPaths = await resolveContentPaths(projectRoot);
   const relDir = coldArtifactsRelDir(env);
   if (path.isAbsolute(relDir)) {
     await mkdir(relDir, { recursive: true });
     await writeFile(path.join(relDir, artifactFileName(ref)), `${JSON.stringify(record)}\n`, "utf8");
   } else {
-    const absDir = await resolveWritable(projectRoot, relDir);
+    const absDir = await resolveWritable(contentPaths, projectRoot, relDir);
     await mkdir(absDir, { recursive: true });
-    const absFile = await resolveWritable(projectRoot, path.posix.join(relDir, artifactFileName(ref)));
+    const absFile = await resolveWritable(
+      contentPaths,
+      projectRoot,
+      path.posix.join(relDir, artifactFileName(ref))
+    );
     await writeFile(absFile, `${JSON.stringify(record)}\n`, "utf8");
   }
   return { ref, queryHash };
@@ -117,13 +123,18 @@ export async function readQueryArtifact(
   if (!/^qa_[a-f0-9]{24}$/.test(ref)) return null;
 
   const projectRoot = await resolveProjectRoot();
+  const contentPaths = await resolveContentPaths(projectRoot);
   const relDir = coldArtifactsRelDir(env);
   let raw: string;
   try {
     if (path.isAbsolute(relDir)) {
       raw = await readFile(path.join(relDir, artifactFileName(ref)), "utf8");
     } else {
-      const absFile = await assertReadable(projectRoot, path.posix.join(relDir, artifactFileName(ref)));
+      const absFile = await assertReadable(
+        contentPaths,
+        projectRoot,
+        path.posix.join(relDir, artifactFileName(ref))
+      );
       raw = await readFile(absFile, "utf8");
     }
   } catch (error) {

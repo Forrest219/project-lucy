@@ -208,9 +208,24 @@ export type AuthFailureReason =
   | "token_revoked"
   | "token_expired";
 
+/**
+ * Lucy v0.25 / L25-09 B22（D2）—— **身份建立之前**就被入口拒绝的请求。
+ *
+ * 路径未知 / 方法不允许 / Origin 不放行这三种拒绝拿不到 Token，因此不进
+ * canonical ledger，改写同一张 `auth_failure_log`（`reason` 列是 TEXT，
+ * 无 CHECK 约束），作为独立的入口证据参与覆盖分母。
+ */
+export type IngressRefusalReason =
+  | "route_not_found"
+  | "method_not_allowed"
+  | "origin_not_allowed";
+
+/** `auth_failure_log.reason` 的完整取值域：认证失败 + 入口拒绝。 */
+export type AuthFailureLogReason = AuthFailureReason | IngressRefusalReason;
+
 export interface AuthFailureLogEntry {
   ts: string;
-  reason: AuthFailureReason;
+  reason: AuthFailureLogReason;
   clientIp?: string;
   userAgent?: string;
   tokenHashPrefix?: string;

@@ -341,8 +341,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     // IME composition Enter (e.g. confirming Chinese candidates) must not
-    // navigate. keyCode 229 covers browsers that still emit it during IME.
-    if (event.isComposing || event.keyCode === 229) return;
+    // navigate. React's synthetic keyboard event does not expose
+    // `isComposing`, so the flag has to be read off the native DOM event
+    // (which carries it per the UI Events spec). keyCode 229 covers
+    // browsers that still emit it during IME.
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
 
     if (event.key === "ArrowDown") {
       event.preventDefault();

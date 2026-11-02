@@ -194,7 +194,7 @@ export function CallMonitor() {
   const data = query.data;
   const awaitingFirstLoad = !data && query.isPending;
   const failedWithoutSnapshot = query.isError && !data;
-  const noData = Boolean(data) && data.traffic.businessCalls <= 0;
+  const noData = data !== undefined && data.traffic.businessCalls <= 0;
   const metricState = failedWithoutSnapshot
     ? ("unavailable" as const)
     : awaitingFirstLoad

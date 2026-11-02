@@ -41,6 +41,20 @@ export interface ParsedGovFilters {
 
 export type GovFilterError = { code: "invalid_arguments"; reason: string };
 
+/**
+ * `parseAndStripGovFilters` 的失败判别式。
+ *
+ * `GovFilterError.code` 是字面量 `"invalid_arguments"`，成功分支的返回值没有
+ * `code` 键，所以 `"code" in result` 就是完整判别。写成谓词而不是让调用方写
+ * `"code" in x && x.code === "..."`，是因为那种组合条件在 TS 的**否定分支**
+ * 不会把联合类型收窄回 `ParsedGovFilters`（TS 6 仍如此）。
+ */
+export function isGovFilterError(
+  result: ParsedGovFilters | GovFilterError
+): result is GovFilterError {
+  return "code" in result;
+}
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -156,7 +170,9 @@ export function parseAndStripGovFilters(
   const asOf = options.asOf ?? new Date();
   let windowHours: number | undefined;
   let calendarDays: number | undefined;
-  let calendarTz = GOVERNANCE_CALENDAR_TZ;
+  // `gov.calendar_tz` 可以是任意 IANA 时区（默认 Asia/Shanghai），因此这里
+  // 必须是 `string` 而不是 `GOVERNANCE_CALENDAR_TZ` 的字面量类型。
+  let calendarTz: string = GOVERNANCE_CALENDAR_TZ;
   let startIso: string | undefined;
   let endIso: string | undefined;
   let trust: GovTrust = options.defaultTrust ?? "confirmed";

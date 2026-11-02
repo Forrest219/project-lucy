@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { formatIdentityCompilerReason, resolveAdmissionSubject, type AdmissionSubject } from "./acl.js";
-import { writeAuthFailureLog, type writeLog } from "./audit.js";
+import { writeAuthFailureLog, type IngressRefusalReason, type writeLog } from "./audit.js";
 import { identifyRequestDetailed, type Identity } from "./identity.js";
 import { extractRequestClientMeta } from "./request-client-meta.js";
 /**
@@ -161,7 +161,7 @@ function recordAuthFailure(req: IncomingMessage, result: Awaited<ReturnType<type
  * the ingress recorded every request while these were dropped. They are
  * evidence of an ingress attempt, not of an execution.
  */
-function recordIngressRefusal(req: IncomingMessage, reason: string): void {
+function recordIngressRefusal(req: IncomingMessage, reason: IngressRefusalReason): void {
   const network = extractRequestClientMeta(req);
   void writeAuthFailureLog({
     ts: new Date().toISOString(),

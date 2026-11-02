@@ -224,7 +224,15 @@ function unqualifiedFields(record: Record<string, unknown>): Array<{ kind: "colu
   return found;
 }
 
-function guardMeasures(record: Record<string, unknown>, aggregated: readonly AggregatedMeasure[]): LucyCallGuard | null {
+/**
+ * `guardMeasures` 只产出「stop」判别（repair / reject 都映射成 stop + 修复提示），
+ * 永远不返回 allow 分支 —— 返回类型因此收窄到 stop 变体，调用方可直接读
+ * `reason` / `repair` / `failureDimension`。
+ */
+function guardMeasures(
+  record: Record<string, unknown>,
+  aggregated: readonly AggregatedMeasure[]
+): Extract<LucyCallGuard, { action: "stop" }> | null {
   const source = sourceOf(record);
   const measures = record.measures;
   if (!Array.isArray(measures)) return null;

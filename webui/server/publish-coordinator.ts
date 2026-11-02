@@ -202,10 +202,11 @@ function isStaleHolder(
   staleAfterMs: number
 ): boolean {
   if (!holder) return false;
-  if (Number.isInteger(holder.pid)) {
+  const pid = holder.pid;
+  if (typeof pid === "number" && Number.isInteger(pid)) {
     // The owner is known: only a dead owner may be reclaimed. This also covers
     // the current process, whose lock must never be stolen.
-    return holder.pid !== process.pid && !isProcessAlive(holder.pid);
+    return pid !== process.pid && !isProcessAlive(pid);
   }
   const acquiredAt = Date.parse(holder.acquiredAt);
   if (Number.isFinite(acquiredAt) && nowMs - acquiredAt > staleAfterMs) return true;

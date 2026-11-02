@@ -2537,9 +2537,14 @@ function renderTurnCsv(rows: TurnEntry[]): string {
   return lines.join("\n");
 }
 
-function csvFieldMetadataFields<T extends readonly string[]>(
-  headers: T,
-  metadata: Record<T[number], Omit<CsvFieldMetadata, "name">>
+// `T` is the header element type (not the array type) so that `headers.map`
+// yields `name: T` and `metadata[name]` stays indexable. With the array-level
+// generic (`T extends readonly string[]`) the map callback degrades to
+// `name: string` while `metadata` stays `Record<T[number], …>`, which TS cannot
+// prove indexable (TS7053).
+function csvFieldMetadataFields<T extends string>(
+  headers: readonly T[],
+  metadata: Record<T, Omit<CsvFieldMetadata, "name">>
 ): CsvFieldMetadata[] {
   return headers.map((name) => ({ name, ...metadata[name] }));
 }

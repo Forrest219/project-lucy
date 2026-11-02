@@ -69,6 +69,7 @@ import {
 } from "../ops-evidence/contract.js";
 import {
   applyStrippedGovFilters,
+  isGovFilterError,
   parseAndStripGovFilters
 } from "../ops-evidence/gov-filters.js";
 import {
@@ -2036,6 +2037,35 @@ function jsonRpcToolResult(requestId: string | number, text: string, options: { 
 }
 
 /**
+ * Hive bridge 的响应类型（由 `resolveAndMaybeServeHiveTool` 推导，避免与
+ * `server/hive/**` 的定义漂移）。
+ */
+type HiveServeResponse = Extract<
+  Awaited<ReturnType<typeof resolveAndMaybeServeHiveTool>>,
+  { action: "serve_hive" }
+>["response"];
+
+/**
+ * Hive bridge 响应 → 可审计的 payload。
+ *
+ * `HiveMcpBridgeResponse` 有两个分支：`handled:true`（带 `payload`）与
+ * `handled:false`（`missing_compiled_sql`，**没有** payload）。后者在编译
+ * SQL 为空时真的会返回（`handleHiveMcpTool`），直接读 `.payload` 得到
+ * `undefined`，下一行 `payload.ok` 就会抛 TypeError —— 所以这里收窄成与
+ * `error` 分支一致的失败 payload。
+ */
+function hiveBridgePayload(response: HiveServeResponse): Record<string, unknown> {
+  if (response.handled) return response.payload;
+  return {
+    ok: false,
+    reason: response.reason,
+    detail: "Hive execution requires compiled SQL; none was produced for this call",
+    jdbcInvokeCount: 0,
+    dialect: "hive"
+  };
+}
+
+/**
  * L25-10 execution wave — after Lucy ACL, divert Hive connections away from KTX.
  * Returns true when the response was already written.
  */
@@ -2047,10 +2077,18 @@ async function maybeWriteHiveDivertedResponse(input: {
   res: ServerResponse;
   start: number;
   requestMeta: Record<string, unknown>;
-  argsSummary: string;
+  argsSummary?: Record<string, unknown>;
   queryMeta: Record<string, unknown>;
   queryTables: string[];
   traceId: string;
+  /**
+   * 审计写入回调 —— 由 `handlePost` 传入。
+   *
+   * traceId 只在 `rpcMethod === "tools/call"` 时补齐（Spec 173 v0.3 /
+   * 2026-10-19 audit-trust），而 `rpcMethod` 只有 `handlePost` 知道；本函数
+   * 在模块作用域，拿不到它，因此审计写入必须由调用方回调。
+   */
+  recordAuditEntry: (entry: Parameters<typeof writeLog>[0]) => void;
 }): Promise<boolean> {
   const projectRoot = await resolveProjectRoot();
   const connectionId = firstConnectionIdFromArgs(input.toolArgs);
@@ -2076,7 +2114,7 @@ async function maybeWriteHiveDivertedResponse(input: {
           jdbcInvokeCount: 0,
           dialect: "hive"
         }
-      : decision.response.payload;
+      : hiveBridgePayload(decision.response);
   const isError = payload.ok === false;
   const responseBody = jsonRpcToolResult(input.requestId, JSON.stringify(payload, null, 2), { isError });
   input.res.writeHead(200, {
@@ -2087,7 +2125,7 @@ async function maybeWriteHiveDivertedResponse(input: {
 
   const jdbcInvokeCount =
     typeof payload.jdbcInvokeCount === "number" ? payload.jdbcInvokeCount : 0;
-  recordRequestAudit({
+  input.recordAuditEntry({
     ts: new Date().toISOString(),
     userId: input.identity.userId,
     client: input.identity.client,
@@ -3609,7 +3647,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
 
     if (connectionId === OPS_EVIDENCE_CONNECTION_ID || (typeof record.filters !== "undefined" && connectionId)) {
       const parsed = parseAndStripGovFilters(record.filters, { connectionId, sourceName });
-      if ("code" in parsed && parsed.code === "invalid_arguments") {
+      if (isGovFilterError(parsed)) {
         const reason = parsed.reason;
         const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${reason}`, { isError: true });
         res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -4493,7 +4531,8 @@ async function buildDenialRepairPayload(
           argsSummary,
           queryMeta,
           queryTables,
-          traceId
+          traceId,
+          recordAuditEntry: recordRequestAudit
         });
         if (hiveHandled) return;
         const block = await readSemanticRecoveryDenial(toolArgs);
@@ -5545,7 +5584,8 @@ async function buildDenialRepairPayload(
       argsSummary,
       queryMeta,
       queryTables,
-      traceId
+      traceId,
+      recordAuditEntry: recordRequestAudit
     });
     if (hiveHandled) return;
   }
@@ -6198,7 +6238,7 @@ export async function forwardAuthorizedLucyQuery(
     return { ok: false, reason: hiveDecision.reason };
   }
   if (hiveDecision.action === "serve_hive") {
-    const payload = hiveDecision.response.payload;
+    const payload = hiveBridgePayload(hiveDecision.response);
     if (payload.ok === false) {
       return { ok: false, reason: typeof payload.reason === "string" ? payload.reason : "hive_query_failed" };
     }

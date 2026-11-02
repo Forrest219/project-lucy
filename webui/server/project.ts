@@ -1932,12 +1932,20 @@ function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRe
       doc.set("setup", setup);
     }
     if (isMap(setup)) {
-      let ids = setup.get("database_connection_ids", true);
-      if (!ids) {
+      // `setup.get(..., true)` keeps the raw node: a missing key is `undefined`,
+      // an empty YAML value is `null`, an existing key may be a YAMLSeq (append)
+      // or any other node (left as-is).
+      // `undefined` 与 `null` 都按「没有列表」处理，与旧实现 `if (!ids)` 的运行时
+      // 行为一致：空值会被补成新列表并登记本次连接 id，不静默丢弃。
+      const existingIds = setup.get("database_connection_ids", true);
+      let ids: YAMLSeq<unknown> | undefined;
+      if (existingIds === undefined || existingIds === null) {
         ids = new YAMLSeq();
         setup.set("database_connection_ids", ids);
+      } else if (isSeq(existingIds)) {
+        ids = existingIds;
       }
-      if (isSeq(ids)) {
+      if (ids) {
         const existing = schemasList(ids);
         if (!existing.includes(input.id)) {
           ids.items.push(input.id);
@@ -2231,6 +2239,27 @@ function connectionEndpointMutatorFactory(
   };
 }
 
+export function updateConnectionEndpoint(
+  root: string,
+  connId: string,
+  rawInput: UpdateConnectionEndpointInput,
+  dryRun: true,
+  options?: UpdateConnectionEndpointOptions
+): Promise<UpdateConnectionEndpointPreview>;
+export function updateConnectionEndpoint(
+  root: string,
+  connId: string,
+  rawInput: UpdateConnectionEndpointInput,
+  dryRun: false,
+  options?: UpdateConnectionEndpointOptions
+): Promise<UpdateConnectionEndpointResult>;
+export function updateConnectionEndpoint(
+  root: string,
+  connId: string,
+  rawInput: UpdateConnectionEndpointInput,
+  dryRun: boolean,
+  options?: UpdateConnectionEndpointOptions
+): Promise<UpdateConnectionEndpointPreview | UpdateConnectionEndpointResult>;
 export async function updateConnectionEndpoint(
   root: string,
   connId: string,
