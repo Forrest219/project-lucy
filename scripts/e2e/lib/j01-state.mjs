@@ -47,6 +47,7 @@ export const HANDOVER_FIELDS = Object.freeze([
   "roleId",
   "agentId",
   "tokenSecretRef",
+  "tokenLabel",
   "questionId",
   "clientSessionRef"
 ]);
@@ -62,6 +63,7 @@ export const FIELD_PRODUCERS = Object.freeze({
   roleId: "J01-06",
   agentId: "J01-06",
   tokenSecretRef: "J01-06",
+  tokenLabel: "J01-06",
   questionId: "J01-07",
   clientSessionRef: "J01-07"
 });
@@ -131,6 +133,7 @@ export function stageContract(stageId) {
  * @property {string|null} roleId
  * @property {string|null} agentId
  * @property {string|null} tokenSecretRef
+ * @property {string|null} tokenLabel
  * @property {string|null} questionId
  * @property {string|null} clientSessionRef
  * @property {Record<string, string>} producedBy
@@ -188,6 +191,7 @@ export function createJourneyState({ runId, instanceId, candidateDigest } = {}) 
     roleId: null,
     agentId: null,
     tokenSecretRef: null,
+    tokenLabel: null,
     questionId: null,
     clientSessionRef: null,
     producedBy: {},

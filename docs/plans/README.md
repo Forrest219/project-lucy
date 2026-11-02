@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261102-e2e-independent-trial-scaffold-plan.md](lucy-20261102-e2e-independent-trial-scaffold-plan.md) | **功能合同已收口（2026-11-02）**。SC-01–SC-13 已由单测与 `e2e:product --list` 取证。八阶段试跑未执行。本条收口不表示可上线。Spec 见 [lucy-20261102-e2e-independent-trial-scaffold-spec.md](../specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md) |
 | [lucy-20261101-ops-evidence-askable-governance-plan.md](lucy-20261101-ops-evidence-askable-governance-plan.md) | **v0.9.1 文档定稿（2026-11-01）**：运维问数可问治理面。Codex 复审小修已落。定稿≠开发授权。Spec 见 [lucy-20261101-ops-evidence-askable-governance-spec.md](../specs/lucy-20261101-ops-evidence-askable-governance-spec.md)。审阅见 [codex-review](../reviews/2026-11-01-codex-review-ops-evidence-askable-governance.md) |
 | [lucy-20261101-token-default-ttl-365-plan.md](lucy-20261101-token-default-ttl-365-plan.md) | **v0.3 文档定稿（2026-11-01）**：新建 Token 默认 365 天。实施待开工。Spec 见 [lucy-20261101-token-default-ttl-365-spec.md](../specs/lucy-20261101-token-default-ttl-365-spec.md) |
 | [lucy-20261101-token-renewal-plan.md](lucy-20261101-token-renewal-plan.md) | **v0.4 文档定稿（2026-11-01）**：Token 显式续期。实施待开工。Spec 见 [lucy-20261101-token-renewal-spec.md](../specs/lucy-20261101-token-renewal-spec.md) |

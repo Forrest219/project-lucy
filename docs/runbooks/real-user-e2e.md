@@ -51,7 +51,9 @@ npm run e2e:real:agent -- --run inbox/e2e/<runId>/run.json
 
 ## 5. 产品轨与镜像轨（2026-11-01）
 
-本手册的本机或 Docker 运行证明产品能力：主线 `J25-01`，旁线 `CONN`、`SEM`、`ACCESS`、`OBSERVE`、`AGENT`、`LIFECYCLE`。`E2E-WEBUI` 归 `SEM`，`E2E-ONBOARD-EVAL` 归 `CONN` 加 `SEM`，`E2E-AGENT` 归 `AGENT`，`E2E-USER-JOURNEY` 是主线的补充证据。
+本手册的本机或 Docker 运行证明产品能力：主线 `J25-01`，旁线 `CONN`、`SEM`、`ACCESS`、`OBSERVE`、`AGENT`、`LIFECYCLE`。主干与任一旁线都可以单独开跑，互不为前置；定义见 [`docs/qa/e2e-sop.md`](../qa/e2e-sop.md) §0。`E2E-WEBUI` 归 `SEM`，`E2E-ONBOARD-EVAL` 归 `CONN` 加 `SEM`，`E2E-AGENT` 归 `AGENT`，`E2E-USER-JOURNEY` 是主线的补充证据。
+
+当前 `npm run e2e:real:management` 会收集 `webui/tests/real-e2e/` 下的全部 spec。只跑主干或一个分支用 `npm run e2e:product`。试跑顺序是 `e2e:real:prepare`，然后 `e2e:product -- --target <id> --list`，确认输出后再去掉 `--list`。`--list` 不起 Lucy，也不跑 Playwright。合同见 [试跑架子 Spec](../specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md)。
 
 amd64 镜像、Kubernetes、受保护 runner 和发布 readiness 记在镜像轨。缺这些环境时镜像维为 `blocked`，产品维仍按 Docker 或 ARM 上的断言判定。客户 K8s 上线门禁不由产品轨的通过代替。
 

@@ -148,8 +148,9 @@ export function writeV025Evidence(run, { coverage, report = null, capabilities =
   const journeyDir = path.join(dir, "journey");
   mkdirSync(journeyDir, { recursive: true });
   const journey = journeyVerdictFromState(journeyState);
+  let journeyResult = null;
   if (journey) {
-    const journeyResult = createResult({
+    journeyResult = createResult({
       executionId: journey.executionId,
       ...identity,
       status: journey.status,
@@ -187,7 +188,7 @@ export function writeV025Evidence(run, { coverage, report = null, capabilities =
     "utf8"
   );
 
-  return { results, report: reportFile, dir };
+  return { results, report: reportFile, dir, journey: journeyResult };
 }
 
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

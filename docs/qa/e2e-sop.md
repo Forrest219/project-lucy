@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy E2E SOP 指引 |
 | 文档类型 | Checklist / Runbook |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-08-08；v1.3 2026-10-18 |
+| 版本 | v1.4 |
+| 撰写日期 | 2026-08-08；v1.4 2026-11-02 |
 | 撰写人 | Cursor Agent |
 | 委托人 | zhangxingchen |
 | 基于材料 | `docs/governance/test-layers-and-release-gates.md`；`docs/qa/lucy-webui-e2e-test-suite.md`；KSC Financial 主题接入实跑；Spider2-lite Pilot（`evals/spider2_lite_sqlite/`）；`docs/governance/DEVELOPMENT.md` |
@@ -24,6 +24,21 @@ New terms:
 | 测试集分表 | 分表 / 测试集 | suite sheet | 把 WebUI E2E 与主题接入混成同一套用例 |
 
 ---
+
+## 0. 定义（2026-11-02）
+
+E2E 做功能检测。它包含一条可单独开跑的真实主干，和一组可单独开跑的分支。主干证明一条连续用户旅程走得通。分支证明各自那一类深度行为。两者互不作为对方的前置，以便解耦、按需要快跑。
+
+| 说法 | 对应 | 一次运行包含什么 |
+|---|---|---|
+| 主干 | 主线 `J25-01` | 八个阶段在同一次运行里串起来。单独跑主干时，不调度任何分支 |
+| 分支 | `CONN`、`SEM`、`ACCESS`、`OBSERVE`、`AGENT`、`LIFECYCLE` | 只调度这一类，或这一类里的一个执行项。不调度主干，也不调度其他分支 |
+
+主干内部仍是一条链。八个阶段共用 `J25-01` 和同一份阶段状态。某阶段失败，该阶段和整条主干记失败，后面的阶段记未跑。单独跑中间某一阶段，不能记成主干通过。
+
+镜像、Kubernetes 和客户发布门禁留在这条功能 E2E 外面。可独立启动的入口是 `npm run e2e:product`。合同见 [试跑架子 Spec](../specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md)。
+
+试跑顺序：`npm run e2e:real:prepare` → `npm run e2e:product -- --target <id> --list` → 去掉 `--list`。`--list` 只打印目标、文件和证据层级。去掉 `--list` 的那一次不在本入口合同的完成定义里。该命令不是 PR 阻塞项，也不替代 `e2e:real:*` 或 `gate:customer-release`。
 
 ## 1. 怎么用本文档
 
@@ -120,7 +135,7 @@ flowchart TB
 
 ## 7. 产品轨与镜像轨（2026-11-01）
 
-产品 E2E 只有一条用户主线 `J25-01`，深度场景归入六类旁线：`CONN`、`SEM`、`ACCESS`、`OBSERVE`、`AGENT`、`LIFECYCLE`。Docker 或 ARM 上跑通即可作为产品证据。
+产品 E2E 只有一条用户主线 `J25-01`，深度场景归入六类旁线：`CONN`、`SEM`、`ACCESS`、`OBSERVE`、`AGENT`、`LIFECYCLE`。主干与任一旁线都可以单独开跑，定义见 §0。Docker 或 ARM 上跑通即可作为产品证据。
 
 | 既有测试集 | 产品轨归属 |
 |---|---|

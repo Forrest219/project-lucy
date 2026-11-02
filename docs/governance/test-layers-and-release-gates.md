@@ -64,6 +64,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run audit:ktx-diff` | governance | regenerates KTX vs Lucy first/second-level directory and file diff audit |
 | `npm run compat:ktx-upgrade -- --candidate <version>` | runtime + platform upgrade | validates a candidate bundled KTX version through Docker/demo/business gates |
 | `cd webui && npm run e2e:release-ux` | platform, release-only | 发版前 WebUI 菜单壳层。按 `navigation.ts` 点击每个一级分组和二级入口，并打开 `/help`。断言当前菜单、页头、H1、页头动作数量、错误原文、禁止主标签和时间筛选。独立 Playwright 配置，只跑 Chromium 1920×1080，不进入 `@pr-smoke`、`e2e:contract:release` 或 `e2e:real`。不是 PR 阻塞项，通过也不能单独把客户包签成可生产。规范见 [`docs/specs/lucy-20261030-webui-release-ux-review-spec.md`](../specs/lucy-20261030-webui-release-ux-review-spec.md) |
+| `npm run e2e:product -- --list` | product e2e entry | 列出主干或一个分支的文件、证据层级和配置。`--list` 不起 Lucy、不跑 Playwright。去掉 `--list` 才调度该目标。不是 PR 阻塞项，也不替代 `e2e:real:*` 或 `gate:customer-release`。规范见 [`docs/specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md`](../specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md) |
 
 ### 2.1 Local Node / Native Addon Baseline
 

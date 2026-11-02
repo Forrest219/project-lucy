@@ -54,6 +54,7 @@ import {
   sanitizeEnv,
   startModelEgressSidecar
 } from "./lib/isolation.mjs";
+import { writeMainlineAgentEvidence } from "./lib/j01-agent-record.mjs";
 import { ExternalInstance, LucyProcess } from "./lib/instance.mjs";
 import { scanText } from "./lib/leak-scan.mjs";
 import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identity.mjs";
@@ -190,6 +191,10 @@ function blockedEntry(testCase, client, runNo, startedAt, reasons, extra = {}) {
 async function askOnce({ ask, goldDoc, testCase, tokens, secrets, adapter, probeInfo, workDir, deps, run, now, ledger }) {
   const gold = ask.goldKey ? goldDoc.questions[ask.goldKey] : { question: ask.question, forbiddenCanaries: [], expected: null };
   const canaries = goldDoc.canaries;
+  // The string that is ACTUALLY sent to the client. It travels with the ask
+  // outcome so the J01-07 evidence can compare the executed prompt with
+  // gold.question (防静默换题). It is never re-derived from gold afterwards:
+  // re-deriving it would make the comparison compare gold with gold.
   const question = `${ask.question ?? gold.question}${ask.suffix ? ` ${ANSWER_SUFFIX}` : ""}`;
   const token = tokens[ask.agentId];
   const fingerprint = tokenFingerprintOf(token);
@@ -235,7 +240,8 @@ async function askOnce({ ask, goldDoc, testCase, tokens, secrets, adapter, probe
       parsed: { ok: false, sessionId: parsed.sessionId, model: parsed.model, finalAnswer: "" },
       evidence,
       assertions: [{ token: "typed_gold", passed: false, detail: `boundary wrap did not complete: ${result.reason ?? "unknown"}` }],
-      fingerprint, since, until, timedOut: Boolean(result.timedOut), exitCode: result.exitCode ?? -1, boundaryIncomplete: true
+      fingerprint, since, until, timedOut: Boolean(result.timedOut), exitCode: result.exitCode ?? -1, boundaryIncomplete: true,
+      executedPrompt: question
     };
   }
   if (parsed.ok) {
@@ -248,9 +254,9 @@ async function askOnce({ ask, goldDoc, testCase, tokens, secrets, adapter, probe
       extraForbidden: (ask.injectionForbidden ?? []).map((name) => canaries[name]),
       expectation: ask.expectation
     });
-    return { parsed, evidence, assertions, fingerprint, since, until, timedOut: result.timedOut, exitCode: result.exitCode };
+    return { parsed, evidence, assertions, fingerprint, since, until, timedOut: result.timedOut, exitCode: result.exitCode, executedPrompt: question };
   }
-  return { parsed, evidence, assertions: [{ token: "typed_gold", passed: false, detail: result.timedOut ? "client timed out" : `client run failed (exit ${result.exitCode})` }], fingerprint, since, until, timedOut: result.timedOut, exitCode: result.exitCode };
+  return { parsed, evidence, assertions: [{ token: "typed_gold", passed: false, detail: result.timedOut ? "client timed out" : `client run failed (exit ${result.exitCode})` }], fingerprint, since, until, timedOut: result.timedOut, exitCode: result.exitCode, executedPrompt: question };
 }
 
 /** Pure-ish orchestration (all I/O injected) so the anti-cheating rules are unit-testable. */
@@ -364,6 +370,11 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
             askIndex,
             agentId: ask.agentId,
             goldKey: ask.goldKey ?? null,
+            // The question this ask answered, in the J01 vocabulary (the same
+            // key the journey state hands over as `questionId`). The J01-07
+            // projection reads it to find the two mainline questions; the
+            // verifier reads `goldKey` to bind the ask to its frozen plan.
+            questionId: ask.goldKey ?? null,
             expectation: ask.expectation ?? "answer",
             since: outcome.since,
             until: outcome.until,
@@ -378,6 +389,14 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
             goldDigest,
             sessionId: outcome.parsed.sessionId,
             model: outcome.parsed.model,
+            // The prompt the client ACTUALLY received (never a gold question
+            // re-derived here) and the client's own transcript, when the adapter
+            // surfaces it. Both are inputs to the J01-07 evidence; neither is
+            // synthesized by the runner.
+            executedPrompt: outcome.executedPrompt ?? null,
+            transcript: Array.isArray(outcome.parsed?.transcript) ? [...outcome.parsed.transcript] : [],
+            transcriptText: typeof outcome.parsed?.transcriptText === "string" ? outcome.parsed.transcriptText : "",
+            serverTrace: Array.isArray(outcome.evidence?.serverTrace) ? [...outcome.evidence.serverTrace] : [],
             answer: redactAll(outcome.parsed.finalAnswer, secrets)
           };
           asks.push(askRecord);
@@ -605,6 +624,7 @@ export async function realIsolationProbe({ adapter, probeInfo, workDir, run, sec
 async function main() {
   const args = parseArgv(process.argv.slice(2), {
     run: "value",
+    ids: "value",
     clients: "value",
     "allow-unisolated-local": "boolean",
     external: "boolean",
@@ -615,7 +635,12 @@ async function main() {
   const clientsDoc = parse(readFileSync(path.resolve(REPO_ROOT, args.clients ?? "docs/qa/real-e2e-clients.yaml"), "utf8"));
   if (countDistinctAutomatedProducts(clientsDoc.clients) < 2) fail("run-agent-journey: at least two distinct automated required products are needed (Hermes profiles count once)", 1);
   if (args["allow-unisolated-local"] && run.executionMode === "release") fail("run-agent-journey: the isolation override is not allowed for release runs", 1);
-  const { cases } = loadCatalog();
+  const loaded = loadCatalog();
+  let cases = loaded.cases;
+  if (args.ids) {
+    const allow = new Set(String(args.ids).split(",").map((id) => id.trim()).filter(Boolean));
+    cases = cases.filter((entry) => allow.has(entry.id));
+  }
   const goldDoc = JSON.parse(readFileSync(path.join(run.paths.checker, "gold.json"), "utf8"));
   const tokens = JSON.parse(readFileSync(path.join(run.secretsDir, "tokens.json"), "utf8"));
   const admins = JSON.parse(readFileSync(path.join(run.secretsDir, "admins.json"), "utf8"));
@@ -776,6 +801,13 @@ async function main() {
     };
     const out = path.join(run.paths.runDir, "results", "agent.json");
     writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);
+    // The J01-07 evidence file. It is written ONLY when this run's ask records
+    // carry the two mainline questions, each with its own executed prompt,
+    // answer, client session and transcript. When they do not, NO file is
+    // created: a missing evidence file is the stage's `blocked` verdict, and a
+    // half-filled one would read as evidence that was never collected.
+    const j01Evidence = writeMainlineAgentEvidence(run.paths.runDir, result.entries.flatMap((entry) => entry.asks ?? []), { secrets });
+    if (j01Evidence.written) progressLog(run, `j01-agent.json written: ${j01Evidence.path}`);
     exitCode = EXIT_CODES[result.status];
     process.stdout.write(`${JSON.stringify({ status: result.status, exitCode, out, summary: result.summary, clients: result.clientInfo.map((c) => ({ product: c.product, probe: c.probe, reasons: c.reasons })) })}\n`);
   } finally {

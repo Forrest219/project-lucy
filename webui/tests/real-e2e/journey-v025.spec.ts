@@ -39,9 +39,9 @@ import {
   type PublishResult,
   type TablesResult
 } from "./helpers/journey-v025";
+import { judgeMainlineAgent, loadMainlineAgentEvidence } from "../../../scripts/e2e/lib/j01-agent-evidence.mjs";
 import {
   assertNoGoldLeak,
-  assertPromptUnchanged,
   completeStage,
   createJourneyState,
   failJourney,
@@ -51,8 +51,7 @@ import {
 import {
   computeGold as computeV025Gold,
   generateDataset as generateV025Dataset,
-  MAINLINE_FIRST_QUESTION,
-  MAINLINE_FOLLOW_UP
+  MAINLINE_FIRST_QUESTION
 } from "../../../examples/security-e2e/gold/v025-gold.mjs";
 import { resolveModelApi } from "../../../scripts/e2e/lib/isolation.mjs";
 import { provisionJourneySchema } from "../../../scripts/e2e/lib/j01-schema.mjs";
@@ -222,7 +221,12 @@ test("J25-01 J01-01..J01-06: 登录 → 连接 → 启用表与 Manifest → 业
     state = completeStage(state, "J01-06", {
       status: "passed",
       evidenceRefs: [`ui://admin/agents/${journey.access.agentId}`],
-      handover: { roleId: journey.access.roleId, agentId: journey.access.agentId, tokenSecretRef: journey.access.tokenSecretRef }
+      handover: {
+        roleId: journey.access.roleId,
+        agentId: journey.access.agentId,
+        tokenSecretRef: journey.access.tokenSecretRef,
+        tokenLabel: journey.names.tokenLabel
+      }
     });
 
     journey.state = state;
@@ -254,23 +258,14 @@ test("J25-01 J01-07..J01-08: 真实 Agent 问答的证据、审计与对账", as
   expect(journey.state, "the management leg of the journey must have run first").not.toBeNull();
   let state = journey.state as JourneyState;
   const gold = mainlineGold();
-  const first = gold[MAINLINE_FIRST_QUESTION];
-  const followUp = gold[MAINLINE_FOLLOW_UP];
 
   // ---- J01-07 真实 Agent 问答 ---------------------------------------------
   // The Agent leg is executed by the real Agent runner. When its evidence is
   // absent the journey stays BLOCKED here: the browser never answers for the
   // Agent.
-  const agentEvidencePath = path.join(runContext().paths.runDir, "results", "agent.json");
-  let agentEvidence: {
-    cases?: Array<{ id: string; status: string; assertions?: Array<{ token: string; passed: boolean }> }>;
-  } | null = null;
-  try {
-    agentEvidence = JSON.parse(readFileSync(agentEvidencePath, "utf8"));
-  } catch {
-    agentEvidence = null;
-  }
-  if (!agentEvidence) {
+  const agentEvidencePath = path.join(runContext().paths.runDir, "results", "j01-agent.json");
+  const loaded = loadMainlineAgentEvidence(agentEvidencePath);
+  if (loaded.status === "blocked") {
     const modelApi = resolveModelApi(runContext() as unknown as { modelApi?: { url?: string } });
     const reason = modelApi
       ? "capability:agent-leg-not-run"
@@ -287,35 +282,24 @@ test("J25-01 J01-07..J01-08: 真实 Agent 问答的证据、审计与对账", as
     test.skip(true, `BLOCKED: ${reason}`);
     return;
   }
-  const agentCase = (agentEvidence.cases ?? []).find((entry) => entry.id === "UX-01-V01");
-  const agentAssertions = agentCase?.assertions ?? [];
-  const agentPassed = (token: string) => agentAssertions.some((entry) => entry.token === token && entry.passed === true);
-  assertion(testInfo, "real_query", agentPassed("real_query"), "the Agent leg ran a real query through the copied configuration");
-  assertion(testInfo, "server_trace", agentPassed("server_trace"), "the Agent leg bound its ask to a server-side trace");
-  assertion(testInfo, "typed_gold", agentPassed("typed_gold"), "the Agent's final answer matched the independently computed typed gold");
-
-  // 防静默换题: the executed prompt is byte-identical to gold.question.
-  const promptBinding = assertPromptUnchanged({ executedPrompt: first.question, goldQuestion: first.question });
-  assertion(testInfo, "consistency", promptBinding.ok, `the mainline question is the gold question (${promptBinding.reason})`);
-  const followUpBinding = assertPromptUnchanged({ executedPrompt: followUp.question, goldQuestion: followUp.question });
-  assertion(testInfo, "consistency", followUpBinding.ok, `the follow-up is the gold follow-up (${followUpBinding.reason})`);
-
-  // 防泄露: the FINAL ANSWER legitimately contains the answer and must not be
-  // flagged; the model-visible inputs are scanned.
-  const answerSurface = assertNoGoldLeak({
-    gold: first,
-    surfaces: [
-      { surface: "agent-prompt", text: first.question },
-      { surface: "final-answer", text: `获客成本 ${(first.expected.cents / 100).toFixed(2)} 元` }
-    ],
-    questionCarriers: ["agent-prompt"]
+  const judged = judgeMainlineAgent(loaded, gold, loaded.serverTrace, {
+    runId: state.runId,
+    instanceId: state.instanceId,
+    agentId: state.agentId ?? "",
+    tokenLabel: state.tokenLabel ?? "",
+    semanticVersion: state.semanticVersion ?? "",
+    policyVersion: state.policyVersion ?? ""
   });
-  assertion(testInfo, "no_leak", answerSurface.ok, `the final answer is not a leak (${answerSurface.reason})`);
-
   state = startStage(state, "J01-07", journey.identity);
+  if (judged.status !== "passed") {
+    state = failJourney(state, { stageId: "J01-07", failureRef: `fail://J01-07/${encodeURIComponent(judged.reason)}` });
+    journey.state = state;
+    writeJourneyState(state);
+    throw new Error(judged.reason);
+  }
   state = completeStage(state, "J01-07", {
     status: "passed",
-    evidenceRefs: ["agent://UX-01-V01"],
+    evidenceRefs: ["results/j01-agent.json"],
     handover: { questionId: MAINLINE_FIRST_QUESTION }
   });
 

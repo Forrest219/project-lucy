@@ -21,6 +21,13 @@ import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identit
 import { managementCapabilities, writeManagementEvidence } from "./collect-management-results.mjs";
 import { writeV025Evidence } from "./collect-v025-results.mjs";
 import { loadCoverage } from "./lib/v025-coverage.mjs";
+import {
+  evidenceLayerFor,
+  filesFor,
+  productExitCode,
+  selectedIdsFor,
+  untargetedPlaywrightArgs
+} from "./lib/product-targets.mjs";
 
 /** Reads a JSON file if it exists; a missing file is not an error here. */
 function readJsonIfExists(file) {
@@ -40,11 +47,11 @@ function progressLog(run, message) {
   }
 }
 
-async function runPlaywright(run, { project, grep, upstream }) {
+async function runPlaywright(run, { project, grep, upstream, files }) {
   const webui = path.join(REPO_ROOT, "webui");
   const bin = path.join(webui, "node_modules", ".bin", "playwright");
-  const args = ["test", "-c", "playwright.real.config.ts", "--project", project, "--workers", "1", "--retries", "0"];
-  if (grep) args.push("--grep", grep);
+  const args = untargetedPlaywrightArgs({ project, grep });
+  if (files?.length) args.push(...files);
   const env = { ...process.env, LUCY_REAL_E2E_RUN: path.join(run.paths.runDir, "run.json") };
   for (const key of Object.keys(env)) if (key.startsWith("LUCY_E2E_")) delete env[key];
   env.PATH = (env.PATH ?? "").split(":").filter((entry) => !entry.endsWith("tests/e2e/fixtures/bin")).join(":");
@@ -139,7 +146,7 @@ function v025Capabilities(run, upstream, external, env = process.env) {
 
 const args = (() => {
   try {
-    return parseArgv(process.argv.slice(2), { run: "value", project: "value", grep: "value", external: "boolean", "ktx-bin": "value" });
+    return parseArgv(process.argv.slice(2), { run: "value", project: "value", grep: "value", external: "boolean", "ktx-bin": "value", target: "value", files: "value" });
   } catch (error) {
     return fail(`run-management: ${error.message}`, 1);
   }
@@ -194,7 +201,8 @@ try {
     });
     await lucy.start();
   }
-  const playwrightExit = await runPlaywright(run, { project, grep: args.grep, upstream });
+  const selectedFiles = args.files ? String(args.files).split(",").map((file) => file.trim()).filter(Boolean) : null;
+  const playwrightExit = await runPlaywright(run, { project, grep: args.grep, upstream, files: selectedFiles });
   const reportPath = path.join(run.paths.runDir, "results", "management-playwright.json");
   if (!existsSync(reportPath)) fail(`run-management: Playwright produced no report (exit ${playwrightExit}); see its output above`, 1);
   const report = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -243,7 +251,21 @@ try {
     journeyState: readJsonIfExists(path.join(run.paths.runDir, "j01-state.json"))
   });
   progressLog(run, `v0.25 execution-item evidence written to ${v025.dir} (${v025.results.length} items)`);
-  exitCode = EXIT_CODES[evidence.status];
+  if (args.target) {
+    const selectedIds = selectedIdsFor(args.target);
+    const resultsById = Object.fromEntries(v025.results.map((result) => [result.executionId, result]));
+    if (v025.journey) resultsById[v025.journey.executionId] = v025.journey;
+    const selection = {
+      target: args.target,
+      files: filesFor(args.target),
+      evidenceLayer: evidenceLayerFor(args.target),
+      selectedIds
+    };
+    writeFileSync(path.join(run.paths.runDir, "selection.json"), `${JSON.stringify(selection, null, 2)}\n`);
+    exitCode = productExitCode({ selectedIds, resultsById }).exitCode;
+  } else {
+    exitCode = EXIT_CODES[evidence.status];
+  }
   process.stdout.write(`${JSON.stringify({ status: evidence.status, exitCode, out, summary: evidence.summary, artifactScan: leak })}\n`);
 } finally {
   if (lucy) await lucy.stop("SIGTERM");
