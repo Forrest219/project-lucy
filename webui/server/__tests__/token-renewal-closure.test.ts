@@ -10,7 +10,7 @@ const auditControl = vi.hoisted(() => ({
   revokedThrow: false,
   calls7d: 0,
   revoked: [] as Array<{ token_hash: string }>,
-  record: vi.fn(async () => 1)
+  record: vi.fn(async (_input: ConfigChangeInput) => 1)
 }));
 
 const gateInject = vi.hoisted(() => ({
@@ -50,7 +50,7 @@ vi.mock("../admin/audit.js", () => ({
     pragma: vi.fn(),
     transaction: (fn: (...args: unknown[]) => unknown) => fn
   })),
-  recordConfigChange: (...args: unknown[]) => auditControl.record(...args),
+  recordConfigChange: (input: ConfigChangeInput) => auditControl.record(input),
   updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAgentAuditRoutes: vi.fn(),
   registerAuditRoutes: vi.fn()
@@ -85,6 +85,7 @@ import { buildServer } from "../index";
 import { identifyRequestDetailed, invalidateAccessConfigCache, isTokenExpired } from "../proxy/identity.js";
 import * as acl from "../proxy/acl.js";
 import * as gate from "../access-governance-gate.js";
+import type { ConfigChangeInput } from "../admin/audit.js";
 import type { FastifyInstance } from "fastify";
 
 function accessYaml(expiresLine: string, delegatedFrom?: string): string {
@@ -139,15 +140,30 @@ async function yamlNow(): Promise<string> {
   return readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
 }
 
-function renewCalls() {
-  return auditControl.record.mock.calls.map((call) => call[0] as {
-    changeType?: string;
-    actor?: string;
-    actorIp?: string;
-    targetId?: string;
-    source?: string;
-    oldSummary?: { label?: string; hashPrefix?: string; expires_at?: string };
-    newSummary?: { label?: string; hashPrefix?: string; expires_at?: string; repair?: boolean; token?: string };
+/**
+ * The narrow view the assertions read. `oldSummary` / `newSummary` are typed
+ * `unknown` on the wire (`ConfigChangeInput`), so they are narrowed here while
+ * every other recorded field is kept verbatim — `JSON.stringify(call)` must
+ * still see the whole audit record (SC-12 checks it carries no plaintext).
+ */
+type RenewAuditEntry = {
+  changeType?: string;
+  actor?: string;
+  actorIp?: string;
+  targetId?: string;
+  source?: string;
+  oldSummary?: { label?: string; hashPrefix?: string; expires_at?: string };
+  newSummary?: { label?: string; hashPrefix?: string; expires_at?: string; repair?: boolean; token?: string };
+};
+
+function renewCalls(): RenewAuditEntry[] {
+  return auditControl.record.mock.calls.map((call) => {
+    const input = call[0];
+    return {
+      ...input,
+      oldSummary: input.oldSummary as RenewAuditEntry["oldSummary"],
+      newSummary: input.newSummary as RenewAuditEntry["newSummary"]
+    };
   });
 }
 
@@ -391,7 +407,11 @@ defaults:
   });
 
   it("SC-11 injected override rejects a missing payload and accepts a valid one with a trace", async () => {
-    const trace = vi.spyOn(gate, "recordAccessGovernanceGateEvent").mockImplementation(() => undefined);
+    const trace = vi.spyOn(gate, "recordAccessGovernanceGateEvent").mockImplementation(() => ({
+      gateEventId: 0,
+      overrideEventId: null,
+      evidenceIds: []
+    }));
     gateInject.decision = "override_required";
     const before = await yamlNow();
     const app = buildServer();

@@ -1235,7 +1235,7 @@ describe("TableWhitelist", () => {
       id: "sql_server",
       driver: "sqlserver",
       engine: "sqlserver",
-      wireProtocol: "tds",
+      wireProtocol: "sqlserver",
       readOnlyExpected: true,
       schemas: ["BIDM"],
       enabledTables: ["bidm.dbo.hs_sy_company_metric"]

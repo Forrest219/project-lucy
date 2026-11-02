@@ -159,6 +159,11 @@ describe("D-03 / G5 — upper-case schema manifest (V19 / V22)", () => {
     expect(compiled.ok).toBe(true);
     if (!compiled.ok) return;
     expect(compiled.grant.kind).toBe("scoped");
+    // `RowGrant` is a discriminated union: `orArms` only exists on the
+    // `scoped` branch. Narrow it instead of reaching through the union.
+    if (compiled.grant.kind !== "scoped") {
+      throw new Error(`expected a scoped grant, got kind=${compiled.grant.kind}`);
+    }
     expect(compiled.grant.orArms).toHaveLength(1);
   });
 
@@ -180,7 +185,13 @@ describe("D-03 / G5 — upper-case schema manifest (V19 / V22)", () => {
     const table = outcome.tables[0]!;
     // The catalog must load — the manifest is found despite the case difference.
     expect(table.catalog.status).toBe("loaded");
-    expect(table.preview.effectiveRowGrant.kind).toBe("scoped");
+    // `preview` is optional in the type: it is absent only when the table
+    // failed to compile (then `error` is set). Narrow it explicitly.
+    const tablePreview = table.preview;
+    if (!tablePreview) {
+      throw new Error(`preview missing for the upper-case table: ${JSON.stringify(table.error)}`);
+    }
+    expect(tablePreview.effectiveRowGrant.kind).toBe("scoped");
 
     // 2) The runtime product for the same table — the source the runtime injects.
     const runtime = await rowPolicy.compileScopedRowGrant(
@@ -192,7 +203,7 @@ describe("D-03 / G5 — upper-case schema manifest (V19 / V22)", () => {
 
     // 3) Both sides must yield the SAME forced_filters payload.
     const previewPayload = rowPolicy.buildForcedFiltersPayload(
-      table.preview.effectiveRowGrant,
+      tablePreview.effectiveRowGrant,
       "hs_sy_bu_metric"
     );
     const runtimePayload = rowPolicy.buildForcedFiltersPayload(runtime.grant, "hs_sy_bu_metric");

@@ -2,6 +2,7 @@ import { access, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ContentPaths } from "../paths";
 import {
   assertReadable,
   ForbiddenPathError,
@@ -14,6 +15,18 @@ import {
 } from "../fs-safe";
 
 let projectRoot: string;
+
+/** Legacy sibling layout: configDir == projectRoot (post-A2 default uses config/ subdir). */
+function legacyPaths(): ContentPaths {
+  return {
+    configDir: projectRoot,
+    semanticLayer: path.join(projectRoot, "semantic-layer"),
+    wiki: path.join(projectRoot, "wiki"),
+    evals: path.join(projectRoot, "evals"),
+    skills: path.join(projectRoot, "skills"),
+    source: "default"
+  };
+}
 
 async function makeProjectRoot() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-secret-"));
@@ -47,13 +60,15 @@ describe("safeWriteNewSecretPassword (Spec 124 Phase A)", () => {
   });
 
   it("still rejects generic safeWrite into .ktx/secrets", async () => {
-    await expectForbidden(() => safeWrite(projectRoot, ".ktx/secrets/demo-mysql-password", "x"));
+    await expectForbidden(() =>
+      safeWrite(legacyPaths(), projectRoot, ".ktx/secrets/demo-mysql-password", "x")
+    );
   });
 
   it("still rejects assertReadable on the written secret", async () => {
     const relPath = ".ktx/secrets/demo-mysql-password";
     await safeWriteNewSecretPassword(projectRoot, relPath, "s3cret-value");
-    await expectForbidden(() => assertReadable(projectRoot, relPath));
+    await expectForbidden(() => assertReadable(legacyPaths(), projectRoot, relPath));
   });
 
   it("refuses overwrite when the password file already exists", async () => {

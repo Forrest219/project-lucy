@@ -66,6 +66,10 @@ describe("certified route", () => {
     });
     expect(resolved.ok).toBe(false);
     if (resolved.ok) return;
+    // `repair` is part of the permission-denial contract only: a `not_found`
+    // route carries no allow list (there is no source to repair towards).
+    expect(resolved.decision).toBe("permission_denied");
+    if (resolved.decision !== "permission_denied") return;
     expect(resolved.repair?.sources).toEqual(["cdn_pnl"]);
     expect(resolved.repair?.connections).toEqual(["demo"]);
     // The requested-but-forbidden source is not an "allowed" name.

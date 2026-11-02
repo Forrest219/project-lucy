@@ -11,6 +11,7 @@ import {
   removeConnection
 } from "../project";
 import { invalidateContentPathsCache } from "../paths";
+import type { WikiSummary } from "../wiki";
 
 let tempRoot: string | undefined;
 let previousRoot: string | undefined;
@@ -41,6 +42,27 @@ afterEach(async () => {
     tempRoot = undefined;
   }
 });
+
+/**
+ * A `listWiki` row shaped exactly like the real API response — `access` is part
+ * of the `WikiSummary` contract. The removal impact calculation only reads
+ * `key` / `slRefs`, so the access entry is a neutral placeholder.
+ */
+function wikiRow(key: string, slRefs: string[]): WikiSummary {
+  return {
+    key,
+    summary: "",
+    tags: [],
+    slRefs,
+    access: {
+      file_version: "sha256:0",
+      acl: { state: "empty" },
+      declared_role_count: null,
+      declared_without_discover: 0,
+      declared_without_read: 0
+    }
+  };
+}
 
 function baseYaml(): string {
   return `connections:
@@ -169,8 +191,8 @@ describe("removeConnection — dryRun", () => {
 
     const result = await removeConnection(root, "mysql-aliyun", true, {
       listWikiFn: async () => [
-        { key: "global/playbook.md", summary: "", tags: [], slRefs: ["mysql-aliyun/dataforai/superstore_orders"] },
-        { key: "global/other.md", summary: "", tags: [], slRefs: ["keep-me/other/t"] }
+        wikiRow("global/playbook.md", ["mysql-aliyun/dataforai/superstore_orders"]),
+        wikiRow("global/other.md", ["keep-me/other/t"])
       ]
     });
 
@@ -380,13 +402,8 @@ users:
   it("blocks when a Wiki page lists the connection in sl_refs", async () => {
     const root = await makeProject(baseYaml());
     const wikiList = async () => [
-      {
-        key: "global/playbook.md",
-        summary: "",
-        tags: [],
-        slRefs: ["mysql-aliyun/dataforai/superstore_orders"]
-      },
-      { key: "global/other.md", summary: "", tags: [], slRefs: ["keep-me/other/t"] }
+      wikiRow("global/playbook.md", ["mysql-aliyun/dataforai/superstore_orders"]),
+      wikiRow("global/other.md", ["keep-me/other/t"])
     ];
     const preview = await removeConnection(root, "mysql-aliyun", true, {
       listWikiFn: wikiList

@@ -13,7 +13,7 @@ import {
   synthesizeFinalRows,
   type CapabilitySourceRef
 } from "../proxy/agent-constraints";
-import type { ResolvedRowPolicyPredicate, RowGrant } from "../proxy/row-policy";
+import type { ForcedFiltersPayload, ResolvedRowPolicyPredicate, RowGrant } from "../proxy/row-policy";
 
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
@@ -710,7 +710,9 @@ describe("AC-P1.5 gate + forced predicate reuse (WP-I3)", () => {
               op: in
               values: [ABC]`;
 
-  const deptForced = {
+  // Typed as the payload the Proxy injects: without the annotation `op`
+  // widens to `string` and stops being a `RowPolicyOp`.
+  const deptForced: ForcedFiltersPayload = {
     or: [{
       and: [{ field: "fin_ledger.department", op: "in", values: ["ABC"] }]
     }]

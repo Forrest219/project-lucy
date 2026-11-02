@@ -1065,7 +1065,7 @@ describe("ConnectionOverview", () => {
     expect(crmSummary).not.toBeNull();
     expect(dataforaiMenu).not.toHaveAttribute("open");
 
-    fireEvent.click(dataforaiSummary);
+    fireEvent.click(dataforaiSummary!);
     expect(dataforaiMenu).toHaveAttribute("open");
 
     fireEvent.mouseLeave(dataforaiMenu!);
@@ -1080,21 +1080,21 @@ describe("ConnectionOverview", () => {
       expect(dataforaiMenu).not.toHaveAttribute("open");
     });
 
-    fireEvent.click(dataforaiSummary);
+    fireEvent.click(dataforaiSummary!);
     expect(dataforaiMenu).toHaveAttribute("open");
-    fireEvent.click(crmSummary);
+    fireEvent.click(crmSummary!);
     expect(crmMenu).toHaveAttribute("open");
     expect(dataforaiMenu).not.toHaveAttribute("open");
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(crmMenu).not.toHaveAttribute("open");
 
-    fireEvent.click(crmSummary);
+    fireEvent.click(crmSummary!);
     expect(crmMenu).toHaveAttribute("open");
     fireEvent.pointerDown(document.body);
     expect(crmMenu).not.toHaveAttribute("open");
 
-    fireEvent.click(dataforaiSummary);
+    fireEvent.click(dataforaiSummary!);
     expect(dataforaiMenu).toHaveAttribute("open");
     fireEvent.click(screen.getByTestId("download-manifest-mysql-aliyun-dataforai"));
     expect(dataforaiMenu).not.toHaveAttribute("open");
@@ -1147,7 +1147,9 @@ describe("ConnectionOverview", () => {
     expect(aliyun).toHaveAttribute("open");
     expect(demo).not.toHaveAttribute("open");
     const schemaMenu = screen.getByTestId("schema-more-mysql-aliyun-dataforai");
-    fireEvent.click(schemaMenu.querySelector("summary"));
+    const schemaSummary = schemaMenu.querySelector("summary");
+    expect(schemaSummary).not.toBeNull();
+    fireEvent.click(schemaSummary!);
     expect(schemaMenu).toHaveAttribute("open");
     expect(aliyun).not.toHaveAttribute("open");
 
@@ -1644,15 +1646,15 @@ describe("ConnectionOverview", () => {
     expect(hostNode).toHaveAttribute("title", `${longHost}:3306`);
     expect(hostNode).toHaveAttribute("dir", "ltr");
     expect(hostNode).toHaveClass("notranslate");
-    expect(hostNode.closest("[translate='no']")).not.toBeNull();
-    const kvHost = hostNode.closest(".pl-connection-kv");
+    expect(hostNode!.closest("[translate='no']")).not.toBeNull();
+    const kvHost = hostNode!.closest(".pl-connection-kv");
     expect(kvHost).not.toBeNull();
     const dbNodes = Array.from(card.querySelectorAll("dd code"));
     const dbNode = dbNodes.find((node) => node.textContent === "data_agent_poc");
     expect(dbNode).toBeDefined();
     expect(dbNode).toHaveAttribute("dir", "ltr");
     expect(dbNode).toHaveClass("notranslate");
-    expect(dbNode.closest("[translate='no']")).not.toBeNull();
+    expect(dbNode!.closest("[translate='no']")).not.toBeNull();
   });
 
   it("SC-2/SC-3/SC-4/SC-5/SC-7: card actions are 添加 Schema and 更多", async () => {
@@ -2123,13 +2125,11 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
 
     expect(await screen.findByTestId("connection-health-starrocks-r1")).toHaveTextContent("通");
 
-    const postTests = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
-      ([input, init]: [RequestInfo | URL, RequestInit?]) => {
-        const url = String(input);
-        const method = init?.method ?? "GET";
-        return method === "POST" && /\/api\/connections\/[^/]+\/test$/.test(url.replace(/^http:\/\/[^/]+/, ""));
-      }
-    );
+    const postTests = fetchMock.mock.calls.filter(([input, init]) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      return method === "POST" && /\/api\/connections\/[^/]+\/test$/.test(url.replace(/^http:\/\/[^/]+/, ""));
+    });
     expect(postTests.length).toBeGreaterThanOrEqual(2);
     // Footer must not regain a large 「测试连接」 button (Spec 44 / 108).
     expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();

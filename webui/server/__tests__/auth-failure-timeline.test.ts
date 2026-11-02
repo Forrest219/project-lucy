@@ -9,7 +9,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import request from "supertest";
+import request, { type Response as SuperagentResponse } from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let projectRoot: string;
@@ -33,7 +33,16 @@ function parseStoredZipEntries(zip: Buffer): Map<string, Buffer> {
   return entries;
 }
 
-function zipBufferParser(res: NodeJS.ReadableStream, callback: (err: Error | null, body?: Buffer) => void): void {
+/**
+ * superagent invokes a custom parser with the raw Node response stream
+ * (`superagent/lib/node/index.js`: `parser(res, (error, object) => …)`), while
+ * `@types/superagent` declares that first argument as `Response`
+ * (`@types/superagent/lib/request-base.d.ts`: `type NodeParser = (res: Response, …) => void`).
+ * `Response` extends `Stream`, and the only members used here — the `data` and
+ * `end` events — exist both on the declared type and on the runtime
+ * `IncomingMessage`, so the parser is typed with the declared contract.
+ */
+function zipBufferParser(res: SuperagentResponse, callback: (err: Error | null, body?: Buffer) => void): void {
   const chunks: Buffer[] = [];
   res.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
   res.on("end", () => callback(null, Buffer.concat(chunks)));

@@ -155,13 +155,13 @@ function isTranslationDefended(node: Element, pageRoot: Element): boolean {
 }
 
 /**
- * 已知实现缺口（唯一一条）：并集小节的「来源角色：{角色 id 列表}」没有翻译防御。
+ * 已知实现缺口名单已删除。
  *
- * 见 `docs/reviews/2026-11-01-row-policy-templates-and-view-closure.md` §七 与
- * `webui/src/components/admin/RowPolicyDnfPreview.tsx:215-217`。缺口修复后，
- * 这条登记与下面的 `it.fails` 用例必须一起删除。
+ * 收口记录 `docs/reviews/2026-11-01-row-policy-templates-and-view-closure.md` §七 登记的
+ * 唯一一处缺口——并集小节的「来源角色：{角色 id 列表}」没有翻译防御——已由 70f27ba0 修复：
+ * `RowPolicyDnfPreview.tsx` 的 `row-policy-dnf-source-roles` 段现在带 `notranslate` +
+ * `translate="no"`。名单随之清空，全页机器标识扫描现在对**任何**没受防御的标识都转红。
  */
-const KNOWN_UNDEFENDED = ["来源角色："];
 
 beforeEach(() => {
   copyTextWithToastMock.mockClear();
@@ -218,8 +218,15 @@ describe("RTV-07 只读：页面没有写入口", () => {
     for (const label of [/保存/, /新建/, /删除/, /应用/, /提交/, /修改/, /预演/, /导入/, /导出/]) {
       expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
     }
-    // 页面自己就写着只读，并指向真正的写入口。
-    expect(screen.getByText("本页只读。修改请到角色权限。")).toBeInTheDocument();
+    // 页面自己就写着只读，并指向真正的写入口。67e1117e（行权限视图答案优先双栏 v0.4）
+    // 把这句话从一句扁平文本改成「文案 + 指向 /admin/roles 的深链」，所以断言要跟着结构走：
+    // 文案仍然在，写入口仍然是那个角色权限链接。
+    const readOnlyNotice = screen.getByText(/本页只读。修改请到/);
+    expect(readOnlyNotice).toBeInTheDocument();
+    expect(within(readOnlyNotice).getByRole("link", { name: "角色权限" })).toHaveAttribute(
+      "href",
+      "/admin/roles"
+    );
   });
 });
 
@@ -390,32 +397,26 @@ describe("RTV-07 翻译防御：受保护标识", () => {
       const element = node.parentElement;
       if (!element) continue;
       if (isTranslationDefended(element, page)) continue;
-      // 已知缺口按**容器**文本判定：「来源角色：east_role、west_role」在 DOM 里是
-      // 两个文本节点，标识符那一段单独成节点。
-      const containerText = (element.textContent ?? "").trim();
-      if (KNOWN_UNDEFENDED.some((prefix) => containerText.startsWith(prefix))) continue;
       undefended.push(text);
     }
 
-    // 唯一已登记的缺口：并集小节的「来源角色」列表（见下面的 `it.fails` 用例与
-    // 收口记录 §七）。除此之外，出现任何新的没受防御的机器标识都会在这里转红。
+    // 收口记录 §七 登记的唯一已知缺口已修复（见本文件顶部的说明），
+    // 已知缺口名单随之清空。这里现在对**任何**没受防御的机器标识都转红。
     expect(undefended).toEqual([]);
   });
 
-  it.fails(
-    "RTV-07 翻译防御（真实实现缺口）：并集小节的「来源角色」列表尚未受翻译防御",
-    async () => {
-      // 真实实现缺口：webui/src/components/admin/RowPolicyDnfPreview.tsx:215-217
-      // 「来源角色：{角色 id 列表}」这一段没有 translate="no" + notranslate，
-      // 与本 Spec Terminology Compliance 的 Protected DOM 段（角色标识）不符。
-      // 按「不改运行代码」如实登记；修复后本用例必须去掉 `.fails`。
-      renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
-      await screen.findByTestId("row-policy-view-role-branches");
+  it("RTV-07 翻译防御：并集小节的「来源角色」列表受翻译防御", async () => {
+    // 收口记录 §七 登记的实现缺口已由 70f27ba0 修复：
+    // webui/src/components/admin/RowPolicyDnfPreview.tsx 的「来源角色：{角色 id 列表}」
+    // 现在带 translate="no" + notranslate，符合本 Spec Terminology Compliance 的
+    // Protected DOM 段（角色标识）。原用例以 `it.fails` 如实登记缺口，实现修好后
+    // 必须去掉 `.fails` 并转为正向断言。
+    renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
+    await screen.findByTestId("row-policy-view-role-branches");
 
-      const page = screen.getByTestId("row-policy-view-page");
-      const source = screen.getByText(/来源角色/);
-      expect(source.textContent).toContain("east_role");
-      expect(isTranslationDefended(source, page)).toBe(true);
-    }
-  );
+    const page = screen.getByTestId("row-policy-view-page");
+    const source = screen.getByText(/来源角色/);
+    expect(source.textContent).toContain("east_role");
+    expect(isTranslationDefended(source, page)).toBe(true);
+  });
 });

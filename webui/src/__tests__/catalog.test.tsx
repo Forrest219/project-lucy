@@ -30,8 +30,7 @@ function makeSummary(overrides: Partial<SourceSummary> = {}): SourceSummary {
     authorizedAgentCount: 3,
     semanticUpdatedAt: "2026-07-01T10:30:00.000Z",
     semanticUpdatedAtSource: "overlay",
-    ...overrides,
-    qualifiedName: overrides.qualifiedName ?? `${overrides.schema ?? schema}.${overrides.table ?? table}`
+    ...overrides
   };
 }
 

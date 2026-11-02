@@ -47,16 +47,19 @@ describe("GET /api/admin/audit/sources — full table identity (E5)", () => {
     sources: Array<{ connectionId: string; schema: string; sourceName: string; physicalTable: string }>
   ): Promise<void> {
     const { writeLog } = await import("../proxy/audit");
+    // `AccessLogEntry.tables` is a string[] — `writeLog` serializes it itself
+    // (audit.ts:1059). Handing it a pre-stringified value would double-encode
+    // the column and the read path could not parse it back into an array.
     const accessLogId = await writeLog({
       ts: new Date().toISOString(),
       userId: "user-1",
       tool: "lucy_query",
-      tables: JSON.stringify(tables),
+      tables,
       outcome: "ok",
       durationMs: 5,
       requestId,
       traceId: requestId
-    } as Parameters<typeof writeLog>[0]);
+    });
     await writeAccessLogSources(
       accessLogId,
       new Date().toISOString(),

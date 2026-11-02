@@ -221,11 +221,20 @@ describe("Spec 189 — cross-page reconciliation: the Raw Audit layer", () => {
   it("keeps the audit default view on Raw Business and the full set behind includeProtocol (SC-05)", async () => {
     const query = `since=${encodeURIComponent(WINDOW_START_ISO)}&until=${encodeURIComponent(WINDOW_END_ISO)}`;
     const defaultView = await get(`/api/admin/audit?${query}`);
-    const fullView = await get(`/api/admin/audit?${query}&includeProtocol=true`);
+    // Spec 189 §4.2 — Raw Audit is every row, protocol events included. Since the
+    // audit-inquiry-kind Spec (D7 / D8) the audit list defaults to
+    // `accessGrade=exclude_connect`, and the access grade is applied AFTER the protocol gate:
+    // the two compose (相与). `includeProtocol=true` on its own only makes the protocol rows
+    // candidates — the default grade still removes them. Reading the Raw Audit layer therefore
+    // has to ask for both, exactly as SC-11 describes.
+    const protocolOnly = await get(`/api/admin/audit?${query}&includeProtocol=true`);
+    const fullView = await get(`/api/admin/audit?${query}&includeProtocol=true&accessGrade=all`);
     // Raw Audit (all rows) = Raw Business + protocol events.
     expect(fullView.total).toBe(87);
     expect(defaultView.total).toBe(75);
     expect(fullView.total - defaultView.total).toBe(12);
+    // includeProtocol alone does not widen the list — the access grade runs after it.
+    expect(protocolOnly.total).toBe(defaultView.total);
   });
 });
 
@@ -247,7 +256,7 @@ describe("Spec 189 — cross-page reconciliation: population boundaries", () => 
     const overview = await get("/api/admin/governance/overview?hours=168");
     const agentList = await get("/api/admin/agents");
     const audit = await get(`/api/admin/audit?${query}`);
-    const auditFull = await get(`/api/admin/audit?${query}&includeProtocol=true`);
+    const auditFull = await get(`/api/admin/audit?${query}&includeProtocol=true&accessGrade=all`);
 
     const layers = {
       defaultUsageAll: overview.usageOverview.calls,

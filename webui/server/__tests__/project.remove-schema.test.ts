@@ -11,6 +11,28 @@ import {
   SCHEMA_NAME_PATTERN
 } from "../project";
 import { invalidateContentPathsCache } from "../paths";
+import type { WikiSummary } from "../wiki";
+
+/**
+ * A `listWiki` row shaped exactly like the real API response — `access` is part
+ * of the `WikiSummary` contract. The schema-removal impact calculation only
+ * reads `key` / `slRefs`, so the access entry is a neutral placeholder.
+ */
+function wikiRow(key: string, slRefs: string[]): WikiSummary {
+  return {
+    key,
+    summary: "",
+    tags: [],
+    slRefs,
+    access: {
+      file_version: "sha256:0",
+      acl: { state: "empty" },
+      declared_role_count: null,
+      declared_without_discover: 0,
+      declared_without_read: 0
+    }
+  };
+}
 
 let tempRoot: string | undefined;
 let previousRoot: string | undefined;
@@ -294,9 +316,9 @@ describe("removeSchema — impact collection", () => {
     const root = await makeProject(baseYaml());
 
     const fakeWiki = async () => [
-      { key: "global/page1.md", summary: "", tags: [], slRefs: ["mysql-aliyun/finance_mart/sales_fact"] },
-      { key: "global/page2.md", summary: "", tags: [], slRefs: ["mysql-aliyun/finance_mart/users"] },
-      { key: "global/page3.md", summary: "", tags: [], slRefs: ["mysql-aliyun/other_schema/some_table"] }
+      wikiRow("global/page1.md", ["mysql-aliyun/finance_mart/sales_fact"]),
+      wikiRow("global/page2.md", ["mysql-aliyun/finance_mart/users"]),
+      wikiRow("global/page3.md", ["mysql-aliyun/other_schema/some_table"])
     ];
 
     const result = await removeSchema(root, "mysql-aliyun", "finance_mart", true, {

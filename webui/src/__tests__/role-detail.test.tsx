@@ -306,7 +306,6 @@ describe("RoleDetail Spec 150", () => {
         usageCount: 0,
         role: {
           description: "平台运维数据面（非 WebUI 登录账户）",
-          permission_model_version: 2,
           allow: {
             connections: ["mysql-aliyun"],
             source_scope: "catalog_bound",

@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe("ConfigAudit Spec 96 polish", () => {
   it("renders 配置审计 without actorNotice and with pl-data-grid Chinese headers", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(
         JSON.stringify({
           ok: true,

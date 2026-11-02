@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { invalidateContentPathsCache } from "../paths";
 import { listSources } from "../semantic-layer";
+import type { SourceSummary } from "../model";
 
 let projectRoot: string;
 let prevRoot: string | undefined;
@@ -111,7 +112,7 @@ afterEach(async () => {
   await rm(projectRoot, { recursive: true, force: true });
 });
 
-function findSummary(tables: { table: string }[], table: string) {
+function findSummary(tables: SourceSummary[], table: string) {
   const summary = tables.find((t) => t.table === table);
   if (!summary) throw new Error(`table ${table} not found`);
   return summary;

@@ -244,6 +244,10 @@ describe("HQ-11..HQ-18 MCP / worker / audit", () => {
     });
     expect(decision.action).toBe("serve_hive");
     if (decision.action !== "serve_hive") return;
+    // `handled: false` (missing_compiled_sql) carries no payload — the bridge
+    // only produces one once the call was handled.
+    expect(decision.response.handled).toBe(true);
+    if (!decision.response.handled) return;
     expect(decision.response.payload.ok).toBe(false);
     expect(decision.response.payload.reason).toBe("hive_execution_context_unavailable");
   });
@@ -401,6 +405,8 @@ describe("HQ-11..HQ-18 MCP / worker / audit", () => {
     });
     expect(decision.action).toBe("serve_hive");
     if (decision.action !== "serve_hive") return;
+    expect(decision.response.handled).toBe(true);
+    if (!decision.response.handled) return;
     expect(decision.response.payload.ok).toBe(true);
     expect(decision.response.payload.jdbcInvokeCount).toBe(1);
   });
