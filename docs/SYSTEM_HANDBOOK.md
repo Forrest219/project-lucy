@@ -1418,9 +1418,9 @@ defaults:
 
 | 操作 | 行为 |
 | --- | --- |
-| 新建 token | 生成 32 字节随机明文；必须设置 `expires_at`（默认 365 天、最长 365 天）；HTTP 响应只显示一次且禁止缓存 |
-| 续期 token | 只更新 `expires_at`；不返回明文、不改 hash；已过期可续，已撤销不可续；写审计 `token_renew` |
-| 落盘 | `access.yaml` 只保存 `sha256:<hex>` |
+| 新建 token | 生成 32 字节随机明文；必须设置 `expires_at`（默认 365 天、最长 365 天）；HTTP 响应只显示一次且禁止缓存；同步写入固定截断 `token_hint`（前 6 + `…` + 后 4） |
+| 续期 token | 只更新 `expires_at`；不返回明文、不改 hash／`token_hint`；已过期可续，已撤销不可续；写审计 `token_renew` |
+| 落盘 | `access.yaml` 保存 `sha256:<hex>` 与可选 `token_hint`；**禁止**完整明文落盘 |
 | 撤销 token | 先写 `.ktx-ui/audit.sqlite.revoked_tokens`，再从 YAML 删除 |
 | 删除 Agent | 先撤销该 Agent 所有 token，再删除 YAML user |
 | 复制 MCP 配置 | 只复制 `${LUCY_AGENT_TOKEN}` 占位符，不复制明文 |

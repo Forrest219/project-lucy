@@ -31,6 +31,7 @@ const inventory = {
   tokens: [
     {
       hashPrefix: "sha256:aaaa0000",
+      tokenHint: "a1b2c3…9f0e",
       label: "hermes-laptop",
       created: "2026-06-18",
       expires_at: presetDate(20),

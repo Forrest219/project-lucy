@@ -28,6 +28,7 @@ import {
   normalizeNewTokenExpiry,
   TokenExpiryPolicyError
 } from "./token-expiry-policy.js";
+import { buildTokenDisplayHint, isValidTokenDisplayHint } from "./token-display-hint.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -161,6 +162,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
 
     type TokenInventoryItem = {
       hashPrefix: string;
+      /** Spec lucy-20261102-token-display-hint — human核对片段；非法／缺失为 null。 */
+      tokenHint: string | null;
       label: string;
       created: string;
       expires_at: string | null;
@@ -213,6 +216,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
 
         allTokens.push({
           hashPrefix,
+          tokenHint: isValidTokenDisplayHint(t.token_hint) ? t.token_hint : null,
           label: t.label,
           created: t.created,
           expires_at: t.expires_at ?? null,
@@ -275,7 +279,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
           t.agent.name.toLowerCase().includes(q) ||
           t.agent.roles.some((r) => r.toLowerCase().includes(q)) ||
           (t.last_device_name_seen && t.last_device_name_seen.toLowerCase().includes(q)) ||
-          (t.last_client && t.last_client.toLowerCase().includes(q))
+          (t.last_client && t.last_client.toLowerCase().includes(q)) ||
+          (t.tokenHint && t.tokenHint.toLowerCase().includes(q))
       );
     }
 
@@ -417,15 +422,17 @@ export function registerTokenRoutes(app: FastifyInstance) {
         await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       }
 
-      // Generate token — plaintext never written anywhere except the HTTP response
+      // Full plaintext only in the HTTP response; YAML may store fixed truncation hint.
       const plainToken = randomBytes(32).toString("hex");
       const tokenHash = hashToken(plainToken);
+      const tokenHint = buildTokenDisplayHint(plainToken);
       const created = new Date().toISOString().slice(0, 10);
 
       const newToken = {
         hash: tokenHash,
         label,
         created,
+        token_hint: tokenHint,
         ...(deviceName ? { device_name: deviceName } : {}),
         expires_at
       };
@@ -450,6 +457,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
             label,
             device_name: deviceName,
             hashPrefix: tokenHash.slice(0, 19),
+            token_hint: tokenHint,
             expires_at
           }
         });
@@ -463,6 +471,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
           written: true,
           token: plainToken,
           hash: tokenHash,
+          token_hint: tokenHint,
           label,
           device_name: deviceName,
           created,

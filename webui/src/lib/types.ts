@@ -1548,6 +1548,8 @@ export type CreateTokenResponse = {
 
 export type TokenInventoryItem = {
   hashPrefix: string;
+  /** Spec lucy-20261102-token-display-hint — human核对片段；缺失为 null。 */
+  tokenHint: string | null;
   label: string;
   created: string;
   expires_at: string | null;

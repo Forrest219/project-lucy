@@ -24,6 +24,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261102-token-display-hint-spec.md](specs/lucy-20261102-token-display-hint-spec.md) | **v0.1 已实施（2026-11-02）。功能合同未正式收口签字。本条收口不表示可上线**。Token 列表改展示固定明文截断「Token 核对提示」（`token_hint`）；审计仍用完整 `sha256:`／`hashPrefix`。功能编号无。Plan 见 [lucy-20261102-token-display-hint-plan.md](plans/lucy-20261102-token-display-hint-plan.md) |
 | `governance/DEVELOPMENT.md` | 开发治理总纲：Plan Mode 强制场景、红线、Spec 落位与内容规格（重要功能伪代码）、术语合规 |
 | `governance/project-overview.md` | 项目总览：onboarding、模块索引、当前能力边界（v1.4，持续更新） |
 | `governance/vision.md` | Lucy 产品愿景 |

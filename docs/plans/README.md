@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261102-token-display-hint-plan.md](lucy-20261102-token-display-hint-plan.md) | **v0.1 已实施（2026-11-02）。本条收口不表示可上线**。Token 核对提示（`token_hint`）签发与列表展示；不重建 Docker。Spec 见 [lucy-20261102-token-display-hint-spec.md](../specs/lucy-20261102-token-display-hint-spec.md) |
 | [lucy-20261102-audit-inquiry-kind-plan.md](lucy-20261102-audit-inquiry-kind-plan.md) | **v0.4 已实施，功能合同未收口。本条收口不表示可上线**。S1–S4 已落地。SC-01–SC-25 自动化已落，尚无逐条收口记录。Spec 见 [lucy-20261102-audit-inquiry-kind-spec.md](../specs/lucy-20261102-audit-inquiry-kind-spec.md)。审阅见 [2026-11-02-codex-review-audit-inquiry-kind.md](../reviews/2026-11-02-codex-review-audit-inquiry-kind.md) |
 | [lucy-20261102-functional-close-release-delete-plan.md](lucy-20261102-functional-close-release-delete-plan.md) | **已执行（2026-11-02）**。五条清单功能收口，发布类从现行状态删除。发布编号不改成通过 |
 | [lucy-20261102-upgrade-list-product-release-split-plan.md](lucy-20261102-upgrade-list-product-release-split-plan.md) | **已执行（2026-11-02）**。四条清单的发布和现场退出升级现行状态。记录见 [2026-11-02-upgrade-list-product-release-split.md](../reviews/2026-11-02-upgrade-list-product-release-split.md) |

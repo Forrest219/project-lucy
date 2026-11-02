@@ -104,9 +104,10 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
       .expect(200);
 
     expect(res.body.ok).toBe(true);
-    const { token, hash, label } = res.body.data;
+    const { token, hash, label, token_hint: tokenHint } = res.body.data;
     expect(token).toMatch(/^[0-9a-f]{64}$/);
     expect(hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(tokenHint).toBe(`${token.slice(0, 6)}…${token.slice(-4)}`);
     expect(label).toBe("cursor-test");
     expect(res.headers["cache-control"]).toBe("private, no-store");
     expect(res.headers.pragma).toBe("no-cache");
@@ -155,10 +156,13 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
       .expect(200);
 
     const plainToken = res.body.data.token as string;
+    const tokenHint = res.body.data.token_hint as string;
     const yamlContent = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     expect(yamlContent).not.toContain(plainToken);
-    // but hash should be present
+    // but hash and fixed display hint should be present
     expect(yamlContent).toContain("sha256:");
+    expect(yamlContent).toContain(`token_hint: ${tokenHint}`);
+    expect(tokenHint).toBe(`${plainToken.slice(0, 6)}…${plainToken.slice(-4)}`);
     await app.close();
   });
 
@@ -414,6 +418,7 @@ describe("POST /api/admin/agents/:userId/tokens/:label/renew", () => {
       - hash: "sha256:aaaa0000"
         label: hermes-laptop
         created: 2026-06-18
+        token_hint: a1b2c3…9f0e
         expires_at: "${expiryInDays(30)}"
     allow:
       tables:
@@ -444,6 +449,7 @@ defaults:
     const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     expect(yaml).toContain("sha256:aaaa0000");
     expect(yaml).toContain("label: hermes-laptop");
+    expect(yaml).toContain("token_hint: a1b2c3…9f0e");
     expect(yaml).toContain("expires_at:");
     await app.close();
   });
@@ -585,6 +591,9 @@ describe("GET /api/admin/tokens", () => {
     expect(token.agent.id).toBe("zhangsan");
     expect(token.agent.name).toBe("张三");
     expect(token.status).toBe("available");
+    // Fixture has no token_hint — must not fabricate from hash.
+    expect(token.tokenHint).toBeNull();
+    expect(token.hashPrefix).toMatch(/^sha256:/);
     expect(res.body.data.stats).toEqual({
       totalTokens: 1,
       availableTokens: 1,
@@ -592,6 +601,24 @@ describe("GET /api/admin/tokens", () => {
       expiringSoonTokens: 0,
       expiredTokens: 0
     });
+    await app.close();
+  });
+
+  it("returns tokenHint for newly created tokens and keeps hashPrefix for audit", async () => {
+    const app = buildServer();
+    await app.ready();
+    const created = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "hint-list-check", expires_at: expiryInDays(30) })
+      .expect(200);
+    const plain = created.body.data.token as string;
+    const expectedHint = `${plain.slice(0, 6)}…${plain.slice(-4)}`;
+
+    const res = await request(app.server).get("/api/admin/tokens").expect(200);
+    const row = res.body.data.tokens.find((t: { label: string }) => t.label === "hint-list-check");
+    expect(row).toBeTruthy();
+    expect(row.tokenHint).toBe(expectedHint);
+    expect(row.hashPrefix).toMatch(/^sha256:/);
     await app.close();
   });
 

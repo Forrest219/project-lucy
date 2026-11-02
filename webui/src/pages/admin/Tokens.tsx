@@ -242,7 +242,7 @@ export function Tokens() {
               <tr>
                 <th><span className="notranslate" translate="no">Token</span> 标签 / 备注</th>
                 <th>所属 <span className="notranslate" translate="no">Agent</span></th>
-                <th><span className="notranslate" translate="no">Token</span> 前缀</th>
+                <th><span className="notranslate" translate="no">Token</span> 核对提示</th>
                 <th>生效角色</th>
                 <th>最近业务使用</th>
                 <th>过期时间</th>
@@ -338,11 +338,21 @@ export function Tokens() {
                         </div>
                       </td>
 
-                      {/* Token Prefix */}
-                      <td className="py-3 px-3">
-                        <code className="text-xs font-mono bg-bg-muted px-1.5 py-0.5 rounded text-fg-muted notranslate" translate="no">
-                          {token.hashPrefix ? `${token.hashPrefix}…` : "—"}
-                        </code>
+                      {/* Token Display Hint — Spec lucy-20261102-token-display-hint */}
+                      <td className="py-3 px-3 max-w-[9rem]">
+                        {token.tokenHint ? (
+                          <code
+                            className="text-xs font-mono bg-bg-muted px-1.5 py-0.5 rounded text-fg-muted notranslate break-all whitespace-normal inline-block max-w-full"
+                            translate="no"
+                            data-testid="token-display-hint"
+                          >
+                            {token.tokenHint}
+                          </code>
+                        ) : (
+                          <span className="text-xs text-fg-muted" data-testid="token-display-hint-missing">
+                            无核对提示
+                          </span>
+                        )}
                       </td>
 
                       {/* Scope / Roles */}

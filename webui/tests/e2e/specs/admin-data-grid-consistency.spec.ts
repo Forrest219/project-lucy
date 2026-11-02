@@ -359,6 +359,7 @@ async function stubCrossPageGridApis(page: Page) {
         data: {
           tokens: Array.from({ length: 5 }, (_, index) => ({
             hashPrefix: `sha256:${"abcdef0123456789".repeat(4)}${index}`,
+            tokenHint: index % 2 === 0 ? `abcdef…${String(index).padStart(4, "0")}` : null,
             label: `e2e-wide-grid-token-label-with-long-name-${String(index).padStart(2, "0")}`,
             created: "2026-08-20",
             expires_at: "2026-12-31",

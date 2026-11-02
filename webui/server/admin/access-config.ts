@@ -41,6 +41,9 @@ export interface YamlToken {
   label: string;
   created: string;
   expires_at?: string | null;
+  device_name?: string | null;
+  /** Spec lucy-20261102-token-display-hint — fixed plaintext truncation for UI核对. */
+  token_hint?: string | null;
   actor_id?: string | null;
   actor_kind?: "person" | "automation" | null;
 }

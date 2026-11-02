@@ -11,6 +11,7 @@ const MOCK_TOKENS_RESPONSE: TokensResponse = {
   tokens: [
     {
       hashPrefix: "sha256:aaaa0000",
+      tokenHint: "a1b2c3…9f0e",
       label: "cursor-desk-xingchen",
       created: "2026-08-20",
       expires_at: "2026-12-31",
@@ -35,6 +36,7 @@ const MOCK_TOKENS_RESPONSE: TokensResponse = {
     },
     {
       hashPrefix: "sha256:bbbb1111",
+      tokenHint: null,
       label: "hermes-agent-prod",
       created: "2026-06-01",
       expires_at: "2026-07-01",
@@ -123,6 +125,14 @@ describe("Tokens (/admin/tokens)", () => {
     expect(table).toHaveTextContent("xingchen-mbp");
     expect(table).toHaveTextContent("hermes-agent-prod");
     expect(table).toHaveTextContent("已过期");
+    expect(table).toHaveTextContent("Token 核对提示");
+    expect(table).toHaveTextContent("a1b2c3…9f0e");
+    expect(table).toHaveTextContent("无核对提示");
+    expect(table).not.toHaveTextContent("sha256:aaaa0000");
+    const hint = within(screen.getByTestId("token-row-cursor-desk-xingchen")).getByTestId(
+      "token-display-hint"
+    );
+    expect(hint.className).toMatch(/break-all/);
   });
 
   it("handles revoke modal confirmation flow", async () => {
