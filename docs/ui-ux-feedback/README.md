@@ -58,6 +58,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-11-02 | Publish Workbench `/publish/workbench` | UAT：分文件勾选发布诉求登记为 `UX-PUBLISH-WORKBENCH-010` → `Deferred`；纳入 [`0.30.0` 需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) REQ-030-001。**本版（`0.25.0`）不做优化、不改代码**；现行仍整批同步。同页条目阴影不一致一并记为本版不做。 |
 | 2026-10-30 | 发版前 UI 检查第一次启用 | 按 Spec `lucy-20261030-webui-release-ux-review` §7，把 2026-10-30 走查里低于 6 分的表面登记为 Open。不修页面。 |
 | 2026-08-07 | Publish Workbench `/publish/workbench` 语义生效台 | Spec 123 / `wo-202608-57` 落地：`UX-PUBLISH-WORKBENCH-007` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。去上传/导出；「生效准备」+「同步索引并生效」；「更多」全量重建 `force:true`。修订 Spec 35；术语 §4.3。跨页面主题新增 `publish workbench activation ia`。验证：`review.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-07 | Publish Workbench `/publish/workbench` CTA 确认路径 | Spec 121 / `wo-202608-54` 落地：`UX-PUBLISH-WORKBENCH-006` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。Header「发布并重建索引」打开确认侧栏并 reindex，不再打开「发布语义资产」上传 Drawer；上传入口仍独占上传路径。修订 Spec 35 §6.2 / Spec 112。跨页面主题新增 `publish cta vs upload path separation`。验证：`review.test.tsx`、`lint:terminology`、`build`。 |

@@ -253,3 +253,24 @@ Reported: 2026-10-30
 
 ### Notes
 Spec [`lucy-20261030-publish-workbench-three-column-spec.md`](../../specs/lucy-20261030-publish-workbench-three-column-spec.md) v0.2 与其 Plan 已落地（本轮不做浏览器验证；结束后只做 code review，待复核后升 Verified）。主题：`publish workbench three-column ia`。三栏与宽确认侧栏的页面级模式登记在 `webui/docs/design-system/99-governance.md` 的 TD-20261030-01。
+
+## UX-PUBLISH-WORKBENCH-010: 期望分文件勾选发布（本版不做）
+
+Status: Deferred
+Route: `/publish/workbench`
+Area: Pending Changes selection / selective publish
+Severity: P2
+Reported: 2026-11-02
+Target pool: `0.30.0`（[`docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](../../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) REQ-030-001）
+
+### Feedback
+UAT：左栏「待发布变更」无勾选，不知道如何发布；希望先勾选再发布。同页条目卡片阴影深浅不一致（视觉 polish，本版一并不做）。
+
+### Expected（池内草案，未开 Spec）
+真·分文件勾选发布：仅勾选文件生效，未勾选仍留待发布；确认面与索引实际影响一致。详见需求池 REQ-030-001。
+
+### Browser Check
+（Deferred；`0.30.0` 开 Spec 后补。）当前本版验收仍按整批同步：中栏「校验变更」→「同步索引并生效」。
+
+### Notes
+2026-11-02 产品决定：不进 `0.25.0`；纳入 `0.30.0` 需求池；本版不优化、不改代码。现行仍整批同步（Spec 123 / 20261030）。
