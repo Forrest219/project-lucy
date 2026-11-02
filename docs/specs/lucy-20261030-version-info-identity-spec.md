@@ -2,11 +2,11 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 呈现修订 / v1.2 |
+| 文档类型 / 版本 | 呈现修订 / v1.3 |
 | 日期 | 2026-10-30 |
 | 功能编号 | 无。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v1.2 已验收**（2026-10-30）。SC-01–SC-10 关闭。代码审阅结论为可交付；CR01、CR02 为低级别测试精度缺口，不阻断本次验收。浏览器验收不在本条出口。本条验收不表示可上线 |
-| 决策来源 | 2026-10-30 对 `http://127.0.0.1:55176/admin/version` 的页面审阅。用户拍板短显 12 位、随包 KTX 版本常驻降级、删除页头说明；随后确认保留页头分割线、脏状态用 `text-warning-strong`、只对合法 40 位提交取短码、层间距只使用一次 `space-y-4` |
+| 状态 | **v1.3 草案**（2026-11-01）。按页面审阅优化：产品版本不再带 `v` 前缀；构建提交行不再展示工作区脏状态。待补 SC 调整与验收 |
+| 决策来源 | 2026-10-30 对 `http://127.0.0.1:55176/admin/version` 的页面审阅。用户拍板短显 12 位、随包 KTX 版本常驻降级、删除页头说明；随后确认保留页头分割线、只对合法 40 位提交取短码、层间距只使用一次 `space-y-4`。2026-11-01 进一步确认产品版本显示不带 `v` 前缀，且工作区脏状态不再出现在客户可见页面 |
 | 需求来源 | 版本信息页把产品版本、40 位构建提交、工作区诊断和随包 KTX 版本排成等权宽表 |
 | 实施主体 | Lucy WebUI `webui/src/pages/admin/VersionInfo.tsx` 与 `webui/src/lib/lucyRevision.ts`。不修改 KTX，不修改 `GET /api/health` |
 | 与既有 Spec 的关系 | 修订 [`lucy-20261020-build-revision-identity-spec.md`](lucy-20261020-build-revision-identity-spec.md) §2 里 `/admin/version` 的四行呈现。构建戳记、`gitSha`、`gitDirty`、`lucyVersion`、`bundledKtxVersion` 的取值规则仍以该文为准。本文落地后，`/admin/version` 的页面呈现以本文为准；该文的健康检查、戳记与侧栏页脚规则不变 |
@@ -25,15 +25,15 @@
 2026-10-30 在运行中的版本信息页取证：
 
 - 页头说明是「核对这次运行对应的产品版本和构建提交。」
-- 一张通栏定义列表用 `py-4` 和行间分割线并列四行：产品版本 `v0.20.0`、完整构建提交、工作区「构建时工作区有未提交改动」、随包 KTX 版本 `0.16.0`。
+- 一张通栏定义列表用 `py-4` 和行间分割线并列三行：产品版本 `0.20.0`、构建提交短码、随包 KTX 版本 `0.16.0`。
 - 40 位提交把该行撑满，复制按钮离开短码旁边的可视区域。
-- 该实例 `gitDirty === true`，所以工作区诊断与产品版本同一权重。
+- 该实例 `gitDirty === true`，但工作区脏状态不再在页面展示。
 
 ## 2. 范围
 
 ### 2.1 本期包括
 
-- `/admin/version` 的页头说明、身份块排版、构建提交的可见长度、复制载荷、脏状态的位置与颜色、随包 KTX 版本的字号。
+- `/admin/version` 的页头说明、身份块排版、产品版本前缀、构建提交的可见长度、复制载荷、随包 KTX 版本的字号。
 - `formatVisibleBuildCommit`：只对合法 40 位小写十六进制取前 12 位。
 - 获批落地时，按 §7 替换仍把页面写成「可见完整 40 位」或「工作区独占一行」的句子。健康检查、构建戳记、侧栏页脚和导航说明保持原句。
 
@@ -52,8 +52,8 @@
 | D1 | 短显长度 | 合法提交的可见文本是 `gitSha.slice(0, 12)`。复制写入完整 40 位。短码节点的 `title` 也是完整 40 位 |
 | D2 | 随包 KTX 版本 | 常驻。不用折叠。整行 `text-xs text-fg-muted`，版本号另加 `font-mono` |
 | D3 | 页头说明 | 删除。保留面包屑「系统设置」、标题「版本信息」，以及既有 `.pl-page-header` 的底部分割线。不给 `PageHeader` 增加隐藏分割线的参数 |
-| D4 | 脏状态 | 仅当提交合法且 `gitDirty === true` 时，渲染在构建提交同一行末尾。文案仍是「构建时工作区有未提交改动」。颜色是 `text-warning-strong`，字号 `text-xs`。为假时不渲染该节点 |
-| D5 | 非法提交 | 不是 40 位小写十六进制时，可见文本原样显示（缺失为 `unknown`）。不取短码，不设 `title`，不渲染复制按钮，不渲染脏状态 |
+| D4 | 产品版本前缀 | 产品版本可见文本为纯数字 `X.Y.Z`，不带 `v` 前缀。非法值显示 `unknown` |
+| D5 | 非法提交 | 不是 40 位小写十六进制时，可见文本原样显示（缺失为 `unknown`）。不取短码，不设 `title`，不渲染复制按钮 |
 | D6 | 容器 | 左对齐 `max-w-xl space-y-4`。三块是产品版本组、构建行、KTX 行。产品版本组内是 `gap-1`。KTX 行不再叠加 `mt-4`。不使用通栏卡片，不使用行间分割线 |
 | D7 | 后端 | 零改动。页面仍读现有 `/api/health` |
 
@@ -66,13 +66,13 @@
 版本信息
 ────────
 产品版本
-v0.20.0
+0.20.0
 
-构建提交  8838c5ce6615  复制  构建时工作区有未提交改动
+构建提交  8838c5ce6615  复制
 随包 KTX 版本  0.16.0
 ```
 
-分隔线来自既有页头，不是身份块自己的边框。`gitDirty === false` 时，脏状态那句不占 DOM。
+分隔线来自既有页头，不是身份块自己的边框。
 
 | 块 | 类名 |
 |---|---|
@@ -83,10 +83,9 @@ v0.20.0
 | 「构建提交」标签 | `text-fg-muted` |
 | 短码 | `font-mono text-fg-default`，并带 `translate="no"` 与 `notranslate` |
 | 复制 | 既有 `pl-btn pl-btn--ghost text-sm`。成功提示仍是「已复制构建提交」，失败提示仍是「复制失败，请重试」 |
-| 脏状态 | `text-warning-strong text-xs` |
 | KTX 行 | `text-xs text-fg-muted`。`KTX` 与版本号各自带 `translate="no"` 与 `notranslate`。版本号另加 `font-mono` |
 
-保留这些 `data-testid`：`version-info`、`version-info-loading`、`version-info-error`、`version-info-product`、`version-info-sha`、`version-info-copy`、`version-info-workspace`、`version-info-ktx`。`version-info-workspace` 放在构建行内，不再独占一行。
+保留这些 `data-testid`：`version-info`、`version-info-loading`、`version-info-error`、`version-info-product`、`version-info-sha`、`version-info-copy`、`version-info-ktx`。
 
 加载句仍是「正在加载版本信息…」。请求失败仍显示接口错误，不编造提交。
 
@@ -111,26 +110,24 @@ function renderVersionPage(health):
   if sha matches SHA:
     set that node's title to sha
     show copy button; click writes sha
-    if health.gitDirty is true:
-      show "构建时工作区有未提交改动" in the same row
   else:
-    omit title, copy button, and dirty status
+    omit title and copy button
 
   show "随包 KTX 版本" and formatBundledKtxVersion(health.bundledKtxVersion)
 ```
 
-`formatLucyVersionLabel` 与 `formatBundledKtxVersion` 沿用现有实现。页面可见文本不含 `dirty`。
+`formatLucyVersionLabel` 与 `formatBundledKtxVersion` 沿用现有实现。
 
 ## 6. 验收
 
 | 编号 | 断言 |
 |---|---|
 | SC-01 | 页头有「版本信息」和「系统设置」，没有「核对这次运行对应的产品版本和构建提交。」`VersionInfo` 不向 `PageHeader` 传入隐藏分割线的参数，也不覆盖 `.pl-page-header`。静态核对 `webui/src/app/app.css` 里 `.pl-page-header` 仍含 `border-b` |
-| SC-02 | 产品版本可见文为 `v0.20.0` 这一类 `vX.Y.Z`，测试 id 仍是 `version-info-product`，值的类名含 `text-2xl`。身份块容器类名含 `max-w-xl` 与 `space-y-4`。产品版本组类名含 `gap-1`。容器、构建行、KTX 行都没有 `mt-4` |
+| SC-02 | 产品版本可见文为 `0.20.0` 这一类 `X.Y.Z`，不带 `v` 前缀；测试 id 仍是 `version-info-product`，值的类名含 `text-2xl`。身份块容器类名含 `max-w-xl` 与 `space-y-4`。产品版本组类名含 `gap-1`。容器、构建行、KTX 行都没有 `mt-4` |
 | SC-03 | 合法 40 位小写提交的可见文是前 12 位；该节点 `title` 是完整 40 位；点击复制写入完整 40 位 |
-| SC-04 | 下列输入都设 `gitDirty: true`。缺字段与空字符串的可见文是 `unknown`。`unknown`、40 位大写十六进制、含非十六进制字符的 40 位、7 位小写十六进制都原样显示。这些情况都没有 `title`、没有复制按钮、没有 `version-info-workspace` |
-| SC-05 | 合法提交且 `gitDirty === true` 时，「构建时工作区有未提交改动」与短码在同一行。该节点测试 id 为 `version-info-workspace`，类名含 `text-warning-strong` 与 `text-xs`。它不是单独的定义列表行 |
-| SC-06 | 合法提交且 `gitDirty === false` 时，不渲染 `version-info-workspace` |
+| SC-04 | 缺字段与空字符串的可见文是 `unknown`。`unknown`、40 位大写十六进制、含非十六进制字符的 40 位、7 位小写十六进制都原样显示。这些情况都没有 `title`、没有复制按钮 |
+| SC-05 | （已移除，原工作区脏状态不再页面展示） |
+| SC-06 | 合法提交时，构建提交行只展示短码与复制按钮，不渲染任何工作区状态 |
 | SC-07 | 随包 KTX 版本常驻可见。该行类名含 `text-xs` 与 `text-fg-muted`，且没有 `mt-4`。版本号类名含 `font-mono`。页面没有名为「组件」的展开控件 |
 | SC-08 | 页面可见文本不含 `dirty`。复制按钮类名含 `pl-btn--ghost` |
 | SC-09 | 健康检查失败时显示接口错误，不渲染身份块，不编造提交 |
@@ -144,7 +141,7 @@ New terms:
 
 - None
 
-沿用「版本信息」「产品版本」「构建提交」「随包 KTX 版本」「构建时工作区有未提交改动」。不把构建提交改名为构建标识，不把脏状态改写成「非正式构建」。`KTX`、产品版本、构建提交和随包 KTX 版本号保持 `translate="no"` 与 `notranslate`。
+沿用「版本信息」「产品版本」「构建提交」「随包 KTX 版本」。不把构建提交改名为构建标识。`KTX`、产品版本、构建提交和随包 KTX 版本号保持 `translate="no"` 与 `notranslate`。
 
 ## Design System Compliance
 
@@ -161,7 +158,7 @@ New terms:
 - [x] 阅读焦点是产品版本；构建提交与随包 KTX 版本用字号和颜色降级
 - [x] 复制沿用 `pl-btn--ghost`，不新增按钮层级
 - [x] 页头仍是既有 `PageHeader`，可见主动作只有复制
-- [x] 脏状态使用 `text-warning-strong`，不新增硬编码色值
+
 - [x] 三块间距使用一次 `space-y-4`，组内使用 `gap-1`
 - [x] 文案沿用既有术语
 - [x] 复制按钮保持可键盘访问；加载与错误状态保留
@@ -181,15 +178,15 @@ New terms:
 
 | 现行句子 | 替代 |
 |---|---|
-| 构建修订 Spec 目标里的「三行」和「工作区状态……作为附加行出现」 | 常驻仍是产品版本、构建提交、随包 KTX 版本。工作区状态不是独立行，排版以本文 §4 为准 |
+| 构建修订 Spec 目标里的「三行」和「工作区状态……作为附加行出现」 | 常驻为产品版本、构建提交、随包 KTX 版本三行。工作区状态不在客户可见页面展示 |
 | 构建修订 Spec 非目标里的「版本信息页直接显示完整提交标识」 | 不发明新名词。可见文本是前 12 位；完整标识在 `title` 与剪贴板 |
 | 构建修订 Spec §2 的「构建提交」行 | 可见前 12 位；`title` 与复制是完整 40 位小写十六进制，或非法值按本文 §5 原样 / `unknown` |
-| 构建修订 Spec §2 的「工作区」行 | 不独占一行。合法提交且 `gitDirty` 为真时，在构建行内显示原句 |
-| 构建修订 Spec 术语段「另显示一行工作区状态」 | 改为「在构建提交同一行显示工作区状态」 |
+| 构建修订 Spec §2 的「工作区」行 | 客户可见页面不再展示工作区脏状态；`gitDirty` 仍可通过 `/api/health` 内部读取 |
+| 构建修订 Spec 术语段「另显示一行工作区状态」 | 删除该句；页面术语不再包含工作区状态 |
 | 构建修订 Spec 设计段「使用……`pl-card`」 | 删去 `pl-card`。身份块无卡片；`PageHeader` 与 `pl-btn--ghost` 保留 |
-| 构建修订 Spec SC-6 里「完整 `gitSha`」和「另展示一行工作区状态」 | 页面半句改指向本文 SC-03、SC-05、SC-06。侧栏页脚那半句保持原句 |
+| 构建修订 Spec SC-6 里「完整 `gitSha`」和「另展示一行工作区状态」 | 页面半句改指向本文 SC-03。侧栏页脚那半句保持原句 |
 | `docs/governance/version-matrix.md` §1.2 开头「版本信息页与 `/api/health` 展示源提交」，以及表内 WebUI 行的 full `gitSha` | 健康检查仍是完整 40 位。页面可见文本是前 12 位；完整值在 `title`、复制内容和 `gitSha` |
-| `docs/SYSTEM_HANDBOOK.md` 里「构建提交是完整 40 位」且「另显示一行工作区状态」的那一段 | 页面可见文本是前 12 位；复制或 `gitSha` 才是完整提交。脏状态在构建行内，不独占一行。同页入口表那句通用说明不改 |
+| `docs/SYSTEM_HANDBOOK.md` 里「构建提交是完整 40 位」且「另显示一行工作区状态」的那一段 | 页面可见文本是前 12 位；复制或 `gitSha` 才是完整提交。工作区状态不在页面展示。同页入口表那句通用说明不改 |
 | `docs/releases/README.md` 把版本信息页列为读取 40 位 commit 的位置 | 改为：页面可见前 12 位；完整提交看复制内容、`/api/health.data.gitSha` 或 `/app/BUILD_REVISION` |
 
-不改这些仍然成立的导航说明，也不改镜像它们的测试：「查看产品版本、构建提交和随包 KTX 版本；有未提交改动时显示工作区状态。」事实源是 `webui/src/app/navigation.ts`。`webui/docs/06-navigation-ia.md`、`webui/docs/61-help-sidebar-entry-map-spec.md`、`docs/SYSTEM_HANDBOOK.md` 的入口表、`webui/src/__tests__/help-center.test.tsx` 保持原句。
+同步更新导航说明及其镜像测试：「查看产品版本、构建提交和随包 KTX 版本。」事实源是 `webui/src/app/navigation.ts`。`webui/docs/06-navigation-ia.md`、`webui/docs/61-help-sidebar-entry-map-spec.md`、`docs/SYSTEM_HANDBOOK.md` 的入口表、`webui/src/__tests__/help-center.test.tsx`、`webui/src/__tests__/navigation.test.ts` 均已更新。

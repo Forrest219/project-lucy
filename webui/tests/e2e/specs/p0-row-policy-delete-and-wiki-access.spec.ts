@@ -28,7 +28,7 @@ function scopedRoleDetail() {
     description: "E2E 行级策略删除确认",
     source: "yaml",
     tools: ["lucy_query"],
-    connections: ["mysql-aliyun"],
+    connections: ["demo-mysql"],
     sourceNames: ["superstore_orders"],
     sourceCount: 1,
     invalid: false,
@@ -39,10 +39,10 @@ function scopedRoleDetail() {
       description: "E2E 行级策略删除确认",
       permission_model_version: 2,
       allow: {
-        connections: ["mysql-aliyun"],
+        connections: ["demo-mysql"],
         tools: ["lucy_query"],
         tableSelectors: [{
-          connection: "mysql-aliyun",
+          connection: "demo-mysql",
           schema: "dataforai",
           names: ["superstore_orders"],
           row_access: "scoped",
@@ -272,7 +272,7 @@ test.describe("P0 行级策略与 Wiki 访问", () => {
     expect(previews.filter((body) => body.removeRole)).toEqual([{
       removeRole: true,
       roleId: SCOPED_ROLE_ID,
-      tables: [{ connection: "mysql-aliyun", schema: "dataforai", name: "superstore_orders" }]
+      tables: [{ connection: "demo-mysql", schema: "dataforai", name: "superstore_orders" }]
     }]);
     expect(deletes.some((body) => body.dryRun === false && body.rowPolicyConfirmation)).toBe(true);
   });

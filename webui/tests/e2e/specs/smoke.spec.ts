@@ -38,7 +38,7 @@ test.describe("L1 PR Smoke 12 条 (升级对齐版)", () => {
   test("@pr-smoke E2E-CON-01 连接概览术语与开箱向导入口", async ({ page }) => {
     await page.goto("/connections");
     await expect(page.getByTestId("page-header")).toBeVisible();
-    await expect(page.getByTestId("connection-card-mysql-aliyun")).toBeVisible();
+    await expect(page.getByTestId("connection-card-demo-mysql")).toBeVisible();
     const onboardingBtn = page.getByTestId("start-onboarding-assistant-btn");
     await expect(onboardingBtn).toBeVisible();
     await assertNoForbiddenTerms(page);
@@ -47,7 +47,7 @@ test.describe("L1 PR Smoke 12 条 (升级对齐版)", () => {
   // 4. E2E-CON-03：受控 YAML 上传 Drawer 打开（不实际落盘）
   test("@pr-smoke E2E-CON-03 上传 Drawer 打开", async ({ page }) => {
     await page.goto("/connections");
-    await page.getByTestId("add-schema-mysql-aliyun").click();
+    await page.getByTestId("add-schema-demo-mysql").click();
     const drawer = page.getByTestId("add-schema-drawer");
     await expect(drawer).toBeVisible();
     const select = drawer.getByTestId("add-schema-select");
@@ -137,7 +137,7 @@ test.describe("L1 PR Smoke 12 条 (升级对齐版)", () => {
     await page.goto("/connections");
     const response = await page.request.post("/api/catalog/assets/upload", {
       data: {
-        connectionId: "mysql-aliyun",
+        connectionId: "demo-mysql",
         schema: "dataforai",
         assetType: "schemaManifest",
         filename: "../etc/passwd.yaml",
@@ -153,7 +153,7 @@ test.describe("L1 PR Smoke 12 条 (升级对齐版)", () => {
     };
     expect(body.error?.code).toBe("TARGET_EXISTS");
     expect(body.data?.validation?.targetPath).toBe(
-      "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"
+      "semantic-layer/demo-mysql/_schema/dataforai.yaml"
     );
     expect(JSON.stringify(body)).not.toContain("../etc/passwd");
   });

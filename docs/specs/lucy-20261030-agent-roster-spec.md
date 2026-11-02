@@ -2,22 +2,22 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / **v1.3** |
-| 日期 / 目标版本 | 2026-10-30；2026-11-01 功能合同收口 / 不绑定产品版本号 |
+| 文档类型 / 版本 | 功能设计基线 / **v1.4** |
+| 日期 / 目标版本 | 2026-10-30；2026-11-01 功能合同收口；同日 v1.4 增量修订 / 不绑定产品版本号 |
 | 台账号 | 无。不进入 v0.25 升级台账，不另派 WebUI 流水号 |
-| 状态 | **v1.3 功能合同已收口（2026-11-01）**。SC-01–SC-15 全部关闭，逐条落点见 §7.2，证据见 [收口记录](../reviews/2026-11-01-agent-roster-closure.md)。设计基线见 [第 3 轮 Codex 审阅](../reviews/2026-10-30-codex-review-agent-roster.md)。**本条收口不表示可上线**——移动窄屏、Docker 重建、客户交付不在本条出口 |
-| 决策来源 | 2026-10-30 对 `/admin/agents` 的名册讨论。六项呈现全部接受；列头用 Token；启用行不放标记；仅连接用次级文字 |
-| 需求来源 | 数据平台经理在这一页要看出谁能访问、凭据还能不能用、这周有没有在查数 |
-| 实施主体 | Lucy WebUI。不修改 KTX 源码，不改审计写入 |
+| 状态 | **v1.4 增量已落地（2026-11-01）**。第四张卡改为固定语义的「暂时不能查数」；名册页头不再放整宽降级提示。改写 SC-01 与 SC-16／SC-17 已通过本地 vitest（见 §7.3）。v1.3 的 SC-02–SC-15 仍以 [收口记录](../reviews/2026-11-01-agent-roster-closure.md) 为准。设计基线见 [第 3 轮 Codex 审阅](../reviews/2026-10-30-codex-review-agent-roster.md)。**本条收口不表示可上线**——移动窄屏、Docker 重建、客户交付不在本条出口 |
+| 决策来源 | 2026-10-30 对 `/admin/agents` 的名册讨论。六项呈现全部接受；列头用 Token；启用行不放标记；仅连接用次级文字。**2026-11-01**：页头「有 Agent 暂时不能查数」整宽提示过突兀；批准用第四张 KPI 常驻异常计数替换「可用 Token」，标题与读法固定、主值永远是数字，不为健康／异常切换卡身份 |
+| 需求来源 | 数据平台经理在这一页要看出谁能访问、有没有 Agent 暂时不能查数、这周有没有在查数；凭据可用性改由主表 Token 列与 `/admin/tokens` 承担 |
+| 实施主体 | Lucy WebUI。不修改 KTX 源码，不改审计写入，不改 `GET /api/admin/policy-runtime` 契约 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」 |
-| 与既有 Spec 的关系 | **另起呈现合同。** 用量口径继续以 Spec 155 / 189 为准。本文件只改 `/admin/agents` 展示哪些数，以及对象详情抽屉补哪三行。不改三层分类、恒等式、活跃 Agent 分子 |
+| 与既有 Spec 的关系 | **另起呈现合同。** 用量口径继续以 Spec 155 / 189 为准。本文件只改 `/admin/agents` 展示哪些数，以及对象详情抽屉补哪三行。不改三层分类、恒等式、活跃 Agent 分子。策略降级的机器原因与修复文案继续来自既有 policy-runtime／`PolicyDegradeNotice` 内容，本文件只改名册页的呈现落点 |
 | 实施计划 | [`docs/plans/lucy-20261030-agent-roster-plan.md`](../plans/lucy-20261030-agent-roster-plan.md) |
 
 ## 闭口层级
 
 - 层级：功能合同
-- 本条承诺：`/admin/agents` 用四张卡和六列表回答谁能访问、凭据还能不能用、这周有没有在查数；仅连接可被看见和筛出，且不改变活跃 Agent 的计数
-- 本条出口：SC-01–SC-15 的组件测试、契约测试和术语检查
+- 本条承诺：`/admin/agents` 用四张卡和六列表回答谁能访问、有没有 Agent 暂时不能查数、这周有没有在查数；仅连接可被看见和筛出，且不改变活跃 Agent 的计数。第四张卡固定为「暂时不能查数」异常计数，不用整宽 banner 顶在页头
+- 本条出口：SC-01–SC-17 的组件测试、契约测试和术语检查（其中 SC-01 以 v1.4 为准；SC-16、SC-17 为 v1.4 新增；SC-02–SC-15 仍以 v1.3 收口为准）
 - 不在本条出口：整库旅程、跨模块故障演练、证据等级、移动窄屏、Docker 重建
 - 上线关系：本条收口不表示可上线
 
@@ -32,6 +32,7 @@ New terms:
 - No Available Token: UI 主术语「无可用 Token」。可用 Token 为 0 且配置 Token 大于 0。
 - Agent Roster Token Column: 列头「Token」。主行「可用 n」或「无可用 Token」，次行「配置 n」。
 - Agent Disabled Mark: UI 主术语「已禁用」。只出现在未启用 Agent 的显示名旁。
+- Temporarily Unable to Query Agents: UI 主术语「暂时不能查数」。名册第四张 KPI 的固定标题。主值是因 EffectivePolicy 无法应用而暂停查数的 Agent 个数；健康时为 `0`，不为健康／异常切换卡标题或卡身份。
 
 Forbidden terms:
 
@@ -40,6 +41,8 @@ Forbidden terms:
 - 把「仅连接」叫成「仅连接会话」，或把它算进近 N 活跃 Agent。
 - 启用行上放「启用」胶囊、绿点或灰点。
 - 筛选项「闲置」纳入仅连接，或纳入指标不可用的行。空的最近业务使用仍写「未使用」，不改成「闲置」。
+- 第四张卡按健康态改成「查数正常／查数异常」等状态文案主值，或健康时拆掉该卡、异常时再插入。
+- 名册页头再放整宽「有 Agent 暂时不能查数／所有 Agent 暂时不能查数」提示块顶在指标卡之上（详情页 scoped 提示不在本禁令内）。
 
 术语标准 §4.5 已登记上表。实现不得另起译名。`Agent`、`Token`、`MCP`、用户 ID、角色 id 在 DOM 上使用 `translate="no"` 与 `notranslate`。
 
@@ -56,6 +59,7 @@ Forbidden terms:
 - [ ] 四张卡使用共享 Metric Card，容器用默认 `pl-metric-grid`，去掉 `pl-metric-grid--three`
 - [ ] xl 断点一行四张；更窄宽度沿用该组件既有的两列，不新写断点
 - [ ] 「无可用 Token」使用既有 `text-warning-strong`，不新增色值，不做新胶囊
+- [ ] 「暂时不能查数」卡：主值 `> 0` 用 Metric Card 既有 `warning` tone；全局降级用既有 `danger` tone；`0` 时不加 tone，不用 success 绿壳表示健康
 - [ ] 「已禁用」使用既有 `pl-status-badge` 与 `pl-status-not_started`
 - [ ] 「仅连接」使用次级文字色，不上 warning 色
 - [ ] 表格继续用 `pl-data-grid`。宽表滚动容器保持；本页列减少后，不把壳层最小宽度改小
@@ -72,15 +76,18 @@ Forbidden terms:
 
 `/admin/agents` 现在是六张卡、十二列表。经理要横滑才能看完一个人。当前演示数据里，业务调用 14 次，协议请求 777 次；四个 Agent 里只有一个这周有业务调用。另一个 Agent 的业务调用是 0、协议请求是 360，最近 MCP 访问是几分钟前，最近业务使用是十天前。协议量和最近 MCP 访问会把「客户端还连着」读成「这周在查数」。
 
-这一页的工作是名册：谁能访问，凭据还能不能用，这周有没有在查数。协议诊断留在点名之后。
+这一页的工作是名册：谁能访问，有没有 Agent 暂时不能查数，这周有没有在查数。凭据可用性留在表内 Token 列与 `/admin/tokens`。协议诊断留在点名之后。
+
+v1.3 收口后，策略降级仍用页头整宽 `PolicyDegradeNotice` 顶在四张卡之上；有多名 Agent 异常时文案过长，把名册概览顶下去，也和「KPI 用数字显性提醒异常」的读法不一致。「可用 Token」汇总已在 `/admin/tokens` 与主表 Token 列重复出现，适合让出第四格。
 
 ## 2. 目标
 
-1. 顶部四张卡：Agent 总数、近 7 天活跃 Agent、近 7 天业务调用量、可用 Token。
+1. 顶部四张卡：Agent 总数、近 7 天活跃 Agent、近 7 天业务调用量、暂时不能查数。
 2. 主表六列：显示名/用户 ID、角色、Token、近 7 天业务调用量、最近业务使用、操作。
 3. 未启用的 Agent 在显示名旁标「已禁用」。已启用的行不放状态标记。
 4. 仅连接可以在时间旁看见，也可以从「近 7 天活跃」筛出来。它不增加活跃 Agent。
 5. 协议请求量和最近 MCP 访问改到对象详情抽屉。接口字段保留。
+6. 名册页头不再渲染整宽策略降级提示；异常名单与修复说明挂在第四张卡的展开区。
 
 ## 3. 非目标
 
@@ -88,7 +95,9 @@ Forbidden terms:
 |---|---|
 | 改 Spec 189 的协议集合、默认用量、活跃 Agent 分子、调用量恒等式 | 本文件只改名册呈现 |
 | 删除 `protocolCallsLast7d`、`lastSeen`、`usedCredentialCountLast7d` 等接口字段 | 抽屉和其它页面还要读 |
-| 改 `/admin/tokens`、`/admin/agents/:userId`、使用概况、调用监控 | 那些页有自己的合同 |
+| 改 `/admin/tokens`、使用概况、调用监控 | 那些页有自己的合同；可用 Token 汇总留在 Token 页 |
+| 改 `GET /api/admin/policy-runtime` 或降级原因码 | 只改名册呈现落点 |
+| 强制改掉 `/admin/agents/:userId` 上已有的 scoped `PolicyDegradeNotice` | 详情页仍可对当前 Agent 提示修复；本文件约束名册列表页 |
 | 把近 7 天拒绝放回主表或顶部卡 | 拒绝留在抽屉和访问日志 |
 | 改列表排序 | 保持接口返回顺序，避免心跳把行顶到最前 |
 | 为窄屏新做断点或改壳层最小宽度 | 本仓库默认不做移动窄屏 |
@@ -98,7 +107,7 @@ Forbidden terms:
 
 | ID | 决策 | 冻结 |
 |---|---|---|
-| D1 | 顶部四张卡，顺序见 §5.1。去掉近 7 天使用过的凭据、近 7 天协议请求量 | **已冻结** |
+| D1 | 顶部四张卡，顺序见 §5.1。去掉近 7 天使用过的凭据、近 7 天协议请求量。**v1.4：第四张由「可用 Token」改为「暂时不能查数」** | **已冻结** |
 | D2 | 主表六列，顺序见 §5.2。不保留序号，不保留独立的当前状态列 | **已冻结** |
 | D3 | 列头是 Token。可用为 0 且配置大于 0 时主行写「无可用 Token」 | **已冻结** |
 | D4 | 已启用不放胶囊、圆点或「启用」。未启用只标「已禁用」 | **已冻结** |
@@ -111,6 +120,7 @@ Forbidden terms:
 | D11 | 指标不可用时，业务调用量和最近业务使用显示「—」，不标仅连接，不归入闲置 | **已冻结** |
 | D12 | 窗口边界用本响应的 `summary.windowStart` / `summary.windowEnd`，半开区间。缺 summary、缺任一端，时间条款都不成立；协议请求量大于 0 仍可标仅连接 | **已冻结** |
 | D13 | 抽屉先看指标是否可用。不可用时协议请求量和两个时间都是「—」。可用且时间为空时，最近业务使用写「未使用」，最近 MCP 访问写「未访问」 | **已冻结** |
+| D14 | 「暂时不能查数」卡标题与读法固定；主值永远是数字（或不可用时「—」）。健康时为 `0`，仍占第四格。不为健康／异常切换卡身份。名册页头不再渲染整宽 `PolicyDegradeNotice`；名单与修复说明只出现在该卡展开区 | **已冻结** |
 
 ## 5. 页面
 
@@ -118,18 +128,50 @@ Forbidden terms:
 
 ### 5.1 指标卡
 
-容器是 `pl-metric-grid`，不带 `pl-metric-grid--three`。四张卡的标题、帮助文案和数据来源保持现在这四张的口径：
+容器是 `pl-metric-grid`，不带 `pl-metric-grid--three`。四张卡的标题固定，不为健康／异常改标题或拆插卡片：
 
 | 顺序 | 标题 | 值 |
 |---|---|---|
 | 1 | Agent 总数 | 当前配置 Agent 数，含未启用 |
 | 2 | 近 7 天活跃 Agent | `usageActiveAgentCountLast7d`。帮助文案继续写明只按业务调用判定 |
 | 3 | 近 7 天业务调用量 | `usageCallsLast7d` |
-| 4 | 可用 Token | `availableTokenCount`。副文继续写配置 Token 数 |
+| 4 | 暂时不能查数 | 见 §5.1.1。主值永远是数字；健康为 `0` |
 
-`kpiContracts.ts` 里 `used-credential-count` 的条目保留，帮助文案仍与「近 N 业务活跃 Token」区分。`pages` 去掉 `/admin/agents`。该条目目前只登记了这一页，去掉之后 `pages` 为空。`kpi-contracts.test.ts` 里「每个条目至少有一页」的断言为这一条单独放行，其它条目仍至少有一页。`calls-7d` 与 `active-agent-count` 仍登记在本页。
+`kpiContracts.ts`：
+
+- `used-credential-count` 的条目保留，帮助文案仍与「近 N 业务活跃 Token」区分。`pages` 去掉 `/admin/agents`。该条目目前只登记了这一页，去掉之后 `pages` 为空。`kpi-contracts.test.ts` 里「每个条目至少有一页」的断言为这一条单独放行，其它条目仍至少有一页。
+- `calls-7d` 与 `active-agent-count` 仍登记在本页。
+- **v1.4** 新增本页条目（建议 id：`temporarily-unable-to-query-agents`），`label` 为「暂时不能查数」，`pages` 含 `/admin/agents`，`windowed: false`。帮助文案写明：因 EffectivePolicy 无法应用而暂停查数的 Agent 个数；`0` 表示当前无此异常；全局降级时等于本页 Agent 总数。
+- 名册顶卡不再展示「可用 Token」汇总；该汇总继续由 `/admin/tokens` 与主表 Token 列承担。若契约里曾把「配置 Token／可用 Token」只挂在本页顶卡，按实现核对后从本页 `pages` 拿掉或改为指向 Token 页，不得让已下线的顶卡继续登记在本页。
 
 页顶「审计写入尚未完成」的提示保留。只因为凭据 prefix 冲突而出现的「近 7 天使用过的凭据无法可靠映射」提示从本页移除。
+
+**名册列表页不再在页头／指标卡之上渲染整宽 `PolicyDegradeNotice`（`data-testid=policy-degrade-banner`）。** 降级呈现落在第四张卡及其展开区。
+
+### 5.1.1 「暂时不能查数」卡
+
+数据来自既有 `GET /api/admin/policy-runtime`（与现 `PolicyDegradeNotice` 同源），不新造接口字段。与本页 `GET /api/admin/agents` 的 Agent 列表一起派生主值。
+
+| 条件 | 主值 | tone | 副文 |
+|---|---|---|---|
+| `healthy == true`，或可见异常 Agent 数为 0 | `0` | 无 | 可写「当前无此异常」；不得改成「正常」主值 |
+| 非全局降级，且有具名异常 Agent | 去重后的异常 Agent 个数（读 `issues[].agentId`；无 `issues` 时读 `degradedAgents`） | `warning` | 可写「需修复角色或配置」 |
+| `degradedGlobal == true` | 本页当前配置 Agent 总数（与第一张卡同一分母，含未启用） | `danger` | 可写「全部 Agent」 |
+| policy-runtime 请求失败或尚未可读 | 「—」，`state=unavailable` | 无 | 「数据源不可用」或组件既有不可用副文；**不得把失败显示成 `0`** |
+
+展开区（仅主值是大于 0 的数字时提供）：
+
+- 列出与现 `PolicyDegradeNotice` 相同的异常项：Agent 显示名（无则用户 ID）、修复说明、`打开这个 Agent`／`去修改角色` 链接（有 role 时）。
+- 保留脚注：「保存成功后，这条提示会消失。」
+- 主值为 `0` 或「—」时不渲染展开区内容。
+- 展开控件放在第四张卡内或紧贴该卡下方，不得再变成页头整宽 warning 条。
+- 全局降级时展开区展示全局修复说明（现 `access_config_unreadable` 文案），不要求再枚举每一个 Agent 行。
+
+计数口径：
+
+- 只统计当前名册响应里仍存在的 Agent id；已从配置删除、但偶发残留在 policy-runtime 里的 id 不计入主值。
+- 同一 Agent 多条 issue 只计 1。
+- 不把「无可用 Token」、闲置、仅连接算进本卡。
 
 ### 5.2 主表
 
@@ -220,10 +262,17 @@ else:
 
 ```text
 response = GET /api/admin/agents
+policy = GET /api/admin/policy-runtime
 windowStart = response.summary 存在 ? response.summary.windowStart : 缺失
 windowEnd = response.summary 存在 ? response.summary.windowEnd : 缺失
-render 四张卡 from response.summary
-  不渲染 usedCredential、protocolCalls
+render 前三张卡 from response.summary
+  不渲染 usedCredential、protocolCalls、可用 Token 汇总顶卡
+render 第四张卡「暂时不能查数」per §5.1.1(policy, response.agents)
+  名册页头不渲染整宽 PolicyDegradeNotice
+  if 主值 > 0:
+    展开区可列出修复说明与链接
+  else:
+    不渲染展开区
 
 for agent in response.agents，保持数组顺序:
   bucket, mark = §6(agent, windowStart, windowEnd)
@@ -240,7 +289,7 @@ for agent in response.agents，保持数组顺序:
     按 §5.5 的「指标可用」列显示
 ```
 
-失败分支：`metricsState == "unavailable"` 或 `usageCallsLast7d` 为 `null` 或缺失时，该行 calls 与时间为「—」，`bucket = unknown`，没有仅连接。配置数和可用数仍按 access 配置显示，因为它们不来自审计库。缺 `summary` 时按缺窗口处理，不另造 7 天。
+失败分支：`metricsState == "unavailable"` 或 `usageCallsLast7d` 为 `null` 或缺失时，该行 calls 与时间为「—」，`bucket = unknown`，没有仅连接。配置数和可用数仍按 access 配置显示，因为它们不来自审计库。缺 `summary` 时按缺窗口处理，不另造 7 天。policy-runtime 失败时第四张卡主值为「—」，不得写成 `0`。
 
 ## 7. 验收标准
 
@@ -264,7 +313,7 @@ for agent in response.agents，保持数组顺序:
 
 | ID | 检查 |
 |---|---|
-| SC-01 | 指标卡恰好四张，顺序为 Agent 总数、近 7 天活跃 Agent、近 7 天业务调用量、可用 Token。没有近 7 天使用过的凭据，没有近 7 天协议请求量。网格不带 `pl-metric-grid--three` |
+| SC-01 | **v1.4 改写。** 指标卡恰好四张，顺序为 Agent 总数、近 7 天活跃 Agent、近 7 天业务调用量、暂时不能查数。没有可用 Token 顶卡，没有近 7 天使用过的凭据，没有近 7 天协议请求量。网格不带 `pl-metric-grid--three`。名册页在指标卡之上没有 `policy-degrade-banner` |
 | SC-02 | 表头恰好为显示名/用户 ID、角色、Token、近 7 天业务调用量、最近业务使用、操作。没有序号、当前状态、配置 Token、可用 Token、近 7 天使用过的凭据、近 7 天协议请求量、最近 MCP 访问 |
 | SC-03 | 已启用的行没有「启用」文案，也没有状态圆点。未启用的行在显示名旁有「已禁用」，且使用 `pl-status-not_started` |
 | SC-04 | 可用 0、配置 3 时主行是「无可用 Token」并带 `text-warning-strong`，次行是「配置 3」。可用 2、配置 2 时主行是「可用 2」，次行是「配置 2」，主行不带 warning 色。`availableTokens` 缺失、已启用、配置 2 时主行是「可用 2」，不带 warning。`availableTokens` 缺失、未启用、配置 2 时同时有「已禁用」和「无可用 Token」。配置 0 时主行是「可用 0」，次行是「配置 0」，不带 warning |
@@ -279,6 +328,8 @@ for agent in response.agents，保持数组顺序:
 | SC-13 | `GET /api/admin/agents` 仍返回 `protocolCallsLast7d`、`lastSeen`、`usedCredentialCountLast7d`。本文件不删除这些字段 |
 | SC-14 | 在 §7.1 夹具上，`a-time` 有「仅连接」。把它的 `lastSeen` 改成窗口终点、其它字段不变，则不再有「仅连接」，并进入闲置 |
 | SC-15 | 在 §7.1 夹具上，`a-inside-business-time` 进入闲置。`a-protocol-inside` 有「仅连接」，并进入仅连接，不进入闲置 |
+| SC-16 | **v1.4 新增。** 「暂时不能查数」卡标题固定。`healthy` 时主值是数字 `0`，无 warning／danger tone，无展开区。两个具名 Agent 降级且均在本页名册中时，主值是 `2`，tone 为 warning；展开后可见两名 Agent、修复说明，以及打开 Agent／去修改角色链接（有 role 时），并有「保存成功后，这条提示会消失。」。页头没有整宽 `policy-degrade-banner` |
+| SC-17 | **v1.4 新增。** `degradedGlobal` 且本页有 5 个配置 Agent 时，主值是 `5`，tone 为 danger；展开区给全局修复说明，不要求枚举五行。policy-runtime 失败时主值是「—」，副文走不可用，不得显示 `0`。`kpiContracts` 为本卡登记本页；帮助文案区分「暂时不能查数」与「可用 Token／无可用 Token」 |
 
 ### 7.2 执行结果与逐条落点（2026-11-01）
 
@@ -288,7 +339,7 @@ for agent in response.agents，保持数组顺序:
 
 | 编号 | 结果 | 落点 |
 |---|---|---|
-| SC-01 | 通过 | `agent-list.test.tsx`「renders stability-and-adoption top metrics（SC-01）」 |
+| SC-01 | 通过（**v1.3 口径**；v1.4 改写后须重跑，见 §7.3） | `agent-list.test.tsx`「renders stability-and-adoption top metrics（SC-01）」——当时断言第四张为可用 Token |
 | SC-02 | 通过 | `agent-list.test.tsx`「renders prioritized table columns for ops value（SC-02）」 |
 | SC-03 | 通过 | `agent-list.test.tsx`「SC-03 已启用的行没有状态标记，未启用的行在显示名旁标「已禁用」」 |
 | SC-04 | 通过 | `agent-list.test.tsx`「SC-04 Token 格按可用数与配置数写主行与次行」 |
@@ -316,3 +367,16 @@ for agent in response.agents，保持数组顺序:
 | 抽屉去掉「先判指标是否可用」的守卫 | SC-10 不可用分支 |
 
 每个 SC 都挂在**具体判定的失效**上，不是「断言一个常量」的空用例。
+
+### 7.3 v1.4 增量执行结果（2026-11-01）
+
+| 编号 | 结果 | 落点 |
+|---|---|---|
+| SC-01 | 通过（v1.4 口径） | `agent-list.test.tsx`「renders stability-and-adoption top metrics（SC-01）」 |
+| SC-02–SC-15 | 仍以 §7.2 为准 | 本增量不重开 |
+| SC-16 | 通过 | `agent-list.test.tsx`「SC-16 暂时不能查数卡在健康时为 0，部分降级时可展开修复说明且无页头 banner」 |
+| SC-17 | 通过 | `agent-list.test.tsx`「SC-17 全局降级按 Agent 总数计数；policy-runtime 失败不得写成 0」＋ `kpi-contracts.test.ts` 对本卡的登记断言 |
+
+**实测**：`agent-list.test.tsx` / `kpi-contracts.test.ts` / `policy-degrade-notice.test.tsx` —— **3 文件 / 67 条全绿**。
+
+实现落点：`PolicyDegradeMetric.tsx`、`policyDegradeMetric.ts`、`AgentList.tsx`、`PolicyDegradeBanner.tsx`、`kpiContracts.ts`、术语标准 §4.5。

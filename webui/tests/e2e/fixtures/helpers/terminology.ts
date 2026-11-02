@@ -43,7 +43,7 @@ const PROFESSIONAL_TOKEN_REGEX =
 const PROFESSIONAL_PATH_REGEX =
   /(\.ya?ml|\.md|\.zip|semantic-layer\/|wiki\/|ktx\.yaml|\.ktx-ui\/|http:\/\/127\.0\.0\.1)/;
 const DB_OBJECT_REGEX =
-  /(mysql-aliyun|dataforai|openclaw_db|superstore_orders|finance_mart)/;
+  /(demo-mysql|dataforai|openclaw_db|superstore_orders|finance_mart)/;
 
 /**
  * 断言页面 DOM 中不出现任何 forbidden term。

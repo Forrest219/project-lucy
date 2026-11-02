@@ -23,9 +23,9 @@ import { assertFixtureOnly } from "../fixtures/helpers/reset";
 /**
  * `mode=live-smoke` 让页面直接进入「检查能不能连上」分支，状态面板才会渲染。
  * `agentId` 必填：MCP 调试台在选定 Agent 之前不渲染任务选择与状态面板。
- * `e2e-default` 是 fixture project 里的契约 Agent（access-fixture.yaml / ktx-fixture.yaml）。
+ * `demo_agent` 是 fixture project 里的契约 Agent（access-fixture.yaml / ktx-fixture.yaml）。
  */
-const PLAYGROUND_URL = "/admin/mcp-playground?agentId=e2e-default&mode=live-smoke";
+const PLAYGROUND_URL = "/admin/mcp-playground?agentId=demo_agent&mode=live-smoke";
 
 /**
  * Spec 191 §5 —— 三段事实的正交性。
@@ -38,7 +38,7 @@ const PLAYGROUND_URL = "/admin/mcp-playground?agentId=e2e-default&mode=live-smok
 const STATUS_FIXTURE = {
   ok: true,
   data: {
-    config: { connectionIds: ["mysql-aliyun"] },
+    config: { connectionIds: ["demo-mysql"] },
     catalog: { lastByConnection: {} },
     policy: { healthy: true },
     execution: {

@@ -8,7 +8,7 @@ project:
   root: .
 
 connections:
-  mysql-aliyun:
+  demo-mysql:
     driver: mysql
     engine: mysql
     readOnlyExpected: true
@@ -17,7 +17,7 @@ connections:
     username: e2e_user
     passwordSource:
       type: file
-      path: .ktx/secrets/mysql-aliyun-password
+      path: .ktx/secrets/demo-mysql-password
     database: e2e_db
     schemas:
       - dataforai
@@ -27,8 +27,8 @@ connections:
       - dataforai.superstore_people
 
 agents:
-  - id: e2e-default
-    role: e2e_fixture_reader
+  - id: demo_agent
+    role: demo_readonly
 
 mcp:
   bind: 127.0.0.1:7878

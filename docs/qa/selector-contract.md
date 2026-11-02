@@ -591,7 +591,6 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `version-info-product` | version-info-product | `pages/admin/VersionInfo.tsx` |
 | `version-info-sha` | version-info-sha | `pages/admin/VersionInfo.tsx` |
 | `version-info-copy` | version-info-copy | `pages/admin/VersionInfo.tsx` |
-| `version-info-workspace` | version-info-workspace | `pages/admin/VersionInfo.tsx` |
 | `version-info-ktx` | version-info-ktx | `pages/admin/VersionInfo.tsx` |
 | `sidebar-auth` | sidebar-auth | `app/App.tsx` |
 | `add-schema-select` | add-schema-select | `components/AddSchemaDrawer.tsx` |
@@ -660,6 +659,9 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `object-detail-role-not-found` | object-detail-role-not-found | `components/ObjectDetailDrawer.tsx` |
 | `object-detail-role-body` | object-detail-role-body | `components/ObjectDetailDrawer.tsx` |
 | `policy-degrade-banner` | policy-degrade-banner | `components/PolicyDegradeBanner.tsx` |
+| `metric-temporarily-unable-to-query` | metric-temporarily-unable-to-query | `components/PolicyDegradeMetric.tsx` |
+| `policy-degrade-metric-toggle` | policy-degrade-metric-toggle | `components/PolicyDegradeMetric.tsx` |
+| `policy-degrade-metric-panel` | policy-degrade-metric-panel | `components/PolicyDegradeMetric.tsx` |
 | `remove-schema-drawer` | remove-schema-drawer | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-close` | remove-schema-close | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-enabled-count` | remove-schema-enabled-count | `components/RemoveSchemaDrawer.tsx` |
@@ -1603,11 +1605,16 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-edge-detail-path-${evaluation.pathKey}` | 访问关系图：edge detail path ${evaluation.pathKey} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-edge-drawer` | 访问关系图：edge drawer（边明细右侧抽屉，呈现修订 D6） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-hover-tip` | 访问关系图：节点／边悬停浮层（chart-first Spec §5.6，非 SVG `<title>`） | `components/admin/AccessMapCanvas.tsx` |
-| `access-map-kernel-${link.edge.id}` | 访问关系图：kernel ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-hit-${link.edge.id}-${index}` | 访问关系图：命中层 ${link.edge.id}（透明命中扩展，厚度 ≥ `MIN_HIT_PX`，不参与计量；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-kernel-${link.edge.id}` | 访问关系图：kernel ${link.edge.id}（访问内核填充面积） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-label-${node.id}` | 访问关系图：外标块 ${node.id}（名称 + 副标题 + 状态行；geometry Spec §5.2） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-link-${link.edge.id}` | 访问关系图：link ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-midline-${link.edge.id}` | 访问关系图：虚线中线 ${link.edge.id}（需复核；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-node-${node.id}` | 访问关系图：node ${node.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-node-button-${item.node.id}` | 访问关系图：node button ${item.node.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-node-list` | 访问关系图：node list | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-outline-${link.edge.id}` | 访问关系图：danger 实线轮廓 ${link.edge.id}（越权；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-ribbon-${link.edge.id}` | 访问关系图：授权面积 ${link.edge.id}（主视觉；需复核时为独立警示面积） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-svg` | 访问关系图：svg | `components/admin/AccessMapCanvas.tsx` |
 
 ### `webui/src/components/admin/AccessMapCredentialList.tsx`

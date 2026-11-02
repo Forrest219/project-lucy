@@ -117,6 +117,15 @@ export const KPI_REGISTRY: MetricContract[] = [
     windowed: true
   },
   {
+    // Agent 名册 Spec v1.4 §5.1.1 — fourth roster KPI; replaces available-Token top card.
+    id: "temporarily-unable-to-query-agents",
+    kind: "list_kpi",
+    label: "暂时不能查数",
+    help: "因 EffectivePolicy 无法应用而暂停查数的 Agent 个数。0 表示当前无此异常；全局降级时等于本页 Agent 总数。与「可用 Token／无可用 Token」不是同一个指标。",
+    pages: ["/admin/agents"],
+    windowed: false
+  },
+  {
     id: "real-questions",
     kind: "list_kpi",
     label: "近 N 真实问询",

@@ -44,7 +44,7 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
       await page.goto("/connections");
       await expect(page.getByTestId("page-header")).toBeVisible();
       // 只读配置健康时不展示风险徽标；仅未声明只读时才出现该 testid。
-      await expect(page.getByTestId("connection-readonly-mysql-aliyun")).toHaveCount(0);
+      await expect(page.getByTestId("connection-readonly-demo-mysql")).toHaveCount(0);
       // 页面头只承载当前对象标题；侧栏分组负责表达“数据接入”归属。
       await expect(page.getByTestId("page-header")).toContainText("连接概览");
       // Header 右侧不出现跨页导航按钮（§E2E-CON-01）：
@@ -57,7 +57,7 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
 
     await test.step("2. 添加 Schema finance_mart", async () => {
       // 真实 testid：add-schema-${conn.id}
-      await page.getByTestId("add-schema-mysql-aliyun").click();
+      await page.getByTestId("add-schema-demo-mysql").click();
       const drawer = page.getByTestId("add-schema-drawer");
       await expect(drawer).toBeVisible();
       const select = drawer.getByTestId("add-schema-select");
@@ -90,11 +90,11 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
 
     await test.step("3. 上传 Schema Manifest", async () => {
       // 真实 testid：schema-row-${conn.id}-${schema}
-      const row = page.getByTestId("schema-row-mysql-aliyun-finance_mart");
+      const row = page.getByTestId("schema-row-demo-mysql-finance_mart");
       await expect(row).toBeVisible();
       // Schema 状态：真实 testid schema-asset-status-${conn.id}-${schema}
       await expect(
-        page.getByTestId("schema-asset-status-mysql-aliyun-finance_mart")
+        page.getByTestId("schema-asset-status-demo-mysql-finance_mart")
       ).toContainText("缺失 Manifest");
       // 能读库时行内主操作是「从数据库读取表结构」，上传在「更多」里。
       await row.locator("summary").click();
@@ -116,7 +116,7 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
       // 上传后列表会立即从“缺失”切换为“已存在”，并重建该行；
       // Drawer 因所属按钮组件卸载而关闭，以列表最终状态作为成功判据。
       await expect(
-        page.getByTestId("schema-asset-status-mysql-aliyun-finance_mart")
+        page.getByTestId("schema-asset-status-demo-mysql-finance_mart")
       ).toContainText("已存在");
       await expect(page.getByTestId("catalog-asset-upload-drawer")).toHaveCount(0);
     });
@@ -129,19 +129,19 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
       // 新上传的 Manifest 表默认尚未进入启用范围；先验证库存已可见，
       // 再直接进入当前规范表详情路由，避免将“启用范围”的独立流程混入本发布用例。
       await expect(page.getByTestId("catalog-row-fact_revenue")).toBeVisible();
-      await page.goto("/catalog/mysql-aliyun/finance_mart/fact_revenue");
+      await page.goto("/catalog/demo-mysql/finance_mart/fact_revenue");
       await expect(page).toHaveURL(
-        /\/catalog\/mysql-aliyun\/finance_mart\/fact_revenue$/
+        /\/catalog\/demo-mysql\/finance_mart\/fact_revenue$/
       );
       // 用当前服务端原始 YAML 完成一次无语义变化的真实写入，
       // 使发布门禁拥有可执行 ktx sl validate 的 changed source。
       const sourceResponse = await page.request.get(
-        "/api/sources/mysql-aliyun/finance_mart/fact_revenue"
+        "/api/sources/demo-mysql/finance_mart/fact_revenue"
       );
       expect(sourceResponse.ok()).toBeTruthy();
       const sourcePayload = await sourceResponse.json() as { data: { rawYaml: string } };
       const importResponse = await page.request.post(
-        "/api/sources/mysql-aliyun/finance_mart/fact_revenue/import",
+        "/api/sources/demo-mysql/finance_mart/fact_revenue/import",
         { data: { yaml: sourcePayload.data.rawYaml, dryRun: false, sourceFileName: "e2e-current.yaml" } }
       );
       expect(importResponse.ok()).toBeTruthy();

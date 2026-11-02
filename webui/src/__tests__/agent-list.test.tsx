@@ -72,6 +72,7 @@ const analystRole: Role = {
 afterEach(() => {
   agentsMeta = undefined;
   agentsSummary = undefined;
+  policyRuntimeStub = undefined;
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -80,6 +81,18 @@ afterEach(() => {
 let agentsMeta: { runtimeConsistency: "matched" | "unconfirmed" } | undefined;
 /** 服务端 aggregate。Agent 名册的窗口（summary.windowStart / windowEnd）只从这里来。 */
 let agentsSummary: Record<string, unknown> | undefined;
+/** policy-runtime stub for the roster KPI. null → healthy default; false → omit (simulate failure). */
+let policyRuntimeStub: Record<string, unknown> | false | undefined;
+
+const HEALTHY_POLICY_RUNTIME = {
+  policyVersion: "test",
+  degradedGlobal: false,
+  degradedAgents: [] as string[],
+  issues: [] as Array<{ agentId: string; reason: string }>,
+  healthy: true,
+  accessConfigDigest: "a",
+  sourceMapVersion: "b"
+};
 
 function stubAgentsEndpoints(
   agents: Agent[],
@@ -123,6 +136,14 @@ function stubAgentsEndpoints(
     }
     if (url.startsWith("/api/admin/roles")) {
       return new Response(JSON.stringify({ ok: true, data: { roles } }));
+    }
+    if (url === "/api/admin/policy-runtime") {
+      if (policyRuntimeStub === false) {
+        return new Response(JSON.stringify({ ok: false, error: { code: "INTERNAL", message: "boom" } }), { status: 500 });
+      }
+      return new Response(
+        JSON.stringify({ ok: true, data: policyRuntimeStub ?? HEALTHY_POLICY_RUNTIME })
+      );
     }
     if (url === "/api/admin/agents" && init?.method === "POST") {
       const body = JSON.parse(String(init.body));
@@ -193,6 +214,9 @@ describe("AgentList", () => {
       }
       if (url.startsWith("/api/admin/roles")) {
         return new Response(JSON.stringify({ ok: true, data: { roles: [analystRole] } }));
+      }
+      if (url === "/api/admin/policy-runtime") {
+        return new Response(JSON.stringify({ ok: true, data: HEALTHY_POLICY_RUNTIME }));
       }
       return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
     });
@@ -613,17 +637,21 @@ describe("AgentList", () => {
     await screen.findByRole("heading", { name: "Agent" });
     await screen.findByTestId("metric-agent-count");
 
-    // Agent 名册 Spec SC-01 —— 顶部恰好四张卡：Agent 总数、近 7 天活跃 Agent、
-    // 近 7 天业务调用量、可用 Token。没有「近 7 天使用过的凭据」，没有「近 7 天协议请求量」。
+    // Agent 名册 Spec SC-01（v1.4）—— 顶部恰好四张卡：Agent 总数、近 7 天活跃 Agent、
+    // 近 7 天业务调用量、暂时不能查数。没有可用 Token 顶卡，没有页头降级 banner。
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("Agent 总数");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃 Agent");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
     expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("近 7 天业务调用量");
     expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("7");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("可用 Token");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
+    await waitFor(() => {
+      expect(screen.getByTestId("metric-temporarily-unable-to-query")).toHaveTextContent("暂时不能查数");
+      expect(screen.getByTestId("metric-temporarily-unable-to-query")).toHaveTextContent("0");
+    });
+    expect(screen.queryByTestId("metric-active-token-count")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-used-credentials")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-protocol-calls")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("policy-degrade-banner")).not.toBeInTheDocument();
 
     const metricOrder = [
       ...document.querySelectorAll("[data-testid='agent-metric-grid'] > [data-testid^='metric-']")
@@ -632,10 +660,11 @@ describe("AgentList", () => {
       "metric-agent-count",
       "metric-active-agent-count",
       "metric-business-calls",
-      "metric-active-token-count"
+      "metric-temporarily-unable-to-query"
     ]);
     expect(screen.getByTestId("metric-help-agent-count")).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-business-calls")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-temporarily-unable-to-query-agents")).toBeInTheDocument();
     expect(screen.getByTestId("metric-agent-count")).toHaveClass("pl-metric-card--with-help");
 
     // 拒绝指标不再出现在 KPI 区
@@ -654,6 +683,87 @@ describe("AgentList", () => {
     // 默认 pl-metric-grid：窄屏两列、xl 四张一行。不再使用三列变体。
     expect(screen.getByTestId("agent-metric-grid")).toHaveClass("pl-metric-grid");
     expect(screen.getByTestId("agent-metric-grid")).not.toHaveClass("pl-metric-grid--three");
+  });
+
+  it("SC-16 暂时不能查数卡在健康时为 0，部分降级时可展开修复说明且无页头 banner", async () => {
+    policyRuntimeStub = {
+      policyVersion: "p1",
+      degradedGlobal: false,
+      degradedAgents: ["kr_agent", "us_agent"],
+      issues: [
+        { agentId: "kr_agent", reason: "role_resolution_failed:chatbi-kr-analyst" },
+        { agentId: "us_agent", reason: "role_resolution_failed:chatbi-us-analyst" }
+      ],
+      healthy: false,
+      accessConfigDigest: "a",
+      sourceMapVersion: "b"
+    };
+    stubAgentsEndpoints([
+      makeAgent({ id: "demo", name: "Demo", role: "demo_readonly" }),
+      makeAgent({ id: "kr_agent", name: "韩国行权限", role: "chatbi-kr-analyst" }),
+      makeAgent({ id: "us_agent", name: "美国行权限", role: "chatbi-us-analyst" })
+    ]);
+    renderAgentList();
+    const card = await screen.findByTestId("metric-temporarily-unable-to-query");
+    await waitFor(() => expect(card).toHaveTextContent("2"));
+    expect(card).toHaveTextContent("暂时不能查数");
+    expect(card.querySelector(".pl-metric-card--warning")).toBeTruthy();
+    expect(screen.queryByTestId("policy-degrade-banner")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("policy-degrade-metric-panel")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("policy-degrade-metric-toggle"));
+    const panel = await screen.findByTestId("policy-degrade-metric-panel");
+    expect(panel).toHaveTextContent("韩国行权限");
+    expect(panel).toHaveTextContent("美国行权限");
+    expect(panel).toHaveTextContent("角色 chatbi-kr-analyst 没有对应到已发布的数据表");
+    expect(panel).toHaveTextContent("保存成功后，这条提示会消失。");
+    const openLinks = screen.getAllByRole("link", { name: "打开这个 Agent" });
+    expect(openLinks.map((link) => link.getAttribute("href"))).toEqual([
+      "/admin/agents/kr_agent",
+      "/admin/agents/us_agent"
+    ]);
+    expect(
+      screen.getAllByRole("link", { name: "去修改角色" }).map((link) => link.getAttribute("href"))
+    ).toEqual(["/admin/roles/chatbi-kr-analyst", "/admin/roles/chatbi-us-analyst"]);
+  });
+
+  it("SC-17 全局降级按 Agent 总数计数；policy-runtime 失败不得写成 0", async () => {
+    policyRuntimeStub = {
+      policyVersion: "p1",
+      degradedGlobal: true,
+      degradedAgents: [],
+      issues: [],
+      healthy: false,
+      accessConfigDigest: "a",
+      sourceMapVersion: "b"
+    };
+    stubAgentsEndpoints([
+      makeAgent({ id: "a1", name: "A1" }),
+      makeAgent({ id: "a2", name: "A2" }),
+      makeAgent({ id: "a3", name: "A3" }),
+      makeAgent({ id: "a4", name: "A4" }),
+      makeAgent({ id: "a5", name: "A5" })
+    ]);
+    renderAgentList();
+    const card = await screen.findByTestId("metric-temporarily-unable-to-query");
+    await waitFor(() => expect(card).toHaveTextContent("5"));
+    expect(card.querySelector(".pl-metric-card--danger")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("policy-degrade-metric-toggle"));
+    const panel = await screen.findByTestId("policy-degrade-metric-panel");
+    expect(panel).toHaveTextContent("权限配置目前读不出来");
+    expect(panel).not.toHaveTextContent("A1：");
+
+    cleanup();
+    policyRuntimeStub = false;
+    stubAgentsEndpoints([makeAgent({ id: "only", name: "Only" })]);
+    renderAgentList();
+    const failed = await screen.findByTestId("metric-temporarily-unable-to-query");
+    await waitFor(() => {
+      expect(failed).toHaveTextContent("—");
+      expect(failed).toHaveTextContent("数据源不可用");
+    });
+    expect(failed).not.toHaveTextContent(/暂时不能查数\s*0/);
+    expect(screen.queryByTestId("policy-degrade-metric-toggle")).not.toBeInTheDocument();
   });
 
   it("agent table row links role id to role detail and exposes 查看权限 in RowMoreMenu", async () => {
@@ -810,102 +920,35 @@ describe("AgentList", () => {
           deniedLast7d: 0,
           activeTokensLast7d: 1,
           configuredTokens: 1,
+          availableTokens: 1,
           topTables: []
         }
       })
     ];
-    const fetchWithSummary = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/api/admin/agents") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            data: {
-              agents: withSummary,
-              version: "v1",
-              summary: {
-                agentCount: 1,
-                enabledAgentCount: 1,
-                configuredTokenCount: 1,
-                activeTokenCountLast7d: 1,
-                callsLast7d: 10,
-                usageCallsLast7d: 10,
-                evalProbeCallsLast7d: 0,
-                deniedLast7d: 0
-              }
-            }
-          })
-        );
-      }
-      if (url === "/api/project") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            data: {
-              root: "/tmp",
-              ktxAvailable: true,
-              connections: [],
-              mcpEndpoint: {
-                url: "https://lucy.example.com/mcp",
-                status: "configured",
-                source: "env",
-                configured: true,
-                diagnostics: []
-              }
-            }
-          })
-        );
-      }
-      if (url.startsWith("/api/admin/roles")) {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            data: {
-              roles: [{ ...analystRole, id: "demo_readonly" }]
-            }
-          })
-        );
-      }
-      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchWithSummary);
+    agentsSummary = {
+      agentCount: 1,
+      enabledAgentCount: 1,
+      configuredTokenCount: 1,
+      availableTokenCount: 1,
+      activeTokenCountLast7d: 1,
+      usageActiveAgentCountLast7d: 1,
+      callsLast7d: 10,
+      usageCallsLast7d: 10,
+      evalProbeCallsLast7d: 0,
+      deniedLast7d: 0
+    };
+    stubAgentsEndpoints(withSummary, [{ ...analystRole, id: "demo_readonly" }]);
     renderAgentList();
-    await screen.findByTestId("metric-active-token-count");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
+    await screen.findByTestId("metric-business-calls");
+    expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("10");
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
+    // Token 汇总仍可由客户端 helper 算出；顶卡不再展示可用 Token。
+    expect(summarizeAgents(withSummary).availableTokenCount).toBe(1);
+    expect(screen.queryByTestId("metric-active-token-count")).not.toBeInTheDocument();
 
-    // Fallback 路径：移除 summary 后再次渲染，helper 仍能算出 1
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url === "/api/admin/agents") {
-          return new Response(JSON.stringify({ ok: true, data: { agents: withSummary, version: "v1" } }));
-        }
-        if (url === "/api/project") {
-          return new Response(
-            JSON.stringify({
-              ok: true,
-              data: {
-                root: "/tmp",
-                ktxAvailable: true,
-                connections: [],
-                mcpEndpoint: {
-                  url: "https://lucy.example.com/mcp",
-                  status: "configured",
-                  source: "env",
-                  configured: true,
-                  diagnostics: []
-                }
-              }
-            })
-          );
-        }
-        if (url.startsWith("/api/admin/roles")) {
-          return new Response(JSON.stringify({ ok: true, data: { roles: [] } }));
-        }
-        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
-      })
-    );
+    // Fallback 路径：移除 summary 后再次渲染，业务调用卡仍读客户端聚合。
+    agentsSummary = undefined;
+    stubAgentsEndpoints(withSummary, []);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
@@ -920,7 +963,7 @@ describe("AgentList", () => {
       </QueryClientProvider>
     );
     await waitFor(() => {
-      expect(screen.getAllByTestId("metric-active-token-count").at(-1)).toHaveTextContent("1");
+      expect(screen.getAllByTestId("metric-business-calls").at(-1)).toHaveTextContent("10");
     });
   });
 

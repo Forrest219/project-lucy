@@ -7,10 +7,10 @@ import type { Agent, AgentsResponseSummary, CreateAgentBody, EffectivePermission
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable } from "../../components/AgentRoleField";
 import { PageHeader } from "../../components/PageHeader";
-import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
 import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { DisplayRefreshNotice } from "../../components/DisplayRefreshNotice";
 import { MetricCard } from "../../components/MetricCard";
+import { PolicyDegradeMetric } from "../../components/PolicyDegradeMetric";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
@@ -578,12 +578,6 @@ export function AgentList() {
         }
       />
 
-      <PolicyDegradeNotice
-        scope={{
-          agentNames: Object.fromEntries(agents.map((agent) => [agent.id, agent.name]))
-        }}
-      />
-
       <DisplayRefreshNotice query={agentsQuery} className="mt-4" />
 
       {data.meta?.runtimeConsistency === "unconfirmed" ? (
@@ -628,18 +622,9 @@ export function AgentList() {
           helpId="business-calls"
           testId="metric-business-calls"
         />
-        <MetricCard
-          label={
-            <span>
-              可用 <span className="notranslate" translate="no">Token</span>
-            </span>
-          }
-          labelText="可用 Token"
-          value={summary.availableTokenCount ?? 0}
-          help="当前 Agent 已启用且 Token 未过期的配置凭据数。"
-          subValue={`配置 ${summary.configuredTokenCount} 个`}
-          helpId="active-token-count"
-          testId="metric-active-token-count"
+        <PolicyDegradeMetric
+          rosterAgentIds={agents.map((agent) => agent.id)}
+          agentNames={Object.fromEntries(agents.map((agent) => [agent.id, agent.name]))}
         />
       </div>
 

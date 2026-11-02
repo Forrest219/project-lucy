@@ -177,7 +177,7 @@ describe("navigation (shared sidebar config)", () => {
       "admin-config-audit": "查看各类配置与内容资产的写入记录、变更内容和操作者。",
       "admin-branding": "配置客户 Logo、产品名称与品牌副标题。",
       "admin-accounts": "管理 WebUI 登录账户，并配置所有者或运维角色。",
-      "admin-version": "查看产品版本、构建提交和随包 KTX 版本；有未提交改动时显示工作区状态。"
+      "admin-version": "查看产品版本、构建提交和随包 KTX 版本。"
     });
   });
 

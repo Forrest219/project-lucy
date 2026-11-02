@@ -18,6 +18,25 @@
 // 的真实返回逐字一致。
 
 import { expect, test, type Page } from "@playwright/test";
+import {
+  DEMO_AGENT_ALL,
+  DEMO_AGENT_EAST,
+  DEMO_AGENT_SOUTHWEST,
+  DEMO_CONNECTION,
+  DEMO_REGION_EAST,
+  DEMO_REGION_SOUTHWEST,
+  DEMO_ROLE_ALL,
+  DEMO_ROLE_EAST,
+  DEMO_ROLE_SOUTHWEST,
+  DEMO_SCHEMA,
+  DEMO_SCHEMA_ALT,
+  DEMO_TEMPLATE_EAST,
+  DEMO_TABLES,
+  demoDeepLink,
+  demoIdentity,
+  demoPhysicalTable,
+  demoTableTestId
+} from "../fixtures/helpers/demo-baseline";
 
 // ─── 共享 fixture ────────────────────────────────────────────────────────────
 
@@ -85,9 +104,9 @@ function templateWriteResponse(dryRun: boolean) {
       impact: {
         tables: [
           {
-            connectionId: "mysql-aliyun",
-            schema: "finance",
-            sourceName: "orders",
+            connectionId: DEMO_CONNECTION,
+            schema: DEMO_SCHEMA,
+            sourceName: DEMO_TABLES.orders,
             beforeDigest: "before-1",
             afterDigest: "after-1",
             changed: true
@@ -115,8 +134,8 @@ function roleDetail() {
     description: "浏览器验收 Role",
     source: "yaml",
     tools: ["lucy_query"],
-    connections: ["mysql-aliyun"],
-    sourceNames: ["superstore_orders"],
+    connections: [DEMO_CONNECTION],
+    sourceNames: [DEMO_TABLES.orders],
     sourceCount: 1,
     invalid: false,
     warnings: [],
@@ -125,13 +144,13 @@ function roleDetail() {
     role: {
       description: "浏览器验收 Role",
       allow: {
-        connections: ["mysql-aliyun"],
+        connections: [DEMO_CONNECTION],
         tools: ["lucy_query"],
         tableSelectors: [
           {
-            connection: "mysql-aliyun",
-            schema: "dataforai",
-            names: ["superstore_orders"]
+            connection: DEMO_CONNECTION,
+            schema: DEMO_SCHEMA,
+            names: [DEMO_TABLES.orders]
           }
         ]
       }
@@ -141,13 +160,13 @@ function roleDetail() {
       snapshotHash: "snapshot-1",
       sourceMapVersion: "source-map-1",
       tools: ["lucy_query"],
-      connections: ["mysql-aliyun"],
+      connections: [DEMO_CONNECTION],
       sources: [
         {
-          connectionId: "mysql-aliyun",
-          schema: "dataforai",
-          sourceName: "superstore_orders",
-          table: "dataforai.superstore_orders"
+          connectionId: DEMO_CONNECTION,
+          schema: DEMO_SCHEMA,
+          sourceName: DEMO_TABLES.orders,
+          table: demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.orders)
         }
       ],
       legacyAllow: false,
@@ -227,10 +246,10 @@ async function installRowPolicyApi(page: Page, fixture: RowPolicyFixture = empty
           data: {
             snapshot: SNAPSHOT,
             table: {
-              connectionId: "mysql-aliyun",
-              schema: "finance",
-              sourceName: "orders",
-              physicalTable: "finance.orders"
+              connectionId: DEMO_CONNECTION,
+              schema: DEMO_SCHEMA,
+              sourceName: DEMO_TABLES.orders,
+              physicalTable: demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.orders)
             },
             state: "ok",
             status: "ok",
@@ -258,9 +277,9 @@ async function installRowPolicyApi(page: Page, fixture: RowPolicyFixture = empty
           data: {
             connections: [
               {
-                id: "mysql-aliyun",
-                schemas: ["dataforai"],
-                enabledTables: ["dataforai.superstore_orders"]
+                id: DEMO_CONNECTION,
+                schemas: [DEMO_SCHEMA],
+                enabledTables: [demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.orders)]
               }
             ]
           }
@@ -268,9 +287,9 @@ async function installRowPolicyApi(page: Page, fixture: RowPolicyFixture = empty
       });
       return;
     }
-    if (url.pathname === "/api/connections/mysql-aliyun/tables") {
+    if (url.pathname === `/api/connections/${DEMO_CONNECTION}/tables`) {
       await route.fulfill({
-        json: { ok: true, data: { tables: ["dataforai.superstore_orders"] } }
+        json: { ok: true, data: { tables: [demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.orders)] } }
       });
       return;
     }
@@ -289,8 +308,8 @@ async function installRowPolicyApi(page: Page, fixture: RowPolicyFixture = empty
           tables: [
             {
               requested: {
-                connection: "mysql-aliyun",
-                schema: "dataforai",
+                connection: DEMO_CONNECTION,
+                schema: DEMO_SCHEMA,
                 name: "superstore_orders"
               },
               catalog: { status: "loaded", catalogLoaded: true },
@@ -312,9 +331,9 @@ async function installRowPolicyApi(page: Page, fixture: RowPolicyFixture = empty
           ok: true,
           data: {
             model: {
-              conn: "mysql-aliyun",
-              schema: "dataforai",
-              table: "superstore_orders",
+              conn: DEMO_CONNECTION,
+              schema: DEMO_SCHEMA,
+              table: DEMO_TABLES.orders,
               filePath: "semantic-layer/superstore_orders.yaml",
               descriptions: {},
               columns: [{ name: "region", type: "string", descriptions: {} }],
@@ -355,8 +374,8 @@ test.describe("P1-1 行策略模板：草稿变更作废旧预演（RTP-06）", 
 
     await nameInput.fill("by_region");
     await descriptionInput.fill("按大区限定行");
-    await fieldInput.fill("region_code");
-    await valueInput.fill("CN-EAST");
+    await fieldInput.fill("region");
+    await valueInput.fill(DEMO_REGION_EAST);
 
     // ── 第一次预演：影响面出现，正式保存解锁 ──
     await dryRunButton.click();
@@ -365,7 +384,7 @@ test.describe("P1-1 行策略模板：草稿变更作废旧预演（RTP-06）", 
     await expect(saveButton).toBeEnabled();
 
     // ── 改谓词取值：旧预演作废 ──
-    await valueInput.fill("CN-SOUTH");
+    await valueInput.fill(DEMO_REGION_SOUTHWEST);
     await expect(page.getByTestId("row-policy-template-impact-empty")).toBeVisible();
     await expect(page.getByTestId("row-policy-template-impact")).toHaveCount(0);
     await expect(saveButton).toBeDisabled();
@@ -398,12 +417,12 @@ test.describe("P1-1 行策略模板：草稿变更作废旧预演（RTP-06）", 
     expect(dryRuns[0]?.body).toMatchObject({
       name: "by_region",
       description: "按大区限定行",
-      predicates: [{ field: "region_code", op: "eq", value: "CN-EAST" }]
+      predicates: [{ field: "region", op: "eq", value: DEMO_REGION_EAST }]
     });
     expect(dryRuns[2]?.body).toMatchObject({
       name: "by_region_v2",
       description: "按大区限定行",
-      predicates: [{ field: "region_code", op: "eq", value: "CN-SOUTH" }]
+      predicates: [{ field: "region", op: "eq", value: DEMO_REGION_SOUTHWEST }]
     });
     // 草稿变更期间不得发出正式保存
     expect(
@@ -421,13 +440,13 @@ test.describe("P1-1 行策略模板：不可绑定项可见且禁用（RTP-08）
       {
         name: "by_region",
         description: "按大区限定行",
-        predicates: [{ field: "region_code", op: "eq", value: "CN-EAST" }],
+        predicates: [{ field: "region", op: "eq", value: DEMO_REGION_EAST }],
         digest: "digest-by-region",
         references: [],
         usabilityByTable: [
           {
-            connectionId: "mysql-aliyun",
-            schema: "dataforai",
+            connectionId: DEMO_CONNECTION,
+            schema: DEMO_SCHEMA,
             sourceName: "superstore_orders",
             usability: { status: "bindable" }
           }
@@ -441,8 +460,8 @@ test.describe("P1-1 行策略模板：不可绑定项可见且禁用（RTP-08）
         references: [],
         usabilityByTable: [
           {
-            connectionId: "mysql-aliyun",
-            schema: "dataforai",
+            connectionId: DEMO_CONNECTION,
+            schema: DEMO_SCHEMA,
             sourceName: "superstore_orders",
             usability: { status: "field_missing", fields: ["not_a_column"] }
           }
@@ -495,7 +514,7 @@ test.describe("P1-1 行权限视图：四态可分（RTV-03）", () => {
     for (const item of cases) {
       fixture.viewsList = { status: item.status, tables: [] };
       fixture.viewsTable = { status: item.status };
-      await page.goto("/admin/row-policies?connectionId=mysql-aliyun&schema=finance&sourceName=orders");
+      await page.goto(demoDeepLink(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders));
 
       const badge = page
         .getByTestId("row-policy-view-detail")
@@ -532,20 +551,20 @@ test.describe("P1-1 行权限视图：深链与完整表身份（RTV-04）", () 
     fixture.viewsList = {
       tables: [
         {
-          connectionId: "mysql-aliyun",
-          schema: "finance",
-          sourceName: "orders",
-          physicalTable: "finance.orders",
+          connectionId: DEMO_CONNECTION,
+          schema: DEMO_SCHEMA,
+          sourceName: DEMO_TABLES.orders,
+          physicalTable: demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.orders),
           roleCount: 1,
           agentCount: 1,
           effectiveRowGrant: { kind: "scoped", digest: "digest-1", orArms: [] },
           restricted: true
         },
         {
-          connectionId: "mysql-aliyun",
-          schema: "hr",
-          sourceName: "orders",
-          physicalTable: "hr.orders",
+          connectionId: DEMO_CONNECTION,
+          schema: DEMO_SCHEMA_ALT,
+          sourceName: DEMO_TABLES.orders,
+          physicalTable: demoPhysicalTable(DEMO_SCHEMA_ALT, DEMO_TABLES.orders),
           roleCount: 1,
           agentCount: 0,
           effectiveRowGrant: { kind: "all" },
@@ -559,7 +578,7 @@ test.describe("P1-1 行权限视图：深链与完整表身份（RTV-04）", () 
           roleId: "analyst",
           rowAccess: "scoped",
           templateRefs: [],
-          inlinePredicates: [{ field: "region_code", op: "eq", value: "CN-EAST" }],
+          inlinePredicates: [{ field: "region", op: "eq", value: DEMO_REGION_EAST }],
           rowGrant: { kind: "scoped", digest: "digest-1", orArms: [] }
         }
       ],
@@ -579,66 +598,66 @@ test.describe("P1-1 行权限视图：深链与完整表身份（RTV-04）", () 
     await page.goto("/admin/row-policies");
     await expect(page.getByTestId("row-policy-view-table-list")).toBeVisible();
     await expect(
-      page.getByTestId("row-policy-view-table-mysql-aliyun-finance-orders")
+      page.getByTestId(demoTableTestId(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders))
     ).toBeVisible();
-    await expect(page.getByTestId("row-policy-view-table-mysql-aliyun-hr-orders")).toBeVisible();
+    await expect(page.getByTestId(demoTableTestId(DEMO_CONNECTION, DEMO_SCHEMA_ALT, DEMO_TABLES.orders))).toBeVisible();
     await expect(page.getByTestId("row-policy-view-table-list").locator("tbody tr")).toHaveCount(2);
 
     // ── 二、深链参数：三个表身份参数缺一不可，且逐字正确 ──
-    await page.goto("/admin/row-policies?connectionId=mysql-aliyun&schema=finance&sourceName=orders");
+    await page.goto(demoDeepLink(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders));
     await expect
       .poll(() => requests.filter((entry) => entry.url.startsWith("/api/admin/row-policy/views/table?")).length)
       .toBeGreaterThan(0);
     const detailRequest = requests.find((entry) =>
       entry.url.startsWith("/api/admin/row-policy/views/table?")
     );
-    expect(detailRequest?.url).toContain("connectionId=mysql-aliyun");
-    expect(detailRequest?.url).toContain("schema=finance");
-    expect(detailRequest?.url).toContain("sourceName=orders");
+    expect(detailRequest?.url).toContain(`connectionId=${DEMO_CONNECTION}`);
+    expect(detailRequest?.url).toContain(`schema=${DEMO_SCHEMA}`);
+    expect(detailRequest?.url).toContain(`sourceName=${DEMO_TABLES.orders}`);
 
-    // 单表详情渲染的是 finance 下的那张表，不是同名合并后的东西
+    // 单表详情渲染的是 dataforai 下的那张表，不是同名合并后的东西
     const detail = page.getByTestId("row-policy-view-detail");
     await expect(detail).toBeVisible();
-    await expect(detail).toContainText("mysql-aliyun/finance/orders");
-    await expect(detail).not.toContainText("mysql-aliyun/hr/orders");
+    await expect(detail).toContainText(demoIdentity(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders));
+    await expect(detail).not.toContainText(demoIdentity(DEMO_CONNECTION, DEMO_SCHEMA_ALT, DEMO_TABLES.orders));
   });
 });
 
-// ─── RTV-01／RTV-02：亚洲大区经营表反查闭环（对齐人工 UAT 设计）────────────────
+// ─── RTV-01／RTV-02：受限表反查闭环（对齐人工 UAT 设计）────────────────
 //
-// 人工用例锚点：mysql-aliyun / chatbi / ai_intl_country_daily，region = 亚洲。
+// 人工用例锚点：demo-mysql / dataforai / superstore_orders，region = East（demo 真实取值）。
 // 浏览器层用同一表身份与字面量验证「仅受限表 → 详情 → 模板／DNF／Agent 最终行约束」；
-// 不连真实 Aliyun，API 形状与生产反查接口一致。
+// 表身份来自 fixtures/helpers/demo-baseline.ts，与真实 demo 实例同一套命名。
 
-const ASIA_OR_ARMS = [
-  [{ field: "region", op: "eq", value: "亚洲" }],
-  [{ field: "region", op: "eq", value: "欧洲" }]
+const DEMO_OR_ARMS = [
+  [{ field: "region", op: "eq", value: DEMO_REGION_EAST }],
+  [{ field: "region", op: "eq", value: DEMO_REGION_SOUTHWEST }]
 ];
 
-const ASIA_SCOPED_GRANT = {
+const DEMO_SCOPED_GRANT = {
   kind: "scoped" as const,
-  digest: "asia-europe-union",
-  orArms: ASIA_OR_ARMS
+  digest: "east-southwest-union",
+  orArms: DEMO_OR_ARMS
 };
 
-function asiaCountryDailyTables(): TableListEntry[] {
+function demoScopedTables(): TableListEntry[] {
   return [
     {
-      connectionId: "mysql-aliyun",
-      schema: "chatbi",
-      sourceName: "ai_intl_country_daily",
-      physicalTable: "chatbi.ai_intl_country_daily",
+      connectionId: DEMO_CONNECTION,
+      schema: DEMO_SCHEMA,
+      sourceName: DEMO_TABLES.orders,
+      physicalTable: demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.orders),
       roleCount: 2,
-      agentCount: 1,
-      effectiveRowGrant: ASIA_SCOPED_GRANT,
+      agentCount: 2,
+      effectiveRowGrant: DEMO_SCOPED_GRANT,
       grantStatus: "scoped",
       restricted: true
     },
     {
-      connectionId: "mysql-aliyun",
-      schema: "chatbi",
-      sourceName: "ai_intl_retention_daily",
-      physicalTable: "chatbi.ai_intl_retention_daily",
+      connectionId: DEMO_CONNECTION,
+      schema: DEMO_SCHEMA,
+      sourceName: DEMO_TABLES.people,
+      physicalTable: demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.people),
       roleCount: 1,
       agentCount: 1,
       effectiveRowGrant: { kind: "all" },
@@ -648,64 +667,78 @@ function asiaCountryDailyTables(): TableListEntry[] {
   ];
 }
 
-function asiaCountryDailyDetail() {
+function demoScopedDetail() {
   return {
     table: {
-      connectionId: "mysql-aliyun",
-      schema: "chatbi",
-      sourceName: "ai_intl_country_daily",
-      physicalTable: "chatbi.ai_intl_country_daily"
+      connectionId: DEMO_CONNECTION,
+      schema: DEMO_SCHEMA,
+      sourceName: DEMO_TABLES.orders,
+      physicalTable: demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.orders)
     },
     roles: [
       {
-        roleId: "row_policy_asia_probe",
+        roleId: DEMO_ROLE_EAST,
         rowAccess: "scoped",
-        templateRefs: ["by_asia_region"],
+        templateRefs: [DEMO_TEMPLATE_EAST],
         inlinePredicates: [],
         rowGrant: {
           kind: "scoped",
-          digest: "asia-only",
-          orArms: [[{ field: "region", op: "eq", value: "亚洲" }]]
+          digest: "east-only",
+          orArms: [[{ field: "region", op: "eq", value: DEMO_REGION_EAST }]]
         }
       },
       {
-        roleId: "row_policy_europe_probe",
+        roleId: DEMO_ROLE_SOUTHWEST,
         rowAccess: "scoped",
         templateRefs: [],
-        inlinePredicates: [{ field: "region", op: "eq", value: "欧洲" }],
+        inlinePredicates: [{ field: "region", op: "eq", value: DEMO_REGION_SOUTHWEST }],
         rowGrant: {
           kind: "scoped",
-          digest: "europe-only",
-          orArms: [[{ field: "region", op: "eq", value: "欧洲" }]]
+          digest: "southwest-only",
+          orArms: [[{ field: "region", op: "eq", value: DEMO_REGION_SOUTHWEST }]]
         }
       }
     ],
-    effectiveRowGrant: ASIA_SCOPED_GRANT,
+    effectiveRowGrant: DEMO_SCOPED_GRANT,
     agents: [
       {
-        agentId: "asia_probe_agent",
+        agentId: DEMO_AGENT_EAST,
         enabled: true,
         constraints: [],
-        finalRows: ASIA_SCOPED_GRANT
+        finalRows: {
+          kind: "scoped",
+          digest: "east-only",
+          orArms: [[{ field: "region", op: "eq", value: DEMO_REGION_EAST }]]
+        }
+      },
+      {
+        agentId: DEMO_AGENT_SOUTHWEST,
+        enabled: true,
+        constraints: [],
+        finalRows: {
+          kind: "scoped",
+          digest: "southwest-only",
+          orArms: [[{ field: "region", op: "eq", value: DEMO_REGION_SOUTHWEST }]]
+        }
       }
     ]
   };
 }
 
-test.describe("P1-1 行权限视图：亚洲大区经营表反查（RTV-01／RTV-02）", () => {
-  test("@p1-acceptance RTV-01 — 仅受限表筛出亚洲经营表，详情展示模板与 Agent 最终行约束", async ({ page }) => {
+test.describe("P1-1 行权限视图：受限表反查（RTV-01／RTV-02）", () => {
+  test("@p1-acceptance RTV-01 — 仅受限表筛出受限表，详情展示模板与 Agent 最终行约束", async ({ page }) => {
     const fixture = emptyFixture();
-    fixture.viewsList = { tables: asiaCountryDailyTables() };
-    fixture.viewsTable = asiaCountryDailyDetail();
+    fixture.viewsList = { tables: demoScopedTables() };
+    fixture.viewsTable = demoScopedDetail();
     const { requests } = await installRowPolicyApi(page, fixture);
 
     await page.goto("/admin/row-policies");
     await expect(page.getByTestId("row-policy-view-table-list")).toBeVisible();
     await expect(
-      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_country_daily")
+      page.getByTestId(demoTableTestId(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders))
     ).toBeVisible();
     await expect(
-      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_retention_daily")
+      page.getByTestId(demoTableTestId(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.people))
     ).toBeVisible();
     await expect(page.getByTestId("row-policy-view-table-list").locator("tbody tr")).toHaveCount(2);
 
@@ -722,46 +755,47 @@ test.describe("P1-1 行权限视图：亚洲大区经营表反查（RTV-01／RTV
       .toBe(true);
     await expect(page).toHaveURL(/restricted=true/);
     await expect(
-      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_country_daily")
+      page.getByTestId(demoTableTestId(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders))
     ).toBeVisible();
     await expect(
-      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_retention_daily")
+      page.getByTestId(demoTableTestId(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.people))
     ).toHaveCount(0);
     await expect(page.getByTestId("row-policy-view-table-list").locator("tbody tr")).toHaveCount(1);
     await expect(
       page
-        .getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_country_daily")
+        .getByTestId(demoTableTestId(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders))
         .getByTestId("row-policy-view-table-grant")
     ).toHaveText(/受限行授予/);
 
-    // 点开亚洲经营表：角色分支含模板引用，Agent 最终行约束可见
-    await page.getByRole("button", { name: "mysql-aliyun/chatbi/ai_intl_country_daily" }).click();
+    // 点开受限表：角色分支含模板引用，Agent 最终行约束可见
+    await page.getByRole("button", { name: demoIdentity(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders) }).click();
     const detail = page.getByTestId("row-policy-view-detail");
     await expect(detail).toBeVisible();
-    await expect(detail).toContainText("mysql-aliyun/chatbi/ai_intl_country_daily");
-    await expect(page.getByTestId("row-policy-view-role-row_policy_asia_probe")).toBeVisible();
+    await expect(detail).toContainText(demoIdentity(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders));
+    await expect(page.getByTestId(`row-policy-view-role-${DEMO_ROLE_EAST}`)).toBeVisible();
     await expect(page.getByTestId("row-policy-view-role-templates")).toHaveText(
-      "引用模板：by_asia_region"
+      `引用模板：${DEMO_TEMPLATE_EAST}`
     );
-    await expect(page.getByTestId("row-policy-dnf-agents-section")).toContainText("asia_probe_agent");
+    await expect(page.getByTestId("row-policy-dnf-agents-section")).toContainText(DEMO_AGENT_EAST);
+    await expect(page.getByTestId("row-policy-dnf-agents-section")).toContainText(DEMO_AGENT_SOUTHWEST);
     await expect(page.getByTestId("row-policy-dnf-union-all")).toHaveCount(0);
   });
 
-  test("@p1-acceptance RTV-02 — 亚洲∨欧洲两受限 Role 保留两条 OR 臂，不显示全部行", async ({ page }) => {
+  test("@p1-acceptance RTV-02 — East∨Southwest 两受限 Role 保留两条 OR 臂，不显示全部行", async ({ page }) => {
     const fixture = emptyFixture();
-    fixture.viewsList = { tables: asiaCountryDailyTables() };
-    fixture.viewsTable = asiaCountryDailyDetail();
+    fixture.viewsList = { tables: demoScopedTables() };
+    fixture.viewsTable = demoScopedDetail();
     await installRowPolicyApi(page, fixture);
 
     await page.goto(
-      "/admin/row-policies?connectionId=mysql-aliyun&schema=chatbi&sourceName=ai_intl_country_daily"
+      demoDeepLink(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders)
     );
 
     const detail = page.getByTestId("row-policy-view-detail");
     await expect(detail).toBeVisible();
     await expect(page.getByTestId("row-policy-dnf-union")).toBeVisible();
-    await expect(page.getByTestId("row-policy-dnf-union-arm-0")).toContainText("亚洲");
-    await expect(page.getByTestId("row-policy-dnf-union-arm-1")).toContainText("欧洲");
+    await expect(page.getByTestId("row-policy-dnf-union-arm-0")).toContainText(DEMO_REGION_EAST);
+    await expect(page.getByTestId("row-policy-dnf-union-arm-1")).toContainText(DEMO_REGION_SOUTHWEST);
     await expect(page.getByTestId("row-policy-dnf-union-all")).toHaveCount(0);
 
     const accessLabels = page.getByTestId("row-policy-view-role-access");
@@ -770,28 +804,28 @@ test.describe("P1-1 行权限视图：亚洲大区经营表反查（RTV-01／RTV
     await expect(accessLabels.nth(1)).toHaveText("受限行授予");
     await expect(detail).not.toContainText("行权限：全部行");
 
-    // 欧洲角色是内联条件；亚洲角色走模板
-    await expect(page.getByTestId("row-policy-view-role-row_policy_europe_probe")).toContainText(
-      "region 等于 欧洲"
+    // Southwest 角色是内联条件；East 角色走模板
+    await expect(page.getByTestId(`row-policy-view-role-${DEMO_ROLE_SOUTHWEST}`)).toContainText(
+      `region 等于 ${DEMO_REGION_SOUTHWEST}`
     );
     await expect(page.getByTestId("row-policy-view-role-templates")).toHaveText(
-      "引用模板：by_asia_region"
+      `引用模板：${DEMO_TEMPLATE_EAST}`
     );
   });
 
   test("@p1-acceptance RTV-04 — 选中全部行表后再切仅受限表，详情保留并提示脱离筛选", async ({ page }) => {
     const fixture = emptyFixture();
-    fixture.viewsList = { tables: asiaCountryDailyTables() };
+    fixture.viewsList = { tables: demoScopedTables() };
     fixture.viewsTable = {
       table: {
-        connectionId: "mysql-aliyun",
-        schema: "chatbi",
-        sourceName: "ai_intl_retention_daily",
-        physicalTable: "chatbi.ai_intl_retention_daily"
+        connectionId: DEMO_CONNECTION,
+        schema: DEMO_SCHEMA,
+        sourceName: DEMO_TABLES.people,
+        physicalTable: demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.people)
       },
       roles: [
         {
-          roleId: "retention_all",
+          roleId: DEMO_ROLE_ALL,
           rowAccess: "all",
           templateRefs: [],
           inlinePredicates: [],
@@ -801,7 +835,7 @@ test.describe("P1-1 行权限视图：亚洲大区经营表反查（RTV-01／RTV
       effectiveRowGrant: { kind: "all" },
       agents: [
         {
-          agentId: "asia_probe_agent",
+          agentId: DEMO_AGENT_ALL,
           enabled: true,
           constraints: [],
           finalRows: { kind: "all" }
@@ -811,27 +845,27 @@ test.describe("P1-1 行权限视图：亚洲大区经营表反查（RTV-01／RTV
     await installRowPolicyApi(page, fixture);
 
     await page.goto(
-      "/admin/row-policies?connectionId=mysql-aliyun&schema=chatbi&sourceName=ai_intl_retention_daily"
+      demoDeepLink(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.people)
     );
     await expect(page.getByTestId("row-policy-view-detail")).toContainText(
-      "mysql-aliyun/chatbi/ai_intl_retention_daily"
+      demoIdentity(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.people)
     );
 
     await page.getByRole("button", { name: "仅受限表" }).click();
     await expect(page).toHaveURL(/restricted=true/);
     // 当前表三参数保留；清单不再含该表 → 「当前表不在筛选结果中」
-    await expect(page).toHaveURL(/connectionId=mysql-aliyun/);
-    await expect(page).toHaveURL(/schema=chatbi/);
-    await expect(page).toHaveURL(/sourceName=ai_intl_retention_daily/);
+    await expect(page).toHaveURL(new RegExp(`connectionId=${DEMO_CONNECTION}`));
+    await expect(page).toHaveURL(new RegExp(`schema=${DEMO_SCHEMA}`));
+    await expect(page).toHaveURL(new RegExp(`sourceName=${DEMO_TABLES.people}`));
     await expect(page.getByTestId("row-policy-view-outside-filter")).toHaveText(
       "当前表不在筛选结果中。"
     );
     await expect(page.getByTestId("row-policy-view-detail")).toBeVisible();
     await expect(
-      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_country_daily")
+      page.getByTestId(demoTableTestId(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.orders))
     ).toBeVisible();
     await expect(
-      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_retention_daily")
+      page.getByTestId(demoTableTestId(DEMO_CONNECTION, DEMO_SCHEMA, DEMO_TABLES.people))
     ).toHaveCount(0);
   });
 });
@@ -845,15 +879,15 @@ test.describe("P1-1 行权限视图：失败集合披露（RTV-05）", () => {
       state: "partial",
       status: "ok",
       failures: [
-        { subjectId: "role_broken", reason: "row_policy_field_missing:region_code" },
+        { subjectId: "role_broken", reason: "row_policy_field_missing:region" },
         { subjectId: "role_legacy", reason: "role_resolution_failed" }
       ],
       tables: [
         {
-          connectionId: "mysql-aliyun",
-          schema: "finance",
-          sourceName: "orders",
-          physicalTable: "finance.orders",
+          connectionId: DEMO_CONNECTION,
+          schema: DEMO_SCHEMA,
+          sourceName: DEMO_TABLES.orders,
+          physicalTable: demoPhysicalTable(DEMO_SCHEMA, DEMO_TABLES.orders),
           roleCount: 1,
           agentCount: 0,
           effectiveRowGrant: { kind: "all" },
@@ -881,7 +915,7 @@ test.describe("P1-1 行权限视图：失败集合披露（RTV-05）", () => {
     const failures = page.getByTestId("row-policy-view-list-failures");
     await expect(failures).toBeVisible();
     await expect(failures).toContainText("role_broken");
-    await expect(failures).toContainText("row_policy_field_missing:region_code");
+    await expect(failures).toContainText("row_policy_field_missing:region");
     await expect(failures).toContainText("role_legacy");
     await expect(failures).toContainText("role_resolution_failed");
   });

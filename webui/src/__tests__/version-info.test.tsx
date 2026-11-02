@@ -110,7 +110,7 @@ describe("VersionInfo", () => {
     renderPage();
 
     const product = await screen.findByTestId("version-info-product");
-    expect(product).toHaveTextContent("v0.20.0");
+    expect(product).toHaveTextContent("0.20.0");
     expect(product.className).toContain("text-2xl");
     expect(product).toHaveAttribute("translate", "no");
     expect(product.className).toContain("notranslate");
@@ -155,36 +155,15 @@ describe("VersionInfo", () => {
     ["a 40-character uppercase commit", UPPER_SHA, UPPER_SHA],
     ["a 40-character non-hex commit", NON_HEX_SHA, NON_HEX_SHA],
     ["a 7-character commit", SHORT_SHA, SHORT_SHA]
-  ])("SC-04 shows %s as-is and offers no copy, title or workspace row", async (_label, gitSha, expected) => {
+  ])("SC-04 shows %s as-is and offers no copy or title", async (_label, gitSha, expected) => {
     const sha = await renderWithSha(gitSha);
 
     expect(sha).toHaveTextContent(expected);
     expect(sha).not.toHaveAttribute("title");
     expect(screen.queryByTestId("version-info-copy")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("version-info-workspace")).not.toBeInTheDocument();
   });
 
-  it("SC-05 shows the workspace status in the build row", async () => {
-    mockHealth({
-      lucyVersion: "0.20.0",
-      gitSha: SHA,
-      gitDirty: true,
-      bundledKtxVersion: "0.16.0"
-    });
-
-    renderPage();
-
-    const sha = await screen.findByTestId("version-info-sha");
-    const workspace = screen.getByTestId("version-info-workspace");
-    expect(workspace).toHaveTextContent("构建时工作区有未提交改动");
-    expect(workspace.className).toContain("text-warning-strong");
-    expect(workspace.className).toContain("text-xs");
-    // Same row as the short commit, not a definition list row of its own.
-    expect(workspace.parentElement).toBe(sha.parentElement);
-    expect(screen.getByTestId("version-info").querySelector("dl")).toBeNull();
-  });
-
-  it("SC-06 leaves the workspace status out of a clean build", async () => {
+  it("SC-06 renders the build commit row", async () => {
     mockHealth({
       lucyVersion: "0.20.0",
       gitSha: SHA,
@@ -195,7 +174,6 @@ describe("VersionInfo", () => {
     renderPage();
 
     expect(await screen.findByTestId("version-info-sha")).toHaveTextContent(SHA.slice(0, 12));
-    expect(screen.queryByTestId("version-info-workspace")).not.toBeInTheDocument();
   });
 
   it("SC-07 keeps the bundled KTX version visible without a disclosure", async () => {
