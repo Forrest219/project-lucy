@@ -57,7 +57,8 @@ import {
   readProject,
   resolveProjectRoot,
   removeConnection,
-  removeSchema
+  removeSchema,
+  updateConnectionEndpoint
 } from "./project";
 import { loadContentPaths, resolveContentPaths } from "./paths";
 import { collectContentLayout, mirrorOnlySemanticRelPaths } from "./content-layout";
@@ -318,11 +319,16 @@ function endpointGateDetail(detail: unknown): unknown {
   if (
     source.reason === "multiple" ||
     source.reason === "username_differs" ||
-    source.reason === "reuse_existing_credentials"
+    source.reason === "reuse_existing_credentials" ||
+    source.reason === "shared_endpoint" ||
+    source.reason === "same_server_different_database"
   ) {
     return {
       reason: source.reason,
       ...(typeof source.schema === "string" ? { schema: source.schema } : {}),
+      ...(typeof source.requestedDatabase === "string"
+        ? { requestedDatabase: source.requestedDatabase }
+        : {}),
       matches: endpointMatchList(source.matches)
     };
   }
@@ -366,11 +372,25 @@ function supportedErrorDetail(error: SupportedError): unknown {
   }
   if (
     error.code === "ENDPOINT_ALREADY_CONNECTED" ||
+    error.code === "ENDPOINT_EDIT_CONFLICT" ||
     error.code === "SCHEMA_ALREADY_ON_CONNECTION" ||
     error.code === "ENDPOINT_SCHEMA_COUNT" ||
     error.code === "SAME_SERVER_DIFFERENT_DATABASE"
   ) {
     return endpointGateDetail(error.detail);
+  }
+  if (
+    error.code === "CONNECTION_ENDPOINT_INVALID_FIELD" ||
+    error.code === "CONNECTION_ENDPOINT_NO_CHANGE" ||
+    error.code === "CONNECTION_ENDPOINT_UNSUPPORTED_DRIVER" ||
+    error.code === "CONNECTION_ENDPOINT_FORBIDDEN" ||
+    error.code === "CONNECTION_PASSWORD_SOURCE_NOT_EDITABLE"
+  ) {
+    const detail = error.detail;
+    if (detail && typeof detail === "object" && "field" in detail) {
+      return { field: (detail as { field?: string }).field };
+    }
+    return undefined;
   }
   if (error.code === "CONNECTION_TEST_FAILED") {
     const detail = error.detail;
@@ -1927,6 +1947,60 @@ export function buildServer() {
     logProbeTiming(request, "test", purpose, timing);
     return { ok: true, data: result };
   }));
+
+  app.post<{
+    Params: { connId: string };
+    Body: {
+      host?: string;
+      port?: number;
+      username?: string;
+      password?: string;
+      dryRun?: boolean;
+      acknowledgeSharedEndpoint?: boolean;
+      acknowledgeSameServerDifferentDatabase?: boolean;
+    };
+  }>("/api/connections/:connId/endpoint", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const body = request.body ?? {};
+    const dryRun = body.dryRun !== false;
+    if (typeof body.host !== "string" || !body.host.trim()) {
+      throw enabledTableError("BAD_REQUEST", "host is required");
+    }
+    if (typeof body.port !== "number") {
+      throw enabledTableError("BAD_REQUEST", "port is required");
+    }
+    if (typeof body.username !== "string" || !body.username.trim()) {
+      throw enabledTableError("BAD_REQUEST", "username is required");
+    }
+    const digestBefore = await ktxDigestSnapshot(projectRoot);
+    const result = await updateConnectionEndpoint(
+      projectRoot,
+      connId,
+      {
+        host: body.host,
+        port: body.port,
+        username: body.username,
+        ...(typeof body.password === "string" ? { password: body.password } : {})
+      },
+      dryRun,
+      {
+        recordConfigChange,
+        endpointFlags: {
+          acknowledgeSharedEndpoint: body.acknowledgeSharedEndpoint === true,
+          acknowledgeSameServerDifferentDatabase: body.acknowledgeSameServerDifferentDatabase === true
+        }
+      }
+    );
+    if (!dryRun) {
+      writtenFiles.push({ filePath: "ktx.yaml" });
+      void digestBefore;
+    }
+    return {
+      ok: true,
+      data: dryRun ? result : { ...result, executionRuntimePending: true as const }
+    };
+  });
 
   app.post<{
     Params: { connId: string };

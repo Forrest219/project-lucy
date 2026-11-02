@@ -61,7 +61,7 @@
 - 不把「一个端点只有一张卡片」写成不变式。唯一匹配在显式确认后仍可有第二张卡片。
 - 不自动合并、改名或删除历史重复连接。
 - 不把 `localhost`、`127.0.0.1` 与主机名解析成同一端点。不做 DNS 比较。
-- 不修改已有连接的 host、端口、用户名或密码。
+- 不修改已有连接的 host、端口、用户名或密码。**后继例外**：[`lucy-20261101-connection-endpoint-edit-spec.md`](../../docs/specs/lucy-20261101-connection-endpoint-edit-spec.md) 允许编辑当前连接的 endpoint；该路径复用本 Spec 匹配键，但冲突集**排除自身** connection id，且不是「新建第二条连接」主路径。
 - 不把 live-schemas 可见性写进既有「添加 Schema」接口。该接口仍做连接级连通测试。可见性只约束从本软门禁进入的复用路径。
 - 不引入跨进程锁、多副本锁或分布式事务。一致性边界是单进程，与 `docs/governance/DEVELOPMENT.md` 的部署约束一致。
 - 不把 live-schemas 的缓存整体取消。普通目录浏览仍可使用缓存；本软门禁的复用确认必须显式 `refresh=1` 绕过缓存。
@@ -315,7 +315,7 @@ Gate B 批准前不改术语标准正文。批准后再把上表补进 `webui/do
 9. PostgreSQL 同一 host、端口、database 按端点匹配处理。database 不同且未带 `acknowledgeDifferentDatabase: true` 时，`dryRun: false` 返回 `SAME_SERVER_DIFFERENT_DATABASE` 并不写入。带上该字段后允许第二张卡片。只在界面展示说明、请求却不带字段时，服务端拒绝。
 10. SQLite、不同端口、不同 driver、以及仅大小写不同的 host 比较：后者算匹配；前三者不返回本 Spec 的端点错误。`localhost` 与 `127.0.0.1` 不互配。
 11. 接入向导添加 Schema 成功后，第 2 步使用已有连接 ID。
-12. 现有不同 host 的连接保持原卡片。本 Spec 不改它们的 host、密码或 Schema 列表。
+12. 现有不同 host 的连接保持原卡片。本 Spec（新建软门禁路径）不改它们的 host、密码或 Schema 列表。就地改 host 见后继 `lucy-20261101-connection-endpoint-edit`。
 13. SQL Server 与 Oracle 的 live-schemas 分别使用其原生系统目录查询；不能因协议识别为 `unknown` 而让复用路径永久失败。
 14. 新建连接与添加 / 删除 Schema、删除连接等正式 `ktx.yaml` 写入并发时，最终 YAML 同时保留各自变更，不发生最后写入覆盖前一项变更。
 

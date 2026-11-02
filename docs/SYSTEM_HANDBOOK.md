@@ -439,20 +439,21 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 | 启用表范围 | `/connections/enabled-tables` | 维护 `ktx.yaml` 的 `enabled_tables` |
 | 连通测试 | `/connections/test` | 调用 `ktx connection test <connId>` |
 
-> WebUI 不负责新建物理数据库连接。新增连接的 host、port、database、username、password、driver 等字段由运维在 `ktx.yaml` 和 secret 文件中配置。
-> WebUI 管理的是已声明连接：查看连接状态、测试连接、添加 Schema、维护启用表范围、上传 YAML 资产、刷新本地目录。
+> WebUI 可**新建连接**（`/connections` → 新建连接）与**编辑服务器地址**（连接卡片 → 编辑连接）。密码持久态仍为 `file:` 引用；WebUI 不回读密码明文。手工编辑 `ktx.yaml` + secrets 仍可用作高级 / 灾备路径。
+> WebUI 还管理已声明连接：连通测试、添加 Schema、维护启用表范围、上传 YAML 资产、刷新本地目录。
 
 | 问题 | 结论 |
 | --- | --- |
-| 我在哪里新建连接？ | 编辑 `ktx.yaml`，不是 WebUI |
+| 我在哪里新建连接？ | WebUI `/connections` 新建连接；或手工编辑 `ktx.yaml` |
+| 如何改 IP / 端口？ | WebUI 连接卡片「编辑连接」（保留连接 ID）；或手工改 `ktx.yaml` |
 | 密码放哪里？ | `file:` / `env:` / Docker secrets，不写 inline 明文 |
-| WebUI 能做什么？ | 管理已声明连接 |
+| WebUI 能做什么？ | 新建 / 编辑服务器地址、管理已声明连接 |
 | 新连接什么时候对 Agent 可见？ | `ktx.yaml`、manifest / overlay、`enabled_tables`、`access.yaml` 均就绪后 |
 
 | 工作 | 操作入口 |
 | --- | --- |
-| 新增物理数据库连接 | `ktx.yaml` + secret 文件 |
-| 修改连接 host / port / username / password | `ktx.yaml` + secret 文件 |
+| 新增物理数据库连接 | WebUI 新建连接；或 `ktx.yaml` + secret 文件 |
+| 修改连接 host / port / username / password | WebUI「编辑连接」（约定 `file:` 密码可覆盖）；或 `ktx.yaml` + secret 文件 |
 | 给已有连接添加 Schema | WebUI `/connections` 或受控 API |
 | 测试连接 | WebUI 或 `ktx connection test` |
 | 维护启用表范围 | WebUI `/connections/enabled-tables` |
@@ -559,7 +560,7 @@ PUT /api/connections/:connId/enabled-tables
 
 | 角色 | 负责的事 | 不负责的事 |
 | --- | --- | --- |
-| WebUI | 查看 connection、连通测试、添加 Schema、维护 `enabled_tables`、上传 YAML 资产、刷新本地目录、显示 secret 路径来源 | 写入 host / port / user / password；读取 `password: file:` 指向的密码文件内容；直接连接物理数据库做扫描 |
+| WebUI | 新建连接、编辑服务器地址、连通测试、添加 Schema、维护 `enabled_tables`、上传 YAML 资产、刷新本地目录、显示 secret 路径来源 | 回读密码明文；直接连接物理数据库做扫描 |
 | `ktx.yaml` + secret | 声明物理连接的 driver、host、port、username、password、schemas、`enabled_tables` | Agent 鉴权；role / ACL 治理 |
 | `webui/config/access.yaml` | 定义 role、Agent、token hash、ACL（连接、表范围、工具） | 物理连接配置；MCP upstream 行为 |
 

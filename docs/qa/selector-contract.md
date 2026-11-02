@@ -1537,6 +1537,11 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `row-policy-view-detail` | 行策略／行权限视图：view detail | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-detail-empty` | 行策略／行权限视图：view detail empty | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-detail-error` | 行策略／行权限视图：view detail error | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-identity` | 行策略／行权限视图：详情身份与状态区 | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-identity-primary` | 行策略／行权限视图：详情身份主行 | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-identity-secondary` | 行策略／行权限视图：详情状态次行 | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-subject-row` | 行策略／行权限视图：角色／Agent 两列行 | `pages/admin/RowPolicyView.tsx` / `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-source-roles` | 行策略 DNF 预览：来源角色次要行 | `components/admin/RowPolicyDnfPreview.tsx` |
 | `row-policy-view-diagnostics` | 行策略／行权限视图：view diagnostics | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-failures` | 行策略／行权限视图：view failures | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-list-empty` | 行策略／行权限视图：view list empty | `pages/admin/RowPolicyView.tsx` |

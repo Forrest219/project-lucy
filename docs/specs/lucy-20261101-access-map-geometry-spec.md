@@ -12,7 +12,7 @@
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」 |
 | 与既有 Spec 的关系 | **再修订** quiet-reading [`lucy-20261030-access-map-quiet-reading-spec.md`](lucy-20261030-access-map-quiet-reading-spec.md) **§5.4**，以及 chart-first [`lucy-20261101-access-map-chart-first-spec.md`](lucy-20261101-access-map-chart-first-spec.md) 对卡片规则的沿用句。**保持** quiet-reading §5.3 着色 token、chart-first 页壳。权威语义 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md) 不变 |
 | 实施计划 | [`docs/plans/lucy-20261101-access-map-geometry-plan.md`](../plans/lucy-20261101-access-map-geometry-plan.md) |
-| 审阅 | 交叉审阅 v0.1 → 本 v0.2 定稿 |
+| 审阅 | 交叉审阅 v0.1 → 本 v0.2 定稿 → 实施收口 |
 
 > v0.2 已实施（2026-11-01）。D1–D12 按 §4 拍板。SC 出处见实施笔记。本条收口不表示可上线。
 

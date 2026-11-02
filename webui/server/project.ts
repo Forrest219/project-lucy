@@ -7,6 +7,8 @@ import { KtxCliError, testConnection } from "./ktx";
 import { formatConnectionErrorMessage } from "./connection-errors";
 import {
   ForbiddenPathError,
+  safeOverwriteSecretPassword,
+  safeReadSecretPasswordBytesIfExists,
   safeRemove,
   safeRemoveSecretPasswordIfExists,
   safeWrite,
@@ -30,7 +32,12 @@ import type {
   RemoveSchemaResult
 } from "./model";
 import { previewDiff } from "./diff";
-import { assertEndpointGate, type EndpointFlags } from "./connection-endpoint-gate.js";
+import {
+  assertEndpointEditGate,
+  assertEndpointGate,
+  type EndpointEditFlags,
+  type EndpointFlags
+} from "./connection-endpoint-gate.js";
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock.js";
 import { withPublishCoordinator } from "./publish-coordinator.js";
 import type { ConnectionTestResult } from "./ktx";
@@ -214,6 +221,108 @@ export class ConnectionPasswordRequiredError extends Error {
     this.name = "ConnectionPasswordRequiredError";
   }
 }
+
+/** Spec lucy-20261101-connection-endpoint-edit */
+export class ConnectionEndpointNoChangeError extends Error {
+  code = "CONNECTION_ENDPOINT_NO_CHANGE";
+  statusCode = 400;
+  constructor(message = "连接服务器地址无变更") {
+    super(message);
+    this.name = "ConnectionEndpointNoChangeError";
+  }
+}
+
+export class ConnectionEndpointUnsupportedDriverError extends Error {
+  code = "CONNECTION_ENDPOINT_UNSUPPORTED_DRIVER";
+  statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionEndpointUnsupportedDriverError";
+  }
+}
+
+export class ConnectionEndpointForbiddenError extends Error {
+  code = "CONNECTION_ENDPOINT_FORBIDDEN";
+  statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionEndpointForbiddenError";
+  }
+}
+
+export class ConnectionPasswordSourceNotEditableError extends Error {
+  code = "CONNECTION_PASSWORD_SOURCE_NOT_EDITABLE";
+  statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionPasswordSourceNotEditableError";
+  }
+}
+
+export class ConnectionEndpointInvalidFieldError extends Error {
+  code = "CONNECTION_ENDPOINT_INVALID_FIELD";
+  statusCode = 400;
+  detail?: { field?: string };
+  constructor(message: string, detail?: { field?: string }) {
+    super(message);
+    this.name = "ConnectionEndpointInvalidFieldError";
+    this.detail = detail;
+  }
+}
+
+export type PresenceResult =
+  | { status: "ok"; missingEnabledTables: [] }
+  | { status: "missing"; missingEnabledTables: string[] }
+  | { status: "not_completed"; reason: string; missingEnabledTables?: string[] };
+
+export type UpdateConnectionEndpointInput = {
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+};
+
+export type UpdateConnectionEndpointCurrent = {
+  host: string;
+  port: number;
+  username: string;
+};
+
+export type UpdateConnectionEndpointPreview = {
+  diff: string;
+  proposedYaml: string;
+  current: UpdateConnectionEndpointCurrent;
+  passwordAction: "keep" | "replace";
+  connection?: ConnectionInfo;
+};
+
+export type UpdateConnectionEndpointResult = {
+  written: true;
+  auditId?: number;
+  current: UpdateConnectionEndpointCurrent;
+  connection: ConnectionInfo;
+  passwordAction: "keep" | "replace";
+  test: {
+    status: "ok";
+    message?: string;
+    durationMs?: number;
+  };
+  presence: PresenceResult;
+  executionRuntimePending: true;
+};
+
+export type UpdateConnectionEndpointOptions = {
+  recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
+  testConnectionFn?: typeof testConnection;
+  presenceCheckFn?: (
+    root: string,
+    connId: string,
+    enabledTables: string[]
+  ) => Promise<PresenceResult>;
+  execFileImpl?: Parameters<typeof testConnection>[2];
+  endpointFlags?: EndpointEditFlags;
+  lockHeld?: boolean;
+};
 
 export class ConnectionCreateValidationError extends Error {
   code = "CONNECTION_CREATE_INVALID";
@@ -2028,6 +2137,340 @@ export async function createConnection(
       durationMs
     }
   };
+}
+
+function isCanonicalFilePassword(projectRoot: string, connId: string, passwordField: unknown): boolean {
+  if (typeof passwordField !== "string" || !passwordField.startsWith("file:")) return false;
+  const ref = passwordField.slice("file:".length).trim();
+  const expectedAbs = path.join(projectRoot, ".ktx", "secrets", `${connId}-password`);
+  const expectedRel = connectionSecretRelPath(connId);
+  if (ref === expectedRel || ref === expectedAbs) return true;
+  try {
+    return path.resolve(ref) === path.resolve(expectedAbs) || path.resolve(projectRoot, ref) === path.resolve(expectedAbs);
+  } catch {
+    return false;
+  }
+}
+
+function portScalarForWrite(existing: unknown, port: number): string | number {
+  if (typeof existing === "string") return String(port);
+  return port;
+}
+
+async function defaultPresenceCheck(
+  root: string,
+  connId: string,
+  enabledTables: string[]
+): Promise<PresenceResult> {
+  if (enabledTables.length === 0) {
+    return { status: "ok", missingEnabledTables: [] };
+  }
+  const schemas = Array.from(
+    new Set(
+      enabledTables
+        .map((table) => schemaInferredFromEnabledTable(table))
+        .filter((schema): schema is string => Boolean(schema))
+    )
+  );
+  if (schemas.length > 3) {
+    return { status: "not_completed", reason: "budget_exceeded" };
+  }
+  const started = Date.now();
+  try {
+    const { readLiveTables } = await import("./live-tables.js");
+    const missing: string[] = [];
+    for (const schema of schemas) {
+      if (Date.now() - started > 10_000) {
+        return { status: "not_completed", reason: "timeout", missingEnabledTables: missing };
+      }
+      const live = await readLiveTables(root, connId, schema, { refresh: true });
+      if (live.status !== "ok") {
+        const code = "error" in live ? String((live as { error?: { code?: string } }).error?.code ?? "") : "";
+        if (code.includes("UNSUPPORTED") || code === "TABLE_LIST_UNSUPPORTED" || code === "PROTOCOL_UNSUPPORTED") {
+          return { status: "not_completed", reason: "unsupported_driver" };
+        }
+        return { status: "not_completed", reason: "probe_error" };
+      }
+      const names = new Set((live.tables ?? []).map((row) => `${schema}.${row.table}`));
+      // also allow bare table match for same schema
+      const bare = new Set((live.tables ?? []).map((row) => row.table));
+      for (const entry of enabledTables) {
+        if (schemaInferredFromEnabledTable(entry) !== schema) continue;
+        const table = entry.includes(".") ? entry.slice(entry.indexOf(".") + 1) : entry;
+        if (!names.has(entry) && !bare.has(table)) {
+          missing.push(entry);
+        }
+      }
+    }
+    if (missing.length === 0) return { status: "ok", missingEnabledTables: [] };
+    return { status: "missing", missingEnabledTables: missing };
+  } catch {
+    return { status: "not_completed", reason: "probe_error" };
+  }
+}
+
+function connectionEndpointMutatorFactory(
+  connId: string,
+  host: string,
+  port: number,
+  username: string
+) {
+  return (doc: ReturnType<typeof parseDocument>) => {
+    const conns = doc.get("connections", true);
+    if (!isMap(conns) || !conns.has(connId)) {
+      throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+    }
+    const conn = conns.get(connId, true);
+    if (!isMap(conn)) {
+      throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+    }
+    const existingPort = conn.get("port");
+    conn.set("host", host);
+    conn.set("port", portScalarForWrite(isScalar(existingPort) ? existingPort.value : existingPort, port));
+    conn.set("username", username);
+  };
+}
+
+export async function updateConnectionEndpoint(
+  root: string,
+  connId: string,
+  rawInput: UpdateConnectionEndpointInput,
+  dryRun: boolean,
+  options: UpdateConnectionEndpointOptions = {}
+): Promise<UpdateConnectionEndpointPreview | UpdateConnectionEndpointResult> {
+  if (dryRun === false && !options.lockHeld) {
+    return withKtxYamlWriteLock(() =>
+      withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+        updateConnectionEndpoint(root, connId, rawInput, false, { ...options, lockHeld: true })
+      )
+    );
+  }
+
+  if (connId === OPS_EVIDENCE_CONNECTION_ID) {
+    throw new ConnectionEndpointForbiddenError(`连接「${connId}」禁止在界面编辑服务器地址`);
+  }
+
+  const yamlText = await readFile(path.join(root, "ktx.yaml"), "utf8");
+  const config = valueAsRecord(parse(yamlText));
+  const connectionsConfig = valueAsRecord(config.connections);
+  const rawConn = connectionsConfig[connId];
+  if (!rawConn || typeof rawConn !== "object") {
+    throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+  }
+  const conn = valueAsRecord(rawConn);
+  const driver = typeof conn.driver === "string" ? conn.driver : "";
+  if (driver === "sqlite" || driver === "athena" || !driver) {
+    throw new ConnectionEndpointUnsupportedDriverError(
+      `连接类型「${driver || "unknown"}」不支持在界面修改服务器地址`
+    );
+  }
+
+  const host = typeof rawInput.host === "string" ? rawInput.host.trim() : "";
+  const username = typeof rawInput.username === "string" ? rawInput.username.trim() : "";
+  const port = rawInput.port;
+  if (!host) {
+    throw new ConnectionEndpointInvalidFieldError("host is required", { field: "host" });
+  }
+  if (!username) {
+    throw new ConnectionEndpointInvalidFieldError("username is required", { field: "username" });
+  }
+  if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new ConnectionEndpointInvalidFieldError("port must be an integer between 1 and 65535", {
+      field: "port"
+    });
+  }
+
+  const current: UpdateConnectionEndpointCurrent = {
+    host: typeof conn.host === "string" ? conn.host : "",
+    port: Number(conn.port) || 0,
+    username: typeof conn.username === "string" ? conn.username : ""
+  };
+
+  const passwordTrimmed =
+    typeof rawInput.password === "string" ? rawInput.password.trim() : "";
+  const passwordAction: "keep" | "replace" = passwordTrimmed.length > 0 ? "replace" : "keep";
+  if (passwordAction === "replace" && !isCanonicalFilePassword(root, connId, conn.password)) {
+    throw new ConnectionPasswordSourceNotEditableError(
+      "该连接的密码不是约定的密码文件引用，界面不能覆盖密码"
+    );
+  }
+
+  const database = typeof conn.database === "string" ? conn.database : "";
+  const engine = typeof conn.engine === "string" ? conn.engine : undefined;
+  await assertEndpointEditGate(
+    root,
+    connId,
+    { driver, engine, host, port, database, username },
+    options.endpointFlags ?? {}
+  );
+
+  const hostChanged = normalizeHostCompare(current.host) !== normalizeHostCompare(host);
+  const portChanged = Number(current.port) !== port;
+  const userChanged = current.username.trim() !== username;
+  if (!hostChanged && !portChanged && !userChanged && passwordAction === "keep") {
+    if (dryRun) {
+      return {
+        diff: "",
+        proposedYaml: redactKtxYamlForPreview(yamlText),
+        current: { host: current.host, port: Number(current.port) || port, username: current.username },
+        passwordAction: "keep"
+      };
+    }
+    throw new ConnectionEndpointNoChangeError();
+  }
+
+  const mutator = connectionEndpointMutatorFactory(connId, host, port, username);
+  const preview = await writeKtxYaml(root, mutator, { dryRun: true, lockHeld: options.lockHeld });
+  const safeProposed = redactKtxYamlForPreview(preview.serialized);
+  const safeOld = redactKtxYamlForPreview(preview.oldText);
+  const diff = previewDiff(safeOld, safeProposed, "ktx.yaml");
+  const projectAfterPreview = await readProject(root);
+  const connectionInfo = projectAfterPreview.connections.find((item) => item.id === connId);
+
+  if (dryRun) {
+    return {
+      diff,
+      proposedYaml: safeProposed,
+      current: { host: current.host, port: Number(current.port) || port, username: current.username },
+      passwordAction,
+      ...(connectionInfo ? { connection: { ...connectionInfo, host, port: String(port) } } : {})
+    };
+  }
+
+  // Commit path: re-validate under lock (caller holds lock when lockHeld).
+  const secretRelPath = connectionSecretRelPath(connId);
+  let oldSecret: Buffer | null = null;
+  if (passwordAction === "replace") {
+    oldSecret = await safeReadSecretPasswordBytesIfExists(root, secretRelPath);
+  }
+
+  let secretWritten = false;
+  let yamlWritten = false;
+  const rollback = async () => {
+    if (yamlWritten) {
+      const paths = await loadContentPaths();
+      await safeWrite(paths, root, "ktx.yaml", preview.oldText);
+      yamlWritten = false;
+    }
+    if (secretWritten) {
+      if (oldSecret) {
+        await safeOverwriteSecretPassword(root, secretRelPath, oldSecret.toString("utf8"));
+      } else {
+        await safeRemoveSecretPasswordIfExists(root, secretRelPath);
+      }
+      secretWritten = false;
+    }
+  };
+
+  try {
+    if (passwordAction === "replace") {
+      await safeOverwriteSecretPassword(root, secretRelPath, passwordTrimmed);
+      secretWritten = true;
+    }
+    await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: true });
+    yamlWritten = true;
+  } catch (error) {
+    await rollback();
+    throw error;
+  }
+
+  const testFn = options.testConnectionFn ?? testConnection;
+  const execFileImpl = options.execFileImpl ?? execFile;
+  let testMessage: string | undefined;
+  let durationMs: number | undefined;
+  try {
+    const testResult: ConnectionTestResult = await testFn(root, connId, execFileImpl);
+    durationMs = testResult.latencyMs;
+    if (testResult.status !== "ok") {
+      await rollback();
+      throw new ConnectionTestFailedError(testResult.reason?.trim() || "连接失败", {
+        reason: testResult.reason ?? "",
+        stdout: testResult.stdout ?? "",
+        stderr: testResult.stderr ?? ""
+      });
+    }
+    testMessage = testResult.detail;
+  } catch (error) {
+    if (error instanceof ConnectionTestFailedError) throw error;
+    await rollback();
+    if (error instanceof KtxCliError) {
+      throw new ConnectionTestFailedError("无法执行连通测试：未找到 ktx CLI", {
+        reason: "ktx_cli_missing",
+        stdout: "",
+        stderr: error instanceof Error ? error.message : ""
+      });
+    }
+    throw error;
+  }
+
+  let presence: PresenceResult;
+  try {
+    const check = options.presenceCheckFn ?? defaultPresenceCheck;
+    const enabledTables = stringArray(conn.enabled_tables);
+    presence = await check(root, connId, enabledTables);
+  } catch {
+    presence = { status: "not_completed", reason: "probe_error" };
+  }
+
+  let auditId: number | undefined;
+  if (options.recordConfigChange) {
+    const passwordBytes =
+      passwordAction === "replace" ? Buffer.byteLength(passwordTrimmed, "utf8") : 0;
+    try {
+      auditId = await options.recordConfigChange({
+        filePath: "ktx.yaml",
+        changeType: "connection_endpoint_update",
+        targetId: connId,
+        oldSummary: {
+          host: current.host,
+          port: current.port,
+          username: current.username
+        },
+        newSummary: {
+          connectionId: connId,
+          host,
+          port,
+          username,
+          passwordAction,
+          passwordBytes,
+          testStatus: "ok"
+        },
+        diff
+      });
+    } catch (error) {
+      await rollback();
+      throw error;
+    }
+  }
+
+  const after = await readProject(root);
+  const updated = after.connections.find((item) => item.id === connId);
+  return {
+    written: true,
+    auditId,
+    current: { host, port, username },
+    connection: updated ?? {
+      id: connId,
+      driver,
+      host,
+      port: String(port),
+      database,
+      schemas: stringArray(conn.schemas),
+      enabledTables: stringArray(conn.enabled_tables)
+    },
+    passwordAction,
+    test: { status: "ok", message: testMessage, durationMs },
+    presence,
+    executionRuntimePending: true
+  };
+}
+
+function normalizeHostCompare(host: string): string {
+  const text = host.trim().toLowerCase();
+  if (text.startsWith("[") && text.endsWith("]") && text.length > 2) {
+    return text.slice(1, -1);
+  }
+  return text;
 }
 
 const PROBE_CONNECTION_ID = "probe";

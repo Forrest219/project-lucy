@@ -1,0 +1,38 @@
+# Spec 149 §5.4 — `ops_call_tables` 的 overlay。
+#
+# 派生列（`call_day`）只出现在这里。表达式是 SQLite 的 `date(ts)`，不是
+# MySQL 的 `YEAR()`；含义是 **UTC 日历日**。
+name: ops_call_tables
+
+grain:
+  - event_id
+  - physical_table
+
+columns:
+  - name: call_day
+    type: time
+    role: time
+    expr: date(ts)
+    descriptions:
+      db: 调用日（UTC 日历日）
+      ai: >-
+        UTC calendar day derived from `ts`. When a question asks for "the last 7
+        days", filter these 7 UTC days and say in the answer that the window is
+        UTC.
+
+measures:
+  - name: call_count
+    expr: count(*)
+    description: 调用次数（按来源表计行）。
+
+  - name: denied_count
+    expr: sum(case when outcome = 'denied' then 1 else 0 end)
+    description: 被拒绝的调用次数。
+
+  - name: error_count
+    expr: sum(case when outcome = 'error' then 1 else 0 end)
+    description: 出错的调用次数。
+
+  - name: total_duration_ms
+    expr: sum(duration_ms)
+    description: 耗时合计（毫秒）。

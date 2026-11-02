@@ -131,6 +131,11 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 |---|---|---|---|---|
 | Connection | 连接 | 数据库连接 | 链接、联接 | 数据库连接配置对象 |
 | Create Connection | 新建连接 | — | 新建链接、添加联接、创建数据源（作主按钮） | 在 WebUI 创建 `ktx.yaml` 连接配置（Spec 124）；持久密码仅为 `file:` 引用 |
+| Edit Connection | 编辑连接 | — | 修改数据源、换库、改链接、编辑联接 | 就地修改已有连接的服务器地址与可选凭据；不新建连接 ID（`lucy-20261101-connection-endpoint-edit`） |
+| Connection Server Address | 服务器地址 | — | IP、Endpoint（作主标签）、主机端口（作主标签） | host 字段标签；卡片值仍可显示 `host:port` |
+| Keep Existing Password | 保留原密码 | — | 沿用密钥、不改 Token | 密码框留空表示不覆盖约定密码文件 |
+| Shared Endpoint Acknowledgement | 仍要改到相同端点 | — | 仍要新建连接、强制新建 | 编辑后与其他连接同端点时的显式确认 |
+| Enabled Table Presence Warning | 启用表存在性提示 | — | 结构门禁失败、对象校验失败（作阻断主文案） | 编辑成功后的软警告；不回滚 endpoint |
 | Delete Connection | 删除连接 | — | 删除链接、删除联接、删除数据库、删库 | 从 `ktx.yaml` 卸载整条连接配置；不触碰物理库（Spec 127） |
 | Connection ID | 连接 ID | — | 连接名（作主标签）、Connection Name（作主标签） | `connections.<id>` 键 |
 | Connection Password | 数据库密码 | — | 密钥、Token（作连接表单主标签） | 仅新建表单一次性输入；写入后不可回显（Spec 124） |
@@ -304,6 +309,9 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 |---|---|---|---|
 | Connection Overview | 连接概览 | 连接总览混用 | 数据库接入主工作台 |
 | Create Connection | 新建连接 | 新建链接、添加联接、创建数据源（作主按钮） | `/connections` 创建连接配置；非「添加 Schema」（Spec 124） |
+| Edit Connection | 编辑连接 | 修改数据源、换库、改链接、编辑联接 | `/connections` 就地改服务器地址；保留连接 ID（`lucy-20261101-connection-endpoint-edit`） |
+| Connection Server Address | 服务器地址 | IP、Endpoint（作主标签）、主机端口（作主标签） | 编辑连接表单 host 标签 |
+| Shared Endpoint Acknowledgement | 仍要改到相同端点 | 仍要新建连接、强制新建 | 编辑路径端点冲突确认 |
 | Delete Connection | 删除连接 | 删除链接、删除联接、删除数据库、删库 | 从 `ktx.yaml` 卸载整条连接配置；不触碰物理库（Spec 127） |
 | Connection Delete Impact | 删除影响 | — | dryRun 摘要：Schema、已启用表、secret、YAML 资产、Role、Wiki（Spec 127） |
 | Confirm Connection ID | 输入连接 ID 以确认 | — | 删除连接确认前须原样输入目标连接 ID（Spec 127） |

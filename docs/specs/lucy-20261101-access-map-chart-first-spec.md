@@ -212,7 +212,7 @@ Page Header
 ### 5.6 图区几何与悬停
 
 沿用 quiet-reading §5.3 着色；**图面几何改指**
-[`lucy-20261101-access-map-geometry-spec.md`](lucy-20261101-access-map-geometry-spec.md)（v0.2）
+[`lucy-20261101-access-map-geometry-spec.md`](lucy-20261101-access-map-geometry-spec.md)（**v0.2 功能合同已收口**）
 §5.1–§5.5（细柱 + 外标块 + 面积流带 + 刻度封顶 + 列间距与横滚），
 quiet-reading §5.4 的定宽卡片规则已被该 Spec 取代。本条新增/继续有效：
 
