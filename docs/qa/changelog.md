@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-11-02 · 作废导航抽样，菜单壳层改由 e2e:release-ux 覆盖
+
+### 作废
+- `E2E-NAV-01`、`E2E-NAV-02` 从 `webui/tests/e2e/specs/smoke.spec.ts` 删除。
+- `E2E-NAV-03` 从未实现，用例矩阵标作废。
+- 影响映射不再引用这三个编号。
+
+### 修改
+- `webui/tests/release-ux/structure.spec.ts`：真实 Chrome 1920×1080 点击每个一级分组和二级入口，断言 pathname、当前菜单、页头、H1 和页头动作数量。`/help` 仍直接打开。
+- `docs/qa/impact-map.json` 升到 `0.5.0`。只挂在已作废 NAV 上的两个 selector 改挂 `E2E-SEM-01`。
+
+### 范围声明
+- 本轮不重跑 Docker，不执行 `e2e:release-ux`。客户旅程 `UX-01` 到 `UX-07` 不在这次改动里。
+
+---
+
 ## 2026-10-27 · MCP Runtime 执行层重载：第一个浏览器契约场景 E2E-MCP-01
 
 ### 新增

@@ -6,7 +6,9 @@ import {
   datetimeViolation,
   errorTextViolations,
   forbiddenPrimaryLabels,
-  h1Violation
+  h1Violation,
+  headerActionViolation,
+  pageHeaderViolation
 } from "../../tests/release-ux/invariants";
 
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
@@ -43,6 +45,18 @@ describe("release UX structure invariants", () => {
     expect(h1Violation(["系统手册"], null)).toBeNull();
     expect(h1Violation([], null)).toMatch(/one h1/);
   });
+
+  it("fails a sidebar page whose header has more than three visible actions", () => {
+    expect(headerActionViolation(null)).toBeNull();
+    expect(headerActionViolation(0)).toBeNull();
+    expect(headerActionViolation(3)).toBeNull();
+    expect(headerActionViolation(4)).toMatch(/4 visible actions/);
+  });
+
+  it("fails a sidebar page that does not render page-header", () => {
+    expect(pageHeaderViolation(true)).toBeNull();
+    expect(pageHeaderViolation(false)).toMatch(/page-header/);
+  });
 });
 
 describe("release UX suite boundary", () => {
@@ -56,6 +70,21 @@ describe("release UX suite boundary", () => {
     expect(release.match(/name: "chromium"/g)).toHaveLength(1);
     expect(release).not.toContain("chromium-narrow");
     expect(release).not.toContain("webkit");
+  });
+
+  it("clicks every sidebar group and item instead of sampling a few pages", () => {
+    const suite = readFileSync(path.join(repoRoot, "webui/tests/release-ux/structure.spec.ts"), "utf8");
+    const smoke = readFileSync(path.join(repoRoot, "webui/tests/e2e/specs/smoke.spec.ts"), "utf8");
+    expect(suite).toContain("navGroups");
+    expect(suite).toContain("nav-group-toggle-");
+    expect(suite).toContain("nav-link-");
+    expect(suite).toContain("aria-current");
+    expect(suite).toContain("pageHeaderViolation");
+    expect(suite).toContain("headerActionViolation");
+    expect(suite).not.toContain("E2E-NAV-");
+    expect(smoke).not.toContain("E2E-NAV-01");
+    expect(smoke).not.toContain("E2E-NAV-02");
+    expect(smoke).not.toContain("E2E-NAV-03");
   });
 
   it("registers e2e:release-ux without changing the contract or smoke commands", () => {

@@ -63,7 +63,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p1:release-readiness` | aggregate | runs P1 gates and writes aggregate evidence; use `--allow-blocked` only for pre-release evidence collection |
 | `npm run audit:ktx-diff` | governance | regenerates KTX vs Lucy first/second-level directory and file diff audit |
 | `npm run compat:ktx-upgrade -- --candidate <version>` | runtime + platform upgrade | validates a candidate bundled KTX version through Docker/demo/business gates |
-| `cd webui && npm run e2e:release-ux` | platform, release-only | 发版前 WebUI 结构层。按 `navigation.ts` 打开侧栏每一页和 `/help`，断言 H1、错误原文、禁止主标签和时间筛选。独立 Playwright 配置，不进入 `@pr-smoke`、`e2e:contract:release` 或 `e2e:real`。不是 PR 阻塞项，通过也不能单独把客户包签成可生产。规范见 [`docs/specs/lucy-20261030-webui-release-ux-review-spec.md`](../specs/lucy-20261030-webui-release-ux-review-spec.md) |
+| `cd webui && npm run e2e:release-ux` | platform, release-only | 发版前 WebUI 菜单壳层。按 `navigation.ts` 点击每个一级分组和二级入口，并打开 `/help`。断言当前菜单、页头、H1、页头动作数量、错误原文、禁止主标签和时间筛选。独立 Playwright 配置，只跑 Chromium 1920×1080，不进入 `@pr-smoke`、`e2e:contract:release` 或 `e2e:real`。不是 PR 阻塞项，通过也不能单独把客户包签成可生产。规范见 [`docs/specs/lucy-20261030-webui-release-ux-review-spec.md`](../specs/lucy-20261030-webui-release-ux-review-spec.md) |
 
 ### 2.1 Local Node / Native Addon Baseline
 
@@ -280,7 +280,7 @@ Recommended CI jobs:
 | ktx-diff-audit | `npm run audit:ktx-diff -- --out inbox/ktx-lucy-diff-$(date +%F).md` |
 | ktx-upgrade-compat | `npm run compat:ktx-upgrade -- --candidate <version>` |
 | customer-real-db | manual or protected secret environment: `npm run smoke:p0:customer` |
-| release-ux-structure | **不是 CI / PR 阻塞项**。发版前手工执行 `cd webui && npm run e2e:release-ux`。不进入 `spec-and-webui`，也不签发客户发布。通过只证明夹具上的页面结构 |
+| release-ux-structure | **不是 CI / PR 阻塞项**。发版前手工执行 `cd webui && npm run e2e:release-ux`。不进入 `spec-and-webui`，也不签发客户发布。通过只证明夹具上点击侧栏后的页头壳层 |
 
 GitHub Actions implementation: `.github/workflows/lucy-release.yml`.
 

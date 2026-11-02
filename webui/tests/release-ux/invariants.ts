@@ -50,3 +50,14 @@ export function datetimeViolation(fact: DatetimeFact | null): string | null {
   }
   return null;
 }
+
+/** `null` means the page has no page-header-actions region, which counts as zero. */
+export function headerActionViolation(count: number | null): string | null {
+  if (count === null || count <= 3) return null;
+  return `page header has ${count} visible actions`;
+}
+
+export function pageHeaderViolation(present: boolean): string | null {
+  if (present) return null;
+  return "sidebar page is missing page-header";
+}

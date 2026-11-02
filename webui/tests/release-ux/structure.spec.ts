@@ -1,5 +1,6 @@
-// Release UX structure suite. Opens every sidebar route from navigation.ts plus /help.
-// Does not click section tabs, count header actions, or judge empty-state copy.
+// Release UX menu shell. Clicks every sidebar group and item from navigation.ts.
+// /help is outside the sidebar and is opened directly.
+// Does not judge empty-state copy or contradictory status labels.
 
 import { expect, test, type Page } from "@playwright/test";
 import { navGroups } from "../../src/app/navigation";
@@ -8,6 +9,8 @@ import {
   errorTextViolations,
   forbiddenPrimaryLabels,
   h1Violation,
+  headerActionViolation,
+  pageHeaderViolation,
   type DatetimeFact
 } from "./invariants";
 
@@ -16,9 +19,9 @@ interface PageFacts {
   errorText: string;
   labels: string[];
   datetime: DatetimeFact | null;
+  pageHeader: boolean;
+  headerActionCount: number | null;
 }
-
-const routes = navGroups.flatMap((group) => group.items.map((item) => ({ to: item.to, label: item.label })));
 
 async function factsFor(page: Page, scanLabels: boolean): Promise<PageFacts> {
   return page.evaluate((includeLabels) => {
@@ -70,32 +73,66 @@ async function factsFor(page: Page, scanLabels: boolean): Promise<PageFacts> {
         ? { presetSelected: selected, start: inputs[0]?.value ?? "", end: inputs[1]?.value ?? "" }
         : null;
 
-    return { h1s, errorText: chunks.join("\n"), labels, datetime };
+    const actions = document.querySelector("[data-testid='page-header-actions']");
+    const headerActionCount = actions
+      ? [...actions.querySelectorAll("button, a")].filter((el) => {
+          const style = getComputedStyle(el);
+          if (style.display === "none" || style.visibility === "hidden") return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        }).length
+      : null;
+
+    return {
+      h1s,
+      errorText: chunks.join("\n"),
+      labels,
+      datetime,
+      pageHeader: Boolean(document.querySelector("[data-testid='page-header']")),
+      headerActionCount
+    };
   }, scanLabels);
 }
 
-async function assertRoute(page: Page, route: string, expectedLabel: string | null) {
-  await page.goto(route);
+async function assertShell(page: Page, expectedLabel: string | null) {
   await expect.poll(async () => page.locator("h1").count(), { timeout: 20_000 }).toBeGreaterThan(0);
   const facts = await factsFor(page, expectedLabel !== null);
   const h1 = h1Violation(facts.h1s, expectedLabel);
   const errors = errorTextViolations(facts.errorText);
   const forbidden = expectedLabel === null ? [] : forbiddenPrimaryLabels(facts.labels);
   const datetime = datetimeViolation(facts.datetime);
-  expect({ h1, errors, forbidden, datetime }, route).toEqual({
+  const header = expectedLabel === null ? null : pageHeaderViolation(facts.pageHeader);
+  const actions = expectedLabel === null ? null : headerActionViolation(facts.headerActionCount);
+  expect({ h1, errors, forbidden, datetime, header, actions }, expectedLabel ?? "/help").toEqual({
     h1: null,
     errors: [],
     forbidden: [],
-    datetime: null
+    datetime: null,
+    header: null,
+    actions: null
   });
 }
 
-for (const item of routes) {
-  test(`structure ${item.label} ${item.to}`, async ({ page }) => {
-    await assertRoute(page, item.to, item.label);
-  });
+for (const group of navGroups) {
+  for (const item of group.items) {
+    test(`menu shell ${group.title} / ${item.label}`, async ({ page }) => {
+      await page.goto("/overview");
+      const toggle = page.getByTestId(`nav-group-toggle-${group.id}`);
+      await expect(toggle).toBeVisible();
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+        await toggle.click();
+      }
+      await expect(page.getByTestId(`nav-group-${group.id}`)).toHaveAttribute("data-open", "true");
+      await expect(page.getByTestId(`nav-group-items-${group.id}`)).toBeVisible();
+      await page.getByTestId(`nav-link-${item.id}`).click();
+      await expect.poll(() => new URL(page.url()).pathname).toBe(item.to);
+      await expect(page.getByTestId(`nav-link-${item.id}`)).toHaveAttribute("aria-current", "page");
+      await assertShell(page, item.label);
+    });
+  }
 }
 
-test("structure /help has one non-empty h1", async ({ page }) => {
-  await assertRoute(page, "/help", null);
+test("menu shell /help has one non-empty h1", async ({ page }) => {
+  await page.goto("/help");
+  await assertShell(page, null);
 });

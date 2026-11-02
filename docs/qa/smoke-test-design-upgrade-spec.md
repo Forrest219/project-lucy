@@ -44,7 +44,7 @@ Fast Smoke 执行流水线:
   - 许可激活码解析：验证 License 解码器、指纹与签名规则；
   - 配置包结构验证：`headless-config-smoke` 语法及依赖校验。
 - **Phase 3: WebUI 核心路由与 Selector 契约**
-  - 运行 Playwright Headless 12 条 L1 核心用例（覆盖 `/publish/workbench`、`/connections`、`/onboarding`、`/admin/access/tokens`、`/admin/audit`、`/admin/usage`、`/wiki` 及全页翻译防御）。
+  - 运行 Playwright Headless 10 条 L1 核心用例（覆盖 `/publish/workbench`、`/connections`、`/onboarding`、`/admin/access/tokens`、`/admin/audit`、`/admin/usage`、`/wiki` 及全页翻译防御）。侧栏菜单壳层不在这 10 条里，发版前跑 `e2e:release-ux`。
 - **Phase 4: 本地轻量服务启动与 MCP 握手**
   - 启动隔离端口的 WebUI/Proxy 实例；
   - 验证 `/api/health` 与 `/api/license/status` 信封；
