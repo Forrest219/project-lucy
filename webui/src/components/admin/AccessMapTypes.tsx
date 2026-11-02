@@ -50,6 +50,12 @@ export type AccessMapNodeMeta = {
   grantPaths?: number;
   accessUsers?: number;
   accessPaths?: number;
+  /** 授权路径上出现过的 Agent id。共享下游时用来把别人的问询剔出当前主体。 */
+  grantAgentIds?: string[];
+  /** 访问路径上出现过的 Agent id。 */
+  accessAgentIds?: string[];
+  /** 折叠进「其他」的真实节点 id。只出现在渲染节点上。 */
+  foldedMemberIds?: string[];
   sourceScope?: string;
   toolCount?: number;
   tableCount?: number;
@@ -202,7 +208,7 @@ export function accessMapEdgeStateLabel(state: AccessMapEdgeState): string {
 }
 
 export function accessMapTrustLabel(trust: "confirmed" | "include_candidate"): string {
-  return trust === "include_candidate" ? "含候选口径" : "已确认口径";
+  return trust === "include_candidate" ? "含候选关联" : "已确认关联";
 }
 
 /** 快照覆盖率的可读表述；低覆盖率不得被读成低越权率（§4.9 / SC-13）。 */

@@ -181,7 +181,7 @@ export function AccessMap() {
         description="授权路径与窗口内实际访问对照。"
       />
 
-      {/* 工具条：统计窗口、Schema 层、访问口径、定位、聚焦面包屑。 */}
+      {/* 工具条：统计窗口、Schema 层、问询计入、定位、聚焦面包屑。 */}
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-fg-muted">统计窗口</span>
@@ -235,20 +235,43 @@ export function AccessMap() {
           </select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-fg-muted" htmlFor="access-map-trust-select">
-            访问口径
-          </label>
-          <select
-            id="access-map-trust-select"
-            className="pl-input"
-            value={trustValue}
+        <div className="flex max-w-xs flex-col gap-1">
+          <span className="text-xs font-medium text-fg-muted">问询计入</span>
+          <div
+            className="pl-segmented-control"
+            role="tablist"
+            aria-label="问询计入"
             data-testid="access-map-trust"
-            onChange={(event) => setParam("trust", event.target.value)}
           >
-            <option value="confirmed">已确认</option>
-            <option value="include_candidate">含候选</option>
-          </select>
+            {(
+              [
+                ["confirmed", "已确认关联"],
+                ["include_candidate", "含候选关联"]
+              ] as const
+            ).map(([value, label]) => {
+              const active = trustValue === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  className={
+                    active
+                      ? "pl-segmented-control-item pl-segmented-control-item--active"
+                      : "pl-segmented-control-item"
+                  }
+                  aria-selected={active}
+                  aria-pressed={active}
+                  onClick={() => setParam("trust", value)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] leading-snug text-fg-muted" data-testid="access-map-trust-hint">
+            授权连接始终显示。这一项只影响问询：默认只计已确认关联；含候选关联时，推断对上的问询也算一次访问。
+          </p>
         </div>
 
         <div className="flex flex-col gap-1">
@@ -404,9 +427,10 @@ export function AccessMap() {
               <AccessMapCanvas
                 nodes={response.render.nodes}
                 edges={response.render.edges}
+                censusNodes={response.nodes}
+                censusEdges={response.edges}
                 focusNodeId={focusNodeId}
                 summary={`访问关系图：${response.render.nodes.length} 个节点，${response.render.edges.length} 条边，需复核 ${response.meta.signals.needsReviewEdges} 条，确凿越权 ${response.meta.signals.confirmedUnauthorizedEdges} 条。`}
-                onSelectNode={(nodeId) => setParam("focus", nodeId)}
                 onClearFocus={clearFocus}
               />
             </>

@@ -1488,7 +1488,8 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-search-submit` | 访问关系图：search submit | `pages/admin/AccessMap.tsx` |
 | `access-map-snapshot-id` | 访问关系图：snapshot id | `pages/admin/AccessMap.tsx` |
 | `access-map-token-filter-notice` | 访问关系图：token filter notice | `pages/admin/AccessMap.tsx` |
-| `access-map-trust` | 访问关系图：trust | `pages/admin/AccessMap.tsx` |
+| `access-map-trust` | 访问关系图：问询计入（已确认关联 / 含候选关联） | `pages/admin/AccessMap.tsx` |
+| `access-map-trust-hint` | 访问关系图：问询计入说明（授权始终显示，只影响问询） | `pages/admin/AccessMap.tsx` |
 | `access-map-view-map` | 访问关系图：view map | `pages/admin/AccessMap.tsx` |
 | `access-map-view-table` | 访问关系图：view table | `pages/admin/AccessMap.tsx` |
 | `access-map-window` | 访问关系图：window | `pages/admin/AccessMap.tsx` |
@@ -1598,6 +1599,12 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | Test ID | 元素 | 出现位置 |
 |---|---|---|
 | `access-map-canvas` | 访问关系图：canvas | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-chain-caption` | 访问关系图：正在看的链路名称 | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-chain-clear` | 访问关系图：看全图（取消链路高亮） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-chain-hint` | 访问关系图：链路高亮提示 | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-column-card-${column.depth}` | 访问关系图：列头 KPI 卡 ${column.depth} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-column-card-value-${column.depth}` | 访问关系图：列头 KPI 数字 ${column.depth} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-column-cards` | 访问关系图：列头 KPI 卡行 | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-edge-badge-${link.edge.id}` | 访问关系图：edge badge ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-edge-badge-button-${link.edge.id}` | 访问关系图：edge badge button ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-edge-badges` | 访问关系图：edge badges | `components/admin/AccessMapCanvas.tsx` |
@@ -1607,13 +1614,14 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-hover-tip` | 访问关系图：节点／边悬停浮层（chart-first Spec §5.6，非 SVG `<title>`） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-hit-${link.edge.id}-${index}` | 访问关系图：命中层 ${link.edge.id}（透明命中扩展，厚度 ≥ `MIN_HIT_PX`，不参与计量；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-kernel-${link.edge.id}` | 访问关系图：kernel ${link.edge.id}（访问内核填充面积） | `components/admin/AccessMapCanvas.tsx` |
-| `access-map-label-${node.id}` | 访问关系图：外标块 ${node.id}（名称 + 副标题 + 状态行；geometry Spec §5.2） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-label-${node.id}` | 访问关系图：外标块 ${node.id}（只显示名称；路径数与僵尸授权在列头 KPI） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-link-${link.edge.id}` | 访问关系图：link ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-midline-${link.edge.id}` | 访问关系图：虚线中线 ${link.edge.id}（需复核；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-node-${node.id}` | 访问关系图：node ${node.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-node-button-${item.node.id}` | 访问关系图：node button ${item.node.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-node-list` | 访问关系图：node list | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-outline-${link.edge.id}` | 访问关系图：danger 实线轮廓 ${link.edge.id}（越权；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-plot-scroll` | 访问关系图：图面横向滚动区（列头 KPI 在它外面） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-ribbon-${link.edge.id}` | 访问关系图：授权面积 ${link.edge.id}（主视觉；需复核时为独立警示面积） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-svg` | 访问关系图：svg | `components/admin/AccessMapCanvas.tsx` |
 

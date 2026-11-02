@@ -201,6 +201,9 @@ export type AccessMapNodeMeta = {
   grantPaths?: number;
   accessUsers?: number;
   accessPaths?: number;
+  grantAgentIds?: string[];
+  accessAgentIds?: string[];
+  foldedMemberIds?: string[];
   sourceScope?: string;
   toolCount?: number;
   tableCount?: number;
@@ -376,6 +379,8 @@ export type AccessMapAuditRow = {
   connectionId: string;
   schemaName: string;
   sourceName: string;
+  /** Spec 162／189 eval_mark；缺省视为非探针。 */
+  evalMark?: boolean | null;
 };
 
 export type AccessMapPermissionSnapshot = {
@@ -395,6 +400,12 @@ export type AccessMapAccessSide =
       loadSnapshot: (hash: string) => AccessMapPermissionSnapshot | null;
     }
   | { state: "unavailable"; reason: string };
+
+/** Optional build knobs — governance injects the same MetricWindow as `gov.*`. */
+export type BuildAccessMapOptions = {
+  /** When set, overrides `ACCESS_MAP_WINDOW_HOURS[query.window]`. */
+  injectedWindow?: MetricWindow;
+};
 
 /**
  * 构图依赖。真实实现由 `createAdminAccessMapProvider` 组装；测试注入假实现，
@@ -1232,6 +1243,7 @@ export function foldAccessMapGraph(
   for (const [depth, other] of otherByDepth) {
     const members = graph.nodes.filter((node) => removedIds.has(node.id) && node.depth === depth);
     other.label = `其他（${members.length}）`;
+    other.meta.foldedMemberIds = members.map((node) => node.id);
     other.grantPaths = members.reduce((sum, node) => sum + node.grantPaths, 0);
     other.accessPaths = members.reduce((sum, node) => sum + node.accessPaths, 0);
     for (const member of members) {
@@ -1267,7 +1279,9 @@ function serializeNode(node: InternalNode): AccessMapNode {
       grantPaths: node.grantPaths,
       grantUsers: node.grantUsers.size,
       accessPaths: node.accessPaths,
-      accessUsers: node.accessUsers.size
+      accessUsers: node.accessUsers.size,
+      grantAgentIds: [...node.grantUsers],
+      accessAgentIds: [...node.accessUsers]
     }
   };
 }
@@ -1438,6 +1452,14 @@ export type AccessMapResponse = {
     edges: AccessMapEdge[];
     folded: { nodes: number; edges: number };
   };
+  /**
+   * Scoped／focused 后用于 `meta.counts.grantPaths`／`accessPaths` 的路径引用。
+   * 可问治理面物化复用此集合，禁止另写守恒算法。
+   */
+  pathRefs: {
+    grant: GrantPathRef[];
+    access: AccessPathRef[];
+  };
 };
 
 /**
@@ -1453,9 +1475,11 @@ export type AccessMapResponse = {
  */
 export async function buildAccessMap(
   provider: AccessMapProvider,
-  query: AccessMapQuery
+  query: AccessMapQuery,
+  options?: BuildAccessMapOptions
 ): Promise<AccessMapResponse> {
-  const window = buildMetricWindow(ACCESS_MAP_WINDOW_HOURS[query.window]);
+  const window =
+    options?.injectedWindow ?? buildMetricWindow(ACCESS_MAP_WINDOW_HOURS[query.window]);
   const grantSide = await provider.loadGrantSide();
 
   const identity = grantSide.identity;
@@ -1488,6 +1512,8 @@ export async function buildAccessMap(
   let accessReason = "授权面不可用，未评估访问层";
   let deniedCalls = 0;
   let rawCalls = 0;
+  let keptGrantRefs: GrantPathRef[] = [];
+  let keptAccessRefs: AccessPathRef[] = [];
 
   if (grantSide.state !== "unavailable") {
     const grant = buildGrantLayer({ side: grantSide, withSchema: query.layer === "schema" });
@@ -1570,12 +1596,12 @@ export async function buildAccessMap(
 
     // 计数口径统一走共享词汇（`counting.ts`），不另写一套。
     const keptNodeIds = new Set(focused.nodes.keys());
-    const keptGrantRefs = grant.pathRefs.filter((ref) =>
+    keptGrantRefs = grant.pathRefs.filter((ref) =>
       keptNodeIds.has(nodeId("agent", ref.agentId)) &&
       keptNodeIds.has(nodeId("role", ref.roleId)) &&
       keptNodeIds.has(nodeId("connection", ref.connectionId))
     );
-    const keptAccessRefs = accessPathRefs.filter((ref) =>
+    keptAccessRefs = accessPathRefs.filter((ref) =>
       keptNodeIds.has(nodeId("agent", ref.agentId)) &&
       keptNodeIds.has(nodeId("role", ref.roleId)) &&
       keptNodeIds.has(nodeId("connection", ref.connectionId))
@@ -1629,7 +1655,8 @@ export async function buildAccessMap(
     },
     nodes,
     edges,
-    render: { nodes: renderNodes, edges: renderEdges, folded }
+    render: { nodes: renderNodes, edges: renderEdges, folded },
+    pathRefs: { grant: keptGrantRefs, access: keptAccessRefs }
   };
 }
 
@@ -1680,7 +1707,13 @@ function parseAuditRows(raw: unknown): AccessMapAuditRow[] {
           : null,
       connectionId: String(row.connection_id ?? ""),
       schemaName: String(row.schema_name ?? ""),
-      sourceName: String(row.source_name ?? "")
+      sourceName: String(row.source_name ?? ""),
+      evalMark:
+        row.eval_mark === 1 || row.eval_mark === true
+          ? true
+          : row.eval_mark === 0 || row.eval_mark === false
+            ? false
+            : null
     });
   }
   return rows;
@@ -1897,7 +1930,7 @@ export function createAdminAccessMapProvider(
           .prepare(
             `SELECT al.id AS call_id, al.user_id, al.matched_role_id, al.role_ids,
                     al.token_label, al.outcome, al.ts, al.permission_snapshot_hash,
-                    al.capability_digest,
+                    al.capability_digest, al.eval_mark,
                     als.connection_id, als.schema_name, als.source_name
              FROM access_log al
              JOIN access_log_sources als ON als.access_log_id = al.id

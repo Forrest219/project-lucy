@@ -17,6 +17,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccessMap } from "../pages/admin/AccessMap";
+import { traceAccessMapChain, traceAccessMapSubjectChain } from "../components/admin/AccessMapCanvas";
 import type { AccessMapResponse } from "../components/admin/AccessMapTypes";
 
 function makeNode(
@@ -1315,5 +1316,307 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     };
     const dependencyNames = Object.keys(pkg.dependencies ?? {});
     expect(dependencyNames.filter((name) => name.startsWith("d3"))).toEqual([]);
+  });
+});
+
+describe("链路高亮与列头 KPI", () => {
+  it("点击节点点亮整条上下游，卡片改成这条链路的数，且不把图收成子图", async () => {
+    const response = makeResponse();
+    response.nodes = [
+      ...response.nodes,
+      makeNode("agent:other", "agent", "其他", 0, { grantPaths: 1, grantUsers: 1 }),
+      makeNode("role:other", "role", "other_role", 1, { grantPaths: 1, grantUsers: 1 })
+    ];
+    response.edges = [
+      ...response.edges,
+      makeEdge("agent:other", "role:other", { grantPaths: 1, grantUsers: 1 })
+    ];
+    response.render = { nodes: response.nodes, edges: response.edges, folded: { nodes: 0, edges: 0 } };
+    const fetchMock = stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-node-agent:agent_a")).toBeInTheDocument());
+
+    const agentLabel = screen.getByTestId("access-map-label-agent:agent_a");
+    expect(agentLabel.textContent).not.toContain("条路径");
+    expect(agentLabel.textContent).not.toContain("僵尸授权");
+    expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("2");
+    expect(screen.getByTestId("access-map-column-card-0")).toHaveTextContent("有授权");
+    expect(screen.getByTestId("access-map-column-card-0")).toHaveTextContent("有问询");
+
+    fireEvent.click(screen.getByTestId("access-map-node-agent:agent_a"));
+
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).toHaveAttribute("data-chain", "on");
+    expect(screen.getByTestId("access-map-node-role:role_reader")).toHaveAttribute("data-chain", "on");
+    expect(screen.getByTestId("access-map-node-conn:mysql_main")).toHaveAttribute("data-chain", "on");
+    expect(screen.getByTestId("access-map-node-table:mysql_main::finance::orders")).toHaveAttribute(
+      "data-chain",
+      "on"
+    );
+    expect(screen.getByTestId("access-map-node-agent:other")).toHaveAttribute("data-chain", "off");
+    expect(screen.getByTestId("access-map-node-role:other")).toHaveAttribute("data-chain", "off");
+    expect(screen.getByTestId("access-map-link-e|agent:agent_a|role:role_reader")).toHaveAttribute(
+      "data-chain",
+      "on"
+    );
+    expect(screen.getByTestId("access-map-link-e|agent:other|role:other")).toHaveAttribute("data-chain", "off");
+    expect(lastRequestUrl(fetchMock)).not.toContain("focus=");
+    expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("1");
+    expect(screen.getByTestId("access-map-chain-caption")).toHaveTextContent("AGENT A");
+
+    fireEvent.click(screen.getByTestId("access-map-chain-clear"));
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).not.toHaveAttribute("data-chain");
+    expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("2");
+  });
+
+  it("问询计入说明授权始终显示，并区分已确认关联与含候选关联", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-trust")).toBeInTheDocument());
+
+    const control = screen.getByTestId("access-map-trust");
+    expect(control).toHaveTextContent("已确认关联");
+    expect(control).toHaveTextContent("含候选关联");
+    expect(screen.getByTestId("access-map-trust-hint")).toHaveTextContent("授权连接始终显示");
+    expect(screen.getByTestId("access-map-trust-hint")).toHaveTextContent("推断对上的问询");
+
+    within(control).getByRole("tab", { name: "含候选关联" }).click();
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("trust=include_candidate"));
+  });
+
+  it("环上的节点不会挡住侧面接进来的上游", () => {
+    const edges = [makeEdge("A", "B"), makeEdge("B", "A"), makeEdge("C", "B")];
+    const chain = traceAccessMapChain("A", edges);
+    expect([...chain.nodes].sort()).toEqual(["A", "B", "C"]);
+    expect(chain.edges.has("e|C|B")).toBe(true);
+  });
+
+  it("钉住一个人后，共享下游只计他自己的问询，悬停别人不改这条链路", async () => {
+    const shared = {
+      grantPaths: 2,
+      grantUsers: 2,
+      accessPaths: 1,
+      accessUsers: 1,
+      grantAgentIds: ["agent_a", "agent_b"],
+      accessAgentIds: ["agent_b"]
+    };
+    const response = makeResponse({
+      nodes: [
+        makeNode("agent:agent_a", "agent", "AGENT A", 0, { grantPaths: 1, grantUsers: 1, accessPaths: 0 }),
+        makeNode("agent:agent_b", "agent", "AGENT B", 0, { grantPaths: 1, grantUsers: 1, accessPaths: 1 }),
+        makeNode("role:shared", "role", "shared", 1, shared),
+        makeNode("conn:shared", "connection", "shared", 2, shared),
+        makeNode("table:shared", "table", "shared", 3, shared)
+      ],
+      edges: [
+        makeEdge("agent:agent_a", "role:shared", { grantPaths: 1, grantUsers: 1 }),
+        makeEdge("agent:agent_b", "role:shared", { grantPaths: 1, grantUsers: 1, accessPaths: 1 }),
+        makeEdge("role:shared", "conn:shared", { grantPaths: 2, grantUsers: 2, accessPaths: 1 }),
+        makeEdge("conn:shared", "table:shared", { grantPaths: 2, grantUsers: 2, accessPaths: 1 })
+      ]
+    });
+    response.render = { nodes: response.nodes, edges: response.edges, folded: { nodes: 0, edges: 0 } };
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-node-agent:agent_a")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("access-map-label-agent:agent_a"));
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).toHaveAttribute("data-chain", "on");
+    expect(screen.getByTestId("access-map-node-agent:agent_b")).toHaveAttribute("data-chain", "off");
+    expect(screen.getByTestId("access-map-node-role:shared")).toHaveAttribute("data-chain", "on");
+    expect(screen.getByTestId("access-map-column-card-1")).toHaveTextContent("有问询 0");
+    expect(screen.getByTestId("access-map-column-card-1")).toHaveTextContent("僵尸授权 1");
+    expect(screen.getByTestId("access-map-chain-caption")).toHaveTextContent("AGENT A");
+
+    fireEvent.mouseEnter(screen.getByTestId("access-map-node-agent:agent_b"));
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).toHaveAttribute("data-chain", "on");
+    expect(screen.getByTestId("access-map-node-agent:agent_b")).toHaveAttribute("data-chain", "off");
+    expect(screen.getByTestId("access-map-chain-caption")).toHaveTextContent("AGENT A");
+
+    fireEvent.click(screen.getByTestId("access-map-node-agent:agent_a").querySelector("rect") as Element);
+    expect(screen.queryByTestId("access-map-chain-caption")).not.toBeInTheDocument();
+  });
+
+  it("Esc 先灭掉高亮，指针还停着也不会立刻亮回来，再按一次才清 URL 聚焦", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage("/admin/access-map?focus=agent%3Aagent_a");
+    await waitFor(() => expect(screen.getByTestId("access-map-node-agent:agent_a")).toBeInTheDocument());
+
+    fireEvent.mouseEnter(screen.getByTestId("access-map-node-agent:agent_a"));
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).toHaveAttribute("data-chain", "on");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).not.toHaveAttribute("data-chain");
+    expect(lastRequestUrl(fetchMock)).toContain("focus=agent%3Aagent_a");
+
+    fireEvent.mouseEnter(screen.getByTestId("access-map-node-agent:agent_a"));
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).not.toHaveAttribute("data-chain");
+
+    fireEvent.mouseLeave(screen.getByTestId("access-map-node-agent:agent_a"));
+    fireEvent.mouseEnter(screen.getByTestId("access-map-node-agent:agent_a"));
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).toHaveAttribute("data-chain", "on");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).not.toContain("focus="));
+  });
+
+  it("折叠只影响画法，列头按真实表计数，卡片不在横向滚动区里", async () => {
+    const tables = [1, 2, 3, 4, 5].map((index) =>
+      makeNode(`table:t${index}`, "table", `t${index}`, 3, {
+        grantPaths: 1,
+        accessPaths: index === 1 ? 1 : 0,
+        grantAgentIds: ["agent_a"],
+        accessAgentIds: index === 1 ? ["agent_a"] : []
+      })
+    );
+    const response = makeResponse();
+    const kept = response.nodes.filter((node) => node.kind !== "table");
+    const keptEdges = response.edges.filter((edge) => !edge.target.startsWith("table:"));
+    response.nodes = [...kept, ...tables];
+    response.edges = [
+      ...keptEdges,
+      ...tables.map((table) => makeEdge("conn:mysql_main", table.id, { grantPaths: 1, grantUsers: 1 }))
+    ];
+    response.render = {
+      nodes: [
+        ...kept,
+        makeNode("other:table:3", "table", "其他（5）", 3, {
+          grantPaths: 5,
+          accessPaths: 1,
+          foldedMemberIds: tables.map((table) => table.id)
+        })
+      ],
+      edges: [...keptEdges, makeEdge("conn:mysql_main", "other:table:3", { grantPaths: 5, accessPaths: 1 })],
+      folded: { nodes: 4, edges: 4 }
+    };
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-node-other:table:3")).toBeInTheDocument());
+
+    expect(screen.getByTestId("access-map-column-card-value-3")).toHaveTextContent("5");
+    expect(screen.getByTestId("access-map-column-card-3")).toHaveTextContent("有问询 1");
+    expect(screen.getByTestId("access-map-column-card-3")).toHaveTextContent("僵尸授权 4");
+    expect(
+      screen.getByTestId("access-map-plot-scroll").contains(screen.getByTestId("access-map-column-cards"))
+    ).toBe(false);
+
+    fireEvent.click(screen.getByTestId("access-map-node-button-agent:agent_a"));
+    expect(screen.getByTestId("access-map-column-card-value-3")).toHaveTextContent("5");
+    expect(screen.getByTestId("access-map-node-other:table:3")).toHaveAttribute("data-chain", "on");
+  });
+
+  it("共用连接时，别人的专属表不算进当前链路，点表也不会把对方算进主体", async () => {
+    const response = makeResponse({
+      nodes: [
+        makeNode("agent:agent_a", "agent", "AGENT A", 0, { grantPaths: 1, grantUsers: 1 }),
+        makeNode("agent:agent_b", "agent", "AGENT B", 0, { grantPaths: 1, grantUsers: 1 }),
+        makeNode("role:ra", "role", "RA", 1, {
+          grantPaths: 1,
+          grantAgentIds: ["agent_a"],
+          accessAgentIds: []
+        }),
+        makeNode("role:rb", "role", "RB", 1, {
+          grantPaths: 1,
+          grantAgentIds: ["agent_b"],
+          accessAgentIds: []
+        }),
+        makeNode("conn:c", "connection", "C", 2, {
+          grantPaths: 2,
+          grantAgentIds: ["agent_a", "agent_b"],
+          accessAgentIds: []
+        }),
+        makeNode("table:ta", "table", "TA", 3, {
+          grantPaths: 1,
+          grantAgentIds: ["agent_a"],
+          accessAgentIds: []
+        }),
+        makeNode("table:tb", "table", "TB", 3, {
+          grantPaths: 1,
+          grantAgentIds: ["agent_b"],
+          accessAgentIds: []
+        })
+      ],
+      edges: [
+        makeEdge("agent:agent_a", "role:ra", { grantPaths: 1 }),
+        makeEdge("agent:agent_b", "role:rb", { grantPaths: 1 }),
+        makeEdge("role:ra", "conn:c", { grantPaths: 1 }),
+        makeEdge("role:rb", "conn:c", { grantPaths: 1 }),
+        makeEdge("conn:c", "table:ta", { grantPaths: 1 }),
+        makeEdge("conn:c", "table:tb", { grantPaths: 1 })
+      ]
+    });
+    response.render = { nodes: response.nodes, edges: response.edges, folded: { nodes: 0, edges: 0 } };
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-node-agent:agent_a")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("access-map-node-agent:agent_a"));
+    expect(screen.getByTestId("access-map-node-table:ta")).toHaveAttribute("data-chain", "on");
+    expect(screen.getByTestId("access-map-node-conn:c")).toHaveAttribute("data-chain", "on");
+    expect(screen.getByTestId("access-map-node-table:tb")).toHaveAttribute("data-chain", "off");
+    expect(screen.getByTestId("access-map-node-agent:agent_b")).toHaveAttribute("data-chain", "off");
+    expect(screen.getByTestId("access-map-node-role:rb")).toHaveAttribute("data-chain", "off");
+    expect(screen.getByTestId("access-map-column-card-value-3")).toHaveTextContent("1");
+    expect(screen.getByTestId("access-map-column-card-3")).toHaveTextContent("有授权 1");
+
+    fireEvent.click(screen.getByTestId("access-map-node-agent:agent_a"));
+    fireEvent.click(screen.getByTestId("access-map-node-table:ta"));
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).toHaveAttribute("data-chain", "on");
+    expect(screen.getByTestId("access-map-node-agent:agent_b")).toHaveAttribute("data-chain", "off");
+    expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("1");
+    expect(screen.getByTestId("access-map-node-table:tb")).toHaveAttribute("data-chain", "off");
+  });
+
+  it("键盘列表的悬停和离开也遵守 Esc 抑制，没有高亮时 Esc 清聚焦", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage("/admin/access-map?focus=agent%3Aagent_a");
+    await waitFor(() => expect(screen.getByTestId("access-map-node-button-agent:agent_a")).toBeInTheDocument());
+
+    const listA = screen.getByTestId("access-map-node-button-agent:agent_a");
+    const listRole = screen.getByTestId("access-map-node-button-role:role_reader");
+    fireEvent.mouseEnter(listA);
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).toHaveAttribute("data-chain", "on");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByTestId("access-map-node-agent:agent_a")).not.toHaveAttribute("data-chain");
+    expect(lastRequestUrl(fetchMock)).toContain("focus=agent%3Aagent_a");
+
+    fireEvent.mouseLeave(listA);
+    fireEvent.mouseEnter(listRole);
+    expect(screen.getByTestId("access-map-node-role:role_reader")).toHaveAttribute("data-chain", "on");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByTestId("access-map-node-role:role_reader")).not.toHaveAttribute("data-chain");
+    expect(lastRequestUrl(fetchMock)).toContain("focus=agent%3Aagent_a");
+
+    fireEvent.mouseEnter(listRole);
+    expect(screen.getByTestId("access-map-node-role:role_reader")).not.toHaveAttribute("data-chain");
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).not.toContain("focus="));
+  });
+
+  it("主体裁剪不会把共享连接另一侧的表留在链路里", () => {
+    const nodes = [
+      makeNode("agent:agent_a", "agent", "A", 0),
+      makeNode("role:ra", "role", "RA", 1, { grantAgentIds: ["agent_a"], accessAgentIds: [] }),
+      makeNode("conn:c", "connection", "C", 2, {
+        grantAgentIds: ["agent_a", "agent_b"],
+        accessAgentIds: []
+      }),
+      makeNode("table:tb", "table", "TB", 3, { grantAgentIds: ["agent_b"], accessAgentIds: [] })
+    ];
+    const edges = [
+      makeEdge("agent:agent_a", "role:ra"),
+      makeEdge("role:ra", "conn:c"),
+      makeEdge("conn:c", "table:tb")
+    ];
+    const chain = traceAccessMapSubjectChain(
+      ["agent:agent_a"],
+      nodes,
+      edges,
+      new Set(["agent_a"])
+    );
+    expect(chain.nodes.has("table:tb")).toBe(false);
+    expect(chain.nodes.has("conn:c")).toBe(true);
   });
 });

@@ -255,6 +255,7 @@ describe("P1-3 访问关系图 · 四口径与全局调用数（A3）", () => {
     // orders 被两个 Role 授权 → 2 条授权路径、1 个 Agent。
     expect(table?.meta.grantPaths).toBe(2);
     expect(table?.meta.grantUsers).toBe(1);
+    expect(table?.meta.grantAgentIds).toEqual(["agent_a"]);
     expect(response.meta.counts.grantPaths).toBe(3);
     expect(response.meta.counts.grantUsers).toBe(1);
   });

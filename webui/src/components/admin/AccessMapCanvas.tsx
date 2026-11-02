@@ -69,14 +69,13 @@ export const ACCESS_MAP_CANVAS_MIN_HEIGHT = "clamp(420px, 58vh, 720px)";
 /** 密度预算高度：刻度按「填满这个高度」反推，再被 `MAX_PX_PER_PATH` 封顶。 */
 export const DENSE_BUDGET_H = 640;
 const PADDING = 28;
-/** 列标题占的那一行。 */
-const COLUMN_HEADER_HEIGHT = 34;
+/**
+ * 列标题已经挪到 SVG 外的 KPI 卡，图内不再留一行标题。
+ * 保留一小段上边距，避免最上面的外标贴死画布边缘。
+ */
+const COLUMN_HEADER_HEIGHT = 8;
 const LABEL_FONT_SIZE = 12;
-const SUBTITLE_FONT_SIZE = 10;
-const STATUS_FONT_SIZE = 9;
 const LABEL_LINE_HEIGHT = 15;
-const SUBTITLE_LINE_HEIGHT = 13;
-const STATUS_LINE_HEIGHT = 12;
 /** 标签块的最大宽度（超出省略）。 */
 const LABEL_MAX_WIDTH = 168;
 /** 首列 / 末列标签块与柱的水平间距。 */
@@ -339,15 +338,13 @@ type LabelMeasure = {
 
 function measureLabel(node: AccessMapNode, statusState: AccessMapEdgeState | null): LabelMeasure {
   const name = truncateLabel(node.label, LABEL_MAX_WIDTH, LABEL_FONT_SIZE);
-  const subtitle = truncateLabel(accessMapNodeSubtitle(node), LABEL_MAX_WIDTH, SUBTITLE_FONT_SIZE);
+  // 副标题和状态仍留在数据里（悬停、无障碍、布局测试），但不再占图面：
+  // 图上每个节点都写「N 个 Agent · M 条路径 / 僵尸授权」会把流向淹没。
+  // 这些数改由列头 KPI 卡承担。
+  const subtitle = accessMapNodeSubtitle(node);
   const status = statusState ? accessMapEdgeStateLabel(statusState) : null;
-  const width = Math.max(
-    estimateTextWidth(name, LABEL_FONT_SIZE),
-    estimateTextWidth(subtitle, SUBTITLE_FONT_SIZE),
-    status ? estimateTextWidth(status, STATUS_FONT_SIZE) : 0
-  );
-  const height =
-    LABEL_LINE_HEIGHT + SUBTITLE_LINE_HEIGHT + (status ? STATUS_LINE_HEIGHT : 0);
+  const width = estimateTextWidth(name, LABEL_FONT_SIZE);
+  const height = LABEL_LINE_HEIGHT;
   return { name, fullName: node.label, subtitle, status, statusState, width, height };
 }
 
@@ -903,20 +900,245 @@ function kernelFillClass(edge: AccessMapEdge): string {
  *
  * 僵尸授权走中性色：警告色留给需复核与确凿越权，僵尸授权的数量放在指标卡上。
  */
-function markerFillClass(state: AccessMapEdgeState): string {
-  if (state === "overflow") return "fill-danger-strong";
-  if (state === "needs_review") return "fill-warning-strong";
-  return "fill-fg-muted";
+const COLUMN_CARD_INDEX = ["①", "②", "③", "④", "⑤", "⑥"] as const;
+
+/**
+ * 从一个节点沿边的方向走完上下游。
+ *
+ * 只往下游走出去的边、只往上游走进来的边，不从中途节点横穿到兄弟分支。
+ * 点「何老师」时亮的是他能到达的角色、连接和表；共用同一角色的其他人不会被点亮。
+ */
+export function traceAccessMapChain(
+  nodeId: string,
+  edges: AccessMapEdge[]
+): { nodes: Set<string>; edges: Set<string> } {
+  const outgoing = new Map<string, AccessMapEdge[]>();
+  const incoming = new Map<string, AccessMapEdge[]>();
+  for (const edge of edges) {
+    const out = outgoing.get(edge.source);
+    if (out) out.push(edge);
+    else outgoing.set(edge.source, [edge]);
+    const inc = incoming.get(edge.target);
+    if (inc) inc.push(edge);
+    else incoming.set(edge.target, [edge]);
+  }
+
+  const reached = new Set<string>([nodeId]);
+  const edgeIds = new Set<string>();
+  // 上下游各自记「从哪个方向来过」。共用一个集合时，环上的节点被下游先标过，
+  // 上游就不再展开，会漏掉从环侧面接进来的人。
+  const seenDown = new Set<string>([nodeId]);
+  const seenUp = new Set<string>([nodeId]);
+
+  const down = [nodeId];
+  while (down.length > 0) {
+    const current = down.pop() as string;
+    for (const edge of outgoing.get(current) ?? []) {
+      edgeIds.add(edge.id);
+      reached.add(edge.target);
+      if (!seenDown.has(edge.target)) {
+        seenDown.add(edge.target);
+        down.push(edge.target);
+      }
+    }
+  }
+
+  const up = [nodeId];
+  while (up.length > 0) {
+    const current = up.pop() as string;
+    for (const edge of incoming.get(current) ?? []) {
+      edgeIds.add(edge.id);
+      reached.add(edge.source);
+      if (!seenUp.has(edge.source)) {
+        seenUp.add(edge.source);
+        up.push(edge.source);
+      }
+    }
+  }
+
+  return { nodes: reached, edges: edgeIds };
 }
 
+function agentIdOf(nodeId: string): string {
+  return nodeId.startsWith("agent:") ? nodeId.slice("agent:".length) : nodeId;
+}
+
+/**
+ * 卡片按「当前主体」计授权和问询。
+ *
+ * 没钉住时看节点自己的路径数。钉住某个 Agent 后，共享的角色、连接、表只算这个人自己的
+ * `grantAgentIds` / `accessAgentIds`，别人的问询不再算进他的卡。
+ */
+export function summarizeAccessMapColumn(
+  columnNodes: AccessMapNode[],
+  subjectAgentIds: Set<string> | null
+): { nodeCount: number; granted: number; queried: number; dormant: number } {
+  let granted = 0;
+  let queried = 0;
+  let dormant = 0;
+  for (const node of columnNodes) {
+    if (node.kind === "token") continue;
+    let hasGrant = false;
+    let hasAccess = false;
+    if (!subjectAgentIds) {
+      hasGrant = (node.meta.grantPaths ?? 0) > 0;
+      hasAccess = (node.meta.accessPaths ?? 0) > 0;
+    } else if (node.kind === "agent") {
+      const mine = subjectAgentIds.has(agentIdOf(node.id));
+      hasGrant = mine && (node.meta.grantPaths ?? 0) > 0;
+      hasAccess = mine && (node.meta.accessPaths ?? 0) > 0;
+    } else {
+      hasGrant = (node.meta.grantAgentIds ?? []).some((id) => subjectAgentIds.has(id));
+      hasAccess = (node.meta.accessAgentIds ?? []).some((id) => subjectAgentIds.has(id));
+    }
+    if (hasGrant) granted += 1;
+    if (hasAccess) queried += 1;
+    if (hasGrant && !hasAccess) dormant += 1;
+  }
+  return {
+    nodeCount: columnNodes.filter((node) => node.kind !== "token").length,
+    granted,
+    queried,
+    dormant
+  };
+}
+
+function attributionAgentIds(node: AccessMapNode): string[] {
+  return [...(node.meta.grantAgentIds ?? []), ...(node.meta.accessAgentIds ?? [])];
+}
+
+function hasAttribution(node: AccessMapNode): boolean {
+  return node.meta.grantAgentIds !== undefined || node.meta.accessAgentIds !== undefined;
+}
+
+/**
+ * 主体来自被点中的节点本身，不从「沿边能走到谁」反推。
+ * 点一张只属于 A 的表时，不能因为连接也被 B 使用就把 B 算进主体。
+ * 节点上没有归因数组时返回 null，退回纯方向遍历，兼容旧数据。
+ */
+export function subjectAgentIdsForPin(
+  pinned: AccessMapNode | null,
+  censusNodes: AccessMapNode[]
+): Set<string> | null {
+  if (!pinned) return null;
+  if (pinned.kind === "agent") return new Set([agentIdOf(pinned.id)]);
+  const members = (pinned.meta.foldedMemberIds ?? [])
+    .map((id) => censusNodes.find((node) => node.id === id))
+    .filter((node): node is AccessMapNode => Boolean(node));
+  const sources = members.length > 0 ? members : [pinned];
+  if (!sources.some(hasAttribution)) return null;
+  return new Set(sources.flatMap(attributionAgentIds));
+}
+
+function nodeTouchesSubject(node: AccessMapNode, subject: Set<string>): boolean {
+  if (node.kind === "agent") return subject.has(agentIdOf(node.id));
+  if (!hasAttribution(node)) return true;
+  return attributionAgentIds(node).some((id) => subject.has(id));
+}
+
+/**
+ * 在方向遍历上再按主体裁剪。共享连接的下游若只属于别人，就不进入链路，
+ * 高亮和节点总数都不算它。
+ */
+export function traceAccessMapSubjectChain(
+  seedIds: string[],
+  nodes: AccessMapNode[],
+  edges: AccessMapEdge[],
+  subject: Set<string> | null
+): { nodes: Set<string>; edges: Set<string> } {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const outgoing = new Map<string, AccessMapEdge[]>();
+  const incoming = new Map<string, AccessMapEdge[]>();
+  for (const edge of edges) {
+    const from = outgoing.get(edge.source) ?? [];
+    from.push(edge);
+    outgoing.set(edge.source, from);
+    const to = incoming.get(edge.target) ?? [];
+    to.push(edge);
+    incoming.set(edge.target, to);
+  }
+  const allowed = (id: string): boolean => {
+    if (!subject) return true;
+    const node = byId.get(id);
+    return Boolean(node && nodeTouchesSubject(node, subject));
+  };
+  const reached = new Set<string>();
+  const edgeIds = new Set<string>();
+  const seenDown = new Set<string>();
+  const seenUp = new Set<string>();
+  for (const seed of seedIds) {
+    if (!byId.has(seed)) continue;
+    reached.add(seed);
+    seenDown.add(seed);
+    seenUp.add(seed);
+  }
+  const down = [...reached];
+  while (down.length > 0) {
+    const current = down.pop() as string;
+    for (const edge of outgoing.get(current) ?? []) {
+      if (!allowed(edge.target)) continue;
+      edgeIds.add(edge.id);
+      reached.add(edge.target);
+      if (!seenDown.has(edge.target)) {
+        seenDown.add(edge.target);
+        down.push(edge.target);
+      }
+    }
+  }
+  const up = [...reached];
+  for (const id of up) seenUp.add(id);
+  while (up.length > 0) {
+    const current = up.pop() as string;
+    for (const edge of incoming.get(current) ?? []) {
+      if (!allowed(edge.source)) continue;
+      edgeIds.add(edge.id);
+      reached.add(edge.source);
+      if (!seenUp.has(edge.source)) {
+        seenUp.add(edge.source);
+        up.push(edge.source);
+      }
+    }
+  }
+  return { nodes: reached, edges: edgeIds };
+}
+
+/** 把未折叠链路上的节点映射回画面上的柱子和流带。折叠柱子只要有一个成员在链上就亮。 */
+export function paintAccessMapChain(
+  census: { nodes: Set<string> },
+  renderNodes: AccessMapNode[],
+  renderEdges: AccessMapEdge[]
+): { nodes: Set<string>; edges: Set<string> } {
+  const nodeIds = new Set<string>();
+  for (const node of renderNodes) {
+    if (census.nodes.has(node.id)) {
+      nodeIds.add(node.id);
+      continue;
+    }
+    if ((node.meta.foldedMemberIds ?? []).some((id) => census.nodes.has(id))) nodeIds.add(node.id);
+  }
+  const edgeIds = new Set<string>();
+  for (const edge of renderEdges) {
+    if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) edgeIds.add(edge.id);
+  }
+  return { nodes: nodeIds, edges: edgeIds };
+}
+
+
 export type AccessMapCanvasProps = {
+  /** 画出来的节点（可能已折叠成「其他」）。 */
   nodes: AccessMapNode[];
   edges: AccessMapEdge[];
-  focusNodeId?: string | null;
-  onSelectNode?: (nodeId: string) => void;
   /**
-   * Esc 且抽屉关闭时清除聚焦（呈现修订 §5.5）。
+   * 未折叠的全量节点。KPI 用这份计数，「其他（5）」不能算成 1。
+   * 不传时退回 `nodes`。
+   */
+  censusNodes?: AccessMapNode[];
+  censusEdges?: AccessMapEdge[];
+  focusNodeId?: string | null;
+  /**
+   * Esc 且抽屉关闭、也没有链路高亮时，清除 URL 聚焦（呈现修订 §5.5）。
    * 抽屉开着时 Esc 只关抽屉，由 Radix Dialog 自己处理。
+   * 有链路高亮时，第一次 Esc 只取消高亮，图保持全图。
    */
   onClearFocus?: () => void;
   /** 无障碍摘要：节点数、边数、信号计数。 */
@@ -937,13 +1159,19 @@ type AccessMapHoverTip =
 export function AccessMapCanvas({
   nodes,
   edges,
+  censusNodes,
+  censusEdges,
   focusNodeId,
-  onSelectNode,
   onClearFocus,
   summary
 }: AccessMapCanvasProps) {
   const layout = useMemo(() => layoutAccessMap(nodes, edges), [nodes, edges]);
+  const populationNodes = censusNodes ?? nodes;
+  const populationEdges = censusEdges ?? edges;
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [pinnedNodeId, setPinnedNodeId] = useState<string | null>(null);
+  /** Esc 之后，指针还停在节点上时不再用悬停把高亮补回来，直到离开再进入。 */
+  const [hoverSuppressed, setHoverSuppressed] = useState(false);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [hoverTip, setHoverTip] = useState<AccessMapHoverTip | null>(null);
 
@@ -953,15 +1181,59 @@ export function AccessMapCanvas({
     return (nodeId: string): string => byId.get(nodeId) ?? nodeId;
   }, [nodes]);
 
-  const incident = useMemo(() => {
-    if (!hoveredNodeId) return null;
-    const ids = new Set<string>([hoveredNodeId]);
-    for (const edge of edges) {
-      if (edge.source === hoveredNodeId) ids.add(edge.target);
-      if (edge.target === hoveredNodeId) ids.add(edge.source);
-    }
-    return ids;
-  }, [hoveredNodeId, edges]);
+  const pinnedNode = useMemo(
+    () => nodes.find((node) => node.id === pinnedNodeId) ?? null,
+    [nodes, pinnedNodeId]
+  );
+  const resolveChain = (node: AccessMapNode | null) => {
+    if (!node) return null;
+    const seeds =
+      node.meta.foldedMemberIds && node.meta.foldedMemberIds.length > 0
+        ? node.meta.foldedMemberIds
+        : [node.id];
+    const subject = subjectAgentIdsForPin(node, populationNodes);
+    const census = traceAccessMapSubjectChain(seeds, populationNodes, populationEdges, subject);
+    return {
+      subject,
+      censusNodes: census.nodes,
+      paint: paintAccessMapChain(census, nodes, edges)
+    };
+  };
+  /**
+   * 没钉住时，悬停预览整条链路。已经钉住之后，悬停只出浮层，不再改亮哪条、也不改卡片。
+   * 链路按主体裁剪：共用连接不会把别人的专属表算进来。
+   */
+  const pinnedView = useMemo(
+    () => resolveChain(pinnedNode),
+    // resolveChain 只依赖下面这几项；钉住节点变了才重算。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pinnedNode, populationNodes, populationEdges, nodes, edges]
+  );
+  const hoveredNode = useMemo(
+    () => nodes.find((node) => node.id === hoveredNodeId) ?? null,
+    [nodes, hoveredNodeId]
+  );
+  const hoverChain = useMemo(() => {
+    if (pinnedNodeId || hoverSuppressed || !hoveredNode) return null;
+    return resolveChain(hoveredNode)?.paint ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredNode, pinnedNodeId, hoverSuppressed, populationNodes, populationEdges, nodes, edges]);
+  const pinnedChain = pinnedView?.paint ?? null;
+  const chain = pinnedChain ?? hoverChain;
+  const censusChain = pinnedView?.censusNodes ?? null;
+  const subjectAgentIds = pinnedView?.subject ?? null;
+
+  const pinNode = (nodeId: string): void => {
+    setPinnedNodeId((current) => (current === nodeId ? null : nodeId));
+  };
+  const previewNode = (nodeId: string): void => {
+    if (!hoverSuppressed) setHoveredNodeId(nodeId);
+  };
+  const leaveNode = (): void => {
+    setHoverSuppressed(false);
+    setHoveredNodeId(null);
+    setHoverTip(null);
+  };
 
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
 
@@ -988,11 +1260,18 @@ export function AccessMapCanvas({
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       if (selectedEdgeId) return;
+      const highlightActive = Boolean(pinnedNodeId || (hoveredNodeId && !hoverSuppressed));
+      if (highlightActive) {
+        setPinnedNodeId(null);
+        setHoveredNodeId(null);
+        setHoverSuppressed(true);
+        return;
+      }
       onClearFocus?.();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [selectedEdgeId, onClearFocus]);
+  }, [selectedEdgeId, pinnedNodeId, hoveredNodeId, hoverSuppressed, onClearFocus]);
 
   return (
     <div
@@ -1002,8 +1281,82 @@ export function AccessMapCanvas({
       ref={rootRef}
       style={{ minHeight: ACCESS_MAP_CANVAS_MIN_HEIGHT }}
     >
+      <div
+        className="flex items-center justify-between gap-3 text-xs text-fg-muted"
+        data-testid="access-map-chain-hint"
+      >
+        {pinnedNode ? (
+          <>
+            <span className="notranslate" translate="no" data-testid="access-map-chain-caption">
+              正在看 {pinnedNode.label} 的链路
+            </span>
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost text-xs"
+              data-testid="access-map-chain-clear"
+              onClick={() => setPinnedNodeId(null)}
+            >
+              看全图
+            </button>
+          </>
+        ) : (
+          <span>点一个名字，整条链路会亮起来，上面的数字跟着变成这条链路。</span>
+        )}
+      </div>
+
+      {/*
+        列头 KPI 固定在视口里排成一行，不跟桑基图横滚。
+        图比屏幕宽时，表这一列在右侧，卡如果跟柱子走，第一眼就看不到「表」。
+      */}
+      <div
+        className="grid gap-3"
+        data-testid="access-map-column-cards"
+        style={{ gridTemplateColumns: `repeat(${Math.max(layout.columns.length, 1)}, minmax(0, 1fr))` }}
+      >
+        {layout.columns.map((column, index) => {
+          const columnNodes = populationNodes.filter(
+            (node) => node.kind !== "token" && node.depth === column.depth
+          );
+          const scoped = censusChain
+            ? columnNodes.filter((node) => censusChain.has(node.id))
+            : columnNodes;
+          const summaryCard = summarizeAccessMapColumn(scoped, subjectAgentIds);
+          const active = pinnedNode?.depth === column.depth;
+          return (
+            <div
+              key={`column-card-${column.depth}`}
+              data-testid={`access-map-column-card-${column.depth}`}
+              data-column-label={column.label}
+              data-active={active ? "true" : "false"}
+              className={`rounded-lg border bg-bg-elevated px-3 py-2 shadow-card ${
+                active ? "border-brand" : "border-border-default"
+              } ${pinnedChain && summaryCard.nodeCount === 0 ? "opacity-40" : ""}`}
+            >
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-fg-muted">
+                  <span className="notranslate" translate="no">
+                    {column.label}
+                  </span>
+                  <span aria-hidden="true">{COLUMN_CARD_INDEX[index] ?? String(index + 1)}</span>
+                </div>
+                <div
+                  className="mt-1 text-2xl font-semibold leading-none text-fg-default"
+                  data-testid={`access-map-column-card-value-${column.depth}`}
+                >
+                  {summaryCard.nodeCount}
+                </div>
+                <div className="mt-2 text-[11px] leading-snug text-fg-muted">
+                  有授权 {summaryCard.granted} · 有问询 {summaryCard.queried}
+                </div>
+                <div className="text-[11px] leading-snug text-fg-muted">
+                  僵尸授权 {summaryCard.dormant}
+                </div>
+            </div>
+          );
+        })}
+      </div>
+
       {/* 图区横向滚动：不缩小 SVG，也不做窄屏重排。 */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" data-testid="access-map-plot-scroll">
         <svg
           role="img"
           aria-label={summary}
@@ -1012,28 +1365,20 @@ export function AccessMapCanvas({
           width={layout.width}
           height={layout.height}
           className="block"
+          onClick={() => setPinnedNodeId(null)}
         >
-          {layout.columns.map((column) => (
-            <text
-              key={`column-${column.depth}`}
-              x={column.x}
-              y={PADDING + 18}
-              className="fill-fg-strong text-[12px] font-medium notranslate"
-              data-column-label={column.label}
-              {...translateNo}
-            >
-              {column.label}
-            </text>
-          ))}
           {layout.links.map((link) => {
-            const unrelated = incident
-              ? !incident.has(link.edge.source) && !incident.has(link.edge.target)
-              : false;
-            const faded = unrelated;
+            const onChain = chain ? chain.edges.has(link.edge.id) : false;
+            const faded = Boolean(chain) && !onChain;
             return (
               <g
                 key={link.edge.id}
                 data-testid={`access-map-link-${link.edge.id}`}
+                data-chain={chain ? (onChain ? "on" : "off") : undefined}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setSelectedEdgeId(link.edge.id);
+                }}
                 onMouseEnter={(event) =>
                   setHoverTip({
                     kind: "edge",
@@ -1050,7 +1395,7 @@ export function AccessMapCanvas({
                 {link.band ? (
                   <path
                     d={link.band.path}
-                    className={`${bandFillClass(link.edge)} ${faded ? "opacity-10" : "opacity-30"}`}
+                    className={`${bandFillClass(link.edge)} ${faded ? "opacity-10" : onChain ? "opacity-60" : "opacity-30"}`}
                     data-testid={`access-map-ribbon-${link.edge.id}`}
                     onClick={() => setSelectedEdgeId(link.edge.id)}
                     style={{ cursor: "pointer" }}
@@ -1063,7 +1408,7 @@ export function AccessMapCanvas({
                 {link.kernel ? (
                   <path
                     d={link.kernel.path}
-                    className={`${kernelFillClass(link.edge)} ${faded ? "opacity-15" : "opacity-90"}`}
+                    className={`${kernelFillClass(link.edge)} ${faded ? "opacity-15" : onChain ? "opacity-100" : "opacity-90"}`}
                     data-testid={`access-map-kernel-${link.edge.id}`}
                     onClick={() => setSelectedEdgeId(link.edge.id)}
                     style={{ cursor: "pointer" }}
@@ -1116,8 +1461,11 @@ export function AccessMapCanvas({
           })}
           {layout.nodes.map((item) => {
             const { node } = item;
+            const isPinned = pinnedNodeId === node.id;
             const isFocus = focusNodeId === node.id;
-            const clickable = Boolean(onSelectNode) && !node.meta.unresolved;
+            const clickable = !node.meta.unresolved;
+            const onChain = chain ? chain.nodes.has(node.id) : false;
+            const dimmed = Boolean(chain) && !onChain;
             const block = item.labelBlock;
             const hitWidth = Math.max(PILLAR_WIDTH, MIN_HIT_PX);
             const hitHeight = Math.max(item.height, MIN_HIT_PX);
@@ -1127,10 +1475,20 @@ export function AccessMapCanvas({
                 data-testid={`access-map-node-${node.id}`}
                 data-node-kind={node.kind}
                 data-unresolved={node.meta.unresolved ? "true" : undefined}
-                onMouseEnter={(event) =>
-                  setHoverTip({ kind: "node", node, ...tipPosition(event.clientX, event.clientY) })
-                }
-                onMouseLeave={() => setHoverTip(null)}
+                data-chain={chain ? (onChain ? "on" : "off") : undefined}
+                data-pinned={isPinned ? "true" : undefined}
+                className={dimmed ? "opacity-20" : undefined}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (!clickable) return;
+                  pinNode(node.id);
+                }}
+                onMouseEnter={(event) => {
+                  if (clickable) previewNode(node.id);
+                  setHoverTip({ kind: "node", node, ...tipPosition(event.clientX, event.clientY) });
+                }}
+                onMouseLeave={leaveNode}
+                style={{ cursor: clickable ? "pointer" : "default" }}
               >
                 {/* 全名留在 `<title>`：外标里的名称过长时会省略。 */}
                 <title>
@@ -1142,13 +1500,12 @@ export function AccessMapCanvas({
                   width={item.width}
                   height={item.height}
                   rx={3}
-                  className={`${nodeFillClass(node)} ${isFocus ? "opacity-100" : "opacity-80"}`}
-                  onClick={clickable ? () => onSelectNode?.(node.id) : undefined}
-                  onMouseEnter={() => setHoveredNodeId(node.id)}
-                  onMouseLeave={() => setHoveredNodeId(null)}
-                  style={{ cursor: clickable ? "pointer" : "default" }}
+                  className={`${nodeFillClass(node)} ${isPinned || isFocus ? "opacity-100" : "opacity-80"} ${
+                    isPinned || isFocus ? "stroke-brand" : ""
+                  }`}
+                  strokeWidth={isPinned || isFocus ? 2 : 0}
                 />
-                {/* 透明命中扩展：细柱也要好点。 */}
+                {/* 透明命中扩展：细柱也要好点。名字在柱外，点击落在整组上。 */}
                 <rect
                   x={item.x - (hitWidth - item.width) / 2}
                   y={item.y}
@@ -1157,7 +1514,7 @@ export function AccessMapCanvas({
                   fill="transparent"
                   pointerEvents="all"
                 />
-                {/* 外标块：名称 + 副标题 + 状态行。 */}
+                {/* 外标只留名字。路径数和僵尸授权改到列头卡片，避免每根柱旁都是一句说明。 */}
                 <g data-testid={`access-map-label-${node.id}`}>
                   <text
                     x={block.x}
@@ -1167,24 +1524,6 @@ export function AccessMapCanvas({
                   >
                     {block.name}
                   </text>
-                  <text
-                    x={block.x}
-                    y={block.y + 26}
-                    className="fill-fg-muted text-[10px] notranslate"
-                    {...translateNo}
-                  >
-                    {block.subtitle}
-                  </text>
-                  {block.status && block.statusState ? (
-                    <text
-                      x={block.x}
-                      y={block.y + 38}
-                      className={`text-[9px] notranslate ${markerFillClass(block.statusState)}`}
-                      {...translateNo}
-                    >
-                      {block.status}
-                    </text>
-                  ) : null}
                 </g>
               </g>
             );
@@ -1195,7 +1534,7 @@ export function AccessMapCanvas({
       {/*
         悬停浮层（chart-first Spec §5.6）。
         `pointer-events-none`：浮层**不拦截指针**，点击仍然落到下面的节点/边上
-        （点边开抽屉、点节点写 focus 都不受影响）。
+        （点边开抽屉、点节点钉住链路都不受影响）。
         位置跟随鼠标偏移一小段，避免盖住被指的东西本身。
       */}
       {hoverTip ? (
@@ -1246,9 +1585,12 @@ export function AccessMapCanvas({
               className="pl-btn pl-btn--ghost text-xs notranslate"
               translate="no"
               disabled={Boolean(item.node.meta.unresolved)}
-              onClick={() => onSelectNode?.(item.node.id)}
-              onMouseEnter={() => setHoveredNodeId(item.node.id)}
-              onMouseLeave={() => setHoveredNodeId(null)}
+              onClick={() => {
+                if (item.node.meta.unresolved) return;
+                pinNode(item.node.id);
+              }}
+              onMouseEnter={() => previewNode(item.node.id)}
+              onMouseLeave={leaveNode}
               data-testid={`access-map-node-button-${item.node.id}`}
             >
               {item.node.label}

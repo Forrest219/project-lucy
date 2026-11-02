@@ -71,7 +71,7 @@ export function AccessMapLegendMeta({ meta }: AccessMapLegendMetaProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
       <span className="notranslate" translate="no" data-testid="access-map-legend-trust">
-        访问口径：{accessMapTrustLabel(meta.access.trust)}
+        问询计入：{accessMapTrustLabel(meta.access.trust)}
       </span>
       <span className="notranslate" translate="no" data-testid="access-map-legend-window">
         统计窗口：{meta.window.startIso} ~ {meta.window.endIso}
