@@ -5,6 +5,7 @@ import {
   enabledAdmins,
   loadAdminsConfig,
   saveAdminsConfig,
+  withAdminsWrite,
   type AdminsConfig,
   type WebuiAdminRecord
 } from "./admins-store.js";
@@ -109,7 +110,7 @@ async function createOwner(store: SecurityStore, input: BootstrapInput, password
   });
   if (!prepared.ok) return stateUnavailable();
   try {
-    await saveAdminsConfig(
+    await withAdminsWrite(() => saveAdminsConfig(
       { version: "1", admins: [record] },
       {
         changeType: "admin_bootstrap",
@@ -119,7 +120,7 @@ async function createOwner(store: SecurityStore, input: BootstrapInput, password
         newSummary: { count: 1, id: input.adminId, role: "owner" },
         requestId: input.requestId
       }
-    );
+    ));
   } catch (error) {
     store.abortOperation(operationId, "admins write failed");
     throw error;

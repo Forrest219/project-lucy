@@ -177,7 +177,7 @@ afterEach(() => {
 });
 
 describe("登录账户页 OIDC 身份绑定（L25-06 + lucy-20261030-login-accounts）", () => {
-  it("SC-04 运维名册只有四列，没有登录方式、新建账户、管理和禁用", async () => {
+  it("SC-04 运维名册有邮箱列，没有登录方式、新建账户、管理和禁用", async () => {
     authState.status = {
       mode: "required",
       me: OPERATOR_ME,
@@ -188,6 +188,7 @@ describe("登录账户页 OIDC 身份绑定（L25-06 + lucy-20261030-login-accou
     renderAdminAccounts();
 
     expect(await screen.findByRole("columnheader", { name: "登录账户" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "邮箱" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "显示名" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "角色" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "状态" })).toBeInTheDocument();
@@ -200,7 +201,7 @@ describe("登录账户页 OIDC 身份绑定（L25-06 + lucy-20261030-login-accou
     expect(screen.queryByRole("button", { name: "移除本地密码" })).not.toBeInTheDocument();
   });
 
-  it("SC-06 单点登录未启用时新建对话框只有四个字段，页头下一句说明", async () => {
+  it("SC-06 单点登录未启用时新建对话框有登录字段和可选邮箱，没有身份绑定", async () => {
     authState.status = {
       mode: "required",
       me: OWNER_ME,
@@ -221,6 +222,7 @@ describe("登录账户页 OIDC 身份绑定（L25-06 + lucy-20261030-login-accou
     const modal = await screen.findByTestId("admin-account-create-modal");
     expect(within(modal).getByLabelText("登录账户")).toBeInTheDocument();
     expect(within(modal).getByLabelText("显示名")).toBeInTheDocument();
+    expect(within(modal).getByLabelText("邮箱")).not.toBeRequired();
     expect(within(modal).getByLabelText("初始密码")).toBeInTheDocument();
     expect(within(modal).getByLabelText("角色")).toBeInTheDocument();
     expect(within(modal).queryByTestId("admin-create-binding-issuer")).not.toBeInTheDocument();
@@ -228,6 +230,108 @@ describe("登录账户页 OIDC 身份绑定（L25-06 + lucy-20261030-login-accou
     expect(within(modal).queryByTestId("admin-create-binding-email")).not.toBeInTheDocument();
     expect(within(modal).queryByTestId("admin-create-bind-toggle")).not.toBeInTheDocument();
     expect(within(modal).queryByText(/身份源/)).not.toBeInTheDocument();
+  });
+
+  it("账户邮箱留空不提交，空格和缺少后缀时不发请求，合规地址按小写提交", async () => {
+    authState.status = {
+      mode: "required",
+      me: OWNER_ME,
+      authEnabled: true,
+      methods: ["local"]
+    };
+    stubAdminsFetch({
+      ...ADMINS_WITH_BINDING,
+      admins: ADMINS_WITH_BINDING.admins.map((admin) =>
+        admin.id === "ops_li" ? { ...admin, email: null } : { ...admin, email: "zhang@example.com" }
+      )
+    });
+    renderAdminAccounts();
+
+    expect(await screen.findByTestId("admin-account-email-ops_li")).toHaveTextContent("—");
+    expect(screen.getByTestId("admin-account-email-admin_zhang")).toHaveTextContent("zhang@example.com");
+
+    fireEvent.click(screen.getByTestId("admin-account-create-open"));
+    const modal = await screen.findByTestId("admin-account-create-modal");
+    fireEvent.change(within(modal).getByLabelText("登录账户"), { target: { value: "ops_new" } });
+    fireEvent.change(within(modal).getByLabelText("初始密码"), {
+      target: { value: "correct-horse-battery" }
+    });
+    fireEvent.change(within(modal).getByLabelText("邮箱"), { target: { value: "Li @Example.com" } });
+    fireEvent.click(within(modal).getByTestId("admin-account-create-submit"));
+    expect(within(modal).getByRole("alert")).toHaveTextContent("邮箱不能包含空格");
+    expect(calls.some((call) => call.method === "POST")).toBe(false);
+
+    fireEvent.change(within(modal).getByLabelText("邮箱"), { target: { value: "li@example" } });
+    fireEvent.click(within(modal).getByTestId("admin-account-create-submit"));
+    expect(within(modal).getByRole("alert")).toHaveTextContent("邮箱需要包含域名后缀（如 .com）");
+    expect(calls.some((call) => call.method === "POST")).toBe(false);
+
+    fireEvent.change(within(modal).getByLabelText("邮箱"), { target: { value: "" } });
+    fireEvent.click(within(modal).getByTestId("admin-account-create-submit"));
+    await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+    const blank = calls.find((call) => call.method === "POST");
+    expect(blank?.body).not.toHaveProperty("email");
+    expect(blank?.body).not.toHaveProperty("oidcBinding");
+
+    calls.length = 0;
+    fireEvent.click(screen.getByTestId("admin-account-create-open"));
+    const again = await screen.findByTestId("admin-account-create-modal");
+    fireEvent.change(within(again).getByLabelText("登录账户"), { target: { value: "ops_new" } });
+    fireEvent.change(within(again).getByLabelText("初始密码"), {
+      target: { value: "correct-horse-battery" }
+    });
+    fireEvent.change(within(again).getByLabelText("邮箱"), { target: { value: "Li@Example.COM" } });
+    fireEvent.click(within(again).getByTestId("admin-account-create-submit"));
+    await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+    expect(calls.find((call) => call.method === "POST")?.body).toMatchObject({
+      email: "li@example.com"
+    });
+
+    const drawer = await openDrawer("ops_li");
+    fireEvent.change(within(drawer).getByTestId("admin-account-email-input-ops_li"), {
+      target: { value: "Ops@Example.COM" }
+    });
+    fireEvent.click(within(drawer).getByTestId("admin-account-email-save-ops_li"));
+    await waitFor(() => expect(calls.some((call) => call.method === "PATCH")).toBe(true));
+    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({ email: "ops@example.com" });
+  });
+
+  it("清空抽屉邮箱时 PATCH 发送空字符串", async () => {
+    stubAdminsFetch({
+      ...ADMINS_WITH_BINDING,
+      admins: ADMINS_WITH_BINDING.admins.map((admin) =>
+        admin.id === "ops_li" ? { ...admin, email: "ops@example.com" } : admin
+      )
+    });
+    renderAdminAccounts();
+
+    const drawer = await openDrawer("ops_li");
+    fireEvent.change(within(drawer).getByTestId("admin-account-email-input-ops_li"), {
+      target: { value: "" }
+    });
+    fireEvent.click(within(drawer).getByTestId("admin-account-email-save-ops_li"));
+    await waitFor(() => expect(calls.some((call) => call.method === "PATCH")).toBe(true));
+    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({ email: "" });
+  });
+
+  it("抽屉邮箱不合规时不发 PATCH", async () => {
+    stubAdminsFetch({
+      ...ADMINS_WITH_BINDING,
+      admins: ADMINS_WITH_BINDING.admins.map((admin) =>
+        admin.id === "ops_li" ? { ...admin, email: "ops@example.com" } : admin
+      )
+    });
+    renderAdminAccounts();
+
+    const drawer = await openDrawer("ops_li");
+    fireEvent.change(within(drawer).getByTestId("admin-account-email-input-ops_li"), {
+      target: { value: "ops @example.com" }
+    });
+    fireEvent.click(within(drawer).getByTestId("admin-account-email-save-ops_li"));
+    expect(within(drawer).getByTestId("admin-account-email-error-ops_li")).toHaveTextContent(
+      "邮箱不能包含空格"
+    );
+    expect(calls.some((call) => call.method === "PATCH")).toBe(false);
   });
 
   it("SC-07 单点登录已启用时，未勾选不出现三项，勾选后三项必填且密码可留空", async () => {

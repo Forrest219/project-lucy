@@ -881,6 +881,7 @@ Protected terms（DOM 须 `translate="no"` + `notranslate`）：`OIDC`、`PKCE`�
 | Create Login Account | 新建账户 | — | 新建用户、添加用户、用户管理、账户管理（作页头或侧栏） | 页头主操作和对话框标题。提交按钮仍是「创建账户」 |
 | Manage Login Account | 管理 | — | 编辑用户、用户详情 | 所有者打开该登录账户抽屉的行内动作。运维不可见 |
 | Delete Login Account Confirm | 删除登录账户 | — | 输入用户名确认 | 删除前必须输入该登录账户 id。确认按钮是「删除账户」 |
+| Account Email | 邮箱 | — | 邮箱登录、邮箱绑定 | 登录账户上的可选联系地址。不参与本地登录或单点登录匹配，也不代替绑定里的联系邮箱。空格不合格；字母按小写保存；须含 `@` 与域名后缀（如 `.com`） |
 
 用户可见的 `/admin/accounts` 与登录账户 id 使用 `translate="no"` 与 `notranslate`。
 

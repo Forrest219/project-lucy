@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { accountEmailTaken, normalizeAccountEmail } from "./account-email.js";
 import {
   countEnabledOwners,
   countEnabledOwnersWithLocalPassword,
@@ -11,6 +12,7 @@ import {
   publicAdminView,
   resolveAuthMode,
   saveAdminsConfig,
+  withAdminsWrite,
   ADMIN_ID_RE,
   type AdminsConfig,
   type OidcBinding,
@@ -304,6 +306,27 @@ async function checkOidcBinding(
   return { ok: true, binding: { issuer, sub, email } };
 }
 
+/**
+ * Account contact email. Omitted, null, and "" all mean "no address" for a
+ * create. A patch distinguishes omission from a present empty value at the
+ * call site. Whitespace and a missing `@` or domain suffix are refused.
+ */
+function readAccountEmail(
+  raw: unknown
+):
+  | { ok: true; email: string | null }
+  | { ok: false; status: 400; code: "ACCOUNT_EMAIL_INVALID"; message: string } {
+  if (raw === undefined || raw === null) return { ok: true, email: null };
+  if (typeof raw !== "string") {
+    return { ok: false, status: 400, code: "ACCOUNT_EMAIL_INVALID", message: "邮箱格式不正确" };
+  }
+  const checked = normalizeAccountEmail(raw);
+  if (!checked.ok) {
+    return { ok: false, status: 400, code: "ACCOUNT_EMAIL_INVALID", message: checked.message };
+  }
+  return { ok: true, email: checked.email };
+}
+
 /** A `(issuer, sub)` or `(issuer, email)` pair may belong to one account only. */
 function bindingConflicts(config: AdminsConfig, binding: OidcBinding, exceptAdminId?: string): boolean {
   for (const admin of config.admins) {
@@ -369,6 +392,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       displayName?: string;
       password?: string;
       role?: WebuiAdminRole | "admin";
+      email?: string | null;
       oidcBinding?: { issuer?: string; sub?: string; email?: string };
     };
   }>("/api/admin/admins", async (request, reply) => {
@@ -425,6 +449,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       }
     }
 
+    return withAdminsWrite(async () => {
     const config = await loadAdminsConfig({ fresh: true });
     if (findAdmin(config, adminId)) {
       return reply.status(409).send({
@@ -438,6 +463,19 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         error: { code: "OIDC_BINDING_CONFLICT", message: "该身份已绑定其他登录账户" }
       });
     }
+    const accountEmail = readAccountEmail(request.body?.email);
+    if (!accountEmail.ok) {
+      return reply.status(accountEmail.status).send({
+        ok: false,
+        error: { code: accountEmail.code, message: accountEmail.message }
+      });
+    }
+    if (accountEmail.email && accountEmailTaken(config, accountEmail.email)) {
+      return reply.status(409).send({
+        ok: false,
+        error: { code: "ACCOUNT_EMAIL_TAKEN", message: "该邮箱已被其他登录账户使用" }
+      });
+    }
 
     const password_hash = password.length > 0 ? await hashPassword(password) : undefined;
     const record: WebuiAdminRecord = {
@@ -446,6 +484,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       display_name: displayName,
       ...(password_hash ? { password_hash } : {}),
       role,
+      ...(accountEmail.email ? { email: accountEmail.email } : {}),
       enabled: true,
       created_at: new Date().toISOString(),
       ...(binding ? { oidc_bindings: [binding] } : {})
@@ -484,6 +523,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     }
 
     return { ok: true, data: { admin: ownerAdminView(record) } };
+    });
   });
 
   app.patch<{
@@ -494,6 +534,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       role?: WebuiAdminRole | "admin";
       enabled?: boolean;
       removeLocalPassword?: boolean;
+      email?: string | null;
     };
   }>("/api/admin/admins/:adminId", async (request, reply) => {
     if ((await resolveAuthMode()) !== "required") {
@@ -505,6 +546,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     if (!(await requireOwner(request, reply))) return;
 
     const { adminId } = request.params;
+    return withAdminsWrite(async () => {
     const config = await loadAdminsConfig({ fresh: true });
     const index = config.admins.findIndex((a) => a.id === adminId);
     if (index < 0) {
@@ -519,6 +561,22 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
 
     if (typeof request.body?.displayName === "string" && request.body.displayName.trim()) {
       nextRecord.display_name = request.body.displayName.trim();
+    }
+    if (request.body && Object.prototype.hasOwnProperty.call(request.body, "email")) {
+      const accountEmail = readAccountEmail(request.body.email);
+      if (!accountEmail.ok) {
+        return reply.status(accountEmail.status).send({
+          ok: false,
+          error: { code: accountEmail.code, message: accountEmail.message }
+        });
+      }
+      if (accountEmail.email && accountEmailTaken(config, accountEmail.email, adminId)) {
+        return reply.status(409).send({
+          ok: false,
+          error: { code: "ACCOUNT_EMAIL_TAKEN", message: "该邮箱已被其他登录账户使用" }
+        });
+      }
+      nextRecord.email = accountEmail.email ?? undefined;
     }
     if (request.body?.role === "owner" || request.body?.role === "operator" || request.body?.role === "admin") {
       nextRecord.role = normalizeWebuiAdminRole(request.body.role);
@@ -640,6 +698,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     if (!(await recordAccountEvents(request, events))) return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
 
     return { ok: true, data: { admin: publicAdminView(nextRecord) } };
+    });
   });
 
   app.delete<{
@@ -654,6 +713,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     if (!(await requireOwner(request, reply))) return;
 
     const { adminId } = request.params;
+    return withAdminsWrite(async () => {
     const config = await loadAdminsConfig({ fresh: true });
     const target = findAdmin(config, adminId);
     if (!target) {
@@ -703,6 +763,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     }
 
     return { ok: true, data: { deleted: adminId } };
+    });
   });
 
   /**
@@ -725,6 +786,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     if (!(await requireOwner(request, reply))) return;
 
     const { adminId } = request.params;
+    return withAdminsWrite(async () => {
     const config = await loadAdminsConfig({ fresh: true });
     const index = config.admins.findIndex((a) => a.id === adminId);
     if (index < 0) {
@@ -800,6 +862,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     }
 
     return { ok: true, data: { admin: ownerAdminView(nextRecord) } };
+    });
   });
 
   /** Remove the identity binding of one account (L25-06 §5.3). */
@@ -816,6 +879,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     if (!(await requireOwner(request, reply))) return;
 
     const { adminId } = request.params;
+    return withAdminsWrite(async () => {
     const config = await loadAdminsConfig({ fresh: true });
     const index = config.admins.findIndex((a) => a.id === adminId);
     if (index < 0) {
@@ -905,5 +969,6 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     }
 
     return { ok: true, data: { admin: ownerAdminView(nextRecord) } };
+    });
   });
 }

@@ -1,4 +1,4 @@
-import { FormEvent, useId, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -10,12 +10,17 @@ import {
   readBinding,
   readLoginMethods
 } from "../../components/admin/OidcBindingPanel";
+import { normalizeAccountEmail } from "../../lib/account-email";
 
 type AdminRole = "owner" | "operator";
+
+const ACCOUNT_EMAIL_HINT =
+  "选填。不能包含空格；英文字母不区分大小写，保存为小写；需要包含 @ 和域名后缀（如 .com）。不用于登录。";
 
 type AdminRow = {
   id: string;
   displayName: string;
+  email?: string | null;
   role: AdminRole;
   enabled: boolean;
   createdAt: string | null;
@@ -314,6 +319,7 @@ export function AdminAccounts() {
             <thead>
               <tr>
                 <th>登录账户</th>
+                <th>邮箱</th>
                 <th>显示名</th>
                 <th>角色</th>
                 <th>状态</th>
@@ -334,6 +340,9 @@ export function AdminAccounts() {
                         当前登录
                       </span>
                     ) : null}
+                  </td>
+                  <td className="notranslate" translate="no" data-testid={`admin-account-email-${row.id}`}>
+                    {row.email || "—"}
                   </td>
                   <td>{row.displayName}</td>
                   <td>{roleLabel(row.role)}</td>
@@ -432,6 +441,7 @@ function CreateAccountDialog({
 }) {
   const [adminId, setAdminId] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<AdminRole>("operator");
   const [bindChecked, setBindChecked] = useState(false);
@@ -452,12 +462,13 @@ function CreateAccountDialog({
       : null;
 
   const createMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (normalizedEmail: string | null) =>
       apiPost<{ admin: AdminRow }>("/api/admin/admins", {
         adminId,
         displayName: displayName || undefined,
         password: password || undefined,
         role,
+        ...(normalizedEmail ? { email: normalizedEmail } : {}),
         ...(bindingDraft ? { oidcBinding: bindingDraft } : {})
       }),
     onSuccess: async () => {
@@ -469,7 +480,13 @@ function CreateAccountDialog({
 
   function onCreate(event: FormEvent) {
     event.preventDefault();
-    createMutation.mutate();
+    const checked = normalizeAccountEmail(email);
+    if (!checked.ok) {
+      setFormError(checked.message);
+      return;
+    }
+    setFormError(null);
+    createMutation.mutate(checked.email);
   }
 
   return (
@@ -500,6 +517,23 @@ function CreateAccountDialog({
               onChange={(e) => setDisplayName(e.target.value)}
             />
           </label>
+          <div className="grid gap-1">
+            <label className="text-sm font-medium" htmlFor="admin-new-email">
+              邮箱
+            </label>
+            <input
+              id="admin-new-email"
+              className="pl-input notranslate"
+              translate="no"
+              autoComplete="email"
+              inputMode="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@company.com"
+              data-testid="admin-create-email"
+            />
+            <span className="text-xs text-fg-muted">{ACCOUNT_EMAIL_HINT}</span>
+          </div>
           {/* The role select must NOT stay inside the <label>: a label's text content
               also captures the control's own option text and the help text below it, so
               the accessible name of the select became the whole sentence
@@ -664,7 +698,14 @@ function AccountDrawer({
 }) {
   const [password, setPassword] = useState("");
   const [passwordSaved, setPasswordSaved] = useState(false);
+  const [email, setEmail] = useState(row.email ?? "");
+  const [emailError, setEmailError] = useState<string | null>(null);
   const roleReasonId = useId();
+
+  useEffect(() => {
+    setEmail(row.email ?? "");
+    setEmailError(null);
+  }, [row.id, row.email]);
 
   const disableReasons = row.enabled ? guardReasons(row, "disable", meId, rows) : [];
   const deleteReasons = guardReasons(row, "delete", meId, rows);
@@ -724,6 +765,50 @@ function AccountDrawer({
         )}
 
         <div className="pl-drawer-body">
+          <section className="grid gap-1">
+            <label className="text-sm font-medium" htmlFor={`admin-account-email-${row.id}`}>
+              邮箱
+            </label>
+            <input
+              id={`admin-account-email-${row.id}`}
+              className="pl-input notranslate"
+              translate="no"
+              autoComplete="email"
+              inputMode="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setEmailError(null);
+              }}
+              placeholder="name@company.com"
+              data-testid={`admin-account-email-input-${row.id}`}
+            />
+            <span className="text-xs text-fg-muted">{ACCOUNT_EMAIL_HINT}</span>
+            {emailError ? (
+              <p className="text-sm text-danger" role="alert" data-testid={`admin-account-email-error-${row.id}`}>
+                {emailError}
+              </p>
+            ) : null}
+            <div>
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost"
+                onClick={() => {
+                  const checked = normalizeAccountEmail(email);
+                  if (!checked.ok) {
+                    setEmailError(checked.message);
+                    return;
+                  }
+                  setEmailError(null);
+                  onPatch({ email: checked.email ?? "" });
+                }}
+                data-testid={`admin-account-email-save-${row.id}`}
+              >
+                保存邮箱
+              </button>
+            </div>
+          </section>
+
           <section className="grid gap-1">
             <label className="text-sm font-medium" htmlFor={`admin-account-role-${row.id}`}>
               角色

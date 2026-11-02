@@ -5,6 +5,7 @@ import {
   findAdminByUid,
   loadAdminsConfig,
   saveAdminsConfig,
+  withAdminsWrite,
   type WebuiAdminRecord
 } from "./admins-store.js";
 import {
@@ -224,20 +225,12 @@ export async function enableAccount(admin: WebuiAdminRecord): Promise<boolean> {
 
 // ---- legacy uid migration -------------------------------------------------
 
-let migrationTail: Promise<unknown> = Promise.resolve();
-
-function exclusive<T>(fn: () => Promise<T>): Promise<T> {
-  const run = migrationTail.then(fn, fn);
-  migrationTail = run.catch(() => undefined);
-  return run;
-}
-
 /**
  * Controlled, audited migration: give a legacy account its immutable `account_uid` (once).
- * Serialized so concurrent first logins cannot assign two different uids.
+ * Shares the admins.yaml write queue so a login cannot overwrite a contact email.
  */
 export function ensureAccountUid(adminId: string): Promise<WebuiAdminRecord | null> {
-  return exclusive(async () => {
+  return withAdminsWrite(async () => {
     const config = await loadAdminsConfig({ fresh: true });
     const found = findAdmin(config, adminId);
     if (!found || found.account_uid) return found ?? null;
