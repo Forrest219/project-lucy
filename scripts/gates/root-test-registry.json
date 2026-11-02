@@ -244,6 +244,26 @@
       "reason": null
     },
     {
+      "path": "scripts/e2e/__tests__/j01-agent-evidence.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/j01-agent-evidence.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/j01-agent-record.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/j01-agent-record.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
       "path": "scripts/e2e/__tests__/j01-schema.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",
@@ -341,6 +361,16 @@
       "command": "node --test scripts/e2e/__tests__/phase-control.test.mjs",
       "gate": "k8s-static",
       "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/product-targets.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the repository sources and runs the target selector in --list mode; writes nothing",
+      "command": "node --test scripts/e2e/__tests__/product-targets.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
       "reason": null
     },
     {
