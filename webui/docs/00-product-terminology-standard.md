@@ -683,13 +683,34 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | View Query Artifact | 查看查询原文 | — | 作为生成 SQL 的唯一入口 | Spec 124 legacy；Spec 125 改为列表直展 |
 | Generated SQL | 生成 SQL | compiled SQL | 热库 SQL 原文（过宽）、raw SQL | Spec 125：`lucy_query` 编译结果；热库 `generated_sql`；调用流水列 / CSV |
 | Ops Evidence Connection | 运维问数连接 | 连接 ID `lucy-ops` | 管理员连接、默认业务连接、审计库连接（作卡片主称） | Spec 149：指向审计热库只读视图的系统连接；不进入 `database_connection_ids` |
-| Ops Evidence Role | 运维问数角色 | `lucy_ops_reader` | Lucy 运维数据面角色、WebUI 所有者、登录管理员（作本 Role 主称） | Spec 149：只授权 `ops_calls` / `ops_call_tables` 的参考模板；与 `lucy_admin` 正交 |
-| Ops Evidence Skill | 运维问数 Skill | Skill 名 `ops-questioning` | 业务 Skill（作本篇主称）、全局 Skill | Spec 149 v1.2：只授权给运维问数角色的已发布 Skill；口径不进全局 Wiki。本连接不把 `token_label` 去重称为业务活跃 Token |
+| Ops Evidence Role | 运维问数角色 | `lucy_ops_reader` | Lucy 运维数据面角色、WebUI 所有者、登录管理员（作本 Role 主称） | Spec 149 + 可问治理面：参考模板须列出全部运维问数 sourceName；与 `lucy_admin` 正交。ensure 永不写 `access.yaml` |
+| Ops Evidence Skill | 运维问数 Skill | Skill 名 `ops-questioning` | 业务 Skill（作本篇主称）、全局 Skill | Spec 149 v1.2 + 可问治理面：只授权给运维问数角色的已发布 Skill；口径不进全局 Wiki。禁止 `token_label` 去重称为业务活跃 Token 或可用 Token 人口 |
 | Demo Ops Agent | 演示运维问数 Agent | 用户 ID `demo_ops` | 把 `demo_readonly` 或 `lucy_admin` 当作本 Agent | Spec 149 v1.2：只存在于 Docker demo 模板；不在启动时创建 |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本、`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`、`ops-questioning`、`demo_ops`。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本、`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`、`ops-questioning`、`demo_ops`、`ops_agents`、`ops_tokens`、`ops_agent_activity`、`ops_question_kpi_agents`、`ops_grant_paths`、`ops_access_paths`、`ops_edge_signals`、`ops_map_nodes`、`ops_map_meta`、`ops_table_adoption`、`snapshot_id`、`pathKey`、`confirmedUnauthorized`。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加问询记录 CSV；页头「导出」跟随当前页签，不再并排两个粒度；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色；v1.2 定稿增加运维问数 Skill 与演示运维问数 Agent。问数仍沿用调用流水、生成 SQL、裁决原因。本连接不回答业务活跃 Token。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。**`lucy-20261102-audit-inquiry-kind`** 增加问询种类与实例内流水号问询 ID；管理列表默认排除会话访问；调用流水增加访问等级并默认排除连接级。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加问询记录 CSV；页头「导出」跟随当前页签，不再并排两个粒度；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色；v1.2 定稿增加运维问数 Skill 与演示运维问数 Agent。问数仍沿用调用流水、生成 SQL、裁决原因。本连接不回答业务活跃 Token。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。**`lucy-20261102-audit-inquiry-kind`** 增加问询种类与实例内流水号问询 ID；管理列表默认排除会话访问；调用流水增加访问等级并默认排除连接级。**可问治理面**（`docs/specs/lucy-20261101-ops-evidence-askable-governance-spec.md`）扩展术语见 §4.7.3。
+
+#### 4.7.3 可问治理面（2026-11-01）新增术语
+
+依据 `docs/specs/lucy-20261101-ops-evidence-askable-governance-spec.md` Terminology Compliance。UI 文案、Skill／Wiki、API 用户可见错误、测试断言均按本节。
+
+| Canonical term | 问数主术语 | 禁止混淆 | 说明 |
+|---|---|---|---|
+| Askable Governance Surface | 可问治理面 | `lucy_ops_*` 控制面工具；图页截图像素对等 | `lucy-ops` 上可查询的治理／用量只读事实；口径以问数合同为准 |
+| Shared Builder Reuse | 共享派生复用 | 强制与图页 KPI／折叠渲染逐格相等 | 路径／边等优先调用 access-map builder，避免第二套守恒算法 |
+| Configured Agent Population | 配置 Agent 人口 | 窗口活跃 Agent | 当前 `access.yaml` Agent 全集（含未启用）＝名册 Agent 总数 |
+| Available Token Population | 可用 Token 人口 | `token_label` 去重；业务活跃 Token | 名册 `availableTokenCount` |
+| Window Active Agent | 窗口活跃 Agent | Spec 189 近 N 活跃 Agent | 窗口内默认用量∧自追问排除事件集上 `distinct agent_id` |
+| Silent Agent | 沉默 Agent | 窗口仅连接；名册闲置 | 配置人口 − 窗口活跃 Agent |
+| Window No-record Agent | 窗口无记录 | 「从未连接」；沉默 Agent | Q4 档①：窗内协议=0 且默认用量=0 |
+| Window Connect-only Agent | 窗口仅连接 | Spec 194 仅连接会话；名册固定近 7 天「仅连接」 | Q4 档②：有协议；默认用量=0 |
+| Window Soft-usage Agent | 窗口轻量业务未问 | 仅「浏览未问会话」；勿缩成只含浏览工具 | Q4 档③：有默认用量；查数=0；真实问询=0 |
+| Window Query-without-ask Agent | 窗口查数未问 | 未上报查数会话 | Q4 档④：有查数；无真实问询 |
+| Window Question-active Agent | 窗口问询活跃 | Spec 189 近 N 活跃 Agent；窗口活跃 Agent | Q4 档⑤：至少 1 条真实问询 |
+| Governance Snapshot | 治理投影快照 | 单行 `ts` | `query_key`／`materialization_id` 标识的一次物化 |
+| Table Activity Rate | 表活跃率 | 调用次数占比 | `active_days/denom_days`（可问治理面 D19） |
+| Window-unvisited Table | 近窗未访问表 | 「上线以来从未访问」；僵尸授权 | 当前可授权／启用表中，查询窗口内无 access_path 的表 |
 
 #### 4.7.1 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语
 

@@ -5,8 +5,8 @@
 | 文档名称 | 运维问数连接 Spec (Ops Evidence Connection Spec) |
 | 文档类型 | Product / Data / ACL Spec |
 | Spec 编号 | 149 |
-| 版本 | v1.2 |
-| 撰写日期 | 2026-09-24；v1.1 修订 2026-10-28；v1.2 定稿 2026-10-29 |
+| 版本 | v1.2（+ 可问治理面交叉修订 2026-11-01） |
+| 撰写日期 | 2026-09-24；v1.1 修订 2026-10-28；v1.2 定稿 2026-10-29；交叉修订 2026-11-01 |
 | 委托人 | xingchen |
 | 状态 | **v1.2 定稿；实现已落地到工作树（未提交）**。定稿依据 [Codex 审阅](../../docs/reviews/2026-10-29-codex-review-spec149-ops-evidence.md)（结论：退回修订）。v1.2 处置 R01–R09。工单 v2.1 与本版对齐。T0 冻结结果见 §5.2。实现覆盖 SC-01–SC-23 的自动化断言，**尚未执行浏览器/E2E/镜像与客户环境验收** |
 | 输出位置 | `webui/docs/149-ops-evidence-connection-spec.md` |
@@ -24,6 +24,7 @@
 | v1.0 | 2026-09-24 | 只读连接、两张视图、语义模板、`lucy_ops_reader`、删除保护。未落地 |
 | v1.1 | 2026-10-28 | 默认用量行排除、Skill 与连接级 Wiki、Docker demo 的 `demo_ops`、夹具验收。未进入开发 |
 | v1.2 | 2026-10-29 | 按 Codex 审阅定稿。资产写入解析后的内容根并镜像到项目根；确保发生在 KTX 启动之前，晚于 daemon 的写入不可查询；物理名四个字段分开冻结；配置冲突时拒绝查询；本连接不回答业务活跃 Token；Skill 通道沿用对象 ACL；已有文件冲突只记录不覆盖；`call_day` 只写 overlay；自身追问按事件整段排除 |
+| v1.2+ | 2026-11-01 | 可问治理面交叉：Goal 8 人口按源回答；ensure 必须 union 扩展 `enabled_tables`；仍不写 `access.yaml`。合同见 [`docs/specs/lucy-20261101-ops-evidence-askable-governance-spec.md`](../../docs/specs/lucy-20261101-ops-evidence-askable-governance-spec.md) |
 
 ## 审阅处置
 
@@ -79,7 +80,7 @@ Protected DOM：`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`
 5. 不写入 `setup.database_connection_ids`。确保逻辑不创建、不修改 Agent 或 Token，不并入 `lucy_admin`。
 6. 删除连接 API 拒绝 `lucy-ops`。审计库、语义、Skill、Wiki 保持不动。
 7. 语义、Skill、Wiki 写入解析后的内容根。缺失则复制；字节相同则跳过；契约不同则保留原文件并记冲突。随后镜像到 KTX 读取的项目根同级目录。
-8. 本连接的人口只有活跃 Agent。问「活跃用户」、业务活跃 Token 或访问账户时，说明本连接不回答，并指向使用概况。不把 `token_label` 去重叫做业务活跃 Token。
+8. **人口口径（修订，可问治理面）**：旧两视图仍按默认用量事件集回答流水。配置 Agent 人口、可用 Token 人口、窗口活跃／沉默 Agent、Q4 五档等由治理投影源回答（见 [`docs/specs/lucy-20261101-ops-evidence-askable-governance-spec.md`](../../docs/specs/lucy-20261101-ops-evidence-askable-governance-spec.md)）。问「活跃用户」、业务活跃 Token 或访问账户时，说明本连接不回答业务活跃 Token／访问账户，并指向使用概况。禁止把 `token_label` 去重叫做可用 Token 人口或业务活跃 Token。
 9. Docker demo 模板包含用户 `demo_ops`，Role 只授权 `lucy-ops`。`demo_readonly` 仍只授权三张示例表。
 
 ## 3. Non-goals
@@ -293,7 +294,9 @@ connectionVisible(role, "lucy-ops"):
 
 ## 7. 连接配置
 
-确保写入的块与 v1.1 相同：`driver: sqlite`，`readonly: true`，`database` 为当前审计库绝对路径，`schemas: [main]`，`enabled_tables` 为冻结后的 physicalTable。禁止调用 `createConnection`。不改 `database_connection_ids`，不改其他连接。
+确保写入的块：`driver: sqlite`，`readonly: true`，`database` 为当前审计库绝对路径，`schemas: [main]`，`enabled_tables` 为冻结后的 physicalTable **全集**（含可问治理面新增物理名）。禁止调用 `createConnection`。不改 `database_connection_ids`，不改其他连接，**永不写 `access.yaml`**。
+
+**已有 `lucy-ops` 且 driver／路径／readonly 一致时（可问治理面修订）**：必须把 `enabled_tables` **并集扩展**为当前冻结全集（幂等；不删用户额外表名）。不得因「块已存在」跳过表集扩展。正式 Role 表选择器仍须运营显式扩权（ensure 不改 Role 字节）。
 
 不一致：已存在的 `lucy-ops` 其 `driver` 不是 `sqlite`，或 `database` 不是当前审计库绝对路径，或 `readonly` 不是 `true`。不覆盖原块。状态为 `conflict`。目录不列出该连接。`lucy_query` 返回 `OPS_EVIDENCE_CONNECTION_CONFLICT`。警告文案仍是「运维问数连接配置不一致，未改写」。三种不一致都拒绝查询，不只记录日志。
 
@@ -335,7 +338,9 @@ ensureOpsEvidence():
     readiness = conflict
     return
   else:
-    connectionWrite = unchanged
+    # 可问治理面：driver/path/readonly 一致时仍须 union 扩展 enabled_tables
+    enabled_tables = enabled_tables ∪ OPS_EVIDENCE_ENABLED_TABLES
+    connectionWrite = tables_expanded ? expanded : unchanged
 
   paths = resolveContentPaths(projectRoot)
   # env LUCY_CONTENT_ROOT, else ktx.yaml paths.content_root, else <projectRoot>/config
