@@ -7,7 +7,7 @@
 | 状态 | **功能合同已收口（2026-11-01）** |
 | 主 Spec | [`docs/specs/lucy-20261101-new-token-expiry-preset-ux-spec.md`](../specs/lucy-20261101-new-token-expiry-preset-ux-spec.md) |
 | 授权边界 | 仅改 `NewToken.tsx`、对应组件测试、`docs/qa/selector-contract.md` 中 policy notice 行，以及本 Plan / Spec 状态。不改 Token API、Onboarding Step6、不要求浏览器门禁、不强制本轮 docker 重建 |
-| 验收 | Spec SC-01–SC-06：**全部通过**（`npx vitest run src/__tests__/new-token.test.tsx` 16/16；`npm run lint:terminology` 退出码 0） |
+| 验收 | Spec SC-01–SC-05：**通过**（`npx vitest run src/__tests__/new-token.test.tsx` 16/16）。SC-06 术语 lint 已拆出 |
 
 **Goal:** 新建 Token 页快捷预设改为 segmented；删除有效期政策提示句。
 

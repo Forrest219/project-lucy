@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 产品功能合同 / **v0.3 待 Codex 确认定稿（N1 已改）** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P1**。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.3 文档定稿（2026-11-01）**：Codex 第 2／3 轮确认可定稿；N1 编号与残留 `SC-D` 标题已清理。实施仍须委托人明示开工。本条收口不表示可上线 |
+| 状态 | **v0.3 已实施，功能合同未收口（2026-11-02 核对）**。`NEW_TOKEN_DEFAULT_TTL_DAYS = 365`，新建页初载 365 天，手册与 Spec 124 §7 已写默认 365。Plan Task 0–4 已勾销。2026-11-02 复跑 `token-expiry-policy.test.ts` 与 `new-token.test.tsx` 通过。SC-01–SC-08 尚无逐条收口记录。本条收口不表示可上线 |
 | 决策来源 | 2026-11-01 产品批准默认 TTL 改为 365；Codex 第 1 轮要求与续期分拆闭口 |
 | 需求来源 | Admin 新签发默认寿命对齐一年运维节奏；上限仍 365 |
 | 实施主体 | `webui/server/admin/token-expiry-policy.ts`、`NewToken.tsx`、相关测试；手册／Spec 124 §7／既有 UX Spec 注记。不改 KTX；不改续期 API（见续期 Spec） |
@@ -18,8 +18,8 @@
 
 - 层级：功能合同
 - 本条承诺：Admin 新签发 Token 的默认有效期为 365 天，最长仍为距今天 365 天；新建页初载选中「1 年」档，且不恢复已删除的政策提示句。
-- 本条出口：SC-01–SC-08。
-- 不在本条出口：续期 API／UI、浏览器、Docker、客户环境、Step6 短窗、自动续期。
+- 本条出口：SC-01–SC-08。SC-08 只断言 Step6 默认短窗不被本条改掉。
+- 不在本条出口：续期 API／UI、浏览器、Docker、客户环境、自动续期。SC-08 的术语 lint 与 §4 落盘清单是过程记录，2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。Step6 的产品定义不在本条，本条只锁它不被改掉。
 - 上线关系：本条收口不表示可上线
 
 ---
@@ -95,8 +95,8 @@ normalizeNewTokenExpiry(raw, now):  # unchanged bounds vs today
 | SC-05 | DOM 无 `new-token-expiry-policy-notice`，无「默认有效期为 90 天」可见文案 |
 | SC-06 | Spec 124 §7 与 `SYSTEM_HANDBOOK` 现行句不再写「管理页默认 90」；改为默认 365 并指向本 Spec |
 | SC-07 | UX Spec 文首注记：默认 today+90／SC-02 初载 90d **已被本 Spec 覆盖**；索引行同步 |
-| SC-08 | Step6 默认短窗（现 7 天）回归不变；`npm run lint:terminology` exit 0 |
+| SC-08 | Step6 默认短窗（现 7 天）回归不变。术语 lint 不在本条出口 |
 
 ## 4. 落盘清单自检
 
-含 `lint:spec-docs`、`lint:spec`、`lint:terminology`、`lint:ia-boundary`（R9）。定稿／收口时逐项记录结果。
+落盘清单与四门禁不在本条出口。定稿或收口时把命令结果写入收口记录。

@@ -2,24 +2,24 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 产品功能合同 / **v0.4 文档定稿** |
+| 文档类型 / 版本 | 产品功能合同 / **v0.4** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P1**。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.4 文档定稿（2026-11-01）**：Codex 第 4 轮确认可定稿。实施仍须委托人明示开工。本条收口不表示可上线 |
+| 状态 | **v0.4 功能合同已收口（2026-11-02）**。SC-01–SC-24 关闭。SC-25 已拆出。本条收口不表示可上线。收口见 [token-renewal-closure](../reviews/2026-11-02-token-renewal-closure.md) |
 | 决策来源 | 2026-11-01 产品批准显式续期（含过期后）、撤销不可续、创建／续期同档；Codex 第 1 轮审阅 |
 | 需求来源 | 到期后避免强迫客户端换明文；管理员掌握续期／撤销主动权 |
 | 实施主体 | Admin Token renew API、Tokens／Agent Token UI、审计 `token_renew`、术语标准、相关测试。默认 TTL 见 [`lucy-20261101-token-default-ttl-365-spec.md`](lucy-20261101-token-default-ttl-365-spec.md) |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md) |
 | 与既有 Spec 的关系 | Spec 124 仍是吊销、Proxy `expires_at` 硬拒绝、明文一次性权威。本条新增续期，不削弱撤销。预设 UI 模式对齐 [`lucy-20261101-new-token-expiry-preset-ux-spec.md`](lucy-20261101-new-token-expiry-preset-ux-spec.md)。不改 Step6 |
 | 实施计划 | [`docs/plans/lucy-20261101-token-renewal-plan.md`](../plans/lucy-20261101-token-renewal-plan.md) |
-| 审阅 | [`docs/reviews/2026-11-01-codex-review-token-default-ttl-and-renewal.md`](../reviews/2026-11-01-codex-review-token-default-ttl-and-renewal.md) |
+| 审阅 | [`docs/reviews/2026-11-01-codex-review-token-default-ttl-and-renewal.md`](../reviews/2026-11-01-codex-review-token-default-ttl-and-renewal.md)；收口见 [`docs/reviews/2026-11-02-token-renewal-closure.md`](../reviews/2026-11-02-token-renewal-closure.md) |
 
 ## 闭口层级
 
 - 层级：功能合同
 - 本条承诺：管理员可对仍受续期资格约束的 Token 显式续期——只更新 `expires_at`、不改 hash／明文；已过期可续；已撤销不可续；须审计且失败关闭。
-- 本条出口：SC-01–SC-25。
-- 不在本条出口：新建默认 TTL（另条）、浏览器、Docker、客户环境、静默自动续期、Step6。
+- 本条出口：SC-01–SC-24。
+- 不在本条出口：新建默认 TTL（另条）、浏览器、Docker、客户环境、静默自动续期、Step6。SC-25 与 §7 落盘清单是过程记录，2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。
 - 上线关系：本条收口不表示可上线
 
 ---
@@ -53,9 +53,9 @@ Forbidden: 续期返回明文；用删建同 label 冒充续期；把撤销写�
 
 ### What This Change Follows
 
-- [ ] 续期对话框预设用 `pl-segmented-control--cols-4`；选中 `--active`
-- [ ] 对话框唯一实心 primary 为「确认续期」
-- [ ] 成功不回显明文
+- [x] 续期对话框预设用 `pl-segmented-control--cols-4`；选中 `--active`
+- [x] 对话框唯一实心 primary 为「确认续期」
+- [x] 成功不回显明文
 
 ### Exceptions (If Any)
 
@@ -271,7 +271,7 @@ renewToken(userId, label, expires_at_raw, actor, body):
 | SC-22 | ack／runtime 失败后，以相同 `expires_at` 走 repair：不得因「未严格延长」被拒；成功时 `runtimeAck===true` **且** 存在耐久 `token_renew`（含 `repair:true`） |
 | SC-23 | `auditedWriteFile` 抛错（未完成落盘）：不报告续期成功；YAML 保持原到期日 |
 | SC-24 | **终态审计失败夹具**：YAML 已是新值但无成功 renew 审计 → HTTP 非成功；随后 repair 若在无成功审计时仅 ack，测试必须失败；repair 补齐审计后可成功 |
-| SC-25 | 术语标准已登记 Renewal／Rotation；四门禁有记录 |
+| SC-25 | **拆出。** 术语登记与四门禁是过程记录，不在本条出口 |
 
 ## 6. 风险
 
@@ -285,4 +285,4 @@ renewToken(userId, label, expires_at_raw, actor, body):
 
 ## 7. 落盘清单自检
 
-见 DEVELOPMENT 唯一清单 1–11；门禁四命令见 SC-R22（关闭 R9）。
+落盘清单与四门禁不在本条出口。收口时把命令结果写入收口记录，不作为用户承诺。

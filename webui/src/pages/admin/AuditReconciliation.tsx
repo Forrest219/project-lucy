@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, apiGet } from "../../lib/apiClient";
+import { copyTextWithToast } from "../../lib/clipboard";
 import { PageHeader } from "../../components/PageHeader";
 import {
   RECONCILIATION_DIFFERENCE_LABELS,
@@ -106,6 +107,18 @@ export function AuditReconciliation() {
   const missingSummary = asOfMissingSummary(usageData?.asOfProof);
   const token = usageData?.tokenReconciliation;
   const configured = token?.configuredSnapshot;
+  /**
+   * 完整表排行（Spec §3.4／§4.2）。
+   *
+   * 列表**逐条给出完整 `connectionId / schema / table`**，不做视觉截断，
+   * 也不收成「等 N 个」——截断在这里就是信息断点。同名不同连接／Schema 不合并。
+   * 「复制全文」把整份完整身份复制出去，截断后的阅读仍能拿到全名。
+   */
+  const rankedTables = usageData?.tables?.complete ?? [];
+  const tableRankingText = rankedTables
+    .map((entry) => `${entry.connectionId ?? "—"} / ${entry.schema ?? "—"} / ${entry.table ?? "—"}`)
+    .join("\n");
+  const unknownTableCalls = usageData?.tables?.unknownBucket?.callCount ?? 0;
   const differences = useMemo(() => {
     const byId = new Map(token?.differences.map((d) => [d.id, d]) ?? []);
     return RECONCILIATION_DIFFERENCE_ORDER.map((id) => byId.get(id)).filter(
@@ -342,6 +355,62 @@ export function AuditReconciliation() {
             </div>
           </section>
         </>
+      ) : null}
+
+      {usageData ? (
+        <section className="pl-card grid gap-3" data-testid="reconciliation-table-ranking">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-fg-default">表排行（完整表身份）</h3>
+            <button
+              type="button"
+              className="pl-btn pl-btn--secondary text-xs"
+              data-testid="reconciliation-table-copy"
+              disabled={rankedTables.length === 0}
+              onClick={() => {
+                void copyTextWithToast(tableRankingText, { successMessage: "已复制表排行全文" });
+              }}
+            >
+              复制全文
+            </button>
+          </div>
+          {rankedTables.length === 0 ? (
+            <div className="text-xs text-fg-muted">本窗口没有可核验的完整表身份</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="pl-data-grid pl-data-table w-full">
+                <thead>
+                  <tr>
+                    <th>连接</th>
+                    <th>Schema</th>
+                    <th>表</th>
+                    <th>调用数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rankedTables.map((entry) => (
+                    <tr key={entry.identityKey}>
+                      <td className="notranslate font-mono text-xs" translate="no">
+                        {entry.connectionId ?? "—"}
+                      </td>
+                      <td className="notranslate font-mono text-xs" translate="no">
+                        {entry.schema ?? "—"}
+                      </td>
+                      <td className="notranslate font-mono text-xs" translate="no">
+                        {entry.table ?? "—"}
+                      </td>
+                      <td className="font-mono text-xs">{entry.callCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {unknownTableCalls > 0 ? (
+            <div className="text-xs text-fg-muted" data-testid="reconciliation-table-unknown">
+              {unknownTableCalls} 次调用没有可核验的来源引用，表身份未知（不猜表、不合并）。
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       <section className="pl-card grid gap-3" data-testid="reconciliation-inquiry">

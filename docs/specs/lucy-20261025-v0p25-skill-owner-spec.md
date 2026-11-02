@@ -6,7 +6,7 @@
 | 文档版本 / 日期 | v0.5-functional-contract-closed / 2026-11-01，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1／S2 → v0.5 功能合同收口） |
 | 功能编号 / 目标版本 | L25-04 / v0.25 |
 | 优先级 | P2；不改变既有 P0／P1 验收与交付阻断状态 |
-| 状态 | **v0.5 功能合同已收口（2026-11-01）**。SKO-01–SKO-16 全部关闭，证据见 [收口记录](../reviews/2026-11-01-skill-owner-closure.md)，逐条落点见 §8.1。**本条收口不表示可上线**——浏览器实测与移动窄屏验证、镜像构建与部署、客户环境验证与客户交付不在本条出口 |
+| 状态 | **v0.5 功能合同已收口（2026-11-01）**。SKO-01–SKO-15 关闭，证据见 [收口记录](../reviews/2026-11-01-skill-owner-closure.md)，逐条落点见 §8.1。SKO-16 工程门禁于 2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。**本条收口不表示可上线**——浏览器实测与移动窄屏验证、镜像构建与部署、客户环境验证与客户交付不在本条出口 |
 | 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2 L25-04；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1 保持 P2 |
 | 审查记录 | [L25-04／L25-05 Spec 审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)（F-01–F-08 已关闭；F-09–F-12 为实施前待办，已回写本文） |
 | 现有基础 | Skill frontmatter、统一 Skill 工作台、保存预检、`file_version` 乐观并发、`skill` 类配置审计 |
@@ -16,8 +16,8 @@
 
 - 层级：功能合同
 - 本条承诺：业务 Skill 带一个自由文本的负责人标签，用户可以填写、修改、清除它；它只影响显示与审计摘要，**不改变访问授权**。
-- 本条出口：§8 验收矩阵 SKO-01–SKO-16 及其 §8.1 逐条落点。SKO-01–SKO-15 由自动化断言关闭；SKO-16 由定向 server／UI 测试（5 文件 / 53 条）、构建、术语 lint、Spec lint 与 selector contract「**不新增 issue**」关闭。
-- 不在本条出口：浏览器实测与移动窄屏验证；镜像构建与部署；客户环境验证与客户交付；整库旅程、Agent 路径、跨模块或系统级故障演练；证据等级（归发布取证层，该层目前没有承载本轮已收口功能的已执行 Spec）。
+- 本条出口：§8 验收矩阵 SKO-01–SKO-15 及其 §8.1 逐条落点。由自动化断言关闭。
+- 不在本条出口：SKO-16 工程门禁（构建、术语 lint、Spec lint、selector contract 不新增 issue）；浏览器实测与移动窄屏验证；镜像构建与部署；客户环境验证与客户交付；整库旅程、Agent 路径、跨模块或系统级故障演练；证据等级（归发布取证层，该层目前没有承载本轮已收口功能的已执行 Spec）。
 - 上线关系：本条收口不表示可上线
 
 > 本文件定义拟实现行为，不代表功能已经实现或验收通过。PM 签核只确认设计基线，不授权开发；开发授权另行决定。
@@ -229,7 +229,7 @@ confirm write:
 | SKO-13 | 权限隔离 | owner 不是登录账户或角色；修改 owner 不改变 roles_allowed、工具能力或 MCP 拒绝原因 |
 | SKO-14 | 摘要与导出 | 摘要仍无正文；既有 Skill 导出保留 owner，MCP 不新增负责人授权语义 |
 | SKO-15 | 工作台回归 | 创建、编辑、取消、脏数据保护、删除和发布状态预检不回归；无技能市场入口 |
-| SKO-16 | 工程门禁 | 定向 server／UI 测试、构建、术语与 Spec lint 通过；selector contract **不新增 issue**（既有基线为红，见审阅记录 F-12，不在 L25-04 授权范围内）；浏览器测试仅按明确任务要求执行 |
+| SKO-16 | 工程门禁 | **拆出。** 构建、术语 lint、Spec lint、selector contract 不新增 issue 是过程记录，不在本条出口 |
 
 ### 8.1 执行结果与逐条落点（2026-11-01）
 
@@ -252,7 +252,7 @@ confirm write:
 | SKO-13 | 权限隔离 | 通过 | `skill-owner-l25-04.test.ts`「改动它不动 roles_allowed」；`skill-owner-sko-acceptance.test.ts`「改它不改变授权判定与 MCP 拒绝原因」 |
 | SKO-14 | 摘要与导出 | 通过 | `skill-owner-l25-04.test.ts`「列表与详情返回同一个 owner，缺省为空且不返回正文」；`skill-owner-sko-acceptance.test.ts`「摘要无正文；既有导出保留 owner；MCP 授权集合未新增负责人语义」 |
 | SKO-15 | 工作台回归 | 通过（**收口时补 2 条缺口用例**） | `skill-owner-sko-acceptance.test.ts`「无二级市场入口」；**新增** `skill-owner-sko-15-workbench-regression.test.tsx` 两条（「删除是两步确认：第一步只武装删除、不发请求，确认后才发 DELETE」「发布状态进入预检：「状态变化」反映 草稿 → 已发布，且未确认前不写盘」）；其余工作台回归项（创建／编辑／保存／取消／脏数据保护／预检主体）由 `skill-list.test.tsx` 既有断言承载 |
-| SKO-16 | 工程门禁 | 通过 | 定向 server／UI 测试 **5 文件 / 53 条全绿**；`npm --prefix webui run build` exit 0；`npm run lint:terminology` exit 0（1094 files）；`npm run lint:spec` exit 0；`node scripts/lint-spec-docs.mjs` exit 0；selector contract **本批新增 0 条 issue**（新增用例只复用已登记 testid，未新增 testid）；`tsc --noEmit` 本条涉及文件 0 错（全仓既存 86） |
+| SKO-16 | 工程门禁 | **拆出** | 原过程记录保留：定向测试 5 文件 / 53 条、build exit 0、`lint:terminology` exit 0、`lint:spec` exit 0、`lint:spec-docs` exit 0、selector contract 新增 0 条。不构成用户承诺。行为断言在 SKO-01–15 |
 
 > **口径更正**：本条旧文写的「selector contract fail 数保持 24」是 2026-10-26 的旧值。当前门禁的**决定退出码的 fail 集为 201**（`UNREGISTERED` 143 ＋ `UNREGISTERED TEMPLATE` 56 ＋ `SPEC-DANGLES-IMPL` 2），另有 57 条 warn 级 `ORPHAN` 不计入该集。SKO-16 的判据是「**不新增 issue**」，不是「issue 总数为 0」；本批以「移走新增用例文件复跑、issue 集合逐条 diff 为空」证明新增 0 条。可归因到本条的残留只有 1 条 warn 级 ORPHAN `skill-detail-owner`（该 testid 经 `DetailRow` 的 `testId` prop 渲染，门禁脚本只识别字面量 `data-testid="..."`，运行时实现存在）。
 
@@ -264,9 +264,9 @@ confirm write:
 |---|---|---|---|
 | S1 数据与写入 | types、loader、validator、writer、rawContent、preview impact、audit summary；**F-03 的文件回滚闭包**（`requireIntent` + `rollbackOnTerminalFailure`，opt-in，不改变既有调用方行为） | SKO-01～14 的服务端用例 | **已实施**，21 项新测试全过 |
 | S2 工作台 | client types、总览列、详情、编辑字段、预检和错误映射 | SKO-02～05／09／15 的 UI 用例 | **已实施**，6 项新 UI 测试全过 |
-| S3 文档与验证 | selector（新增 `data-testid` 须登记进 `docs/qa/selector-contract.md`）、系统手册、术语复核及定向工程门禁 | SKO-16；未获浏览器测试要求时不自行扩项 | **已完成**：4 个新 testid 已登记；系统手册 §3.12 已补「负责人」字段说明；构建、术语与 Spec lint 通过 |
+| S3 文档与验证 | selector（新增 `data-testid` 须登记进 `docs/qa/selector-contract.md`）、系统手册、术语复核及定向工程门禁 | 过程记录，不在功能合同出口 | **已完成**：4 个新 testid 已登记；系统手册 §3.12 已补「负责人」字段说明；构建与 lint 的退出码改记为过程记录 |
 
-> **2026-11-01 功能合同收口。** S1／S2／S3 的自动化覆盖与文档落点已就位并通过，SKO-01–16 **全部关闭**（服务端 13／13 ＋ 工作台 6／6 ＋ 收口时补的 2 条）。**本条收口不表示可上线**：浏览器实测与移动窄屏验证、镜像构建与部署、客户环境验证与客户交付均不在本条出口。selector contract 的旧口径「fail 数保持 24」已按 §8.1 更正为「**不新增 issue**」，当前门禁 fail 集为 201（既有欠账，非本条引入）；可归因到本条的残留只有 1 条 warn 级 ORPHAN（`skill-detail-owner`）。
+> **2026-11-01 功能合同收口。** S1／S2／S3 的自动化覆盖与文档落点已就位并通过，SKO-01–15 **关闭**（服务端 13／13 ＋ 工作台 6／6 ＋ 收口时补的 2 条）。SKO-16 已拆出。**本条收口不表示可上线**：浏览器实测与移动窄屏验证、镜像构建与部署、客户环境验证与客户交付均不在本条出口。selector contract 的旧口径「fail 数保持 24」已按 §8.1 更正为「**不新增 issue**」，当前门禁 fail 集为 201（既有欠账，非本条引入）；可归因到本条的残留只有 1 条 warn 级 ORPHAN（`skill-detail-owner`）。
 
 ## Terminology Compliance
 
@@ -289,4 +289,5 @@ New terms（已同步登记到术语标准 §4.10）:
 - [x] PM 签核设计基线（2026-10-26）：设计基线成立；开发授权与验收另行决定。
 - [x] 2026-10-26 取得开发授权并实施 S1／S2（见 §9）。
 - [x] 2026-10-26 补齐 S3 文档项：系统手册 §3.12 增「负责人」字段说明；新增 `data-testid` 全部登记进 selector contract。
-- [x] 2026-11-01 **功能合同收口**：SKO-01–SKO-16 全部关闭，逐条落点见 §8.1，证据见 [收口记录](../reviews/2026-11-01-skill-owner-closure.md)。收口时补 2 条 SKO-15 缺口用例（删除两步确认、发布状态预检），**未改任何运行代码**。
+- [x] 2026-11-01 **功能合同收口**：SKO-01–SKO-15 关闭，逐条落点见 §8.1，证据见 [收口记录](../reviews/2026-11-01-skill-owner-closure.md)。收口时补 2 条 SKO-15 缺口用例（删除两步确认、发布状态预检），**未改任何运行代码**。SKO-16 于次日拆出，见下条。
+- [x] 2026-11-02 出口拆分：SKO-16 工程门禁拆出。SKO-01–SKO-15 的通过结论不变。见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。

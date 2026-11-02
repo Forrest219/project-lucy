@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 呈现修订 / **v0.3 功能合同已收口** |
 | 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号。功能编号待 PM 指派，不占用 `L25-*`，不升父 Spec 版本号 |
 | 功能编号 / 优先级 | **待 PM 指派** / **P1** |
-| 状态 | **v0.4 答案优先双栏（2026-11-01）**：在 v0.3 收口之上增补 SC-19–SC-23（左清单／右结论、诊断折叠、详情三区标题）。v0.3 的 SC-01–SC-18 仍成立；闭口证据见 [`docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`](../reviews/2026-11-01-row-policy-view-presentation-closure.md)。**本条收口不表示可上线**——浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入不在本条出口；父 Spec 的 RTV-01–RTV-08 不在本条出口 |
+| 状态 | **v0.4 答案优先双栏（2026-11-01）**：在 v0.3 收口之上增补 SC-19–SC-23（左清单／右结论、诊断折叠、详情三区标题）。v0.3 的 SC-01–SC-17 仍成立；SC-18 术语 lint 于 2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)；闭口证据见 [`docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`](../reviews/2026-11-01-row-policy-view-presentation-closure.md)。**本条收口不表示可上线**——浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入不在本条出口；父 Spec 的 RTV-01–RTV-08 不在本条出口 |
 | 决策来源 | 2026-10-30 对 `http://127.0.0.1:55176/admin/row-policies` 的页面探查。12 张表的有效行授予都是「行权限：全部行」。点开 `superstore_orders` 后清单收成 1 行；再勾「仅看受限表」，地址栏丢掉 `sourceName`，表名框仍显示 `superstore_orders`，清单变成「空筛选」 |
 | 开工授权 | 2026-10-30 PM 书面授权：按本文与配套 Plan 完成开发落地。D1–D10 全部通过，没有否决项。不存在「只做 D3」或「不做 D8／D10」的退路。功能编号仍待 PM 指派 |
 | 需求来源 | 行权限视图要先回答「这张表实际受什么行约束」，再允许换一张表。筛选、选表、快照哈希不再挤在同一条阅读流里 |
@@ -329,7 +329,7 @@ renderListEmpty(status):
 | SC-15 | 页面没有保存、删除、预演按钮。`docs/qa/selector-contract.md` 里已有的 `row-policy-view-*` id 仍在 |
 | SC-16 | 清单结果不含当前表时，详情仍在，且可见「当前表不在筛选结果中。」 |
 | SC-17 | 边界句原文仍是 `ROW_POLICY_PREVIEW_BOUNDARY` |
-| SC-18 | `npm run lint:terminology` 通过 |
+| SC-18 | **拆出。** 术语 lint 是过程门禁，不在本条出口 |
 | SC-19 | 工作台为双栏：`row-policy-view-workspace` 内左 `row-policy-view-list-panel`、右详情或 `row-policy-view-detail-empty` |
 | SC-20 | 打开深链三参数时右栏详情存在；无三参数时右栏空态句为「选择左侧一张表，查看实际生效的行约束。」 |
 | SC-21 | `state=partial` 时诊断默认折叠：summary 含「快照部分可用」，不含可见主文案 `partial`；展开后 `row-policy-view-list-failures` 仍列出失败 |
@@ -361,7 +361,7 @@ S1–S4 已按配套 Plan §4 实施完毕，D1–D10 全部落地，没有走�
 | SC-15 | 页面测试「SC-15 页面只读：没有保存／删除／预演，既有 row-policy-view-* id 仍在」＋ 五个新 test id 已登记进 `docs/qa/selector-contract.md` |
 | SC-16 | 页面测试「SC-16 当前表不在筛选结果中时详情仍渲染并说明」 |
 | SC-17 | 页面测试「SC-17 边界句原文不变」＋ DNF 预览测试「carries the fixed boundary sentence」 |
-| SC-18 | 仓库根目录 `npm run lint:terminology` 退出码 0 |
+| SC-18 | **拆出。** 原命令退出码改记为过程记录 |
 | SC-19 | 页面测试「SC-19 工作台左清单右详情双栏」 |
 | SC-20 | 页面测试「SC-20 深链打开详情；无三参数时右栏空态」 |
 | SC-21 | 页面测试「SC-21 诊断默认折叠，展开后仍见失败集合」 |
@@ -378,8 +378,8 @@ S1–S4 已按配套 Plan §4 实施完毕，D1–D10 全部落地，没有走�
 
 - 层级：功能合同
 - 本条承诺：行权限视图把「这张表实际受什么行约束」讲清楚——点表只打开详情，清单筛选与当前表解耦，授权状态四态互斥且不混用文案，页面只读。
-- 本条出口：SC-01–SC-23 的自动化用例（页面测试 `webui/src/__tests__/row-policy-view.test.tsx`、DNF 预览测试 `webui/src/__tests__/row-policy-dnf-preview.test.tsx`、服务端 `webui/server/__tests__/p1-row-policy-views.test.ts`），加 `npm run lint:terminology`。
-- 不在本条出口：浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入；父 Spec（行策略模板与按表反查）的 RTV-01–RTV-08。
+- 本条出口：SC-01–SC-17、SC-19–SC-23 的自动化用例（页面测试 `webui/src/__tests__/row-policy-view.test.tsx`、DNF 预览测试 `webui/src/__tests__/row-policy-dnf-preview.test.tsx`、服务端 `webui/server/__tests__/p1-row-policy-views.test.ts`）。
+- 不在本条出口：SC-18 术语 lint；浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入；父 Spec（行策略模板与按表反查）的 RTV-01–RTV-08。
 - 上线关系：本条收口不表示可上线
 
 ## 8. 落盘清单

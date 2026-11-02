@@ -104,7 +104,7 @@ Forbidden terms:
 | 把推断问询或会话访问算进真实问询 | 没有原文就不是本 KPI 的分子 |
 | 新增统计表、定时汇总或回写 `access_log` | 与 Spec 189 一样，读取时派生 |
 | 改 `/ops/calls` 的六张调用健康卡 | 调用监控继续回答报错、拒绝和变慢 |
-| 改审计问询列表的来源筛选和会话访问展示 | 取证页保持原样 |
+| 改审计问询列表的来源筛选和会话访问展示 | 本条自己不改那一页，取证页在本条范围内保持原样。2026-11-02 起，问询种类、访问等级和这两页的筛选由 [lucy-20261102-audit-inquiry-kind-spec.md](lucy-20261102-audit-inquiry-kind-spec.md) 承接 |
 | 预登记尚未存在的 `lucy_continue_question` | 该工具落地时由该变更显式指定等级；落地前未知名走「未分级」 |
 | 把服务器本地时区当作业务日 | 日历日固定为 UTC+8 |
 
@@ -397,8 +397,8 @@ function dailyTable(window, questions, sessions):
 
 - 层级：功能合同
 - 本条承诺：使用概况把「每天真实问询多少」与「连接、浏览、查数」分开讲清楚——新增四张问询会话卡与按日问询表，口径由已落库的原文问询去重得出，且不改动 Spec 189 的调用量与活跃 Agent 口径。
-- 本条出口：SC-01–SC-24、SC-26 的自动化用例（等级一致性 `access-grade.test.ts`、窗口聚合 `daily-question-kpi.test.ts`、与 Spec 189 的正交性 `usage-governance.test.ts`、页面渲染分流 `admin-governance-observability.test.tsx`），SC-25 沿用既有审计问询测试（`proxy-audit.test.ts` 的问询重建用例，本轮未改该路径），加 `npm run lint:terminology`。
-- 不在本条出口：浏览器与移动窄屏验证；镜像构建与部署；客户环境验证；真实实例写入；全仓 typecheck 基线（当前 89 个既存错误，非本功能引入）。
+- 本条出口：SC-01–SC-24、SC-26 的自动化用例（等级一致性 `access-grade.test.ts`、窗口聚合 `daily-question-kpi.test.ts`、与 Spec 189 的正交性 `usage-governance.test.ts`、页面渲染分流 `admin-governance-observability.test.tsx`），SC-25 沿用既有审计问询测试（`proxy-audit.test.ts` 的问询重建用例，本轮未改该路径）。
+- 不在本条出口：术语 lint（2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)）；浏览器与移动窄屏验证；镜像构建与部署；客户环境验证；真实实例写入；全仓 typecheck 基线。
 - 上线关系：本条收口不表示可上线
 
 ## 9. 修订声明落点

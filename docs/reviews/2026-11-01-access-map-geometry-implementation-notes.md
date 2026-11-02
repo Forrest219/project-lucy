@@ -10,7 +10,7 @@
 | 主 Spec | [`docs/specs/lucy-20261101-access-map-geometry-spec.md`](../specs/lucy-20261101-access-map-geometry-spec.md) v0.2（功能合同，**已实施**） |
 | 实施 Plan | [`docs/plans/lucy-20261101-access-map-geometry-plan.md`](../plans/lucy-20261101-access-map-geometry-plan.md) v0.2（S1→S2→S3→S4 按序执行，未跳步） |
 | 权威语义 | [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md) —— **语义、API、边状态机、两档措辞、Token 过滤原文、URL 合法值一字未动**；只加一条交叉引用句 |
-| 结果 | **完成**：SC-01–SC-16 全部有出处；自动化 SC-01–SC-15 全绿，SC-16 桌面截图已落盘 |
+| 结果 | **完成**：SC-01–SC-14 有自动化出处，SC-16 桌面截图已落盘。SC-15 术语 lint 于 2026-11-02 拆出 |
 | 未做 | Docker / demo 镜像重建、部署、`git commit` / `git push`、完整 Playwright 套件、移动窄屏、发布走查（均在本轮禁令之外） |
 
 ---
@@ -130,7 +130,7 @@ metricKernel(edge)    = edge.accessPaths * unitPx      # 访问内核
 | SC-12 | **可见面积**悬停出浮层（含无内核的 dormant 与 normal），含从→到与状态 | ✅ | 组件「geometry SC-12」 |
 | SC-13 | **可见面积**点击开抽屉（dormant 授权面积、needs_review 独立带） | ✅ | 组件「geometry SC-13」 |
 | SC-14 | 无裸 hex、无新增运行时依赖 | ✅ | layout「SC-14」静态扫描 + 组件「geometry SC-14」 |
-| SC-15 | `npm run lint:terminology` 退出码 0 | ✅ | 见 §5.3 |
+| SC-15 | 术语 lint | **拆出** | 原退出码见 §5.3，只作过程记录 |
 | SC-16 | 桌面截图人工验收（稀疏占比 / 外标可读 / 四态 / 悬停点击） | ✅ | 见 §六（5 张截图已落盘 `docs/reviews/assets/2026-11-01-access-map-geometry/`） |
 
 ---

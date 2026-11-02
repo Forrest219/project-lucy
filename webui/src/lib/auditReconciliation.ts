@@ -99,6 +99,42 @@ export type ReconciliationAsOfDimension = {
   missingCount: number;
 };
 
+/**
+ * 完整表身份（Spec §3.2「完整表清单」／§3.4「完整表身份与排行」）。
+ *
+ * 去重键是**连接 / Schema / 表三元组**：同名不同连接或 Schema 不合并。
+ * 身份缺项的来源引用进 `incomplete`，缺来源引用的调用进 `unknownBucket`——
+ * 两者都单列，不按名称相似度合并，也不猜表名。
+ */
+export type ReconciliationTableIdentity = {
+  identityKey: string;
+  connectionId: string | null;
+  schema: string | null;
+  table: string | null;
+  identityComplete: boolean;
+  missingIdentityParts: string[];
+  physicalTable: string | null;
+  callCount: number;
+  firstObservedAt: string | null;
+  lastObservedAt: string | null;
+  sourceStatus: "resolved" | "identity_incomplete" | "unknown";
+  sourceStatusNullReason: string | null;
+};
+
+export type ReconciliationTableEvidence = {
+  /** 完整身份去重集合；同名不同连接 / Schema 不合并。 */
+  complete: ReconciliationTableIdentity[];
+  /** 身份不完整的来源引用；单列不合并。 */
+  incomplete: ReconciliationTableIdentity[];
+  /** 缺表身份的调用进入独立未知桶。 */
+  unknownBucket: {
+    callIds: string[];
+    callCount: number;
+    reason: string;
+    detail: string;
+  };
+};
+
 export type ReconciliationAsOfProof = {
   ok: boolean;
   missingTotal?: number;
@@ -124,6 +160,8 @@ export type ReconciliationUsageResponse = {
   asOfProof: ReconciliationAsOfProof;
   diagnosticIncomplete: unknown;
   tokenReconciliation: ReconciliationTokenReconciliation;
+  /** 完整表排行（完整 `connectionId / schema / table`）。 */
+  tables: ReconciliationTableEvidence;
   /** 完整使用明细（分页游标）。 */
   calls: {
     items: ReconciliationUsageRow[];

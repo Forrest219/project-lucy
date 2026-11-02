@@ -6,13 +6,13 @@
 |---|---|
 | 文档版本 / 日期 | **v0.2** / 2026-11-01 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号无，不进入 v0.25 登记册 |
-| 主 Spec | [访问关系图图优先呈现 Spec](../specs/lucy-20261101-access-map-chart-first-spec.md)（**v0.1 已定稿待实施**） |
+| 主 Spec | [访问关系图图优先呈现 Spec](../specs/lucy-20261101-access-map-chart-first-spec.md)（**v0.2 功能合同已收口**） |
 | 权威语义 | [Spec 187](../../webui/docs/187-access-relation-sankey-spec.md)。本 Plan 不改其 API、边状态、URL 值、两档措辞。Spec 187 的 SC-01–SC-14 不在本条出口 |
 | 前序呈现 | [quiet-reading Spec](../specs/lucy-20261030-access-map-quiet-reading-spec.md) / [Plan](2026-10-30-lucy-access-map-quiet-reading-plan.md)。本条**取代**其页壳三卡+双折叠；**保持**着色、抽屉、表 |
-| 状态 | **v0.2 实施完成（2026-11-01）**。用户已批准方案 A′ 与 Spec/Plan 落盘。S1–S3 全部落地，SC-01–SC-14 均有自动化断言并通过。本条收口不表示可上线 |
+| 状态 | **v0.2 功能合同已收口（2026-11-01）**。S1–S3 已落地。SC-01–SC-13 关闭。SC-14 已拆出。本条收口不表示可上线 |
 | 授权边界 | 改访问关系图页呈现与对应组件/布局测试、selector-contract 必要行、quiet-reading / Spec 187 的交叉引用句（若需指向本 Spec）。**不涉及**构建镜像、部署、`git commit` / `git push`（除非用户另授）、浏览器走查 |
 | coder 交付提示词 | 由委托方在会话内下发，**不入库**（该文件不是 Plan，入 `docs/plans/` 会被形状门禁判为 7 条阻塞项）。本 Plan 与主 Spec 即其执行契约 |
-| 验收 | Spec SC-01–SC-14；组件测试 + 布局测试 + `npm run lint:terminology`。浏览器走查不在本条出口 |
+| 验收 | Spec SC-01–SC-13；组件测试 + 布局测试。SC-14 术语 lint 已拆出。浏览器走查不在本条出口 |
 | 实施主体 | Lucy WebUI `webui/src`。不修改 KTX，不修改 `webui/server/admin/access-map.ts` |
 
 **Goal:** 让 `/admin/access-map` 以关系图为主视觉：去掉三 KPI 卡与双折叠墙，图例短行置顶贴图，口径与快照沉底弱入口，并改善图区高度、栏距与悬停可读性。

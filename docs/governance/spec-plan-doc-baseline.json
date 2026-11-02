@@ -2598,10 +2598,6 @@
     },
     {
       "file": "docs/specs/lucy-20261025-v0p25-oidc-single-sign-on-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-20261025-v0p25-oidc-single-sign-on-spec.md",
       "rule": "filename"
     },
     {
@@ -2642,15 +2638,7 @@
     },
     {
       "file": "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md",
       "rule": "filename"
-    },
-    {
-      "file": "docs/specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md",
-      "rule": "close-layer"
     },
     {
       "file": "docs/specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md",

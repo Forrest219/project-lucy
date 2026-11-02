@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 呈现修订 / **v0.2 已定稿待实施** |
+| 文档类型 / 版本 | 呈现修订 / **v0.2 已实施** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号。不升 Spec 187 版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（图面几何）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.2 已定稿待实施**（2026-11-01）。交叉审阅意见已按委托人裁定修订并定稿。本条收口不表示可上线 |
+| 状态 | **v0.2 已实施（2026-11-01）**。S1–S4 已落地。SC-01–SC-14 与桌面截图 SC-16 见 [实施笔记](../reviews/2026-11-01-access-map-geometry-implementation-notes.md)。SC-15 已拆出。本状态只对齐实施笔记，不另写收口记录，也不表示可上线 |
 | 决策来源 | 2026-11-01 几何复盘结论（委托人批准）＋交叉审阅 [`inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md`](../../inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md)；修订裁定接受阻断项与桌面截图最低视觉出口，拒绝「取消刻度封顶、撑满槽位放大 unit」 |
 | 需求来源 | 治理台访问关系图的流带厚度须可比较、节点不得喧宾夺主；稀疏图不得被撑成粉肉块，也不得缩成槽位里的迷你图顶条 |
 | 实施主体 | Lucy WebUI `AccessMapCanvas` 布局与绘制（`webui/src/components/admin/AccessMapCanvas.tsx` 及对应测试）。不修改 KTX，不修改 `/api/admin/access-map` |
@@ -14,14 +14,14 @@
 | 实施计划 | [`docs/plans/lucy-20261101-access-map-geometry-plan.md`](../plans/lucy-20261101-access-map-geometry-plan.md) |
 | 审阅 | 交叉审阅 v0.1 → 本 v0.2 定稿 |
 
-> v0.2 已定稿待实施（2026-11-01）。D1–D12 按 §4 拍板。本条收口不表示可上线。
+> v0.2 已实施（2026-11-01）。D1–D12 按 §4 拍板。SC 出处见实施笔记。本条收口不表示可上线。
 
 ## 闭口层级
 
 - 层级：功能合同
 - 本条承诺：访问关系图 SVG 采用「细柱 + `labelBlock` 外标 + 计量刻度封顶 + 四态面积流带」，路径厚度可比；计量几何与命中地板解耦；着色 token 与 Spec 187 双层编码语义不变；当前 demo 稀疏图达到约定图面占比并经桌面截图验收。
-- 本条出口：SC-01–SC-16（自动化 SC-01–SC-15 + 桌面截图人工 SC-16）。
-- 不在本条出口：完整浏览器发布走查、Playwright 套件、窄屏/移动、镜像构建、部署、证据等级；Spec 187 / quiet-reading / chart-first 既有 SC（冲突的布局断言由本条改写承接）。
+- 本条出口：SC-01–SC-14 与桌面截图 SC-16。
+- 不在本条出口：SC-15 术语 lint（2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)）；完整浏览器发布走查、Playwright 套件、窄屏/移动、镜像构建、部署、证据等级；Spec 187 / quiet-reading / chart-first 既有 SC（冲突的布局断言由本条改写承接）。
 - 上线关系：本条收口不表示可上线
 
 ---
@@ -281,7 +281,7 @@ onHover(hit): show chart-first tip (dormant 含授权面积)
 | SC-12 | 可见 path 悬停：覆盖 dormant（无内核）与 normal；浮层非仅 `<title>`，含从→到与状态 | 组件测试 |
 | SC-13 | 可见 path 点击开抽屉：至少 dormant 授权面积与 needs_review 独立带；`access-map-edge-detail` 可见。不得只靠点击隐藏清单按钮充当本条唯一证据 | 组件测试 |
 | SC-14 | 无新增裸 hex；无新增运行时依赖 | 组件/静态 |
-| SC-15 | `npm run lint:terminology` 退出码 0 | 门禁 |
+| SC-15 | **拆出。** 术语 lint 是过程门禁，不在本条出口 | 过程记录 |
 | SC-16 | 当前 demo 桌面截图人工验收：稀疏全图占比与留白、三列外标可读、四态（可用夹具或实页）、节点与可见流带悬停/点击。记录落入 `docs/reviews/` 或 `inbox/` 并在收口时引用 | 人工（收口必要） |
 
 上线关系：本条收口不表示可上线。完整发布走查不在本条出口。

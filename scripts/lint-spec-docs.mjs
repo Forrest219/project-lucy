@@ -14,6 +14,7 @@
  *   metadata    Spec 须有 文档类型·版本·状态；Plan 须有 状态·授权边界·验收
  *   filename    新 Spec / Plan 使用唯一文件名；模块 docs 数字流水号 Spec 已封板
  *   close-layer 新功能 Spec 必须有「闭口层级」，且层级只能是功能合同或发布取证
+ *   stale-status 「未执行且不排期」「不可交付 UAT」不得裸写；作废标记必须紧贴该句，且不走基线豁免
  *
  * 存量违规冻结在 docs/governance/spec-plan-doc-baseline.json：**基线只减不增**。
  * 新增违规 → exit 1；基线里已不再违规的条目 → 报 stale（提示可从基线移除），不阻塞。
@@ -46,6 +47,14 @@ const MODULE_DOCS_SKIP = new Set(["docs", "inbox", "node_modules"]);
 /** 只拒绝 v0p25、v2p5 这种产品版本段。v8 这类技术专名不在此列。 */
 const VERSION_SEGMENT = /^v\d+p\d+$/i;
 const CLOSE_LAYER_FIELDS = ["不在本条出口", "本条承诺", "本条出口", "上线关系", "层级"];
+const STALE_STATUS_PHRASE = /未执行且不排期|未执行且未排期|不可交付 UAT/g;
+const STALE_STATUS_EXTRA = [
+  "docs/README.md",
+  "docs/plans/README.md",
+  "docs/governance/project-overview.md"
+];
+const STALE_STATUS_PREFIX = /(?:不再写|不构成功能阻断|已作废的?)[「"\s]*$/;
+const STALE_STATUS_SUFFIX = /^(?:[」"'*\s。，、；：|（）()]|和|或|并|推出|的现在时|已就地标|已于同日|该句|该记法|这两句|这句|「[^」]{0,24}」)*(?:(?<!未)已?作废|不再写|不得当作现值|不构成功能阻断)/;
 
 const DS_TEMPLATE_PARTS = [
   { re: /Referenced\s+Specs/i, label: "Referenced Specs" },
@@ -208,6 +217,34 @@ function parseCloseLayerField(line) {
   return null;
 }
 
+function phraseIsVoided(line, index, length) {
+  const before = line.slice(Math.max(0, index - 24), index);
+  if (STALE_STATUS_PREFIX.test(before)) return true;
+  const after = line.slice(index + length, index + length + 80);
+  return STALE_STATUS_SUFFIX.test(after);
+}
+
+export function collectStaleStatusViolations(relPath, text) {
+  const violations = [];
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i += 1) {
+    STALE_STATUS_PHRASE.lastIndex = 0;
+    let bare = false;
+    for (const match of lines[i].matchAll(STALE_STATUS_PHRASE)) {
+      if (phraseIsVoided(lines[i], match.index, match[0].length)) continue;
+      bare = true;
+      break;
+    }
+    if (!bare) continue;
+    violations.push({
+      file: relPath,
+      rule: "stale-status",
+      message: `第 ${i + 1} 行把已作废的状态写成现值。作废标记必须紧贴「未执行且不排期」或「不可交付 UAT」：紧前写不再写、不构成功能阻断，或紧后写已作废、不再写、不得当作现值、不构成功能阻断。「未作废」和同一行里另一件事的「作废」不算。现行状态只读 Spec 头部。`
+    });
+  }
+  return violations;
+}
+
 function collectCloseLayerViolations(relPath, text) {
   const body = sectionBody(text, /闭口层级$/);
   if (body === null) {
@@ -325,6 +362,8 @@ export function collectDocViolations(relPath, text) {
     }
   }
 
+  violations.push(...collectStaleStatusViolations(relPath, text));
+
   if (hs.some((h) => /Terminology Compliance/i.test(h.title))) {
     if (!/This feature follows/.test(text)) {
       violations.push({ file: relPath, rule: "term-shape", message: "Terminology Compliance 缺少 This feature follows 句式" });
@@ -367,7 +406,7 @@ export function loadTrackedFiles() {
 
 /**
  * 把违规按基线分类：
- *   - 基线内 → 不报；
+ *   - 基线内 → 不报（`stale-status` 除外，这条永不豁免）；
  *   - 基线外且**已跟踪** → blocking（exit 1）；
  *   - 基线外且**未跟踪** → warnings（只提醒，不阻塞共享工作区）；
  *   - 基线里已不再违规的条目 → stale。
@@ -380,7 +419,7 @@ export function classifyViolations(violations, baselineEntries, trackedFiles = n
   const blocking = [];
   const warnings = [];
   for (const v of violations) {
-    if (baselineKeys.has(`${v.file}::${v.rule}`)) continue;
+    if (v.rule !== "stale-status" && baselineKeys.has(`${v.file}::${v.rule}`)) continue;
     const tracked = trackedFiles === null ? true : trackedFiles.has(v.file);
     if (tracked) blocking.push(v);
     else warnings.push(v);
@@ -417,6 +456,17 @@ export function scanRepo() {
       });
     }
     violations.push(...collectDocViolations(relPath, text));
+  }
+  for (const relPath of STALE_STATUS_EXTRA) {
+    if (!existsSync(path.join(repoRoot, relPath))) continue;
+    violations.push(...collectStaleStatusViolations(relPath, read(relPath)));
+  }
+  const reviewsDir = path.join(repoRoot, "docs/reviews");
+  if (existsSync(reviewsDir)) {
+    for (const name of readdirSync(reviewsDir).filter((item) => item.endsWith(".md")).sort()) {
+      const relPath = path.posix.join("docs/reviews", name);
+      violations.push(...collectStaleStatusViolations(relPath, read(relPath)));
+    }
   }
 
   const baseline = loadBaseline();

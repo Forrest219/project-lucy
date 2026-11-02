@@ -10,7 +10,7 @@
 | 主 Spec | [`docs/specs/lucy-20261101-access-map-chart-first-spec.md`](../specs/lucy-20261101-access-map-chart-first-spec.md) v0.2（功能合同已收口） |
 | 实施 Plan | [`docs/plans/lucy-20261101-access-map-chart-first-plan.md`](../plans/lucy-20261101-access-map-chart-first-plan.md) v0.2 |
 | 权威语义 | [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)（**未改其语义**：API、边状态机、两档措辞、Token 过滤原文、URL 参数合法值一律未动） |
-| 结果 | **完成**：S1–S3 全部落地，SC-01–SC-14 均有自动化断言并通过 |
+| 结果 | **完成**：S1–S3 全部落地，SC-01–SC-13 有自动化断言并通过。SC-14 于 2026-11-02 拆出 |
 | 未做 | 浏览器走查、Playwright 实跑、镜像构建、部署、`git commit` / `git push`（均不在本条出口） |
 
 ---
@@ -124,7 +124,7 @@
 | SC-11 | Token 过滤提示句逐字不变 | `access-map.test.tsx` → `SC-11 — Token 过滤提示句逐字不变` | 通过 |
 | SC-12 | 关键 `access-map-*` test id 仍可找到或迁入弱入口后仍可找到；页面不出现「桑基图」 | `access-map.test.tsx` → `SC-12 — 迁入弱入口的 test id 仍可找到；页面不出现「桑基图」` | 通过 |
 | SC-13 | 页面源码无新增裸十六进制颜色 | `access-map-layout.test.tsx` → 「访问关系图源码的色值约束」→ `SC-15 — AccessMap*.tsx 里没有裸十六进制颜色`（扫 `components/admin/AccessMap*.tsx` + `pages/admin/AccessMap.tsx`，覆盖本轮新增的 `AccessMapSignalNotes.tsx` 与改过的画布／图例／页文件）。**该用例的编号沿用 quiet-reading 的旧编号，本条 SC-13 与它指的是同一条约束** | 通过 |
-| SC-14 | `npm run lint:terminology` 退出码 0 | 命令级门禁（见 §六） | 通过 |
+| SC-14 | 术语 lint | 命令级门禁（见 §六） | **拆出**。原退出码 0 只作过程记录 |
 
 ---
 

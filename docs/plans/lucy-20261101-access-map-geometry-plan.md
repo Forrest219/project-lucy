@@ -6,12 +6,12 @@
 |---|---|
 | 文档版本 / 日期 | **v0.2** / 2026-11-01 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号无，不进入 v0.25 登记册 |
-| 主 Spec | [访问关系图几何语言修订 Spec](../specs/lucy-20261101-access-map-geometry-spec.md)（**v0.2 已定稿待实施**） |
+| 主 Spec | [访问关系图几何语言修订 Spec](../specs/lucy-20261101-access-map-geometry-spec.md)（**v0.2 已实施**） |
 | 权威语义 | [Spec 187](../../webui/docs/187-access-relation-sankey-spec.md)。不改 API、边状态、URL 值、两档措辞、路径守恒 |
 | 前序呈现 | [quiet-reading](../specs/lucy-20261030-access-map-quiet-reading-spec.md)；[chart-first](../specs/lucy-20261101-access-map-chart-first-spec.md) |
-| 状态 | **v0.2 已定稿待实施（2026-11-01）**。已吸收交叉审阅并定稿。本条收口不表示可上线 |
-| 授权边界 | 本轮文档定稿可改 Spec/Plan/索引。改 `webui/src` 须用户开发授权。不镜像构建、不部署、不 `git commit`/`push`（除非另授） |
-| 验收 | Spec SC-01–SC-16；映射见 §5。完整发布走查 / Playwright 套件不在出口；SC-16 为 demo 桌面截图人工验收 |
+| 状态 | **v0.2 已实施（2026-11-01）**。S1–S4 已落地。SC-01–SC-14 与桌面截图 SC-16 见 [实施笔记](../reviews/2026-11-01-access-map-geometry-implementation-notes.md)。SC-15 已拆出。本状态只对齐实施笔记，不另写收口记录，也不表示可上线 |
+| 授权边界 | S1–S4 已按实施笔记写入 `webui/src`。不镜像构建、不部署。`git commit`／`push` 仍须另授 |
+| 验收 | Spec SC-01–SC-14 与 SC-16；映射见 §5。SC-15 术语 lint 已拆出。完整发布走查 / Playwright 套件不在出口；SC-16 为 demo 桌面截图人工验收 |
 | 实施主体 | Lucy WebUI `webui/src`。不修改 KTX，不修改 `webui/server/admin/access-map.ts` |
 | 审阅 | [`inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md`](../../inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md) → v0.2 |
 
@@ -100,9 +100,9 @@ S0 仅文档；直至 P3 才改 `webui/src`。
 ### S3 交叉引用与门禁
 
 1. **必须**更新 quiet-reading、chart-first、Spec 187 指针。
-2. `npm run lint:terminology`、`npm run lint:spec-docs` → SC-15。
+2. 术语 lint 与 `lint:spec-docs` 写入过程记录，不再作为 SC-15 出口。
 
-**出口**：SC-15；三处指针一致。
+**出口**：三处指针一致。SC-15 已拆出。
 
 ### S4 桌面截图（SC-16）
 
@@ -130,7 +130,7 @@ S0 仅文档；直至 P3 才改 `webui/src`。
 | SC-12 | S2 | `access-map.test.tsx`（含 dormant 可见面积悬停） |
 | SC-13 | S2 | `access-map.test.tsx`（可见 path 点击，不只隐藏按钮） |
 | SC-14 | S2 | `access-map.test.tsx` / 静态扫描 |
-| SC-15 | S3 | `npm run lint:terminology` |
+| SC-15 | — | **拆出。** 术语 lint 不在出口 |
 | SC-16 | S4 | 桌面截图 + 短记录 |
 
 建议命令（S1–S3）：
@@ -143,7 +143,7 @@ cd .. && npm run lint:terminology && npm run lint:spec-docs
 ## 6. 完成定义
 
 - S0–S4 勾销
-- SC-01–SC-16 均有通过记录
+- SC-01–SC-14 与 SC-16 均有通过记录。SC-15 不要求通过记录
 - 索引状态可更新为功能合同已收口
 - **本条收口不表示可上线**
 

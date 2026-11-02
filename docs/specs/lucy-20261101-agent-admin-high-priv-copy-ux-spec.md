@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 呈现修订 / **v0.2 功能合同已收口** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号。不升 Spec 100 / Spec 131 版本号 |
 | 功能编号 / 优先级 | **无** / **P2**（Agent 详情与创建页局部文案／分层）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.2 功能合同已收口（2026-11-01）**。D1–D8 已冻结；SC-01–SC-12 全部关闭（组件测试 69/69；`npm run lint:terminology` exit 0）。实施记录见 [`docs/reviews/2026-11-01-agent-admin-high-priv-copy-ux-implementation-notes.md`](../reviews/2026-11-01-agent-admin-high-priv-copy-ux-implementation-notes.md)。本条收口不表示可上线 |
+| 状态 | **v0.2 功能合同已收口（2026-11-01）**。D1–D8 已冻结；SC-01–SC-11 全部关闭（组件测试 69/69）。SC-12 术语 lint 于 2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。实施记录见 [`docs/reviews/2026-11-01-agent-admin-high-priv-copy-ux-implementation-notes.md`](../reviews/2026-11-01-agent-admin-high-priv-copy-ux-implementation-notes.md)。本条收口不表示可上线 |
 | 决策来源 | 2026-11-01 对 `http://127.0.0.1:55176/admin/agents/zhangxingchen`（已勾选 `lucy_admin`）的走查与讨论：高权限警示一句塞四层意思、突兀拗口；个人行限制在 `lucy_admin` 后价值未讲清，布局与文案无分层引导。委托人认可优化方向并要求按规范落盘 Spec / Plan |
 | 需求来源 | Agent 基本信息页在绑定运维数据面角色时，警示与个人行限制应可读、可分层，且不削弱 Spec 131 的高权限意图与 Spec 100 的人级收窄能力 |
 | 实施主体 | Lucy WebUI：`webui/src/pages/admin/AgentDetail.tsx`、`AgentList.tsx`（同文案警示）、相关组件测试。不修改 KTX、不改 ACL／constraints 编译语义、不改 Token API |
@@ -17,8 +17,8 @@
 
 - 层级：功能合同
 - 本条承诺：Agent 详情／创建在绑定 `lucy_admin` 或等价运维数据面角色时，高权限警示拆成短主句＋可选次句，且不再夹带 Token 过期建议；个人行限制区块按是否含目录绑定角色切换情境说明，空态弱展示且不删除配置能力，「编译≠取数生效」不常驻大段。
-- 本条出口：SC-01–SC-12。组件测试打假可见文案、test id、空态／展开分层、情境分支；`npm run lint:terminology` 退出码 0。
-- 不在本条出口：浏览器走查、Playwright、窄屏、镜像构建、部署、ACL／constraints 运行时语义、Role 详情行级策略面板、Token 签发页政策句回潮、Spec 100／131 既有 SC。
+- 本条出口：SC-01–SC-11。组件测试打假可见文案、test id、空态／展开分层、情境分支。
+- 不在本条出口：SC-12 术语 lint；浏览器走查、Playwright、窄屏、镜像构建、部署、ACL／constraints 运行时语义、Role 详情行级策略面板、Token 签发页政策句回潮、Spec 100／131 既有 SC。
 - 上线关系：本条收口不表示可上线
 
 ---
@@ -248,7 +248,7 @@ function renderConstraintsEditor(constraintRows, ...):
 | SC-09 | 勾选 `lucy_admin` 时「添加行限制」不因该角色本身被额外禁用（仍仅受既有 `addBlockReason` 约束） |
 | SC-10 | 「编译通过」／「行级取数已生效」类 caveat **不**作为空态或警示条常驻段落；若存在，仅在 tooltip／确认区 test id 下 |
 | SC-11 | 既有 constraints 保存确认流与 `data-testid`（`agent-constraints-editor`、`agent-lucy-admin-role-warning`）仍可找到 |
-| SC-12 | `npm run lint:terminology` 退出码 0 |
+| SC-12 | **拆出。** 术语 lint 是过程门禁，不在本条出口 |
 
 ## 8. 风险与回滚
 

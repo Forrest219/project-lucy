@@ -4,10 +4,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **v0.4 文档定稿（2026-11-01）**。委托人明示开工前不改运行代码 |
+| 状态 | **v0.4 功能合同已收口（2026-11-02）**。SC-01–SC-24 关闭。SC-25 已拆出。本条收口不表示可上线 |
 | 主 Spec | [`docs/specs/lucy-20261101-token-renewal-spec.md`](../specs/lucy-20261101-token-renewal-spec.md) |
 | 授权边界 | 定稿＋明示开工前仅文档／审阅。开工后：renew API、Tokens／Agent Token UI、审计枚举与 redaction／中文标签、术语标准、selector-contract、相关测试。不改 KTX；不改 Step6；不引入自动续期；不要求浏览器／docker。Gate 政策变更必须回 Spec，禁止私自降级。须实现 repair 重试与 Proxy 对齐的旧值解析 |
-| 验收 | SC-01–SC-25 |
+| 验收 | SC-01–SC-24 已关闭。SC-25 已拆出 |
 
 **Goal:** 显式续期（含过期）；撤销不可续；严格延长；审计与失败关闭完备。
 
@@ -31,7 +31,7 @@
 |---|---|---|
 | P1 | Codex 再审可定稿 | **满足**（第 4 轮） |
 | P2 | 委托人明示开工 | **满足**（2026-11-01） |
-| P3 | 四门禁有记录 | 待办 |
+| P3 | 四门禁有记录 | **有记录**（收口记录，不在本条出口） |
 
 ## 3. 任务
 
@@ -64,12 +64,12 @@
 
 ### Task 5: 收口
 
-- [x] 主路径 SC 由本机 vitest／lint 覆盖；委托 owner 注入与 ack 故障注入可后续补强
+- [x] SC-01–SC-24 由本机 vitest 关闭，含委托 owner 与 ack／审计故障注入
 - [x] `lint:spec-docs`、`lint:spec`、`lint:terminology`、`lint:ia-boundary`
 
 ## 4. 验收
 
-以 SC-01–SC-25 为准。
+以 SC-01–SC-24 为准。SC-25 已拆出。
 
 ## 5. 完成定义
 

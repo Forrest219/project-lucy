@@ -4,9 +4,9 @@
 |---|---|
 | 文档类型 / 版本 | 实现 Task / v1.1 |
 | 日期 | 2026-10-30 |
-| 状态 | **波次 A–F 运行代码已落地，第二轮按 Plan v0.11 的 S1–S6 退出条件收口，SRR 仍未执行**。设计合同仍是 Spec v0.11 / Plan v0.11。证据见 [实现记录](../reviews/2026-10-30-l25-15-implementation-evidence.md) |
-| 授权边界 | 2026-10-30 用户授权制定本 Task，以实现 L25-15 的实现收口。授权按下方波次 A–F 写代码和对应测试。**不授权** S7、浏览器验证、移动窄屏、镜像构建、部署、推送、客户交付、修改 KTX、把 SRR-01–SRR-24 标成已通过 |
-| 验收 | 每波以 Plan 该阶段退出条件的自动化证据为退出。测试通过不等于 SRR 验收通过。SRR 状态保持未执行，直到实施记录写下初态、输入和实际输出 |
+| 状态 | **S1–S6 运行代码与定向测试已落地（2026-10-30）**。设计合同仍是 Spec／Plan v0.11。SRR-22 已拆出归交付。SRR-01–SRR-21、SRR-23–SRR-24 仍未执行。测试通过不等于验收通过。证据见 [实现记录](../reviews/2026-10-30-l25-15-implementation-evidence.md) |
+| 授权边界 | 2026-10-30 用户授权制定本 Task，以实现 L25-15 的实现收口。授权按下方波次 A–F 写代码和对应测试。**不授权** S7、浏览器验证、移动窄屏、镜像构建、部署、推送、客户交付、修改 KTX、把 SRR 标成已通过 |
+| 验收 | 每波以 Plan 该阶段退出条件的自动化证据为退出。测试通过不等于 SRR 验收通过。SRR-22 已拆出。SRR-01–SRR-21、SRR-23–SRR-24 保持未执行 |
 | 合同 | [Spec v0.11](../specs/lucy-20261027-v0p25-semantic-release-restore-spec.md) · [Plan v0.11](2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md) · [第 4 轮复核](../reviews/2026-10-30-l25-15-implementation-ready-review.md) |
 | 文件名说明 | 本文件是**落地 Task**（授权 + 波次拆分），不是主 Spec 的那份 Plan——那份是已冻结的 [Plan v0.11](2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md)，沿用存量文件名，不改名。本 Task 按「新 Plan 唯一文件名」规则取 `lucy-YYYYMMDD-<slug>-plan.md` 形态，slug 取 Task 自身的日期与身份 |
 

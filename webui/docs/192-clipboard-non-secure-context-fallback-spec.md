@@ -222,7 +222,7 @@ selection.addRange(savedRange)          # 若 savedRange 存在
 | AC-08 | 单测覆盖上述分支（AC-02/03/04/05）且通过 |
 | AC-09 | e2e 回归覆盖非安全上下文回退（浏览器内删除 `navigator.clipboard` 后复制仍成功） |
 | AC-10 | QA 剧本新增「非回环 HTTP 来源」核查步骤，避免继续用回环来源误判 |
-| AC-11 | `npm run lint:terminology`、`npm run lint:ia-boundary`、相关单测、`npm run build`、`git diff --check` 通过 |
+| AC-11 | **拆出。** 术语 lint、IA lint、build 与 diff 检查是过程记录。单测见 AC-08 |
 
 ## 7. 关联与风险
 

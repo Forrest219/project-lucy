@@ -8,7 +8,7 @@
 | 权威语义 | Spec 100（个人行限制／FinalRows）、Spec 131（lucy_admin／catalog_bound 安全意图）。本 Plan **不改**其编译与授权代数 |
 | 状态 | **v0.2 功能合同已收口（2026-11-01）**。D1–D8 已在主 Spec §4 冻结。S1–S3 已落地；SC-01–SC-12 全部关闭（组件测试 69/69；`npm run lint:terminology` exit 0）。实施记录见 [`docs/reviews/2026-11-01-agent-admin-high-priv-copy-ux-implementation-notes.md`](../reviews/2026-11-01-agent-admin-high-priv-copy-ux-implementation-notes.md)。本条收口不表示可上线 |
 | 授权边界 | 已授权改 `webui/src` 文案与空态分层、共享常量、相关组件测试、selector-contract 文案行。**不涉及**构建镜像、部署、`git commit`／`git push`（除非用户另授权）、浏览器走查、NewToken 政策句回潮、KTX／ACL runtime。Spec 131 呈现注记已在定稿完成，实施阶段无需再改 |
-| 验收 | 以主 Spec §7 SC-01–SC-12 为准；证据为组件测试 + `npm run lint:terminology` |
+| 验收 | 以主 Spec §7 SC-01–SC-11 为准；证据为组件测试。SC-12 术语 lint 已拆出 |
 | 实施主体 | Lucy WebUI `webui/src` |
 | 待拍板 | **已关闭**（2026-11-01）：讨论认可后 D1–D8 按 Spec §4 提议列冻结 |
 | 审阅者定稿提示词 | [`lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md`](lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md)（Kimi／审阅者；讨论冻结 ≠ 审阅定稿） |

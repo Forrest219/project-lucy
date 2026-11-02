@@ -7,6 +7,7 @@ import {
   classifyViolations,
   collectDocViolations,
   collectFilenameViolation,
+  collectStaleStatusViolations,
   listNumberedSpecsUnder,
   scanRepo
 } from "./lint-spec-docs.mjs";
@@ -305,6 +306,31 @@ test("闭口层级：缺少小节、层级写两个、功能合同缺上线关�
     collectDocViolations(SPEC, noShip).find((v) => v.rule === "close-layer").message,
     /本条收口不表示可上线/
   );
+});
+
+test("stale-status：作废标记必须紧贴被作废的那句", () => {
+  const bare = "A01–A12 记为「未执行且不排期」，本条不可交付 UAT。";
+  const marked = "曾记「未执行且不排期」，并推出「不可交付 UAT」。这两句已作废，不得当作现值。";
+  const negated = "L25-09 当前仍未执行且不排期，该状态未作废。";
+  const otherFact = "登录次数已作废；L25-09 当前仍未执行且不排期，本条不可交付 UAT。";
+  assert.equal(collectStaleStatusViolations("docs/reviews/sample.md", bare).length, 1);
+  assert.equal(collectStaleStatusViolations("docs/reviews/sample.md", marked).length, 0);
+  assert.equal(collectStaleStatusViolations("docs/reviews/sample.md", negated).length, 1);
+  assert.equal(collectStaleStatusViolations("docs/reviews/sample.md", otherFact).length, 1);
+});
+
+test("stale-status：不走基线豁免", () => {
+  const violations = [{ file: "docs/reviews/sample.md", rule: "stale-status", message: "" }];
+  const baseline = [{ file: "docs/reviews/sample.md", rule: "stale-status" }];
+  const { blocking } = classifyViolations(violations, baseline);
+  assert.equal(blocking.length, 1);
+  assert.equal(blocking[0].rule, "stale-status");
+});
+
+test("stale-status：仓库现值里没有裸写的已作废状态", () => {
+  const result = scanRepo();
+  const hits = result.blocking.filter((v) => v.rule === "stale-status");
+  assert.deepEqual(hits, []);
 });
 
 test("判定范围：git 跟踪集合含已入库文件；已跟踪文件不得降级为告警", () => {

@@ -1866,3 +1866,16 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | Test ID | 元素 | 出现位置 |
 |---|---|---|
 | `workbench-mirror-only-semantic` | workbench mirror only semantic | `pages/publish/PublishWorkbench.tsx` |
+
+## 2026-11-02 · L25-02／03 对账表排行 selector 补录
+
+> 守门脚本 `webui/scripts/check-selector-contract.mjs` 规则 ①：实现的 `data-testid` 必须在本表登记。
+> 本轮只登记**本轮新增**的两个元素（对账使用概况页的完整表排行与其「复制全文」），
+> 目的是让本轮**不新增**未登记项；既有 `reconciliation-*` 元素的登记状态不在本轮范围内。
+
+### `webui/src/pages/admin/AuditReconciliation.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `reconciliation-table-ranking` | 对账使用概况：完整表排行（逐条完整 `connectionId / schema / table`） | `pages/admin/AuditReconciliation.tsx` |
+| `reconciliation-table-copy` | 对账使用概况：表排行「复制全文」 | `pages/admin/AuditReconciliation.tsx` |

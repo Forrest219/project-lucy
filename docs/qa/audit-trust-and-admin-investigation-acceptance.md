@@ -1,10 +1,12 @@
 # Lucy 审计可信度与管理员调查验收矩阵
 
+本文件已退出升级管理。场景文本保留，不决定任何功能是否收口，也不进入升级建议书。EA 的执行状态保持原样，不改成通过。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | Acceptance Contract / Checklist |
 | 版本与日期 | v0.1，2026-10-19，Asia/Shanghai |
-| 状态 | 验收定义，全部未执行；不是通过证据 |
+| 状态 | 本文件已退出升级管理。场景文本保留，不决定任何功能是否收口，也不进入升级建议书；EA 的执行状态保持原样，不改成通过 |
 | Spec | [优化Spec](../specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md) |
 | Plan | [Claude实施Plan](../plans/2026-10-19-audit-trust-and-admin-investigation-plan.md) |
 | 实施与举证 | Claude Code |

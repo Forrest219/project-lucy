@@ -8,6 +8,11 @@
  *  3. 「活跃数 > 配置数」**不自动等于数据异常**；
  *  4. as-of S 不可证明时显式披露为诊断视图，不静默当完整结论；
  *  5. 差异集合四类逐类列出，身份清单不截断计数。
+ *
+ * 2026-11-02 追加（L25-02／03 功能收口）：
+ *  6. 问询详情逐条给出完整表身份，**不收成「等 N 个」**（Spec §4.1）；
+ *  7. 使用概况的表排行逐条给出完整 `connectionId / schema / table`，
+ *     并可复制全文；列表文本**不出现「等 N 个」**（Spec §3.4 / §4.2）。
  */
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -15,6 +20,15 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuditReconciliation } from "../pages/admin/AuditReconciliation";
+
+const toastMock = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  warning: vi.fn()
+}));
+
+vi.mock("sonner", () => ({ toast: toastMock }));
 
 function usagePayload(overrides: Record<string, unknown> = {}) {
   return {
@@ -117,6 +131,36 @@ function usagePayload(overrides: Record<string, unknown> = {}) {
       },
       ...overrides
     }
+  };
+}
+
+/**
+ * 13 条长表身份（Spec §4.1 V01 的形状）：连接 / Schema / 表 三段都足够长，
+ * 任何「截成等 N 个」的处理都会在这一组上暴露。
+ */
+const LONG_TABLE_IDENTITIES = Array.from({ length: 13 }, (_, index) => {
+  const n = String(index + 1).padStart(2, "0");
+  return {
+    connectionId: `mysql-aliyun-connection-${n}-with-a-long-connection-name`,
+    schema: `reporting_schema_${n}_with_a_long_schema_name`,
+    table: `fact_table_${n}_with_a_very_long_physical_table_name`
+  };
+});
+
+function tableEvidenceOf(identity: (typeof LONG_TABLE_IDENTITIES)[number], callCount = 1) {
+  return {
+    identityKey: JSON.stringify([identity.connectionId, identity.schema, identity.table]),
+    connectionId: identity.connectionId,
+    schema: identity.schema,
+    table: identity.table,
+    identityComplete: true,
+    missingIdentityParts: [],
+    physicalTable: identity.table,
+    callCount,
+    firstObservedAt: "2026-11-02T00:00:00.000Z",
+    lastObservedAt: "2026-11-02T00:01:00.000Z",
+    sourceStatus: "resolved",
+    sourceStatusNullReason: null
   };
 }
 
@@ -357,5 +401,76 @@ describe("批 C-2：P0-4 使用概况页", () => {
     await waitFor(() => expect(screen.getByTestId("reconciliation-usage-row-1")).toBeInTheDocument());
     expect(screen.getByTestId("reconciliation-usage-row-1")).toHaveTextContent("sl_query");
     expect(screen.getByTestId("reconciliation-usage-paging")).toHaveTextContent("已返回 1 / 匹配 1");
+  });
+
+  // ── 2026-11-02：L25-02／03 功能收口的两句产品行为 ────────────────────────
+
+  it("问询详情逐条给出完整表身份，不收成「等 N 个」", async () => {
+    const inquiry = {
+      turnId: "turn-long-tables",
+      tables: {
+        complete: LONG_TABLE_IDENTITIES.map((identity) => tableEvidenceOf(identity)),
+        unknownBucket: {
+          callIds: [],
+          callCount: 0,
+          reason: "not_collected",
+          detail: "调用存在但没有可核验来源引用；来源未知，不从 SQL 文本无条件猜测"
+        }
+      }
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("/api/admin/audit/reconciliation/usage")) {
+        return new Response(JSON.stringify(usagePayload()), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true, data: { inquiry } }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage("/admin/audit-reconciliation?range=7d&turnId=turn-long-tables");
+
+    const detail = await screen.findByTestId("reconciliation-inquiry-detail");
+    for (const identity of LONG_TABLE_IDENTITIES) {
+      expect(detail).toHaveTextContent(identity.connectionId);
+      expect(detail).toHaveTextContent(identity.schema);
+      expect(detail).toHaveTextContent(identity.table);
+    }
+    // 截断成「等 N 个」就是信息断点：详情里不许出现这种收口。
+    expect(detail.textContent ?? "").not.toMatch(/等\s*\d+\s*个/);
+  });
+
+  it("使用概况的表排行列出完整表身份并可复制全文", async () => {
+    const ranked = tableEvidenceOf(LONG_TABLE_IDENTITIES[0], 3);
+    const payload = usagePayload({
+      tables: {
+        complete: [ranked],
+        incomplete: [],
+        unknownBucket: {
+          callIds: [],
+          callCount: 0,
+          reason: "not_collected",
+          detail: "调用存在但没有可核验来源引用；来源未知，不从 SQL 文本无条件猜测"
+        }
+      }
+    });
+    stubUsage(payload);
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) }
+    });
+    renderPage();
+
+    const ranking = await screen.findByTestId("reconciliation-table-ranking");
+    expect(ranking).toHaveTextContent(ranked.connectionId);
+    expect(ranking).toHaveTextContent(ranked.schema);
+    expect(ranking).toHaveTextContent(ranked.table);
+    expect(ranking.textContent ?? "").not.toMatch(/等\s*\d+\s*个/);
+
+    fireEvent.click(screen.getByTestId("reconciliation-table-copy"));
+    await waitFor(() => {
+      expect(vi.mocked(navigator.clipboard.writeText)).toHaveBeenCalled();
+    });
+    const copied = String(vi.mocked(navigator.clipboard.writeText).mock.calls[0][0] ?? "");
+    expect(copied).toContain(ranked.connectionId);
+    expect(copied).toContain(ranked.schema);
+    expect(copied).toContain(ranked.table);
   });
 });

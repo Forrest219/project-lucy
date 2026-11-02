@@ -847,8 +847,7 @@ diffTableLists(previousTables, currentTables):
   - 错误码分类：构造 `ok:false` 的 `ktx sql` 结果，逐个 reason 断言（SC-10 必测）。
 - 集成：SC-23、SC-24（权限路径）、SC-30 ~ SC-32。
 - 前端：SC-34（组件断言，不要求浏览器测试，除非 PM 另行要求）。
-- 术语：`npm run lint:terminology` 必须绿（新词已登记）。
-- Spec 门禁：`npm run lint:spec` 必须绿。
+- 术语 lint 与 `lint:spec` **不在本条出口**（2026-11-02 拆出）。新词仍须登记在术语标准。
 - 真实存量连接验收：SC-1 ~ SC-34 在夹具上全过后，仍需在**真实存量连接**上做一次只读对账（§10 P3 / P7），产出角色有效 source 基线对比。
 
 ---

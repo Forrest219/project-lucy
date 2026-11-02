@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 呈现修订 / **v0.3 已验收** |
 | 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号。不升 Spec 187 版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（页头与图面）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.3 已验收**（2026-10-30）。D1–D8 已按 §4 提议采纳。SC-01–SC-16 由组件测试、布局测试与 `npm run lint:terminology` 关闭。浏览器走查不在本条出口。本条验收不表示可上线 |
+| 状态 | **v0.3 已验收**（2026-10-30）。D1–D8 已按 §4 提议采纳。SC-01–SC-15 由组件测试与布局测试关闭。SC-16 术语 lint 于 2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。浏览器走查不在本条出口。本条验收不表示可上线 |
 | 决策来源 | 2026-10-30 对 `http://127.0.0.1:55176/admin/access-map` 的页面探查：4 个 Agent、23 条边全部为僵尸授权、需复核 0、确凿越权 0、统计窗口 168h。信号文案、图例、桑基图、节点按钮、技术 ID 链接和凭证清单叠在同一条纵向流里 |
 | 需求来源 | 治理台访问关系图需要企业级阅读层级：一屏只回答「这张图现在怎样」，口径和等价清单离开主视觉 |
 | 实施主体 | Lucy WebUI 访问关系图页（`webui/src/pages/admin/AccessMap.tsx` 与 `webui/src/components/admin/AccessMap*.tsx`）。不修改 KTX，不修改 `/api/admin/access-map` |
@@ -13,14 +13,14 @@
 | 与既有 Spec 的关系 | **修订 Spec 187 的呈现，不修订其语义。** 权威仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 只过滤访问层、两档措辞、URL 参数、降级矩阵沿用该文。Spec 187 §4.4「僵尸授权」一行的 UI 表现已指向本 Spec §5.3。Spec 187 的 SC-01–SC-14 不在本条出口。**页壳再修订**：三指标卡与双折叠墙的默认首屏合同已被 [`lucy-20261101-access-map-chart-first-spec.md`](lucy-20261101-access-map-chart-first-spec.md) 取代；本 Spec §5.3–§5.6（着色、抽屉、表）仍有效，除非 chart-first 显式改写 |
 | 实施计划 | [`docs/plans/2026-10-30-lucy-access-map-quiet-reading-plan.md`](../plans/2026-10-30-lucy-access-map-quiet-reading-plan.md) |
 
-> v0.3 已验收（2026-10-30）。D1–D8 已按 §4 的「提议」列全部拍板采纳，无否决项。Spec 187 §4.4 僵尸授权行的 UI 表现与 `TD-187-01` 的着色句已指向本文 §5.3；语义（API、URL 值、边状态判定、两档措辞）不变。SC-01–SC-16 已关闭。本条收口不表示可上线。
+> v0.3 已验收（2026-10-30）。D1–D8 已按 §4 的「提议」列全部拍板采纳，无否决项。Spec 187 §4.4 僵尸授权行的 UI 表现与 `TD-187-01` 的着色句已指向本文 §5.3；语义（API、URL 值、边状态判定、两档措辞）不变。SC-01–SC-15 已关闭。SC-16 已拆出。本条收口不表示可上线。
 
 ## 闭口层级
 
 - 层级：功能合同
 - 本条承诺：访问关系图按页头、工具条、三张指标卡、主工作区、凭证表阅读；口径与快照离开首屏；节点名称落在卡片内；警告色只留给大于 0 的需复核、确凿越权，以及指标卡上的僵尸授权计数。
-- 本条出口：SC-01–SC-16。组件测试与布局测试打假可见文案、选中态、URL 值、列标题、文字盒与流带、着色、视觉隐藏清单、抽屉、聚焦面包屑、数据表与凭证表；SC-15 扫描源码色值；SC-16 以 `npm run lint:terminology` 退出码 0 为准。
-- 不在本条出口：浏览器走查、Playwright、窄屏视口、镜像构建、部署、证据等级，以及 Spec 187 的 SC-01–SC-14（含守恒、降级、跨页回归与跨模块对账）。
+- 本条出口：SC-01–SC-15。组件测试与布局测试打假可见文案、选中态、URL 值、列标题、文字盒与流带、着色、视觉隐藏清单、抽屉、聚焦面包屑、数据表与凭证表；SC-15 扫描源码色值。
+- 不在本条出口：SC-16 术语 lint；浏览器走查、Playwright、窄屏视口、镜像构建、部署、证据等级，以及 Spec 187 的 SC-01–SC-14（含守恒、降级、跨页回归与跨模块对账）。
 - 上线关系：本条收口不表示可上线
 
 ---
@@ -332,9 +332,9 @@ onEscape:
 | SC-13 | 凭证区是表。点击 Token 后提示句等于「已按 Token {label} 过滤访问层，授权层不受影响。」再次点击清除 `token` |
 | SC-14 | 现有访问关系图单测与选择器契约中的 test id 保持可找到。允许改断言的是可见文案、class 和「清单是否占位」 |
 | SC-15 | 页面源码无新增裸十六进制颜色 |
-| SC-16 | `npm run lint:terminology` 通过 |
+| SC-16 | **拆出。** 术语 lint 是过程门禁，不在本条出口 |
 
-SC-01–SC-16 **已验收**（2026-10-30）。依据是 `webui/src/__tests__/access-map.test.tsx` 与 `webui/src/__tests__/access-map-layout.test.tsx` 合计 36 项通过，以及仓库根 `npm run lint:terminology` 退出码 0（1087 个文件）。
+SC-01–SC-15 **已验收**（2026-10-30）。依据是 `webui/src/__tests__/access-map.test.tsx` 与 `webui/src/__tests__/access-map-layout.test.tsx` 合计 36 项通过。SC-16 的术语 lint 已拆出；当时退出码 0 只作过程记录。
 
 验收证据（2026-10-30，配套 Plan 的 §5）：
 
@@ -355,7 +355,7 @@ SC-01–SC-16 **已验收**（2026-10-30）。依据是 `webui/src/__tests__/acc
 | SC-13 | 有断言 | `webui/src/__tests__/access-map.test.tsx` |
 | SC-14 | 有断言（既有 test id 仍可找到） | `webui/src/__tests__/access-map.test.tsx` |
 | SC-15 | 有断言（源码扫描无裸十六进制） | `webui/src/__tests__/access-map-layout.test.tsx` |
-| SC-16 | 命令级门禁（`npm run lint:terminology` 退出码 0） | 仓库根脚本 |
+| SC-16 | **拆出。** 原命令级门禁改记为过程记录 | 不在本条出口 |
 
 上表是本条出口。浏览器走查归 [`lucy-20261030-webui-release-ux-review-spec.md`](lucy-20261030-webui-release-ux-review-spec.md) 的必走表面。窄屏视口、镜像构建、部署，以及 Spec 187 的 SC-01–SC-14，不在本条出口。
 

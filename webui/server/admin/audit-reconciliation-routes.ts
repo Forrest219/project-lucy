@@ -26,6 +26,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 import { getAuditDb } from "./audit.js";
+import { resolveTurnCorrelationKey } from "./audit-inquiry-serial.js";
 import { getSecurityStore } from "../security/instance.js";
 import { sha256Hex, stableJson } from "../config-digest.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
@@ -49,12 +50,15 @@ import {
 } from "./reconciliation-context.js";
 import {
   buildInquiryReconciliation,
+  buildTableEvidenceSet,
   getReconciliationPorts,
+  groupSourceRowsByCall,
   isProtocolTool,
   paginateByKey,
   probeColumns,
   proveAsOfSForSelection,
   proveInquiryAsOfS,
+  readSourceRowsForCalls,
   reconcileTokens,
   type AccessLogRow,
   type ActiveTokenObservation,
@@ -641,20 +645,29 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
       };
     }
 
-    const turnId = request.params.turnId?.trim();
-    if (!turnId) {
+    const requestedTurnId = request.params.turnId?.trim();
+    if (!requestedTurnId) {
       reply.code(400);
       return { ok: false, error: { code: "TURN_ID_REQUIRED" } };
     }
 
     try {
       const mode = readMode(request.query.mode);
+      const database = await getAuditDb();
+      let turnId = requestedTurnId;
+      if (/^\d+$/.test(requestedTurnId)) {
+        const resolved = resolveTurnCorrelationKey(database, requestedTurnId);
+        if (!resolved) {
+          reply.code(404);
+          return { ok: false, error: { code: "TURN_NOT_FOUND" } };
+        }
+        turnId = resolved;
+      }
       const bundle = await openReconciliationContext({
         filter: { turnId },
         metricUnit: "tool_call",
         mode
       });
-      const database = await getAuditDb();
       const detail = withFrozenAuditSnapshot(database, () =>
         buildInquiryReconciliation({ db: database, context: bundle.context, turnId })
       );
@@ -749,9 +762,19 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
           unknownIdentity: tokenInput.unknownIdentity,
           protocolEventCount: rows.protocolEventCount
         });
+        // 完整表排行（Spec §3.4／§4.2）：与问询详情共用同一份表身份推导。
+        // 读的是**同一批已筛选、已回放的范围行**，不另起一次查询，也不另造一套口径。
+        const sourcesByCall = groupSourceRowsByCall(
+          readSourceRowsForCalls(
+            database,
+            rows.scopeRows.map((row) => row.id),
+            bundle.context.watermarkSeq
+          )
+        );
+        const tables = buildTableEvidenceSet(rows.scopeRows, sourcesByCall);
         // F-02：精确 as-of S 证明（范围 = 本次读到的同一批行）。
         const asOfProof = proveAsOfSForSelection(database, bundle.context, rows.scopeRows, rows.unplaceableRowIds);
-        return { tokenReconciliation, usageRows: rows.rows, asOfProof };
+        return { tokenReconciliation, usageRows: rows.rows, tables, asOfProof };
       });
 
       // F-02：上游不能证明按 S 精确重建时，**正式完整读取失败关闭**；
@@ -778,6 +801,12 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
           asOfProof: usage.asOfProof,
           diagnosticIncomplete: usage.asOfProof.ok ? null : buildDiagnosticIncomplete(usage.asOfProof),
           tokenReconciliation: usage.tokenReconciliation,
+          // 完整表排行：连接 / Schema / 表三元组，同名不同连接或 Schema 不合并。
+          tables: {
+            complete: usage.tables.complete,
+            incomplete: usage.tables.incomplete,
+            unknownBucket: usage.tables.unknownBucket
+          },
           calls: {
             items: page.items,
             nextCursor: page.nextCursor,

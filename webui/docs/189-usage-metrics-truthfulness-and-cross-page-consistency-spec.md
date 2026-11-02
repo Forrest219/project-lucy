@@ -347,7 +347,7 @@ function auditDefaultView(filter):
 | SC-15 | P1 | 最近 MCP 访问可以晚于最近业务使用；使用过的凭据可以多于业务活跃 Token，UI 与 `kpiContracts.ts` 不将二者混称，D4 锚点不丢失 |
 | SC-16 | P1 | 历史 Agent／Token 与当前配置资产的跨页面差异符合 §6 人口边界；活跃率超过 100% 时仍按 Spec 128 进入 `partial` |
 | SC-17 | P1 | 现有 24h／7d、调用监控四种窗口、访问关系图三种窗口和导出筛选行为不回归；Risk Review 使用 Raw Business，Release Readiness 使用 Default Usage，Role 拒绝归属和现场 Role 绑定边界不变 |
-| SC-18 | P1 | `lint:terminology`、`kpi-contracts` 及全部相关前后端测试、TypeScript 构建通过；未执行的项目不得标记为已验收 |
+| SC-18 | P1 | `kpi-contracts` 及本条相关前后端测试通过。术语 lint 与 TypeScript 构建 **拆出**，不在本条出口。未执行的项目不得标记为已验收 |
 
 ## 10. 验证记录（2026-10-27，WO-202610-28 T1～T6）
 

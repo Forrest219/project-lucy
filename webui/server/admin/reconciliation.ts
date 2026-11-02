@@ -510,6 +510,105 @@ export type TableEvidence = {
   sourceStatusNullReason: NullReason | null;
 };
 
+export type TableEvidenceSet = {
+  /** 完整身份去重集合；同名不同连接 / Schema 不合并。 */
+  complete: TableEvidence[];
+  /** 身份不完整的来源引用；单列不合并。 */
+  incomplete: TableEvidence[];
+  /** 缺表身份的调用进入独立未知桶（不按名称相似度合并）。 */
+  unknownBucket: {
+    callIds: string[];
+    callCount: number;
+    reason: NullReason;
+    detail: string;
+  };
+};
+
+/**
+ * 完整表身份清单（Spec §3.2「完整表清单」／§3.4「完整表身份与排行」）。
+ *
+ * 纯函数：只吃「调用行 + 按调用分组的来源引用」，不碰数据库。问询详情与使用概况的
+ * 表排行共用这一份推导，避免出现第二套表身份口径。
+ *
+ * 口径：
+ *   - 去重键是 **连接 / Schema / 表三元组**；同名不同连接或 Schema 不合并；
+ *   - 缺项的来源引用进 `incomplete`，缺来源引用的调用进 `unknownBucket`；
+ *   - 两者都不按名称相似度合并，也不猜表名。
+ */
+export function buildTableEvidenceSet(
+  rows: AccessLogRow[],
+  sourcesByCall: Map<number, SourceRow[]>
+): TableEvidenceSet {
+  const tableMap = new Map<string, TableEvidence>();
+  const callsWithoutSource: string[] = [];
+  for (const row of rows) {
+    const sources = sourcesByCall.get(row.id) ?? [];
+    if (sources.length === 0) {
+      callsWithoutSource.push(String(row.id));
+      continue;
+    }
+    for (const source of sources) {
+      const missingParts: string[] = [];
+      if (!source.connection_id) missingParts.push("connectionId");
+      if (!source.schema_name) missingParts.push("schema");
+      if (!source.source_name) missingParts.push("table");
+      const identityComplete = missingParts.length === 0;
+      const identityKey = identityComplete
+        ? JSON.stringify([source.connection_id, source.schema_name, source.source_name])
+        : JSON.stringify([
+            source.connection_id ?? null,
+            source.schema_name ?? null,
+            source.source_name ?? null,
+            source.physical_table ?? null
+          ]);
+      const observedAt = source.ts ?? row.ts;
+      const existing = tableMap.get(identityKey);
+      if (existing) {
+        existing.callCount += 1;
+        if (!existing.callIds.includes(String(row.id))) existing.callIds.push(String(row.id));
+        const observed = isoMs(observedAt);
+        const first = isoMs(existing.firstObservedAt);
+        const last = isoMs(existing.lastObservedAt);
+        if (observed !== null && (first === null || observed < first)) {
+          existing.firstObservedAt = observedAt;
+        }
+        if (observed !== null && (last === null || observed > last)) {
+          existing.lastObservedAt = observedAt;
+        }
+        continue;
+      }
+      tableMap.set(identityKey, {
+        identityKey,
+        connectionId: source.connection_id ?? null,
+        schema: source.schema_name ?? null,
+        table: source.source_name ?? null,
+        identityComplete,
+        missingIdentityParts: missingParts,
+        physicalTable: source.physical_table ?? null,
+        extractionMethod: source.extraction_method ?? null,
+        confidence: source.confidence ?? null,
+        firstObservedAt: observedAt,
+        lastObservedAt: observedAt,
+        callIds: [String(row.id)],
+        callCount: 1,
+        sourceStatus: identityComplete ? "resolved" : "identity_incomplete",
+        sourceStatusNullReason: identityComplete ? null : "not_collected"
+      });
+    }
+  }
+
+  return {
+    complete: [...tableMap.values()].filter((entry) => entry.identityComplete),
+    incomplete: [...tableMap.values()].filter((entry) => !entry.identityComplete),
+    unknownBucket: {
+      callIds: callsWithoutSource,
+      callCount: callsWithoutSource.length,
+      reason: "not_collected",
+      detail: "调用存在但没有可核验来源引用；来源未知，不从 SQL 文本无条件猜测"
+    }
+  };
+}
+
 export type CallEvidence = {
   unitId: string;
   ts: string;
@@ -707,12 +806,7 @@ export function buildInquiryReconciliation(
 
   // ── 调用与尝试 ────────────────────────────────────────────────────────────
   const sourceRows = readSourceRowsForCalls(db, rows.map((row) => row.id), context.watermarkSeq);
-  const sourcesByCall = new Map<number, SourceRow[]>();
-  for (const source of sourceRows) {
-    const list = sourcesByCall.get(source.access_log_id);
-    if (list) list.push(source);
-    else sourcesByCall.set(source.access_log_id, [source]);
-  }
+  const sourcesByCall = groupSourceRowsByCall(sourceRows);
 
   const callItems: CallEvidence[] = [];
   const bucketCounts = emptyBucketCounts();
@@ -756,66 +850,11 @@ export function buildInquiryReconciliation(
   const attemptsObservable = columns.has("attempt_id") && distinctAttempts.size > 0;
 
   // ── 完整表清单 ────────────────────────────────────────────────────────────
-  const tableMap = new Map<string, TableEvidence>();
-  const callsWithoutSource: string[] = [];
-  for (const row of rows) {
-    const sources = sourcesByCall.get(row.id) ?? [];
-    if (sources.length === 0) {
-      callsWithoutSource.push(String(row.id));
-      continue;
-    }
-    for (const source of sources) {
-      const missingParts: string[] = [];
-      if (!source.connection_id) missingParts.push("connectionId");
-      if (!source.schema_name) missingParts.push("schema");
-      if (!source.source_name) missingParts.push("table");
-      const identityComplete = missingParts.length === 0;
-      const identityKey = identityComplete
-        ? JSON.stringify([source.connection_id, source.schema_name, source.source_name])
-        : JSON.stringify([
-            source.connection_id ?? null,
-            source.schema_name ?? null,
-            source.source_name ?? null,
-            source.physical_table ?? null
-          ]);
-      const observedAt = source.ts ?? row.ts;
-      const existing = tableMap.get(identityKey);
-      if (existing) {
-        existing.callCount += 1;
-        if (!existing.callIds.includes(String(row.id))) existing.callIds.push(String(row.id));
-        const observed = isoMs(observedAt);
-        const first = isoMs(existing.firstObservedAt);
-        const last = isoMs(existing.lastObservedAt);
-        if (observed !== null && (first === null || observed < first)) {
-          existing.firstObservedAt = observedAt;
-        }
-        if (observed !== null && (last === null || observed > last)) {
-          existing.lastObservedAt = observedAt;
-        }
-        continue;
-      }
-      tableMap.set(identityKey, {
-        identityKey,
-        connectionId: source.connection_id ?? null,
-        schema: source.schema_name ?? null,
-        table: source.source_name ?? null,
-        identityComplete,
-        missingIdentityParts: missingParts,
-        physicalTable: source.physical_table ?? null,
-        extractionMethod: source.extraction_method ?? null,
-        confidence: source.confidence ?? null,
-        firstObservedAt: observedAt,
-        lastObservedAt: observedAt,
-        callIds: [String(row.id)],
-        callCount: 1,
-        sourceStatus: identityComplete ? "resolved" : "identity_incomplete",
-        sourceStatusNullReason: identityComplete ? null : "not_collected"
-      });
-    }
-  }
-
-  const completeTables = [...tableMap.values()].filter((entry) => entry.identityComplete);
-  const incompleteTables = [...tableMap.values()].filter((entry) => !entry.identityComplete);
+  // 与使用概况的表排行共用同一份推导（`buildTableEvidenceSet`）：一份表身份口径。
+  const tableEvidence = buildTableEvidenceSet(rows, sourcesByCall);
+  const completeTables = tableEvidence.complete;
+  const incompleteTables = tableEvidence.incomplete;
+  const callsWithoutSource = tableEvidence.unknownBucket.callIds;
 
   // ── 问询身份 ──────────────────────────────────────────────────────────────
   const turnRow = readConversationTurn(db, turnId);
@@ -975,12 +1014,7 @@ export function buildInquiryReconciliation(
     },
     tables: {
       complete: completeTables,
-      unknownBucket: {
-        callIds: callsWithoutSource,
-        callCount: callsWithoutSource.length,
-        reason: "not_collected",
-        detail: "调用存在但没有可核验来源引用；来源未知，不从 SQL 文本无条件猜测"
-      }
+      unknownBucket: tableEvidence.unknownBucket
     },
     turns: {
       registeredInquiryTurns,
@@ -1034,7 +1068,9 @@ export function buildInquiryReconciliation(
   };
 }
 
-type SourceRow = {
+export type SourceRow = {
+  /** `access_log_sources` 的自增行号；只用于把分批查询的结果还原成原来的全局顺序。 */
+  id: number;
   access_log_id: number;
   ts: string | null;
   connection_id: string | null;
@@ -1045,12 +1081,23 @@ type SourceRow = {
   confidence: string | null;
 };
 
-function readSourceRowsForCalls(db: Database.Database, callIds: number[], seqUpperBound?: number): SourceRow[] {
+/**
+ * 读取指定调用行的来源引用。
+ *
+ * `IN (...)` 的绑定变量有上限，所以按批读取；批内仍按 `id ASC` 排序，
+ * 全部批次读完后按行号还原成同一份全局顺序（与单批查询等价）。
+ */
+export function readSourceRowsForCalls(
+  db: Database.Database,
+  callIds: number[],
+  seqUpperBound?: number
+): SourceRow[] {
   if (callIds.length === 0) return [];
   if (!tableExists(db, "access_log_sources")) return [];
   const info = probeColumns(db, "access_log_sources");
   if (!info.has("access_log_id")) return [];
   const wanted = [
+    "id",
     "access_log_id",
     "ts",
     "connection_id",
@@ -1063,26 +1110,48 @@ function readSourceRowsForCalls(db: Database.Database, callIds: number[], seqUpp
   const projection = wanted.map((column) =>
     info.has(column) ? column : `NULL AS ${column}`
   ).join(", ");
-  const placeholders = callIds.map(() => "?").join(", ");
   const bound = info.has("ledger_seq") && seqUpperBound !== undefined;
-  const rows = db
-    .prepare(
-      `SELECT ${projection} FROM access_log_sources
-        WHERE access_log_id IN (${placeholders})
-        ${bound ? "AND (ledger_seq IS NULL OR ledger_seq <= ?)" : ""}
-        ORDER BY id ASC`
-    )
-    .all(...(bound ? [...callIds, seqUpperBound] : callIds)) as Array<Record<string, unknown>>;
-  return rows.map((row) => ({
-    access_log_id: Number(row.access_log_id),
-    ts: (row.ts as string | null) ?? null,
-    connection_id: (row.connection_id as string | null) ?? null,
-    schema_name: (row.schema_name as string | null) ?? null,
-    source_name: (row.source_name as string | null) ?? null,
-    physical_table: (row.physical_table as string | null) ?? null,
-    extraction_method: (row.extraction_method as string | null) ?? null,
-    confidence: (row.confidence as string | null) ?? null
-  }));
+  const rows: SourceRow[] = [];
+  // 单批 900 个绑定变量：远低于 SQLite 的上限（保守按 999 估），同时把宽窗口的查询拆开。
+  const BATCH_SIZE = 900;
+  for (let start = 0; start < callIds.length; start += BATCH_SIZE) {
+    const batch = callIds.slice(start, start + BATCH_SIZE);
+    const placeholders = batch.map(() => "?").join(", ");
+    const batchRows = db
+      .prepare(
+        `SELECT ${projection} FROM access_log_sources
+          WHERE access_log_id IN (${placeholders})
+          ${bound ? "AND (ledger_seq IS NULL OR ledger_seq <= ?)" : ""}
+          ORDER BY id ASC`
+      )
+      .all(...(bound ? [...batch, seqUpperBound] : batch)) as Array<Record<string, unknown>>;
+    for (const row of batchRows) {
+      rows.push({
+        id: Number(row.id ?? 0),
+        access_log_id: Number(row.access_log_id),
+        ts: (row.ts as string | null) ?? null,
+        connection_id: (row.connection_id as string | null) ?? null,
+        schema_name: (row.schema_name as string | null) ?? null,
+        source_name: (row.source_name as string | null) ?? null,
+        physical_table: (row.physical_table as string | null) ?? null,
+        extraction_method: (row.extraction_method as string | null) ?? null,
+        confidence: (row.confidence as string | null) ?? null
+      });
+    }
+  }
+  rows.sort((left, right) => left.id - right.id);
+  return rows;
+}
+
+/** 把来源引用按调用行分组（同一调用可有多条来源引用）。 */
+export function groupSourceRowsByCall(sourceRows: SourceRow[]): Map<number, SourceRow[]> {
+  const sourcesByCall = new Map<number, SourceRow[]>();
+  for (const source of sourceRows) {
+    const list = sourcesByCall.get(source.access_log_id);
+    if (list) list.push(source);
+    else sourcesByCall.set(source.access_log_id, [source]);
+  }
+  return sourcesByCall;
 }
 
 type ConversationTurnRow = {

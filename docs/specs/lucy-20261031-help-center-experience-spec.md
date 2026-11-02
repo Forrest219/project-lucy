@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计草案 / **v0.1-draft** |
 | 日期 / 目标版本 | 2026-10-31 / v0.25 |
 | 台账号 | **L25-12**。挂 v0.25 升级台账（[`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.6）。不另派 WebUI 流水号 |
-| 状态 | **待评审；仅授权起草与登记，暂不开发。** 本次不修改程序、运行配置、客户资产、镜像或数据库，不新增测试代码，不执行功能验证或部署 |
+| 状态 | **待定（2026-11-02）**。本版不实施、不评审、不开工。功能稳定后再排。D1–D14 仍是草案，SC-01–SC-20 未执行。原草案仍不得实施 |
 | 决策来源 | 2026-10-31 Forrest 决定：帮助文档拆成「快速入门」与「详细指南」两类读物；快速入门不与现有手册混在一起，放在新的改良帮助中心里；当前单页模式不优雅；允许用户把页面内容复制走（复制 Markdown / 导出 PDF） |
 | 与既有 Spec 的关系 | **取代 [`lucy-20261021-v2p5-help-center-spec.md`](lucy-20261021-v2p5-help-center-spec.md)（L25-12 原草案，v0.1-draft）。** 原草案只覆盖手册的三层 IA 派生；本 Spec 在其上扩编：新增独立快速入门资产、导出与打印合同、`docs/user-guide/` 迁移处置、角色名统一。原草案自本 Spec 登记起标为「已被取代，不得实施」，其 §3.3 的 URL 合同被本 Spec §5 取代，其余约定在无冲突处继续有效 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」「功能闭口与发布取证」「新增 Spec / Plan 的落盘清单」 |
@@ -18,8 +18,8 @@
 
 - 层级：功能合同
 - 本条承诺：帮助中心以「门户 → 分类 → 文章」三层呈现系统手册，并独立承载一份「快速入门」读物；任意文章的 Markdown 可被复制或导出带走，旧深链零失效
-- 本条出口：SC-01–SC-20 的组件测试、契约测试、静态门禁与术语检查
-- 不在本条出口：整库旅程、Agent 路径、跨模块或系统级故障演练、证据等级、移动窄屏、Docker 重建、客户现场验收
+- 本条出口：SC-01–SC-20 的组件测试与契约测试，以及 `lint:handbook-anchors` 对快速入门深链的检查
+- 不在本条出口：`lint:terminology`、`lint:spec-docs`、`lint:ia-boundary`（2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)）；整库旅程、Agent 路径、跨模块或系统级故障演练、证据等级、移动窄屏、Docker 重建、客户现场验收
 - 上线关系：本条收口不表示可上线
 
 ## Terminology Compliance
@@ -436,9 +436,9 @@ async function copyMarkdown(targetId) {
 | 门禁 | 检查内容 | 处置 |
 |---|---|---|
 | `npm run lint:handbook-anchors`（既有，**扩展**） | ① 手册内部锚点有效性 ② 手册 TOC 可达性（既有）③ **新增**：`docs/GETTING_STARTED.md` 里每条指向手册的深链 id 必须在 `SECTION_ID_CONTRACT` 中存在，且对应 article／section 在派生 IA 中可达 | 违反即失败。不新增命令、不新增 CI job（D14） |
-| `npm run lint:terminology`（既有） | 新增术语登记（快速入门／详细指南／复制 Markdown／导出 Markdown／打印／三类角色名）未登记即失败 | 违反即失败 |
-| `npm run lint:spec-docs`（既有） | 本 Spec 与 Plan 的文档形态 | 见 §13 落盘清单 |
-| `npm run lint:ia-boundary`（既有） | 路由与 API 边界 | 违反即失败 |
+| `npm run lint:terminology`（既有） | 新增术语登记 | **不在本条出口。** 过程记录 |
+| `npm run lint:spec-docs`（既有） | 本 Spec 与 Plan 的文档形态 | **不在本条出口。** 过程记录 |
+| `npm run lint:ia-boundary`（既有） | 路由与 API 边界 | **不在本条出口。** 过程记录 |
 
 新增门禁不单独登记到 `docs/governance/test-layers-and-release-gates.md`，因为 D14 决定不新增命令；既有命令的检查范围扩展在 §11 表内说明。
 

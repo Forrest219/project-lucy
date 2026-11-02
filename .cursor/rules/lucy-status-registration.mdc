@@ -1,0 +1,10 @@
+---
+description: 功能状态只有一份现值，改状态必须同批改完登记镜像
+alwaysApply: true
+---
+
+# 状态登记
+
+规则正文只在 `docs/governance/DEVELOPMENT.md`「功能闭口与发布取证」。本规则只指向它，不另写一套口径。
+
+功能的现行状态只以 Spec 头部「状态」行为准。改状态时按该文件改完现值镜像。历史变更行、复核快照和实施笔记不是现值。已作废的「未执行且不排期」和「不可交付 UAT」不得抄回。机器检查是 `lint:spec-docs` 的 `stale-status`。

@@ -8,7 +8,7 @@
 | 权威语义 | [Spec 187](../../webui/docs/187-access-relation-sankey-spec.md)。本 Plan 不改其 API、边状态、URL 值、两档措辞。Spec 187 的 SC-01–SC-14 不在本条出口 |
 | 状态 | **v0.3 已验收**（2026-10-30）。S0–S4 已完成。SC-01–SC-16 关闭。本条收口不表示可上线 |
 | 授权边界 | 已按授权实施：改页面、改 `TD-187-01`、改 Spec 187 §4.4 僵尸授权行的 UI 表现。**不涉及**构建镜像、部署、`git commit` / `git push`、浏览器走查 |
-| 验收 | SC-01–SC-16 **已验收**（2026-10-30）。依据是 `access-map.test.tsx` 与 `access-map-layout.test.tsx` 合计 36 项通过，以及 `npm run lint:terminology` 退出码 0。浏览器走查不在本条出口 |
+| 验收 | SC-01–SC-15 **已验收**（2026-10-30）。依据是 `access-map.test.tsx` 与 `access-map-layout.test.tsx` 合计 36 项通过。SC-16 术语 lint 已拆出。浏览器走查不在本条出口 |
 | 实施主体 | Lucy WebUI `webui/src`。不修改 KTX，不修改 `webui/server/admin/access-map.ts` |
 | 待拍板 | **已关闭**（2026-10-30）：D1–D8 全部采纳，D3 与 D5 均未否决，否决退路已关闭 |
 

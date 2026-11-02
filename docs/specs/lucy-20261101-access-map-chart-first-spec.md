@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 呈现修订 / **v0.2 功能合同已收口** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号。不升 Spec 187 版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（页壳与图面）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.2 功能合同已收口**（2026-11-01）。方案 A′ 已落地：去掉三张指标卡与双折叠墙；图例短行在图正上方；口径全文与快照沉到图下弱入口；抬高图区、拉开栏距、补可读悬停。SC-01–SC-14 全部有自动化断言并通过（组件测试 + 布局测试 46/46；`npm run lint:terminology` 退出码 0）。实施记录见 [`docs/plans/lucy-20261101-access-map-chart-first-plan.md`](../plans/lucy-20261101-access-map-chart-first-plan.md) §9 与 `inbox/2026-11-01-access-map-chart-first-IMPLEMENTATION_NOTES.md`。本条收口不表示可上线 |
+| 状态 | **v0.2 功能合同已收口**（2026-11-01）。方案 A′ 已落地：去掉三张指标卡与双折叠墙；图例短行在图正上方；口径全文与快照沉到图下弱入口；抬高图区、拉开栏距、补可读悬停。SC-01–SC-13 有组件与布局断言并通过。SC-14 术语 lint 于 2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。实施记录见 [`docs/plans/lucy-20261101-access-map-chart-first-plan.md`](../plans/lucy-20261101-access-map-chart-first-plan.md) §9 与 `inbox/2026-11-01-access-map-chart-first-IMPLEMENTATION_NOTES.md`。本条收口不表示可上线 |
 | 决策来源 | 2026-11-01 对 `http://127.0.0.1:55176/admin/access-map` 的反馈与拍板：桑基图是打开本页的重点；三 KPI 卡与「口径说明 / 快照」宽条喧宾夺主；partial 提示突兀；图面偏小、四栏挤、悬停不友好。委托人明确选 **方案 A**（去掉 KPI 卡），并要求图相关图例/口径保留但放在不明显位置；图例短行放**正上方** |
 | 需求来源 | 治理台访问关系图以关系图为主视觉；诚实性口径与快照不得消失，但不得抢首屏 |
 | 实施主体 | Lucy WebUI 访问关系图页（`webui/src/pages/admin/AccessMap.tsx` 与 `webui/src/components/admin/AccessMap*.tsx`）。不修改 KTX，不修改 `/api/admin/access-map` |
@@ -13,14 +13,14 @@
 | 与既有 Spec 的关系 | **再修订** [`lucy-20261030-access-map-quiet-reading-spec.md`](lucy-20261030-access-map-quiet-reading-spec.md) 的页壳骨架（§5.1 三指标卡 + 双 `details`），**不撤销**其图面着色（§5.3）、抽屉（§5.5）、数据表与凭证表（§5.6）等已验收呈现。权威语义仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 过滤、两档措辞、URL 参数、降级矩阵沿用 Spec 187。Spec 187 与 quiet-reading 的既有 SC **不在本条出口** |
 | 实施计划 | [`docs/plans/lucy-20261101-access-map-chart-first-plan.md`](../plans/lucy-20261101-access-map-chart-first-plan.md) |
 
-> v0.2 功能合同已收口（2026-11-01）。D1–D8 按 §4 提议列拍板，未在实施中改写。SC-01–SC-14 全部有自动化断言并通过。本条收口不表示可上线。
+> v0.2 功能合同已收口（2026-11-01）。D1–D8 按 §4 提议列拍板，未在实施中改写。SC-01–SC-13 有自动化断言并通过。SC-14 已拆出。本条收口不表示可上线。
 
 ## 闭口层级
 
 - 层级：功能合同
 - 本条承诺：访问关系图页默认阅读路径以关系图为主工作区；首屏不再渲染三张信号 Metric Card，也不再渲染独立宽条「口径说明」「快照」；图正上方保留图例短行；图下方保留弱入口承载口径全文与快照哈希；partial 降级仍可见但不抢主视觉；图区有可用高度与可读栏距；节点/边悬停有可读浮层。
-- 本条出口：SC-01–SC-14。组件测试与布局测试打假 DOM 结构、test id 迁移、图例位置、弱入口内容、悬停文案要点、栏距/高度类约束、术语；`npm run lint:terminology` 退出码 0。
-- 不在本条出口：浏览器走查、Playwright、窄屏视口、镜像构建、部署、证据等级，以及 Spec 187 的 SC-01–SC-14、quiet-reading 的 SC-01–SC-16（其中与本条冲突的页壳断言由本条测试改写承接）。
+- 本条出口：SC-01–SC-13。组件测试与布局测试打假 DOM 结构、test id 迁移、图例位置、弱入口内容、悬停文案要点、栏距/高度类约束、术语用词。
+- 不在本条出口：SC-14 术语 lint；浏览器走查、Playwright、窄屏视口、镜像构建、部署、证据等级，以及 Spec 187 的 SC-01–SC-14、quiet-reading 的 SC-01–SC-16（其中与本条冲突的页壳断言由本条测试改写承接）。
 - 上线关系：本条收口不表示可上线
 
 ---
@@ -290,7 +290,7 @@ render(response, url):
 | SC-11 | Token 过滤提示句保持 Spec 187 原文（承接 quiet-reading SC-13） |
 | SC-12 | 既有关键 `access-map-*` test id（legend、snapshot-id、partial-notice、canvas、edge-drawer、view tabs 等）仍可找到或按本 Spec 迁入弱入口后仍可找到 |
 | SC-13 | 页面源码无新增裸十六进制颜色 |
-| SC-14 | `npm run lint:terminology` 退出码 0 |
+| SC-14 | **拆出。** 术语 lint 是过程门禁，不在本条出口 |
 
 上线关系：本条收口不表示可上线。浏览器走查不在本条出口。
 

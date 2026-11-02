@@ -671,8 +671,8 @@ SC-01–SC-48 的**逐条**证据（初态 / 输入 / 实际输出 / 证据文�
 
 - 层级：功能合同
 - 本条承诺：问询预算按**已结算数据处理时长**计量，用尽时给调用者一条可达的续查通道（声明—消费两段式、待兑现持久化），并且预算终止在审计与问询汇总里可查、可归因。
-- 本条出口：SC-01–SC-48 的自动化用例——逐条落点见 §7.8 与 [验收表](../reviews/2026-10-30-question-budget-acceptance.md)；核心文件 `question-budget-window-mode.test.ts`、`question-budget-scope-identity.test.ts`、`question-budget-closure.test.ts`、`question-budget-continuation.test.ts`、`question-budget-settlement.test.ts`、`question-budget-turn-supersede.test.ts`、`question-budget-bypass-scope.test.ts`、`question-budget-incident-regression.test.ts`、`data-qa-instructions-contract.test.ts`、`scope-restatement-instructions.test.ts`，另加 `admin-audit.test.ts` 的 SC-25–SC-28；加 `npm run lint:terminology`。**SC-04 的证据等级是进程内 MCP 自动化**（清模块后起第二个真实代理实例、共用同一磁盘审计库、经 HTTP `tools/call` 发起真实 MCP 数据调用），**不是操作系统或容器重启**。
-- 不在本条出口：**操作系统进程重启与容器重启**（SC-04 的进程内证据不覆盖，属发布取证层）；远端 CI job；客户环境验证；镜像构建、部署与客户交付；整库旅程、Agent 路径与跨模块故障演练；全仓 typecheck 基线。
+- 本条出口：SC-01–SC-48 的自动化用例——逐条落点见 §7.8 与 [验收表](../reviews/2026-10-30-question-budget-acceptance.md)；核心文件 `question-budget-window-mode.test.ts`、`question-budget-scope-identity.test.ts`、`question-budget-closure.test.ts`、`question-budget-continuation.test.ts`、`question-budget-settlement.test.ts`、`question-budget-turn-supersede.test.ts`、`question-budget-bypass-scope.test.ts`、`question-budget-incident-regression.test.ts`、`data-qa-instructions-contract.test.ts`、`scope-restatement-instructions.test.ts`，另加 `admin-audit.test.ts` 的 SC-25–SC-28。**SC-04 的证据等级是进程内 MCP 自动化**（清模块后起第二个真实代理实例、共用同一磁盘审计库、经 HTTP `tools/call` 发起真实 MCP 数据调用），**不是操作系统或容器重启**。
+- 不在本条出口：术语 lint（2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)）；**操作系统进程重启与容器重启**（SC-04 的进程内证据不覆盖，属发布取证层）；远端 CI job；客户环境验证；镜像构建、部署与客户交付；整库旅程、Agent 路径与跨模块故障演练；全仓 typecheck 基线。
 - 上线关系：本条收口不表示可上线
 
 ---

@@ -306,7 +306,7 @@ Protected terms：`Agent`、`Token`、`MCP`、`P95`、`ACL`。数据访问视图
 | SC-7 | 调用监控仍是六张 KPI、工具排行、最近失败；页面文本不含「活跃率」。时间窗以 Spec 165 为准，可以有近 7 天和近 30 天 | `webui/src/__tests__/call-monitor.test.tsx` |
 | SC-8 | 使用概况 API 仍返回 `calls`、`denied`、`p95LatencyMs`、`metricsState`。P95 查询失败使 `p95LatencyMs === null` 且 `metricsState === "unavailable"` 时，只要三类活跃计数非 null，响应里的计数字段仍是原数值 | `webui/server/__tests__/admin-governance-observability.test.ts` 保留原契约，并加这条响应断言 |
 | SC-9 | 手册侧栏表把使用概况放在运行状态；说明覆盖资产活跃与 WebUI 页面访问。系统概览 FAQ 里「ACL 拒绝到使用概况查看」改为到调用监控或访问日志 | `docs/SYSTEM_HANDBOOK.md` 与 `webui/src/__tests__/help-center.test.tsx` |
-| SC-10 | 术语检查通过 | `cd webui && npm run lint:terminology` |
+| SC-10 | **拆出。** 术语 lint 是过程记录，不在本条出口 | 原检查命令不再作为出口 |
 | SC-11 | 插入 `page_key='admin-usage'`、`group_id='governance'` 的历史行后，分组排行把这些访问计入「运行状态」，访问治理的次数不包含它们。同一行的菜单排行仍计入「使用概况」。另插入当前目录中 `groupId === null` 的页面访问后，不增加任何分组次数 | `webui/server/__tests__/admin-ui-usage.test.ts` |
 | SC-12 | 组件收到 `p95LatencyMs: null`、`metricsState: "unavailable"`，且 `activeAgentCount`、`activeTokenCount`、`activeTableCount` 均为成功数值时，三张资产卡展示这些数字。任一活跃计数单独为 null 时，只有对应卡不可用，另外两张卡仍展示；特别覆盖 `activeTokenCount === null` 且 Token partial 标志为 true、`activeTableCount === null` 且表 partial 标志为 true 的组合，两者均必须呈现 `unavailable` 而非 `partial` | `admin-governance-observability.test.tsx` |
 | SC-13 | Token 排行标题沿用「Token 调用排行 · 近 N」，并明确说明只含当前配置 Token、百分比按本排行合计、未配置或历史凭证不进入排行 | `admin-governance-observability.test.tsx` 可见文案断言 |

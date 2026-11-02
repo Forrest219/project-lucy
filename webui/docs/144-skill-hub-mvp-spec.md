@@ -165,7 +165,7 @@ Protected DOM：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`role
 | SC-144-04 | 草稿不出现在 `resources/list` 和 `initialize` 目录；按 URI 读取返回 `skill_not_published` |
 | SC-144-05 | `roles_allowed` 不匹配返回 `skill_role_mismatch`；`deprecated` 返回 `skill_deprecated`；二者均为 `-32003` |
 | SC-144-06 | 允许与拒绝各至少一条访问审计，且 reason 与 §5 一致 |
-| SC-144-07 | `cd webui && npm run lint:terminology` 通过；导航测试随 `navigation.ts` 更新后通过 |
+| SC-144-07 | 导航测试随 `navigation.ts` 更新后通过。术语 lint **拆出**，不在本条出口 |
 
 验收环境为本地或 demo。不在生产环境修改 Role、Skill 文件或发布索引。
 

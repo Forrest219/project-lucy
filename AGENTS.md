@@ -1,6 +1,8 @@
 # project-lucy Agent 开发入口
 
-本仓库的开发治理规则见 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md)。功能闭口与发布取证、以及新 Spec 的唯一文件名，见该文件「功能闭口与发布取证」。
+本仓库的开发治理规则只以 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 为正文。本文件不复述第二套口径。功能闭口、发布取证、状态登记和新 Spec 的文件名，都见该文件「功能闭口与发布取证」。
+
+功能的现行状态只以 Spec 头部「状态」行为准。改状态时按该文件改完现值镜像。历史变更行、复核快照和实施笔记不是现值。已作废的「未执行且不排期」和「不可交付 UAT」不得抄回。机器检查是 `lint:spec-docs` 的 `stale-status`。
 数据问答运行时指导走 Lucy MCP Proxy 的 `initialize` instructions 注入（内容来源 [`webui/config/data-qa-instructions.md`](webui/config/data-qa-instructions.md)，机制见 [`webui/docs/07-mcp-auth-proxy-spec.md`](webui/docs/07-mcp-auth-proxy-spec.md) §4.4），不再由 [`CLAUDE.md`](CLAUDE.md) 承载——`CLAUDE.md` 现在只做指引，不得再写入数据问答规则正文；如发现回归，请改回纯引用。
 
 Vibe coding 双核角色协作（thinker / builder）的可选完整交付流水线见 [`docs/agent-pipeline.md`](docs/agent-pipeline.md)，按需调用，非必经流程。

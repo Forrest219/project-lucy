@@ -6,7 +6,7 @@
 | 文档版本 / 日期 | v0.3-implementation-alignment / 2026-10-25 定稿；2026-10-26 回写 §4.2 client secret 权限，Asia/Shanghai |
 | 功能编号 / 目标版本 | L25-06 / v0.25 |
 | 优先级 | P1：企业身份接入；不改变既有 P0／P1 验收与交付阻断状态 |
-| 状态 | **需求审查已签核通过（2026-10-25）；2026-10-25 获 PM 开发授权并完成实施（提交 `b89e14d`、`f933c2c`）；OIDC-24／OIDC-25 因真实环境不可得记 `blocked_environment`；§4.2 权限口径已于 2026-10-26 按真实部署事实回写。实现完成不等于验收通过，也不等于客户交付通过** |
+| 状态 | **需求审查已签核通过（2026-10-25）；2026-10-25 获 PM 开发授权并完成实施（提交 `b89e14d`、`f933c2c`）；OIDC-22–OIDC-25 于 2026-11-02 拆出功能合同，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。§4.2 权限口径已于 2026-10-26 按真实部署事实回写。实现完成不等于验收通过，也不等于客户交付通过。OIDC-01–21 与 OIDC-26 的执行状态不因这次拆分改变** |
 | 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.1 L25-06；2026-10-25 Forrest 要求开始设计并批准评审裁定与 Spec 定稿 |
 | 审查记录 | [L25-06 OIDC Spec 评审记录](../reviews/2026-10-25-lucy-v0.25-l25-06-oidc-spec-review-record.md)（M-01–M-04、F-03、G-01 签核条件已关闭） |
 | 现有基础 | `webui/server/auth/oidc-profile.ts`、`admins.yaml` 的 `oidc_bindings`、v2 持久会话、Helm 预留 `oidc` values |
@@ -16,6 +16,14 @@
 > 本文件定义拟实现行为，不代表功能已经实现或验收通过。本文批准后，仅在企业安全 Spec §1.1 的 OIDC 非目标上形成有边界的例外；其他安全合同继续有效。
 >
 > 相对建议书原始 L25-06 表述的两处明确化已经 2026-10-25 Forrest 批准：① OIDC 凭据的认证、找回与 MFA 由身份源承担，Lucy 本地密码仍由 owner 重置并保留 break-glass；② 无论身份源是否可用，本地密码登录都保留，且至少一名启用中 owner 必须具有本地密码。这是恢复与降级合同的加强，不是未声明偏离。
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：已绑定的外部身份可以登录既有本地账户；本地密码登录与至少一名本地密码所有者始终保留；默认关闭，OIDC 失败不回退开放模式。
+- 本条出口：OIDC-01–OIDC-21、OIDC-26。OIDC-21 是 Chart 渲染不变量。
+- 不在本条出口：OIDC-22、OIDC-23、OIDC-24、OIDC-25（离线启动、升级回滚、客户集群旅程、客户身份源）。2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。这些编号原状未执行，拆出不等于通过。
+- 上线关系：本条收口不表示可上线
 
 ## 0. 设计决议摘要
 
@@ -533,10 +541,10 @@ function authenticateExistingLucyRequest(request):
 | OIDC-19 | 限速与故障存储 | 四类桶按 §8.2.1 命中；随机 state 不建事务桶；NAT 仅临时 429；安全库或认证账本失败不交付会话；不形成永久账户锁定 | §8.2.1 |
 | OIDC-20 | 启动缓存、重启与临时事务 | 未认证 status 不读盘；文件变更重启后才生效；重启后旧 callback 失败并可重新登录；既有持久 Lucy 会话按原合同工作；无新增 schema 迁移 | D11／§4.3 |
 | OIDC-21 | Helm 安全接线 | enabled=false 不接线；enabled=true 只挂载配置和 Secret 文件；HTTP publicUrl、缺 Secret、覆盖固定 env 均拒绝 | §10 |
-| OIDC-22 | 离线与 probes | 无公网可启动和本地登录；无运行时外部前端资源；三类 probes 不访问 IdP | §8.3／§10 |
-| OIDC-23 | 升级与回滚 | 旧账户和预留绑定保留；未启用不开放；关闭或回滚不删除凭据、不回退开放、不误称撤销全部会话 | §10.2 |
-| OIDC-24 | linux/amd64 K8s 真实链路 | 同一候选 digest 完成 owner／operator、本地降级、撤销、重启和升级旅程；证据绑定镜像与配置摘要 | 全链路 |
-| OIDC-25 | 目标身份源兼容验收 | 使用客户目标 issuer 的真实 client registration 验证授权、token、JWKS 与账户绑定；环境不足记 blocked，不以 mock 替代 | 交付验收 |
+| OIDC-22 | 离线与 probes | **拆出。** 无公网启动与离线安装归交付 | §8.3／§10 |
+| OIDC-23 | 升级与回滚 | **拆出。** 客户升级与回滚说明归交付 | §10.2 |
+| OIDC-24 | linux/amd64 K8s 真实链路 | **拆出。** 客户集群旅程归交付。原 `blocked_environment` 不再挂在功能合同上 | 全链路 |
+| OIDC-25 | 目标身份源兼容验收 | **拆出。** 客户身份源归交付。原 `blocked_environment` 不再挂在功能合同上 | 交付验收 |
 | OIDC-26 | 启动配置与 Secret 不可用 | 分别以 profile 无效、secret 缺失／不可读／为空启动：OIDC 缓存为不可用，methods 仅 local，本地登录继续；修复文件后重启恢复 OIDC；无敏感值泄露 | §4.2／§4.3 |
 
 ## 12. 实施拆分建议（不代表已授权）
@@ -546,7 +554,7 @@ function authenticateExistingLucyRequest(request):
 | S1 配置与账户模型 | 扩展既有 `parseOidcProfile`：scope 必含 openid、logout 两字段可选；启动期 profile／secret 缓存；methods 派生；绑定 API 与 issuer 精确校验；最后本地 owner 保护；扩展 `AuthEventKind`／`SUMMARY_KEYS`；本地登录补 `method=local`；新增 `password_removed` 与绑定事件 | OIDC-01／02／03／10／12／13／18／26 的单元与 API 用例；审计封闭清单无静默丢键 |
 | S2 协议主链 | start／callback、短期事务、code＋PKCE、ID token 验证、绑定解析、既有会话签发；实现 §8.2.1 四类桶及具体 gate | OIDC-04～11／17／19／20 |
 | S3 UI 与恢复体验 | 登录按钮、错误映射、绑定维护、退出说明、公开手册和术语防御 | OIDC-14～17 的交互断言；默认不额外做移动窄屏测试 |
-| S4 客户交付 | Helm、Secret、离线依赖、升级回滚、amd64 K8s 与目标 IdP 验收 | OIDC-18／21～25；证据不足保持 blocked |
+| S4 客户交付 | Helm 以外的离线依赖、升级回滚、amd64 K8s 与目标 IdP | OIDC-22～25 **已拆出**，不在功能合同出口。OIDC-21 留在 OIDC-01–21 |
 
 实施 Plan 必须进一步确定所选 OIDC 库及其许可证／维护状态、依赖版本、实际文件路径和测试 IdP 拓扑；不得把本设计基线写成已经生效的运行时合同。
 

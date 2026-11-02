@@ -88,21 +88,26 @@ async function seedProject(): Promise<void> {
   await writeFile(path.join(projectRoot, "semantic-layer/shop-db/orders.yaml"), ORDERS);
 }
 
-function mockKtx(): void {
+function mockKtx() {
+  // The mocks are created outside the factory so a test can assert on them
+  // (G30: a batch validation must not reindex anything).
+  const validateSource = vi.fn(async () => ({
+    ok: true,
+    exitCode: 0,
+    stdout: "",
+    stderr: "",
+    issues: []
+  }));
+  const reindexProject = vi.fn(async () => ({ exitCode: 0, stdout: "indexed", stderr: "" }));
   vi.doMock("../ktx", async () => {
     const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
     return {
       ...actual,
-      validateSource: vi.fn(async () => ({
-        ok: true,
-        exitCode: 0,
-        stdout: "",
-        stderr: "",
-        issues: []
-      })),
-      reindexProject: vi.fn(async () => ({ exitCode: 0, stdout: "indexed", stderr: "" }))
+      validateSource,
+      reindexProject
     };
   });
+  return { validateSource, reindexProject };
 }
 
 beforeEach(async () => {
@@ -308,6 +313,80 @@ describe("FC-32 shared legality", () => {
     expect(imported.status).toBe(400);
     expect(imported.body.error.message).toContain("导入预检未通过");
     expect(await readFile(path.join(projectRoot, "semantic-layer/shop-db/orders.yaml"), "utf8")).toBe(before);
+    await app.close();
+  });
+});
+
+/**
+ * G30 —— 批量校验只产报告，不产可发布计划。
+ *
+ * 这是产品合同本身：校验端点的产物只是**任务与报告**，没有可发布计划的标识
+ * （`validationId` / `releaseId` / `planDigest`），也不写发布、不索引。
+ * 关闭 G30 是把这条合同**收口成现状**，不是让校验端点改产可发布计划。
+ */
+describe("G30 — the batch check produces a report, not a publishable plan", () => {
+  it("returns a task and a report only, and writes no release", async () => {
+    const ktx = mockKtx();
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+
+    const scope = await request(app.server)
+      .post("/api/semantic-assets/scopes")
+      .send({ refs: [{ connectionId: "shop-db", schema: "public", table: "orders" }] });
+    expect(scope.status).toBe(200);
+    const scopeId = scope.body.data.scopeId as string;
+
+    const started = await request(app.server)
+      .post("/api/semantic-assets/check")
+      .send({ scopeId });
+    expect(started.status).toBe(202);
+
+    const data = started.body.data as Record<string, unknown>;
+    expect(data.taskId).toBeTruthy();
+    expect(data.operationId).toBeTruthy();
+    expect(data.scopeId).toBe(scopeId);
+    // 产物是「任务」，不是「可发布计划」。
+    expect(data).not.toHaveProperty("validationId");
+    expect(data).not.toHaveProperty("releaseId");
+    expect(data).not.toHaveProperty("planDigest");
+    expect(data).not.toHaveProperty("candidateDigest");
+
+    let task: Record<string, unknown> = {};
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const polled = await request(app.server).get(
+        `/api/semantic-assets/operations/${String(data.operationId)}`
+      );
+      task = polled.body.data as Record<string, unknown>;
+      if (task.status && task.status !== "queued" && task.status !== "running") break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(task.status).toBe("completed");
+    // 落库的任务记录同样只有报告。
+    expect(task.reportJsonUrl).toBeTruthy();
+    expect(task.reportCsvUrl).toBeTruthy();
+    expect(task).not.toHaveProperty("validationId");
+    expect(task).not.toHaveProperty("releaseId");
+    expect(task).not.toHaveProperty("planDigest");
+
+    // 审计记的是 validated，`publishEffect` 为 false —— 校验不是发布。
+    const { recordConfigChange } = await import("../admin/audit.js");
+    const records = vi
+      .mocked(recordConfigChange)
+      .mock.calls.map((call) => call[0] as unknown as Record<string, unknown>);
+    const validated = records.find((record) => record.changeType === "semantic_batch_validated");
+    expect(validated).toBeTruthy();
+    const oldSummary = validated?.oldSummary as Record<string, unknown>;
+    const newSummary = validated?.newSummary as Record<string, unknown>;
+    expect(oldSummary.publishEffect).toBe(false);
+    expect(newSummary.publishEffect).toBe(false);
+    expect(newSummary.releaseId).toBeNull();
+    expect(records.some((record) => record.changeType === "semantic_batch_published")).toBe(false);
+
+    // 校验不写发布：正式文件不变，也不触发索引。
+    expect(await readFile(path.join(projectRoot, "semantic-layer/shop-db/orders.yaml"), "utf8")).toBe(ORDERS);
+    expect(ktx.reindexProject).not.toHaveBeenCalled();
+
     await app.close();
   });
 });

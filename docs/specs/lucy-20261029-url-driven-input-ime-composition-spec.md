@@ -397,7 +397,7 @@ SC-01 – SC-13 是**逐处**承诺，每处的五个条件分别是：①`value
 | SC-18 | C-1 变换写回（`AuditReconciliation`） | `url-driven-input-transform-writeback.test.tsx` describe「SC-18：AuditReconciliation 问询 ID 输入框保留原文」：输入框保留 `  turn-42  `，请求按 trim 后的 `turn-42` 发起 |
 | SC-19 | C-2 变换写回（`CaseEditor`） | 同文件 describe「SC-19：CaseEditor 期望指标输入框可键入「, 」」2 条：受控值是原文、`", "` 不被抹掉；提交时按解析后的数组 `["weighted_discount","profit_margin"]` 下发 |
 | SC-20 | 全量测试与回归哨兵 | 全量 `cd webui && npx vitest run`：425 个测试文件 / 5173 条用例，其中 `server/__tests__/api.create-connection.test.ts` 的 2 条**既有服务端 flake** 偶发失败（单独复跑 3 次有 2 次全绿；与本条无交集，本条不改任何服务端代码，根因见收口记录「残余」一节）。两个**既有**哨兵未回归：`src/__tests__/audit.test.tsx`「`user=analyst_zhang` 服务端查询断言」、`src/__tests__/admin-audit-turns.test.tsx`「shows clear-filters when a non-default filter is active」 |
-| SC-21 | 静态门禁与 CI 接线 | `npm run lint:terminology`、`npm run lint:ia-boundary`、`npm run lint:url-driven-input` 全绿；CI 已接线于 `.github/workflows/lucy-release.yml` 的 job `spec-and-webui`。**远端 CI job 未跑——证据等级，归发布取证** |
+| SC-21 | 本条规则门禁 | `npm run lint:url-driven-input` 全绿，打假 SC-14–SC-16。`lint:terminology`、`lint:ia-boundary` 与远端 CI **拆出**，不在本条出口 |
 | SC-22 | 回声协议 | `admin-audit-url-mirror.test.tsx`「SC-22：较早的 URL 值晚到时不覆盖草稿」「SC-22：新值先确认、旧值后到时也不覆盖草稿」——用可控延迟的 router 替身稳定复现两种顺序 |
 | SC-23 | 写前 trim 与 `all` 哨兵 | Audit 统一搜索与消费点：`admin-audit-url-mirror.test.tsx`「统一搜索：末尾空格保留在输入框与 URL，消费值再 trim」+「统一搜索的末尾空格不会进入请求参数」；目录 `q`：`url-driven-input-mirror-contract.test.tsx`「SC-23：消费点按 trim 后的值过滤（原始尾空格只留在输入框与 URL 里）」；Token 文本 `all` 与下拉框哨兵：同文件「SC-23：文本 `all` 是普通文本，不走下拉框的「清空」哨兵」「SC-23：下拉框的 `all` 清空哨兵不变——选「全部状态」把 status 参数删掉」 |
 
@@ -407,8 +407,8 @@ SC-01 – SC-13 是**逐处**承诺，每处的五个条件分别是：①`value
 
 - 层级：功能合同
 - 本条承诺：13 处筛选栏文本输入框在中文输入法组合期间不被打断——受控值取自局部状态镜像，URL 作为下游事实源跟随**原文**，且深链、后退、清除筛选都不会让输入框与 URL 脱节。
-- 本条出口：SC-01–SC-13 的逐处用例（`webui/src/__tests__/admin-audit-url-mirror.test.tsx`、`webui/src/__tests__/url-driven-input-mirror-contract.test.tsx`）；SC-14–SC-16 的静态门禁与其单测（`webui/scripts/lint-url-driven-input.mjs`、`webui/scripts/__tests__/lint-url-driven-input.test.ts`）；SC-17 的真实浏览器探针记录（`webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/`）；SC-18–SC-19 的伴生缺陷用例（`webui/src/__tests__/url-driven-input-transform-writeback.test.tsx`）；SC-20 的全量 WebUI 测试与两个既有 URL 断言哨兵；SC-22–SC-23 的回声与消费点用例；以及 `npm run lint:terminology`、`npm run lint:ia-boundary`、`npm run lint:url-driven-input`。
-- 不在本条出口：远端 CI job 的绿灯（证据等级）；整库旅程、Agent 路径与跨模块故障演练；镜像构建、部署与客户环境验证；移动窄屏与响应式验证；Safari / WebKit 与真实 OS 级输入法（macOS 拼音、Windows 微软拼音）实测；Firefox 实测；全仓 typecheck 基线。**全仓形态门禁 `npm run lint:spec` 也不在本条出口**——本条不新增任何后端接口，该门禁打假不了本条承诺（收口复核时它已因另一条线的接口登记补齐而转绿）。
+- 本条出口：SC-01–SC-13 的逐处用例（`webui/src/__tests__/admin-audit-url-mirror.test.tsx`、`webui/src/__tests__/url-driven-input-mirror-contract.test.tsx`）；SC-14–SC-16 的静态门禁与其单测（`webui/scripts/lint-url-driven-input.mjs`、`webui/scripts/__tests__/lint-url-driven-input.test.ts`）；SC-17 的真实浏览器探针记录（`webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/`）；SC-18–SC-19 的伴生缺陷用例（`webui/src/__tests__/url-driven-input-transform-writeback.test.tsx`）；SC-20 的全量 WebUI 测试与两个既有 URL 断言哨兵；SC-22–SC-23 的回声与消费点用例；以及 `npm run lint:url-driven-input`。
+- 不在本条出口：SC-21 里的 `lint:terminology`、`lint:ia-boundary` 与远端 CI job（2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)）；整库旅程、Agent 路径与跨模块故障演练；镜像构建、部署与客户环境验证；移动窄屏与响应式验证；Safari / WebKit 与真实 OS 级输入法（macOS 拼音、Windows 微软拼音）实测；Firefox 实测；全仓 typecheck 基线。**全仓形态门禁 `npm run lint:spec` 也不在本条出口**——本条不新增任何后端接口，该门禁打假不了本条承诺（收口复核时它已因另一条线的接口登记补齐而转绿）。
 - 上线关系：本条收口不表示可上线
 
 ---
