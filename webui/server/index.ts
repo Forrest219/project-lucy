@@ -178,6 +178,7 @@ import { startDiscoveryWorker } from "./live-table-worker.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
+import { buildAdminOpenApiDocument } from "./admin/openapi-document.js";
 import { registerOidcRoutes } from "./auth/oidc-routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { actorIdFromRequest, requireWebuiAuthHook } from "./auth/guard.js";
@@ -2947,6 +2948,7 @@ export function buildServer() {
   // creation, the independent batch check, and the operation polling/cancel.
   registerSemanticBatchRoutes(app);
 
+  app.get("/api/openapi.json", async () => buildAdminOpenApiDocument());
   registerAuthRoutes(app);
   registerAdminAccountRoutes(app);
   registerOidcRoutes(app);

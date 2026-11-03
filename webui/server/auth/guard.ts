@@ -9,6 +9,7 @@ import {
 import { authenticateSession } from "./account-state.js";
 import type { SessionClaims } from "./session.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
+import { diagnoseApiRoute } from "./api-route-diagnosis.js";
 
 export type RequestAdminContext = {
   session: SessionClaims | null;
@@ -40,6 +41,8 @@ export function isPublicApi(method: string, url: string): boolean {
   if (!pathOnly.startsWith("/api/")) return true;
   const m = method.toUpperCase();
   if (m === "GET" && pathOnly === "/api/health") return true;
+  // Admin OpenAPI is public and exact. Do not open the rest of /api/auth/*.
+  if (m === "GET" && pathOnly === "/api/openapi.json") return true;
   if (m === "GET" && pathOnly === "/api/auth/status") return true;
   if (m === "POST" && pathOnly === "/api/auth/login") return true;
   if (m === "POST" && pathOnly === "/api/auth/bootstrap") return true;
@@ -75,6 +78,34 @@ export async function requireWebuiAuthHook(
   reply: FastifyReply
 ): Promise<void> {
   if (isSensitiveApi(request.method, request.url)) reply.header("Cache-Control", "no-store");
+
+  // D3: CSRF already ran. Diagnose with the live router before any session denial.
+  const requestPath = request.url.split("?")[0]?.split("#")[0] ?? request.url;
+  if (requestPath.startsWith("/api/")) {
+    const diagnosis = diagnoseApiRoute(request.server, request.method, request.url);
+    if (diagnosis.kind === "none") {
+      return reply.status(404).send({
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: `Route ${request.method} ${request.url} not found`,
+          detail: { allowedMethods: [] as string[] }
+        }
+      });
+    }
+    if (diagnosis.kind === "method_not_allowed") {
+      reply.header("Allow", diagnosis.allowedMethods.join(", "));
+      return reply.status(405).send({
+        ok: false,
+        error: {
+          code: "METHOD_NOT_ALLOWED",
+          message: "此路径不允许使用该 HTTP 方法",
+          detail: { allowedMethods: diagnosis.allowedMethods }
+        }
+      });
+    }
+  }
+
   const ctx = await attachAdminContext(request);
   const mode = await resolveAuthMode();
   ctx.authMode = mode;

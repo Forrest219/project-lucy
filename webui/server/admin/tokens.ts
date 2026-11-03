@@ -7,7 +7,7 @@ import { auditedWriteFile } from "./config-audit-write.js";
 import { withDisplayWriteBarrier } from "../display-generation.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
-import type { YamlAccessConfig } from "./agents.js";
+import type { TokenUsageSnapshot, YamlAccessConfig, YamlToken, YamlUser } from "./agents.js";
 import { getLastBusinessUseMap, getLastUsedMap } from "./agents.js";
 import {
   evaluateAccessGovernanceGate,
@@ -26,9 +26,12 @@ import {
   assertStrictExtension,
   expiryNormalizedEqual,
   normalizeNewTokenExpiry,
+  resolveIssuedTokenExpiry,
   TokenExpiryPolicyError
 } from "./token-expiry-policy.js";
 import { buildTokenDisplayHint, isValidTokenDisplayHint } from "./token-display-hint.js";
+import { resolveMcpEndpoint } from "../runtime-config.js";
+import { buildClientConfigs } from "../../src/lib/setupAssistant.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -47,6 +50,69 @@ function withTokenWriteLock<T>(fn: () => Promise<T>): Promise<T> {
 
 function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
+}
+
+type TokenListRow = {
+  hashPrefix: string;
+  tokenHint: string | null;
+  label: string;
+  created: string;
+  expires_at: string | null;
+  device_name: string | null;
+  agent: { id: string; name: string; enabled: boolean; roles: string[] };
+  last_used?: string;
+  last_business_use?: string;
+  last_tool?: string;
+  last_outcome?: string;
+  last_ip?: string | null;
+  last_user_agent?: string | null;
+  last_client?: string | null;
+  last_client_version?: string | null;
+  last_device_name_seen?: string | null;
+  distinct_ips_7d?: number;
+  status: "available" | "expired" | "agent_disabled";
+};
+
+/** Same non-sensitive row as GET /api/admin/tokens. Never includes plaintext. */
+export function projectTokenListRow(
+  user: YamlUser,
+  token: YamlToken,
+  nowMs: number,
+  usage?: TokenUsageSnapshot,
+  lastBusinessUse?: string
+): TokenListRow {
+  const hashPrefix = token.hash ? token.hash.slice(0, 19) : "";
+  const isAgentEnabled = user.enabled !== false;
+  const resolvedRoles = resolveRoleIds(user);
+  const expired = isTokenExpired(token.expires_at, nowMs);
+  let status: TokenListRow["status"] = "available";
+  if (!isAgentEnabled) status = "agent_disabled";
+  else if (expired) status = "expired";
+  return {
+    hashPrefix,
+    tokenHint: isValidTokenDisplayHint(token.token_hint) ? token.token_hint : null,
+    label: token.label,
+    created: token.created,
+    expires_at: token.expires_at ?? null,
+    device_name: token.device_name ?? null,
+    agent: {
+      id: user.id,
+      name: user.name || user.id,
+      enabled: isAgentEnabled,
+      roles: resolvedRoles.ok ? resolvedRoles.roleIds : []
+    },
+    last_used: usage?.lastUsed,
+    last_business_use: lastBusinessUse,
+    last_tool: usage?.lastTool,
+    last_outcome: usage?.lastOutcome,
+    last_ip: usage?.lastIp ?? null,
+    last_user_agent: usage?.lastUserAgent ?? null,
+    last_client: usage?.lastClient ?? null,
+    last_client_version: usage?.lastClientVersion ?? null,
+    last_device_name_seen: usage?.lastDeviceNameSeen ?? null,
+    distinct_ips_7d: usage?.distinctIps7d,
+    status
+  };
 }
 
 function defaultActor(request?: FastifyRequest): AccessGovernanceApprover {
@@ -198,47 +264,13 @@ export function registerTokenRoutes(app: FastifyInstance) {
     for (const user of users) {
       const userUsage = lastUsedMap.get(user.id);
       const userBusinessUse = lastBusinessUseMap.get(user.id);
-      const isAgentEnabled = user.enabled !== false;
-      const resolvedRoles = resolveRoleIds(user);
-      const roles = resolvedRoles.ok ? resolvedRoles.roleIds : [];
 
       for (const t of user.tokens || []) {
         const hashPrefix = t.hash ? t.hash.slice(0, 19) : "";
         const usage = hashPrefix ? userUsage?.get(hashPrefix) : undefined;
-        const expired = isTokenExpired(t.expires_at, now);
-
-        let status: "available" | "expired" | "agent_disabled" = "available";
-        if (!isAgentEnabled) {
-          status = "agent_disabled";
-        } else if (expired) {
-          status = "expired";
-        }
-
-        allTokens.push({
-          hashPrefix,
-          tokenHint: isValidTokenDisplayHint(t.token_hint) ? t.token_hint : null,
-          label: t.label,
-          created: t.created,
-          expires_at: t.expires_at ?? null,
-          device_name: t.device_name ?? null,
-          agent: {
-            id: user.id,
-            name: user.name || user.id,
-            enabled: isAgentEnabled,
-            roles
-          },
-          last_used: usage?.lastUsed,
-          last_business_use: userUsage ? userBusinessUse?.get(hashPrefix) : undefined,
-          last_tool: usage?.lastTool,
-          last_outcome: usage?.lastOutcome,
-          last_ip: usage?.lastIp ?? null,
-          last_user_agent: usage?.lastUserAgent ?? null,
-          last_client: usage?.lastClient ?? null,
-          last_client_version: usage?.lastClientVersion ?? null,
-          last_device_name_seen: usage?.lastDeviceNameSeen ?? null,
-          distinct_ips_7d: usage?.distinctIps7d,
-          status
-        });
+        allTokens.push(
+          projectTokenListRow(user, t, now, usage, userUsage ? userBusinessUse?.get(hashPrefix) : undefined)
+        );
       }
     }
 
@@ -306,21 +338,25 @@ export function registerTokenRoutes(app: FastifyInstance) {
       dryRun?: boolean;
       label: string;
       device_name?: string | null;
-      expires_at: string;
+      expires_at?: string;
+      expires_in?: string;
+      includeClientConfigs?: boolean;
       override?: AccessGovernanceOverrideRequest;
     };
   }>("/api/admin/agents/:userId/tokens", async (request, reply) => {
+    const t0 = Date.now();
     const { userId } = request.params;
     const { label } = request.body ?? {};
     const deviceNameRaw = request.body?.device_name;
     const dryRun = request.body?.dryRun === true;
+    const includeClientConfigs = request.body?.includeClientConfigs === true;
     reply.header("Cache-Control", "private, no-store");
     reply.header("Pragma", "no-cache");
     reply.header("Expires", "0");
 
     let expires_at: string;
     try {
-      expires_at = normalizeNewTokenExpiry(request.body?.expires_at);
+      expires_at = resolveIssuedTokenExpiry(request.body?.expires_at, request.body?.expires_in, t0);
     } catch (error) {
       return reply.status(400).send({
         ok: false,
@@ -353,8 +389,25 @@ export function registerTokenRoutes(app: FastifyInstance) {
       }
 
       const user = config.users[userIndex];
-      if (user.tokens.some((t) => t.label === label)) {
-        return reply.status(409).send({ ok: false, error: { code: "TOKEN_LABEL_TAKEN", message: `Token label '${label}' already exists for this agent` } });
+      const taken = user.tokens.find((t) => t.label === label);
+      if (taken) {
+        const [lastUsedMap, lastBusinessUseMap] = await Promise.all([
+          getLastUsedMap([user.id]),
+          getLastBusinessUseMap([user.id])
+        ]);
+        const hashPrefix = taken.hash ? taken.hash.slice(0, 19) : "";
+        const usage = hashPrefix ? lastUsedMap.get(user.id)?.get(hashPrefix) : undefined;
+        const businessUse = lastUsedMap.get(user.id) ? lastBusinessUseMap.get(user.id)?.get(hashPrefix) : undefined;
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "TOKEN_LABEL_TAKEN",
+            message: `Token label '${label}' already exists for this agent`,
+            detail: {
+              existingToken: projectTokenListRow(user, taken, Date.now(), usage, businessUse)
+            }
+          }
+        });
       }
 
       // L25-16 / G13 — 为**已有委托**的 Agent 签发 Token 必须 owner：
@@ -422,6 +475,22 @@ export function registerTokenRoutes(app: FastifyInstance) {
         await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       }
 
+      let clientConfigEndpoint: string | undefined;
+      if (includeClientConfigs) {
+        const endpoint = resolveMcpEndpoint();
+        if (endpoint.status !== "configured" || !endpoint.url) {
+          return reply.status(503).send({
+            ok: false,
+            error: {
+              code: "MCP_ENDPOINT_UNAVAILABLE",
+              message: "公开 MCP 地址未配置为可签发端点，本次未签发 Token",
+              detail: { status: endpoint.status, diagnostics: endpoint.diagnostics }
+            }
+          });
+        }
+        clientConfigEndpoint = endpoint.url;
+      }
+
       // Full plaintext only in the HTTP response; YAML may store fixed truncation hint.
       const plainToken = randomBytes(32).toString("hex");
       const tokenHash = hashToken(plainToken);
@@ -477,7 +546,10 @@ export function registerTokenRoutes(app: FastifyInstance) {
           created,
           expires_at,
           ...runtime,
-          gate
+          gate,
+          ...(clientConfigEndpoint
+            ? { clientConfigs: buildClientConfigs(clientConfigEndpoint, plainToken) }
+            : {})
         }
       };
     });

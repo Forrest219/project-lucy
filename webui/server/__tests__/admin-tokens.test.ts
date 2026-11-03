@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { normalizeNewTokenExpiry, presetExpiryDateString } from "../admin/token-expiry-policy.js";
 import { buildServer } from "../index";
 
 const revokedRows: Array<{ token_hash: string; revoked_at: string; reason: string }> = [];
@@ -634,6 +635,212 @@ describe("GET /api/admin/tokens", () => {
       .get("/api/admin/tokens?search=nonexistent")
       .expect(200);
     expect(resNone.body.data.tokens).toHaveLength(0);
+    await app.close();
+  });
+});
+
+describe("token issue discoverability", () => {
+  const t0 = Date.parse("2026-06-15T08:00:00.000Z");
+  let dateNow: ReturnType<typeof vi.spyOn> | undefined;
+  const previousMcp = process.env.LUCY_PUBLIC_MCP_URL;
+
+  function expectedPreset(days: number): string {
+    return normalizeNewTokenExpiry(presetExpiryDateString(days, t0), t0);
+  }
+
+  beforeEach(() => {
+    dateNow = vi.spyOn(Date, "now").mockReturnValue(t0);
+  });
+
+  afterEach(() => {
+    dateNow?.mockRestore();
+    if (previousMcp === undefined) delete process.env.LUCY_PUBLIC_MCP_URL;
+    else process.env.LUCY_PUBLIC_MCP_URL = previousMcp;
+  });
+
+  it("SC-07 duplicate label returns a non-sensitive existingToken", async () => {
+    const app = buildServer();
+    await app.ready();
+    const created = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "taken-label", expires_in: "30d" })
+      .expect(200);
+    const plain = created.body.data.token as string;
+    const again = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "taken-label", expires_in: "30d" })
+      .expect(409);
+    expect(again.body.error.code).toBe("TOKEN_LABEL_TAKEN");
+    const existing = again.body.error.detail.existingToken;
+    expect(existing.label).toBe("taken-label");
+    expect(existing.created).toBeTruthy();
+    expect(existing.expires_at).toBe(expectedPreset(30));
+    expect(existing.status).toBe("available");
+    expect(existing.tokenHint).toBe(created.body.data.token_hint);
+    expect(existing.hashPrefix).toMatch(/^sha256:/);
+    expect(existing.token).toBeUndefined();
+    expect(existing.hash).toBeUndefined();
+    expect(JSON.stringify(again.body)).not.toContain(plain);
+    const listed = await request(app.server).get("/api/admin/tokens").expect(200);
+    const row = listed.body.data.tokens.find((token: { label: string }) => token.label === "taken-label");
+    expect(row.label).toBe(existing.label);
+    expect(row.created).toBe(existing.created);
+    expect(row.expires_at).toBe(existing.expires_at);
+    expect(row.status).toBe(existing.status);
+    expect(row.tokenHint).toBe(existing.tokenHint);
+    expect(row.hashPrefix).toBe(existing.hashPrefix);
+    await app.close();
+  });
+
+  it("SC-11 expires_in 365d matches the fixed t0 preset", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "year-token", expires_in: "365d" })
+      .expect(200);
+    expect(res.body.data.expires_at).toBe(expectedPreset(365));
+    await app.close();
+  });
+
+  it("SC-12 accepts equal expiry fields and rejects a conflict", async () => {
+    const app = buildServer();
+    await app.ready();
+    const equal = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "equal-expiry", expires_in: "365d", expires_at: expectedPreset(365) })
+      .expect(200);
+    expect(equal.body.data.expires_at).toBe(expectedPreset(365));
+    const conflict = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "conflict-expiry", expires_in: "30d", expires_at: expectedPreset(365) })
+      .expect(400);
+    expect(conflict.body.error.code).toBe("EXPIRES_CONFLICT");
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).not.toContain("conflict-expiry");
+    await app.close();
+  });
+
+  it("SC-13 rejects expires_in 7d", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "week-token", expires_in: "7d" })
+      .expect(400);
+    expect(res.body.error.code).toBe("EXPIRES_IN_INVALID");
+    await app.close();
+  });
+
+  it("SC-14 gates clientConfigs on a configured MCP endpoint", async () => {
+    const app = buildServer();
+    await app.ready();
+    const before = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+
+    delete process.env.LUCY_PUBLIC_MCP_URL;
+    const fallback = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "fallback-token", expires_in: "30d", includeClientConfigs: true })
+      .expect(503);
+    expect(fallback.body.error.code).toBe("MCP_ENDPOINT_UNAVAILABLE");
+    expect(fallback.body.data?.token).toBeUndefined();
+    expect(fallback.body.data?.clientConfigs).toBeUndefined();
+
+    process.env.LUCY_PUBLIC_MCP_URL = "not-a-url";
+    const invalid = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "invalid-token", expires_in: "30d", includeClientConfigs: true })
+      .expect(503);
+    expect(invalid.body.error.code).toBe("MCP_ENDPOINT_UNAVAILABLE");
+
+    process.env.LUCY_PUBLIC_MCP_URL = "ftp://lucy.example.com/mcp";
+    const ftp = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "ftp-token", expires_in: "30d", includeClientConfigs: true })
+      .expect(503);
+    expect(ftp.body.error.code).toBe("MCP_ENDPOINT_UNAVAILABLE");
+    expect(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8")).toBe(before);
+
+    process.env.LUCY_PUBLIC_MCP_URL = "https://lucy.example.com/agent";
+    const recommended = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "path-token", expires_in: "30d", includeClientConfigs: true })
+      .expect(200);
+    expect(recommended.body.data.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(Object.keys(recommended.body.data.clientConfigs).sort()).toEqual(["claude_code", "codex", "cursor", "json"]);
+
+    process.env.LUCY_PUBLIC_MCP_URL = "https://lucy.example.com/mcp";
+    const issued = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "config-token", expires_in: "30d", includeClientConfigs: true })
+      .expect(200);
+    const plain = issued.body.data.token as string;
+    const configs = issued.body.data.clientConfigs;
+    expect(Object.keys(configs).sort()).toEqual(["claude_code", "codex", "cursor", "json"]);
+    const cursor = JSON.parse(configs.cursor.snippet);
+    const generic = JSON.parse(configs.json.snippet);
+    expect(JSON.stringify(cursor)).toContain("https://lucy.example.com/mcp");
+    expect(JSON.stringify(cursor)).toContain(plain);
+    expect(JSON.stringify(generic)).toContain(plain);
+    expect(configs.claude_code.snippet).toContain("https://lucy.example.com/mcp");
+    expect(configs.codex.snippet).toContain("https://lucy.example.com/mcp");
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).not.toContain(plain);
+    expect(yaml).not.toContain(recommended.body.data.token);
+    await app.close();
+  });
+
+  it("SC-15 omits clientConfigs unless includeClientConfigs is true", async () => {
+    process.env.LUCY_PUBLIC_MCP_URL = "https://lucy.example.com/mcp";
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "no-fragment", expires_in: "30d" })
+      .expect(200);
+    expect(res.body.data).not.toHaveProperty("clientConfigs");
+    await app.close();
+  });
+
+  it("SC-19 dryRun shares resolve_expiry and skips mint plus endpoint failures", async () => {
+    delete process.env.LUCY_PUBLIC_MCP_URL;
+    const app = buildServer();
+    await app.ready();
+    const before = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    const preview = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ dryRun: true, label: "preview-year", expires_in: "365d", includeClientConfigs: true })
+      .expect(200);
+    expect(preview.body.data.dryRun).toBe(true);
+    expect(preview.body.data.proposed.expires_at).toBe(expectedPreset(365));
+    expect(preview.body.data.token).toBeUndefined();
+    expect(preview.body.data).not.toHaveProperty("clientConfigs");
+    expect(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8")).toBe(before);
+
+    const invalid = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ dryRun: true, label: "preview-bad", expires_in: "7d", includeClientConfigs: true })
+      .expect(400);
+    expect(invalid.body.error.code).toBe("EXPIRES_IN_INVALID");
+
+    const conflict = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({
+        dryRun: true,
+        label: "preview-conflict",
+        expires_in: "30d",
+        expires_at: expectedPreset(365),
+        includeClientConfigs: true
+      })
+      .expect(400);
+    expect(conflict.body.error.code).toBe("EXPIRES_CONFLICT");
+    expect(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8")).toBe(before);
+
+    const issued = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "real-year", expires_in: "90d" })
+      .expect(200);
+    expect(issued.body.data.expires_at).toBe(expectedPreset(90));
     await app.close();
   });
 });

@@ -38,6 +38,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261103-admin-api-agent-discoverability-spec.md](specs/lucy-20261103-admin-api-agent-discoverability-spec.md) | **v0.4 已实施（2026-11-03）**。SC-01–SC-20 自动化已落，尚无逐条收口记录。本条收口不表示可上线。功能编号无。Plan 见 [lucy-20261103-admin-api-agent-discoverability-plan.md](plans/lucy-20261103-admin-api-agent-discoverability-plan.md)。审阅见 [codex-review](reviews/2026-11-03-codex-review-admin-api-agent-discoverability.md) |
 | [specs/lucy-20261102-token-display-hint-spec.md](specs/lucy-20261102-token-display-hint-spec.md) | **v0.1 已实施（2026-11-02）。功能合同未正式收口签字。本条收口不表示可上线**。Token 列表改展示固定明文截断「Token 核对提示」（`token_hint`）；审计仍用完整 `sha256:`／`hashPrefix`。功能编号无。Plan 见 [lucy-20261102-token-display-hint-plan.md](plans/lucy-20261102-token-display-hint-plan.md) |
 | [specs/lucy-20261102-audit-turns-column-density-spec.md](specs/lucy-20261102-audit-turns-column-density-spec.md) | **v0.3 已实施，功能合同未收口。本条收口不表示可上线**。问询记录表列密度；开始时间与问询时长上下双行；客户端 / 会话 ID 可换行；三档视口证据在 `inbox/audit-turns-column-density-20261102/`。功能编号无。Plan 见 [lucy-20261102-audit-turns-column-density-plan.md](plans/lucy-20261102-audit-turns-column-density-plan.md) |
 | [specs/lucy-20261102-audit-inquiry-kind-spec.md](specs/lucy-20261102-audit-inquiry-kind-spec.md) | **v0.4 已实施，功能合同未收口。本条收口不表示可上线**。问询 ID 改为实例内流水号；问询记录增加问询种类并默认排除会话访问；调用流水增加访问等级并默认排除连接级。SC-01–SC-25 自动化已落，尚无逐条收口记录。功能编号无。Plan 见 [lucy-20261102-audit-inquiry-kind-plan.md](plans/lucy-20261102-audit-inquiry-kind-plan.md)。审阅见 [2026-11-02-codex-review-audit-inquiry-kind.md](reviews/2026-11-02-codex-review-audit-inquiry-kind.md) |

@@ -134,6 +134,7 @@ export const SECTION_ID_CONTRACT = new Map<string, string>([
   ["Agent 自检协议", "yaml-agent-self-check"],
   ["调用监控（/ops/calls）", "call-monitor"],
   ["Token 凭据（/admin/tokens）", "agent-tokens"],
+  ["用 Admin API 脚本开通（Agent／Token）", "admin-api-script-provisioning"],
   ["MCP 调试台（/admin/mcp-playground）", "mcp-playground"],
   ["现场提问（/eval/field-questions）", "field-questions"],
   ["安全评测候选（/eval/security-candidates）", "security-candidates"],

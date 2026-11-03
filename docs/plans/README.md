@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261103-admin-api-agent-discoverability-plan.md](lucy-20261103-admin-api-agent-discoverability-plan.md) | **v0.4 已实施（2026-11-03）**。SC-01–SC-20 自动化已落，尚无逐条收口记录。本条收口不表示可上线。Spec 见 [lucy-20261103-admin-api-agent-discoverability-spec.md](../specs/lucy-20261103-admin-api-agent-discoverability-spec.md)。审阅见 [codex-review](../reviews/2026-11-03-codex-review-admin-api-agent-discoverability.md) |
 | [lucy-20261102-lucy-0-30-0-requirement-pool-plan.md](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) | **候选需求池（不是 Spec，不授权实现）**：`0.30.0` 池；当前产品线仍是 `0.25.0`。首条 REQ-030-001 发布工作台分文件勾选发布（本版不做） |
 | [lucy-20261102-token-display-hint-plan.md](lucy-20261102-token-display-hint-plan.md) | **v0.1 已实施（2026-11-02）。本条收口不表示可上线**。Token 核对提示（`token_hint`）签发与列表展示；不重建 Docker。Spec 见 [lucy-20261102-token-display-hint-spec.md](../specs/lucy-20261102-token-display-hint-spec.md) |
 | [lucy-20261102-audit-turns-column-density-plan.md](lucy-20261102-audit-turns-column-density-plan.md) | **v0.3 已实施，功能合同未收口。本条收口不表示可上线**。问询记录列密度；开始时间与问询时长上下双行；客户端 / 会话可换行。Spec 见 [lucy-20261102-audit-turns-column-density-spec.md](../specs/lucy-20261102-audit-turns-column-density-spec.md) |

@@ -86,6 +86,7 @@
 | --- | --- | --- |
 | 什么时候该建角色，什么时候该建 `Agent` / `Token`？ | 角色 = 可复用的权限边界；`Agent` = 要对审计负责的人/机器人；`Token` = 某台设备或某个客户端的接入凭证。先角色、再 `Agent`、最后签发 `Token`。 | [什么时候配置角色、Agent 和 Token](#admin-role-agent-token-guide) |
 | 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#admin-role-agent-token-guide) |
+| 想用脚本 / 运维 Agent 开通 `Agent`、签发 `Token`，不要反解前端？ | 先拉公开 `GET /api/openapi.json`；再用管理员 Cookie 会话调 Admin API。没有 scoped Admin Bearer。 | [用 Admin API 脚本开通（Agent／Token）](#admin-api-script-provisioning) |
 | `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC `Access denied` / `decision_reason` 怎么查？](#json-rpc-access-denied-decision-reason)、[3.5 访问治理 · 角色 / Agent / Token](#access-governance) |
 | `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 · 角色 / Agent / Token](#access-governance)、[6.5 MCP 返回 401](#mcp-401) |
 | 问询记录和调用流水都能导出吗？ | 可以。`/admin/audit` 的「导出问询记录」是一问一行，「导出调用流水」是一调用一行；两者通过「问询 ID」关联。 | [问询记录与调用流水怎么选、怎么导出](#admin-audit-turns-vs-calls) |
@@ -1258,7 +1259,7 @@ PUT /api/wiki/:key
 4. 改完角色后旧客户端仍拒访 → 扩权后需新开 session。
 5. 把 `WebUI` 登录与 `MCP` `Bearer` 混用 → 两套凭证，互不登录对方系统。
 
-YAML 结构、签发规则与裁决链路见本节后续三节：[Role-first 模型](#role-first-model)、[Token 发行规则](#token-issuance-policy)、[权限裁决机制](#permission-decision-flow)；调用与审计留痕见 [问题簇审计](#question-cluster-audit)。客户端粘贴配置见 [4. Agent / 客户端接入指南](#mcp-integration)。
+YAML 结构、签发规则与裁决链路见本节后续三节：[Role-first 模型](#role-first-model)、[Token 发行规则](#token-issuance-policy)、[权限裁决机制](#permission-decision-flow)；调用与审计留痕见 [问题簇审计](#question-cluster-audit)。客户端粘贴配置见 [4. Agent / 客户端接入指南](#mcp-integration)。脚本开通（不点 WebUI）见 [用 Admin API 脚本开通（Agent／Token）](#admin-api-script-provisioning)。
 
 #### 问询记录与调用流水怎么选、怎么导出
 
@@ -1521,9 +1522,10 @@ Token 是 **Agent 的接入凭证**，不是权限边界；同 Agent 下多个 T
 #### 签发
 
 - 入口路径：从 `/admin/agents` 选中 Agent → Token 区；或从 `/admin/tokens` 选择 Agent 后一键签发。
-- 必填项：`expires_at`（管理页默认 365 天，最长 365 天；空值表示长期有效，**不推荐**，会失去下文 `expires_at` 强制校验的硬拒绝兜底）。
+- 到期：管理页默认 365 天，最长 365 天。API 须提供 `expires_at` **或** `expires_in`（`"30d"`｜`"90d"`｜`"180d"`｜`"365d"`）；二者皆缺会拒绝。空／永久别名**不再**用于新建签发。
 - 可选项：标签 / 设备名（便于人工分辨；写明如 `forrest-mbp-cursor`、`eval-runner-2` 之类，**不要含明文 secret**）。
 - 明文 Token **只出现一次**：签发后立刻复制到客户端凭据库 / secret store；不要进仓库、聊天记录、截图或 Wiki。
+- 脚本签发可加 `includeClientConfigs: true`，在**同一次**创建响应里带回 Hermes／Claude Code／Codex／generic 配置片段（须已配置可用的公开 MCP endpoint）；详情见 [用 Admin API 脚本开通（Agent／Token）](#admin-api-script-provisioning)。
 
 #### 吊销
 
@@ -1588,6 +1590,79 @@ Proxy 鉴权链路在 access 决策中**实际比对** `expires_at`，不再只�
 - §3.5 [MCP 调试台（/admin/mcp-playground）](#mcp-playground) — 受控试调验证 Token / Role 链路；区分 `callSource=playground`
 - §3.11 [MCP 会话与上游连接](#mcp-session-upstream) — Token + `Mcp-Session-Id` 在 MCP 握手层的关系
 - §4 [Agent / 客户端接入指南](#mcp-integration) — 各客户端配置模板与 `LUCY_PUBLIC_MCP_URL` 取值
+- [用 Admin API 脚本开通（Agent／Token）](#admin-api-script-provisioning) — OpenAPI、Cookie 会话、`dryRun` 差异、`expires_in`／`clientConfigs`
+
+#### 用 Admin API 脚本开通（Agent／Token）
+
+深链：`/help?section=admin-api-script-provisioning`。
+
+面向要用 **curl／运维 Agent／自建脚本** 完成「建 Agent、改角色、签发／撤销 Token」的管理员。日常点选仍走 WebUI；本节只补**可编程入口的发现方式与易踩坑**，不复述完整请求体——机器可读契约以运行中实例为准。
+
+**先拉契约（无需登录）**
+
+```bash
+curl -fsS "${LUCY_WEBUI_BASE}/api/openapi.json" -o lucy-admin.openapi.json
+```
+
+`GET /api/openapi.json` 公开可读，覆盖登录、Agent、Token、角色等开通相关 operation（含必填字段与各接口的 `dryRun` 默认说明）。手册不维护第二份路径表，避免与实现漂移。
+
+**身份：管理员 Cookie，没有 Admin Bearer**
+
+Admin API 只认 WebUI 会话 Cookie `lucy_admin_session`。**不存在**可长期持有的 scoped「管理员 API Token」。数据面 MCP 的 Bearer Token 不能用来调 `/api/admin/*`。
+
+```bash
+# 登录拿会话（字段名是 adminId，不是 username）
+curl -fsS -c lucy-admin.cookie -X POST "${LUCY_WEBUI_BASE}/api/auth/login" \
+  -H 'content-type: application/json' \
+  -d '{"adminId":"<管理员账户>","password":"<密码>"}'
+
+# 之后带上 Cookie
+curl -fsS -b lucy-admin.cookie "${LUCY_WEBUI_BASE}/api/admin/agents"
+```
+
+**三条易踩坑（比猜字段更耗时）**
+
+| 点 | 合同 |
+| --- | --- |
+| Agent／Role 写接口 | **省略 `dryRun` = 预览**（不落盘）。确认写入必须显式 `"dryRun": false`。 |
+| Token 签发／续期 | **省略 `dryRun` = 真实写入**。仅 `"dryRun": true` 才是预览；预览不返回明文、不写库存。 |
+| 确认写入后的版本 | Agent `POST`／`PATCH` 成功响应含 `after.agent` 与 `after.version`。下一次 PATCH 的并发版本用 **`after.version`**，不要拿 `policyVersion` 冒充。 |
+
+**签发捷径**
+
+- 到期：`"expires_in": "365d"`（或 `30d`／`90d`／`180d`），也可只传 `expires_at`；两者同传且规范化后不等 → `EXPIRES_CONFLICT`。
+- 需要客户端片段：`"includeClientConfigs": true`。仅当实例已配置可用的公开 MCP endpoint（`resolveMcpEndpoint` 为 `configured`）才会签发并返回 `clientConfigs`；否则在落盘前 `503 MCP_ENDPOINT_UNAVAILABLE`。
+- 标签冲突：`409 TOKEN_LABEL_TAKEN` 的 `error.detail.existingToken` 带非敏感元数据（无明文），便于决定撤销重签还是换 label。
+
+**最小 happy path（示意）**
+
+```bash
+BASE="${LUCY_WEBUI_BASE}"   # 例：http://127.0.0.1:55176
+CK=lucy-admin.cookie
+
+curl -fsS -c "$CK" -X POST "$BASE/api/auth/login" \
+  -H 'content-type: application/json' \
+  -d '{"adminId":"...","password":"..."}'
+
+# 改角色：先预览，再确认（注意 dryRun:false）
+curl -fsS -b "$CK" -X PATCH "$BASE/api/admin/agents/<agentId>" \
+  -H 'content-type: application/json' \
+  -d '{"dryRun":false,"version":"<上次 after.version 或 GET 的 version>","patch":{"roles":["<roleId>"]}}'
+
+# 签发 Token（省略 dryRun = 真签发）；需要粘贴配置时打开 includeClientConfigs
+curl -fsS -b "$CK" -X POST "$BASE/api/admin/agents/<agentId>/tokens" \
+  -H 'content-type: application/json' \
+  -d '{"label":"cursor-laptop","expires_in":"365d","includeClientConfigs":true}'
+```
+
+委托给 owner 的 Agent 签发 Token、或改动触及控制面可达范围的角色，仍须 **owner** 会话（与 WebUI 门禁一致）；OpenAPI 与错误码会标明。完整参数、错误码与撤销／续期路径以 `openapi.json` 为准。
+
+**关联**
+
+- [什么时候配置角色、Agent 和 Token](#admin-role-agent-token-guide) — 先角色、再 Agent、再 Token
+- [Token 凭据（/admin/tokens）](#agent-tokens) — 页面签发、吊销、续期
+- [WebUI 管理员登录](#admin-webui-login) — 会话与 break-glass
+- §4 [Agent / 客户端接入指南](#mcp-integration) — 数据面 MCP Bearer（与 Admin Cookie 不是同一套）
 
 #### MCP 调试台（/admin/mcp-playground）
 

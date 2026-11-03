@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { agentCommitTestHooks } from "../admin/agents.js";
 import { buildServer } from "../index";
 import { isMcpProtocolMethod } from "../proxy/usage-classification.js";
 
@@ -188,6 +189,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  agentCommitTestHooks.afterCapture = null;
+  agentCommitTestHooks.beforeResponse = null;
   if (prevRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = prevRoot;
   await rm(projectRoot, { recursive: true, force: true });
@@ -1245,6 +1248,116 @@ describe("Spec 168 Agent role set", () => {
     expect(after.body.data.agent.roleResolutionError).toBeUndefined();
     expect(after.body.data.agent.roles).toEqual(["analyst"]);
     expect(after.body.data.agent.role).toBe("analyst");
+    await app.close();
+  });
+});
+
+describe("admin agent discoverability writes", () => {
+  it("SC-08 missing id or name returns expected and a nested agent example", async () => {
+    const app = buildServer();
+    await app.ready();
+    for (const body of [{}, { agent: { id: "onlyid" } }, { agent: { name: "只有名字" } }]) {
+      const res = await request(app.server).post("/api/admin/agents").send(body).expect(400);
+      expect(res.body.error.code).toBe("BAD_REQUEST");
+      expect(res.body.error.detail.expected.properties.agent.required).toEqual(expect.arrayContaining(["id", "name"]));
+      expect(res.body.error.detail.example.agent.id).toBeTruthy();
+      expect(res.body.error.detail.example.agent.name).toBeTruthy();
+    }
+    await app.close();
+  });
+
+  it("SC-09 preview omits after and still returns gate", async () => {
+    const app = buildServer();
+    await app.ready();
+    const created = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ agent: { id: "previewbot", name: "预览", role: "analyst" } })
+      .expect(200);
+    expect(created.body.data.gate).toBeTruthy();
+    expect(created.body.data).not.toHaveProperty("after");
+    const patched = await request(app.server)
+      .patch("/api/admin/agents/zhangsan")
+      .send({ dryRun: true, patch: { name: "预览名" } })
+      .expect(200);
+    expect(patched.body.data.gate).toBeTruthy();
+    expect(patched.body.data).not.toHaveProperty("after");
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).not.toContain("previewbot");
+    expect(yaml).not.toContain("预览名");
+    await app.close();
+  });
+
+  it("SC-10 fixture A chains after.version and does not reuse policyVersion", async () => {
+    const app = buildServer();
+    await app.ready();
+    const first = await request(app.server)
+      .patch("/api/admin/agents/zhangsan")
+      .send({ dryRun: false, patch: { name: "一次" } })
+      .expect(200);
+    expect(first.body.data.after.agent.name).toBe("一次");
+    expect(first.body.data.after.version).toBeTruthy();
+    expect(first.body.data.policyVersion).toBeTruthy();
+    expect(first.body.data.after.version).not.toBe(first.body.data.policyVersion);
+    expect(first.body.data.agent).toEqual(first.body.data.after.agent);
+    const listed = await request(app.server).get("/api/admin/agents/zhangsan").expect(200);
+    expect(listed.body.data.version).toBe(first.body.data.after.version);
+
+    const second = await request(app.server)
+      .patch("/api/admin/agents/zhangsan")
+      .send({ dryRun: false, version: first.body.data.after.version, patch: { name: "二次" } })
+      .expect(200);
+    expect(second.body.data.after.agent.name).toBe("二次");
+    expect(second.body.data.after.version).not.toBe(first.body.data.after.version);
+    await app.close();
+  });
+
+  it("SC-10 fixture B keeps the captured version when another write lands before the response", async () => {
+    const app = buildServer();
+    await app.ready();
+    agentCommitTestHooks.beforeResponse = async () => {
+      const interleaved = await request(app.server)
+        .patch("/api/admin/agents/zhangsan")
+        .send({ dryRun: false, patch: { note: "b-write" } });
+      expect(interleaved.status).toBe(200);
+    };
+    const resA = await request(app.server)
+      .patch("/api/admin/agents/zhangsan")
+      .send({ dryRun: false, patch: { name: "a-write" } })
+      .expect(200);
+    const latest = await request(app.server).get("/api/admin/agents/zhangsan").expect(200);
+    expect(latest.body.data.agent.note).toBe("b-write");
+    expect(resA.body.data.after.version).not.toBe(latest.body.data.version);
+    expect(resA.body.data.after.agent.name).toBe("a-write");
+    const conflict = await request(app.server)
+      .patch("/api/admin/agents/zhangsan")
+      .send({ dryRun: false, version: resA.body.data.after.version, patch: { name: "using-a" } })
+      .expect(409);
+    expect(conflict.body.error.code).toBe("VERSION_CONFLICT");
+    expect(JSON.stringify(conflict.body)).not.toContain('"after"');
+    await app.close();
+  });
+
+  it("SC-16 confirmed create returns after and a failed write does not", async () => {
+    const app = buildServer();
+    await app.ready();
+    const created = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: false, agent: { id: "okbot", name: "成功", role: "analyst" } })
+      .expect(200);
+    expect(created.body.data.written).toBe(true);
+    expect(created.body.data.after.agent.id).toBe("okbot");
+    expect(created.body.data.after.version).not.toBe(created.body.data.policyVersion);
+    expect(created.body.data.agent.id).toBe("okbot");
+
+    const before = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    const failed = await request(app.server)
+      .patch("/api/admin/agents/okbot")
+      .send({ dryRun: false, version: "0000000000000-stale", patch: { name: "失败名" } })
+      .expect(409);
+    expect(failed.body.ok).toBe(false);
+    expect(failed.body.error.code).toBe("VERSION_CONFLICT");
+    expect(JSON.stringify(failed.body)).not.toContain('"after"');
+    expect(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8")).toBe(before);
     await app.close();
   });
 });

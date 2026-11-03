@@ -6,6 +6,8 @@ import {
   effectiveExpiryMs,
   isAbsentExpiry,
   normalizeNewTokenExpiry,
+  presetExpiryDateString,
+  resolveIssuedTokenExpiry,
   TokenExpiryPolicyError
 } from "../admin/token-expiry-policy.js";
 
@@ -44,6 +46,26 @@ describe("token-expiry-policy", () => {
     const now = Date.now();
     const future = new Date(now + 90 * 24 * 60 * 60 * 1000).toISOString();
     expect(() => assertStrictExtension("2020-01-01T00:00:00.000Z", future, now)).not.toThrow();
+  });
+
+  it("resolves expires_in from a fixed t0 and rejects conflicts", () => {
+    const t0 = Date.parse("2026-06-15T08:00:00.000Z");
+    const expected = normalizeNewTokenExpiry(presetExpiryDateString(365, t0), t0);
+    expect(resolveIssuedTokenExpiry(undefined, "365d", t0)).toBe(expected);
+    expect(resolveIssuedTokenExpiry(expected, "365d", t0)).toBe(expected);
+    expect(() => resolveIssuedTokenExpiry(undefined, "7d", t0)).toThrow(TokenExpiryPolicyError);
+    try {
+      resolveIssuedTokenExpiry(undefined, "7d", t0);
+    } catch (error) {
+      expect((error as TokenExpiryPolicyError).code).toBe("EXPIRES_IN_INVALID");
+    }
+    expect(() => resolveIssuedTokenExpiry(expected, "30d", t0)).toThrow(TokenExpiryPolicyError);
+    try {
+      resolveIssuedTokenExpiry(expected, "30d", t0);
+    } catch (error) {
+      expect((error as TokenExpiryPolicyError).code).toBe("EXPIRES_CONFLICT");
+    }
+    expect(() => resolveIssuedTokenExpiry(undefined, undefined, t0)).toThrow(TokenExpiryPolicyError);
   });
 
   it("assertStrictExtension allows first finite expiry from absent", () => {

@@ -2,8 +2,13 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { stringify, parse } from "yaml";
-import type { FastifyInstance, FastifyRequest } from "fastify";
-import { writeAccessConfigFileWithAuditClosure, type YamlRole } from "./access-config.js";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import {
+  accessWriteResponseBody,
+  writeAccessConfigFileWithAuditClosure,
+  type AccessConfigWriteResult,
+  type YamlRole
+} from "./access-config.js";
 import { resolveProjectRoot } from "../project.js";
 import { previewDiff } from "../diff.js";
 import { getAuditDb, type ConfigAuditActorType } from "./audit.js";
@@ -89,6 +94,44 @@ function rejectTemplateRole(roleId: string) {
   };
 }
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
+
+const AGENT_CREATE_EXPECTED = {
+  type: "object",
+  required: ["agent"],
+  properties: {
+    agent: {
+      type: "object",
+      required: ["id", "name"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" }
+      }
+    }
+  }
+} as const;
+
+const AGENT_CREATE_EXAMPLE = {
+  agent: { id: "analyst_bot", name: "分析助手" }
+} as const;
+
+/**
+ * Test seam for SC-10 fixture B and SC-16.
+ * `afterCapture` runs inside the write coordination window after the snapshot
+ * is bound. `beforeResponse` runs after that window is released and before
+ * the HTTP body is returned. Production leaves both null.
+ */
+export const agentCommitTestHooks: {
+  afterCapture: (() => Promise<void>) | null;
+  beforeResponse: (() => Promise<void>) | null;
+} = {
+  afterCapture: null,
+  beforeResponse: null
+};
+
+type AgentProjection = Awaited<ReturnType<typeof userToAgentWithPermissions>>;
+type AgentAccessWriteResult = AccessConfigWriteResult & {
+  after?: { agent: AgentProjection; version: string };
+};
 
 export interface YamlToken {
   hash: string;
@@ -212,9 +255,26 @@ async function readAccessYaml(projectRoot: string): Promise<{ config: YamlAccess
  * optional direct rollback, so no intermediate access version is published.
  */
 async function writeAccessYaml(
-  ...args: Parameters<typeof writeAccessYamlInBarrier>
-): ReturnType<typeof writeAccessYamlInBarrier> {
-  return withDisplayWriteBarrier(["P"], () => writeAccessYamlInBarrier(...args));
+  projectRoot: string,
+  config: YamlAccessConfig,
+  audit?: {
+    enabled: boolean;
+    changeType: string;
+    targetId?: string;
+    oldSummary?: unknown;
+    newSummary?: unknown;
+    diff?: string;
+    requestId?: string;
+    source?: string;
+    actor?: string;
+    actorType?: ConfigAuditActorType;
+    actorIp?: string;
+    sessionId?: string | null;
+    expectedVersion?: string;
+  },
+  committedAgent?: YamlUser
+): Promise<AgentAccessWriteResult> {
+  return withDisplayWriteBarrier(["P"], () => writeAccessYamlInBarrier(projectRoot, config, audit, committedAgent));
 }
 
 async function writeAccessYamlInBarrier(
@@ -234,13 +294,9 @@ async function writeAccessYamlInBarrier(
     actorIp?: string;
     sessionId?: string | null;
     expectedVersion?: string;
-  }
-): Promise<{
-  auditId?: number;
-  policyVersion: string;
-  policyRuntimeAck: boolean;
-  runtimeAck: boolean;
-}> {
+  },
+  committedAgent?: YamlUser
+): Promise<AgentAccessWriteResult> {
   // Strip derived last_used before writing
   const toWrite: YamlAccessConfig = {
     ...config,
@@ -250,9 +306,12 @@ async function writeAccessYamlInBarrier(
     }))
   };
   const content = stringify(toWrite, { lineWidth: 0 });
+  // Bound inside the publish window, before it is released. Do not re-read
+  // the file after the window to pair a newer version with this agent.
+  let capturedAfter: AgentAccessWriteResult["after"];
   // Lucy v0.25 — Agent writes share the one access.yaml durable-audit closure with the
   // Role / row-policy writer (durable intent → atomic write → commit → durable terminal).
-  return writeAccessConfigFileWithAuditClosure(projectRoot, ACCESS_YAML_REL, content, audit, {
+  const result = await writeAccessConfigFileWithAuditClosure(projectRoot, ACCESS_YAML_REL, content, audit, {
     source: audit?.source ?? "admin_agents_api",
     kind: "agent_save",
     expectedVersion: audit?.expectedVersion,
@@ -261,8 +320,64 @@ async function writeAccessYamlInBarrier(
       // cancel in-flight work and clear caches before this write reports success.
       const narrowed = narrowingScopeForWrite(previousRaw, toWrite);
       if (narrowed) await narrowAuthorization(narrowed);
+      if (!committedAgent) return;
+      const filePath = path.join(projectRoot, ACCESS_YAML_REL);
+      const raw = await readFile(filePath, "utf-8");
+      const info = await stat(filePath);
+      const version = computeVersion(raw, info.mtimeMs);
+      invalidateAccessConfigCache();
+      let agent: AgentProjection;
+      try {
+        agent = await userToAgentWithPermissions(committedAgent);
+      } catch {
+        agent = {
+          ...userToAgent(committedAgent),
+          effectivePermissions: undefined,
+          permissionWarnings: ["after_projection_fallback"]
+        };
+      }
+      capturedAfter = { agent, version };
+      if (agentCommitTestHooks.afterCapture) await agentCommitTestHooks.afterCapture();
     }
   });
+  return {
+    ...result,
+    after: result.status === "committed" ? capturedAfter : undefined
+  };
+}
+
+async function finishConfirmedAgentWrite(
+  reply: FastifyReply,
+  writeResult: AgentAccessWriteResult,
+  extra: Record<string, unknown>
+) {
+  if (writeResult.status === "committed" && writeResult.after) {
+    const hook = agentCommitTestHooks.beforeResponse;
+    if (hook) {
+      agentCommitTestHooks.beforeResponse = null;
+      await hook();
+    }
+    return {
+      ok: true as const,
+      data: {
+        written: true,
+        policyVersion: writeResult.policyVersion,
+        policyRuntimeAck: writeResult.policyRuntimeAck,
+        runtimeAck: writeResult.runtimeAck,
+        after: writeResult.after,
+        agent: writeResult.after.agent,
+        ...extra
+      }
+    };
+  }
+  if (writeResult.status === "committed") {
+    return reply.status(500).send({
+      ok: false,
+      error: { code: "INTERNAL", message: "Agent 写入已提交，但未能绑定访问配置并发版本" }
+    });
+  }
+  const failure = accessWriteResponseBody(writeResult, extra);
+  return reply.status(failure.statusCode).send(failure.body);
 }
 
 function computeVersion(raw: string, mtimeMs: number): string {
@@ -1427,7 +1542,14 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const dryRun = request.body?.dryRun !== false;
     const agentInput = request.body?.agent;
     if (!agentInput || !agentInput.id || !agentInput.name) {
-      return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "agent.id and agent.name are required" } });
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "BAD_REQUEST",
+          message: "agent.id and agent.name are required",
+          detail: { expected: AGENT_CREATE_EXPECTED, example: AGENT_CREATE_EXAMPLE }
+        }
+      });
     }
     if (!AGENT_ID_RE.test(agentInput.id)) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "agent.id must match ^[A-Za-z0-9_-]{1,32}$" } });
@@ -1538,18 +1660,8 @@ export function registerAgentRoutes(app: FastifyInstance) {
       newSummary: { userIds: newConfig.users.map((user) => user.id), role: summaryRole(newUser), roles: newUser.roles },
       diff,
       ...auditActorFields(trustedActorFromRequest(request))
-    });
-    return {
-      ok: true,
-      data: {
-        written: true,
-        policyVersion: writeResult.policyVersion,
-        policyRuntimeAck: writeResult.policyRuntimeAck,
-        runtimeAck: writeResult.runtimeAck,
-        gate,
-        agent: await userToAgentWithPermissions(newUser)
-      }
-    };
+    }, newUser);
+    return finishConfirmedAgentWrite(reply, writeResult, { gate });
   });
 
   // GET /api/admin/agents/:userId
@@ -1820,7 +1932,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       },
       diff,
       ...auditActorFields(trustedActorFromRequest(request))
-    }).catch((error: unknown) => {
+    }, updatedUser).catch((error: unknown) => {
       if ((error as { code?: string }).code === "VERSION_CONFLICT") return null;
       throw error;
     });
@@ -1830,18 +1942,10 @@ export function registerAgentRoutes(app: FastifyInstance) {
         error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
       });
     }
-    return {
-      ok: true,
-      data: {
-        written: true,
-        policyVersion: writeResult.policyVersion,
-        policyRuntimeAck: writeResult.policyRuntimeAck,
-        runtimeAck: writeResult.runtimeAck,
-        gate,
-        agent: await userToAgentWithPermissions(updatedUser),
-        ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {})
-      }
-    };
+    return finishConfirmedAgentWrite(reply, writeResult, {
+      gate,
+      ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {})
+    });
   });
 
   // DELETE /api/admin/agents/:userId

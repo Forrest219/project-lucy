@@ -631,4 +631,30 @@ defaults:
     if (!call) throw new Error("ack-only repair must not count as success");
     await repaired.close();
   });
+
+  it("SC-20 omits dryRun to renew for real and dryRun true leaves expires_at unchanged", async () => {
+    const before = await yamlNow();
+    const app = buildServer();
+    await app.ready();
+    const preview = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens/hermes-laptop/renew")
+      .send({ dryRun: true, expires_at: expiryInDays(90) })
+      .expect(200);
+    expect(preview.body.data.dryRun).toBe(true);
+    expect(preview.body.data.proposed.expires_at).toBeTruthy();
+    expect(preview.body.data.token).toBeUndefined();
+    expect(await yamlNow()).toBe(before);
+
+    const committed = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens/hermes-laptop/renew")
+      .send({ expires_at: expiryInDays(120) })
+      .expect(200);
+    expect(committed.body.data.written).toBe(true);
+    expect(committed.body.data.dryRun).toBeUndefined();
+    expect(committed.body.data.expires_at).toBeTruthy();
+    const after = await yamlNow();
+    expect(after).not.toBe(before);
+    expect(after).toContain(committed.body.data.expires_at);
+    await app.close();
+  });
 });

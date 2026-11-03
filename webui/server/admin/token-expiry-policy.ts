@@ -3,12 +3,17 @@ import { isTokenExpired, normalizeExpiresAtInput } from "../proxy/identity.js";
 export const NEW_TOKEN_DEFAULT_TTL_DAYS = 365;
 export const NEW_TOKEN_MAX_TTL_DAYS = 365;
 
+export const TOKEN_EXPIRES_IN_PRESETS = ["30d", "90d", "180d", "365d"] as const;
+export type TokenExpiresInPreset = (typeof TOKEN_EXPIRES_IN_PRESETS)[number];
+
 export class TokenExpiryPolicyError extends Error {
   readonly code:
     | "EXPIRES_AT_REQUIRED"
     | "EXPIRES_AT_INVALID"
     | "EXPIRES_AT_TOO_FAR"
-    | "EXPIRES_AT_NOT_EXTENDED";
+    | "EXPIRES_AT_NOT_EXTENDED"
+    | "EXPIRES_IN_INVALID"
+    | "EXPIRES_CONFLICT";
 
   constructor(code: TokenExpiryPolicyError["code"], message: string) {
     super(message);
@@ -138,6 +143,50 @@ export function expiryNormalizedEqual(left: unknown, rightIso: string): boolean 
   } catch {
     return false;
   }
+}
+
+function isBlankExpiryInput(value: unknown): boolean {
+  if (value == null) return true;
+  return typeof value === "string" && value.trim().length === 0;
+}
+
+function isExpiresInPreset(value: string): value is TokenExpiresInPreset {
+  return (TOKEN_EXPIRES_IN_PRESETS as readonly string[]).includes(value);
+}
+
+/**
+ * Shared by Token preview and real issue. `t0` is the request clock.
+ * `Nd` is `presetExpiryDateString(N, t0)` then `normalizeNewTokenExpiry`.
+ * Both fields absent → `EXPIRES_AT_REQUIRED`. Illegal literal → `EXPIRES_IN_INVALID`.
+ * Both present: accept only when the normalized instants are equal.
+ */
+export function resolveIssuedTokenExpiry(expiresAt: unknown, expiresIn: unknown, nowMs = Date.now()): string {
+  const hasAt = !isBlankExpiryInput(expiresAt);
+  const hasIn = !isBlankExpiryInput(expiresIn);
+  if (!hasAt && !hasIn) {
+    throw new TokenExpiryPolicyError("EXPIRES_AT_REQUIRED", "expires_at is required for new tokens");
+  }
+
+  let fromIn: string | undefined;
+  if (hasIn) {
+    if (typeof expiresIn !== "string" || !isExpiresInPreset(expiresIn.trim())) {
+      throw new TokenExpiryPolicyError(
+        "EXPIRES_IN_INVALID",
+        'expires_in must be one of "30d", "90d", "180d", "365d"'
+      );
+    }
+    const days = Number(expiresIn.trim().slice(0, -1));
+    fromIn = normalizeNewTokenExpiry(presetExpiryDateString(days, nowMs), nowMs);
+  }
+
+  const fromAt = hasAt ? normalizeNewTokenExpiry(expiresAt, nowMs) : undefined;
+  if (fromIn && fromAt && fromIn !== fromAt) {
+    throw new TokenExpiryPolicyError(
+      "EXPIRES_CONFLICT",
+      "expires_at and expires_in normalize to different instants"
+    );
+  }
+  return (fromAt ?? fromIn) as string;
 }
 
 /** Calendar date string (UTC) for UI presets: today + days. */
