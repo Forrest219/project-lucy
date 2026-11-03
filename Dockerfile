@@ -66,7 +66,11 @@ RUN sh /tmp/docker-build-mirrors.sh npm install -g "@kaelio/ktx@${KTX_VERSION}"
 
 # StarRocks / MySQL-protocol engines may reject SET SESSION max_execution_time (P0-1/P0-2).
 COPY scripts/runtime/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-mysql-starrocks-compat.js
-RUN node /tmp/patch-ktx-mysql-starrocks-compat.js && rm /tmp/patch-ktx-mysql-starrocks-compat.js
+COPY scripts/runtime/patch-ktx-notion-client-cjs.js /tmp/patch-ktx-notion-client-cjs.js
+RUN node /tmp/patch-ktx-mysql-starrocks-compat.js \
+  && node /tmp/patch-ktx-notion-client-cjs.js \
+  && rm /tmp/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-notion-client-cjs.js
+
 
 # K8s upgrade contract: run as UID 10001 to match legacy PVC ownership (.git).
 RUN groupadd -g 10001 lucy \

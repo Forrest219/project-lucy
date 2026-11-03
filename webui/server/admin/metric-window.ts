@@ -40,6 +40,27 @@ export function buildMetricWindow(hours: number, now: Date = new Date()): Metric
 
 /** Canonical 7-day window (168 hours). */
 export const WINDOW_7D_HOURS = 168 as const;
+export const WINDOW_14D_HOURS = 336 as const;
+export const WINDOW_30D_HOURS = 720 as const;
+
+export type AgentStatsRange = "7d" | "14d" | "30d";
+
+const AGENT_STATS_RANGE_HOURS: Record<AgentStatsRange, number> = {
+  "7d": WINDOW_7D_HOURS,
+  "14d": WINDOW_14D_HOURS,
+  "30d": WINDOW_30D_HOURS
+};
+
+/** API default stays 7d so callers without `range` keep the historical window. */
+export function parseAgentStatsRange(raw: unknown): AgentStatsRange {
+  if (raw === "7d" || raw === "14d" || raw === "30d") return raw;
+  if (raw === "90d") return "30d";
+  return "7d";
+}
+
+export function buildAgentStatsWindow(range: AgentStatsRange, now?: Date): MetricWindow {
+  return buildMetricWindow(AGENT_STATS_RANGE_HOURS[range], now);
+}
 
 /** Build the standard 7-day metric window. */
 export function build7dWindow(now?: Date): MetricWindow {

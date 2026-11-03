@@ -10,9 +10,12 @@ import {
   decideEndpointGate
 } from "../connection-endpoint-gate";
 import { addSchema, createConnection, writeKtxYaml, type CreateConnectionInput } from "../project";
+import { invalidateContentPathsCache } from "../paths";
 import type { ConnectionTestResult } from "../ktx";
 
 let projectRoot = "";
+let previousRoot: string | undefined;
+let rootOverridden = false;
 
 const baseInput: CreateConnectionInput = {
   id: "warehouse-mysql",
@@ -42,6 +45,12 @@ async function makeProject(text = yaml()) {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-endpoint-gate-"));
   await writeFile(path.join(projectRoot, "ktx.yaml"), text, "utf8");
   await mkdir(path.join(projectRoot, ".ktx", "secrets"), { recursive: true });
+  if (!rootOverridden) {
+    previousRoot = process.env.KTX_PROJECT_ROOT;
+    rootOverridden = true;
+  }
+  process.env.KTX_PROJECT_ROOT = projectRoot;
+  invalidateContentPathsCache();
 }
 
 function okTest(connId: string): ConnectionTestResult {
@@ -58,7 +67,14 @@ function okTest(connId: string): ConnectionTestResult {
 }
 
 afterEach(async () => {
+  if (rootOverridden) {
+    if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
+    else process.env.KTX_PROJECT_ROOT = previousRoot;
+    rootOverridden = false;
+    invalidateContentPathsCache();
+  }
   if (projectRoot) await rm(projectRoot, { recursive: true, force: true });
+  projectRoot = "";
 });
 
 describe("decideEndpointGate", () => {
@@ -128,6 +144,93 @@ describe("decideEndpointGate", () => {
       ).toThrow(EndpointSchemaCountError);
     }
   );
+
+  it("asks before creating a card for another Doris catalog on the same host and port", () => {
+    const host = {
+      driver: "mysql",
+      host: "172.16.19.21",
+      port: "9030",
+      username: "chatbi"
+    };
+    const connections = [
+      { ...host, id: "doris-main", database: "chatbi", schemas: ["chatbi"] },
+      { ...host, id: "hive", database: "dm", schemas: ["dm"] },
+      { ...host, id: "hive-1", database: "hive.dw", schemas: ["dw"] }
+    ];
+    const input: CreateConnectionInput = {
+      id: "hive-jd",
+      driver: "mysql",
+      engine: "mysql",
+      host: "172.16.19.21",
+      port: 9030,
+      database: "hive_jd.app",
+      username: "chatbi",
+      password: "sim-secret",
+      schemas: ["app"]
+    };
+    expect(() => decideEndpointGate(connections, input)).toThrow(SameServerDifferentDatabaseError);
+    expect(decideEndpointGate(connections, input, { acknowledgeDifferentDatabase: true })).toEqual({
+      action: "create",
+      acknowledgedDifferentDatabase: true
+    });
+    expect(() => decideEndpointGate(connections, { ...input, schemas: [] })).toThrow(
+      SameServerDifferentDatabaseError
+    );
+    try {
+      decideEndpointGate(connections, input);
+    } catch (error) {
+      expect(error).toBeInstanceOf(SameServerDifferentDatabaseError);
+      expect(error).not.toBeInstanceOf(EndpointAlreadyConnectedError);
+      expect((error as Error).message).toBe(
+        "这是另一个外部目录，不会加到已有连接。确认后将新增一张连接卡片。"
+      );
+      expect((error as Error).message).not.toContain("请选择要把 Schema");
+    }
+  });
+
+  it("adds another database on the same external catalog to the existing connection", () => {
+    const existing = {
+      id: "hive-1",
+      driver: "mysql",
+      host: "172.16.19.21",
+      port: "9030",
+      database: "hive.dw",
+      username: "chatbi",
+      schemas: ["dw"]
+    };
+    expect(() =>
+      decideEndpointGate([existing], {
+        ...baseInput,
+        host: "172.16.19.21",
+        port: 9030,
+        database: "hive.ods",
+        username: "chatbi",
+        schemas: ["ods"]
+      })
+    ).toThrow(EndpointAlreadyConnectedError);
+  });
+
+  it("still adds a schema to the same catalog.database instead of opening another card", () => {
+    const existing = {
+      id: "hive-1",
+      driver: "mysql",
+      host: "172.16.19.21",
+      port: "9030",
+      database: "hive.dw",
+      username: "chatbi",
+      schemas: ["dw"]
+    };
+    expect(() =>
+      decideEndpointGate([existing], {
+        ...baseInput,
+        host: "172.16.19.21",
+        port: 9030,
+        database: "hive.dw",
+        username: "chatbi",
+        schemas: ["ods"]
+      })
+    ).toThrow(EndpointAlreadyConnectedError);
+  });
 
   it("validates schema count before asking the user to choose among multiple matches", () => {
     const second = { ...existing, id: "mysql-copy" };
@@ -216,6 +319,59 @@ describe("createConnection endpoint gate", () => {
     const text = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
     expect(text).toContain("write_marker_a: true");
     expect(text).toContain("write_marker_b: true");
+  });
+
+  it("writes a new hive_jd.app card without contacting the real database", async () => {
+    await makeProject(`connections:
+  doris-main:
+    driver: mysql
+    host: 172.16.19.21
+    port: 9030
+    database: chatbi
+    username: chatbi
+    schemas:
+      - chatbi
+  hive:
+    driver: mysql
+    host: 172.16.19.21
+    port: 9030
+    database: dm
+    username: chatbi
+    schemas:
+      - dm
+  hive-1:
+    driver: mysql
+    host: 172.16.19.21
+    port: 9030
+    database: hive.dw
+    username: chatbi
+    schemas:
+      - dw
+`);
+    const input: CreateConnectionInput = {
+      id: "hive-jd",
+      driver: "mysql",
+      engine: "mysql",
+      host: "172.16.19.21",
+      port: 9030,
+      database: "hive_jd.app",
+      username: "chatbi",
+      password: "sim-secret",
+      schemas: ["app"]
+    };
+    await expect(createConnection(projectRoot, input, true)).rejects.toBeInstanceOf(
+      SameServerDifferentDatabaseError
+    );
+    const created = await createConnection(projectRoot, input, false, {
+      endpointFlags: { acknowledgeDifferentDatabase: true },
+      testConnectionFn: async (_root, connId) => okTest(connId)
+    });
+    expect(created.written).toBe(true);
+    const text = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(text).toContain("hive-jd:");
+    expect(text).toContain("hive_jd.app");
+    expect(text).toContain("doris-main:");
+    expect(text).not.toContain("sim-secret");
   });
 
   it("preserves an added schema while another connection is being created", async () => {

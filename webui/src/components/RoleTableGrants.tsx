@@ -52,10 +52,40 @@ export function RoleTableGrants({
 
   function setSchema(connection: string, schema: string, names: string[], selected: boolean) {
     if (disabled || value.mode !== "names") return;
-    const schemaKeys = new Set(names.map((name) => `${connection}/${schema}/${name}`));
-    const kept = tables.filter((table) => !schemaKeys.has(permissionTableKey(table)));
+    const kept = tables.filter((table) => !(table.connection === connection && table.schema === schema));
     replaceTables(selected ? [...kept, ...names.map((name) => ({ connection, schema, name }))] : kept);
   }
+
+  function removeTable(connection: string, schema: string, name: string) {
+    toggleTable(connection, schema, name, false);
+  }
+
+  function removeStaleTables() {
+    if (disabled || value.mode !== "names") return;
+    replaceTables(tables.filter((table) => !staleKeys.has(permissionTableKey(table))));
+  }
+
+  const liveKeys = useMemo(() => {
+    const next = new Set<string>();
+    if (!candidatesLoaded) return next;
+    for (const connection of connections) {
+      for (const schema of connection.schemas) {
+        for (const name of candidateTablesByKey[`${connection.id}\0${schema}`] ?? []) {
+          next.add(`${connection.id}/${schema}/${name}`);
+        }
+      }
+    }
+    return next;
+  }, [candidateTablesByKey, candidatesLoaded, connections]);
+
+  const staleTables = useMemo(() => {
+    if (value.mode !== "names" || !candidatesLoaded) return [];
+    return tables.filter((table) => !liveKeys.has(permissionTableKey(table)));
+  }, [candidatesLoaded, liveKeys, tables, value.mode]);
+  const staleKeys = useMemo(
+    () => new Set(staleTables.map((table) => permissionTableKey(table))),
+    [staleTables]
+  );
 
   function confirmScopeChange() {
     if (confirmMode === "enable") onChange({ mode: "catalog_bound", connections: grantAllConnections ? ["*"] : [] });
@@ -164,15 +194,80 @@ export function RoleTableGrants({
         </div>
       )}
 
+      {value.mode === "names" && staleTables.length > 0 ? (
+        <section
+          className="rounded-lg border border-warning-strong bg-warning-soft p-3"
+          data-testid="stale-table-grants"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-warning-strong">
+              失效授权 {staleTables.length} 条
+            </p>
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost text-xs"
+              data-testid="stale-table-grants-clear"
+              disabled={disabled}
+              onClick={removeStaleTables}
+            >
+              清除全部失效授权
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-warning-strong notranslate" translate="no">
+            这些路径已不在当前可授权候选中（连接已删除、Schema 已变更或表已停用），保存前请移除。行级策略会随该条授权一起删除。
+          </p>
+          <ul className="mt-2 grid gap-1">
+            {staleTables.map((table) => {
+              const key = permissionTableKey(table);
+              return (
+                <li key={key} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="notranslate" translate="no">
+                    {key}
+                    {table.predicates?.length ? ` · ${table.predicates.length} 条行级策略条件` : ""}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`移除失效授权 ${key}`}
+                    className="pl-btn pl-btn--ghost text-xs"
+                    disabled={disabled}
+                    onClick={() => removeTable(table.connection, table.schema, table.name)}
+                  >
+                    移除
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       {value.mode === "names" && tables.length > 0 ? (
         <details>
           <summary className="cursor-pointer text-sm font-medium">查看已选表</summary>
           <ul className="mt-2 grid gap-1 text-xs text-fg-muted">
-            {tables.map((table) => (
-              <li key={permissionTableKey(table)} className="notranslate" translate="no">
-                {permissionTableKey(table)}{table.predicates?.length ? ` · ${table.predicates.length} 条行级策略条件` : ""}
-              </li>
-            ))}
+            {tables.map((table) => {
+              const key = permissionTableKey(table);
+              const stale = staleKeys.has(key);
+              return (
+                <li key={key} className="flex items-center justify-between gap-2">
+                  <span className="notranslate" translate="no">
+                    {key}
+                    {stale ? " · 失效" : ""}
+                    {table.predicates?.length ? ` · ${table.predicates.length} 条行级策略条件` : ""}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`移除 ${key}`}
+                    className="pl-btn pl-btn--ghost text-xs"
+                    data-testid={`selected-table-remove-${key}`}
+                    disabled={disabled}
+                    onClick={() => removeTable(table.connection, table.schema, table.name)}
+                  >
+                    移除
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </details>
       ) : null}

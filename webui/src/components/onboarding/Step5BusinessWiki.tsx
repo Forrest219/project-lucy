@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { BookOpen, FileUp, CheckCircle2, AlertCircle } from "lucide-react";
-import { apiPost } from "../../lib/apiClient";
+import { apiPut } from "../../lib/apiClient";
 import { AuthoringHowTo } from "./AuthoringHowTo";
 
 export type Step5BusinessWikiProps = {
@@ -10,6 +10,14 @@ export type Step5BusinessWikiProps = {
   onSkip: () => void;
   onBack: () => void;
 };
+
+export function wizardWikiKey(rawPath: string): string {
+  const trimmed = rawPath.trim().replaceAll("\\", "/").replace(/^\/+/, "").replace(/^wiki\//, "");
+  if (!trimmed) {
+    throw new Error("请填写文档相对路径。");
+  }
+  return trimmed.toLowerCase().endsWith(".md") ? trimmed : `${trimmed}.md`;
+}
 
 export function Step5BusinessWiki({
   connectionId,
@@ -22,11 +30,14 @@ export function Step5BusinessWiki({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      apiPost("/api/wiki", {
-        path: wikiPath.trim(),
-        content
-      }),
+    mutationFn: () => {
+      const key = wizardWikiKey(wikiPath);
+      return apiPut(`/api/wiki/${encodeURIComponent(key)}`, {
+        dryRun: false,
+        content,
+        frontmatter: {}
+      });
+    },
     onSuccess: () => {
       onSuccess();
     },

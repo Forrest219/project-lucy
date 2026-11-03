@@ -8,7 +8,12 @@ import { resolveProjectRoot } from "../project.js";
 import { previewDiff } from "../diff.js";
 import { getAuditDb, type ConfigAuditActorType } from "./audit.js";
 import { presentStoredClient } from "../proxy/request-client-meta.js";
-import { build7dWindow } from "./metric-window.js";
+import {
+  build7dWindow,
+  buildAgentStatsWindow,
+  parseAgentStatsRange,
+  type AgentStatsRange
+} from "./metric-window.js";
 import { expandTemplate } from "./role-templates.js";
 import {
   previewAgentPermissionsForAdmin,
@@ -944,7 +949,8 @@ function buildAgentsSummary(
   /** Spec 128 Task 7: global DISTINCT active token count from audit DB. */
   globalActiveTokenCount: number | null,
   tokenPrefixCollision: boolean,
-  auditWriteHealth: AuditWriteHealthSnapshot
+  auditWriteHealth: AuditWriteHealthSnapshot,
+  range: AgentStatsRange = "7d"
 ): {
   agentCount: number;
   enabledAgentCount: number;
@@ -980,6 +986,7 @@ function buildAgentsSummary(
   };
   windowStart?: string;
   windowEnd?: string;
+  range?: AgentStatsRange;
 } {
   let enabledAgentCount = 0;
   let activeAgentCountLast7d = 0;
@@ -1041,7 +1048,8 @@ function buildAgentsSummary(
       metricsState: "unavailable",
       auditCompleteness: { ...auditWriteHealth, state: "unavailable" },
       windowStart,
-      windowEnd
+      windowEnd,
+      range
     };
   }
 
@@ -1067,7 +1075,8 @@ function buildAgentsSummary(
     metricsState: "ok",
     auditCompleteness: auditWriteHealth,
     windowStart,
-    windowEnd
+    windowEnd,
+    range
   };
 }
 
@@ -1330,8 +1339,9 @@ function agentWritePreview(raw: string, newConfig: YamlAccessConfig): { diff: st
 
 export function registerAgentRoutes(app: FastifyInstance) {
   // GET /api/admin/agents
-  app.get("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
+  app.get<{ Querystring: { range?: string } }>("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
+    const range = parseAgentStatsRange(request.query.range);
     // Spec 174 §3.1 — users / version / permissions come from one access snapshot;
     // if access changes while dynamic stats are read, rebuild the whole batch.
     // Spec 195 §6 — the route and the snapshot layer share ONE request budget:
@@ -1341,18 +1351,18 @@ export function registerAgentRoutes(app: FastifyInstance) {
       // Spec 195 §4 — the permission display depends on P and C; a change to C
       // during the statistics read must reject the old permission result too.
       const accessGeneration = generationKey(["P", "C"]);
-      const listing = await buildAgentList(projectRoot, budget);
+      const listing = await buildAgentList(projectRoot, range, budget);
       if (generationKey(["P", "C"]) === accessGeneration && !hasPendingDisplayWrite(["P", "C"])) return listing;
       if (budget.attemptsLeft <= 0) break;
     }
     throw new DisplaySnapshotBusyError("generation_changed");
   }));
 
-  async function buildAgentList(projectRoot: string, budget?: DisplayRequestBudget) {
+  async function buildAgentList(projectRoot: string, range: AgentStatsRange = "7d", budget?: DisplayRequestBudget) {
     const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
     const userIds = config.users.map((user) => user.id);
     const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version, budget));
-    const window = build7dWindow();
+    const window = buildAgentStatsWindow(range);
     const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await timeAsync("stats", () => Promise.all([
       getLastUsedMap(userIds),
       getAgentConfigTimelineMap(userIds),
@@ -1372,7 +1382,8 @@ export function registerAgentRoutes(app: FastifyInstance) {
       agents,
       globalActiveTokenCount,
       hasTokenPrefixCollision(config.users),
-      readAuditWriteHealth()
+      readAuditWriteHealth(),
+      range
     );
     // Runtime-only changes need not bump a file generation. Compute this after
     // every asynchronous read, immediately before assembling the response.
@@ -1542,14 +1553,14 @@ export function registerAgentRoutes(app: FastifyInstance) {
   });
 
   // GET /api/admin/agents/:userId
-  app.get<{ Params: { userId: string } }>("/api/admin/agents/:userId", async (request, reply) => {
+  app.get<{ Params: { userId: string }; Querystring: { range?: string } }>("/api/admin/agents/:userId", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const { config, version } = await readAccessYaml(projectRoot);
     const user = config.users.find((u) => u.id === request.params.userId);
     if (!user) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
     }
-    const stats = await getStats(user);
+    const stats = await getStats(user, buildAgentStatsWindow(parseAgentStatsRange(request.query.range)));
     const [tokenUsage, timelineMap] = await Promise.all([
       getLastUsedMap([user.id]),
       getAgentConfigTimelineMap([user.id])

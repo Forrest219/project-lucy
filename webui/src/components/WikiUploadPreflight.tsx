@@ -47,6 +47,12 @@ const SOURCE_LABELS: Record<WikiAccessSource, string> = {
   reset: "重新设置"
 };
 
+function uploadWarningsForAcl(warnings: string[], allowedRoles: string[]): string[] {
+  const visible = allowedRoles.includes("*") || allowedRoles.length > 0;
+  if (!visible) return warnings;
+  return warnings.filter((warning) => !warning.includes("无人可见"));
+}
+
 export function WikiUploadPreflight({
   open,
   mode,
@@ -123,8 +129,9 @@ export function WikiUploadPreflight({
         >
           <Dialog.Title className="pl-wiki-preflight-title">{title}</Dialog.Title>
           <Dialog.Description
-            className="pl-wiki-preflight-description"
+            className="pl-wiki-preflight-description notranslate"
             id="wiki-upload-preflight-description"
+            translate="no"
           >
             确认目标目录、目标 Wiki 路径、标题、关联表、可访问角色和 Diff 后再写入业务 Wiki。
           </Dialog.Description>
@@ -335,7 +342,7 @@ export function WikiUploadPreflight({
                 <h3 className="pl-wiki-preflight-section-title">警告与阻断问题</h3>
                 {preview.warnings.length > 0 ? (
                   <ul className="pl-wiki-upload-warnings" data-testid="wiki-upload-warnings">
-                    {preview.warnings.map((warning) => (
+                    {uploadWarningsForAcl(preview.warnings, editorValue).map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>

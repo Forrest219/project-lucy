@@ -86,8 +86,8 @@ async function installSetupApi(page: Page) {
     if (url.pathname === "/api/connections/e2e-chatbi/enabled-tables" && method === "PUT") {
       await route.fulfill({ json: { ok: true, data: { ok: true } } }); return;
     }
-    if (url.pathname === "/api/wiki" && method === "POST") {
-      await route.fulfill({ json: { ok: true, data: { ok: true } } }); return;
+    if (url.pathname.startsWith("/api/wiki/") && method === "PUT") {
+      await route.fulfill({ json: { ok: true, data: { key: decodeURIComponent(url.pathname.slice("/api/wiki/".length)) } } }); return;
     }
     if (url.pathname === "/api/project" && method === "GET") {
       await route.fulfill({ json: { ok: true, data: {

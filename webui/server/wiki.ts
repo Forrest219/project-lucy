@@ -480,6 +480,12 @@ function aclOf(data: Record<string, unknown>): ObjectAcl {
  * read the page: unless the caller supplies a valid new `allowed_roles`, the current ACL
  * declaration is carried over (and a historical wider ACL is never revived).
  */
+function applyAllowedRoles(markdown: string, roles: string[]): string {
+  const parsed = parseMarkdownFrontmatter(markdown);
+  const data: Record<string, unknown> = { ...parsed.data, allowed_roles: roles };
+  return stringifyMarkdownFrontmatter(parsed.content, data);
+}
+
 function carryCurrentAcl(proposedMarkdown: string, currentText: string, options: { restore?: boolean } = {}): string {
   const proposed = parseMarkdownFrontmatter(proposedMarkdown);
   const proposedDeclares = Object.prototype.hasOwnProperty.call(proposed.data, "allowed_roles");

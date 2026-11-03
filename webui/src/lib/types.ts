@@ -832,6 +832,8 @@ export type WikiSummary = {
   slRefs: string[];
   /** Spec 193 §6.1 — authorization status for this row, from one aggregate response. */
   access: WikiAccessListEntry;
+  /** Present for Agent visibility notice helpers that read the ACL state directly. */
+  acl?: WikiAclState;
 };
 
 export type WikiDirectorySummary = {
@@ -1503,6 +1505,8 @@ export type AgentsResponseSummary = {
   metricsState?: "ok" | "unavailable";
   windowStart?: string;
   windowEnd?: string;
+  /** Selected stats window; `callsLast7d` etc. are counts inside this window. */
+  range?: "7d" | "14d" | "30d";
   auditCompleteness?: {
     state: "ok" | "partial" | "unavailable";
     scope: "current_process";

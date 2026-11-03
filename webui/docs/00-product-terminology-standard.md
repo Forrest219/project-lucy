@@ -457,7 +457,7 @@ Connection (连接)
 |---|---|---|
 | 接入进度 · 第 n 步，共 6 步 | 连接卡片与接入向导弹窗共用的当前步骤。卡片写「接入进度 · 第 n 步」，弹窗写全句并带上当前步骤名 | 接入进度 n/6 |
 | 准备表结构 | 第 2 步标题和第 1 步出口；缺 Manifest 时从 Schema 行进入的抽屉标题（Spec 164） | 把「上传 Schema Manifest」当作唯一步骤名 |
-| 从数据库读取表结构 | 尚无 Schema Manifest 时的主按钮。接入向导第 2 步，以及添加 Schema 成功步、缺 Manifest 的 Schema 行（Spec 164） | 自动生成清单、跳过 Manifest |
+| 从数据库读取表结构 | 尚无 Schema Manifest 时的主按钮。接入向导第 2 步，添加 Schema 成功步、缺 Manifest 的 Schema 行（Spec 164）；已有 Manifest 时放在 Schema 行「更多」中，保留原 YAML 中已有表并从数据库勾选尚未写入的表 | 自动生成清单、跳过 Manifest、按张手写 YAML、覆盖已有表说明 |
 | 使用已有 Schema Manifest | 已有资产时的默认主动作 | 请重新上传、强制替换 |
 | 我已有 Schema Manifest | 展开上传 | 裸「上传 YAML」 |
 | 替换已有 Schema Manifest | 主动覆盖入口，确认后再写入 | 自动覆盖 |
@@ -558,6 +558,7 @@ Connection (连接)
 | Agent User ID | 用户 ID | 用户 id | Agent 标识（与显示名混用） | 技术标识；搜索、详情只读 |
 | Agent List Identity Column | 显示名/用户 ID | — | 列表主列仅写「显示名」而单元格含用户 ID | `/admin/agents` 列表主列头；双行：主行显示名、次行用户 ID（Spec 98） |
 | Agent List Search | 搜索显示名或用户 ID | 搜索 Agent 名称 / 用户 ID | Agent 名称 | 列表搜索 placeholder |
+| Agent Stats Range | 近 7 天 / 近 14 天 / 近 30 天 | 周、月 | 只提供近 7 天 | `/admin/agents` 页头时间窗；URL `range=7d\|14d\|30d`；列表默认近 30 天；KPI 标题随 N 变化 |
 | Configured Agent Count | Agent 总数 | 已配置实例 | access.yaml 中的实例（主 hint） | 不随窗口变；含 `enabled: false` |
 | Active Agent | 近 N 活跃 Agent | 活跃 Agent（叙述） | 最近活跃 Agent（主标签）；卡底「近 N 有调用」藏窗口 | N 进**标题**；Spec 189：窗口内至少 1 次**默认用量业务调用**的去重 Agent，纯协议与默认视图排除的评测探针不计入；是否只含当前配置 Agent 按页面人口边界确定 |
 | Agent Active Rate | Agent 活跃率 | 活跃 / 总数 | — | 并入活跃 Agent 卡副行，不独立成卡 |

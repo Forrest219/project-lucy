@@ -13,6 +13,7 @@ import {
 } from "../lib/connectionId";
 import { queryKeys } from "../lib/queryKeys";
 import { SCHEMA_NAME_RULE_HINT, validateSchemaName } from "../lib/schemas";
+import { CATALOG_DATABASE_HINT } from "../lib/catalogDatabase";
 import { formatConnectionProbeMessage, classifyConnectionError } from "../lib/connectionErrors";
 import {
   readEndpointGate,
@@ -48,7 +49,8 @@ function connectionRequest(
   portNumber: number,
   schemas: string[],
   dryRun: boolean,
-  flags: EndpointFlags
+  flags: EndpointFlags,
+  options: { includePassword?: boolean; password?: string } = {}
 ) {
   const isSqlite = form.databaseType === "sqlite" || form.driver === "sqlite";
   const isAthena = form.databaseType === "athena" || form.driver === "athena";
@@ -56,6 +58,9 @@ function connectionRequest(
     ...(flags.acknowledgeSeparateConnection ? { acknowledgeSeparateConnection: true } : {}),
     ...(flags.acknowledgeDifferentDatabase ? { acknowledgeDifferentDatabase: true } : {})
   };
+  // Preview (dryRun) must not send the password. Probe and confirm-create must.
+  const sendPassword = options.includePassword === true || dryRun === false;
+  const password = options.password ?? form.password;
   if (isAthena) {
     return {
       id: form.id.trim(),
@@ -83,7 +88,7 @@ function connectionRequest(
           host: form.host.trim(),
           port: portNumber,
           username: form.username.trim(),
-          ...(dryRun ? {} : form.password ? { password: form.password } : {})
+          ...(sendPassword && password ? { password } : {})
         }),
     database: form.database.trim(),
     schemas,
@@ -178,6 +183,7 @@ export function CreateConnectionDrawer({
 }: CreateConnectionDrawerProps) {
   const queryClient = useQueryClient();
   const gateEpoch = useRef(0);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [previewAttempted, setPreviewAttempted] = useState(false);
@@ -286,14 +292,15 @@ export function CreateConnectionDrawer({
   });
 
   const probeMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (password: string) =>
       apiPost<ProbeConnectionResult>("/api/connections/probe", (() => {
         const { dryRun: _dryRun, id: _id, schemas: _schemas, ...probe } = connectionRequest(
           form,
           portNumber,
           [],
           true,
-          {}
+          {},
+          { includePassword: true, password }
         );
         // The probe endpoint REQUIRES the password — the server rejects a probe without
         // it (CONNECTION_PASSWORD_REQUIRED / "数据库密码为必填项"). But `connectionRequest`
@@ -313,6 +320,13 @@ export function CreateConnectionDrawer({
       );
     },
     onError: (err) => {
+      if (err instanceof ApiError && err.code === "CONNECTION_PASSWORD_REQUIRED") {
+        setProbeResult({
+          status: "error",
+          message: mapCreateErrorMessage(err)
+        });
+        return;
+      }
       const raw = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
       setProbeResult({
         status: "error",
@@ -325,7 +339,9 @@ export function CreateConnectionDrawer({
     mutationFn: (flags: EndpointFlags) =>
       apiPost<CreateConnectionResult>(
         "/api/connections",
-        connectionRequest(form, portNumber, schemasParsed.schemas, false, flags)
+        connectionRequest(form, portNumber, schemasParsed.schemas, false, flags, {
+          password: passwordInputRef.current?.value || form.password
+        })
       ),
     onSuccess: (data) => {
       setCreated(data);
@@ -741,7 +757,14 @@ export function CreateConnectionDrawer({
                     label="数据库"
                     required
                     error={show("database") ? databaseIssue : null}
-                    hint="连接时使用的默认数据库名称，与下方初始 Schema 不是同一项"
+                    hint={
+                      form.databaseType === "doris" ||
+                      form.databaseType === "starrocks" ||
+                      form.databaseType === "mysql"
+                        ? CATALOG_DATABASE_HINT
+                        : "连接时使用的默认数据库名称，与下方初始 Schema 不是同一项"
+                    }
+                    hintTestId="create-connection-database-hint"
                   >
                     <input
                       className="pl-input notranslate"
@@ -773,10 +796,12 @@ export function CreateConnectionDrawer({
                     >
                       <div className="relative w-full">
                         <input
+                          ref={passwordInputRef}
                           type={showPassword ? "text" : "password"}
                           className="pl-input pr-10"
                           value={form.password}
                           onChange={(e) => patchForm("password", e.target.value)}
+                          onInput={(e) => patchForm("password", (e.target as HTMLInputElement).value)}
                           onBlur={() => setTouched((t) => ({ ...t, password: true }))}
                           autoComplete="new-password"
                           data-testid="create-connection-password"
@@ -871,9 +896,16 @@ export function CreateConnectionDrawer({
                 className="pl-btn pl-btn--ghost mr-auto"
                 disabled={probeMutation.isPending}
                 onClick={() => {
+                  const password = passwordInputRef.current?.value ?? form.password;
+                  if (password !== form.password) patchForm("password", password);
                   setProbeAttempted(true);
-                  if (!canProbe) return;
-                  probeMutation.mutate();
+                  const ready = isAthena
+                    ? !regionIssue && !s3Issue && !databaseIssue
+                    : isSqlite
+                      ? !databaseIssue
+                      : !hostIssue && !portIssue && !databaseIssue && !usernameIssue && password.length > 0;
+                  if (!ready) return;
+                  probeMutation.mutate(password);
                 }}
                 data-testid="create-connection-test-btn"
               >

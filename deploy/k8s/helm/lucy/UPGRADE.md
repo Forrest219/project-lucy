@@ -367,3 +367,14 @@ Upgrade only to an image digest that passed `customer-release-readiness`. The re
 candidate digest; if `docker buildx imagetools inspect <tag>` shows a different digest than the evidence, do not deploy.
 Tokens, permissions and audit survive an upgrade; WebUI administrator sessions do not (v2 sessions, Spec §3.2) and
 administrators sign in again.
+
+## Branch `release/lucy-upgrade-ready-M` (not a customer package)
+
+This note describes the uncommitted-then-committed workspace on top of `main` `731907f` (Lucy `0.20.0`, chart `0.2.7`, bundled KTX `0.16.0`). It is not a promoted image, not a Helm release, and not customer acceptance.
+
+- Upgrade start: an existing Lucy `0.20.0` PVC on chart `0.2.x`. This branch does not change the Deployment selector, Service ports, or `persistence.existingClaim`.
+- New configuration: none. No new required Helm value. `LUCY_KTX_MCP_RELOAD=0` skips the post-write KTX MCP restart and leaves the previous daemon running.
+- Data change: connection, schema, Wiki, role, and manifest writes stay on the PVC. A catalog-qualified database is stored as `catalog.database` (for example `hive_jd.app`). It is not merged into another card whose external directory name differs.
+- Downtime: chart upgrades still use `Recreate` and replace the single pod. After a connection or schema write, WebUI stops and starts the KTX MCP daemon; MCP is briefly unavailable during that restart. WebUI login and the PVC are not reset.
+- Failure recovery: a failed daemon restart does not roll back `ktx.yaml`. The API reports the reload as failed when the old process is still the one listening. Pod liveness remains HTTP `/api/health` and does not supervise the daemon. If query tools stay down after a write, restart the pod. Helm rollback still does not restore PVC files; use the quiesced backup.
+- Known limits: no live check against `172.16.19.21`. External-directory schema lists report table count `0` until a structure read. Agent statistics bookmarks using `range=90d` are counted as 30 days. The Notion CommonJS patch is applied when the image is built; an image built without that patch still fails connection tests before reaching the database.

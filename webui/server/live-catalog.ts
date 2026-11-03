@@ -1,3 +1,4 @@
+import { showDatabasesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo, LiveSchemaSummary, LiveSchemasResponse } from "./model";
@@ -123,15 +124,23 @@ function sqlForProtocol(protocol: CatalogProtocol): string {
   return MYSQL_LIVE_SQL;
 }
 
+function sqlForConnection(conn: ConnectionInfo, protocol: CatalogProtocol): string {
+  if (protocol === "mysql") {
+    const catalog = splitCatalogDatabase(conn.database);
+    if (catalog) return showDatabasesFromCatalogSql(catalog.catalog);
+  }
+  return sqlForProtocol(protocol);
+}
+
 function parseRows(json: unknown): LiveSchemaSummary[] {
   if (!json || typeof json !== "object") return [];
   const rows = (json as { rows?: unknown }).rows;
   if (!Array.isArray(rows)) return [];
   const out: LiveSchemaSummary[] = [];
   for (const row of rows) {
-    if (!Array.isArray(row) || row.length < 2) continue;
+    if (!Array.isArray(row) || row.length < 1) continue;
     const schema = String(row[0] ?? "").trim();
-    const tableCount = Number(row[1]);
+    const tableCount = row.length < 2 ? 0 : Number(row[1]);
     if (!schema || !Number.isFinite(tableCount)) continue;
     out.push({ schema, tableCount: Math.max(0, Math.floor(tableCount)) });
   }
@@ -227,7 +236,7 @@ export async function listLiveSchemas(
 
   let sqlResult: SqlResult;
   try {
-    sqlResult = await runSqlImpl(projectRoot, connId, sqlForProtocol(wireProtocol), {
+    sqlResult = await runSqlImpl(projectRoot, connId, sqlForConnection(conn, wireProtocol), {
       maxRows: 2000,
       timeoutMs: 30_000
     });

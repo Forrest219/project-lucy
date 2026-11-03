@@ -104,7 +104,7 @@ export function agentsReady(doc: Document, exp: PerfExpected): boolean {
   if (!total || (total.textContent || "").trim() !== String(b.length)) return false;
   const search = doc.querySelector('input[placeholder="搜索显示名或用户 ID"]') as HTMLInputElement | null;
   if (!search || search.disabled) return false;
-  for (const label of ["当前状态", "角色", "近 7 天活跃"]) {
+  for (const label of ["当前状态", "角色", "近 30 天活跃"]) {
     const select = doc.querySelector(`select[aria-label="${label}"]`) as HTMLSelectElement | null;
     if (!select || select.disabled) return false;
   }

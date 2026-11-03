@@ -135,6 +135,27 @@ describe("wiki editor storage", () => {
     await expect(previewWikiWrite(projectRoot, "/tmp/a.md", { content: "bad" })).rejects.toBeInstanceOf(ForbiddenPathError);
   });
 
+  it("lists Agent ACL on wiki summaries", async () => {
+    await writeWiki(projectRoot, "global/visible.md", {
+      frontmatter: { summary: "Visible", allowed_roles: ["analyst"] },
+      content: "# Visible\n"
+    });
+    const listedVisible = await listWiki(projectRoot);
+    expect(listedVisible).toHaveLength(1);
+    expect(listedVisible[0]).toMatchObject({
+      key: "global/visible.md",
+      summary: "Visible",
+      tags: [],
+      slRefs: [],
+      access: {
+        acl: { state: "roles", roles: ["analyst"] },
+        declared_role_count: 1,
+        declared_without_discover: 0,
+        declared_without_read: 0
+      }
+    });
+  });
+
   it("previews uploaded markdown without writing, then commits through the wiki allowlist", async () => {
     const markdown = "---\nsummary: Uploaded\nsl_refs:\n  - mysql/schema/table\n---\n# Uploaded\n";
     const preview = await previewWikiUpload(projectRoot, {

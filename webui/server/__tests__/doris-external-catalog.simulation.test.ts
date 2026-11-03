@@ -1,0 +1,129 @@
+import { describe, expect, it } from "vitest";
+import { listLiveSchemas } from "../live-catalog";
+import { previewSchemaStructure } from "../schema-structure";
+import type { SqlResult } from "../ktx";
+import type { ConnectionInfo } from "../model";
+
+/**
+ * Isolated stand-in for SelectDB at 172.16.19.21. Unqualified information_schema
+ * fails the way the external catalog does; catalog-qualified SHOW statements
+ * return hive_jd.app without opening a network connection.
+ */
+const DEFAULT_CLUSTER_ERROR =
+  "errCode = 2, detailMessage =\nUnknown database 'default_cluster:information_schema'";
+
+const hiveJd: ConnectionInfo = {
+  id: "hive-jd",
+  driver: "mysql",
+  engine: "mysql",
+  wireProtocol: "mysql",
+  host: "172.16.19.21",
+  port: "9030",
+  database: "hive_jd.app",
+  schemas: ["app"],
+  enabledTables: []
+};
+
+const hive1: ConnectionInfo = {
+  id: "hive-1",
+  driver: "mysql",
+  engine: "mysql",
+  wireProtocol: "mysql",
+  host: "172.16.19.21",
+  port: "9030",
+  database: "hive.dw",
+  schemas: ["dw"],
+  enabledTables: []
+};
+
+function sqlResult(rows: unknown[][], ok = true, stderr = ""): SqlResult {
+  return {
+    ok,
+    exitCode: ok ? 0 : 1,
+    stdout: "",
+    stderr,
+    latencyMs: 3,
+    command: "ktx sql",
+    args: [],
+    json: ok ? { headers: [], rows } : null
+  };
+}
+
+function simulateIsolatedDoris(sql: string): SqlResult {
+  const text = sql.replace(/\s+/g, " ").trim();
+  if (/\binformation_schema\b/i.test(text)) {
+    return sqlResult([], false, DEFAULT_CLUSTER_ERROR);
+  }
+  if (text === "SHOW DATABASES FROM `hive_jd`") {
+    return sqlResult([["app"], ["information_schema"]]);
+  }
+  if (text === "SHOW DATABASES FROM `hive`") {
+    return sqlResult([["dw"], ["dm"], ["ods"]]);
+  }
+  if (text === "SHOW TABLES FROM `hive_jd`.`app`") {
+    return sqlResult([
+      ["app_user_tail_dau_i_d_i_d"],
+      ["app_user_tail_retain_i_d_i_d"],
+      ["日活明细"]
+    ]);
+  }
+  if (text === "SHOW FULL COLUMNS FROM `hive_jd`.`app`.`日活明细`") {
+    return sqlResult([["统计日期", "date", null, "YES", "", null, "", "", "业务日期"]]);
+  }
+  if (text === "SHOW FULL COLUMNS FROM `hive_jd`.`app`.`app_user_tail_dau_i_d_i_d`") {
+    return sqlResult([["stat_date", "date", null, "YES", "", null, "", "", "统计日期"]]);
+  }
+  if (text === "SHOW FULL COLUMNS FROM `hive_jd`.`app`.`app_user_tail_retain_i_d_i_d`") {
+    return sqlResult([["retain_cnt", "bigint", null, "YES", "", null, "", "", "留存人数"]]);
+  }
+  return sqlResult([], false, `unexpected sql: ${text}`);
+}
+
+describe("isolated Doris external catalog", () => {
+  it("lists hive_jd databases without querying unqualified information_schema", async () => {
+    const seen: string[] = [];
+    const result = await listLiveSchemas("/isolated", "hive-jd", { refresh: true }, {
+      readConnectionsImpl: async () => [hiveJd, hive1],
+      runSqlImpl: async (_root, _id, sql) => {
+        seen.push(sql);
+        return simulateIsolatedDoris(sql);
+      }
+    });
+
+    expect(seen).toEqual(["SHOW DATABASES FROM `hive_jd`"]);
+    expect(seen.join("\n")).not.toMatch(/information_schema/i);
+    expect(result.status).toBe("ok");
+    expect(result.schemas).toEqual([{ schema: "app", tableCount: 0 }]);
+    expect(result.reason ?? "").not.toContain("default_cluster");
+  });
+
+  it("does not report schema app on the hive catalog connection", async () => {
+    const result = await listLiveSchemas("/isolated", "hive-1", { refresh: true }, {
+      readConnectionsImpl: async () => [hiveJd, hive1],
+      runSqlImpl: async (_root, _id, sql) => simulateIsolatedDoris(sql)
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.schemas.map((item) => item.schema)).toEqual(["dw", "dm", "ods"]);
+    expect(result.schemas.some((item) => item.schema === "app")).toBe(false);
+  });
+
+  it("reads the two target tables from hive_jd.app through the simulator", async () => {
+    const seen: string[] = [];
+    const preview = await previewSchemaStructure("/isolated", "hive-jd", "app", {
+      readConnectionsImpl: async () => [hiveJd],
+      runSqlImpl: async (_root, _id, sql) => {
+        seen.push(sql);
+        return simulateIsolatedDoris(sql);
+      }
+    });
+
+    expect(seen.some((sql) => /information_schema/i.test(sql))).toBe(false);
+    expect(preview.tableCount).toBe(3);
+    expect(preview.yaml).toContain("app_user_tail_dau_i_d_i_d");
+    expect(preview.yaml).toContain("app_user_tail_retain_i_d_i_d");
+    expect(preview.yaml).toContain("日活明细");
+    expect(preview.yaml).toContain("统计日期");
+    expect(preview.readable).toBe(true);
+  });
+});

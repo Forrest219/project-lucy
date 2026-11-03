@@ -201,6 +201,7 @@ export function WikiEditor() {
   const [uploadFileName, setUploadFileName] = useState("");
   const [uploadMarkdown, setUploadMarkdown] = useState("");
   const [uploadPreview, setUploadPreview] = useState<WikiUploadPreview | null>(null);
+  const [uploadAllowedRoles, setUploadAllowedRoles] = useState<string[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   /* Spec 193 §5 — the explicit authorization selection of the upload. */
@@ -240,6 +241,7 @@ export function WikiEditor() {
   const [restorePreviewError, setRestorePreviewError] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadPreviewRequestRef = useRef(0);
+  const uploadAclTouchedRef = useRef(false);
   const moveTargetDirectoryRef = useRef("");
   const renameDirectoryPathRef = useRef("");
   const renameDirectoryNameRef = useRef("");
@@ -460,6 +462,8 @@ export function WikiEditor() {
       setUiMode("read");
       setUploadOpen(false);
       setUploadPreview(null);
+      setUploadAllowedRoles([]);
+      uploadAclTouchedRef.current = false;
       setUploadError(null);
       setUploadSelection(null);
       setUploadEmptyConfirmed(false);
@@ -1318,6 +1322,8 @@ export function WikiEditor() {
     }
     setUploadMode(modeToOpen);
     setUploadPreview(null);
+    setUploadAllowedRoles([]);
+    uploadAclTouchedRef.current = false;
     setUploadError(null);
     setUploadSelection(null);
     setUploadEmptyConfirmed(false);
@@ -1877,6 +1883,7 @@ export function WikiEditor() {
             ) : uiMode === "read" ? (
               <WikiReadView
                 access={currentPageAccess ?? undefined}
+                acl={pageQuery.data?.acl}
                 content={content}
                 frontmatter={frontmatter}
                 keyName={key}
@@ -2060,6 +2067,8 @@ export function WikiEditor() {
         onCancel={() => {
           setUploadOpen(false);
           setUploadPreview(null);
+          setUploadAllowedRoles([]);
+          uploadAclTouchedRef.current = false;
           setUploadError(null);
           setUploadSelection(null);
         }}

@@ -131,7 +131,8 @@ function stubAgentsEndpoints(
         })
       );
     }
-    if (url === "/api/admin/agents" && (!init || !init.method || init.method === "GET")) {
+    const agentsPath = url.split("?")[0];
+    if (agentsPath === "/api/admin/agents" && (!init || !init.method || init.method === "GET")) {
       return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1", ...(agentsMeta ? { meta: agentsMeta } : {}), ...(agentsSummary ? { summary: agentsSummary } : {}) } }));
     }
     if (url.startsWith("/api/admin/roles")) {
@@ -313,7 +314,7 @@ describe("AgentList", () => {
     expect(screen.getByTestId("agent-metrics-unavailable-unknown1")).toHaveTextContent("数据不可用");
 
     // Agent 名册 Spec §5.4 —— 指标不可用的行只留在「全部」，不进「闲置」。
-    fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), {
+    fireEvent.change(screen.getByRole("combobox", { name: "近 30 天活跃" }), {
       target: { value: "idle" }
     });
     expect(screen.queryByTestId("agent-row-unknown1")).not.toBeInTheDocument();
@@ -637,12 +638,12 @@ describe("AgentList", () => {
     await screen.findByRole("heading", { name: "Agent" });
     await screen.findByTestId("metric-agent-count");
 
-    // Agent 名册 Spec SC-01（v1.4）—— 顶部恰好四张卡：Agent 总数、近 7 天活跃 Agent、
-    // 近 7 天业务调用量、暂时不能查数。没有可用 Token 顶卡，没有页头降级 banner。
+    // Agent 名册 Spec SC-01（v1.4）—— 顶部恰好四张卡：Agent 总数、近 30 天活跃 Agent、
+    // 近 30 天业务调用量、暂时不能查数。没有可用 Token 顶卡，没有页头降级 banner。
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("Agent 总数");
-    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃 Agent");
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 30 天活跃 Agent");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
-    expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("近 7 天业务调用量");
+    expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("近 30 天业务调用量");
     expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("7");
     await waitFor(() => {
       expect(screen.getByTestId("metric-temporarily-unable-to-query")).toHaveTextContent("暂时不能查数");
@@ -840,7 +841,7 @@ describe("AgentList", () => {
 
     fireEvent.change(screen.getByRole("combobox", { name: "角色" }), { target: { value: "all" } });
     // Agent 名册 Spec §5.4 —— 四档：全部、有业务调用、仅连接、闲置。
-    fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), { target: { value: "idle" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "近 30 天活跃" }), { target: { value: "idle" } });
     expect(screen.getByTestId("agent-row-idle_agent")).toBeInTheDocument();
     expect(screen.queryByTestId("agent-row-active_agent")).not.toBeInTheDocument();
   });
@@ -854,7 +855,7 @@ describe("AgentList", () => {
     expect(screen.getByLabelText("搜索显示名或用户 ID")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "当前状态" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "角色" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "近 7 天活跃" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "近 30 天活跃" })).toBeInTheDocument();
     expect(screen.queryByLabelText("按配置Token数筛选")).not.toBeInTheDocument();
     expect(screen.getByTestId("agent-list-result-count")).toHaveTextContent("1 条结果");
     expect(screen.getByRole("columnheader", { name: "显示名/用户 ID" })).toBeInTheDocument();
@@ -1004,7 +1005,7 @@ describe("AgentList", () => {
       "显示名/用户 ID",
       "角色",
       "Token",
-      "近 7 天业务调用量",
+      "近 30 天业务调用量",
       "最近业务使用",
       "操作"
     ]);
@@ -1239,7 +1240,7 @@ function hasConnectOnly(id: string): boolean {
 }
 
 function setActivityFilter(value: "all" | "business" | "connect_only" | "idle") {
-  fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), { target: { value } });
+  fireEvent.change(screen.getByRole("combobox", { name: "近 30 天活跃" }), { target: { value } });
 }
 
 describe("Agent 名册 Spec —— 名册呈现（SC-03～SC-09、SC-11、SC-14、SC-15）", () => {
@@ -1354,7 +1355,7 @@ describe("Agent 名册 Spec —— 名册呈现（SC-03～SC-09、SC-11、SC-14�
 
   it("SC-08 近 7 天活跃四档互斥、且不改变行序", async () => {
     await renderRoster();
-    const select = screen.getByRole("combobox", { name: "近 7 天活跃" });
+    const select = screen.getByRole("combobox", { name: "近 30 天活跃" });
     expect([...select.querySelectorAll("option")].map((option) => option.textContent)).toEqual([
       "全部",
       "有业务调用",

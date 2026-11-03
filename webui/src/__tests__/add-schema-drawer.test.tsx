@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddSchemaDrawer } from "../components/AddSchemaDrawer";
+import { SchemaStructurePrep } from "../components/SchemaStructurePrep";
 import type { ConnectionInfo } from "../lib/types";
 
 function LocationProbe() {
@@ -765,6 +766,139 @@ describe("AddSchemaDrawer", () => {
     const later = vi.mocked(global.fetch).mock.calls.slice(callsBefore).map((call) => String(call[0]));
     expect(later.some((url) => url.includes("schema-structure"))).toBe(false);
     expect(later.some((url) => url.includes("/api/catalog/reload"))).toBe(false);
+  });
+});
+
+describe("SchemaStructurePrep refreshExisting", () => {
+  it("keeps existing Manifest tables and only appends selected database tables", async () => {
+    const uploads: Array<{ content?: string; confirmOverwrite?: boolean }> = [];
+    let written = false;
+    stubFetch({
+      "GET /api/sources": () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              tables: written
+                ? [{
+                    conn: "mysql-aliyun",
+                    schema: "dataforai",
+                    table: "orders",
+                    qualifiedName: "dataforai.orders",
+                    filePath: "",
+                    columnCount: 1,
+                    columnNames: ["id"],
+                    hasTableDesc: false,
+                    hasGrain: false,
+                    measureCount: 0,
+                    joinCount: 0,
+                    wikiRefCount: 0,
+                    completion: "partial",
+                    mtime: "",
+                    enabled: false,
+                    authorizedAgentCount: 0
+                  }]
+                : [],
+              manifestSchemas: [{ conn: "mysql-aliyun", schema: "dataforai", filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml" }]
+            }
+          })
+        ),
+      "GET /api/catalog/assets/schema-manifest?connectionId=mysql-aliyun&schema=dataforai": () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              connectionId: "mysql-aliyun",
+              schema: "dataforai",
+              content: "tables:\n  orders:\n    table: dataforai.orders\n    columns:\n      - name: id\n        descriptions:\n          human: 订单号\n"
+            }
+          })
+        ),
+      "POST /api/connections/mysql-aliyun/schema-structure": () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              schema: "dataforai",
+              readable: true,
+              yaml: "tables:\n  orders:\n    table: dataforai.orders\n    columns:\n      - name: id\n        type: string\n  people:\n    table: dataforai.people\n    columns:\n      - name: name\n        type: string\n  extra:\n    table: dataforai.extra\n    columns:\n      - name: note\n        type: string\n",
+              tableCount: 3,
+              columnCount: 3,
+              mapped: { number: 0, string: 3, time: 0 },
+              downgraded: []
+            }
+          })
+        ),
+      "POST /api/catalog/assets/validate": () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              valid: true,
+              connectionId: "mysql-aliyun",
+              schema: "dataforai",
+              assetKind: "schema_manifest",
+              assetType: "schemaManifest",
+              targetPath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
+              exists: true,
+              originalFilename: "dataforai.yaml",
+              sizeBytes: 40,
+              sha256: "abc",
+              tables: 2,
+              tableNames: ["orders", "people"],
+              warnings: [],
+              errors: []
+            }
+          })
+        ),
+      "POST /api/catalog/assets/upload": (body) => {
+        written = true;
+        uploads.push(body as { content?: string; confirmOverwrite?: boolean });
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              uploaded: true,
+              record: { tables: 2 },
+              validation: { tables: 2, valid: true, exists: true, errors: [], warnings: [] },
+              reload: { status: "success", tables: 2, warnings: [] }
+            }
+          })
+        );
+      }
+    });
+    const onPrepared = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <SchemaStructurePrep
+            connection={makeConn()}
+            schema="dataforai"
+            showAddedStatus={false}
+            exitLabel="关闭"
+            idPrefix="prepare-structure"
+            refreshExisting
+            onExit={vi.fn()}
+            onPrepared={onPrepared}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    expect(await screen.findByTestId("prepare-structure-refresh-hint")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("prepare-structure-read-structure"));
+    const picker = await screen.findByTestId("prepare-structure-table-picker");
+    expect(picker).toHaveTextContent("现有 Manifest 中的 1 张表会原样保留");
+    expect(screen.getByTestId("prepare-structure-add-table-people")).toBeChecked();
+    expect(screen.getByTestId("prepare-structure-add-table-extra")).toBeChecked();
+    fireEvent.click(screen.getByTestId("prepare-structure-add-table-extra"));
+    fireEvent.click(screen.getByTestId("prepare-structure-add-tables"));
+    await waitFor(() => expect(uploads).toHaveLength(1));
+    expect(uploads[0]?.confirmOverwrite).toBe(true);
+    expect(uploads[0]?.content).toContain("human: 订单号");
+    expect(uploads[0]?.content).toContain("people:");
+    expect(uploads[0]?.content).not.toContain("extra:");
+    await waitFor(() => expect(onPrepared).toHaveBeenCalled());
   });
 });
 

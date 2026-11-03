@@ -166,31 +166,43 @@ export function ObjectAclField({
       data-role-status={roleStatus}
     >
       <legend className="pl-eyebrow">可访问角色</legend>
+      <p className="pl-acl-hint" data-testid={`${testId}-hint`}>
+        决定问答 <span className="notranslate" translate="no">Agent</span> 能否搜索和阅读。未选择时{" "}
+        <span className="notranslate" translate="no">Agent</span> 看不到这份内容。
+      </p>
       {corrupt ? (
         <p className="pl-error" data-testid={`${testId}-corrupt`}>
           当前授权声明已损坏，目前无人可见。请重新选择并保存。
         </p>
       ) : null}
-      <label className="pl-acl-option">
-        <input
-          checked={choice === "none"}
-          disabled={disabled}
-          name={groupId}
-          onChange={() => pick("none")}
-          type="radio"
-        />
-        <span>无人可见</span>
-      </label>
-      <label className="pl-acl-option">
-        <input
-          checked={choice === "roles"}
-          disabled={disabled}
-          name={groupId}
-          onChange={() => pick("roles")}
-          type="radio"
-        />
-        <span>指定角色</span>
-      </label>
+      <div className="pl-acl-option-row">
+        <label className="pl-acl-option">
+          <input
+            checked={choice === "none"}
+            disabled={disabled}
+            name={groupId}
+            onChange={() => pick("none")}
+            type="radio"
+          />
+          <span>无人可见</span>
+        </label>
+        <small className="pl-acl-option-note">
+          <span className="notranslate" translate="no">Agent</span> 搜不到也读不到
+        </small>
+      </div>
+      <div className="pl-acl-option-row">
+        <label className="pl-acl-option">
+          <input
+            checked={choice === "roles"}
+            disabled={disabled}
+            name={groupId}
+            onChange={() => pick("roles")}
+            type="radio"
+          />
+          <span>指定角色</span>
+        </label>
+        <small className="pl-acl-option-note notranslate" translate="no">仅这些 Agent 可见</small>
+      </div>
       <div className="pl-acl-roles" data-testid={`${testId}-roles`}>
         {roleStatus === "loading" ? (
           <p className="pl-notice" data-testid={`${testId}-roles-loading`}>
@@ -244,16 +256,19 @@ export function ObjectAclField({
           </>
         )}
       </div>
-      <label className="pl-acl-option">
-        <input
-          checked={choice === "all"}
-          disabled={disabled}
-          name={groupId}
-          onChange={() => pick("all")}
-          type="radio"
-        />
-        <span>所有角色可见</span>
-      </label>
+      <div className="pl-acl-option-row">
+        <label className="pl-acl-option">
+          <input
+            checked={choice === "all"}
+            disabled={disabled}
+            name={groupId}
+            onChange={() => pick("all")}
+            type="radio"
+          />
+          <span>所有角色可见</span>
+        </label>
+        <small className="pl-acl-option-note notranslate" translate="no">开通对应通道的 Agent 均可阅读</small>
+      </div>
       {showAllConfirm ? (
         <div className="pl-acl-confirm" data-testid={`${testId}-all-confirm`}>
           <p className="pl-notice">

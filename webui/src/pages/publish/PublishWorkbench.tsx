@@ -124,17 +124,33 @@ export function classifyChangedSemanticFiles(filePaths: string[]): ClassifiedSem
   return filePaths.map(classifyChangedSemanticFile);
 }
 
+export type ImpactedSemanticTable = { conn: string; table: string };
+
+/**
+ * Table-level overlays keyed by connection. Schema Manifest paths are excluded.
+ */
+export function impactedSemanticTables(filePaths: string[]): ImpactedSemanticTable[] {
+  const seen = new Set<string>();
+  const tables: ImpactedSemanticTable[] = [];
+  for (const classified of classifyChangedSemanticFiles(filePaths)) {
+    if (classified.kind !== "table-overlay") continue;
+    const id = `${classified.conn}/${classified.table}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    tables.push({ conn: classified.conn, table: classified.table });
+  }
+  return tables.sort((left, right) =>
+    left.conn === right.conn
+      ? left.table.localeCompare(right.table)
+      : left.conn.localeCompare(right.conn)
+  );
+}
+
 /**
  * Table-level overlays only. Schema Manifest paths must not appear as table names.
  */
 export function impactedTableNames(filePaths: string[]): string[] {
-  const seen = new Set<string>();
-  for (const classified of classifyChangedSemanticFiles(filePaths)) {
-    if (classified.kind === "table-overlay") {
-      seen.add(classified.table);
-    }
-  }
-  return [...seen].sort();
+  return [...new Set(impactedSemanticTables(filePaths).map((item) => item.table))].sort();
 }
 
 export function fileChangeStatusLabel(status: string): string {
@@ -148,9 +164,10 @@ export function fileChangeStatusLabel(status: string): string {
 
 function findSourceForTable(
   sources: SourceSummary[],
+  conn: string,
   tableName: string
 ): SourceSummary | null {
-  return sources.find((source) => source.table === tableName) ?? null;
+  return sources.find((source) => source.conn === conn && source.table === tableName) ?? null;
 }
 
 const boundaryChecklistRules: Array<{ pattern: RegExp; prompt: string }> = [
@@ -383,18 +400,20 @@ export function PublishWorkbench() {
       item.kind === "schema-manifest"
   );
   const impactedTables = useMemo(
-    () => impactedTableNames(files.map((file) => file.filePath)),
+    () => impactedSemanticTables(files.map((file) => file.filePath)),
     [files]
   );
   const otherChanges = classified.filter((item) => item.kind === "other");
   const impactedTableRefs = useMemo(() => {
     const sources = sourcesQuery.data?.tables ?? [];
-    return impactedTables.map((tableName) => ({
-      tableName,
-      source: findSourceForTable(sources, tableName)
+    return impactedTables.map((item) => ({
+      conn: item.conn,
+      tableName: item.table,
+      source: findSourceForTable(sources, item.conn, item.table)
     }));
   }, [impactedTables, sourcesQuery.data]);
-  const postPublishEvalDomains = impactedTables.length > 0 ? impactedTables : ["all"];
+  const postPublishEvalDomains =
+    impactedTables.length > 0 ? [...new Set(impactedTables.map((item) => item.table))] : ["all"];
   const reindexSucceeded = reindexMutation.data?.reindex.ok === true;
   const reindexFinished = reindexSucceeded && publishGate.state !== "ready";
   const reindexFailed = reindexMutation.data ? !reindexMutation.data.reindex.ok : false;
@@ -872,6 +891,7 @@ export function PublishWorkbench() {
                         const key = `${table.identity.connectionId}/${table.identity.schema}/${tableName}`;
                         const source = findSourceForTable(
                           sourcesQuery.data?.tables ?? [],
+                          table.identity.connectionId,
                           table.identity.table
                         );
                         return (
@@ -936,8 +956,8 @@ export function PublishWorkbench() {
                       表语义变更 · 共影响 {impactedTables.length} 张表
                     </div>
                     <ul className="grid gap-1.5 text-sm" data-testid="publish-change-impact-list">
-                      {impactedTableRefs.map(({ tableName, source }) => (
-                        <li key={tableName} className="flex items-center justify-between gap-2">
+                      {impactedTableRefs.map(({ conn, tableName, source }) => (
+                        <li key={`${conn}/${tableName}`} className="flex items-center justify-between gap-2">
                           {source ? (
                             <Link
                               to={buildObjectDetailSearch({
@@ -948,7 +968,7 @@ export function PublishWorkbench() {
                               })}
                               className="pl-inline-link notranslate"
                               translate="no"
-                              data-testid={`publish-impact-table-${tableName}`}
+                              data-testid={`publish-impact-table-${conn}-${tableName}`}
                             >
                               {tableName}
                             </Link>
@@ -956,13 +976,24 @@ export function PublishWorkbench() {
                             <span
                               className="text-fg-default notranslate"
                               translate="no"
-                              data-testid={`publish-impact-table-${tableName}`}
+                              data-testid={`publish-impact-table-${conn}-${tableName}`}
                             >
                               {tableName}
                             </span>
                           )}
                           <span className="text-xs text-fg-muted">
-                            {source ? `${source.conn}/${source.schema}` : "未在 Catalog 中"}
+                            {source ? (
+                              <span className="notranslate" translate="no">
+                                {source.conn}/{source.schema}
+                              </span>
+                            ) : (
+                              <>
+                                <span className="notranslate" translate="no">
+                                  {conn}
+                                </span>
+                                {" · 未在 Catalog 中"}
+                              </>
+                            )}
                           </span>
                         </li>
                       ))}

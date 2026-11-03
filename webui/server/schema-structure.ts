@@ -1,9 +1,11 @@
 import { stringify } from "yaml";
+import { quoteMysqlIdent, showFullColumnsSql, showTablesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const CATALOG_STRUCTURE_MAX_TABLES = 200;
 
 const NUMBER_TYPES = new Set([
   "int",
@@ -209,6 +211,36 @@ ORDER BY c.table_name, c.ordinal_position
 `.trim().replace(/\s+/g, " ");
 }
 
+function structureRows(result: SqlResult): unknown[] {
+  const json = result.json;
+  const rows =
+    json && typeof json === "object" && Array.isArray((json as { rows?: unknown }).rows)
+      ? (json as { rows: unknown[] }).rows
+      : null;
+  if (!result.ok || rows === null) {
+    throw new SchemaStructureError("READ_FAILED", "读取表结构失败。");
+  }
+  if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
+    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
+  }
+  return rows;
+}
+
+function mapShowFullColumn(table: string, row: unknown[]): ColumnInput | null {
+  if (!Array.isArray(row) || row.length < 4) return null;
+  const column = String(row[0] ?? "").trim();
+  if (!column || column.length > 256 || /[\0\r\n]/.test(column)) return null;
+  const comment = row.length >= 9 ? String(row[8] ?? "") : "";
+  return {
+    table,
+    column,
+    dataType: String(row[1] ?? ""),
+    nullable: String(row[3] ?? "YES").toUpperCase() !== "NO",
+    primaryKey: String(row[4] ?? "").toUpperCase() === "PRI",
+    comment
+  };
+}
+
 function parseColumns(rows: unknown[]): ColumnInput[] {
   const columns: ColumnInput[] = [];
   for (const row of rows) {
@@ -255,30 +287,63 @@ export async function readSchemaColumns(
     throw new SchemaStructureError("SCHEMA_UNSUPPORTED", "当前数据库类型请上传 Schema Manifest");
   }
   const execute = deps.runSqlImpl ?? runSql;
-  let result: SqlResult;
+  const catalog = protocolOf(connection) === "mysql" ? splitCatalogDatabase(connection.database) : null;
   try {
-    result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
+    if (catalog) {
+      const tablesResult = await execute(
+        projectRoot,
+        connectionId,
+        showTablesFromCatalogSql(catalog.catalog, safeSchema),
+        { maxRows: SCHEMA_STRUCTURE_MAX_ROWS, timeoutMs: 30000 }
+      );
+      const tableNames = structureRows(tablesResult)
+        .map((row) => (Array.isArray(row) ? String(row[0] ?? "").trim() : ""))
+        .filter((name) => {
+          try {
+            quoteMysqlIdent(name);
+            return true;
+          } catch {
+            return false;
+          }
+        });
+      if (tableNames.length > CATALOG_STRUCTURE_MAX_TABLES) {
+        return { status: "too_large" };
+      }
+      const columns: ColumnInput[] = [];
+      for (const table of tableNames) {
+        const columnResult = await execute(projectRoot, connectionId, showFullColumnsSql(catalog.catalog, safeSchema, table), {
+          maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+          timeoutMs: 30000
+        });
+        for (const row of structureRows(columnResult)) {
+          if (!Array.isArray(row)) continue;
+          const mapped = mapShowFullColumn(table, row);
+          if (mapped) columns.push(mapped);
+        }
+        if (columns.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
+          return { status: "too_large" };
+        }
+      }
+      return { status: "ok", columns };
+    }
+    const result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
       maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
       timeoutMs: 30000
     });
-  } catch {
+    const rows = structureRows(result);
+    if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
+      return { status: "too_large" };
+    }
+    return { status: "ok", columns: parseColumns(rows) };
+  } catch (error) {
+    if (error instanceof SchemaStructureError) {
+      if (error.message.includes("超过一次可读取的上限")) {
+        return { status: "too_large" };
+      }
+      return { status: "error", message: error.message };
+    }
     return { status: "error", message: "读取表结构失败。" };
   }
-  if (!result.ok) {
-    return { status: "error", message: "读取表结构失败。" };
-  }
-  const json = result.json;
-  const rows =
-    json && typeof json === "object" && Array.isArray((json as { rows?: unknown }).rows)
-      ? (json as { rows: unknown[] }).rows
-      : null;
-  if (rows === null) {
-    return { status: "error", message: "读取表结构失败。" };
-  }
-  if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
-    return { status: "too_large" };
-  }
-  return { status: "ok", columns: parseColumns(rows) };
 }
 
 export async function previewSchemaStructure(

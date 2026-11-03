@@ -1,3 +1,4 @@
+import { WikiAgentAccessNotice } from "./WikiAgentAccessNotice";
 import { pagesUnderDirectory, wikiTitleFromKey } from "../lib/wiki";
 import { WikiAccessStatusBadge } from "./WikiAccessSummary";
 import {
@@ -258,6 +259,11 @@ export function WikiLibraryHome({
                       wiki/{page.key}
                     </code>
                   </span>
+                  <WikiAgentAccessNotice
+                    acl={page.acl}
+                    compact
+                    testId={`wiki-library-agent-access-${page.key}`}
+                  />
                 </button>
                 <WikiAccessStatusBadge
                   access={accessOf(page)}
