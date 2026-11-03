@@ -5,11 +5,12 @@
 | 文档版本 / 日期 | **v0.4** / 2026-11-03 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P0＋P1**。功能编号无 |
 | 主 Spec | [`docs/specs/lucy-20261103-admin-api-agent-discoverability-spec.md`](../specs/lucy-20261103-admin-api-agent-discoverability-spec.md) |
-| 状态 | **v0.4 已实施（2026-11-03）**。SC-01–SC-20 自动化已落，尚无逐条收口记录。本条收口不表示可上线 |
+| 状态 | **v0.4 功能合同已收口（2026-11-03）**。SC-01–SC-20 全部关闭，逐条落点见 §4.1，证据见收口记录。本条收口不表示可上线 |
 | 授权边界 | **v0.4 可定稿后**：用户同会话「能定稿则推进落地」已明示开工。授权实现 Spec SC-01–SC-20 对应代码与测试。**仍不授权** git commit、客户镜像、Docker `--fresh`／重建、浏览器 E2E，除非用户另授 |
 | 验收 | 以主 Spec §4 SC-01–SC-20 为准 |
 | 实施主体 | `webui/server` Admin／auth／tokens／agents；OpenAPI 模块；endpoint 解析与 `mcpEndpoint` 片段；配套测试 |
 | 审阅 | [`docs/reviews/2026-11-03-codex-review-admin-api-agent-discoverability.md`](../reviews/2026-11-03-codex-review-admin-api-agent-discoverability.md) |
+| 收口记录 | [`docs/reviews/2026-11-03-admin-api-agent-discoverability-closure.md`](../reviews/2026-11-03-admin-api-agent-discoverability-closure.md) |
 
 ## 1. 目标
 

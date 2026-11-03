@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 产品功能合同 / **v0.4** |
 | 日期 / 目标版本 | 2026-11-03 / 不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P0**（可发现性）＋ **P1**（开通 REST 人体工程学）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.4 已实施（2026-11-03）**。SC-01–SC-20 自动化已落，尚无逐条收口记录。本条收口不表示可上线 |
+| 状态 | **v0.4 功能合同已收口（2026-11-03）**。SC-01–SC-20 全部关闭，逐条落点见 §4.1，证据见收口记录。本条收口不表示可上线 |
 | 决策来源 | 2026-11-03 运维反馈；分支 `lucy-v0.25` 对齐；Codex 第 1–2 轮审阅 |
 | 需求来源 | 运维 Agent 反解 WebUI JS 才还原 Admin API 契约，耗时主要在不可发现而非治理内核不足 |
 | 实施主体 | WebUI Admin Fastify：OpenAPI、路由诊断序、错误信封、Agent 写响应 `after`、Token 签发入参；配套测试与索引 |
@@ -13,6 +13,7 @@
 | 与既有 Spec 的关系 | **不削弱** L25-16 D1 方案 C。**不替代** `lucy_ops_token_issue`／`lucy_ops_agent_apply`。本条**显式修订** Token 签发 REST（相对 [`lucy-20261101-new-token-expiry-preset-ux-spec.md`](lucy-20261101-new-token-expiry-preset-ux-spec.md)「不改签发 API」）：以本条为准增加 `expires_in`／可选 `clientConfigs`；**不统一修改**各写操作既有 dryRun 默认值 |
 | 实施计划 | [`docs/plans/lucy-20261103-admin-api-agent-discoverability-plan.md`](../plans/lucy-20261103-admin-api-agent-discoverability-plan.md) |
 | 审阅 | [`docs/reviews/2026-11-03-codex-review-admin-api-agent-discoverability.md`](../reviews/2026-11-03-codex-review-admin-api-agent-discoverability.md) |
+| 收口记录 | [`docs/reviews/2026-11-03-admin-api-agent-discoverability-closure.md`](../reviews/2026-11-03-admin-api-agent-discoverability-closure.md) |
 
 ## 闭口层级
 
@@ -183,6 +184,35 @@ on POST tokens(body):
 | SC-18 | Spec／Plan／两索引状态段与 Spec 头部状态行**逐字**一致；`lint:spec-docs` 对本条无新增阻塞 | 门禁＋人工镜像核对 |
 | SC-19 | Token 签发 `dryRun:true`（含同时 `includeClientConfigs:true`）→ 预览成功、`proposed.expires_at` 来自与真实签发共用的 `resolve_expiry`（覆盖仅 `expires_in`、非法值、双字段冲突）、无明文 `token`、无 `clientConfigs`、无库存新增；endpoint 503 仅非预览 | 服务端测试 |
 | SC-20 | Token 续期 OpenAPI／行为：省略 dryRun＝真实续期；`dryRun:true`＝预览不改 `expires_at`（与现行一致，本条不改默认） | 服务端测试 |
+
+### 4.1 执行结果与逐条落点（2026-11-03）
+
+证据等级：**本地自动化（vitest）**。无 CI job 证据，无客户环境证据。完整记录见 [收口记录](../reviews/2026-11-03-admin-api-agent-discoverability-closure.md)。实现提交 `10577964`。
+
+| 编号 | 结果 | 落点 |
+|---|---|---|
+| SC-01 | 通过 | `admin-openapi-discoverability.test.ts`「SC-01 public OpenAPI lists exactly the D2 operations and the live router」 |
+| SC-02 | 通过 | 同文件「SC-02 declares login, issue, revoke, role PATCH and per-operation dryRun」 |
+| SC-03 | 通过 | 同文件「SC-03 required mode without a session returns AUTH_REQUIRED for a real route」 |
+| SC-04 | 通过 | 同文件「SC-04 wrong methods are 405 for anonymous and signed-in callers, and CSRF still wins」 |
+| SC-05 | 通过 | 同文件「SC-05 a signed-in caller gets 404 for an unknown admin path」 |
+| SC-06 | 通过 | 同文件「SC-06 unknown paths are 404 without a session, and public/auth modes stay intact」 |
+| SC-07 | 通过 | `admin-tokens.test.ts`「SC-07 duplicate label returns a non-sensitive existingToken」 |
+| SC-08 | 通过 | `admin-agents.test.ts`「SC-08 missing id or name returns expected and a nested agent example」 |
+| SC-09 | 通过 | 同文件「SC-09 preview omits after and still returns gate」 |
+| SC-10 | 通过 | 同文件「SC-10 fixture A…」「SC-10 fixture B…」 |
+| SC-11 | 通过 | `admin-tokens.test.ts`「SC-11 expires_in 365d matches the fixed t0 preset」 |
+| SC-12 | 通过 | 同文件「SC-12 accepts equal expiry fields and rejects a conflict」 |
+| SC-13 | 通过 | 同文件「SC-13 rejects expires_in 7d」 |
+| SC-14 | 通过 | 同文件「SC-14 gates clientConfigs on a configured MCP endpoint」 |
+| SC-15 | 通过 | 同文件「SC-15 omits clientConfigs unless includeClientConfigs is true」 |
+| SC-16 | 通过 | `admin-agents.test.ts`「SC-16 confirmed create returns after and a failed write does not」 |
+| SC-17 | 通过 | `admin-openapi-discoverability.test.ts`「SC-17 OpenAPI states the owner gate…」 |
+| SC-18 | 通过 | Spec／Plan／`docs/README.md`／`docs/plans/README.md` 状态段逐字一致；本 Spec／Plan 未引入 `lint:spec-docs` 新增阻塞 |
+| SC-19 | 通过 | `admin-tokens.test.ts`「SC-19 dryRun shares resolve_expiry and skips mint plus endpoint failures」 |
+| SC-20 | 通过 | `token-renewal-closure.test.ts`「SC-20 omits dryRun to renew for real and dryRun true leaves expires_at unchanged」 |
+
+**实测（2026-11-03 复跑）**：对本 Spec SC 标题过滤后 **4 文件 / 32 条全绿**（另 71 条 skipped）。
 
 ## 5. 非目标
 

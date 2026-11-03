@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.1-requirements-review |
 | 日期 / 目标版本 | 2026-10-25 / v0.25 |
 | 功能编号 / 优先级 | L25-13 / P1-6 |
-| 状态 | **已实现，未验收**（v0.25 P1-6 / L25-13）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md` §1.1 W5；提交 `28780eae`。真实升级与真实备份未执行（记 `blocked_delivery`）；非门禁 |
+| 状态 | **发布取证层；不进 `0.25.0` 产品闭口分母（2026-11-03）**。后续候选见 [`REQ-030-006`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)。脚本／合同在仓（提交 `28780eae`）；真实升级与真实备份未执行（记 `blocked_delivery`）；非门禁。RVC-01–13 仍未执行，不改成通过。记录见 [A／B 剥离](../reviews/2026-11-03-product-close-peel-a-b.md) |
 | 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec；本轮只做设计与需求审查材料 |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) L25-13；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1 |
 | 审查入口 | [P1 需求审查清单](../plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) |

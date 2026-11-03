@@ -3,12 +3,13 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 候选需求池。**不是**功能 Spec，**不授权**实现 |
-| 版本 / 日期 | v0.1 / 2026-11-02 |
-| 状态 | **候选需求池已建立（2026-11-02）**。首条 REQ-030-001 登记为 Deferred，不进入 `0.25.0`。本条不表示任何功能已获授权实现，也不表示可上线 |
+| 版本 / 日期 | v0.2 / 2026-11-03 |
+| 状态 | **候选需求池（2026-11-03）**。REQ-030-001–007 均为 Deferred，不进入 `0.25.0`。本条不表示任何功能已获授权实现，也不表示可上线 |
 | 授权边界 | **只登记、不实现**。条目进入实施前须：需求澄清 → 独立 Spec → Plan → 开发授权；本池自身不构成其中任一步 |
-| 验收 | 本池自身的验收＝条目结构完整（ID／标题／来源／优先级／状态齐备）＋ 与 UX 台账双向可追。**不构成任何功能验收**。当前：REQ-030-001 已登记，来源与 UX 台账 `UX-PUBLISH-WORKBENCH-010` 一致 |
+| 验收 | 本池自身的验收＝条目结构完整（ID／标题／来源／优先级／状态齐备）＋ 来源可追。**不构成任何功能验收** |
 | 目标版本 | 候选产品线 **`0.30.0`**（尚未开线；当前产品线仍是 `0.25.0`） |
 | 维护规则 | 只追加条目；开工前须另立 Spec／Plan 并获授权。不得把本文件当作本版（`0.25.0`）实施依据 |
+| 变更 | v0.2（2026-11-03）：按 [A／B 剥离记录](../reviews/2026-11-03-product-close-peel-a-b.md) 追加 REQ-030-002–007 |
 
 ## 目标
 
@@ -27,6 +28,12 @@
 | ID | 标题 | 来源 | 优先级（池内） | 状态 |
 |---|---|---|---|---|
 | REQ-030-001 | 发布工作台：分文件勾选发布 | 2026-11-02 `/publish/workbench` UAT 反馈 | 待定 | Deferred — 不进 `0.25.0` |
+| REQ-030-002 | 帮助中心体验（L25-12） | Spec `lucy-20261031-help-center-experience` | 待定 | Deferred — 不进 `0.25.0` |
+| REQ-030-003 | 访问关系图与访问日志口径对齐 | Spec `lucy-20261102-access-map-audit-echo` | 待定 | Deferred — 不进 `0.25.0` |
+| REQ-030-004 | 运维控制面 W-B（语义发布） | L25-16 W-B；Spec `lucy-20261028-v0p25-lucy-ops-control-plane` | 待定 | Deferred — 不进 `0.25.0` |
+| REQ-030-005 | 客户升级 E2E 自动化（L25-07） | Spec `lucy-20261025-v0p25-upgrade-e2e-automation` | 待定 | Deferred — 发布取证；不进 `0.25.0` 产品分母 |
+| REQ-030-006 | 升级候选验证环境（L25-13） | Spec `lucy-20261025-v0p25-upgrade-candidate-verification` | 待定 | Deferred — 发布取证；不进 `0.25.0` 产品分母 |
+| REQ-030-007 | E2E 主线与旁线优化（harness） | Spec `lucy-20261025-v0p25-e2e-mainline-and-branch-optimization` | 待定 | Deferred — 工程 harness；不进 `0.25.0` 产品分母 |
 
 ---
 
@@ -35,8 +42,8 @@
 条目从本池进入实施前必须依次满足：
 
 1. **需求澄清**：与委托人确认诉求边界、现行约束冲突项与不做项，结论写回本条目。
-2. **独立 Spec**：另立 `docs/specs/lucy-YYYYMMDD-<slug>-spec.md`，完成闭口层级与 SC 编号；不得以本池条目代替 Spec。
-3. **Plan**：另立对应 Plan，登记进 `docs/plans/README.md`。
+2. **独立 Spec**：另立或恢复既有 Spec 的开工授权；不得以本池条目代替 Spec。
+3. **Plan**：另立或恢复对应 Plan，登记进 `docs/plans/README.md`。
 4. **开发授权**：获得明确开工授权后，才可改代码。
 
 未满足上述四步时，条目状态保持 Deferred，不得进入当前版本实施。
@@ -60,7 +67,7 @@
 |---|---|---|
 | 被当成实施依据 | 有人把池内条目直接排进 `0.25.0` | 文件头写明不授权实现；条目状态默认 Deferred |
 | 版本号漂移 | 池名写死 `0.30.0`，与实际开线版本不一致 | 开线时由需求澄清环节确认并整体改写，不静默沿用 |
-| 需求丢失 | 诉求散落各处，池内漏登记 | 登记时必须回填来源；UX 台账与池双向可追 |
+| 需求丢失 | 诉求散落各处，池内漏登记 | 登记时必须回填来源；与 Spec 头部 Deferred 句双向可追 |
 
 ---
 
@@ -97,3 +104,94 @@
 ### 本版临时用法（给操作者，非产品变更）
 
 有待同步文件时：看中栏「生效准备」→「校验变更」→「同步索引并生效」→ 确认侧栏提交。左栏点击只打开差异，不发布。
+
+---
+
+## REQ-030-002：帮助中心体验（L25-12）
+
+### 背景
+
+L25-12 帮助中心 Spec／Plan 已落盘为 v0.1-draft；2026-11-02 起本版不实施、不评审、不开工。2026-11-03 产品收关将本条正式迁入 `0.30.0` 池。
+
+### 期望方向
+
+门户 → 分类 → 文章三层 IA；独立「快速入门」；复制／导出 Markdown；浏览器打印。细节以既有 Spec 为准，开线前须再澄清。
+
+### 关联
+
+- Spec：`docs/specs/lucy-20261031-help-center-experience-spec.md`
+- Plan：`docs/plans/lucy-20261031-help-center-experience-plan.md`
+- 台账：`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` §2.6
+
+---
+
+## REQ-030-003：访问关系图与访问日志口径对齐
+
+### 背景
+
+Spec／Plan v0.3 可定稿（Codex 两轮）；定稿不表示开发已授权。2026-11-03 明确本版不开发，迁入池。
+
+### 期望方向
+
+访问关系图工具条与访问日志共用问询种类／访问等级；关联口径降为弱入口。细节以既有 Spec 为准。
+
+### 关联
+
+- Spec：`docs/specs/lucy-20261102-access-map-audit-echo-spec.md`
+- Plan：`docs/plans/lucy-20261102-access-map-audit-echo-plan.md`
+
+---
+
+## REQ-030-004：运维控制面 W-B（语义发布）
+
+### 背景
+
+L25-16 W-A（连接表／源表导入）已授权实现；W-B（语义发布控制面）仍不可交付开发，依赖 L25-11 审阅通过与 G31。2026-11-03 将 **W-B 单独**迁入池；W-A 仍留在 `0.25.0` 登记（中间带，本轮不动）。
+
+### 期望方向
+
+`lucy_ops_*` 语义发布包装；消费既有 staged 批次；独立授权与审计归因。开线前须重核 G31／批次消费合同。
+
+### 关联
+
+- Spec：`docs/specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md`（W-B 段）
+- Plan：`docs/plans/2026-10-28-lucy-v0.25-lucy-ops-control-plane-implementation-plan.md`（S5）
+
+---
+
+## REQ-030-005：客户升级 E2E 自动化（L25-07）
+
+### 背景
+
+整条合同对象是真实旧版→候选的升级取证（Docker／K3s／K8s），不是产品功能闭口。脚本在仓；真实升级未授权（`blocked_delivery`）；非门禁。2026-11-03 剥离出 `0.25.0` 产品分母。
+
+### 关联
+
+- Spec：`docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md`
+- 上游：`docs/plans/2026-10-19-upgrade-e2e-implementation-plan.md`
+
+---
+
+## REQ-030-006：升级候选验证环境（L25-13）
+
+### 背景
+
+隔离环境备份恢复验证通道，不是交付通道，也不是产品功能闭口。2026-11-03 剥离出 `0.25.0` 产品分母。
+
+### 关联
+
+- Spec：`docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md`
+- 上游：`docs/plans/2026-10-22-upgrade-candidate-verification-plan.md`
+
+---
+
+## REQ-030-007：E2E 主线与旁线优化（harness）
+
+### 背景
+
+测试组织与证据 harness，不改变任何功能 Spec 的验收语义。2026-11-03 剥离出 `0.25.0` 产品分母。
+
+### 关联
+
+- Spec：`docs/specs/lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md`
+- Plan：`docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md`

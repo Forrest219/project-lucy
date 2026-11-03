@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计草案 / **v0.1-draft** |
 | 日期 / 目标版本 | 2026-10-31 / v0.25 |
 | 台账号 | **L25-12**。挂 v0.25 升级台账（[`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.6）。不另派 WebUI 流水号 |
-| 状态 | **待定（2026-11-02）**。本版不实施、不评审、不开工。功能稳定后再排。D1–D14 仍是草案，SC-01–SC-20 未执行。原草案仍不得实施 |
+| 状态 | **Deferred → `0.30.0` 池 [`REQ-030-002`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)（2026-11-03）**。本版不实施、不评审、不开工。D1–D14 仍是草案，SC-01–SC-20 未执行。原草案仍不得实施。记录见 [A／B 剥离](../reviews/2026-11-03-product-close-peel-a-b.md) |
 | 决策来源 | 2026-10-31 Forrest 决定：帮助文档拆成「快速入门」与「详细指南」两类读物；快速入门不与现有手册混在一起，放在新的改良帮助中心里；当前单页模式不优雅；允许用户把页面内容复制走（复制 Markdown / 导出 PDF） |
 | 与既有 Spec 的关系 | **取代 [`lucy-20261021-v2p5-help-center-spec.md`](lucy-20261021-v2p5-help-center-spec.md)（L25-12 原草案，v0.1-draft）。** 原草案只覆盖手册的三层 IA 派生；本 Spec 在其上扩编：新增独立快速入门资产、导出与打印合同、`docs/user-guide/` 迁移处置、角色名统一。原草案自本 Spec 登记起标为「已被取代，不得实施」，其 §3.3 的 URL 合同被本 Spec §5 取代，其余约定在无冲突处继续有效 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」「功能闭口与发布取证」「新增 Spec / Plan 的落盘清单」 |
