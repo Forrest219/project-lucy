@@ -4,20 +4,44 @@ import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type TestConnectionResult = Awaited<ReturnType<typeof import("../ktx").testConnection>>;
+
+/** Mutable fake so once-queues cannot leak across tests after `vi.resetModules()`. */
+const testConnectionState = vi.hoisted(() => {
+  const ok = (connId: string): TestConnectionResult => ({
+    status: "ok" as const,
+    latencyMs: 5,
+    detail: "ok",
+    command: `ktx connection test ${connId}`,
+    args: ["connection", "test", connId],
+    exitCode: 0,
+    stdout: "ok",
+    stderr: ""
+  });
+  return {
+    ok,
+    next: null as null | ((connId: string) => TestConnectionResult | Promise<TestConnectionResult>),
+    reset() {
+      this.next = null;
+    },
+    queueOnce(result: TestConnectionResult | ((connId: string) => TestConnectionResult)) {
+      this.next = typeof result === "function" ? result : () => result;
+    }
+  };
+});
+
 vi.mock("../ktx", async () => {
   const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
   return {
     ...actual,
-    testConnection: vi.fn(async (_root: string, connId: string) => ({
-      status: "ok" as const,
-      latencyMs: 5,
-      detail: "ok",
-      command: `ktx connection test ${connId}`,
-      args: ["connection", "test", connId],
-      exitCode: 0,
-      stdout: "ok",
-      stderr: ""
-    })),
+    testConnection: vi.fn(async (_root: string, connId: string) => {
+      if (testConnectionState.next) {
+        const fn = testConnectionState.next;
+        testConnectionState.next = null;
+        return fn(connId);
+      }
+      return testConnectionState.ok(connId);
+    }),
     runIngest: vi.fn(async () => ({ exitCode: 0, stdout: "ok", stderr: "" })),
     validateSource: vi.fn(async () => ({
       ok: true,
@@ -82,6 +106,7 @@ beforeEach(async () => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
   previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
+  testConnectionState.reset();
   vi.clearAllMocks();
 });
 
@@ -192,8 +217,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
-    const ktx = await import("../ktx");
-    vi.mocked(ktx.testConnection).mockResolvedValueOnce({
+    testConnectionState.queueOnce({
       status: "error",
       latencyMs: 3,
       reason: "Access denied for user",
@@ -377,8 +401,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
-    const ktx = await import("../ktx");
-    vi.mocked(ktx.testConnection).mockResolvedValueOnce({
+    testConnectionState.queueOnce({
       status: "error",
       latencyMs: 3,
       reason: "Access denied for user",
