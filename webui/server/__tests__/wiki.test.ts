@@ -150,8 +150,9 @@ describe("wiki editor storage", () => {
       access: {
         acl: { state: "roles", roles: ["analyst"] },
         declared_role_count: 1,
-        declared_without_discover: 0,
-        declared_without_read: 0
+        // No access.yaml in this fixture → analyst has no wiki discover/read tools.
+        declared_without_discover: 1,
+        declared_without_read: 1
       }
     });
   });

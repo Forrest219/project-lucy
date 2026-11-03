@@ -66,17 +66,25 @@ vi.mock("../admin/audit.js", () => ({
         };
       }
       if (sql.includes("AS business_calls7")) {
-        const CUTOFF = Date.now() - 7 * 24 * 60 * 60 * 1000;
         return {
           all: vi.fn((...args: unknown[]) => {
             // Spec 189 — the stats query binds seven window pairs (14 params)
             // before the user id list. The protocol set comes from the shared
             // classification module, never from a local copy.
+            // Window bounds come from the first pair (args[0]/args[1]) so range=30d
+            // is not silently clamped to a hard-coded 7-day cutoff.
+            const startMs = Date.parse(String(args[0]));
+            const endMs = Date.parse(String(args[1]));
             const userIds = args.slice(14) as string[];
             return userIds.flatMap((userId) => {
               const allForUser = auditRows.filter((row) => row.user_id === userId);
               if (allForUser.length === 0) return [];
-              const matched = allForUser.filter((row) => new Date(row.ts).getTime() >= CUTOFF);
+              const matched = allForUser.filter((row) => {
+                const ts = new Date(row.ts).getTime();
+                return Number.isFinite(startMs) && Number.isFinite(endMs)
+                  ? ts >= startMs && ts < endMs
+                  : false;
+              });
               const business = matched.filter((row) => !isMcpProtocolMethod(row.tool));
               return [{
                 user_id: userId,

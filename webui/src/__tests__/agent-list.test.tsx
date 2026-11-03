@@ -198,13 +198,15 @@ describe("AgentList", () => {
     let failAgents = false;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/project") {
+      const path = url.split("?")[0];
+      if (path === "/api/project") {
         return new Response(JSON.stringify({
           ok: true,
           data: { root: "/tmp/project-lucy", ktxAvailable: true, connections: [], mcpEndpoint: undefined }
         }));
       }
-      if (url === "/api/admin/agents") {
+      // Agent list defaults to ?range=30d; match path so refresh failure still hits this stub.
+      if (path === "/api/admin/agents") {
         if (failAgents) {
           return new Response(
             JSON.stringify({ ok: false, error: { code: "INTERNAL", message: "boom" } }),
@@ -216,7 +218,7 @@ describe("AgentList", () => {
       if (url.startsWith("/api/admin/roles")) {
         return new Response(JSON.stringify({ ok: true, data: { roles: [analystRole] } }));
       }
-      if (url === "/api/admin/policy-runtime") {
+      if (path === "/api/admin/policy-runtime") {
         return new Response(JSON.stringify({ ok: true, data: HEALTHY_POLICY_RUNTIME }));
       }
       return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
@@ -227,7 +229,11 @@ describe("AgentList", () => {
     expect(await screen.findByText("张三")).toBeInTheDocument();
 
     failAgents = true;
-    await act(async () => { await client.refetchQueries({ queryKey: ["admin", "agents"] }); });
+    await act(async () => {
+      await client.refetchQueries({
+        predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === "admin" && query.queryKey[1] === "agents"
+      });
+    });
 
     const notice = await screen.findByTestId("display-refresh-notice");
     expect(notice).toHaveTextContent("刷新失败，当前显示上次成功读取的数据。");
@@ -236,7 +242,11 @@ describe("AgentList", () => {
     expect(screen.getByText("张三")).toBeInTheDocument();
 
     failAgents = false;
-    await act(async () => { await client.refetchQueries({ queryKey: ["admin", "agents"] }); });
+    await act(async () => {
+      await client.refetchQueries({
+        predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === "admin" && query.queryKey[1] === "agents"
+      });
+    });
     await waitFor(() => expect(screen.queryByTestId("display-refresh-notice")).not.toBeInTheDocument());
     expect(screen.getByText("张三")).toBeInTheDocument();
   });

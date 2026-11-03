@@ -276,12 +276,11 @@ describe("Spec 174 R7 — HTTP races on rollback and failed-write paths (SC-04/0
       send: () => request(app.server).patch("/api/admin/agents/lisi").send({ dryRun: false, patch: { name: "Li Si Unacked" } }),
       leaked: "Li Si Unacked",
       /**
-       * Spec §14.3.2 — a Role PATCH that was rolled back reports HTTP 500 /
-       * `ROW_POLICY_SAVE_ROLLED_BACK`: the new change was NOT saved and the
-       * old configuration and policy were verified back.
+       * Spec §14.3.2 — Agent／Role 回滚统一走 `accessWriteResponseBody`：
+       * HTTP 500 + `ROW_POLICY_SAVE_ROLLED_BACK`；新变更未保存，旧配置已核验恢复。
        */
-      expectStatus: (status: number) => expect(status).toBeLessThan(500),
-      expectErrorCode: undefined as string | undefined
+      expectStatus: (status: number) => expect(status).toBe(500),
+      expectErrorCode: "ROW_POLICY_SAVE_ROLLED_BACK"
     },
     {
       name: "access-config writeAccessYaml (roles PATCH)",

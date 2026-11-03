@@ -1777,12 +1777,14 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     });
     expect(dialog).toHaveTextContent("关联表");
     expect(dialog).toHaveTextContent("mysql-aliyun/dataforai/superstore_orders");
-    const aclField = within(dialog).getByTestId("wiki-upload-acl-field");
+    const aclField = within(dialog).getByTestId("wiki-upload-access-editor-field");
     expect(within(aclField).getByLabelText("无人可见")).toBeChecked();
     fireEvent.click(within(aclField).getByLabelText("指定角色"));
     fireEvent.click(await within(aclField).findByLabelText("analyst"));
 
-    fireEvent.change(screen.getByTestId("wiki-upload-directory-input"), {
+    // Selecting roles re-previews; wait for the form to return before editing directory.
+    const directoryInput = await within(dialog).findByTestId("wiki-upload-directory-input");
+    fireEvent.change(directoryInput, {
       target: { value: "ops/playbooks" }
     });
     await waitFor(() => {
