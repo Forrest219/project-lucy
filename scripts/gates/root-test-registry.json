@@ -824,6 +824,16 @@
       "reason": null
     },
     {
+      "path": "scripts/runtime/patch-ktx-notion-client-cjs.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/runtime/patch-ktx-notion-client-cjs.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
       "path": "scripts/smoke/access-template-question-tool.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",

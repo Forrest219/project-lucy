@@ -25,6 +25,7 @@ REST over HTTP，仅 `127.0.0.1`。所有响应为 JSON，遵循统一 envelope�
 
 ```text
 GET  /api/health
+GET  /api/openapi.json                            # 公开可读 Admin OpenAPI（无密钥；仅 GET）
 GET  /api/project
 GET  /api/sources
 GET  /api/sources/:conn/:schema/:table
@@ -247,6 +248,9 @@ POST /mcp                                      # MCP proxy, port 7879
 ```
 
 ## 3. 端点细节
+
+### `GET /api/openapi.json`
+公开可读的 Admin OpenAPI 文档（无登录、无密钥；**仅 GET**）。机器可读枚举登录、Agent／Role／Token 开通相关 operation（含 per-operation `dryRun` 语义）。响应为 OpenAPI JSON 文档本体，**不**包在统一 envelope 里。契约与验收见 [`docs/specs/lucy-20261103-admin-api-agent-discoverability-spec.md`](../../docs/specs/lucy-20261103-admin-api-agent-discoverability-spec.md)。
 
 ### `GET /api/project`
 返回项目根、连接列表（**剥离 password 值**）、schema 列表，以及 public MCP endpoint runtime 配置。
