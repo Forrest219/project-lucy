@@ -3,13 +3,13 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 候选需求池。**不是**功能 Spec，**不授权**实现 |
-| 版本 / 日期 | v0.2 / 2026-11-03 |
-| 状态 | **候选需求池（2026-11-03）**。REQ-030-001–007 均为 Deferred，不进入 `0.25.0`。本条不表示任何功能已获授权实现，也不表示可上线 |
+| 版本 / 日期 | v0.3 / 2026-11-03 |
+| 状态 | **候选需求池（2026-11-03）**。REQ-030-001–011 均为 Deferred，不进入 `0.25.0`。本条不表示任何功能已获授权实现，也不表示可上线 |
 | 授权边界 | **只登记、不实现**。条目进入实施前须：需求澄清 → 独立 Spec → Plan → 开发授权；本池自身不构成其中任一步 |
 | 验收 | 本池自身的验收＝条目结构完整（ID／标题／来源／优先级／状态齐备）＋ 来源可追。**不构成任何功能验收** |
 | 目标版本 | 候选产品线 **`0.30.0`**（尚未开线；当前产品线仍是 `0.25.0`） |
 | 维护规则 | 只追加条目；开工前须另立 Spec／Plan 并获授权。不得把本文件当作本版（`0.25.0`）实施依据 |
-| 变更 | v0.2（2026-11-03）：按 [A／B 剥离记录](../reviews/2026-11-03-product-close-peel-a-b.md) 追加 REQ-030-002–007 |
+| 变更 | v0.3（2026-11-03）：按 [D 剥离记录](../reviews/2026-11-03-product-close-peel-d.md) 追加 REQ-030-008–011。v0.2：按 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md) 追加 REQ-030-002–007 |
 
 ## 目标
 
@@ -34,6 +34,10 @@
 | REQ-030-005 | 客户升级 E2E 自动化（L25-07） | Spec `lucy-20261025-v0p25-upgrade-e2e-automation` | 待定 | Deferred — 发布取证；不进 `0.25.0` 产品分母 |
 | REQ-030-006 | 升级候选验证环境（L25-13） | Spec `lucy-20261025-v0p25-upgrade-candidate-verification` | 待定 | Deferred — 发布取证；不进 `0.25.0` 产品分母 |
 | REQ-030-007 | E2E 主线与旁线优化（harness） | Spec `lucy-20261025-v0p25-e2e-mainline-and-branch-optimization` | 待定 | Deferred — 工程 harness；不进 `0.25.0` 产品分母 |
+| REQ-030-008 | 访问关系图 Spec 187 验收矩阵 | `webui/docs/187-access-relation-sankey-spec.md` SC-01–14 | 待定 | Deferred — 已实现；验收不进 `0.25.0` 产品分母 |
+| REQ-030-009 | OIDC 功能合同验收（L25-06） | Spec `lucy-20261025-v0p25-oidc-single-sign-on` OIDC-01–21／26 | 待定 | Deferred — 已实施；验收不进 `0.25.0` 产品分母 |
+| REQ-030-010 | 语义整批恢复 SRR 验收（L25-15） | Spec `lucy-20261027-v0p25-semantic-release-restore` SRR | 待定 | Deferred — 代码已落；验收不进 `0.25.0` 产品分母 |
+| REQ-030-011 | 运维控制面 W-A VOPS 验收 | L25-16 W-A；VOPS（除已拆出） | 待定 | Deferred — 已授权实现；验收不进 `0.25.0` 产品分母 |
 
 ---
 
@@ -195,3 +199,51 @@ L25-16 W-A（连接表／源表导入）已授权实现；W-B（语义发布控�
 
 - Spec：`docs/specs/lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md`
 - Plan：`docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md`
+
+---
+
+## REQ-030-008：访问关系图 Spec 187 验收矩阵
+
+### 背景
+
+L25-08 访问关系图已实现。本版叠加条（quiet-reading／chart-first／geometry）各自收口或已实施。Spec 187 的 SC-01–14 主验收矩阵仍未执行。2026-11-03 D2：本版产品闭口只认「已实现」与叠加条，主矩阵进池。
+
+### 关联
+
+- Spec：`webui/docs/187-access-relation-sankey-spec.md`
+
+---
+
+## REQ-030-009：OIDC 功能合同验收（L25-06）
+
+### 背景
+
+OIDC 已实施；OIDC-22–25 已拆出归交付。OIDC-01–21 与 OIDC-26 仍未执行。2026-11-03 D2：本版只记「已实施」，正式验收进池。
+
+### 关联
+
+- Spec：`docs/specs/lucy-20261025-v0p25-oidc-single-sign-on-spec.md`
+
+---
+
+## REQ-030-010：语义整批恢复 SRR 验收（L25-15）
+
+### 背景
+
+S1–S6 运行代码与定向测试已落地；SRR-22 已拆出。SRR-01–21、SRR-23–24 仍未执行。2026-11-03 D2：本版只记代码已落，SRR 验收进池。
+
+### 关联
+
+- Spec：`docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md`
+
+---
+
+## REQ-030-011：运维控制面 W-A VOPS 验收
+
+### 背景
+
+W-A 已授权实现；W-B 已是 REQ-030-004。VOPS-27／30 已拆出；其余 VOPS 仍未执行。2026-11-03 D2：本版只记实现授权／代码在仓，W-A VOPS 验收进池。
+
+### 关联
+
+- Spec：`docs/specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md`

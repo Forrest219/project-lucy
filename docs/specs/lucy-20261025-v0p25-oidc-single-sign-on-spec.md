@@ -6,7 +6,7 @@
 | 文档版本 / 日期 | v0.3-implementation-alignment / 2026-10-25 定稿；2026-10-26 回写 §4.2 client secret 权限，Asia/Shanghai |
 | 功能编号 / 目标版本 | L25-06 / v0.25 |
 | 优先级 | P1：企业身份接入；不改变既有 P0／P1 验收与交付阻断状态 |
-| 状态 | **需求审查已签核通过（2026-10-25）；2026-10-25 获 PM 开发授权并完成实施（提交 `b89e14d`、`f933c2c`）；OIDC-22–OIDC-25 于 2026-11-02 拆出功能合同，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。§4.2 权限口径已于 2026-10-26 按真实部署事实回写。实现完成不等于验收通过，也不等于客户交付通过。OIDC-01–21 与 OIDC-26 的执行状态不因这次拆分改变** |
+| 状态 | **已实施；功能合同验收 Deferred → `0.30.0` 池 [`REQ-030-009`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)（2026-11-03）**。提交 `b89e14d`、`f933c2c`；OIDC-22–25 已拆出归交付。OIDC-01–21 与 OIDC-26 仍未执行，不改成通过。本版产品闭口只记「已实施」。记录见 [D 剥离](../reviews/2026-11-03-product-close-peel-d.md) |
 | 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.1 L25-06；2026-10-25 Forrest 要求开始设计并批准评审裁定与 Spec 定稿 |
 | 审查记录 | [L25-06 OIDC Spec 评审记录](../reviews/2026-10-25-lucy-v0.25-l25-06-oidc-spec-review-record.md)（M-01–M-04、F-03、G-01 签核条件已关闭） |
 | 现有基础 | `webui/server/auth/oidc-profile.ts`、`admins.yaml` 的 `oidc_bindings`、v2 持久会话、Helm 预留 `oidc` values |

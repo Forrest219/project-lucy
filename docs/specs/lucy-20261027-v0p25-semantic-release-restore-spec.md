@@ -15,7 +15,7 @@
 | v0.3 修订 | 根据 Claude Code 第二轮只读复核补受控镜像删除与实际 KTX 扫描范围、单表 YAML 导入写入口、reindexing 启动结算及四项一致性边界；发现与处置见 §11.2 |
 | v0.2 修订 | 根据 Claude Code 只读审查收口 absent 删除、release／快照／幂等持久化顺序、索引范围披露、审计前置、记录字段、协调器重入、trigger 归一化、真实写入口与保留竞态；审查发现及处置见 §11.1 |
 | 功能编号 / 优先级 | L25-15 / P0，语义批量修改的可逆性与运维安全能力 |
-| 状态 | **S1–S6 运行代码与定向测试已落地（2026-10-30）**。设计合同仍是 Spec／Plan v0.11。SRR-22 已拆出归交付。SRR-01–SRR-21、SRR-23–SRR-24 仍未执行。测试通过不等于验收通过。S7、浏览器、镜像与客户交付未授权。证据见 [实现记录](../reviews/2026-10-30-l25-15-implementation-evidence.md) |
+| 状态 | **S1–S6 运行代码已落地；SRR 验收 Deferred → `0.30.0` 池 [`REQ-030-010`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)（2026-11-03）**。设计合同仍是 Spec／Plan v0.11。SRR-22 已拆出。SRR-01–21、SRR-23–24 仍未执行，不改成通过。本版产品闭口只记代码已落。证据见 [实现记录](../reviews/2026-10-30-l25-15-implementation-evidence.md)。记录见 [D 剥离](../reviews/2026-11-03-product-close-peel-d.md) |
 | 授权来源 | 2026-10-27 Forrest 要求将批量修改后的历史版本恢复落盘为新功能并完成 Spec、Plan |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.9 |
 | 关联设计 | [L25-11 语义资产批量维护](lucy-20261020-v2p5-semantic-batch-operations-spec.md)，共享发布协调器、校验、CAS、失败恢复与审计，不替代其合同 |
