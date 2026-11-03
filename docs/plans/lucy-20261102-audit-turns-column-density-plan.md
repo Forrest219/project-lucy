@@ -5,7 +5,7 @@
 | 文档版本 / 日期 | **v0.3** / 2026-11-02 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P2**。功能编号无 |
 | 主 Spec | [`docs/specs/lucy-20261102-audit-turns-column-density-spec.md`](../specs/lucy-20261102-audit-turns-column-density-spec.md) |
-| 状态 | **v0.3 已实施，功能合同未收口。本条收口不表示可上线**。S0–S3 完成；v0.3 补客户端/会话换行与问询时长上下双行 |
+| 状态 | **v0.3 功能合同已收口（2026-11-03）**。收口记录见 [`docs/reviews/2026-11-03-audit-turns-column-density-closure.md`](../reviews/2026-11-03-audit-turns-column-density-closure.md)。本条收口不表示可上线 |
 | 授权边界 | 2026-11-02 用户批准方案 1 并授权落地；授权 demo Docker **平滑**重建（保留账号 / ACL / audit volume）。不授权 `--fresh`、客户镜像、git commit、功能合同收口签字 |
 | 验收 | 以主 Spec §5 SC-01–SC-08 为准 |
 | 实施主体 | `webui/src/pages/admin/Audit.tsx`、`webui/src/app/app.css`、`webui/src/__tests__/admin-audit-turns.test.tsx` |

@@ -7,7 +7,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 实施日期 | 2026-11-01 |
-| 主 Spec | [`docs/specs/lucy-20261101-access-map-geometry-spec.md`](../specs/lucy-20261101-access-map-geometry-spec.md) v0.2（功能合同，**已实施**） |
+| 主 Spec | [`docs/specs/lucy-20261101-access-map-geometry-spec.md`](../specs/lucy-20261101-access-map-geometry-spec.md) v0.2（**功能合同已收口（2026-11-03）**，见 [收口记录](../reviews/2026-11-03-access-map-geometry-closure.md)） |
 | 实施 Plan | [`docs/plans/lucy-20261101-access-map-geometry-plan.md`](../plans/lucy-20261101-access-map-geometry-plan.md) v0.2（S1→S2→S3→S4 按序执行，未跳步） |
 | 权威语义 | [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md) —— **语义、API、边状态机、两档措辞、Token 过滤原文、URL 合法值一字未动**；只加一条交叉引用句 |
 | 结果 | **完成**：SC-01–SC-14 有自动化出处，SC-16 桌面截图已落盘。SC-15 术语 lint 于 2026-11-02 拆出 |

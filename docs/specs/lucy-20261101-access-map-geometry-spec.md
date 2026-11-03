@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 呈现修订 / **v0.2 已实施** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号。不升 Spec 187 版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（图面几何）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.2 已实施（2026-11-01）**。S1–S4 已落地。SC-01–SC-14 与桌面截图 SC-16 见 [实施笔记](../reviews/2026-11-01-access-map-geometry-implementation-notes.md)。SC-15 已拆出。本状态只对齐实施笔记，不另写收口记录，也不表示可上线 |
+| 状态 | **v0.2 功能合同已收口（2026-11-03）**。收口记录见 [`docs/reviews/2026-11-03-access-map-geometry-closure.md`](../reviews/2026-11-03-access-map-geometry-closure.md)；实施细节与 SC-16 截图见 [实施笔记](../reviews/2026-11-01-access-map-geometry-implementation-notes.md)（`docs/reviews/assets/2026-11-01-access-map-geometry/`）。SC-15 已拆出。本条收口不表示可上线 |
 | 决策来源 | 2026-11-01 几何复盘结论（委托人批准）＋交叉审阅 [`inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md`](../../inbox/2026-11-01-access-map-geometry-spec-plan-cross-review.md)；修订裁定接受阻断项与桌面截图最低视觉出口，拒绝「取消刻度封顶、撑满槽位放大 unit」 |
 | 需求来源 | 治理台访问关系图的流带厚度须可比较、节点不得喧宾夺主；稀疏图不得被撑成粉肉块，也不得缩成槽位里的迷你图顶条 |
 | 实施主体 | Lucy WebUI `AccessMapCanvas` 布局与绘制（`webui/src/components/admin/AccessMapCanvas.tsx` 及对应测试）。不修改 KTX，不修改 `/api/admin/access-map` |
@@ -14,7 +14,7 @@
 | 实施计划 | [`docs/plans/lucy-20261101-access-map-geometry-plan.md`](../plans/lucy-20261101-access-map-geometry-plan.md) |
 | 审阅 | 交叉审阅 v0.1 → 本 v0.2 定稿 → 实施收口 |
 
-> v0.2 已实施（2026-11-01）。D1–D12 按 §4 拍板。SC 出处见实施笔记。本条收口不表示可上线。
+> v0.2 功能合同已收口（2026-11-03）。D1–D12 按 §4 拍板。SC 出处见 [收口记录](../reviews/2026-11-03-access-map-geometry-closure.md) 与实施笔记。本条收口不表示可上线。
 
 ## 闭口层级
 

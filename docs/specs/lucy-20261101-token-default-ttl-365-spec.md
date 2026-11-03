@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 产品功能合同 / **v0.3 待 Codex 确认定稿（N1 已改）** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P1**。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.3 已实施，功能合同未收口（2026-11-02 核对）**。`NEW_TOKEN_DEFAULT_TTL_DAYS = 365`，新建页初载 365 天，手册与 Spec 124 §7 已写默认 365。Plan Task 0–4 已勾销。2026-11-02 复跑 `token-expiry-policy.test.ts` 与 `new-token.test.tsx` 通过。SC-01–SC-08 尚无逐条收口记录。本条收口不表示可上线 |
+| 状态 | **v0.3 功能合同已收口（2026-11-03）**。收口记录见 [`docs/reviews/2026-11-03-token-default-ttl-365-closure.md`](../reviews/2026-11-03-token-default-ttl-365-closure.md)。本条收口不表示可上线 |
 | 决策来源 | 2026-11-01 产品批准默认 TTL 改为 365；Codex 第 1 轮要求与续期分拆闭口 |
 | 需求来源 | Admin 新签发默认寿命对齐一年运维节奏；上限仍 365 |
 | 实施主体 | `webui/server/admin/token-expiry-policy.ts`、`NewToken.tsx`、相关测试；手册／Spec 124 §7／既有 UX Spec 注记。不改 KTX；不改续期 API（见续期 Spec） |

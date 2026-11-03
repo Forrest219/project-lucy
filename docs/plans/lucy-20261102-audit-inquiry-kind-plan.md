@@ -4,9 +4,9 @@
 |---|---|
 | 文档版本 / 日期 | **v0.4** / 2026-11-02 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号无，不进入 v0.25 登记册 |
-| 主 Spec | [`docs/specs/lucy-20261102-audit-inquiry-kind-spec.md`](../specs/lucy-20261102-audit-inquiry-kind-spec.md)（**v0.4 已实施，功能合同未收口。本条收口不表示可上线**） |
+| 主 Spec | [`docs/specs/lucy-20261102-audit-inquiry-kind-spec.md`](../specs/lucy-20261102-audit-inquiry-kind-spec.md)（**v0.4 功能合同已收口（2026-11-03）**。收口记录见 [`docs/reviews/2026-11-03-audit-inquiry-kind-closure.md`](../reviews/2026-11-03-audit-inquiry-kind-closure.md)。本条收口不表示可上线） |
 | 权威语义 | Spec 172 / 173 的库存摘要与来源徽章；Spec 194 的 `accessGrade`。本 Plan 不改重建、回绑和用量 KPI |
-| 状态 | **v0.4 已实施，功能合同未收口。本条收口不表示可上线**。S1–S4 已落地 |
+| 状态 | **v0.4 功能合同已收口（2026-11-03）**。收口记录见 [`docs/reviews/2026-11-03-audit-inquiry-kind-closure.md`](../reviews/2026-11-03-audit-inquiry-kind-closure.md)。本条收口不表示可上线 |
 | 授权边界 | 2026-11-02 用户批准落地。范围是审计读取、问询记录、调用流水、两份 CSV、字段说明和术语标准 §4.7。不授权镜像、部署、浏览器走查、KTX、使用概况 KPI、git commit |
 | 验收 | 以主 Spec §7 SC-01–SC-25 为准 |
 | 实施主体 | Lucy：`webui/server/admin/audit.ts` 与 `webui/src/pages/admin/Audit.tsx` |

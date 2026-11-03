@@ -5,7 +5,7 @@
 | 文档版本 / 日期 | **v0.1** / 2026-11-02 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P2**。功能编号无 |
 | 主 Spec | [`docs/specs/lucy-20261102-token-display-hint-spec.md`](../specs/lucy-20261102-token-display-hint-spec.md) |
-| 状态 | **v0.1 已实施（2026-11-02）。本条收口不表示可上线** |
+| 状态 | **v0.1 功能合同已收口（2026-11-03）**。收口记录见 [`docs/reviews/2026-11-03-token-display-hint-closure.md`](../reviews/2026-11-03-token-display-hint-closure.md)。本条收口不表示可上线 |
 | 授权边界 | 2026-11-02 用户接受 Codex 方案 A（单字段 `token_hint`）并授权落盘与执行；**明确不要求重建 Docker**；不授权 git commit、客户镜像、`--fresh` |
 | 验收 | 以主 Spec §3 SC-01–SC-08 为准 |
 | 实施主体 | `token-display-hint` 工具、`tokens.ts` 签发／列表、`Tokens.tsx`、类型、术语、SYSTEM_HANDBOOK、相关测试 |

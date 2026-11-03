@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 产品功能合同 / **v0.1** |
 | 日期 / 目标版本 | 2026-11-02 / 不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P2**。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.1 已实施（2026-11-02）。功能合同未正式收口签字。本条收口不表示可上线** |
+| 状态 | **v0.1 功能合同已收口（2026-11-03）**。收口记录见 [`docs/reviews/2026-11-03-token-display-hint-closure.md`](../reviews/2026-11-03-token-display-hint-closure.md)。本条收口不表示可上线 |
 | 决策来源 | 2026-11-02 产品确认：审计继续用完整 `sha256:`；列表对人展示明文截断核对提示；Codex CLI 推荐单字段 `token_hint` |
 | 需求来源 | `/admin/tokens`「Token 前缀」列截断难看、`sha256:` 对用户无意义且严重重复 |
 | 实施主体 | Token 签发落盘、`GET /api/admin/tokens`、Tokens 列表 UI、术语标准、相关测试、SYSTEM_HANDBOOK |

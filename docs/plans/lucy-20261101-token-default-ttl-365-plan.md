@@ -4,7 +4,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **v0.3 已实施，功能合同未收口（2026-11-02 核对）**。Task 0–4 已勾销。此前「开工前不改运行代码」作废。SC-01–SC-08 尚无逐条收口记录 |
+| 状态 | **v0.3 功能合同已收口（2026-11-03）**。收口记录见 [`docs/reviews/2026-11-03-token-default-ttl-365-closure.md`](../reviews/2026-11-03-token-default-ttl-365-closure.md)。本条收口不表示可上线 |
 | 主 Spec | [`docs/specs/lucy-20261101-token-default-ttl-365-spec.md`](../specs/lucy-20261101-token-default-ttl-365-spec.md) |
 | 授权边界 | 定稿＋明示开工前仅文档。开工后：`token-expiry-policy` 默认常量、`NewToken.tsx` 与测试、Spec 124 §7、`SYSTEM_HANDBOOK`、UX Spec／索引覆盖注记。不改续期 API（另 Plan）、不改 Step6、不要求浏览器／docker |
 | 验收 | SC-01–SC-08。SC-08 只含 Step6 短窗回归；术语 lint 与落盘清单已拆出 |

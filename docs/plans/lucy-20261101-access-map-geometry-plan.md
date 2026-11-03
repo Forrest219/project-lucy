@@ -6,10 +6,10 @@
 |---|---|
 | 文档版本 / 日期 | **v0.2** / 2026-11-01 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号无，不进入 v0.25 登记册 |
-| 主 Spec | [访问关系图几何语言修订 Spec](../specs/lucy-20261101-access-map-geometry-spec.md)（**v0.2 已实施**） |
+| 主 Spec | [访问关系图几何语言修订 Spec](../specs/lucy-20261101-access-map-geometry-spec.md)（**v0.2 功能合同已收口（2026-11-03）**） |
 | 权威语义 | [Spec 187](../../webui/docs/187-access-relation-sankey-spec.md)。不改 API、边状态、URL 值、两档措辞、路径守恒 |
 | 前序呈现 | [quiet-reading](../specs/lucy-20261030-access-map-quiet-reading-spec.md)；[chart-first](../specs/lucy-20261101-access-map-chart-first-spec.md) |
-| 状态 | **v0.2 已实施（2026-11-01）**。S1–S4 已落地。SC-01–SC-14 与桌面截图 SC-16 见 [实施笔记](../reviews/2026-11-01-access-map-geometry-implementation-notes.md)。SC-15 已拆出。本状态只对齐实施笔记，不另写收口记录，也不表示可上线 |
+| 状态 | **v0.2 功能合同已收口（2026-11-03）**。收口记录见 [`docs/reviews/2026-11-03-access-map-geometry-closure.md`](../reviews/2026-11-03-access-map-geometry-closure.md)；实施笔记见 [`docs/reviews/2026-11-01-access-map-geometry-implementation-notes.md`](../reviews/2026-11-01-access-map-geometry-implementation-notes.md)。SC-15 已拆出。本条收口不表示可上线 |
 | 授权边界 | S1–S4 已按实施笔记写入 `webui/src`。不镜像构建、不部署。`git commit`／`push` 仍须另授 |
 | 验收 | Spec SC-01–SC-14 与 SC-16；映射见 §5。SC-15 术语 lint 已拆出。完整发布走查 / Playwright 套件不在出口；SC-16 为 demo 桌面截图人工验收 |
 | 实施主体 | Lucy WebUI `webui/src`。不修改 KTX，不修改 `webui/server/admin/access-map.ts` |

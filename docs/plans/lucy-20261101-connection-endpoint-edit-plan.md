@@ -4,7 +4,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **v0.4.3 UX Dialog 补口已实施，功能合同未收口（2026-11-02）**。Task 0–5／6／7 已勾销；Task 8 文档镜像待与收口同次完成。组件测 `edit-connection-dialog.test.tsx` 7/7。Codex r1–r4 见 [`docs/reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md`](../reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md)。本条收口不表示可上线 |
+| 状态 | **v0.4.3 功能合同已收口（2026-11-03）**。服务端见 [`docs/reviews/2026-11-01-connection-endpoint-edit-closure.md`](../reviews/2026-11-01-connection-endpoint-edit-closure.md)；UX 见 [`docs/reviews/2026-11-03-connection-endpoint-edit-ux-closure.md`](../reviews/2026-11-03-connection-endpoint-edit-ux-closure.md)。本条收口不表示可上线 |
 | 主 Spec | [`docs/specs/lucy-20261101-connection-endpoint-edit-spec.md`](../specs/lucy-20261101-connection-endpoint-edit-spec.md) **v0.4.3** |
 | 审阅 | 服务端 r1–r3（2026-11-01）；UX：[`docs/reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md`](../reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md) |
 | 授权边界 | **v0.4 仅 UX**：将失效的 inline Drawer 换为 Tableau 对齐的居中 `EditConnectionDialog`；重开 SC-11–14／22；新增 SC-24–SC-27。**不**改服务端 endpoint API／门禁／回滚／presence；**不**改 connection id／schemas／enabled_tables／ACL；**不**要求浏览器 E2E／移动窄屏；**不**做 Host 旁常驻入口 |

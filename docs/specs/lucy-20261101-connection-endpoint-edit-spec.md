@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | Spec / **v0.4.3 UX Dialog 补口文档定稿** |
 | 日期 / 目标版本 | 2026-11-01（服务端）／2026-11-02（UX Dialog 补口）／不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（连接运维主路径缺口）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.4.3 UX Dialog 补口已实施，功能合同未收口（2026-11-02）**。Codex r1–r4 见 [`docs/reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md`](../reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md)。服务端 SC 仍以 [`docs/reviews/2026-11-01-connection-endpoint-edit-closure.md`](../reviews/2026-11-01-connection-endpoint-edit-closure.md) 为准；UX SC-11–14／22／24–27 自动化已落（`edit-connection-dialog.test.tsx` 7/7），尚无逐条收口记录。本条收口不表示可上线 |
+| 状态 | **v0.4.3 功能合同已收口（2026-11-03）**。服务端 SC-01–SC-10／15–21／23 见 [`docs/reviews/2026-11-01-connection-endpoint-edit-closure.md`](../reviews/2026-11-01-connection-endpoint-edit-closure.md)；UX SC-11–14／22／24–27 见 [`docs/reviews/2026-11-03-connection-endpoint-edit-ux-closure.md`](../reviews/2026-11-03-connection-endpoint-edit-ux-closure.md)。Codex r1–r4 见 [`docs/reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md`](../reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md)。本条收口不表示可上线 |
 | 决策来源 | 连接概览无法改 host/port，只能删除重建；企业工具（如 Tableau）允许改服务器地址；场景为测库 ↔ 生产库切换（结构大体同构、数据不同）。2026-11-02：UAT 发现现实现用无 CSS 的 `pl-drawer-root`／`pl-drawer`，编辑表单掉到页底；委托人批准对齐 Tableau **Edit Connection dialog**（方案 A） |
 | 需求来源 | 委托人产品评估与方案批准（2026-11-01）；交叉审阅 r1；2026-11-02 UX 补口批准（方案 A） |
 | 实施主体 | WebUI：连接概览卡片入口 + **`EditConnectionDialog`**（居中 modal，替换失效的 inline Drawer）；服务端：`updateConnectionEndpoint` + `POST /api/connections/:connId/endpoint`（v0.3 已落地，本轮不改合同）；`decideEndpointEditGate`；`safeOverwriteSecretPassword` |
@@ -424,11 +424,9 @@ SC-01–SC-10／15–21／23 **已关闭**（当时含旧 Drawer 版 SC-11–14�
 | `npm run lint:terminology` | exit 0 |
 | `npm run lint:spec-docs` | exit 0 |
 
-### 12.2 v0.4 UX 补口（待实施）
+### 12.2 v0.4 UX 补口（2026-11-03 已收口）
 
-SC-11–14／22／24–27 **未关闭**。关闭证据写入新的收口／实施笔记；不得用 §12.1 旧 Drawer 组件测冒充 Dialog 通过。
-
-状态转换（定稿／授权开发／收口）时，必须同次更新：Spec 头部「状态」、本小节文案、SC 表状态标注、Plan 头部「状态」、`docs/README.md` 与 `docs/plans/README.md` 索引句，使用同一句现值；收口时另挂证据链接。
+SC-11–14／22／24–27 **已关闭**。逐条落点见 [`docs/reviews/2026-11-03-connection-endpoint-edit-ux-closure.md`](../reviews/2026-11-03-connection-endpoint-edit-ux-closure.md)。§12.1 旧 Drawer 组件测不得冒充 Dialog 通过。
 
 ## 13. 开放依赖
 
