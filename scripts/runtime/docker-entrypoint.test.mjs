@@ -470,17 +470,17 @@ test("entrypoint seeds the ops evidence connection before the daemon starts (SC-
   await assert.rejects(access(path.join(projectRoot, ".ktx-ui/ktx-reload.request")));
 
   await rm(root, { recursive: true, force: true });
-
-// Spec 191 — supervisor owns a non-foreground KTX MCP daemon so WebUI can
-// request reload after ktx.yaml writes without tearing down the container.
-test("entrypoint supervises a non-foreground KTX MCP daemon for reload", async () => {
-  const source = await readFile(entrypoint, "utf8");
-  const startBlock = source.match(/ktx mcp start \\[\s\S]*?wait_for_port/)?.[0] ?? "";
-  assert.match(startBlock, /ktx mcp start \\/);
-  assert.doesNotMatch(startBlock, /--foreground/);
-  assert.match(source, /supervise_ktx/);
-  assert.match(source, /wait -n /);
-  assert.match(source, /KTX_RELOAD_REQUEST_FILE/);
 });
 
+// Spec 191 — supervisor owns the KTX MCP daemon (foreground process, backgrounded
+// with &) so WebUI can request reload after ktx.yaml writes without tearing down
+// the container. Start lives in ktx_start_daemon; lifecycle is supervise_ktx.
+test("entrypoint supervises a KTX MCP daemon for reload", async () => {
+  const source = await readFile(entrypoint, "utf8");
+  const startBlock = source.match(/ktx_start_daemon\(\) \{[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.match(startBlock, /ktx mcp start \\/);
+  assert.match(startBlock, /--foreground &/);
+  assert.match(source, /supervise_ktx\(\)/);
+  assert.match(source, /wait -n /);
+  assert.match(source, /KTX_RELOAD_REQUEST_FILE/);
 });

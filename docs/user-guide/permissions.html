@@ -244,7 +244,7 @@ users:
       <p>若要用 curl／运维 <span translate="no" class="notranslate">Agent</span>／自建脚本完成建 <span translate="no" class="notranslate">Agent</span>、改角色、签发或撤销 <span translate="no" class="notranslate">Token</span>，不要反解前端 JS：</p>
       <ul>
         <li>先拉公开契约 <code class="notranslate" translate="no">GET /api/openapi.json</code>（无需登录）。</li>
-        <li>Admin API 只认 WebUI 会话 Cookie <code class="notranslate" translate="no">lucy_admin_session</code>；登录字段是 <code class="notranslate" translate="no">adminId</code>／<code class="notranslate" translate="no">password</code>。<strong>没有</strong> scoped 管理员 Bearer；数据面 <span translate="no" class="notranslate">MCP</span> Token 不能调 <code class="notranslate" translate="no">/api/admin/*</code>。</li>
+        <li>Admin API 只认 WebUI 会话 Cookie <code class="notranslate" translate="no">lucy_admin_session</code>；登录字段是 <code class="notranslate" translate="no">adminId</code>／<code class="notranslate" translate="no">password</code>。<strong>没有</strong> scoped 管理员 Bearer；数据面 <span translate="no" class="notranslate">MCP</span> <span translate="no" class="notranslate">Token</span> 不能调 <code class="notranslate" translate="no">/api/admin/*</code>。</li>
         <li><span translate="no" class="notranslate">Agent</span>／角色写接口：省略 <code class="notranslate" translate="no">dryRun</code> = 预览，确认写入须 <code class="notranslate" translate="no">dryRun: false</code>。<span translate="no" class="notranslate">Token</span> 签发／续期：省略 = 真写入。</li>
       </ul>
       <div class="callout">
