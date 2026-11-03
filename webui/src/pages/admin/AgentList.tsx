@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import type { Agent, AgentsResponseSummary, CreateAgentBody, EffectivePermissionsPreview, Role } from "../../lib/types";
@@ -15,6 +15,13 @@ import { RowMoreMenu } from "../../components/RowMoreMenu";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
 import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
 import { queryKeys } from "../../lib/queryKeys";
+import {
+  AGENT_STATS_RANGE_HOURS,
+  AGENT_STATS_RANGES,
+  agentStatsRangeLabel,
+  parseAgentStatsRange,
+  type AgentStatsRange
+} from "../../lib/agentStatsRange";
 
 type AgentsResponse = {
   agents: Agent[];
@@ -92,12 +99,16 @@ export function configuredTokenCount(agent: Pick<Agent, "tokens">): number {
  * window relative to `now`. Used as a fallback when the backend does
  * not yet emit `stats.activeTokensLast7d` (older Lucy deployments).
  */
-export function isTokenRecentlyActive(token: Agent["tokens"][number], now: Date = new Date()): boolean {
+export function isTokenRecentlyActive(
+  token: Agent["tokens"][number],
+  now: Date = new Date(),
+  range: AgentStatsRange = "7d"
+): boolean {
   if (!token.last_used) return false;
   const ts = new Date(token.last_used);
   if (Number.isNaN(ts.getTime())) return false;
   const diff = now.getTime() - ts.getTime();
-  return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
+  return diff >= 0 && diff <= AGENT_STATS_RANGE_HOURS[range] * 60 * 60 * 1000;
 }
 
 /**
@@ -111,12 +122,12 @@ export function isTokenRecentlyActive(token: Agent["tokens"][number], now: Date 
  * The `now` parameter exists so tests can inject a deterministic clock
  * without reaching into `Date.now` directly.
  */
-export function activeTokenCount(agent: Agent, now: Date = new Date()): number {
+export function activeTokenCount(agent: Agent, now: Date = new Date(), range: AgentStatsRange = "7d"): number {
   const backend = agent.stats?.usedCredentialsLast7d ?? agent.stats?.activeTokensLast7d;
   // null means unavailable; undefined means legacy backend (pre-M55) — use fallback
   if (typeof backend === "number") return backend;
   if (backend === null) return 0; // unavailable; caller checks metricsState separately
-  return agent.tokens.filter((token) => isTokenRecentlyActive(token, now)).length;
+  return agent.tokens.filter((token) => isTokenRecentlyActive(token, now, range)).length;
 }
 
 /**
@@ -374,6 +385,9 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
 export function AgentList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = parseAgentStatsRange(searchParams.get("range"));
+  const rangeLabel = agentStatsRangeLabel(range);
   const [showNew, setShowNew] = useState(false);
   const [search, setSearch] = useState("");
   const [filterEnabled, setFilterEnabled] = useState<"all" | "enabled" | "disabled">("all");
@@ -381,8 +395,15 @@ export function AgentList() {
   const [filterActivity, setFilterActivity] = useState<"all" | "active" | "inactive">("all");
 
   const agentsQuery = useQuery({
-    ...adminAgentsQueryOptions<AgentsResponse>()
+    ...adminAgentsQueryOptions<AgentsResponse>(range),
+    placeholderData: keepPreviousData
   });
+
+  function setRange(next: AgentStatsRange) {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("range", next);
+    setSearchParams(nextParams, { replace: true });
+  }
   const { data, error } = agentsQuery;
   const { data: rolesData } = useQuery({
     queryKey: ["admin", "roles", { includeTemplates: false }],
@@ -465,6 +486,29 @@ export function AgentList() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-3">
+            <div
+              className="pl-segmented-control pl-segmented-control--cols-3"
+              role="tablist"
+              aria-label="统计时间窗"
+            >
+              {AGENT_STATS_RANGES.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="tab"
+                  className={
+                    range === option
+                      ? "pl-segmented-control-item pl-segmented-control-item--active"
+                      : "pl-segmented-control-item"
+                  }
+                  aria-selected={range === option}
+                  data-testid={`agent-stats-range-${option}`}
+                  onClick={() => setRange(option)}
+                >
+                  {agentStatsRangeLabel(option)}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               className="pl-btn pl-btn--secondary"
@@ -499,7 +543,7 @@ export function AgentList() {
 
       {usedCredentialState === "partial" ? (
         <div className="pl-notice" data-testid="agent-credential-partial-notice">
-          当前配置存在相同的 <span className="notranslate" translate="no">Token hash prefix</span>，近 7 天使用过的凭据无法可靠映射到唯一凭据，已隐藏精确值。
+          当前配置存在相同的 <span className="notranslate" translate="no">Token hash prefix</span>，{rangeLabel}使用过的凭据无法可靠映射到唯一凭据，已隐藏精确值。
         </div>
       ) : null}
 
@@ -515,10 +559,10 @@ export function AgentList() {
           testId="metric-agent-count"
         />
         <MetricCard
-          label={<span>近 7 天活跃 <span className="notranslate" translate="no">Agent</span></span>}
-          labelText="近 7 天活跃 Agent"
+          label={<span>{rangeLabel}活跃 <span className="notranslate" translate="no">Agent</span></span>}
+          labelText={`${rangeLabel}活跃 Agent`}
           value={activeAgentCountLast7d ?? 0}
-          help="近 7 天至少出现过一次非协议业务调用的去重 Agent 数。"
+          help={`${rangeLabel}至少出现过一次非协议业务调用的去重 Agent 数。`}
           subValue={auditMetricsState === "ok" ? "仅按业务调用判定" : undefined}
           state={auditMetricsState}
           helpId="active-agent-count"
@@ -538,27 +582,27 @@ export function AgentList() {
           testId="metric-active-token-count"
         />
         <MetricCard
-          label="近 7 天使用过的凭据"
+          label={`${rangeLabel}使用过的凭据`}
           value={usedCredentialTotal ?? 0}
-          help="近 7 天访问日志中出现过的去重凭据 hash prefix；可能包含已删除或已吊销凭据。"
+          help={`${rangeLabel}访问日志中出现过的去重凭据 hash prefix；可能包含已删除或已吊销凭据。`}
           subValue={usedCredentialState === "ok" ? "按访问日志去重" : undefined}
           state={usedCredentialState}
           helpId="used-credentials"
           testId="metric-used-credentials"
         />
         <MetricCard
-          label="近 7 天业务调用量"
+          label={`${rangeLabel}业务调用量`}
           value={businessCallsLast7dTotal ?? 0}
-          help="近 7 天非协议 MCP 调用次数；用于判定真实业务使用。"
+          help={`${rangeLabel}非协议 MCP 调用次数；用于判定真实业务使用。`}
           subValue={auditMetricsState === "ok" ? "排除握手与工具发现" : undefined}
           state={auditMetricsState}
           helpId="business-calls"
           testId="metric-business-calls"
         />
         <MetricCard
-          label="近 7 天协议请求量"
+          label={`${rangeLabel}协议请求量`}
           value={protocolCallsLast7dTotal ?? 0}
-          help="近 7 天 initialize、notifications/initialized 与 tools/list 请求数。"
+          help={`${rangeLabel} initialize、notifications/initialized 与 tools/list 请求数。`}
           subValue={auditMetricsState === "ok" ? "连接与工具发现" : undefined}
           state={auditMetricsState}
           helpId="protocol-calls"
@@ -610,12 +654,12 @@ export function AgentList() {
               </select>
             </label>
             <label className="grid gap-1.5 text-sm">
-              <span>近 7 天活跃</span>
+              <span>{rangeLabel}活跃</span>
               <select
                 className="pl-input pl-catalog-filter-select"
                 value={filterActivity}
                 onChange={(e) => setFilterActivity(e.target.value as "all" | "active" | "inactive")}
-                aria-label="近 7 天活跃"
+                aria-label={`${rangeLabel}活跃`}
               >
                 <option value="all">全部</option>
                 <option value="active">有业务调用</option>
@@ -677,9 +721,9 @@ export function AgentList() {
                   <th scope="col">
                     可用 <span className="notranslate" translate="no">Token</span>
                   </th>
-                  <th scope="col">近 7 天使用过的凭据</th>
-                  <th scope="col">近 7 天业务调用量</th>
-                  <th scope="col">近 7 天协议请求量</th>
+                  <th scope="col">{rangeLabel}使用过的凭据</th>
+                  <th scope="col">{rangeLabel}业务调用量</th>
+                  <th scope="col">{rangeLabel}协议请求量</th>
                   <th scope="col">最近业务使用</th>
                   <th scope="col">最近 <span className="notranslate" translate="no">MCP</span> 访问</th>
                   <th scope="col">操作</th>

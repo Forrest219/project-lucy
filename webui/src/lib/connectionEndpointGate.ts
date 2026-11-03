@@ -1,4 +1,5 @@
 import { ApiError } from "./apiClient";
+import { schemaNameFromDatabase } from "./catalogDatabase";
 
 export type EndpointMatch = {
   id: string;
@@ -101,6 +102,7 @@ export function singleConflictSchema(input: {
     engine === "starrocks" ||
     engine === "doris";
   const names = input.schemas.map((item) => item.trim()).filter(Boolean);
-  const resolved = mysql && names.length === 0 ? [input.database.trim()].filter(Boolean) : names;
+  const resolved =
+    mysql && names.length === 0 ? [schemaNameFromDatabase(input.database)].filter(Boolean) : names;
   return resolved.length === 1 ? resolved[0] : null;
 }

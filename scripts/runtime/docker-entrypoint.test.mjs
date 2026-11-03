@@ -419,3 +419,13 @@ test("entrypoint refuses a deployment mode that contradicts the Chart-pinned mod
   assert.equal(ok.status, 0, ok.stderr);
   await rm(root, { recursive: true, force: true });
 });
+
+test("entrypoint starts KTX MCP as a managed daemon so WebUI can reload it after ktx.yaml writes", async () => {
+  const source = await readFile(entrypoint, "utf8");
+  const startBlock = source.match(/ktx mcp start \\[\s\S]*?wait_for_port/)?.[0] ?? "";
+  assert.match(startBlock, /ktx mcp start \\/);
+  assert.doesNotMatch(startBlock, /--foreground/);
+  assert.match(source, /ktx mcp stop --project-dir/);
+  assert.doesNotMatch(source, /wait -n /);
+  assert.match(source, /wait "\$\{LUCY_PID\}"/);
+});

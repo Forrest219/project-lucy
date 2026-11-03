@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
+import { externalCatalogName, schemaNameFromDatabase, splitCatalogDatabase } from "./catalog-database.js";
 import type { CreateConnectionInput } from "./project.js";
 
 const SCHEMA_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/;
@@ -117,8 +118,15 @@ function sameServer(existing: StoredConnection, input: CreateConnectionInput): b
 
 function endpointMatches(existing: StoredConnection, input: CreateConnectionInput): boolean {
   if (!sameServer(existing, input)) return false;
-  if (isMysqlWire(input)) return true;
-  return existing.database.trim() === (input.database ?? "").trim();
+  const requested = (input.database ?? "").trim();
+  const saved = existing.database.trim();
+  if (!isMysqlWire(input)) return saved === requested;
+  const requestedCatalog = externalCatalogName(requested);
+  const savedCatalog = externalCatalogName(saved);
+  // Plain MySQL still matches on host and port. An external directory such as
+  // hive_jd is not the same connection as hive or an unqualified internal database.
+  if (requestedCatalog || savedCatalog) return requestedCatalog === savedCatalog;
+  return true;
 }
 
 function usernamesMatch(existing: StoredConnection, input: CreateConnectionInput): boolean {
@@ -129,7 +137,8 @@ function usernamesMatch(existing: StoredConnection, input: CreateConnectionInput
 
 function conflictSchema(input: CreateConnectionInput): string {
   const names = (input.schemas ?? []).map((item) => (typeof item === "string" ? item.trim() : ""));
-  const resolved = isMysqlWire(input) && names.length === 0 ? [(input.database ?? "").trim()] : names;
+  const resolved =
+    isMysqlWire(input) && names.length === 0 ? [schemaNameFromDatabase(input.database)] : names;
   const schema = resolved[0] ?? "";
   if (resolved.length !== 1 || !SCHEMA_NAME_RE.test(schema)) {
     throw new EndpointSchemaCountError(
@@ -176,8 +185,11 @@ export function decideEndpointGate(
   if (sameServerHits.length > 0) {
     conflictSchema(input);
     if (flags.acknowledgeDifferentDatabase !== true) {
+      const differentCatalog = Boolean(splitCatalogDatabase((input.database ?? "").trim()));
       throw new SameServerDifferentDatabaseError(
-        "同一主机端口上的另一个 database 将新增一张连接卡片。",
+        differentCatalog
+          ? "这是另一个外部目录，不会加到已有连接。确认后将新增一张连接卡片。"
+          : "同一主机端口上的另一个 database 将新增一张连接卡片。",
         {
           matches: sameServerHits.map(publicMatch),
           requestedDatabase: (input.database ?? "").trim()

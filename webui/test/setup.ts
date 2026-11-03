@@ -40,6 +40,12 @@ if (process.env.LUCY_WEBUI_AUTH === undefined) {
   process.env.LUCY_WEBUI_AUTH = "off";
 }
 
+// Do not stop/start a real KTX MCP daemon from unit tests; they use temp
+// project dirs and would contend for 127.0.0.1:7878. Production leaves this unset.
+if (process.env.LUCY_KTX_MCP_RELOAD === undefined) {
+  process.env.LUCY_KTX_MCP_RELOAD = "0";
+}
+
 // Many server tests call auditedWriteFile → getAuditDb without setting
 // KTX_PROJECT_ROOT / creating ktx.yaml (gitignored in CI). Provide a
 // process-wide default audit sqlite so those paths do not depend on a

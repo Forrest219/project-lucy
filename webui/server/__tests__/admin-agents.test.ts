@@ -36,25 +36,26 @@ vi.mock("../admin/audit.js", () => ({
       // M55 + Spec 128 Task 7: COUNT(DISTINCT token_hash_prefix) can be called
       // per-agent (args: userId, startIso, endIso) or globally (args: startIso, endIso).
       if (sql.includes("COUNT(DISTINCT token_hash_prefix)")) {
-        const CUTOFF = Date.now() - 7 * 24 * 60 * 60 * 1000;
         const isGlobal = !sql.includes("user_id = ?");
         return {
           get: vi.fn((...args: unknown[]) => {
+            const startMs = Date.parse(String(isGlobal ? args[0] : args[1]));
+            const endMs = Date.parse(String(isGlobal ? args[1] : args[2]));
             const seen = new Set<string>();
             if (isGlobal) {
-              // Global: (startIso, endIso) — no userId filter.
               for (const row of auditRows) {
                 if (!row.token_hash_prefix) continue;
-                if (new Date(row.ts).getTime() < CUTOFF) continue;
+                const ts = new Date(row.ts).getTime();
+                if (ts < startMs || ts >= endMs) continue;
                 seen.add(row.token_hash_prefix);
               }
             } else {
-              // Per-agent: (userId, startIso, endIso)
               const userId = args[0] as string;
               for (const row of auditRows) {
                 if (row.user_id !== userId) continue;
                 if (!row.token_hash_prefix) continue;
-                if (new Date(row.ts).getTime() < CUTOFF) continue;
+                const ts = new Date(row.ts).getTime();
+                if (ts < startMs || ts >= endMs) continue;
                 seen.add(row.token_hash_prefix);
               }
             }
@@ -63,15 +64,19 @@ vi.mock("../admin/audit.js", () => ({
         };
       }
       if (sql.includes("AS business_calls7")) {
-        const CUTOFF = Date.now() - 7 * 24 * 60 * 60 * 1000;
         return {
           all: vi.fn((...args: unknown[]) => {
+            const startMs = Date.parse(String(args[0]));
+            const endMs = Date.parse(String(args[1]));
             const userIds = args.slice(10) as string[];
             const protocol = new Set(["initialize", "notifications/initialized", "tools/list"]);
             return userIds.flatMap((userId) => {
               const allForUser = auditRows.filter((row) => row.user_id === userId);
               if (allForUser.length === 0) return [];
-              const matched = allForUser.filter((row) => new Date(row.ts).getTime() >= CUTOFF);
+              const matched = allForUser.filter((row) => {
+                const ts = new Date(row.ts).getTime();
+                return ts >= startMs && ts < endMs;
+              });
               const business = matched.filter((row) => !protocol.has(row.tool));
               return [{
                 user_id: userId,
@@ -351,8 +356,29 @@ describe("GET /api/admin/agents", () => {
       // zhangsan 的 3 条记录中 aaaa/bbbb 是 distinct token，所以 2 个活跃 token
       activeTokenCountLast7d: 2,
       callsLast7d: 3,
-      deniedLast7d: 1
+      deniedLast7d: 1,
+      range: "7d"
     });
+    await app.close();
+  });
+
+  it("GET /api/admin/agents?range=30d widens the usage window", async () => {
+    const now = Date.now();
+    const inside7d = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const inside30d = new Date(now - 20 * 24 * 60 * 60 * 1000).toISOString();
+    auditRows.push(
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: inside7d, tool: "sl_query", outcome: "ok" },
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: inside30d, tool: "sl_query", outcome: "ok" }
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const seven = await request(app.server).get("/api/admin/agents").expect(200);
+    expect(seven.body.data.summary.callsLast7d).toBe(1);
+    expect(seven.body.data.summary.range).toBe("7d");
+    const thirty = await request(app.server).get("/api/admin/agents?range=30d").expect(200);
+    expect(thirty.body.data.summary.callsLast7d).toBe(2);
+    expect(thirty.body.data.summary.range).toBe("30d");
     await app.close();
   });
 

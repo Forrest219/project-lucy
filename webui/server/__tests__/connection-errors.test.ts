@@ -13,6 +13,16 @@ describe("connection-errors", () => {
     expect(g.actions[0]).toMatch(/补丁/);
   });
 
+  it("classifies Notion Client CJS named-export failures as a ktx loader issue", () => {
+    const g = classifyConnectionError(
+      "Project: /data/lucy Named export 'Client' not found. The requested module '@notionhq/client' is a CommonJS module"
+    );
+    expect(g.category).toBe("ktx_notion_client_cjs");
+    expect(g.title).toBe("KTX 连接器加载失败");
+    expect(g.actions[0]).toMatch(/Notion CJS/);
+    expect(g.summary).not.toMatch(/密码/);
+  });
+
   it("classifies uv runtime download failure", () => {
     const g = classifyConnectionError("ktx could not download uv 0.11.21");
     expect(g.category).toBe("ktx_runtime_uv");

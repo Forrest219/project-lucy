@@ -8,7 +8,12 @@ import { resolveProjectRoot } from "../project.js";
 import { previewDiff } from "../diff.js";
 import { getAuditDb, type ConfigAuditActorType } from "./audit.js";
 import { presentStoredClient } from "../proxy/request-client-meta.js";
-import { build7dWindow } from "./metric-window.js";
+import {
+  build7dWindow,
+  buildAgentStatsWindow,
+  parseAgentStatsRange,
+  type AgentStatsRange
+} from "./metric-window.js";
 import { expandTemplate } from "./role-templates.js";
 import {
   previewAgentPermissionsForAdmin,
@@ -843,7 +848,8 @@ function buildAgentsSummary(
   /** Spec 128 Task 7: global DISTINCT active token count from audit DB. */
   globalActiveTokenCount: number | null,
   tokenPrefixCollision: boolean,
-  auditWriteHealth: AuditWriteHealthSnapshot
+  auditWriteHealth: AuditWriteHealthSnapshot,
+  range: AgentStatsRange = "7d"
 ): {
   agentCount: number;
   enabledAgentCount: number;
@@ -865,6 +871,7 @@ function buildAgentsSummary(
   };
   windowStart?: string;
   windowEnd?: string;
+  range?: AgentStatsRange;
 } {
   let enabledAgentCount = 0;
   let activeAgentCountLast7d = 0;
@@ -916,7 +923,8 @@ function buildAgentsSummary(
       metricsState: "unavailable",
       auditCompleteness: { ...auditWriteHealth, state: "unavailable" },
       windowStart,
-      windowEnd
+      windowEnd,
+      range
     };
   }
 
@@ -939,7 +947,8 @@ function buildAgentsSummary(
     metricsState: "ok",
     auditCompleteness: auditWriteHealth,
     windowStart,
-    windowEnd
+    windowEnd,
+    range
   };
 }
 
@@ -1197,23 +1206,24 @@ function agentWritePreview(raw: string, newConfig: YamlAccessConfig): { diff: st
 
 export function registerAgentRoutes(app: FastifyInstance) {
   // GET /api/admin/agents
-  app.get("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
+  app.get<{ Querystring: { range?: string } }>("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
+    const range = parseAgentStatsRange(request.query.range);
     // Spec 174 §3.1 — users / version / permissions come from one access snapshot;
     // if access changes while dynamic stats are read, rebuild the whole batch (≤3 attempts).
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const accessGeneration = generationKey(["P"]);
-      const listing = await buildAgentList(projectRoot);
+      const listing = await buildAgentList(projectRoot, range);
       if (generationKey(["P"]) === accessGeneration && !hasPendingDisplayWrite(["P"])) return listing;
     }
     throw new DisplaySnapshotBusyError();
   }));
 
-  async function buildAgentList(projectRoot: string) {
+  async function buildAgentList(projectRoot: string, range: AgentStatsRange = "7d") {
     const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
     const userIds = config.users.map((user) => user.id);
     const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version));
-    const window = build7dWindow();
+    const window = buildAgentStatsWindow(range);
     const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await timeAsync("stats", () => Promise.all([
       getLastUsedMap(userIds),
       getAgentConfigTimelineMap(userIds),
@@ -1233,7 +1243,8 @@ export function registerAgentRoutes(app: FastifyInstance) {
       agents,
       globalActiveTokenCount,
       hasTokenPrefixCollision(config.users),
-      readAuditWriteHealth()
+      readAuditWriteHealth(),
+      range
     );
     // Runtime-only changes need not bump a file generation. Compute this after
     // every asynchronous read, immediately before assembling the response.
@@ -1384,14 +1395,14 @@ export function registerAgentRoutes(app: FastifyInstance) {
   });
 
   // GET /api/admin/agents/:userId
-  app.get<{ Params: { userId: string } }>("/api/admin/agents/:userId", async (request, reply) => {
+  app.get<{ Params: { userId: string }; Querystring: { range?: string } }>("/api/admin/agents/:userId", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const { config, version } = await readAccessYaml(projectRoot);
     const user = config.users.find((u) => u.id === request.params.userId);
     if (!user) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
     }
-    const stats = await getStats(user);
+    const stats = await getStats(user, buildAgentStatsWindow(parseAgentStatsRange(request.query.range)));
     const [tokenUsage, timelineMap] = await Promise.all([
       getLastUsedMap([user.id]),
       getAgentConfigTimelineMap([user.id])
@@ -1467,7 +1478,8 @@ export function registerAgentRoutes(app: FastifyInstance) {
     if (parsedRoles.touched && "error" in parsedRoles) {
       return reply.status(400).send({ ok: false, error: parsedRoles.error });
     }
-    let nextRoleIds = resolveRoleIds(existingUser).ok ? resolveRoleIds(existingUser).roleIds : [];
+    const resolvedExistingRoles = resolveRoleIds(existingUser);
+    let nextRoleIds = resolvedExistingRoles.ok ? resolvedExistingRoles.roleIds : [];
     if (parsedRoles.touched && !("error" in parsedRoles)) {
       if (parsedRoles.ids.length === 0 && !existingUser.allow) {
         return reply.status(400).send({ ok: false, error: { code: "ROLE_REQUIRED", message: "At least one role is required" } });

@@ -1050,6 +1050,8 @@
   .pl-connection-card-identity { @apply hidden; }
   .pl-connection-card-header-actions { @apply hidden; }
   .pl-connection-card-body { @apply grid gap-3 px-4 py-4; }
+  .pl-connection-schema-toolbar { @apply flex items-center justify-between gap-3; }
+  .pl-connection-schema-toolbar-title { @apply text-sm font-semibold text-fg-default; }
   /* M46: Host / Database use the same column rhythm as the Schema asset table:
      Host starts at Schema, Database starts at Manifest 状态. */
   .pl-connection-kv-grid {
@@ -1104,12 +1106,12 @@
   .pl-schema-asset-table code { @apply font-mono text-xs font-medium text-fg-default; }
   /* Spec 107: Schema | Manifest | 库内表数 | 已发现 | 已启用 | 操作
      Count cols stay near header width; action gets residual so 5 row links fit one line at ~1440. */
-  .pl-schema-asset-col-schema { width: 14%; }
-  .pl-schema-asset-col-status { width: 14%; }
-  .pl-schema-asset-col-live-count { width: 10%; }
-  .pl-schema-asset-col-local-count { width: 10%; }
-  .pl-schema-asset-col-enabled-count { width: 10%; }
-  .pl-schema-asset-col-action { width: 42%; }
+  .pl-schema-asset-col-schema { width: 16%; }
+  .pl-schema-asset-col-status { width: 16%; }
+  .pl-schema-asset-col-live-count { width: 12%; }
+  .pl-schema-asset-col-local-count { width: 12%; }
+  .pl-schema-asset-col-enabled-count { width: 12%; }
+  .pl-schema-asset-col-action { width: 32%; }
   .pl-schema-asset-table th.pl-schema-asset-table-num-head { @apply text-left; }
   .pl-schema-asset-table-num { @apply text-left font-normal tabular-nums whitespace-nowrap text-fg-body; }
   .pl-schema-asset-table-action { @apply whitespace-normal text-left; }
@@ -1686,6 +1688,7 @@
   .pl-inspector-title-row { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-segmented-control { @apply grid grid-cols-3 gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
   .pl-segmented-control--cols-2 { @apply grid-cols-2; }
+  .pl-segmented-control--cols-3 { @apply grid-cols-3; }
   .pl-segmented-control--cols-4 { @apply grid-cols-4; }
   .pl-segmented-control--auto {
     @apply flex w-fit max-w-full flex-wrap;
@@ -2191,7 +2194,7 @@
   }
   .pl-wiki-library-document { @apply min-w-0; }
   .pl-wiki-library-document-button {
-    @apply grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border border-transparent bg-bg-surface px-2 py-1.5 text-left transition hover:border-border-default hover:bg-bg-muted;
+    @apply grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-transparent bg-bg-surface px-2 py-1.5 text-left transition hover:border-border-default hover:bg-bg-muted;
   }
   .pl-wiki-library-md-icon {
     @apply inline-flex h-5 items-center rounded-sm border border-border-default bg-bg-muted px-1.5 font-mono text-[10px] uppercase text-fg-muted;
@@ -2229,6 +2232,20 @@
      vertically spaced the title away from the body (UX-WIKI-036). */
   .pl-wiki-read-view { @apply grid content-start gap-3 rounded-md border border-border-default bg-bg-surface p-4; }
   .pl-wiki-read-header { @apply grid gap-2; }
+  .pl-wiki-agent-access { @apply grid gap-1 rounded-md border px-3 py-2 text-sm; }
+  .pl-wiki-agent-access--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-wiki-agent-access--ok { @apply border-border-default bg-bg-muted text-fg-body; }
+  .pl-wiki-agent-access--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-wiki-agent-access--compact {
+    @apply inline-flex max-w-[11rem] truncate px-1.5 py-0.5 text-[11px] leading-tight;
+  }
+  .pl-wiki-agent-access-label { @apply m-0 font-medium; }
+  .pl-wiki-agent-access-detail { @apply m-0 text-xs; }
+  .pl-wiki-agent-access-action { @apply mt-1 justify-self-start text-xs; }
+  .pl-wiki-edit-acl {
+    @apply grid gap-2 rounded-md border border-border-default bg-bg-subtle p-3;
+  }
+  .pl-wiki-edit-acl-kicker { @apply m-0 text-sm font-medium text-fg-default; }
   .pl-wiki-read-title { @apply text-2xl font-semibold leading-tight text-fg-default; }
   .pl-wiki-read-key { @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-muted; }
   .pl-wiki-read-summary { @apply text-sm text-fg-body; }
@@ -2609,7 +2626,10 @@
   .pl-wiki-meta-description { @apply text-xs text-fg-muted; }
   .pl-wiki-meta-close { @apply justify-self-end; }
   .pl-acl-field { @apply grid gap-2 border-0 p-0 m-0; }
+  .pl-acl-hint { @apply m-0 text-xs text-fg-muted; }
   .pl-acl-option, .pl-acl-role { @apply flex items-center gap-2 text-sm text-fg-default; }
+  .pl-acl-option-row { @apply flex flex-wrap items-center gap-x-2 gap-y-0.5; }
+  .pl-acl-option-note { @apply text-xs font-normal text-fg-muted; }
   .pl-acl-roles, .pl-acl-confirm { @apply grid gap-1 pl-6; }
   .pl-acl-role--unknown small { @apply text-xs text-fg-muted; }
   .pl-wiki-upload-ref {

@@ -375,7 +375,7 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 请求：
 
 ```jsonc
-{ "key": "global/revenue.md", "markdown": "# Revenue", "mode": "create" }
+{ "key": "global/revenue.md", "markdown": "# Revenue", "mode": "create", "allowed_roles": ["analyst"] }
 ```
 
 响应：
@@ -704,8 +704,8 @@ Field Questions：
 
 Agent 列表与详情：
 
-- `GET /api/admin/agents`
-- `GET /api/admin/agents/:userId`
+- `GET /api/admin/agents?range=7d|14d|30d`：窗口统计写入 `summary.range` 与每条 `stats.windowStart/windowEnd`。省略 `range` 时 API 仍为近 7 天；WebUI Agent 列表默认 `range=30d`，页头可切换 7 / 14 / 30 天。旧 `range=90d` 当作 30 天。兼容字段 `*Last7d` 表示**当前选中窗口**的计数，不是永远 7 天。
+- `GET /api/admin/agents/:userId?range=7d|14d|30d`
 - `GET /api/admin/agents/:userId/effective-permissions`
 
 写入路径是 Role Set（Spec 168）：
@@ -960,10 +960,11 @@ Query：
 
 | 端点 | 变更 |
 |---|---|
+| `GET /api/wiki` | 每条 `pages[]` 增加 `acl`（与单页相同），供文档库展示 Agent 可见范围 |
 | `GET /api/wiki/:key` | 响应增加 `file_version`（`sha256:<hex>`，文件字节）与 `acl`（`missing` / `empty` / `all` / `roles` / `corrupt`）；`frontmatter.allowed_roles` 仅在声明合法时返回 |
 | `PUT /api/wiki/:key`（`dryRun:false`） | 页面已存在时必须带 `expected_version`：缺失 `428 wiki_expected_version_required`，过期 `409 wiki_write_conflict`；`frontmatter.allowed_roles` 为空值之外的合法数组才改写授权，否则保留现有声明 |
-| `POST /api/wiki/upload/preview` | 响应增加 `currentFileVersion`；新页面无 ACL 时 `warnings` 提示无人可见 |
-| `POST /api/wiki/upload/commit` | 覆盖已存在页面须带 `expected_version`（428 / 409 同上）；上传内容未声明 `allowed_roles` 时沿用页面当前授权 |
+| `POST /api/wiki/upload/preview` | 响应增加 `currentFileVersion` 与 `allowedRoles`；新页面无 ACL 时 `warnings` 提示无人可见 |
+| `POST /api/wiki/upload/commit` | 覆盖已存在页面须带 `expected_version`（428 / 409 同上）；请求可带 `allowed_roles`（上传预检所选对象授权，含 `[]`）；未带时若上传内容也未声明 `allowed_roles` 则沿用页面当前授权（新建则无人可见） |
 | `POST /api/wiki/:key/versions/:versionId/restore` | 恢复正文与属性，但**保留当前** `allowed_roles`，不复活历史上更宽的授权 |
 
 Skill 写入沿用 `expected_version`（428 `skill_expected_version_required` / 409 `skill_write_conflict`）；`POST /api/skills`、`PUT /api/skills/:domain/:name` 现在写入请求中的 `roles_allowed`，新建缺省写 `roles_allowed: []`。

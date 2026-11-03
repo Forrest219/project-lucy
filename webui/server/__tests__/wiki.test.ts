@@ -116,10 +116,26 @@ describe("wiki editor storage", () => {
   it("lists markdown pages and rejects unsafe keys", async () => {
     await writeWiki(projectRoot, "global/a.md", { content: "A\n" });
     await expect(listWiki(projectRoot)).resolves.toEqual([
-      { key: "global/a.md", summary: undefined, tags: [], slRefs: [] }
+      { key: "global/a.md", summary: undefined, tags: [], slRefs: [], acl: { state: "missing" } }
     ]);
     await expect(previewWikiWrite(projectRoot, "../raw-sources/a.md", { content: "bad" })).rejects.toBeInstanceOf(ForbiddenPathError);
     await expect(previewWikiWrite(projectRoot, "/tmp/a.md", { content: "bad" })).rejects.toBeInstanceOf(ForbiddenPathError);
+  });
+
+  it("lists Agent ACL on wiki summaries", async () => {
+    await writeWiki(projectRoot, "global/visible.md", {
+      frontmatter: { summary: "Visible", allowed_roles: ["analyst"] },
+      content: "# Visible\n"
+    });
+    await expect(listWiki(projectRoot)).resolves.toEqual([
+      {
+        key: "global/visible.md",
+        summary: "Visible",
+        tags: [],
+        slRefs: [],
+        acl: { state: "roles", roles: ["analyst"] }
+      }
+    ]);
   });
 
   it("previews uploaded markdown without writing, then commits through the wiki allowlist", async () => {
@@ -134,6 +150,8 @@ describe("wiki editor storage", () => {
     expect(preview.title).toBe("Uploaded");
     expect(preview.slRefs).toEqual(["mysql/schema/table"]);
     expect(preview.diff).toContain("+summary: Uploaded");
+    expect(preview.allowedRoles).toEqual([]);
+    expect(preview.warnings.join("\n")).toContain("无人可见");
     await expect(readFile(path.join(projectRoot, "wiki", "global", "uploaded.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
 
     await commitWikiUpload(projectRoot, {
@@ -141,6 +159,15 @@ describe("wiki editor storage", () => {
       markdown
     });
     await expect(readFile(path.join(projectRoot, "wiki", "global", "uploaded.md"), "utf8")).resolves.toBe(markdown);
+
+    await commitWikiUpload(projectRoot, {
+      key: "global/uploaded-acl.md",
+      markdown,
+      allowed_roles: ["analyst"]
+    });
+    const withAcl = await readFile(path.join(projectRoot, "wiki", "global", "uploaded-acl.md"), "utf8");
+    expect(withAcl).toContain("allowed_roles:");
+    expect(withAcl).toContain("analyst");
   });
 
   it("rejects unsafe upload keys and non-markdown targets", async () => {

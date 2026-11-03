@@ -108,7 +108,8 @@ function stubAgentsEndpoints(
         })
       );
     }
-    if (url === "/api/admin/agents" && (!init || !init.method || init.method === "GET")) {
+    const agentsPath = url.split("?")[0];
+    if (agentsPath === "/api/admin/agents" && (!init || !init.method || init.method === "GET")) {
       return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1", ...(agentsMeta ? { meta: agentsMeta } : {}) } }));
     }
     if (url.startsWith("/api/admin/roles")) {
@@ -224,7 +225,7 @@ describe("AgentList", () => {
     expect(screen.getByTestId("agent-protocol-calls-7d-unknown1")).toHaveTextContent("—");
     expect(screen.getByTestId("agent-metrics-unavailable-unknown1")).toHaveTextContent("数据不可用");
 
-    fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), {
+    fireEvent.change(screen.getByRole("combobox", { name: "近 30 天活跃" }), {
       target: { value: "inactive" }
     });
     expect(screen.queryByTestId("agent-row-unknown1")).not.toBeInTheDocument();
@@ -545,14 +546,24 @@ describe("AgentList", () => {
 
     // 顶部指标：配置存量 → 业务活跃 → 凭据生命周期 → 业务/协议调用
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("Agent 总数");
-    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃 Agent");
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 30 天活跃 Agent");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
     expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("可用 Token");
     expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
-    expect(screen.getByTestId("metric-used-credentials")).toHaveTextContent("近 7 天使用过的凭据");
-    expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("近 7 天业务调用量");
+    expect(screen.getByTestId("metric-used-credentials")).toHaveTextContent("近 30 天使用过的凭据");
+    expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("近 30 天业务调用量");
     expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("7");
     expect(screen.getByTestId("metric-protocol-calls")).toHaveTextContent("3");
+    expect(screen.getByTestId("agent-stats-range-30d")).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByTestId("agent-stats-range-14d"));
+    await waitFor(() => {
+      expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 14 天活跃 Agent");
+    });
+    expect(screen.getByTestId("agent-stats-range-14d")).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByTestId("agent-stats-range-7d"));
+    await waitFor(() => {
+      expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃 Agent");
+    });
 
     const metricOrder = [
       ...document.querySelectorAll("[data-testid='agent-metric-grid'] > [data-testid^='metric-']")
@@ -656,7 +667,7 @@ describe("AgentList", () => {
     expect(screen.queryByTestId("agent-row-idle_agent")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "角色" }), { target: { value: "all" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), { target: { value: "inactive" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "近 30 天活跃" }), { target: { value: "inactive" } });
     expect(screen.getByTestId("agent-row-idle_agent")).toBeInTheDocument();
     expect(screen.queryByTestId("agent-row-active_agent")).not.toBeInTheDocument();
   });
@@ -670,7 +681,7 @@ describe("AgentList", () => {
     expect(screen.getByLabelText("搜索显示名或用户 ID")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "当前状态" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "角色" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "近 7 天活跃" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "近 30 天活跃" })).toBeInTheDocument();
     expect(screen.queryByLabelText("按配置Token数筛选")).not.toBeInTheDocument();
     expect(screen.getByTestId("agent-list-result-count")).toHaveTextContent("1 条结果");
     expect(screen.getByRole("columnheader", { name: "显示名/用户 ID" })).toBeInTheDocument();
@@ -740,7 +751,7 @@ describe("AgentList", () => {
     ];
     const fetchWithSummary = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/admin/agents") {
+      if (url.split("?")[0] === "/api/admin/agents") {
         return new Response(
           JSON.stringify({
             ok: true,
@@ -800,7 +811,7 @@ describe("AgentList", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/admin/agents") {
+        if (url.split("?")[0] === "/api/admin/agents") {
           return new Response(JSON.stringify({ ok: true, data: { agents: withSummary, version: "v1" } }));
         }
         if (url === "/api/project") {
@@ -880,9 +891,9 @@ describe("AgentList", () => {
       "当前状态",
       "配置 Token",
       "可用 Token",
-      "近 7 天使用过的凭据",
-      "近 7 天业务调用量",
-      "近 7 天协议请求量",
+      "近 30 天使用过的凭据",
+      "近 30 天业务调用量",
+      "近 30 天协议请求量",
       "最近业务使用",
       "最近 MCP 访问",
       "操作"

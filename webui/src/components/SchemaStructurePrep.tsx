@@ -4,8 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { queryKeys } from "../lib/queryKeys";
 import {
   countReadyTables,
+  fetchExistingSchemaManifest,
   fetchSchemaStructure,
   manifestKnown,
+  manifestTableNames,
+  mergeManifestTables,
+  newTablesFromGenerated,
   reloadPreparedCatalog,
   writeMinimalManifest,
   type SchemaStructurePreview
@@ -23,6 +27,8 @@ export type SchemaStructurePrepProps = {
   showAddedStatus: boolean;
   exitLabel: "完成" | "关闭";
   idPrefix: string;
+  /** Opened from an existing Manifest to refresh structure from the database. */
+  refreshExisting?: boolean;
   onExit: () => void;
   onPrepared: () => void;
 };
@@ -33,6 +39,7 @@ export function SchemaStructurePrep({
   showAddedStatus,
   exitLabel,
   idPrefix,
+  refreshExisting = false,
   onExit,
   onPrepared
 }: SchemaStructurePrepProps) {
@@ -42,12 +49,21 @@ export function SchemaStructurePrep({
   });
   const [preview, setPreview] = useState<SchemaStructurePreview | null>(null);
   const [preferExisting, setPreferExisting] = useState(false);
+  const [pendingYaml, setPendingYaml] = useState<string | null>(null);
+  const [refreshPlan, setRefreshPlan] = useState<{
+    existingYaml: string;
+    generatedYaml: string;
+    existingCount: number;
+    newTables: string[];
+    selected: string[];
+  } | null>(null);
   const [reloadPending, setReloadPending] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const readable = canReadDatabaseStructure(connection);
-  const known = manifestKnown(sourcesQuery.data, connection.id, schema) || preferExisting;
+  const known =
+    !refreshExisting && (manifestKnown(sourcesQuery.data, connection.id, schema) || preferExisting);
   const primary: PrimaryAction = preview
     ? "continue"
     : reloadPending
@@ -59,13 +75,15 @@ export function SchemaStructurePrep({
           : "upload";
 
   const secondaryLabel =
-    primary === "upload" || primary === "continue"
-      ? primary === "continue"
-        ? "我已有 Schema Manifest"
-        : null
-      : known || reloadPending
-        ? "替换已有 Schema Manifest"
-        : "我已有 Schema Manifest";
+    refreshExisting
+      ? null
+      : primary === "upload" || primary === "continue"
+        ? primary === "continue"
+          ? "我已有 Schema Manifest"
+          : null
+        : known || reloadPending
+          ? "替换已有 Schema Manifest"
+          : "我已有 Schema Manifest";
 
   async function refreshSources(): Promise<number> {
     await queryClient.invalidateQueries({ queryKey: queryKeys.sources });
@@ -95,20 +113,21 @@ export function SchemaStructurePrep({
     onPrepared();
   }
 
-  async function commitYaml(yaml: string) {
-    const result = await writeMinimalManifest(connection.id, schema, yaml);
+  async function commitYaml(yaml: string, confirmOverwrite = false) {
+    const result = await writeMinimalManifest(connection.id, schema, yaml, { confirmOverwrite });
     invalidateCatalog();
     if (result.status === "invalid") {
       setError(result.message);
       return;
     }
     if (result.status === "exists") {
-      setPreferExisting(true);
+      setPendingYaml(yaml);
       setPreview(null);
       setReloadPending(false);
       setError(null);
       return;
     }
+    setPendingYaml(null);
     setPreview(null);
     await settleAfterReload(result.reloadStatus);
   }
@@ -122,11 +141,59 @@ export function SchemaStructurePrep({
         setError("这个 Schema 没有可读取的表。");
         return;
       }
+      if (refreshExisting) {
+        const existingYaml = await fetchExistingSchemaManifest(connection.id, schema);
+        const candidates = newTablesFromGenerated(existingYaml, data.yaml);
+        if (candidates.length === 0) {
+          setError("数据库里没有尚未写入 Manifest 的表。现有 YAML 已保留。");
+          return;
+        }
+        setRefreshPlan({
+          existingYaml,
+          generatedYaml: data.yaml,
+          existingCount: manifestTableNames(existingYaml).length,
+          newTables: candidates,
+          selected: candidates
+        });
+        setPreview(data.downgraded.length > 0 ? data : null);
+        return;
+      }
       if (data.downgraded.length > 0) {
         setPreview(data);
         return;
       }
       await commitYaml(data.yaml);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "读取失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleRefreshTable(name: string, checked: boolean) {
+    setRefreshPlan((current) => {
+      if (!current) return current;
+      const selected = checked
+        ? current.selected.includes(name)
+          ? current.selected
+          : [...current.selected, name]
+        : current.selected.filter((item) => item !== name);
+      return { ...current, selected };
+    });
+  }
+
+  async function commitRefreshPlan() {
+    if (!refreshPlan || refreshPlan.selected.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const yaml = mergeManifestTables(
+        refreshPlan.existingYaml,
+        refreshPlan.generatedYaml,
+        refreshPlan.selected
+      );
+      await commitYaml(yaml, true);
+      setRefreshPlan(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "读取失败");
     } finally {
@@ -157,26 +224,34 @@ export function SchemaStructurePrep({
   }
 
   const primaryLabel =
-    primary === "retry"
-      ? "重新同步并继续"
-      : primary === "use"
-        ? "使用已有 Schema Manifest"
-        : primary === "upload"
-          ? "上传 Schema Manifest"
-          : primary === "continue"
-            ? "继续生成"
-            : "从数据库读取表结构";
+    refreshPlan
+      ? `加入选中的 ${refreshPlan.selected.length} 张表`
+      : pendingYaml
+        ? "确认覆盖并继续"
+        : primary === "retry"
+          ? "重新同步并继续"
+          : primary === "use"
+            ? "使用已有 Schema Manifest"
+            : primary === "upload"
+              ? "上传 Schema Manifest"
+              : primary === "continue"
+                ? "继续生成"
+                : "从数据库读取表结构";
 
   const primaryTestId =
-    primary === "retry"
-      ? `${idPrefix}-retry-reload`
-      : primary === "use"
-        ? `${idPrefix}-use-existing`
-        : primary === "continue"
-          ? `${idPrefix}-downgrade-confirm`
-          : primary === "read"
-            ? `${idPrefix}-read-structure`
-            : `${idPrefix}-upload-yaml`;
+    refreshPlan
+      ? `${idPrefix}-add-tables`
+      : pendingYaml
+        ? `${idPrefix}-confirm-overwrite`
+        : primary === "retry"
+        ? `${idPrefix}-retry-reload`
+        : primary === "use"
+          ? `${idPrefix}-use-existing`
+          : primary === "continue"
+            ? `${idPrefix}-downgrade-confirm`
+            : primary === "read"
+              ? `${idPrefix}-read-structure`
+              : `${idPrefix}-upload-yaml`;
 
   const secondaryTestId =
     secondaryLabel === "替换已有 Schema Manifest"
@@ -202,6 +277,61 @@ export function SchemaStructurePrep({
           <code className="notranslate" translate="no">{schema}</code>
         </p>
       )}
+      {refreshExisting && !refreshPlan ? (
+        <p className="text-xs text-fg-muted" data-testid={`${idPrefix}-refresh-hint`}>
+          保留现有 YAML 中已有的表，只从数据库补选尚未写入的表。不会自动启用；完成后到启用表范围勾选。
+        </p>
+      ) : null}
+      {refreshPlan ? (
+        <div className="grid gap-2 text-xs" data-testid={`${idPrefix}-table-picker`}>
+          <p className="notranslate" translate="no">
+            现有 Manifest 中的 {refreshPlan.existingCount} 张表会原样保留。数据库里还有{" "}
+            {refreshPlan.newTables.length} 张未写入的表，请勾选要加入的表。
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost text-xs"
+              onClick={() =>
+                setRefreshPlan((current) =>
+                  current ? { ...current, selected: current.newTables } : current
+                )
+              }
+            >
+              全选
+            </button>
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost text-xs"
+              onClick={() =>
+                setRefreshPlan((current) => (current ? { ...current, selected: [] } : current))
+              }
+            >
+              清除
+            </button>
+          </div>
+          <div className="max-h-48 overflow-y-auto grid gap-1 sm:grid-cols-2">
+            {refreshPlan.newTables.map((name) => (
+              <label key={name} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={refreshPlan.selected.includes(name)}
+                  onChange={(event) => toggleRefreshTable(name, event.target.checked)}
+                  data-testid={`${idPrefix}-add-table-${name}`}
+                />
+                <span className="notranslate" translate="no">
+                  {name}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {pendingYaml ? (
+        <p className="text-xs notranslate" role="status" data-testid={`${idPrefix}-overwrite-hint`} translate="no">
+          该 Schema 已有 Manifest。确认后会用数据库当前表结构覆盖现有文件，已手写的字段说明可能被替换。
+        </p>
+      ) : null}
       {preview ? (
         <div
           className="rounded border border-warning/40 bg-warning/10 p-3 text-xs space-y-2"
@@ -259,9 +389,27 @@ export function SchemaStructurePrep({
             type="button"
             className="pl-btn pl-btn--primary notranslate"
             translate="no"
-            disabled={busy}
+            disabled={busy || Boolean(refreshPlan && refreshPlan.selected.length === 0)}
             aria-busy={busy}
             onClick={() => {
+              if (refreshPlan) {
+                void commitRefreshPlan();
+                return;
+              }
+              if (pendingYaml) {
+                void (async () => {
+                  setBusy(true);
+                  setError(null);
+                  try {
+                    await commitYaml(pendingYaml, true);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "读取失败");
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
+                return;
+              }
               if (primary === "read") void readStructure();
               else if (primary === "continue" && preview) void (async () => {
                 setBusy(true);
@@ -290,11 +438,13 @@ export function PrepareSchemaStructureDrawer({
   connection,
   schema,
   open,
+  refreshExisting = false,
   onClose
 }: {
   connection: ConnectionInfo;
   schema: string;
   open: boolean;
+  refreshExisting?: boolean;
   onClose: () => void;
 }) {
   const navigate = useNavigate();
@@ -328,6 +478,7 @@ export function PrepareSchemaStructureDrawer({
           showAddedStatus={false}
           exitLabel="关闭"
           idPrefix="prepare-structure"
+          refreshExisting={refreshExisting}
           onExit={onClose}
           onPrepared={() => {
             onClose();

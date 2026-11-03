@@ -10,6 +10,7 @@ import {
   classifyChangedSemanticFile,
   countDiffLines,
   fileChangeStatusLabel,
+  impactedSemanticTables,
   impactedTableNames
 } from "../pages/publish/PublishWorkbench";
 
@@ -61,6 +62,13 @@ describe("PublishWorkbench helpers", () => {
       "semantic-layer/demo-mysql/_schema/dataforai.yaml",
       "semantic-layer/demo-mysql/superstore_orders.yaml"
     ])).toEqual(["superstore_orders"]);
+    expect(impactedSemanticTables([
+      "semantic-layer/server-a/orders.yaml",
+      "semantic-layer/server-b/orders.yaml"
+    ])).toEqual([
+      { conn: "server-a", table: "orders" },
+      { conn: "server-b", table: "orders" }
+    ]);
   });
 
   it("maps internal file status codes to business labels", () => {
@@ -655,7 +663,7 @@ describe("PublishWorkbench", () => {
     expect(await screen.findByTestId("publish-impact-schema-list")).toHaveTextContent(
       "demo-mysql/dataforai"
     );
-    expect(screen.getByTestId("publish-impact-table-superstore_orders")).toBeInTheDocument();
+    expect(screen.getByTestId("publish-impact-table-demo-mysql-superstore_orders")).toBeInTheDocument();
     expect(screen.queryByTestId("publish-impact-table-dataforai")).not.toBeInTheDocument();
     expect(screen.queryByText("状态：W")).not.toBeInTheDocument();
   });
@@ -726,12 +734,92 @@ describe("PublishWorkbench", () => {
 
     renderWorkbench();
 
-    const link = await screen.findByTestId("publish-impact-table-superstore_orders");
+    const link = await screen.findByTestId("publish-impact-table-mysql-aliyun-superstore_orders");
     expect(link.tagName).toBe("A");
     expect(link).toHaveAttribute(
       "href",
       "/?object=table&conn=mysql-aliyun&schema=dataforai&table=superstore_orders"
     );
+  });
+
+  it("links an impacted same-named table to its own connection, not a sibling connection", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [{ filePath: "semantic-layer/server-b/orders.yaml", status: "modified", diff: "+ b" }]
+              }
+            })
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                results: [
+                  { conn: "server-b", schema: "qa_business", table: "orders", validation: { ok: true, exitCode: 0, stdout: "", stderr: "" } }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/sources") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                tables: [
+                  {
+                    conn: "server-a",
+                    schema: "qa_business",
+                    table: "orders",
+                    filePath: "semantic-layer/server-a/_schema/qa_business.yaml",
+                    columnCount: 1,
+                    columnNames: [],
+                    hasTableDesc: true,
+                    hasGrain: true,
+                    measureCount: 0,
+                    joinCount: 0,
+                    wikiRefCount: 0,
+                    completion: "done",
+                    mtime: "2026-07-30T00:00:00.000Z"
+                  },
+                  {
+                    conn: "server-b",
+                    schema: "qa_business",
+                    table: "orders",
+                    filePath: "semantic-layer/server-b/_schema/qa_business.yaml",
+                    columnCount: 1,
+                    columnNames: [],
+                    hasTableDesc: true,
+                    hasGrain: true,
+                    measureCount: 0,
+                    joinCount: 0,
+                    wikiRefCount: 0,
+                    completion: "done",
+                    mtime: "2026-07-30T00:00:00.000Z"
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderWorkbench();
+
+    const link = await screen.findByTestId("publish-impact-table-server-b-orders");
+    expect(link).toHaveAttribute("href", "/?object=table&conn=server-b&schema=qa_business&table=orders");
+    expect(link.parentElement).toHaveTextContent("server-b/qa_business");
+    expect(screen.queryByTestId("publish-impact-table-server-a-orders")).not.toBeInTheDocument();
   });
 
   it("renders impacted table as plain text when sources lookup misses", async () => {
@@ -763,9 +851,10 @@ describe("PublishWorkbench", () => {
 
     renderWorkbench();
 
-    const label = await screen.findByTestId("publish-impact-table-ghost_table");
+    const label = await screen.findByTestId("publish-impact-table-mysql-aliyun-ghost_table");
     expect(label.tagName).toBe("SPAN");
     expect(label).toHaveTextContent("ghost_table");
+    expect(screen.getByText(/未在 Catalog 中/)).toBeInTheDocument();
     expect(
       document.querySelector('a[href*="conn=_"][href*="schema=_"]')
     ).not.toBeInTheDocument();

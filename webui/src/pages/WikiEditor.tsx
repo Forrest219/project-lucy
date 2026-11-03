@@ -172,6 +172,7 @@ export function WikiEditor() {
   const [uploadFileName, setUploadFileName] = useState("");
   const [uploadMarkdown, setUploadMarkdown] = useState("");
   const [uploadPreview, setUploadPreview] = useState<WikiUploadPreview | null>(null);
+  const [uploadAllowedRoles, setUploadAllowedRoles] = useState<string[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [deleteDirectoryPath, setDeleteDirectoryPath] = useState<string | null>(null);
@@ -196,6 +197,7 @@ export function WikiEditor() {
   const [restorePreviewError, setRestorePreviewError] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadPreviewRequestRef = useRef(0);
+  const uploadAclTouchedRef = useRef(false);
   const moveTargetDirectoryRef = useRef("");
   const renameDirectoryPathRef = useRef("");
   const renameDirectoryNameRef = useRef("");
@@ -384,7 +386,8 @@ export function WikiEditor() {
         markdown: uploadPreview.proposedMarkdown,
         sourceFileName: uploadPreview.sourceFileName,
         overwrite: uploadMode === "replace" || uploadPreview?.exists === true,
-        expected_version: uploadPreview.currentFileVersion ?? undefined
+        expected_version: uploadPreview.currentFileVersion ?? undefined,
+        allowed_roles: uploadAllowedRoles
       });
     },
     onSuccess: (result) => {
@@ -397,6 +400,8 @@ export function WikiEditor() {
       setUiMode("read");
       setUploadOpen(false);
       setUploadPreview(null);
+      setUploadAllowedRoles([]);
+      uploadAclTouchedRef.current = false;
       setUploadError(null);
       setSearchParams({ key: result.key }, { replace: true });
       toast.success(uploadMode === "replace" ? "Markdown 已覆盖" : "Markdown 已上传");
@@ -1179,6 +1184,8 @@ export function WikiEditor() {
     }
     setUploadMode(modeToOpen);
     setUploadPreview(null);
+    setUploadAllowedRoles([]);
+    uploadAclTouchedRef.current = false;
     setUploadError(null);
     uploadInputRef.current?.click();
   }
@@ -1206,6 +1213,9 @@ export function WikiEditor() {
         return;
       }
       setUploadPreview(result);
+      if (!uploadAclTouchedRef.current) {
+        setUploadAllowedRoles(result.allowedRoles ?? []);
+      }
     } catch (error) {
       if (uploadPreviewRequestRef.current !== requestId) {
         return;
@@ -1545,6 +1555,7 @@ export function WikiEditor() {
               />
             ) : uiMode === "read" ? (
               <WikiReadView
+                acl={pageQuery.data?.acl}
                 content={content}
                 frontmatter={frontmatter}
                 keyName={key}
@@ -1711,14 +1722,21 @@ export function WikiEditor() {
       />
 
       <WikiUploadPreflight
+        allowedRoles={uploadAllowedRoles}
         error={uploadError}
         directories={uploadDirectories}
         isCommitting={uploadCommitMutation.isPending}
         isLoading={uploadLoading}
         mode={uploadMode}
+        onAllowedRolesChange={(roles) => {
+          uploadAclTouchedRef.current = true;
+          setUploadAllowedRoles(roles);
+        }}
         onCancel={() => {
           setUploadOpen(false);
           setUploadPreview(null);
+          setUploadAllowedRoles([]);
+          uploadAclTouchedRef.current = false;
           setUploadError(null);
         }}
         onConfirm={() => uploadCommitMutation.mutate()}

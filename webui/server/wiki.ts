@@ -44,6 +44,8 @@ export type WikiSummary = {
   summary?: string;
   tags: string[];
   slRefs: string[];
+  /** Set by `listWiki`. Older callers and test doubles may omit it. */
+  acl?: ObjectAcl;
 };
 
 export type WikiDirectorySummary = {
@@ -135,6 +137,12 @@ export type WikiUploadInput = {
   mode?: WikiUploadMode;
   /** Required (428) when the target page already exists; stale values are rejected (409). */
   expected_version?: string;
+  /**
+   * Object ACL chosen in the upload preflight. When present, this is written as
+   * `allowed_roles` (including `[]` for 无人可见). When omitted, the markdown's
+   * existing declaration is kept, or the page stays 无人可见 if none exists.
+   */
+  allowed_roles?: string[];
 };
 
 export type WikiUploadMode = "create" | "replace";
@@ -155,6 +163,8 @@ export type WikiUploadPreview = WikiPreview & {
   title: string;
   slRefs: string[];
   warnings: string[];
+  /** Parsed `allowed_roles` after ACL carry-over; `[]` when the page would be 无人可见. */
+  allowedRoles: string[];
 };
 
 export type WikiMovePreview = WikiPreview & {
@@ -401,6 +411,12 @@ function aclOf(data: Record<string, unknown>): ObjectAcl {
  * read the page: unless the caller supplies a valid new `allowed_roles`, the current ACL
  * declaration is carried over (and a historical wider ACL is never revived).
  */
+function applyAllowedRoles(markdown: string, roles: string[]): string {
+  const parsed = parseMarkdownFrontmatter(markdown);
+  const data: Record<string, unknown> = { ...parsed.data, allowed_roles: roles };
+  return stringifyMarkdownFrontmatter(parsed.content, data);
+}
+
 function carryCurrentAcl(proposedMarkdown: string, currentText: string, options: { restore?: boolean } = {}): string {
   const proposed = parseMarkdownFrontmatter(proposedMarkdown);
   const proposedDeclares = Object.prototype.hasOwnProperty.call(proposed.data, "allowed_roles");
@@ -806,7 +822,8 @@ export async function listWiki(projectRoot: string): Promise<WikiSummary[]> {
       key,
       summary: page.frontmatter.summary,
       tags: page.frontmatter.tags ?? [],
-      slRefs: page.frontmatter.sl_refs ?? []
+      slRefs: page.frontmatter.sl_refs ?? [],
+      acl: page.acl
     });
   }
   return summaries;
@@ -1475,7 +1492,8 @@ export async function previewWikiUpload(projectRoot: string, input: WikiUploadIn
     targetTitle,
     title: targetTitle,
     slRefs: frontmatter.sl_refs ?? [],
-    warnings
+    warnings,
+    allowedRoles: frontmatter.allowed_roles ?? []
   };
 }
 
@@ -1488,7 +1506,11 @@ export async function commitWikiUpload(
   const existed = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
   assertExpectedWikiVersion(existed, oldText, input.expected_version);
-  const preview = await previewWikiUpload(projectRoot, input);
+  const markdown =
+    input.allowed_roles !== undefined
+      ? applyAllowedRoles(input.markdown, assertWritableAcl(input.allowed_roles))
+      : input.markdown;
+  const preview = await previewWikiUpload(projectRoot, { ...input, markdown });
   await auditedWriteFile(projectRoot, preview.filePath, preview.proposedMarkdown, {
     enabled: true,
     changeType: existed ? "wiki_upload_replace" : "wiki_upload_create",

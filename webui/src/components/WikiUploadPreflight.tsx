@@ -1,5 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { DiffViewer } from "./DiffViewer";
+import { ObjectAclField } from "./ObjectAclField";
 import type { WikiUploadPreview } from "../lib/types";
 
 export type WikiUploadPreflightProps = {
@@ -8,13 +9,21 @@ export type WikiUploadPreflightProps = {
   preview: WikiUploadPreview | null;
   directories: string[];
   targetDirectory: string;
+  allowedRoles: string[];
   error: string | null;
   isLoading: boolean;
   isCommitting: boolean;
   onCancel: () => void;
   onConfirm: () => void;
   onTargetDirectoryChange: (directory: string) => void;
+  onAllowedRolesChange: (roles: string[]) => void;
 };
+
+function uploadWarningsForAcl(warnings: string[], allowedRoles: string[]): string[] {
+  const visible = allowedRoles.includes("*") || allowedRoles.length > 0;
+  if (!visible) return warnings;
+  return warnings.filter((warning) => !warning.includes("无人可见"));
+}
 
 export function WikiUploadPreflight({
   open,
@@ -22,12 +31,14 @@ export function WikiUploadPreflight({
   preview,
   directories,
   targetDirectory,
+  allowedRoles,
   error,
   isLoading,
   isCommitting,
   onCancel,
   onConfirm,
-  onTargetDirectoryChange
+  onTargetDirectoryChange,
+  onAllowedRolesChange
 }: WikiUploadPreflightProps) {
   const title = mode === "replace" ? "上传覆盖预检" : "上传 Markdown 预检";
   const directoryOptionsId = "wiki-upload-directory-options";
@@ -42,10 +53,11 @@ export function WikiUploadPreflight({
         >
           <Dialog.Title className="pl-wiki-preflight-title">{title}</Dialog.Title>
           <Dialog.Description
-            className="pl-wiki-preflight-description"
+            className="pl-wiki-preflight-description notranslate"
             id="wiki-upload-preflight-description"
+            translate="no"
           >
-            确认目标目录、目标 Wiki 路径、标题、关联表和 Diff 后再写入业务 Wiki。
+            确认目标目录、可访问角色、标题、关联表和 Diff 后再写入业务 Wiki。不选择角色时，Agent 无人可见。
           </Dialog.Description>
 
           {isLoading ? (
@@ -166,9 +178,14 @@ export function WikiUploadPreflight({
                     </dd>
                   </div>
                 </dl>
-                {preview.warnings.length > 0 ? (
+                <ObjectAclField
+                  onChange={onAllowedRolesChange}
+                  testId="wiki-upload-acl-field"
+                  value={allowedRoles}
+                />
+                {uploadWarningsForAcl(preview.warnings, allowedRoles).length > 0 ? (
                   <ul className="pl-wiki-upload-warnings" data-testid="wiki-upload-warnings">
-                    {preview.warnings.map((warning) => (
+                    {uploadWarningsForAcl(preview.warnings, allowedRoles).map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>
