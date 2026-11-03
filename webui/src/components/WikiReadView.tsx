@@ -2,13 +2,15 @@ import clsx from "clsx";
 import { useMemo } from "react";
 import { LinkedSemanticObjects } from "./LinkedSemanticObjects";
 import { MarkdownPreview } from "./MarkdownPreview";
+import { WikiAgentAccessNotice } from "./WikiAgentAccessNotice";
 import { extractTemplatePlaceholders, extractWikiToc, wikiTitleFromContent } from "../lib/wiki";
-import type { SourceSummary, WikiFrontmatter } from "../lib/types";
+import type { SourceSummary, WikiAclState, WikiFrontmatter } from "../lib/types";
 
 export type WikiReadViewProps = {
   keyName: string;
   content: string;
   frontmatter: WikiFrontmatter;
+  acl?: WikiAclState;
   knownSources: ReadonlySet<string>;
   knownTables: SourceSummary[];
   onApplyTemplate: (content: string) => void;
@@ -32,6 +34,7 @@ export function WikiReadView({
   keyName,
   content,
   frontmatter,
+  acl,
   knownSources,
   knownTables,
   onApplyTemplate,
@@ -59,6 +62,11 @@ export function WikiReadView({
         <h1 className="pl-wiki-read-title" data-testid="wiki-read-title">
           {title}
         </h1>
+        <WikiAgentAccessNotice
+          acl={acl}
+          onAuthorize={onSwitchToEdit}
+          testId="wiki-agent-access"
+        />
         {summary && summary !== title ? (
           <p className="pl-wiki-read-summary" data-testid="wiki-read-summary">
             {summary}

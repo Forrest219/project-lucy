@@ -431,6 +431,8 @@ export type WikiSummary = {
   summary?: string;
   tags: string[];
   slRefs: string[];
+  /** Present on `GET /api/wiki` so the library can show Agent visibility without opening the page. */
+  acl?: WikiAclState;
 };
 
 export type WikiDirectorySummary = {
@@ -538,6 +540,8 @@ export type WikiUploadPreview = WikiPreview & {
   title: string;
   slRefs: string[];
   warnings: string[];
+  /** Parsed `allowed_roles` after ACL carry-over; `[]` when the page would be 无人可见. */
+  allowedRoles: string[];
 };
 
 export type WikiMovePreview = WikiPreview & {
@@ -993,6 +997,8 @@ export type AgentsResponseSummary = {
   metricsState?: "ok" | "unavailable";
   windowStart?: string;
   windowEnd?: string;
+  /** Selected stats window; `callsLast7d` etc. are counts inside this window. */
+  range?: "7d" | "14d" | "30d";
   auditCompleteness?: {
     state: "ok" | "partial" | "unavailable";
     scope: "current_process";

@@ -1,9 +1,11 @@
 import { stringify } from "yaml";
+import { quoteMysqlIdent, showFullColumnsSql, showTablesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const CATALOG_STRUCTURE_MAX_TABLES = 200;
 
 const NUMBER_TYPES = new Set([
   "int",
@@ -204,6 +206,21 @@ function structureRows(result: SqlResult): unknown[] {
   return rows;
 }
 
+function mapShowFullColumn(table: string, row: unknown[]): ColumnInput | null {
+  if (!Array.isArray(row) || row.length < 4) return null;
+  const column = String(row[0] ?? "").trim();
+  if (!column || column.length > 256 || /[\0\r\n]/.test(column)) return null;
+  const comment = row.length >= 9 ? String(row[8] ?? "") : "";
+  return {
+    table,
+    column,
+    dataType: String(row[1] ?? ""),
+    nullable: String(row[3] ?? "YES").toUpperCase() !== "NO",
+    primaryKey: String(row[4] ?? "").toUpperCase() === "PRI",
+    comment
+  };
+}
+
 function parseColumns(rows: unknown[]): ColumnInput[] {
   const columns: ColumnInput[] = [];
   for (const row of rows) {
@@ -243,6 +260,41 @@ export async function previewSchemaStructure(
     throw new SchemaStructureError("SCHEMA_UNSUPPORTED", "当前数据库类型请上传 Schema Manifest");
   }
   const execute = deps.runSqlImpl ?? runSql;
+  const catalog = protocolOf(connection) === "mysql" ? splitCatalogDatabase(connection.database) : null;
+  if (catalog) {
+    const tablesResult = await execute(
+      projectRoot,
+      connectionId,
+      showTablesFromCatalogSql(catalog.catalog, safeSchema),
+      { maxRows: SCHEMA_STRUCTURE_MAX_ROWS, timeoutMs: 30000 }
+    );
+    const tableNames = structureRows(tablesResult)
+      .map((row) => (Array.isArray(row) ? String(row[0] ?? "").trim() : ""))
+      .filter((name) => {
+        try {
+          quoteMysqlIdent(name);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    if (tableNames.length > CATALOG_STRUCTURE_MAX_TABLES) {
+      throw new SchemaStructureError("READ_FAILED", "这个 Schema 的表数超过一次可读取的上限。");
+    }
+    const columns: ColumnInput[] = [];
+    for (const table of tableNames) {
+      const columnResult = await execute(projectRoot, connectionId, showFullColumnsSql(catalog.catalog, safeSchema, table), {
+        maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+        timeoutMs: 30000
+      });
+      for (const row of structureRows(columnResult)) {
+        if (!Array.isArray(row)) continue;
+        const mapped = mapShowFullColumn(table, row);
+        if (mapped) columns.push(mapped);
+      }
+    }
+    return buildMinimalSchemaManifest(safeSchema, columns);
+  }
   const result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
     maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
     timeoutMs: 30000

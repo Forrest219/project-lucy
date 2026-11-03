@@ -14,6 +14,7 @@ import {
   extractWikiToc,
   groupWikiPages,
   validateWikiDraft,
+  wikiAgentAccessCopy,
   wikiTitleFromContent
 } from "../lib/wiki";
 
@@ -239,7 +240,8 @@ function buildFetchMock(
             targetTitle: "Uploaded",
             title: "Uploaded",
             slRefs: ["mysql-aliyun/dataforai/superstore_orders"],
-            warnings
+            warnings,
+            allowedRoles: []
           }
         })
       );
@@ -632,6 +634,22 @@ describe("wiki lib helpers", () => {
     expect(nextNewNoteKey(["kx/new-note.md"], "kx")).toBe("kx/new-note-2.md");
   });
 
+  it("wikiAgentAccessCopy names Agent visibility for each ACL state", () => {
+    expect(wikiAgentAccessCopy({ state: "missing" })).toMatchObject({
+      kind: "none",
+      shortLabel: "无人可见"
+    });
+    expect(wikiAgentAccessCopy({ state: "empty" }).kind).toBe("none");
+    expect(wikiAgentAccessCopy({ state: "all" })).toMatchObject({
+      kind: "all",
+      shortLabel: "所有角色可见"
+    });
+    expect(wikiAgentAccessCopy({ state: "roles", roles: ["analyst"] }).label).toContain(
+      "analyst"
+    );
+    expect(wikiAgentAccessCopy({ state: "corrupt", detail: "bad" }).kind).toBe("corrupt");
+  });
+
   it("validateWikiDraft reports error / warning / info findings", () => {
     const findings = validateWikiDraft({
       key: "global/test",
@@ -743,6 +761,11 @@ describe("WikiEditor Read Mode default (P0)", () => {
       expect(title).toHaveTextContent("Superstore guide");
     });
 
+    const access = screen.getByTestId("wiki-agent-access");
+    expect(access).toHaveAttribute("data-kind", "none");
+    expect(access).toHaveTextContent("Agent 权限：无人可见");
+    expect(access).toHaveTextContent("问答 Agent 目前搜不到也读不到这篇文档");
+
     const meta = await screen.findByTestId("wiki-read-meta");
     expect(meta).not.toHaveTextContent("wiki/global/superstore-analysis-playbook.md");
 
@@ -751,6 +774,17 @@ describe("WikiEditor Read Mode default (P0)", () => {
 
     const refs = screen.getByTestId("wiki-read-refs");
     expect(refs.textContent).toContain("dataforai.superstore_orders");
+  });
+
+  it("opens the Agent ACL editor from the read-view authorize action", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    fireEvent.click(await screen.findByTestId("wiki-agent-access-authorize"));
+    expect(await screen.findByTestId("wiki-edit-acl")).toHaveTextContent("Agent 可见范围");
+    expect(screen.getByTestId("wiki-acl-field-hint")).toHaveTextContent(
+      "决定问答 Agent 能否搜索和阅读"
+    );
   });
 
   it("renders the TOC for ## and ### headings", async () => {
@@ -1589,6 +1623,10 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     });
     expect(dialog).toHaveTextContent("关联表");
     expect(dialog).toHaveTextContent("mysql-aliyun/dataforai/superstore_orders");
+    const aclField = within(dialog).getByTestId("wiki-upload-acl-field");
+    expect(within(aclField).getByLabelText("无人可见")).toBeChecked();
+    fireEvent.click(within(aclField).getByLabelText("指定角色"));
+    fireEvent.click(await within(aclField).findByLabelText("analyst"));
 
     fireEvent.change(screen.getByTestId("wiki-upload-directory-input"), {
       target: { value: "ops/playbooks" }
@@ -1605,6 +1643,7 @@ describe("WikiEditor Markdown file operations (M47)", () => {
       expect(body.key).toBe("ops/playbooks/uploaded.md");
       expect(body.markdown).toContain("# Uploaded");
       expect(body.sourceFileName).toBe("uploaded.md");
+      expect(body.allowed_roles).toEqual(["analyst"]);
     });
     await waitFor(() => {
       expect(screen.getByTestId("current-location")).toHaveTextContent(
@@ -2231,6 +2270,11 @@ describe("Wiki home and tree visual clarity (M64 / Spec 105)", () => {
     expect(path.textContent).toMatch(/^wiki\/.+/);
     expect(path).toHaveAttribute("translate", "no");
     expect(path.className).toContain("notranslate");
+    const access = within(firstItem).getByTestId(
+      "wiki-library-agent-access-global/superstore-analysis-playbook.md"
+    );
+    expect(access).toHaveAttribute("data-kind", "none");
+    expect(access).toHaveTextContent("无人可见");
   });
 
   it("does not render triangle or chevron glyphs anywhere in the /wiki home or sidebar (M64)", async () => {

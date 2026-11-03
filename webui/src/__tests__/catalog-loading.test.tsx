@@ -378,7 +378,7 @@ describe("Spec 174 R5 — decorations never gate the cards; probes start after t
     expect(await screen.findByTestId("connection-card-perf-conn", {}, { timeout: 150 })).toBeInTheDocument();
     expect(screen.getByTestId("add-schema-perf-conn")).toBeInTheDocument();
     expect(screen.getByTestId("execution-runtime-slot")).toBeInTheDocument();
-    expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("正在读取配置同步状态...");
+    expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("正在读取刷新状态...");
     await act(async () => {
       runtime.resolve(json({ execution: { status: "stale" } }));
       reloads.resolve(json({ runs: [], last: null, lastByConnection: { "perf-conn": { id: "r1", connectionId: "perf-conn", status: "succeeded", startedAt: "2026-10-01T00:00:00.000Z", finishedAt: "2026-10-01T00:00:01.000Z", tables: 1, warnings: [] } } }));
@@ -399,7 +399,7 @@ describe("Spec 174 R5 — decorations never gate the cards; probes start after t
       runtime.resolve(json({ ok: false, error: { code: "INTERNAL", message: "runtime down" } }, 500));
       reloads.resolve(json({ ok: false, error: { code: "INTERNAL", message: "history down" } }, 500));
     });
-    await waitFor(() => expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("配置同步状态加载失败"));
+    await waitFor(() => expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("刷新状态加载失败"));
     expect(screen.queryByTestId("execution-runtime-notice")).not.toBeInTheDocument();
     expect(screen.getByTestId("execution-runtime-slot")).toBeInTheDocument();
     expect(screen.getByTestId("connection-card-perf-conn")).toBeInTheDocument();

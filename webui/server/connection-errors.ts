@@ -7,6 +7,7 @@
 
 export type ConnectionErrorCategory =
   | "starrocks_max_execution_time"
+  | "ktx_notion_client_cjs"
   | "ktx_runtime_uv"
   | "auth"
   | "dns"
@@ -22,6 +23,7 @@ export type ConnectionErrorGuidance = {
 };
 
 const MAX_EXEC_RE = /max_execution_time|Unknown system variable/i;
+const NOTION_CLIENT_CJS_RE = /Named export 'Client' not found|@notionhq\/client/i;
 const UV_RUNTIME_RE = /could not download uv|ktx Python runtime install failed|runtime install failed/i;
 const AUTH_RE = /access denied|authentication|password|login/i;
 const DNS_RE = /ENOTFOUND|getaddrinfo|resolve host|no such host/i;
@@ -39,6 +41,18 @@ export function classifyConnectionError(raw: string | undefined | null): Connect
         "请使用已包含 ktx StarRocks 兼容补丁的 Lucy 镜像（scripts/runtime/patch-ktx-mysql-starrocks-compat.js）",
         "新建连接时数据库类型请选择 StarRocks（MySQL 协议）",
         "升级后重新测试连接并拉取 live catalog"
+      ]
+    };
+  }
+  if (NOTION_CLIENT_CJS_RE.test(text)) {
+    return {
+      category: "ktx_notion_client_cjs",
+      title: "KTX 连接器加载失败",
+      summary: "KTX 在探测任意数据库前会加载 Notion 适配器，当前捆绑的 @notionhq/client 是 CommonJS，命名导入失败。",
+      actions: [
+        "请使用已包含 ktx Notion CJS 兼容补丁的 Lucy 镜像（scripts/runtime/patch-ktx-notion-client-cjs.js）",
+        "升级或重建 Lucy 容器后重新测试连接",
+        "该失败与目标库账号密码无关"
       ]
     };
   }

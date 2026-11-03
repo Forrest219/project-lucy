@@ -370,7 +370,7 @@ shutdown() {
   local status="${1:-0}"
   trap - TERM INT EXIT
   if [[ -n "${LUCY_PID:-}" ]]; then kill "${LUCY_PID}" >/dev/null 2>&1 || true; fi
-  if [[ -n "${KTX_PID:-}" ]]; then kill "${KTX_PID}" >/dev/null 2>&1 || true; fi
+  ktx mcp stop --project-dir "${PROJECT_ROOT}" >/dev/null 2>&1 || true
   wait >/dev/null 2>&1 || true
   exit "${status}"
 }
@@ -418,13 +418,14 @@ maybe_reindex_context
 echo "[lucy] bundled KTX: $(ktx --version)"
 echo "[lucy] project root: ${PROJECT_ROOT}"
 
+# Daemon mode (no --foreground) so WebUI can `ktx mcp stop` / `ktx mcp start`
+# after writing ktx.yaml. A foreground child would make `wait -n` tear down
+# the whole container on reload.
 ktx mcp start \
   --project-dir "${PROJECT_ROOT}" \
   --host "${KTX_MCP_HOST}" \
   --port "${KTX_MCP_PORT}" \
-  --token "${KTX_INTERNAL_TOKEN}" \
-  --foreground &
-KTX_PID="$!"
+  --token "${KTX_INTERNAL_TOKEN}"
 
 wait_for_port "${KTX_MCP_HOST}" "${KTX_MCP_PORT}" "KTX MCP upstream"
 
@@ -435,7 +436,7 @@ LUCY_PID="$!"
 trap 'shutdown 143' TERM INT
 trap 'shutdown $?' EXIT
 
-wait -n "${KTX_PID}" "${LUCY_PID}"
+wait "${LUCY_PID}"
 status="$?"
 echo "[lucy] child process exited with status ${status}" >&2
 shutdown "${status}"

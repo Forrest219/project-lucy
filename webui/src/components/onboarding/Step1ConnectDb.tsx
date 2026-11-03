@@ -11,6 +11,7 @@ import {
   type DatabaseTypeConfig
 } from "../../lib/connectionId";
 import { queryKeys } from "../../lib/queryKeys";
+import { CATALOG_DATABASE_HINT, schemaNameFromDatabase } from "../../lib/catalogDatabase";
 import { validateSchemaName } from "../../lib/schemas";
 import { formatProbeFailure } from "../../lib/setupAssistant";
 import { readEndpointGate, type EndpointGateState } from "../../lib/connectionEndpointGate";
@@ -198,14 +199,18 @@ export function Step1ConnectDb({
                   password
                 }),
             database: database.trim(),
-            schemas: schema.trim() ? [schema.trim()] : isSqlite ? ["main"] : [database.trim()],
+            schemas: schema.trim()
+              ? [schema.trim()]
+              : isSqlite
+                ? ["main"]
+                : [schemaNameFromDatabase(database)],
             dryRun: false,
             ...(input.acknowledgeSeparateConnection ? { acknowledgeSeparateConnection: true } : {}),
             ...(input.acknowledgeDifferentDatabase ? { acknowledgeDifferentDatabase: true } : {})
           }),
     onSuccess: (res, input) => {
       if (input.epoch !== gateEpoch.current) return;
-      const nextSchema = schema.trim() || (isSqlite ? "main" : database.trim());
+      const nextSchema = schema.trim() || (isSqlite ? "main" : schemaNameFromDatabase(database));
       onSuccess({
         connectionId: res.connection.id,
         schema: nextSchema
@@ -270,7 +275,7 @@ export function Step1ConnectDb({
     setEngine(config.engine);
     setWireProtocol(config.wireProtocol);
     if (!schemaEdited) {
-      setSchema(config.key === "sqlite" ? "" : database);
+      setSchema(config.key === "sqlite" ? "" : schemaNameFromDatabase(database));
     }
     if (!port.trim() || port === prevDefaultPort) {
       setPort(nextDefaultPort);
@@ -459,11 +464,16 @@ export function Step1ConnectDb({
               value={database}
               onChange={(e) => {
                 setDatabase(e.target.value);
-                if (!isSqlite && !schemaEdited) setSchema(e.target.value);
+                if (!isSqlite && !schemaEdited) setSchema(schemaNameFromDatabase(e.target.value));
               }}
               required
               data-testid="setup-database"
             />
+            {driver === "mysql" ? (
+              <p className="text-xs text-fg-muted mt-1 notranslate" translate="no" data-testid="setup-catalog-database-hint">
+                {CATALOG_DATABASE_HINT}
+              </p>
+            ) : null}
           </div>
           <div>
             <label htmlFor="setup-schema" className="block text-xs font-medium text-fg-default mb-1 notranslate" translate="no">
@@ -520,6 +530,7 @@ export function Step1ConnectDb({
                 placeholder="安全密码（一次性写入）"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
                 required
                 autoComplete="current-password"
                 data-testid="setup-password"

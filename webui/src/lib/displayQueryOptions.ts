@@ -11,6 +11,7 @@ import {
   type DisplayReadScope
 } from "./apiClient";
 import { queryKeys } from "./queryKeys";
+import type { AgentStatsRange } from "./agentStatsRange";
 import type { CatalogReloadsResponse, McpRuntimeStatus, ProjectInfo, SourcesResponse } from "./types";
 
 /** Spec 174 §4.2 — shared freshness for the project / sources display reads. */
@@ -85,10 +86,11 @@ export function catalogReloadsQueryOptions() {
 }
 
 /** Agent list carries dynamic audit statistics: keep staleTime 0 (only server-side permission caching). */
-export function adminAgentsQueryOptions<T>() {
+export function adminAgentsQueryOptions<T>(range?: AgentStatsRange) {
+  const path = range ? `/api/admin/agents?range=${range}` : "/api/admin/agents";
   return {
-    queryKey: queryKeys.adminAgents,
-    queryFn: ({ signal }: QueryFunctionContext) => displayRead<T>("/api/admin/agents", "agents", signal),
+    queryKey: range ? [...queryKeys.adminAgents, range] : queryKeys.adminAgents,
+    queryFn: ({ signal }: QueryFunctionContext) => displayRead<T>(path, "agents", signal),
     ...displayRetry
   };
 }

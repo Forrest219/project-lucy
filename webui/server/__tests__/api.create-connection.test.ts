@@ -29,6 +29,15 @@ vi.mock("../ktx", async () => {
   };
 });
 
+const ktxMcpReload = vi.hoisted(() => ({
+  reloadKtxMcpAfterConfigWrite: vi.fn(async () => ({ status: "reloaded" as const, detail: "ok" }))
+}));
+
+vi.mock("../ktx-mcp-reload.js", () => ({
+  reloadKtxMcpAfterConfigWrite: ktxMcpReload.reloadKtxMcpAfterConfigWrite,
+  reloadKtxMcpExecutionRuntime: ktxMcpReload.reloadKtxMcpAfterConfigWrite
+}));
+
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
@@ -117,6 +126,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
 
     expect(response.body.ok).toBe(true);
     expect(response.body.data.secretRelPath).toBe(".ktx/secrets/demo-mysql-password");
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).not.toHaveBeenCalled();
     expect(response.body.data.proposedYaml).toContain("demo-mysql:");
     expect(JSON.stringify(response.body)).not.toContain("plain-secret-should-not-persist");
     expect(JSON.stringify(response.body)).not.toContain("inline-password-value");
@@ -154,6 +164,8 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
 
     expect(response.body.ok).toBe(true);
     expect(response.body.data.written).toBe(true);
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledTimes(1);
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot);
     expect(response.body.data.test.status).toBe("ok");
     expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
     expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");
@@ -302,6 +314,30 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
 
     expect(response.body.error.code).toBe("CONNECTION_ID_INVALID");
     expect(response.body.error.detail.pattern).toMatch(/a-z/);
+  });
+
+  it("POST /api/connections/probe returns CONNECTION_PASSWORD_REQUIRED without a password", async () => {
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const response = await request(app.server)
+      .post("/api/connections/probe")
+      .send({
+        driver: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "analytics",
+        username: "lucy_ro"
+      })
+      .expect(400);
+
+    expect(response.body.error.code).toBe("CONNECTION_PASSWORD_REQUIRED");
+    expect(response.body.error.message).toBe("数据库密码为必填项");
   });
 
   it("POST /api/connections/probe tests without writing yaml or secret", async () => {

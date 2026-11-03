@@ -234,6 +234,8 @@
 | Test ID | 元素 |
 |---|---|
 | `wiki-read-title` | 文档标题 |
+| `wiki-agent-access` | Agent 权限条（阅读态） |
+| `wiki-agent-access-authorize` | 从阅读态跳去选择可访问角色 |
 | `wiki-read-summary` | 摘要 |
 | `wiki-read-meta` | meta 区域（含 sl_refs / tags） |
 | `wiki-read-tags` | 标签 |
@@ -253,11 +255,13 @@
 | Test ID | 元素 | 文案约束 |
 |---|---|---|
 | `wiki-edit-view` | 编辑态根 | 必含 `textarea` |
+| `wiki-edit-acl` | Agent 可见范围 | — |
 | `wiki-edit-meta` | 元信息区（折叠 `文档信息`） | — |
 | `wiki-edit-grid` | 编辑器 + 预览 grid | — |
 | `wiki-edit-source` | 源编辑区 | — |
 | `wiki-edit-textarea` | Markdown 文本框 | 占主工作区 ≥ 80% |
-| `wiki-acl-field` | 可访问角色（对象授权，默认无人可见） | `components/ObjectAclField.tsx` |
+| `wiki-acl-field` | 可访问角色（对象授权，默认无人可见；含 Agent 提示） | `components/ObjectAclField.tsx` |
+| `wiki-acl-field-hint` | 可访问角色对 Agent 的说明 | `components/ObjectAclField.tsx` |
 | `wiki-edit-preview` | 渲染预览 | — |
 
 ### 5.5 WikiSavePreflight.tsx
@@ -411,8 +415,11 @@
 | `agent-role-field` | Agent 角色复选框组 | `components/AgentRoleField.tsx` |
 | `agent-role-option` | Agent 角色复选项 | `components/AgentRoleField.tsx` |
 | `agent-role-capability` | 角色集合的数据能力卡 | `components/AgentRoleField.tsx` |
-| `agent-active-tokens-${agent.id}` | 近 7 天活跃 Token | `pages/admin/AgentList.tsx` |
-| `agent-calls-7d-${agent.id}` | 近 7 天调用量 | `pages/admin/AgentList.tsx` |
+| `agent-stats-range-7d` | Agent 统计窗：近 7 天 | `pages/admin/AgentList.tsx` |
+| `agent-stats-range-14d` | Agent 统计窗：近 14 天 | `pages/admin/AgentList.tsx` |
+| `agent-stats-range-30d` | Agent 统计窗：近 30 天（列表默认） | `pages/admin/AgentList.tsx` |
+| `agent-active-tokens-${agent.id}` | 可用 Token | `pages/admin/AgentList.tsx` |
+| `agent-calls-7d-${agent.id}` | 当前时间窗业务调用量 | `pages/admin/AgentList.tsx` |
 | `agent-leave-confirm-modal` | 未保存离开确认 | `pages/admin/AgentDetail.tsx` |
 | `agent-detail-mcp-playground` | 跳转 MCP 调试台 | `pages/admin/AgentDetail.tsx` |
 | `agent-constraints-editor` | 强制约束编辑器 | `pages/admin/AgentDetail.tsx` |
@@ -579,6 +586,7 @@
 | `wiki-library-document` | wiki-library-document | `components/WikiLibraryHome.tsx` |
 | `wiki-library-document-title` | wiki-library-document-title | `components/WikiLibraryHome.tsx` |
 | `wiki-library-document-path` | wiki-library-document-path | `components/WikiLibraryHome.tsx` |
+| `wiki-library-agent-access-${page.key}` | wiki-library-agent-access-${page.key} (template) | `components/WikiLibraryHome.tsx` |
 | `wiki-move-document-dialog` | wiki-move-document-dialog | `components/WikiMoveDocumentDialog.tsx` |
 | `wiki-move-source` | wiki-move-source | `components/WikiMoveDocumentDialog.tsx` |
 | `wiki-move-source-key` | wiki-move-source-key | `components/WikiMoveDocumentDialog.tsx` |
@@ -1073,7 +1081,7 @@
 | `monitor-empty-action-${action}` | monitor-empty-action-${action} (template) | `pages/eval/Monitor.tsx` |
 | `run-row-detail-${run.id}` | run-row-detail-${run.id} (template) | `pages/eval/RunList.tsx` |
 | `workbench-validation-row-${table}` | workbench-validation-row-${table} (template) | `pages/publish/PublishWorkbench.tsx` |
-| `publish-impact-table-${tableName}` | publish-impact-table-${tableName} (template) | `pages/publish/PublishWorkbench.tsx` |
+| `publish-impact-table-${conn}-${tableName}` | publish-impact-table-${conn}-${tableName} (template) | `pages/publish/PublishWorkbench.tsx` |
 | `publish-post-eval-${domain}` | publish-post-eval-${domain} (template) | `pages/publish/PublishWorkbench.tsx` |
 
 ## 7.1 业务 Skill（Spec 151 / 153）
@@ -1315,6 +1323,7 @@
 | `execution-runtime-notice` | 连接概览问数运行时提示 | `pages/connections/ConnectionOverview.tsx` |
 | `connection-more-${conn.id}` | 连接卡更多菜单（模板） | `pages/connections/ConnectionOverview.tsx` |
 | `read-structure-${conn.id}-${schema}` | Schema 行 `从数据库读取表结构`（模板） | `pages/connections/ConnectionOverview.tsx` |
+| `refresh-structure-${conn.id}-${schema}` | 已有 Manifest 时「更多」中的 `从数据库读取表结构`（模板） | `pages/connections/ConnectionOverview.tsx` |
 | `schema-more-${conn.id}-${schema}` | Schema 行更多菜单（模板） | `pages/connections/ConnectionOverview.tsx` |
 | `whitelist-large-list-notice` | 启用表范围大列表折叠/分页提示 | `pages/connections/TableWhitelist.tsx` |
 | `whitelist-group-toggle-${conn.id}-${schema}` | 启用表范围 Schema 分组展开开关（模板） | `pages/connections/TableWhitelist.tsx` |

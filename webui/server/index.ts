@@ -131,6 +131,7 @@ import {
   registerMcpRuntimeRoutes,
   runMcpRuntimeCanary
 } from "./admin/mcp-runtime.js";
+import { reloadKtxMcpAfterConfigWrite } from "./ktx-mcp-reload.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
@@ -1352,6 +1353,8 @@ export function buildServer() {
         console.error("[connection-create] catalog reload failed", error);
       }
 
+      await reloadKtxMcpAfterConfigWrite(projectRoot);
+
       let policyVersion = "";
       let policyRuntimeAck = false;
       try {
@@ -1666,6 +1669,7 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
+      await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     return { ok: true, data: result };
   });
@@ -1686,6 +1690,7 @@ export function buildServer() {
     });
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
+      await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     return { ok: true, data: result };
   });
@@ -1713,6 +1718,7 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
+      await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     return { ok: true, data: result };
   });

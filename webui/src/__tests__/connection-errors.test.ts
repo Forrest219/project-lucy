@@ -11,6 +11,14 @@ describe("connectionErrors (client)", () => {
     expect(g.category).toBe("starrocks_max_execution_time");
   });
 
+  it("classifies Notion Client CJS named-export failures as a ktx loader issue", () => {
+    const g = classifyConnectionError(
+      "Named export 'Client' not found. The requested module '@notionhq/client' is a CommonJS module"
+    );
+    expect(g.category).toBe("ktx_notion_client_cjs");
+    expect(g.title).toBe("KTX 连接器加载失败");
+  });
+
   it("formatConnectionProbeMessage is user-facing", () => {
     const msg = formatConnectionProbeMessage("Unknown system variable 'max_execution_time'");
     expect(msg).toContain("StarRocks");

@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildMetricWindow,
   build7dWindow,
+  buildAgentStatsWindow,
+  parseAgentStatsRange,
   WINDOW_7D_HOURS,
+  WINDOW_14D_HOURS,
+  WINDOW_30D_HOURS,
   type MetricWindow
 } from "../admin/metric-window";
 
@@ -47,6 +51,24 @@ describe("buildMetricWindow", () => {
 
   it("WINDOW_7D_HOURS is 168", () => {
     expect(WINDOW_7D_HOURS).toBe(168);
+    expect(WINDOW_14D_HOURS).toBe(336);
+    expect(WINDOW_30D_HOURS).toBe(720);
+  });
+
+  it("parseAgentStatsRange defaults omitted API range to 7d", () => {
+    expect(parseAgentStatsRange(undefined)).toBe("7d");
+    expect(parseAgentStatsRange("14d")).toBe("14d");
+    expect(parseAgentStatsRange("30d")).toBe("30d");
+    expect(parseAgentStatsRange("90d")).toBe("30d");
+    expect(parseAgentStatsRange("1h")).toBe("7d");
+  });
+
+  it("buildAgentStatsWindow uses 14d and 30d hour spans", () => {
+    const now = new Date("2026-08-26T12:00:00.000Z");
+    const fourteen = buildAgentStatsWindow("14d", now);
+    const thirty = buildAgentStatsWindow("30d", now);
+    expect((Date.parse(fourteen.endIso) - Date.parse(fourteen.startIso)) / 36e5).toBe(336);
+    expect((Date.parse(thirty.endIso) - Date.parse(thirty.startIso)) / 36e5).toBe(720);
   });
 });
 

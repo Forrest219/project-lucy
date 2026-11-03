@@ -458,7 +458,7 @@ describe("CreateConnectionDrawer UX", () => {
     expect(screen.getByText("数据库")).toBeInTheDocument();
     expect(screen.getByText("用户名")).toBeInTheDocument();
     expect(screen.getByText("数据库密码")).toBeInTheDocument();
-    expect(screen.getByText(/连接时使用的默认数据库名称/)).toBeInTheDocument();
+    expect(screen.getByTestId("create-connection-database-hint")).toHaveTextContent("hive_jd.app");
     expect(screen.getByTestId("create-connection-secret-banner")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "测试连接" })).toBeInTheDocument();
     expect(screen.getByTestId("create-connection-advanced")).not.toHaveAttribute("open");
@@ -477,6 +477,61 @@ describe("CreateConnectionDrawer UX", () => {
     renderDrawer([], onClose);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the filled password when probing the connection", async () => {
+    const bodies: unknown[] = [];
+    stubFetch({
+      "POST /api/connections/probe": (body) => {
+        bodies.push(body);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: { status: "ok", latencyMs: 8 }
+          })
+        );
+      }
+    });
+
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-test-btn"));
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-probe-result")).toHaveTextContent("连接成功");
+    });
+    expect(bodies[0]).toMatchObject({
+      driver: "mysql",
+      host: "127.0.0.1",
+      port: 3306,
+      username: "lucy_ro",
+      password: "s3cret"
+    });
+    expect(bodies[0]).not.toHaveProperty("dryRun");
+  });
+
+  it("shows the password-required probe error without calling it a credential mismatch", async () => {
+    stubFetch({
+      "POST /api/connections/probe": () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: "CONNECTION_PASSWORD_REQUIRED", message: "数据库密码为必填项" }
+          }),
+          { status: 400 }
+        )
+    });
+
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-test-btn"));
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-probe-result")).toHaveTextContent(
+        "数据库密码为必填项"
+      );
+    });
+    expect(screen.getByTestId("create-connection-probe-result")).not.toHaveTextContent(
+      "用户名或密码不正确"
+    );
   });
 
   it("blocks preview after failed probe until override is checked", async () => {
@@ -787,5 +842,103 @@ describe("CreateConnectionDrawer endpoint gate", () => {
     fireEvent.click(addButton);
 
     await waitFor(() => expect(add).toHaveBeenCalledWith({ schema: "analytics", dryRun: false }));
+  });
+
+  it("sends a browser-filled password that never went through onChange", async () => {
+    const bodies: unknown[] = [];
+    stubFetch({
+      "POST /api/connections/probe": (body) => {
+        bodies.push(body);
+        return new Response(JSON.stringify({ ok: true, data: { status: "ok", latencyMs: 4 } }));
+      }
+    });
+    renderDrawer();
+    fillRequiredFields({ password: "" });
+    const input = screen.getByTestId("create-connection-password") as HTMLInputElement;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "filled-by-browser");
+    fireEvent.click(screen.getByTestId("create-connection-test-btn"));
+    await waitFor(() => {
+      expect(bodies[0]).toMatchObject({ password: "filled-by-browser", host: "127.0.0.1" });
+    });
+  });
+
+  it("offers a new card for another catalog on the same host instead of reusing one", async () => {
+    const bodies: unknown[] = [];
+    stubFetch({
+      "POST /api/connections": (body) => {
+        bodies.push(body);
+        if ((body as { acknowledgeDifferentDatabase?: boolean }).acknowledgeDifferentDatabase) {
+          return previewPayload();
+        }
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: {
+              code: "SAME_SERVER_DIFFERENT_DATABASE",
+              message: "这是另一个外部目录，不会加到已有连接。确认后将新增一张连接卡片。",
+              detail: {
+                requestedDatabase: "hive_jd.app",
+                matches: [
+                  {
+                    id: "doris-main",
+                    driver: "mysql",
+                    host: "172.16.19.21",
+                    port: "9030",
+                    database: "chatbi",
+                    username: "chatbi",
+                    schemas: ["chatbi"]
+                  },
+                  {
+                    id: "hive",
+                    driver: "mysql",
+                    host: "172.16.19.21",
+                    port: "9030",
+                    database: "dm",
+                    username: "chatbi",
+                    schemas: ["dm"]
+                  },
+                  {
+                    id: "hive-1",
+                    driver: "mysql",
+                    host: "172.16.19.21",
+                    port: "9030",
+                    database: "hive.dw",
+                    username: "chatbi",
+                    schemas: ["dw"]
+                  }
+                ]
+              }
+            }
+          }),
+          { status: 409, headers: { "content-type": "application/json" } }
+        );
+      }
+    });
+    renderDrawer();
+    fillRequiredFields({
+      id: "hive-jd",
+      host: "172.16.19.21",
+      port: "9030",
+      database: "hive_jd.app",
+      username: "chatbi",
+      password: "sim-secret"
+    });
+    fireEvent.change(screen.getByTestId("create-connection-schemas"), { target: { value: "app" } });
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+    expect(await screen.findByText("这是另一个外部目录，不会加到已有连接。确认后将新增一张连接卡片。")).toBeInTheDocument();
+    expect(screen.queryByText("请选择要把 Schema 加到哪一条连接。")).not.toBeInTheDocument();
+    expect(screen.queryByText("选择已有连接")).not.toBeInTheDocument();
+    expect(screen.queryByText("已有连接看不到该 Schema。")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("endpoint-gate-add-schema")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("endpoint-gate-different-database"));
+    await waitFor(() => expect(bodies.length).toBeGreaterThanOrEqual(2));
+    expect(bodies[1]).toMatchObject({
+      id: "hive-jd",
+      database: "hive_jd.app",
+      schemas: ["app"],
+      acknowledgeDifferentDatabase: true,
+      dryRun: true
+    });
+    expect(screen.queryByText("已有连接看不到该 Schema。")).not.toBeInTheDocument();
   });
 });

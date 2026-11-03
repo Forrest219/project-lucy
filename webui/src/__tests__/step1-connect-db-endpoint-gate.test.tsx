@@ -109,4 +109,64 @@ describe("Step1ConnectDb endpoint gate", () => {
     );
     expect(addRequest?.body).toEqual({ schema: "test_db", dryRun: false });
   });
+
+  it("keeps a SelectDB catalog in the database field and uses the name after the dot as Schema", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+        if (method === "POST" && url === "/api/connections/probe") {
+          return new Response(JSON.stringify({ ok: true, data: { status: "ok", latencyMs: 4 } }));
+        }
+        if (method === "POST" && url === "/api/connections") {
+          bodies.push(body);
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                written: true,
+                connection: { id: "hive-jd", driver: "mysql", schemas: ["app"], enabledTables: [] },
+                test: { status: "ok" }
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <Step1ConnectDb onSuccess={vi.fn()} />
+      </QueryClientProvider>
+    );
+
+    fireEvent.change(screen.getByTestId("setup-driver"), { target: { value: "doris" } });
+    fireEvent.change(screen.getByTestId("setup-conn-id"), { target: { value: "hive-jd" } });
+    fireEvent.change(screen.getByTestId("setup-host"), { target: { value: "172.16.19.21" } });
+    fireEvent.change(screen.getByTestId("setup-database"), { target: { value: "hive_jd.app" } });
+    fireEvent.change(screen.getByTestId("setup-username"), { target: { value: "chatbi" } });
+    fireEvent.change(screen.getByTestId("setup-password"), { target: { value: "sim-secret" } });
+
+    expect(screen.getByTestId("setup-schema")).toHaveValue("app");
+    expect(screen.getByTestId("setup-catalog-database-hint")).toHaveTextContent("hive_jd.app");
+    fireEvent.click(screen.getByTestId("setup-probe-btn"));
+    await screen.findByText(/连通测试成功/);
+    fireEvent.click(screen.getByTestId("setup-step1-next"));
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({
+      id: "hive-jd",
+      driver: "mysql",
+      engine: "doris",
+      database: "hive_jd.app",
+      schemas: ["app"],
+      port: 9030
+    });
+  });
 });

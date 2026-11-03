@@ -22,7 +22,7 @@ import {
 import { SetupAssistantModal } from "../components/onboarding/SetupAssistantModal";
 import { Step2UploadManifest } from "../components/onboarding/Step2UploadManifest";
 import { Step4SemanticOverlay } from "../components/onboarding/Step4SemanticOverlay";
-import { Step5BusinessWiki } from "../components/onboarding/Step5BusinessWiki";
+import { Step5BusinessWiki, wizardWikiKey } from "../components/onboarding/Step5BusinessWiki";
 import { authoringHowToNotes, downloadAuthoringHowTo } from "../lib/authoringHowTo";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
@@ -1383,6 +1383,36 @@ describe("Setup Assistant authoring how-to", () => {
     vi.restoreAllMocks();
     // The how-to download test stubs global URL; later lazy imports need the real one.
     vi.unstubAllGlobals();
+  });
+
+  it("normalizes wizard wiki paths to keys under wiki/", () => {
+    expect(wizardWikiKey("wiki/mysql-aliyun/metrics.md")).toBe("mysql-aliyun/metrics.md");
+    expect(wizardWikiKey("ops/playbooks/gmv")).toBe("ops/playbooks/gmv.md");
+  });
+
+  it("saves the wizard wiki through PUT /api/wiki/:key", async () => {
+    const onSuccess = vi.fn();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/wiki/mysql-aliyun%2Fmetrics.md" && init?.method === "PUT") {
+        return new Response(JSON.stringify({ ok: true, data: { key: "mysql-aliyun/metrics.md" } }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: String(input) } }), {
+        status: 404
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step5BusinessWiki connectionId="mysql-aliyun" onSuccess={onSuccess} onSkip={vi.fn()} onBack={vi.fn()} />
+      </QueryClientProvider>
+    );
+    fireEvent.change(screen.getByTestId("setup-wiki-path"), { target: { value: "mysql-aliyun/metrics.md" } });
+    fireEvent.change(screen.getByTestId("setup-wiki-textarea"), { target: { value: "# 指标口径\n" } });
+    fireEvent.click(screen.getByTestId("setup-step5-next"));
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.dryRun).toBe(false);
+    expect(body.content).toContain("# 指标口径");
   });
 
   it("keeps the business wiki how-to collapsed beside the optional editor", () => {

@@ -96,8 +96,8 @@ export const KPI_REGISTRY: MetricContract[] = [
   {
     id: "calls-7d",
     kind: "list_kpi",
-    label: "近 7 天调用量",
-    help: "近 7 天经 MCP Proxy 记录的调用次数合计。",
+    label: "近 N 调用量",
+    help: "当前时间窗内经 MCP Proxy 记录的调用次数合计。",
     pages: ["/admin/agents"],
     windowed: true
   },
