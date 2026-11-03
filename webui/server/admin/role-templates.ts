@@ -1,5 +1,10 @@
 import type { YamlRole } from "./agents.js";
 import { DATA_PLANE_TOOLS, META_TOOLS } from "../proxy/acl.js";
+import {
+  OPS_EVIDENCE_CONNECTION_ID,
+  OPS_EVIDENCE_FROZEN,
+  OPS_EVIDENCE_ROLE_ID
+} from "../ops-evidence/contract.js";
 
 export interface RoleTemplate extends YamlRole {
   id: string;
@@ -12,6 +17,7 @@ const READONLY_TOOLS = [
   "lucy_explain_query",
   "lucy_freshness",
   "lucy_begin_question",
+  "lucy_continue_question",
   "kx_catalog",
   "wiki_search",
   "wiki_read",
@@ -23,7 +29,8 @@ export const LUCY_R1_EXACT_TOOLS = [
   "lucy_query",
   "lucy_explain_query",
   "lucy_freshness",
-  "lucy_begin_question"
+  "lucy_begin_question",
+  "lucy_continue_question"
 ];
 const SUPERSTORE_NAMES = ["superstore_orders", "superstore_people", "superstore_returns"];
 const POC_R1_NAMES = [
@@ -138,6 +145,45 @@ export const ROLE_TEMPLATES: Record<string, RoleTemplate> = {
         }
       ],
       tools: [...READONLY_TOOLS, "discover_data", "dictionary_search"]
+    }
+  },
+  /**
+   * Spec 149 §6 + 可问治理面 D22 — 运维问数角色参考模板。
+   *
+   * 连接只有 `lucy-ops`；`names` 必须列出**当前全部** sourceName（含 W1）；
+   * `row_access: all`；禁止 `source_scope: catalog_bound`。
+   * `schema` 用 T0 冻结的 schema 字段，`names` 用 sourceName（都**不是** physicalTable）。
+   *
+   * 已落盘正式 Role 不会被 ensure 自动扩表（SC-17c）；须运营显式扩权或从本模板新建。
+   */
+  [OPS_EVIDENCE_ROLE_ID]: {
+    id: OPS_EVIDENCE_ROLE_ID,
+    description:
+      "运维问数角色：只读访问运维问数连接（lucy-ops）的调用流水与可问治理面源，可查看生成 SQL。与 lucy_admin 正交，不并入 lucy_admin。",
+    allow: {
+      connections: [OPS_EVIDENCE_CONNECTION_ID],
+      tableSelectors: [
+        {
+          connection: OPS_EVIDENCE_CONNECTION_ID,
+          schema: OPS_EVIDENCE_FROZEN.schema,
+          names: Object.values(OPS_EVIDENCE_FROZEN.sourceName),
+          row_access: "all"
+        }
+      ],
+      tools: [
+        "lucy_catalog",
+        "connection_list",
+        "lucy_query",
+        "lucy_read_source",
+        "lucy_explain_query",
+        "lucy_freshness",
+        "lucy_begin_question",
+        "lucy_continue_question",
+        "wiki_search",
+        "wiki_read",
+        "lucy_skill_search",
+        "lucy_skill_read"
+      ]
     }
   }
 };

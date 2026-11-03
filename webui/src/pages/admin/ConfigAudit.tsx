@@ -14,6 +14,7 @@ import {
   type ConfigAuditAssetKind
 } from "../../lib/configAuditLabels";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
+import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import type { ConfigAuditEntry, ConfigAuditResponse } from "../../lib/types";
 
 const PAGE_SIZE = 20;
@@ -63,6 +64,16 @@ function sinceForWindowPreset(preset: string): string {
   if (preset === "7d") return sinceDaysAgo(7);
   if (preset === "30d") return sinceDaysAgo(30);
   return "";
+}
+
+/**
+ * 预设选中时的结束时间：当前时刻。
+ * 预设必须同时给出起止两端，否则筛选条会出现「有开始、无结束」的残缺区间
+ * （发版前 WebUI 三层检查 Spec D3 / UX-R07）。取精确当前时刻而非整点，
+ * 免得吞掉最近不到一小时的审计记录。
+ */
+function untilNowIso(): string {
+  return new Date(Date.now()).toISOString();
 }
 
 /**
@@ -157,22 +168,66 @@ export function ConfigAudit() {
   const until = searchParams.get("until") ?? "";
   const windowPreset = searchParams.get("window") ?? "";
 
+  // ── 局部状态镜像（Spec §5.2／§5.3）──────────────────────────────────────
+  // 三个文本筛选框的 `value` 由本地 state 驱动，URL 作为下游事实源跟随。
+  // 历史模式保持现状：push。
+  const targetIdMirror = useUrlMirroredField({
+    read: (sp) => sp.get("targetId") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("targetId", raw);
+      else next.delete("targetId");
+      return next;
+    },
+    history: "push"
+  });
+  const filePathMirror = useUrlMirroredField({
+    read: (sp) => sp.get("filePath") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("filePath", raw);
+      else next.delete("filePath");
+      return next;
+    },
+    history: "push"
+  });
+  const sourceMirror = useUrlMirroredField({
+    read: (sp) => sp.get("source") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("source", raw);
+      else next.delete("source");
+      return next;
+    },
+    history: "push"
+  });
+
   useEffect(() => {
     if (didInitDefaultWindow.current) return;
     didInitDefaultWindow.current = true;
-    if (searchParams.has("window") || searchParams.has("since") || searchParams.has("until")) {
+    const next = new URLSearchParams(searchParams);
+    // 预设已选但缺结束时间（深链 / 旧 URL）：补齐，避免筛选条残缺。
+    if (next.has("window") && !next.has("until")) {
+      next.set("until", untilNowIso());
+      setSearchParams(next, { replace: true });
       return;
     }
-    const next = new URLSearchParams(searchParams);
+    if (next.has("window") || next.has("since") || next.has("until")) {
+      return;
+    }
     next.set("window", DEFAULT_TIME_WINDOW);
     next.set("since", sinceForWindowPreset(DEFAULT_TIME_WINDOW));
+    next.set("until", untilNowIso());
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
   function updateParam(key: string, value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value); else next.delete(key);
-    setSearchParams(next);
+    // 函数式更新：从 prev 拷贝后再改本字段，禁止闭包快照（Spec §5.2 写入契约）。
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value); else next.delete(key);
+      return next;
+    });
     setPage(0);
   }
 
@@ -185,7 +240,7 @@ export function ConfigAudit() {
     } else {
       next.set("window", preset);
       next.set("since", sinceForWindowPreset(preset));
-      next.delete("until");
+      next.set("until", untilNowIso());
     }
     setSearchParams(next);
     setPage(0);
@@ -317,22 +372,22 @@ export function ConfigAudit() {
           className="pl-input w-40 notranslate"
           translate="no"
           placeholder="目标 ID"
-          value={targetId}
-          onChange={(e) => updateParam("targetId", e.target.value)}
+          value={targetIdMirror.value}
+          onChange={(e) => targetIdMirror.onChange(e.target.value)}
           aria-label="目标 ID"
         />
         <input
           className="pl-input w-48"
           placeholder="文件路径"
-          value={filePath}
-          onChange={(e) => updateParam("filePath", e.target.value)}
+          value={filePathMirror.value}
+          onChange={(e) => filePathMirror.onChange(e.target.value)}
           aria-label="文件路径"
         />
         <input
           className="pl-input w-40"
           placeholder="来源"
-          value={source}
-          onChange={(e) => updateParam("source", e.target.value)}
+          value={sourceMirror.value}
+          onChange={(e) => sourceMirror.onChange(e.target.value)}
           aria-label="来源"
         />
       </div>

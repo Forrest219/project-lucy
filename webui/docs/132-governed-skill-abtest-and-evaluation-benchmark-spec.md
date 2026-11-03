@@ -11,6 +11,8 @@
 | 基于材料 | `webui/docs/171-governed-skill-system-and-context-transpass-spec.md`、`skills/domains/superstore/profit-breakdown.skill.md`、`skills/domains/kx_financial/dupont-analysis.skill.md`、`evals/` |
 | 适用范围 | Upper Agents（Claude Code、Codex、Cursor、OpenClaw）数据消费体验验证、Skill 效能量化评测、Golden Cases 质量门禁 |
 | 输出位置 | /Users/zhangxingchen/Projects/project-lucy/webui/docs/132-governed-skill-abtest-and-evaluation-benchmark-spec.md |
+| 状态 | **已实现**。基准用例落地于 `webui/server/__tests__/skill-abtest-benchmark.test.ts`；客户侧复现材料见 Spec 134 |
+| 关联工单 | `docs/plans/2026-10-11-eval-result-policy-context-upgrade.md` |
 
 ---
 

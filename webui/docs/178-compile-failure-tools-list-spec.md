@@ -4,7 +4,7 @@
 |---|---|
 | Spec 编号 / 版本 | 178 / v0.1 |
 | 日期 | 2026-10-18 |
-| 状态 | 待实现 |
+| 状态 | **已实现**（串行计划批次 1；提交 `9331580` `feat(proxy): deny tools/list when role compile fails`）。验收用例 `webui/server/__tests__/spec-178-tools-list-compile-denial.test.ts` |
 | 范围 | T1。承接 Spec 177 的诊断字段 |
 | 治理 | [DEVELOPMENT](../../docs/governance/DEVELOPMENT.md)、[术语标准](00-product-terminology-standard.md) |
 | 依据 | [串行计划](../../docs/plans/2026-10-18-mcp-audit-serial.md) 批次 1 |

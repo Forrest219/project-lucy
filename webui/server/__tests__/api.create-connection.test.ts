@@ -4,20 +4,44 @@ import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type TestConnectionResult = Awaited<ReturnType<typeof import("../ktx").testConnection>>;
+
+/** Mutable fake so once-queues cannot leak across tests after `vi.resetModules()`. */
+const testConnectionState = vi.hoisted(() => {
+  const ok = (connId: string): TestConnectionResult => ({
+    status: "ok" as const,
+    latencyMs: 5,
+    detail: "ok",
+    command: `ktx connection test ${connId}`,
+    args: ["connection", "test", connId],
+    exitCode: 0,
+    stdout: "ok",
+    stderr: ""
+  });
+  return {
+    ok,
+    next: null as null | ((connId: string) => TestConnectionResult | Promise<TestConnectionResult>),
+    reset() {
+      this.next = null;
+    },
+    queueOnce(result: TestConnectionResult | ((connId: string) => TestConnectionResult)) {
+      this.next = typeof result === "function" ? result : () => result;
+    }
+  };
+});
+
 vi.mock("../ktx", async () => {
   const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
   return {
     ...actual,
-    testConnection: vi.fn(async (_root: string, connId: string) => ({
-      status: "ok" as const,
-      latencyMs: 5,
-      detail: "ok",
-      command: `ktx connection test ${connId}`,
-      args: ["connection", "test", connId],
-      exitCode: 0,
-      stdout: "ok",
-      stderr: ""
-    })),
+    testConnection: vi.fn(async (_root: string, connId: string) => {
+      if (testConnectionState.next) {
+        const fn = testConnectionState.next;
+        testConnectionState.next = null;
+        return fn(connId);
+      }
+      return testConnectionState.ok(connId);
+    }),
     runIngest: vi.fn(async () => ({ exitCode: 0, stdout: "ok", stderr: "" })),
     validateSource: vi.fn(async () => ({
       ok: true,
@@ -28,6 +52,15 @@ vi.mock("../ktx", async () => {
     }))
   };
 });
+
+const ktxMcpReload = vi.hoisted(() => ({
+  reloadKtxMcpAfterConfigWrite: vi.fn(async () => ({ status: "reloaded" as const, detail: "ok" }))
+}));
+
+vi.mock("../ktx-mcp-reload.js", () => ({
+  reloadKtxMcpAfterConfigWrite: ktxMcpReload.reloadKtxMcpAfterConfigWrite,
+  reloadKtxMcpExecutionRuntime: ktxMcpReload.reloadKtxMcpAfterConfigWrite
+}));
 
 let projectRoot: string;
 let auditDbPath: string;
@@ -73,6 +106,7 @@ beforeEach(async () => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
   previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
+  testConnectionState.reset();
   vi.clearAllMocks();
 });
 
@@ -117,6 +151,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
 
     expect(response.body.ok).toBe(true);
     expect(response.body.data.secretRelPath).toBe(".ktx/secrets/demo-mysql-password");
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).not.toHaveBeenCalled();
     expect(response.body.data.proposedYaml).toContain("demo-mysql:");
     expect(JSON.stringify(response.body)).not.toContain("plain-secret-should-not-persist");
     expect(JSON.stringify(response.body)).not.toContain("inline-password-value");
@@ -154,6 +189,8 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
 
     expect(response.body.ok).toBe(true);
     expect(response.body.data.written).toBe(true);
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledTimes(1);
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot);
     expect(response.body.data.test.status).toBe("ok");
     expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
     expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");
@@ -180,8 +217,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
-    const ktx = await import("../ktx");
-    vi.mocked(ktx.testConnection).mockResolvedValueOnce({
+    testConnectionState.queueOnce({
       status: "error",
       latencyMs: 3,
       reason: "Access denied for user",
@@ -304,6 +340,30 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(response.body.error.detail.pattern).toMatch(/a-z/);
   });
 
+  it("POST /api/connections/probe returns CONNECTION_PASSWORD_REQUIRED without a password", async () => {
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const response = await request(app.server)
+      .post("/api/connections/probe")
+      .send({
+        driver: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "analytics",
+        username: "lucy_ro"
+      })
+      .expect(400);
+
+    expect(response.body.error.code).toBe("CONNECTION_PASSWORD_REQUIRED");
+    expect(response.body.error.message).toBe("数据库密码为必填项");
+  });
+
   it("POST /api/connections/probe tests without writing yaml or secret", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
@@ -341,8 +401,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
-    const ktx = await import("../ktx");
-    vi.mocked(ktx.testConnection).mockResolvedValueOnce({
+    testConnectionState.queueOnce({
       status: "error",
       latencyMs: 3,
       reason: "Access denied for user",

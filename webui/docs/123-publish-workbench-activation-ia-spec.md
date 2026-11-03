@@ -1,11 +1,13 @@
 # Publish Workbench Activation IA Spec
 
+> **修订（Spec [`lucy-20261030-publish-workbench-three-column-spec.md`](../../docs/specs/lucy-20261030-publish-workbench-three-column-spec.md)，2026-10-30）：** 首屏由「本次将同步的变更 | 生效准备」双栏改为「**待发布变更 | 生效准备 | 最近发布**」三栏；左栏主标题改为「**待发布变更**」（本 Spec §4 的 `Sync Change List` 行相应修订）；页头不再重复放校验与发布按钮，二者归入中栏「生效准备」。本 Spec §5.4 修订 Spec 35（去上传／去导出）、§5.3 同步与确认的「整批同步、不可按文件勾选」继续有效；§5.2 的双栏比例与栏名以新 Spec 为准。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | Publish Workbench Activation IA Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-08-07 |
+| 版本 | v1.1 |
+| 撰写日期 | 2026-08-07；2026-10-30 被发布工作台三栏 Spec 局部修订 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
 | 基于材料 | 用户批准的「语义生效台」最终设计；否定 Spec 35 上传一站式；否定本页导出快照；Spec 119/121 |
@@ -57,7 +59,7 @@
 | Canonical Term | UI 主术语 | 禁止文案 | 说明 |
 |---|---|---|---|
 | Activation Prep Panel | 生效准备 | 发布门禁 | 右栏主工作面 |
-| Sync Change List | 本次将同步的变更 | 待发布变更（作唯一栏标题时可并存副文） | 左栏；副文「本批一并同步，不可分文件勾选」 |
+| Sync Change List | 本次将同步的变更 | 待发布变更（作栏标题） | 本批整批同步的说明文案（Spec 123）；左栏栏标题已由 Spec 20261030 三栏改为「待发布变更」，见术语标准 §4.3 |
 | Sync Index and Activate | 同步索引并生效 | 发布并重建索引（本页 Header/确认主 CTA） | 有变更时主按钮 |
 | Sync Index | 同步索引 | — | 无变更时增量 reindex |
 | Full Reindex | 全量重建索引 | 强制重建索引（作本页文案） | 更多菜单；`force:true` |

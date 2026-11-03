@@ -17,6 +17,12 @@ export interface SkillFrontmatter {
   triggers?: string[];
   eval_cases?: string[];
   description?: string;
+  /**
+   * L25-04: optional free-text owner label (a person or a team). Declared as
+   * `unknown` on purpose — the YAML value can be any shape, so the loader must
+   * narrow it strictly instead of stringifying it.
+   */
+  owner?: unknown;
 }
 
 export interface SkillAsset {
@@ -32,6 +38,13 @@ export interface SkillAsset {
   triggers: string[];
   eval_cases: string[];
   description: string;
+  /**
+   * L25-04: the free-text owner label. Empty means "unspecified"; it is not an
+   * account, a role, or an authorization source.
+   */
+  owner: string;
+  /** Set when the stored `owner` declaration is corrupt (disclosed, never repaired silently). */
+  owner_invalid?: true;
   uri: string;
   relativePath: string;
   filePath: string;

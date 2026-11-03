@@ -51,12 +51,20 @@ export function WikiEditView({
       className="pl-wiki-edit-view"
       data-testid="wiki-edit-view"
     >
-      <ObjectAclField
-        corrupt={aclCorrupt}
-        onChange={(next) => onFrontmatterChange({ ...frontmatter, allowed_roles: next })}
-        testId="wiki-acl-field"
-        value={frontmatter.allowed_roles}
-      />
+      <section
+        aria-label="Agent 可见范围"
+        className="pl-wiki-edit-acl notranslate"
+        data-testid="wiki-edit-acl"
+        translate="no"
+      >
+        <p className="pl-wiki-edit-acl-kicker notranslate" translate="no">Agent 可见范围</p>
+        <ObjectAclField
+          corrupt={aclCorrupt}
+          onChange={(next) => onFrontmatterChange({ ...frontmatter, allowed_roles: next })}
+          testId="wiki-acl-field"
+          value={frontmatter.allowed_roles}
+        />
+      </section>
       {placeholders.length > 0 ? (
         <p
           aria-label="模板待补全占位符"

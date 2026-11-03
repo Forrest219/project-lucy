@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { generateKeyPairSync } from "node:crypto";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
@@ -15,7 +15,7 @@ import { automatedRequiredClients, manualRequiredClients } from "../lib/clients.
 import { REPO_ROOT, fileDigest } from "../lib/common.mjs";
 import { assembleEvidence } from "../lib/assemble.mjs";
 import { archiveEvidence, canonicalManifest, verifyArchive } from "../archive-evidence.mjs";
-import { fileReaderFor, loadVerifyInputs, verifyDenyCase, verifyRelease } from "../verify-evidence.mjs";
+import { D03_REPOSITORY_VERIFICATION, fileReaderFor, loadVerifyInputs, verifyDenyCase, verifyRelease } from "../verify-evidence.mjs";
 import { reconcileChild } from "../../gates/customer-release-readiness.mjs";
 import { statusFromExitCode } from "../../gates/record-gate-result.mjs";
 
@@ -834,6 +834,49 @@ describe("GATE-01: nothing below may be READY", () => {
     victim.status = "failed";
     failedScenario.evidence.summary = { ...failedScenario.evidence.summary, passed: failedScenario.evidence.summary.passed - 1, failed: 1 };
     assert.ok(codes(decide(failedScenario.evidence, failedScenario.dir)).includes("finding_not_verified"), "a fix whose verifying scenario failed is no longer verified");
+  });
+
+  it("D-03 repository verification does not require ROW25-V19 / ROW25-V22 to be passed and does not claim releaseReady", () => {
+    const { dir, evidence } = buildValid();
+    assert.ok(!evidence.cases.some((c) => c.id === "ROW25-V19" || c.id === "ROW25-V22"));
+    for (const rel of D03_REPOSITORY_VERIFICATION.tests) {
+      assert.ok(existsSync(path.join(REPO_ROOT, rel)), rel);
+    }
+    const findings = healthyFindings();
+    findings.findings.push({
+      id: "D-03",
+      severity: "P1",
+      status: "fixed",
+      spec: "L25-14 §1.5 / §5.5",
+      fixedIn: "b7b157354d970860cdb03552c5d5839d7a7ccb9f",
+      verifiedBy: ["ROW25-V19", "ROW25-V22"],
+      acceptedBy: null
+    });
+    const verdict = decide(evidence, dir, { findings });
+    assert.ok(!codes(verdict).includes("finding_not_verified"));
+    assert.ok(!codes(verdict).includes("finding_verifiedBy_missing"));
+    assert.ok(!evidence.cases.some((c) => c.id === "ROW25-V19" || c.id === "ROW25-V22"), "the exception must not forge an E2E pass");
+
+    const other = healthyFindings();
+    other.findings.find((f) => f.id === "V-02").verifiedBy = ["ROW25-V19"];
+    assert.ok(codes(decide(evidence, dir, { findings: other })).includes("finding_not_verified"), "the exception is not a waiver for other findings");
+
+    const extra = healthyFindings();
+    extra.findings.push({
+      id: "D-03",
+      severity: "P1",
+      status: "fixed",
+      spec: "L25-14 §1.5 / §5.5",
+      fixedIn: "b7b157354d970860cdb03552c5d5839d7a7ccb9f",
+      verifiedBy: ["ROW25-V19", "ROW25-V22", "SEC-99-NOT-A-CASE"],
+      acceptedBy: null
+    });
+    assert.ok(codes(decide(evidence, dir, { findings: extra })).includes("finding_not_verified"), "D-03 still fails closed on any id outside the two repository-test refs");
+
+    const repo = decide(evidence, dir, { findings: inputs.findings });
+    assert.equal(repo.releaseReady, false, "repository verification of D-03 does not claim releaseReady");
+    assert.ok(codes(repo).includes("p0_p1_unresolved"));
+    assert.ok(!codes(repo).includes("finding_not_verified"));
   });
 
   it("[GATE-01-V16] npm audit and the dependency register must agree", () => {

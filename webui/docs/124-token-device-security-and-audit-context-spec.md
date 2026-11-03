@@ -114,8 +114,9 @@ tokens:
 
 ## 7. UI
 
-- **New Token**：可选「设备名备注」；`expires_at` 默认 90 天且最长 365 天；引导配置 `x-lucy-device-name` 与一台安装一个 Token。
-- **Agent Token Tab**：分开展示备注 / Agent 类型 / 最近设备名 / 最近 IP；单条与批量撤销。
+- **New Token**：可选「设备名备注」；`expires_at` 默认 **365** 天且最长 365 天（现行值见 [`lucy-20261101-token-default-ttl-365-spec.md`](../../docs/specs/lucy-20261101-token-default-ttl-365-spec.md)；历史「默认 90」已覆盖）；引导配置 `x-lucy-device-name` 与一台安装一个 Token。
+- **Token 续期**：Admin 可显式延长 `expires_at`（含已过期、不含已撤销）；不旋转明文／hash。见 [`lucy-20261101-token-renewal-spec.md`](../../docs/specs/lucy-20261101-token-renewal-spec.md)。
+- **Agent Token Tab**：分开展示备注 / Agent 类型 / 最近设备名 / 最近 IP；单条与批量撤销；续期入口。
 - **Audit 调用流水**：展示/筛选访问 IP、User-Agent、运行时设备名、客户端版本。
 
 ## 8. 验收

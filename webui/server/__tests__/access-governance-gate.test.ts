@@ -195,6 +195,86 @@ describe("evaluateAccessGovernanceGate — P1 review rules", () => {
   });
 });
 
+describe("Spec 189 — Access Governance Gate high-traffic input (Raw Business)", () => {
+  it("does not fire one call below the threshold", () => {
+    const decision = evaluateAccessGovernanceGate({
+      targetKind: "agent",
+      targetId: "warm-agent",
+      oldSources: [SUPERSTORE],
+      newSources: [SUPERSTORE],
+      highTrafficCalls7d: DEFAULT_HIGH_TRAFFIC_THRESHOLD - 1
+    });
+    expect(
+      decision.findings.some((finding) => finding.code === "HIGH_TRAFFIC_TARGET")
+    ).toBe(false);
+    expect(decision.decision).not.toBe("warn");
+  });
+
+  it("fires exactly at the threshold and stays a P1 warn", () => {
+    const decision = evaluateAccessGovernanceGate({
+      targetKind: "agent",
+      targetId: "hot-agent",
+      oldSources: [SUPERSTORE],
+      newSources: [SUPERSTORE],
+      highTrafficCalls7d: DEFAULT_HIGH_TRAFFIC_THRESHOLD
+    });
+    expect(decision.decision).toBe("warn");
+    expect(decision.tierSummary.P1.count).toBeGreaterThan(0);
+    expect(decision.tierSummary.P0.count).toBe(0);
+    // P1 must never escalate to a block / override requirement.
+    expect(decision.decision).not.toBe("block");
+    expect(decision.decision).not.toBe("override_required");
+  });
+
+  it("fires above the threshold and stays a P1 warn", () => {
+    const decision = evaluateAccessGovernanceGate({
+      targetKind: "agent",
+      targetId: "hot-agent",
+      oldSources: [SUPERSTORE],
+      newSources: [SUPERSTORE],
+      highTrafficCalls7d: DEFAULT_HIGH_TRAFFIC_THRESHOLD + 1
+    });
+    expect(decision.decision).toBe("warn");
+    expect(
+      decision.findings.some((finding) => finding.code === "HIGH_TRAFFIC_TARGET")
+    ).toBe(true);
+    expect(decision.tierSummary.P0.count).toBe(0);
+  });
+
+  it("keeps pure protocol traffic out of the high-traffic count", () => {
+    // Spec 189 §6: the gate input is the Raw Business Tool Call count, so an
+    // Agent whose traffic is protocol-only reports 0 and stays un-flagged.
+    const protocolOnlyRawBusinessCalls = 0;
+    const decision = evaluateAccessGovernanceGate({
+      targetKind: "agent",
+      targetId: "protocol-only-agent",
+      oldSources: [SUPERSTORE],
+      newSources: [SUPERSTORE],
+      highTrafficCalls7d: protocolOnlyRawBusinessCalls
+    });
+    expect(
+      decision.findings.some((finding) => finding.code === "HIGH_TRAFFIC_TARGET")
+    ).toBe(false);
+  });
+
+  it("keeps a real eval business call inside the high-traffic count", () => {
+    // Spec 189 §6: eval probes stay in Raw Business, so governance protection
+    // for real evaluation traffic is preserved.
+    const evalProbeRawBusinessCalls = 2;
+    const decision = evaluateAccessGovernanceGate({
+      targetKind: "agent",
+      targetId: "eval-probe-agent",
+      oldSources: [SUPERSTORE],
+      newSources: [SUPERSTORE],
+      highTrafficCalls7d: evalProbeRawBusinessCalls
+    });
+    expect(evalProbeRawBusinessCalls).toBeGreaterThan(0);
+    expect(
+      decision.findings.some((finding) => finding.code === "HIGH_TRAFFIC_TARGET")
+    ).toBe(false); // below threshold, but the count itself is non-zero
+  });
+});
+
 describe("evaluateAccessGovernanceGate — P2 cleanup rules", () => {
   it("warns for stale Token cleanup without blocking", () => {
     const decision = evaluateAccessGovernanceGate({

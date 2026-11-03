@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
 import {
@@ -10,14 +11,23 @@ import {
   type EffectivePermissions
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
+// L25-16 — 控制面工具登记表（角色保存路径校验 `allow.ops` 用）。
+import { isControlPlaneTool, isOpsAssetKind, getOpsToolSpec } from "../ops/control-plane.js";
+import { requireOwnerForOps } from "../auth/guard.js";
+import { verifyRowPolicyPreviewConfirmation } from "../proxy/row-policy-preview.js";
+import { readAccessRecoveryState } from "../access-recovery.js";
+import { computeCandidateDigest } from "../config-digest.js";
 import { expandTemplate, isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID, ROLE_TEMPLATES } from "./role-templates.js";
 import {
   ACCESS_YAML_REL,
   ROLE_ID_RE,
+  accessWriteResponseBody,
   makeDiff,
   readAccessYaml,
   readAccessYamlVersion,
+  runInAccessPublishWindow,
   writeAccessYaml,
+  type AccessConfigWriteResult,
   type YamlAccessConfig,
   type YamlPermissionModelVersion,
   type YamlRole,
@@ -33,6 +43,8 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
+import { ROW_POLICY_TEMPLATE_NAME_PATTERN } from "./row-policy-types.js";
+import { expandRowPolicyTemplatesInConfig, type AccessConfigWithTemplates } from "./row-policy-templates.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import type { FastifyRequest } from "fastify";
@@ -266,7 +278,221 @@ function isTableTouchingTool(tool: string): boolean {
   ].includes(tool);
 }
 
-function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok: false; reason: string } {
+/**
+ * Lucy v0.25 (L25-14 §3.4 / §7) — R4 row-permission audit attribution.
+ *
+ * The durable audit mechanism already exists (`writeAccessConfigFileWithAuditClosure`
+ * → durable intent → atomic write → runtime commit/ack → durable terminal, inside the
+ * shared publish coordinator). This helper only adds the ROW-POLICY specifics the
+ * configuration-audit record must carry:
+ *
+ * - the affected table identity,
+ * - the before / after digest of the Role's row-policy content,
+ * - the number of Agents the change reaches.
+ *
+ * The attribution rides on the existing `config_change_log` channel — no new audit
+ * store, and nothing is written to the L25-09 inquiry runtime event stream.
+ */
+export interface RowPolicyAuditTableIdentity {
+  connection: string;
+  schema: string;
+  name: string;
+}
+
+export interface RowPolicyAuditAttribution {
+  /** The tables whose row policy changed. */
+  tables: RowPolicyAuditTableIdentity[];
+  /** Digest of the Role's row-policy content before the change. */
+  beforeDigest: string;
+  /** Digest of the Role's row-policy content after the change. */
+  afterDigest: string;
+  /** How many Agents reference the Role (the affected Agents). */
+  affectedAgentCount: number;
+  /** The operation id of this save; it is stored in the audit record's request id. */
+  operationId: string;
+}
+
+type RowPolicyTableDigest = RowPolicyAuditTableIdentity & { digest: string };
+
+function rowPolicyTableDigests(role: YamlRole | undefined): RowPolicyTableDigest[] {
+  const out = new Map<string, RowPolicyTableDigest>();
+  for (const selector of role?.allow?.tableSelectors ?? []) {
+    if (!("names" in selector)) continue;
+    for (const name of selector.names ?? []) {
+      const identity: RowPolicyAuditTableIdentity = {
+        connection: selector.connection ?? "",
+        schema: selector.schema,
+        name
+      };
+      const key = `${identity.connection}/${identity.schema}/${identity.name}`;
+      out.set(key, {
+        ...identity,
+        digest: computeCandidateDigest({
+          row_access: selector.row_access ?? null,
+          row_policy: selector.row_policy ?? null
+        })
+      });
+    }
+  }
+  return [...out.values()].sort((a, b) =>
+    `${a.connection}/${a.schema}/${a.name}`.localeCompare(`${b.connection}/${b.schema}/${b.name}`)
+  );
+}
+
+function agentsReferencingRole(config: YamlAccessConfig, roleId: string): number {
+  return config.users.filter((user) => {
+    const resolved = resolveRoleIds(user);
+    return resolved.ok && resolved.roleIds.includes(roleId);
+  }).length;
+}
+
+/**
+ * Build the R4 attribution for a Role save, or `undefined` when the save does not
+ * touch any row policy (a plain Role edit keeps its own change type).
+ */
+export function buildRowPolicyAuditAttribution(
+  roleId: string,
+  before: YamlRole | undefined,
+  after: YamlRole | undefined,
+  config: YamlAccessConfig,
+  operationId: string
+): RowPolicyAuditAttribution | undefined {
+  const beforeTables = rowPolicyTableDigests(before);
+  const afterTables = rowPolicyTableDigests(after);
+  const beforeDigest = computeCandidateDigest(beforeTables);
+  const afterDigest = computeCandidateDigest(afterTables);
+  if (beforeDigest === afterDigest) return undefined;
+
+  const changed: RowPolicyAuditTableIdentity[] = [];
+  const seen = new Set<string>();
+  for (const table of [...beforeTables, ...afterTables]) {
+    const key = `${table.connection}/${table.schema}/${table.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    changed.push({ connection: table.connection, schema: table.schema, name: table.name });
+  }
+
+  return {
+    tables: changed,
+    beforeDigest,
+    afterDigest,
+    affectedAgentCount: agentsReferencingRole(config, roleId),
+    operationId
+  };
+}
+
+/**
+ * Lucy v0.25 P1-1 §3.1 — a `row_policy` may reference a template.
+ *
+ * The reference form is `{ template, predicates? }`:
+ *  - `template` must be a template name (`ROW_POLICY_TEMPLATE_NAME_PATTERN`);
+ *  - `predicates` are the INLINE predicates and are optional when a template is
+ *    referenced — the template's own predicates apply on their own, and inline
+ *    predicates AND with them inside the same selector;
+ *  - without a template, the inline predicates are still required and must be
+ *    non-empty (the existing `parseRowPolicyShape` contract).
+ *
+ * The reference form is what gets STORED. The expansion into a single predicate
+ * list happens in the runtime, right before the row-policy compiler reads the
+ * selector (`proxy/acl.ts`), so the configuration never holds expanded products.
+ */
+function validateRowPolicyShapeWithTemplate(
+  raw: unknown
+): { ok: true; value: YamlRowPolicy } | { ok: false; reason: string } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, reason: "row_policy_invalid" };
+  }
+  const record = raw as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (key !== "predicates" && key !== "template") {
+      return { ok: false, reason: "row_policy_invalid_key" };
+    }
+  }
+  let template: string | undefined;
+  if (record.template !== undefined) {
+    if (typeof record.template !== "string" || !ROW_POLICY_TEMPLATE_NAME_PATTERN.test(record.template.trim())) {
+      return { ok: false, reason: "row_policy_template_name_invalid" };
+    }
+    template = record.template.trim();
+  }
+  if (record.predicates === undefined) {
+    if (template === undefined) return { ok: false, reason: "row_policy_predicates_required" };
+    return { ok: true, value: { template } };
+  }
+  const parsed = parseRowPolicyShape({ predicates: record.predicates });
+  if (!parsed.ok) return { ok: false, reason: parsed.reason };
+  const value: YamlRowPolicy = { predicates: parsed.predicates };
+  if (template !== undefined) value.template = template;
+  return { ok: true, value };
+}
+
+/**
+ * Lucy v0.25 P1-1 §5.1 — refuse a candidate configuration whose template references
+ * cannot be resolved BEFORE it is written.
+ *
+ * A reference that only fails at runtime would deny the Role silently at request time;
+ * a write-time refusal names the template and the Role instead.
+ *
+ * TWO CLASSES of issue, with two different consequences (P2-2):
+ *
+ *  - a REFERENCE issue (a selector references a template that does not exist, or
+ *    references one whose definition is illegal) BLOCKS the write — the Role would
+ *    deny at request time;
+ *  - a CATALOG issue (an illegal template DEFINITION that no selector references) is
+ *    only a diagnostic. It must not refuse an unrelated Role save, and the illegal
+ *    template must survive the save untouched.
+ *
+ * Only TEMPLATE issues are reported here: a selector without a template reference is
+ * not this check's business, so a legacy invalid INLINE policy never blocks an
+ * unrelated save.
+ */
+function roleTemplateDiagnostics(config: YamlAccessConfig): {
+  /** The issue that refuses the write, or null. */
+  blocking: { code: string; message: string } | null;
+  /** The catalog-level issues — reported, never blocking. */
+  warnings: Array<{ code: string; templateName?: string; detail?: string }>;
+} {
+  const expansion = expandRowPolicyTemplatesInConfig(
+    config as unknown as AccessConfigWithTemplates
+  );
+  const reference = expansion.referenceIssues[0];
+  return {
+    blocking: reference
+      ? {
+          code: reference.code,
+          message: reference.detail ?? "行策略模板引用无法解析"
+        }
+      : null,
+    warnings: expansion.catalogIssues.map((issue) => ({
+      code: issue.code,
+      templateName: issue.templateName,
+      detail: issue.detail
+    }))
+  };
+}
+
+/**
+ * L25-16 / G13 — 该角色是否授予了 **owner-only** 的控制面工具。
+ *
+ * 授予 owner-only 能力必须与 owner 本身同级。这只是规则 8 的一部分：
+ * 任何 `allow.ops` 的创建或修改都要 owner，不能用「工具不是 owner-only」代替。
+ */
+export function roleGrantsOwnerOnlyTool(role: YamlRole | undefined): boolean {
+  for (const grant of role?.allow?.ops ?? []) {
+    for (const tool of grant.tools) {
+      if (getOpsToolSpec(tool)?.ownerOnly) return true;
+    }
+  }
+  return false;
+}
+
+/** 角色是否带控制面授权。创建或修改这类角色必须是 owner（Spec §3.2.2 规则 8）。 */
+export function roleCarriesOpsGrant(role: YamlRole | undefined): boolean {
+  const ops = role?.allow?.ops;
+  return Array.isArray(ops) && ops.length > 0;
+}
+
+export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok: false; reason: string } {
   if (!role || typeof role !== "object" || Array.isArray(role)) {
     return { ok: false, reason: "role must be an object" };
   }
@@ -295,7 +521,9 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
   }
   const allow = obj.allow as Record<string, unknown>;
   for (const key of Object.keys(allow)) {
-    if (key !== "connections" && key !== "tableSelectors" && key !== "tools" && key !== "source_scope") {
+    // L25-16 — `allow.ops` 必须放行：否则控制面授权无法通过正式角色保存路径落盘
+    // （Spec §3.2.1 / G3 / R12）。
+    if (key !== "connections" && key !== "tableSelectors" && key !== "tools" && key !== "source_scope" && key !== "ops") {
       return { ok: false, reason: `allow.${key} is not allowed` };
     }
   }
@@ -367,11 +595,11 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
       }
       let rowPolicy: YamlRowPolicy | undefined;
       if (rowAccess === "scoped") {
-        const parsed = parseRowPolicyShape(raw.row_policy);
+        const parsed = validateRowPolicyShapeWithTemplate(raw.row_policy);
         if (!parsed.ok) {
           return { ok: false, reason: `table selector scoped requires valid row_policy (${parsed.reason})` };
         }
-        rowPolicy = { predicates: parsed.predicates };
+        rowPolicy = parsed.value;
       }
       const hasNames = raw.names !== undefined;
       const hasPrefix = raw.prefix !== undefined;
@@ -435,6 +663,76 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
     return { ok: false, reason: "connections must be set when role uses table selectors, catalog_bound, or table-touching tools" };
   }
 
+  // L25-16 — 控制面 grant 校验（Spec §3.2.1 / §3.2.2 规则 2、4、5）。
+  let ops: NonNullable<YamlRole["allow"]>["ops"] | undefined;
+  if (allow.ops !== undefined) {
+    if (!Array.isArray(allow.ops)) {
+      return { ok: false, reason: "allow.ops must be an array" };
+    }
+    const built: NonNullable<YamlRole["allow"]>["ops"] = [];
+    for (const raw of allow.ops as Array<Record<string, unknown>>) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        return { ok: false, reason: "allow.ops entry must be an object" };
+      }
+      for (const key of Object.keys(raw)) {
+        if (key !== "tools" && key !== "asset_kinds" && key !== "connections" && key !== "instance_scope") {
+          return { ok: false, reason: `allow.ops entry ${key} is not allowed` };
+        }
+      }
+      if (!Array.isArray(raw.tools) || raw.tools.length === 0
+        || raw.tools.some((item) => typeof item !== "string" || !item.trim())) {
+        return { ok: false, reason: "allow.ops tools must be a non-empty string array" };
+      }
+      const grantTools = (raw.tools as string[]).map((item) => item.trim()).filter(Boolean);
+      if (grantTools.includes("*")) {
+        return { ok: false, reason: "allow.ops tools must not contain '*'" };
+      }
+      for (const tool of grantTools) {
+        if (!isControlPlaneTool(tool)) {
+          return { ok: false, reason: `allow.ops tools contains unknown control-plane tool ${tool}` };
+        }
+      }
+      if (!Array.isArray(raw.asset_kinds) || raw.asset_kinds.length === 0
+        || raw.asset_kinds.some((item) => typeof item !== "string" || !item.trim())) {
+        return { ok: false, reason: "allow.ops asset_kinds must be a non-empty string array" };
+      }
+      const assetKinds = (raw.asset_kinds as string[]).map((item) => item.trim()).filter(Boolean);
+      for (const kind of assetKinds) {
+        if (!isOpsAssetKind(kind)) {
+          return { ok: false, reason: `allow.ops asset_kinds contains unknown kind ${kind}` };
+        }
+      }
+      let grantConnections: string[] | undefined;
+      if (raw.connections !== undefined) {
+        if (!Array.isArray(raw.connections)
+          || raw.connections.some((item) => typeof item !== "string")) {
+          return { ok: false, reason: "allow.ops connections must be a string array" };
+        }
+        grantConnections = (raw.connections as string[]).map((item) => item.trim()).filter(Boolean);
+      }
+      let instanceScope: "read_only" | undefined;
+      if (raw.instance_scope !== undefined) {
+        if (raw.instance_scope !== "read_only") {
+          return { ok: false, reason: "allow.ops instance_scope must be 'read_only' when set" };
+        }
+        instanceScope = "read_only";
+      }
+      if (instanceScope === "read_only") {
+        const writeTool = grantTools.find((tool) => getOpsToolSpec(tool)?.write);
+        if (writeTool) {
+          return { ok: false, reason: `allow.ops instance_scope read_only cannot grant write tool ${writeTool}` };
+        }
+      }
+      built.push({
+        tools: grantTools,
+        asset_kinds: assetKinds,
+        ...(grantConnections ? { connections: grantConnections } : {}),
+        ...(instanceScope ? { instance_scope: instanceScope } : {})
+      });
+    }
+    ops = built;
+  }
+
   return {
     ok: true,
     value: {
@@ -444,7 +742,8 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
         connections,
         source_scope: sourceScope,
         tableSelectors,
-        tools
+        tools,
+        ops
       }
     }
   };
@@ -479,7 +778,9 @@ export async function migrateRoleToV2(
     nextSelectors = [];
     for (const selector of selectors) {
       if (selector.row_access === "scoped") {
-        const parsed = parseRowPolicyShape(selector.row_policy);
+        // A template reference survives the v1→v2 migration unchanged: the
+        // reference form is what is stored, the expansion happens in the runtime.
+        const parsed = validateRowPolicyShapeWithTemplate(selector.row_policy);
         if (!parsed.ok) {
           return {
             ok: false,
@@ -497,7 +798,7 @@ export async function migrateRoleToV2(
             schema: selector.schema,
             names,
             row_access: "scoped",
-            row_policy: { predicates: parsed.predicates }
+            row_policy: parsed.value
           });
           selectorsChanged = true;
           continue;
@@ -505,7 +806,7 @@ export async function migrateRoleToV2(
         nextSelectors.push({
           ...selector,
           row_access: "scoped",
-          row_policy: { predicates: parsed.predicates }
+          row_policy: parsed.value
         });
         continue;
       }
@@ -543,6 +844,72 @@ export async function migrateRoleToV2(
   };
 }
 
+/**
+ * The template issue code inside a role-resolution reason, if any.
+ *
+ * The runtime reports a Role whose template reference cannot be resolved as
+ * `role_resolution_failed:<roleId>:row_policy_template_unresolved`. The write
+ * path has to name that code instead of a generic `INVALID_ROLE`, so the
+ * operator sees that the REFERENCE is the problem (P1-1 §5.1).
+ */
+function templateIssueCodeOf(reason: string): string | undefined {
+  return reason
+    .split(":")
+    .find((part) => part.startsWith("row_policy_template_"));
+}
+
+/**
+ * Spec §14.2.1 — normalize a Role draft the way the WRITE path normalizes it.
+ *
+ * The preview and the save must build the SAME candidate, otherwise the
+ * candidate digest could never match. Both sides therefore run the identical
+ * normalization (`resolveRoleForWrite`) before the candidate is assembled.
+ */
+export async function normalizeRoleForSave(
+  roleId: string,
+  role: unknown
+): Promise<
+  { ok: true; value: YamlRole }
+  | { ok: false; code: string; message: string; status: number }
+> {
+  const resolved = await resolveRoleForWrite(roleId, role as YamlRole, { allowTemplateId: true });
+  if (!resolved.ok) return resolved;
+  return { ok: true, value: resolved.value };
+}
+
+/**
+ * Spec §14.2.1 — does this Role carry a row-policy surface at all?
+ *
+ * A write entry point that can carry or change a row policy must consume the
+ * preview confirmation; a Role that never touches one has no row-policy impact
+ * to confirm.
+ */
+export function roleCarriesRowPolicy(role: YamlRole | undefined): boolean {
+  for (const selector of role?.allow?.tableSelectors ?? []) {
+    if (selector.row_access === "scoped") return true;
+    if (selector.row_policy !== undefined) return true;
+  }
+  return false;
+}
+
+/**
+ * Spec §14.2.2 — `requireAccessRecoveryClearOrFailClosed()`.
+ *
+ * The recovery gate is checked INSIDE the shared publish window and BEFORE the
+ * candidate is rebuilt: an unresolved recovery is the real reason, and it must
+ * not be reported as a stale preview confirmation.
+ */
+async function accessRecoveryRejection(
+  projectRoot: string
+): Promise<{ code: string; message: string } | undefined> {
+  const state = await readAccessRecoveryState(projectRoot);
+  if (!state.required) return undefined;
+  return {
+    code: "ACCESS_RECOVERY_REQUIRED",
+    message: "访问控制配置处于待恢复状态，已阻断后续写入；请先完成恢复核验。"
+  };
+}
+
 async function resolveRoleForWrite(
   roleId: string,
   role: YamlRole,
@@ -550,8 +917,7 @@ async function resolveRoleForWrite(
 ): Promise<
   { ok: true; value: YamlRole; migration: RoleMigration }
   | { ok: false; code: string; message: string; status: number }
-> {
-  if (!ROLE_ID_RE.test(roleId)) {
+> {  if (!ROLE_ID_RE.test(roleId)) {
     return {
       ok: false,
       code: "INVALID_ROLE_ID",
@@ -579,7 +945,15 @@ async function resolveRoleForWrite(
   }
   const resolved = await previewRolePermissionsForAdmin(roleId, { role: migrated.value });
   if (!resolved.ok) {
-    return { ok: false, code: "INVALID_ROLE", message: resolved.reason, status: 400 };
+    // A Role that references a template which cannot be resolved gets the
+    // TEMPLATE code, not a generic `INVALID_ROLE`: the operator has to know
+    // that the reference is the problem (P1-1 §5.1, P2-2).
+    return {
+      ok: false,
+      code: templateIssueCodeOf(resolved.reason) ?? "INVALID_ROLE",
+      message: resolved.reason,
+      status: 400
+    };
   }
   if (resolved.permissions.sources.length === 0 && (migrated.value.allow?.tableSelectors?.length ?? 0) > 0) {
     return { ok: false, code: "INVALID_ROLE", message: "role resolves to 0 source", status: 400 };
@@ -731,6 +1105,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
       roleId?: string;
       role?: unknown;
       acknowledgeContextReferences?: boolean;
+      /**
+       * Spec §14.2.1 — the preview confirmation. Required when the new Role
+       * carries a row policy: a create must not be a way around the
+       * confirmation the PATCH entry point requires.
+       */
+      rowPolicyConfirmation?: unknown;
     };
   }>("/api/admin/roles", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -747,6 +1127,11 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (config.roles?.[roleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${roleId}' already exists` } });
     }
+    // L25-16 / G13 — 任何 allow.ops 都是控制面可达范围，创建时必须 owner。
+    // 不能只拦 owner-only 工具：W-A 的两个写工具都不是 owner-only。
+    if (roleCarriesOpsGrant(validated.value)) {
+      if (!(await requireOwnerForOps(request, reply, "仅所有者可授予控制面授权（allow.ops）"))) return;
+    }
     const contextGuard = await guardRoleIdForCreate(roleId, request.body?.acknowledgeContextReferences === true);
     if (contextGuard) {
       return reply.status(contextGuard.status).send({
@@ -761,6 +1146,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
         [roleId]: validated.value
       }
     };
+    // Lucy v0.25 P1-1 §5.1 — a template reference that cannot be resolved must be
+    // refused at write time, not at request time. An illegal template DEFINITION
+    // that nothing references is only a warning (P2-2).
+    const templateDiagnostics = roleTemplateDiagnostics(newConfig);
+    if (templateDiagnostics.blocking) {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: templateDiagnostics.blocking.code, message: templateDiagnostics.blocking.message }
+      });
+    }
     // re-stringify via the same stringify used by write
     const proposedYaml = await import("yaml").then(({ stringify }) => stringify(newConfig, { lineWidth: 0 }));
     const diff = makeDiff(raw, proposedYaml);
@@ -775,7 +1170,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration } };
+      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings } };
     }
 
     if (gate.decision === "block") {
@@ -808,32 +1203,123 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
-    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
+    // Lucy v0.25 (L25-14 §3.4) — R4 attribution for a Role create that already
+    // carries a row policy.
+    const operationId = `row_policy_update:${roleId}:${randomUUID()}`;
+    const rowPolicyAttribution = buildRowPolicyAuditAttribution(
+      roleId,
+      undefined,
+      validated.value,
+      config,
+      operationId
+    );
+    // ── the create runs INSIDE the shared publish window (spec §14.2.2) ─────
+    return runInAccessPublishWindow("role_policy_save", projectRoot, async () => {
+      // 0) Spec §14.2.2 — the recovery gate comes first: an unresolved recovery
+      //    fails the write closed before any candidate is rebuilt.
+      const recovery = await accessRecoveryRejection(projectRoot);
+      if (recovery) {
+        return reply.status(503).send({ ok: false, error: recovery });
+      }
+      const fresh = await readAccessYamlVersion(projectRoot);
+      const freshConfig = (await import("yaml")).parse(fresh.raw) as YamlAccessConfig;
+      if (!freshConfig.users) freshConfig.users = [];
+      if (freshConfig.roles?.[roleId]) {
+        return reply.status(409).send({
+          ok: false,
+          error: { code: "ROLE_ID_TAKEN", message: `role '${roleId}' already exists` }
+        });
+      }
+
+      // Spec §14.2.1 — a create that carries a row policy consumes the same
+      // confirmation the PATCH entry point requires.
+      if (roleCarriesRowPolicy(validated.value)) {
+        const verification = await verifyRowPolicyPreviewConfirmation({
+          roleId,
+          role: validated.value,
+          confirmation: request.body?.rowPolicyConfirmation,
+          baseConfig: freshConfig as never,
+          baseAccessVersion: fresh.version
+        });
+        if (!verification.ok) {
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "ROW_POLICY_PREVIEW_REQUIRED",
+              message: verification.message ?? "最终行约束预览确认缺失或已失效",
+              detail: { reason: verification.reason, ...(verification.detail ?? {}) }
+            }
+          });
+        }
+      }
+
+      const freshConfigWithRole: YamlAccessConfig = {
+        ...freshConfig,
+        roles: { ...(freshConfig.roles ?? {}), [roleId]: validated.value }
+      };
+      const freshDiff = makeDiff(fresh.raw, (await import("yaml")).stringify(freshConfigWithRole, { lineWidth: 0 }));
+      const freshAttribution = buildRowPolicyAuditAttribution(
+        roleId,
+        undefined,
+        validated.value,
+        freshConfig,
+        operationId
+      );
+
+      const writeResult = await writeAccessYaml(projectRoot, freshConfigWithRole, {
       enabled: true,
-      changeType: "role_create",
+      changeType: freshAttribution ? "row_policy_update" : "role_create",
+      operation: freshAttribution ? "row_policy.update" : undefined,
       targetId: roleId,
-      oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
-      newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), description: validated.value.description },
-      diff,
+      oldSummary: {
+        roleIds: Object.keys(freshConfig.roles ?? {}),
+        ...(freshAttribution
+          ? {
+              rowPolicy: {
+                operationId: freshAttribution.operationId,
+                tables: freshAttribution.tables,
+                beforeDigest: freshAttribution.beforeDigest,
+                affectedAgentCount: freshAttribution.affectedAgentCount
+              }
+            }
+          : {})
+      },
+      newSummary: {
+        roleIds: Object.keys(freshConfigWithRole.roles ?? {}),
+        description: validated.value.description,
+        ...(freshAttribution
+          ? {
+              rowPolicy: {
+                operationId: freshAttribution.operationId,
+                tables: freshAttribution.tables,
+                beforeDigest: freshAttribution.beforeDigest,
+                afterDigest: freshAttribution.afterDigest,
+                affectedAgentCount: freshAttribution.affectedAgentCount
+              }
+            }
+          : {})
+      },
+      diff: freshDiff,
       ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
     });
-    const detail = await readAccessYaml(projectRoot);
-    const finalResolved = findRole(detail.config, roleId);
-    if (!finalResolved) {
-      return reply.status(500).send({ ok: false, error: { code: "INTERNAL", message: "role was not persisted" } });
-    }
-    const summary = buildRoleSummary(detail.config, finalResolved);
-    const preview = await previewRolePermissionsForAdmin(roleId, { role: finalResolved.role });
-    return {
-      ok: true,
-      data: {
-        written: true,
+
+      const detail = await readAccessYaml(projectRoot);
+      const finalResolved = findRole(detail.config, roleId);
+      if (!finalResolved) {
+        return reply.status(500).send({ ok: false, error: { code: "INTERNAL", message: "role was not persisted" } });
+      }
+      const summary = buildRoleSummary(detail.config, finalResolved);
+      const preview = await previewRolePermissionsForAdmin(roleId, { role: finalResolved.role });
+      const response = accessWriteResponseBody(writeResult, {
         version: detail.version,
         policyVersion: writeResult.policyVersion,
         policyRuntimeAck: writeResult.policyRuntimeAck,
-        runtimeAck: writeResult.runtimeAck,
+        auditId: writeResult.auditId,
+        rowPolicy: freshAttribution,
         gate,
+        templateWarnings: templateDiagnostics.warnings,
+        operationId,
         role: {
           ...summary,
           sourceCount: preview.ok ? preview.permissions.sources.length : 0,
@@ -846,8 +1332,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
           },
           effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined
         }
-      }
-    };
+      });
+      return reply.status(response.statusCode).send(response.body);
+    });
   });
 
   // PATCH /api/admin/roles/:roleId — edit yaml role
@@ -858,6 +1345,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
       version?: string;
       override?: AccessGovernanceOverrideRequest;
       patch?: { description?: unknown; allow?: unknown; permission_model_version?: unknown };
+      /**
+       * Spec §14.2.1 — the preview confirmation. Required whenever the Role
+       * carries a row-policy surface. The server re-derives every digest inside
+       * the publish window; the client is never trusted.
+       */
+      rowPolicyConfirmation?: unknown;
     };
   }>("/api/admin/roles/:roleId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -876,6 +1369,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
       }
       return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
     }
+    // The write entry point that can change a row policy consumes the preview
+    // confirmation (spec §14.2.1). The confirmation is REQUIRED whenever the
+    // Role carries a row-policy surface — before or after the change.
+    const rowPolicyConfirmationRequired =
+      roleCarriesRowPolicy(existing) ||
+      roleCarriesRowPolicy(
+        request.body?.patch?.allow
+          ? ({ allow: request.body.patch.allow } as YamlRole)
+          : undefined
+      );
     const patch: { description?: unknown; allow?: unknown; permission_model_version?: unknown } = {
       ...(request.body?.patch ?? {})
     };
@@ -905,6 +1408,11 @@ export function registerRoleRoutes(app: FastifyInstance) {
         ? (patch.allow as YamlRole["allow"])
         : existing.allow
     };
+    // L25-16 / G13 — 旧角色或改完后的角色带 allow.ops，都必须是 owner。
+    // 检查放在合并之后：只看修改前会漏掉「普通角色被 PATCH 进控制面工具」。
+    if (roleCarriesOpsGrant(existing) || roleCarriesOpsGrant(next)) {
+      if (!(await requireOwnerForOps(request, reply, "仅所有者可修改带控制面授权（allow.ops）的角色"))) return;
+    }
     const validated = await resolveRoleForWrite(request.params.roleId, next, { allowTemplateId: true });
     if (!validated.ok) {
       return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
@@ -913,6 +1421,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
       ...config,
       roles: { ...(config.roles ?? {}), [request.params.roleId]: validated.value }
     };
+    // Lucy v0.25 P1-1 §5.1 — a template reference that cannot be resolved must be
+    // refused at write time, not at request time. An illegal template DEFINITION
+    // that nothing references is only a warning (P2-2).
+    const templateDiagnostics = roleTemplateDiagnostics(newConfig);
+    if (templateDiagnostics.blocking) {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: templateDiagnostics.blocking.code, message: templateDiagnostics.blocking.message }
+      });
+    }
     const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
@@ -926,7 +1444,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, version: currentVersion, gate, migration: validated.migration } };
+      return { ok: true, data: { diff, proposedYaml, version: currentVersion, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings } };
     }
 
     if (gate.decision === "block") {
@@ -959,34 +1477,175 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
-    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
-      enabled: true,
-      changeType: "role_patch",
-      targetId: request.params.roleId,
-      oldSummary: { description: existing.description, allow: existing.allow },
-      newSummary: { description: validated.value.description, allow: validated.value.allow },
-      diff,
-      ...auditActorFields(trustedActorFromRequest(request)),
-      source: "admin_roles_api"
-    });
-    const detail = await readAccessYaml(projectRoot);
-    return {
-      ok: true,
-      data: {
-        written: true,
+    // Lucy v0.25 (L25-14 §3.4) — R4 attribution: a save that touches a row policy is
+    // recorded as a row-permission change in the existing configuration-audit channel.
+    const operationId = `row_policy_update:${request.params.roleId}:${randomUUID()}`;
+    const rowPolicyAttribution = buildRowPolicyAuditAttribution(
+      request.params.roleId,
+      existing,
+      validated.value,
+      config,
+      operationId
+    );
+    // ── the save runs INSIDE the shared publish window (spec §14.2.2) ────────
+    // The window covers the baseline re-read, the candidate rebuild, the final
+    // preview and the confirmation comparison, the intent, the write, the
+    // runtime swap, the terminal audit and the failure recovery. The submission
+    // re-check may NOT be moved outside of it.
+    return runInAccessPublishWindow("role_policy_save", projectRoot, async () => {
+      // 0) Spec §14.2.2 — the recovery gate comes first: an unresolved recovery
+      //    fails the write closed before any candidate is rebuilt.
+      const recovery = await accessRecoveryRejection(projectRoot);
+      if (recovery) {
+        return reply.status(503).send({ ok: false, error: recovery });
+      }
+      // 1) Re-read the access baseline INSIDE the window. The lock-outside raw
+      //    must not be used to decide anything.
+      const fresh = await readAccessYamlVersion(projectRoot);
+      if (request.body?.version && request.body.version !== fresh.version) {
+        return reply.status(409).send({
+          ok: false,
+          error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
+        });
+      }
+      const freshConfig = (await import("yaml")).parse(fresh.raw) as YamlAccessConfig;
+      if (!freshConfig.users) freshConfig.users = [];
+      const freshExisting = freshConfig.roles?.[request.params.roleId];
+      if (!freshExisting || !freshExisting.allow) {
+        return reply.status(409).send({
+          ok: false,
+          error: { code: "ROLE_CHANGED", message: "role changed while saving, please refresh" }
+        });
+      }
+      const freshNext: YamlRole = {
+        ...freshExisting,
+        description: patch.description !== undefined
+          ? (typeof patch.description === "string" ? patch.description : freshExisting.description)
+          : freshExisting.description,
+        allow: patch.allow !== undefined
+          ? (patch.allow as YamlRole["allow"])
+          : freshExisting.allow
+      };
+      const freshValidated = await resolveRoleForWrite(request.params.roleId, freshNext, { allowTemplateId: true });
+      if (!freshValidated.ok) {
+        return reply.status(freshValidated.status).send({
+          ok: false,
+          error: { code: freshValidated.code, message: freshValidated.message }
+        });
+      }
+
+      // 2) The preview confirmation (spec §14.2.1). Every rejection happens
+      //    BEFORE the durable intent and before any configuration write:
+      //    zero configuration write, zero row-policy intent.
+      if (rowPolicyConfirmationRequired) {
+        const verification = await verifyRowPolicyPreviewConfirmation({
+          roleId: request.params.roleId,
+          role: freshValidated.value,
+          confirmation: request.body?.rowPolicyConfirmation,
+          baseConfig: freshConfig as never,
+          baseAccessVersion: fresh.version
+        });
+        if (!verification.ok) {
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "ROW_POLICY_PREVIEW_REQUIRED",
+              message: verification.message ?? "最终行约束预览确认缺失或已失效",
+              detail: { reason: verification.reason, ...(verification.detail ?? {}) }
+            }
+          });
+        }
+      }
+
+      const freshConfigWithRole: YamlAccessConfig = {
+        ...freshConfig,
+        roles: { ...(freshConfig.roles ?? {}), [request.params.roleId]: freshValidated.value }
+      };
+      const freshDiff = makeDiff(fresh.raw, (await import("yaml")).stringify(freshConfigWithRole, { lineWidth: 0 }));
+      const freshAttribution = buildRowPolicyAuditAttribution(
+        request.params.roleId,
+        freshExisting,
+        freshValidated.value,
+        freshConfig,
+        operationId
+      );
+
+      const writeResult = await writeAccessYaml(projectRoot, freshConfigWithRole, {
+        enabled: true,
+        expectedVersion: fresh.version,
+        changeType: freshAttribution ? "row_policy_update" : "role_patch",
+        operation: freshAttribution ? "row_policy.update" : undefined,
+        targetId: request.params.roleId,
+        oldSummary: {
+          description: freshExisting.description,
+          allow: freshExisting.allow,
+          ...(freshAttribution
+            ? {
+                rowPolicy: {
+                  operationId: freshAttribution.operationId,
+                  tables: freshAttribution.tables,
+                  beforeDigest: freshAttribution.beforeDigest,
+                  affectedAgentCount: freshAttribution.affectedAgentCount
+                }
+              }
+            : {})
+        },
+        newSummary: {
+          description: freshValidated.value.description,
+          allow: freshValidated.value.allow,
+          ...(freshAttribution
+            ? {
+                rowPolicy: {
+                  operationId: freshAttribution.operationId,
+                  tables: freshAttribution.tables,
+                  beforeDigest: freshAttribution.beforeDigest,
+                  afterDigest: freshAttribution.afterDigest,
+                  affectedAgentCount: freshAttribution.affectedAgentCount
+                }
+              }
+            : {})
+        },
+        diff: freshDiff,
+        ...auditActorFields(trustedActorFromRequest(request)),
+        source: "admin_roles_api"
+      }).catch((error: unknown) => {
+        if ((error as { code?: string }).code === "VERSION_CONFLICT") return null;
+        throw error;
+      });
+      if (writeResult === null) {
+        return reply.status(409).send({
+          ok: false,
+          error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
+        });
+      }
+
+      // 3) The tri-state result (spec §14.3.2). A rollback is NOT a success:
+      //    only `committed` may report `written: true`.
+      const detail = await readAccessYaml(projectRoot);
+      const response = accessWriteResponseBody(writeResult, {
         version: detail.version,
         policyVersion: writeResult.policyVersion,
         policyRuntimeAck: writeResult.policyRuntimeAck,
-        runtimeAck: writeResult.runtimeAck,
-        gate
-      }
-    };
+        auditId: writeResult.auditId,
+        rowPolicy: freshAttribution,
+        gate,
+        templateWarnings: templateDiagnostics.warnings,
+        operationId
+      });
+      return reply.status(response.statusCode).send(response.body);
+    });
   });
 
   // DELETE /api/admin/roles/:roleId — delete yaml role, blocked if in use
   app.delete<{
     Params: { roleId: string };
-    Body?: { dryRun?: boolean; version?: string; override?: AccessGovernanceOverrideRequest };
+    Body?: {
+      dryRun?: boolean;
+      version?: string;
+      override?: AccessGovernanceOverrideRequest;
+      /** Spec §14.2.1 — required when the Role being deleted carries a row policy. */
+      rowPolicyConfirmation?: unknown;
+    };
   }>(
     "/api/admin/roles/:roleId",
     async (request, reply) => {
@@ -1036,6 +1695,33 @@ export function registerRoleRoutes(app: FastifyInstance) {
         });
       }
       const existingRole = config.roles[request.params.roleId];
+      if (!dryRun && roleCarriesRowPolicy(existingRole)) {
+        const fresh = await readAccessYaml(projectRoot);
+        if (request.body?.version && request.body.version !== fresh.version) {
+          return reply.status(409).send({
+            ok: false,
+            error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
+          });
+        }
+        const freshConfig = (await import("yaml")).parse(fresh.raw) as YamlAccessConfig;
+        const verification = await verifyRowPolicyPreviewConfirmation({
+          roleId: request.params.roleId,
+          removeRole: true,
+          confirmation: request.body?.rowPolicyConfirmation,
+          baseConfig: freshConfig as never,
+          baseAccessVersion: fresh.version
+        });
+        if (!verification.ok) {
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "ROW_POLICY_PREVIEW_REQUIRED",
+              message: verification.message ?? "最终行约束预览确认缺失或已失效",
+              detail: { reason: verification.reason, ...(verification.detail ?? {}) }
+            }
+          });
+        }
+      }
       const newConfig: YamlAccessConfig = {
         ...config,
         roles: Object.fromEntries(
@@ -1109,17 +1795,15 @@ export function registerRoleRoutes(app: FastifyInstance) {
         ...auditActorFields(trustedActorFromRequest(request)),
         source: "admin_roles_api"
       });
-      return {
-        ok: true,
-        data: {
-          written: true,
-          version: (await readAccessYaml(projectRoot)).version,
-          policyVersion: writeResult.policyVersion,
-          policyRuntimeAck: writeResult.policyRuntimeAck,
-          runtimeAck: writeResult.runtimeAck,
-          gate
-        }
-      };
+      // Spec §14.3.2 — only `committed` is a success. `recovery_required` is
+      // 503 with written:false; a rollback is not a saved deletion.
+      const response = accessWriteResponseBody(writeResult, {
+        version: (await readAccessYaml(projectRoot)).version,
+        policyVersion: writeResult.policyVersion,
+        policyRuntimeAck: writeResult.policyRuntimeAck,
+        gate
+      });
+      return reply.status(response.statusCode).send(response.body);
     }
   );
 
@@ -1133,6 +1817,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
       description?: string;
       role?: unknown;
       acknowledgeContextReferences?: boolean;
+      /**
+       * Spec §14.2.1 — the preview confirmation. Required when the copied Role
+       * carries a row policy: a copy must not be a way around the confirmation
+       * the PATCH entry point requires.
+       */
+      rowPolicyConfirmation?: unknown;
     };
   }>("/api/admin/roles/:roleId/copy", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -1170,6 +1860,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
       ...config,
       roles: { ...(config.roles ?? {}), [newRoleId]: validated.value }
     };
+    // Lucy v0.25 P1-1 §5.1 — a copied Role inherits its template references, so the
+    // same write-time resolution check applies. An illegal template DEFINITION that
+    // nothing references is only a warning (P2-2).
+    const templateDiagnostics = roleTemplateDiagnostics(newConfig);
+    if (templateDiagnostics.blocking) {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: templateDiagnostics.blocking.code, message: templateDiagnostics.blocking.message }
+      });
+    }
     const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
@@ -1185,7 +1885,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration } };
+      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings } };
     }
 
     if (gate.decision === "block") {
@@ -1218,13 +1918,59 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
-    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
+    // ── the copy runs INSIDE the shared publish window (spec §14.2.2) ────────
+    return runInAccessPublishWindow("role_policy_save", projectRoot, async () => {
+      // 0) Spec §14.2.2 — the recovery gate comes first: an unresolved recovery
+      //    fails the write closed before any candidate is rebuilt.
+      const recovery = await accessRecoveryRejection(projectRoot);
+      if (recovery) {
+        return reply.status(503).send({ ok: false, error: recovery });
+      }
+      const fresh = await readAccessYamlVersion(projectRoot);
+      const freshConfig = (await import("yaml")).parse(fresh.raw) as YamlAccessConfig;
+      if (!freshConfig.users) freshConfig.users = [];
+      if (freshConfig.roles?.[newRoleId]) {
+        return reply.status(409).send({
+          ok: false,
+          error: { code: "ROLE_ID_TAKEN", message: `role '${newRoleId}' already exists` }
+        });
+      }
+
+      // Spec §14.2.1 — a copy that carries a row policy consumes the same
+      // confirmation the PATCH entry point requires.
+      if (roleCarriesRowPolicy(validated.value)) {
+        const verification = await verifyRowPolicyPreviewConfirmation({
+          roleId: newRoleId,
+          role: validated.value,
+          confirmation: request.body?.rowPolicyConfirmation,
+          baseConfig: freshConfig as never,
+          baseAccessVersion: fresh.version
+        });
+        if (!verification.ok) {
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "ROW_POLICY_PREVIEW_REQUIRED",
+              message: verification.message ?? "最终行约束预览确认缺失或已失效",
+              detail: { reason: verification.reason, ...(verification.detail ?? {}) }
+            }
+          });
+        }
+      }
+
+      const freshConfigWithRole: YamlAccessConfig = {
+        ...freshConfig,
+        roles: { ...(freshConfig.roles ?? {}), [newRoleId]: validated.value }
+      };
+      const freshDiff = makeDiff(fresh.raw, (await import("yaml")).stringify(freshConfigWithRole, { lineWidth: 0 }));
+
+      const writeResult = await writeAccessYaml(projectRoot, freshConfigWithRole, {
       enabled: true,
       changeType: "role_create",
       targetId: newRoleId,
-      oldSummary: { roleIds: Object.keys(config.roles ?? {}), sourceRoleId: request.params.roleId },
-      newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), sourceRoleId: request.params.roleId },
-      diff,
+      oldSummary: { roleIds: Object.keys(freshConfig.roles ?? {}), sourceRoleId: request.params.roleId },
+      newSummary: { roleIds: Object.keys(freshConfigWithRole.roles ?? {}), sourceRoleId: request.params.roleId },
+      diff: freshDiff,
       ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
     });
@@ -1235,15 +1981,13 @@ export function registerRoleRoutes(app: FastifyInstance) {
     }
     const summary = buildRoleSummary(detail.config, finalResolved);
     const preview = await previewRolePermissionsForAdmin(newRoleId, { role: finalResolved.role });
-    return {
-      ok: true,
-      data: {
-        written: true,
+    const response = accessWriteResponseBody(writeResult, {
         version: detail.version,
         policyVersion: writeResult.policyVersion,
         policyRuntimeAck: writeResult.policyRuntimeAck,
-        runtimeAck: writeResult.runtimeAck,
         gate,
+        /** Catalog-level template issues — reported, never blocking (P2-2). */
+        templateWarnings: templateDiagnostics.warnings,
         role: {
           ...summary,
           sourceCount: preview.ok ? preview.permissions.sources.length : 0,
@@ -1256,7 +2000,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
           },
           effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined
         }
-      }
-    };
+      });
+      return reply.status(response.statusCode).send(response.body);
+    });
   });
 }

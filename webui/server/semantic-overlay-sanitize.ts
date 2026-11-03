@@ -1,4 +1,4 @@
-import { parseDocument } from "yaml";
+import { parseDocument, stringify } from "yaml";
 
 /** Manifest-only column keys rejected by KTX resolved SourceColumn (extra=forbid). */
 const MANIFEST_ONLY_COLUMN_KEYS = ["pk", "nullable"] as const;
@@ -70,10 +70,12 @@ export function sanitizeSemanticSourceYaml(text: string): SanitizeSemanticSource
   }
 
   record.columns = columns;
-  const next = parseDocument("");
-  next.contents = next.createNode(record);
   return {
-    text: next.toString({ lineWidth: 0 }),
+    // `stringify` builds a fresh Document from the plain object — same output as
+    // the previous `parseDocument("")` + `createNode` round-trip, but the
+    // Document's `contents` is typed as a *parsed* node, which a freshly
+    // created (unparsed) node cannot be assigned to.
+    text: stringify(record, { lineWidth: 0 }),
     stripped: true,
     strippedKeys
   };

@@ -6,6 +6,10 @@ import { safeWrite } from "../fs-safe.js";
 import { getEvalDb } from "./db.js";
 import { loadContentPaths } from "../paths.js";
 import { getAuditDb } from "../admin/audit.js";
+import { defaultUsageConditionSql } from "../proxy/usage-classification.js";
+
+/** Spec 189 §4.1 — the single Default Usage condition. */
+const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
 
 export type MonitorThreshold = {
   domain: string;
@@ -256,10 +260,15 @@ export function registerMonitorRoutes(app: FastifyInstance) {
     const auditDb = await getAuditDb();
     const placeholders = roleIds.map(() => "role_ids LIKE ?").join(" OR ");
     const params = roleIds.map((roleId) => `%${roleId}%`);
+    // Spec 189 §6 — the 「现场」panel counts Default Usage Calls: protocol
+    // events and default-view-excluded eval probes leave the panel, while the
+    // domain-bound Role population, the client-family aggregation, the empty
+    // state and the trend lines stay untouched.
     const calls = auditDb.prepare(`
       SELECT user_agent, outcome
       FROM access_log
       WHERE ts >= ? AND (${placeholders})
+        AND ${DEFAULT_USAGE_CONDITION}
     `).all(since, ...params) as Array<{ user_agent: string | null; outcome: string | null }>;
     const buckets = new Map<string, { calls: number; errors: number; denies: number }>();
     for (const call of calls) {

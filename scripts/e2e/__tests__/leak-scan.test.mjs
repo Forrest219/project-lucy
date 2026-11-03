@@ -415,6 +415,40 @@ describe("leak scan: text carrier (Spec §7 SEC-17)", () => {
   });
 });
 
+// A masked hash line is the INTENDED output of the product's config-change audit
+// (`password_hash: [REDACTED]`), so the scanner must not report it. The old pattern
+// consumed the whitespace BEFORE the value outside the negative lookahead, so the
+// engine backtracked it to zero width, re-tested the lookahead at the whitespace
+// itself (where `REDACTED` cannot match), and the negative lookahead passed: every
+// properly redacted audit diff was reported as a leak. The security gate failed real
+// cases on that false positive.
+describe("leak scan: a masked password hash is not a leak", () => {
+  for (const masked of [
+    "+    password_hash: [REDACTED]",
+    "\"diff\":\"+    password_hash: [REDACTED]\\n+    role: operator\\n\"",
+    "password_hash: REDACTED",
+    "password_hash: null",
+    "password_hash: ***",
+    "password_hash: \"\""
+  ]) {
+    it(`reports no hit for ${JSON.stringify(masked.slice(0, 48))}`, () => {
+      assert.deepEqual(scanText(masked, { secrets: [] }), []);
+    });
+  }
+
+  it("still reports a concrete hash value", () => {
+    const hits = scanText("+    password_hash: $2b$10$abcdefghijklmnopqrstuvwxyz0123456789", { secrets: [] });
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].kind, "password-hash-value");
+  });
+
+  it("still reports a scrypt hash value", () => {
+    const hits = scanText("password_hash: scrypt:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd", { secrets: [] });
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].kind, "password-hash-value");
+  });
+});
+
 describe("leak scan: zip carrier (A6)", () => {
   it("a stored-entry zip carrying a secret is failed", () => {
     const zip = makeZip("note.txt", "the password is lucy_e2e_secret_in_zip_9999 ok");

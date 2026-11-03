@@ -61,6 +61,17 @@ function assertYamlOnly(text: string): void {
   }
 }
 
+/**
+ * Reject a non-YAML frontmatter engine WITHOUT parsing the document.
+ *
+ * Callers that only need the refusal (an upload preflight, an upload commit)
+ * use this so the `FRONTMATTER_ENGINE_FORBIDDEN` contract is enforced before
+ * any other upload validation runs.
+ */
+export function assertMarkdownFrontmatterEngine(text: string): void {
+  assertYamlOnly(text);
+}
+
 export function parseMarkdownFrontmatter(text: string): MarkdownFrontmatter {
   assertYamlOnly(text);
   const opener = openingLine(text);

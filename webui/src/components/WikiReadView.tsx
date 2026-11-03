@@ -2,18 +2,27 @@ import clsx from "clsx";
 import { useMemo } from "react";
 import { LinkedSemanticObjects } from "./LinkedSemanticObjects";
 import { MarkdownPreview } from "./MarkdownPreview";
+import { WikiAccessSummary } from "./WikiAccessSummary";
+import { WikiAgentAccessNotice } from "./WikiAgentAccessNotice";
 import { extractTemplatePlaceholders, extractWikiToc, wikiTitleFromContent } from "../lib/wiki";
-import type { SourceSummary, WikiFrontmatter } from "../lib/types";
+import type { SourceSummary, WikiAccessListEntry, WikiAclState, WikiFrontmatter } from "../lib/types";
 
 export type WikiReadViewProps = {
   keyName: string;
   content: string;
   frontmatter: WikiFrontmatter;
+  acl?: WikiAclState;
   knownSources: ReadonlySet<string>;
   knownTables: SourceSummary[];
   onApplyTemplate: (content: string) => void;
   onOpenTemplatePicker: () => void;
   onSwitchToEdit: () => void;
+  /** Spec 193 §6.1 — the aggregate authorization entry of this document. */
+  access?: WikiAccessListEntry;
+  /** Opens the independent 管理访问权限 drawer. */
+  onManageAccess?: () => void;
+  /** Disabled reason when the drawer entry point must not be reachable. */
+  manageAccessBlockedReason?: string | null;
 };
 
 const EMPTY_BODY_HINT =
@@ -32,11 +41,15 @@ export function WikiReadView({
   keyName,
   content,
   frontmatter,
+  acl,
   knownSources,
   knownTables,
   onApplyTemplate,
   onOpenTemplatePicker,
-  onSwitchToEdit
+  onSwitchToEdit,
+  access,
+  onManageAccess,
+  manageAccessBlockedReason = null
 }: WikiReadViewProps) {
   const trimmed = content.trim();
   const title = useMemo(
@@ -59,6 +72,11 @@ export function WikiReadView({
         <h1 className="pl-wiki-read-title" data-testid="wiki-read-title">
           {title}
         </h1>
+        <WikiAgentAccessNotice
+          acl={acl}
+          onAuthorize={onSwitchToEdit}
+          testId="wiki-agent-access"
+        />
         {summary && summary !== title ? (
           <p className="pl-wiki-read-summary" data-testid="wiki-read-summary">
             {summary}
@@ -84,6 +102,32 @@ export function WikiReadView({
               knownTables={knownTables}
               refs={slRefs}
             />
+          </div>
+        ) : null}
+        {access ? (
+          <div className="pl-wiki-read-access" data-testid="wiki-read-access">
+            <WikiAccessSummary access={access} />
+            <button
+              aria-describedby={
+                manageAccessBlockedReason ? "wiki-read-access-blocked" : undefined
+              }
+              className="pl-btn pl-btn--secondary text-sm"
+              data-testid="wiki-manage-access-button"
+              disabled={Boolean(manageAccessBlockedReason)}
+              onClick={onManageAccess}
+              type="button"
+            >
+              管理访问权限
+            </button>
+            {manageAccessBlockedReason ? (
+              <span
+                className="pl-notice"
+                data-testid="wiki-read-access-blocked"
+                id="wiki-read-access-blocked"
+              >
+                {manageAccessBlockedReason}
+              </span>
+            ) : null}
           </div>
         ) : null}
         {placeholders.length > 0 ? (

@@ -5,6 +5,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { apiGet } from "../../lib/apiClient";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
+import { getContract, type MetricState } from "../../lib/kpiContracts";
 
 type UsageOverview = {
   agentCount: number;
@@ -34,6 +35,21 @@ type PopularTable = {
   lastSeen: string | null;
 };
 
+type QuestionMetric = {
+  metricId: string;
+  state: MetricState;
+  value: number | null;
+};
+
+type DailyQuestionRow = {
+  date: string;
+  partialDay: boolean;
+  realQuestions: number;
+  unreportedQuerySessions: number;
+  connectOnlySessions: number;
+  browseWithoutAskSessions: number;
+};
+
 type OverviewResponse = {
   windowHours: number;
   localAdminNotice?: string;
@@ -41,6 +57,16 @@ type OverviewResponse = {
   popularTables: PopularTable[];
   tableStatsSource?: "access_log_sources" | "access_log.tables";
   cards?: Record<string, number | string>;
+  realQuestions?: QuestionMetric;
+  unreportedQuerySessions?: QuestionMetric;
+  connectOnlySessions?: QuestionMetric;
+  browseWithoutAskSessions?: QuestionMetric;
+  unassignedQueryCalls?: QuestionMetric;
+  unlinkedQueryCalls?: QuestionMetric;
+  queriesPerQuestion?: QuestionMetric;
+  questionActiveAgents?: QuestionMetric;
+  dailyQuestions?: DailyQuestionRow[] | null;
+  skippedBadTimestamp?: number;
 };
 
 type AgentRow = {
@@ -108,6 +134,19 @@ function assetCardState(
 
 function windowLabel(hours: WindowHours): string {
   return hours === 24 ? "近 24 小时" : "近 7 天";
+}
+
+function contractHelp(id: string, fallback: string): string {
+  return getContract(id)?.help ?? fallback;
+}
+
+function questionCardState(loaded: boolean, metric: QuestionMetric | undefined): MetricState {
+  if (!loaded || !metric) return "unavailable";
+  return metric.state;
+}
+
+function formatRatio(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function pageViewSeriesLabel(windowText: string, bucket: "hour" | "day" | undefined): string {
@@ -305,11 +344,13 @@ export function GovernanceOverview() {
     </span>
   ) : 0;
 
+  // E8：配置数与活跃数**并列**（不再是「活跃 / 总数」这种会被读成比值的写法）。
   const tokenCompoundValue = tokenCardState !== "unavailable" ? (
     <span className="tabular-nums">
-      <span className="text-fg-muted text-base font-normal">活跃 </span>
+      <span className="text-fg-muted text-base font-normal">配置 </span>
+      <span>{usage?.configuredTokenCount ?? 0}</span>
+      <span className="text-fg-muted text-base font-normal"> · 活跃 </span>
       <span>{usage?.activeTokenCount ?? 0}</span>
-      <span className="text-fg-muted text-base font-normal"> / {usage?.configuredTokenCount ?? 0}</span>
     </span>
   ) : 0;
 
@@ -474,7 +515,7 @@ export function GovernanceOverview() {
             value={agentCompoundValue}
             help={
               <span>
-                {windowText}活跃 <span className="notranslate" translate="no">Agent</span> / 已配置 <span className="notranslate" translate="no">Agent</span> 总数（含未启用）。活跃率 = 有访问记录的 <span className="notranslate" translate="no">Agent</span> / 总数。
+                {windowText}业务活跃 <span className="notranslate" translate="no">Agent</span> / 已配置 <span className="notranslate" translate="no">Agent</span> 总数（含未启用）。活跃率 = 有默认用量业务调用的 <span className="notranslate" translate="no">Agent</span> / 总数；分子只计当前配置资产，历史日志身份不计入分母。
               </span>
             }
             subValue={agentCardState === "ok" ? <span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)}</span> : undefined}
@@ -484,19 +525,21 @@ export function GovernanceOverview() {
             testId="metric-agent-asset"
           />
           <MetricCard
-            label={<span><span className="notranslate" translate="no">Token</span> 凭证与活跃</span>}
-            labelText="Token 凭证与活跃"
+            label={<span><span className="notranslate" translate="no">Token</span> 凭据与活跃</span>}
+            labelText="Token 凭据与活跃"
             value={tokenCompoundValue}
             help={
               <span>
-                {windowText}活跃 <span className="notranslate" translate="no">Token</span> / 已下发凭证总数（含未启用 <span className="notranslate" translate="no">Agent</span> 的 <span className="notranslate" translate="no">Token</span>）。D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义（<span className="notranslate" translate="no">partial</span>）。
+                {windowText}业务活跃 <span className="notranslate" translate="no">Token</span> / 已下发凭证总数（含未启用 <span className="notranslate" translate="no">Agent</span> 的 <span className="notranslate" translate="no">Token</span>）。业务活跃 = 窗口内至少有 1 次默认用量业务调用，排除协议事件与默认视图排除的评测探针。D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义（<span className="notranslate" translate="no">partial</span>）。
               </span>
             }
             subValue={tokenCardState === "ok" ? <span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)}</span> : undefined}
             state={tokenCardState}
             unavailableReason={
               tokenCardState === "partial"
-                ? (usage?.tokenPrefixAmbiguous ? "配置 Token 前缀存在冲突（D4），计数存在歧义" : "活跃 Token 数超过配置数，数据异常")
+                ? (usage?.tokenPrefixAmbiguous
+                    ? "配置 Token 前缀存在冲突（D4），计数存在歧义"
+                    : "活跃 Token 数超过配置数：身份／窗口／快照口径未同时一致，不自动等于数据异常；差异明细见下方入口")
                 : undefined
             }
             helpId="token-asset"
@@ -520,7 +563,30 @@ export function GovernanceOverview() {
             testId="metric-table-asset"
           />
         </div>
+        {/* E8：差异明细入口。四类差异集合的权威口径只在 P0-4 只读对账页；
+            这里不重算、不下结论，只把管理员送到能看见差异明细与空值原因的地方。 */}
+        <div
+          className="pl-notice flex flex-wrap items-center justify-between gap-2"
+          data-testid="governance-token-difference-entry"
+        >
+          <span>
+            <span className="notranslate" translate="no">Token</span> 差异明细：已配置未活跃 · 活跃但当前配置不可见 · 已停用或已删除 · 身份未核验。「活跃数 &gt; 配置数」不自动等于数据异常。
+          </span>
+          <Link
+            className="pl-link"
+            to="/admin/audit-reconciliation"
+            data-testid="governance-token-difference-link"
+          >
+            打开审计对账 · 使用概况
+          </Link>
+        </div>
       </div>
+
+      <QuestionKpiSection
+        windowText={windowText}
+        loaded={assetLoaded}
+        overview={overview}
+      />
 
       <div className="pl-usage-rank-grid" data-testid="governance-usage-rank-grid">
         <section className="pl-panel" data-testid="governance-agent-usage">
@@ -575,6 +641,128 @@ export function GovernanceOverview() {
       </div>
       </> : null}
       </div>
+    </div>
+  );
+}
+
+function QuestionKpiSection({
+  windowText,
+  loaded,
+  overview
+}: {
+  windowText: string;
+  loaded: boolean;
+  overview: OverviewResponse | undefined;
+}) {
+  const realState = questionCardState(loaded, overview?.realQuestions);
+  const unreportedState = questionCardState(loaded, overview?.unreportedQuerySessions);
+  const connectState = questionCardState(loaded, overview?.connectOnlySessions);
+  const browseState = questionCardState(loaded, overview?.browseWithoutAskSessions);
+  const activeAgents = overview?.questionActiveAgents;
+  const perQuestion = overview?.queriesPerQuestion;
+  const unlinked = overview?.unlinkedQueryCalls;
+  const unassigned = overview?.unassignedQueryCalls;
+  const realSub = realState === "ok" ? (
+    <span>
+      {activeAgents?.state === "ok" ? (
+        <span>
+          {activeAgents.value} 个 <span className="notranslate" translate="no">Agent</span> 有问询或未上报查数
+        </span>
+      ) : null}
+      {perQuestion?.state === "ok" && perQuestion.value != null ? (
+        <span>{activeAgents?.state === "ok" ? " · " : ""}每问询查数 {formatRatio(perQuestion.value)}</span>
+      ) : null}
+      {unlinked?.state === "ok" && (unlinked.value ?? 0) > 0 ? (
+        <span> · 另有 {unlinked.value} 次查数未挂到已上报问询</span>
+      ) : null}
+    </span>
+  ) : undefined;
+  const unreportedSub = unreportedState === "ok" && unassigned?.state === "ok" && (unassigned.value ?? 0) > 0
+    ? <span>另有 {unassigned.value} 次查数没有会话</span>
+    : undefined;
+  const daily = overview?.dailyQuestions;
+
+  return (
+    <div data-testid="governance-question-metrics">
+      <div className="pl-metric-grid" aria-label="问询">
+        <MetricCard
+          label={<span>{windowText}真实问询</span>}
+          labelText={`${windowText}真实问询`}
+          value={overview?.realQuestions?.value ?? 0}
+          help={contractHelp("real-questions", "窗口内已落库的原文问询数，按问询 ID 去重。")}
+          subValue={realSub}
+          state={realState}
+          helpId="real-questions"
+          testId="metric-real-questions"
+        />
+        <MetricCard
+          label={<span>{windowText}未上报查数会话</span>}
+          labelText={`${windowText}未上报查数会话`}
+          value={overview?.unreportedQuerySessions?.value ?? 0}
+          help={contractHelp("unreported-query-sessions", "窗口内有查数、且该会话从未落下原文问询。")}
+          subValue={unreportedSub}
+          state={unreportedState}
+          helpId="unreported-query-sessions"
+          testId="metric-unreported-query-sessions"
+        />
+        <MetricCard
+          label={<span>{windowText}仅连接会话</span>}
+          labelText={`${windowText}仅连接会话`}
+          value={overview?.connectOnlySessions?.value ?? 0}
+          help={contractHelp("connect-only-sessions", "窗口内调用全部是连接级的会话。")}
+          state={connectState}
+          helpId="connect-only-sessions"
+          testId="metric-connect-only-sessions"
+        />
+        <MetricCard
+          label={<span>{windowText}浏览未问会话</span>}
+          labelText={`${windowText}浏览未问会话`}
+          value={overview?.browseWithoutAskSessions?.value ?? 0}
+          help={contractHelp("browse-without-ask-sessions", "到了浏览或准备，没有问询动作，也没有查数。")}
+          state={browseState}
+          helpId="browse-without-ask-sessions"
+          testId="metric-browse-without-ask-sessions"
+        />
+      </div>
+      {daily == null ? (
+        <p className="pl-notice" data-testid="daily-question-unavailable">按日问询暂时无法统计。</p>
+      ) : (
+        <section className="pl-panel" data-testid="daily-question-panel">
+          <div className="pl-section-heading">
+            <h2 className="pl-panel-title">按日问询</h2>
+          </div>
+          <table className="pl-data-grid pl-data-table w-full" data-testid="daily-question-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>真实问询</th>
+                <th>未上报查数会话</th>
+                <th>仅连接会话</th>
+                <th>浏览未问会话</th>
+              </tr>
+            </thead>
+            <tbody>
+              {daily.map((row) => (
+                <tr key={row.date} data-testid={`daily-question-${row.date}`}>
+                  <td>
+                    <span className="notranslate" translate="no">{row.date}</span>
+                    {row.partialDay ? <span> 未覆盖全天</span> : null}
+                  </td>
+                  <td>{row.realQuestions}</td>
+                  <td>{row.unreportedQuerySessions}</td>
+                  <td>{row.connectOnlySessions}</td>
+                  <td>{row.browseWithoutAskSessions}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {(overview?.skippedBadTimestamp ?? 0) > 0 ? (
+            <p className="pl-notice" data-testid="daily-question-skipped">
+              有 {overview?.skippedBadTimestamp} 条时间无法解析，未计入。
+            </p>
+          ) : null}
+        </section>
+      )}
     </div>
   );
 }

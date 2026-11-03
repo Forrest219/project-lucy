@@ -55,7 +55,20 @@ function stubFetch() {
           cards: {
             calls: hours === 24 ? 1 : 3,
             deniedRate: 33.3
-          }
+          },
+          realQuestions: { metricId: "real-questions", state: "ok", value: 4 },
+          unreportedQuerySessions: { metricId: "unreported-query-sessions", state: "ok", value: 1 },
+          connectOnlySessions: { metricId: "connect-only-sessions", state: "ok", value: 2 },
+          browseWithoutAskSessions: { metricId: "browse-without-ask-sessions", state: "ok", value: 3 },
+          unassignedQueryCalls: { metricId: "unassigned-query-calls", state: "ok", value: 0 },
+          unlinkedQueryCalls: { metricId: "unlinked-query-calls", state: "ok", value: 0 },
+          queriesPerQuestion: { metricId: "queries-per-question", state: "ok", value: 2 },
+          questionActiveAgents: { metricId: "question-active-agents", state: "ok", value: 2 },
+          skippedBadTimestamp: 0,
+          dailyQuestions: [
+            { date: "2026-10-29", partialDay: true, realQuestions: 1, unreportedQuerySessions: 0, connectOnlySessions: 1, browseWithoutAskSessions: 0 },
+            { date: "2026-10-30", partialDay: false, realQuestions: 3, unreportedQuerySessions: 1, connectOnlySessions: 1, browseWithoutAskSessions: 3 }
+          ]
         }
       }));
     }
@@ -179,6 +192,13 @@ describe("GovernanceOverview", () => {
     expect(screen.queryByTestId("metric-calls")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-acl-denied")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-p95-latency")).not.toBeInTheDocument();
+    expect(screen.getByTestId("metric-real-questions")).toHaveTextContent("4");
+    expect(screen.getByTestId("metric-unreported-query-sessions")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-connect-only-sessions")).toHaveTextContent("2");
+    expect(screen.getByTestId("metric-browse-without-ask-sessions")).toHaveTextContent("3");
+    expect(screen.getByTestId("daily-question-table")).toBeInTheDocument();
+    expect(screen.getByTestId("daily-question-2026-10-29")).toHaveTextContent("未覆盖全天");
+    expect(screen.queryByText("近 7 天调用量")).not.toBeInTheDocument();
     expect(screen.getByTestId("usage-call-monitor-link")).toHaveAttribute("href", "/ops/calls?range=24h");
     expect(screen.queryByTestId("usage-sparkline-page-views")).not.toBeInTheDocument();
     expect(screen.getByText(/调用是否报错、被拒绝或变慢，到调用监控查看/)).toBeInTheDocument();
@@ -211,6 +231,12 @@ describe("GovernanceOverview", () => {
     ]);
 
     expect(within(screen.getByTestId("metric-token-asset")).getByText("Token")).toBeInTheDocument();
+    // 主术语是「Token 凭据」；「Token 凭证」是发版前 WebUI 三层检查 Spec §5 的禁止词。
+    expect(screen.getByTestId("metric-token-asset")).toHaveTextContent("Token 凭据与活跃");
+    expect(screen.getByTestId("metric-token-asset")).not.toHaveTextContent("Token 凭证");
+    expect(
+      screen.getByRole("button", { name: "Token 凭据与活跃 说明" })
+    ).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-agent-asset")).toBeInTheDocument();
     expect(screen.getByTestId("metric-agent-asset")).toHaveClass("pl-metric-card--with-help");
     // Compound card has subValue in <small>
@@ -336,6 +362,8 @@ describe("GovernanceOverview", () => {
     expect(within(screen.getByTestId("governance-interface-page-rank")).getByText("趋势监控")).toBeInTheDocument();
     expect(screen.getByText(/页面访问、访问账户与菜单使用/)).toBeInTheDocument();
     expect(screen.queryByTestId("governance-usage-rank-grid")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-real-questions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("daily-question-table")).not.toBeInTheDocument();
 
     const callsBeforeWindow = fetchMock.mock.calls.length;
     fireEvent.click(screen.getByTestId("governance-window-24h"));
@@ -558,5 +586,37 @@ describe("GovernanceOverview", () => {
     for (const testId of availableTestIds) {
       expect(screen.getByTestId(testId)).not.toHaveTextContent("数据不完整");
     }
+  });
+
+  it("SC-24 — 数据访问视图有四张问询卡与按日表，界面使用视图没有；调用量、ACL 拒绝、多数请求耗时仍然不在数据访问视图", async () => {
+    stubFetch();
+    renderPage("/admin/usage");
+
+    // 数据访问视图：四张问询卡 + 按日问询表。
+    // 先等 overview 真正加载完（卡片在未加载时渲染为「数据源不可用」）。
+    expect(await screen.findByTestId("governance-question-metrics")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("metric-real-questions")).toHaveTextContent("4");
+    });
+    expect(screen.getByTestId("metric-unreported-query-sessions")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-connect-only-sessions")).toHaveTextContent("2");
+    expect(screen.getByTestId("metric-browse-without-ask-sessions")).toHaveTextContent("3");
+    expect(screen.getByTestId("daily-question-table")).toBeInTheDocument();
+
+    // 调用量、ACL 拒绝、多数请求耗时三张卡仍然不在数据访问视图。
+    expect(screen.queryByTestId("metric-calls")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-acl-denied")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-p95-latency")).not.toBeInTheDocument();
+    expect(screen.queryByText("多数请求耗时")).not.toBeInTheDocument();
+    expect(screen.queryByText(/ACL 拒绝次数/)).not.toBeInTheDocument();
+
+    // 界面使用视图：这组数据不展示。
+    fireEvent.click(screen.getByTestId("governance-view-interface"));
+    expect(await screen.findByTestId("governance-interface-usage")).toBeInTheDocument();
+    expect(screen.queryByTestId("metric-real-questions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-unreported-query-sessions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-connect-only-sessions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-browse-without-ask-sessions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("daily-question-table")).not.toBeInTheDocument();
   });
 });

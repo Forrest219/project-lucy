@@ -3,6 +3,7 @@ import path from "node:path";
 import { parse, stringify } from "yaml";
 import { resolveProjectRoot } from "../project.js";
 import { auditedWriteFile } from "../admin/config-audit-write.js";
+import { normalizeAccountEmail } from "./account-email.js";
 import { resolveDeploymentMode } from "./deployment-mode.js";
 
 export const ADMINS_YAML_REL = "webui/config/admins.yaml";
@@ -48,6 +49,8 @@ export type WebuiAdminRecord = {
   role: WebuiAdminRole;
   enabled: boolean;
   created_at: string;
+  /** Optional contact address. Never used to sign in or to match an identity provider. */
+  email?: string;
   oidc_bindings?: OidcBinding[];
   /** Keys this build does not interpret. Written back unchanged so a later release can add fields. */
   preserved?: Record<string, unknown>;
@@ -82,6 +85,7 @@ const KNOWN_ADMIN_KEYS = new Set([
   "role",
   "enabled",
   "created_at",
+  "email",
   "oidc_bindings"
 ]);
 
@@ -128,9 +132,11 @@ function normalizeConfig(raw: unknown): AdminsConfig {
     throw new AdminsConfigError("admins.yaml `admins` must be a list");
   }
   const admins: WebuiAdminRecord[] = [];
+  const seenIds = new Set<string>();
   const seenUids = new Set<string>();
   const seenSubjects = new Set<string>();
   const seenEmails = new Set<string>();
+  const seenAccountEmails = new Set<string>();
   for (const item of (doc.admins as unknown[] | null | undefined) ?? []) {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
       throw new AdminsConfigError("admins.yaml entry must be a mapping");
@@ -138,6 +144,10 @@ function normalizeConfig(raw: unknown): AdminsConfig {
     const row = item as Record<string, unknown>;
     const id = trimmedString(row.id);
     if (!id) throw new AdminsConfigError("admins.yaml entry has no id");
+    // The account id is the login identity: two rows with the same id would make
+    // every account lookup (and every OIDC binding resolution) ambiguous.
+    if (seenIds.has(id)) throw new AdminsConfigError(`admins.yaml has a duplicate admin id '${id}'`);
+    seenIds.add(id);
     const bindings = parseOidcBindings(row.oidc_bindings, id);
     const passwordHash = trimmedString(row.password_hash);
     if (!passwordHash && !bindings?.length) {
@@ -151,6 +161,21 @@ function normalizeConfig(raw: unknown): AdminsConfig {
       }
       seenSubjects.add(subjectKey);
       seenEmails.add(emailKey);
+    }
+    let email: string | undefined;
+    if (row.email !== undefined && row.email !== null && row.email !== "") {
+      if (typeof row.email !== "string") {
+        throw new AdminsConfigError(`admins.yaml entry '${id}' has an invalid email`);
+      }
+      const checked = normalizeAccountEmail(row.email);
+      if (!checked.ok || !checked.email) {
+        throw new AdminsConfigError(`admins.yaml entry '${id}' has an invalid email`);
+      }
+      if (seenAccountEmails.has(checked.email)) {
+        throw new AdminsConfigError(`admins.yaml entry '${id}' reuses an account email`);
+      }
+      seenAccountEmails.add(checked.email);
+      email = checked.email;
     }
     const role = normalizeWebuiAdminRole(row.role);
     let accountUid: string | undefined;
@@ -169,6 +194,7 @@ function normalizeConfig(raw: unknown): AdminsConfig {
       display_name: trimmedString(row.display_name) || id,
       ...(passwordHash ? { password_hash: passwordHash } : {}),
       role,
+      ...(email ? { email } : {}),
       enabled: row.enabled !== false,
       created_at: typeof row.created_at === "string" ? row.created_at : new Date(0).toISOString(),
       ...(bindings ? { oidc_bindings: bindings } : {}),
@@ -248,14 +274,88 @@ export function publicAdminView(admin: WebuiAdminRecord): {
   role: WebuiAdminRole;
   enabled: boolean;
   createdAt: string;
+  email: string | null;
 } {
   return {
     id: admin.id,
     displayName: admin.display_name,
     role: admin.role,
     enabled: admin.enabled,
-    createdAt: admin.created_at
+    createdAt: admin.created_at,
+    email: admin.email ?? null
   };
+}
+
+/**
+ * Owner-facing account view (L25-06 §5.3).
+ *
+ * The public view never carries bindings: `/api/auth/status` and `/api/auth/me`
+ * are reachable without a session, so the identity detail stays behind the owner
+ * boundary.
+ */
+export function ownerAdminView(admin: WebuiAdminRecord): {
+  id: string;
+  displayName: string;
+  role: WebuiAdminRole;
+  enabled: boolean;
+  createdAt: string;
+  email: string | null;
+  loginMethods: ("local" | "oidc")[];
+  oidcBindings: OidcBinding[];
+} {
+  const loginMethods: ("local" | "oidc")[] = [];
+  if (admin.password_hash) loginMethods.push("local");
+  if (admin.oidc_bindings?.length) loginMethods.push("oidc");
+  return {
+    ...publicAdminView(admin),
+    loginMethods,
+    oidcBindings: admin.oidc_bindings ?? []
+  };
+}
+
+export type OidcBindingMatch = {
+  admin: WebuiAdminRecord;
+  binding: OidcBinding;
+};
+
+/**
+ * Exact `(issuer, sub)` match — the only key that authenticates an OIDC subject
+ * (L25-06 §3.1). No trailing-slash, case or URL normalization, and no email
+ * fallback: an email is contact information, never an identity.
+ */
+export function findOidcBinding(config: AdminsConfig, issuer: string, sub: string): OidcBindingMatch | undefined {
+  for (const admin of config.admins) {
+    for (const binding of admin.oidc_bindings ?? []) {
+      if (binding.issuer === issuer && binding.sub === sub) return { admin, binding };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Owners that are enabled AND still hold a local password.
+ *
+ * This is the recovery floor of L25-06 D05: Lucy must never depend on an external
+ * identity provider alone, so at least one such owner has to survive every
+ * narrowing write.
+ */
+export function countEnabledOwnersWithLocalPassword(config: AdminsConfig): number {
+  return config.admins.filter((a) => a.enabled && a.role === "owner" && Boolean(a.password_hash)).length;
+}
+
+let adminsWriteTail: Promise<unknown> = Promise.resolve();
+
+/**
+ * One queue for every load-modify-save of admins.yaml.
+ * Not reentrant: a task that calls this again waits forever.
+ */
+export function withAdminsWrite<T>(task: () => Promise<T>): Promise<T> {
+  const run = adminsWriteTail.then(task, task);
+  adminsWriteTail = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
 }
 
 export async function saveAdminsConfig(
@@ -278,6 +378,7 @@ export async function saveAdminsConfig(
         id: a.id,
         ...(a.account_uid ? { account_uid: a.account_uid } : {}),
         display_name: a.display_name,
+        ...(a.email ? { email: a.email } : {}),
         ...(a.password_hash ? { password_hash: a.password_hash } : {}),
         role: a.role,
         enabled: a.enabled,

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
+import { RestoreReleaseDrawer } from "../../components/semantic-assets/RestoreReleaseDrawer";
 import { apiGet } from "../../lib/apiClient";
+import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import {
   PUBLISH_HISTORY_PAGE_SIZE,
   coerceTrigger,
@@ -86,6 +88,16 @@ function sinceForWindowPreset(preset: string): string {
   return "";
 }
 
+/**
+ * 预设选中时的结束时间：当前时刻。
+ * 预设必须同时给出起止两端，否则筛选条会出现「有开始、无结束」的残缺区间
+ * （发版前 WebUI 三层检查 Spec D3 / UX-R07）。取精确当前时刻而非整点，
+ * 免得吞掉最近不到一小时的发布记录。
+ */
+function untilNowIso(): string {
+  return new Date(Date.now()).toISOString();
+}
+
 function previewList(items: string[], limit = SCOPE_PREVIEW_LIMIT): { shown: string[]; more: number } {
   const unique = Array.from(new Set(items.filter(Boolean)));
   return {
@@ -108,7 +120,7 @@ function buildErrorPanel(record: SemanticAssetReleaseRecord): ErrorPanel {
       `exit code: ${reindex.exitCode}`
     ];
     return {
-      title: `Reindex 失败 · ${record.id} (exit ${reindex.exitCode})`,
+      title: `重建索引失败 · ${record.id} (exit ${reindex.exitCode})`,
       body: lines.join("\n")
     };
   }
@@ -338,6 +350,7 @@ export function PublishHistory() {
   const [page, setPage] = useState(0);
   const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
+  const [restoreReleaseId, setRestoreReleaseId] = useState<string | null>(null);
   const didInitDefaultWindow = useRef(false);
 
   const windowPreset = searchParams.get("window") ?? "";
@@ -347,23 +360,47 @@ export function PublishHistory() {
   const reindexStatus = searchParams.get("reindexStatus") ?? "";
   const actor = searchParams.get("actor") ?? "";
 
+  // ── 局部状态镜像（Spec §5.2／§5.3）──────────────────────────────────────
+  // 「操作人」输入框的 `value` 由本地 state 驱动，URL 作为下游事实源跟随。
+  // 历史模式保持现状：push。`window`/`since`/`until` 与文本框互不干扰。
+  const actorMirror = useUrlMirroredField({
+    read: (sp) => sp.get("actor") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("actor", raw);
+      else next.delete("actor");
+      return next;
+    },
+    history: "push"
+  });
+
   useEffect(() => {
     if (didInitDefaultWindow.current) return;
     didInitDefaultWindow.current = true;
-    if (searchParams.has("window") || searchParams.has("since") || searchParams.has("until")) {
+    const next = new URLSearchParams(searchParams);
+    // 预设已选但缺结束时间（深链 / 旧 URL）：补齐，避免筛选条残缺。
+    if (next.has("window") && !next.has("until")) {
+      next.set("until", untilNowIso());
+      setSearchParams(next, { replace: true });
       return;
     }
-    const next = new URLSearchParams(searchParams);
+    if (next.has("window") || next.has("since") || next.has("until")) {
+      return;
+    }
     next.set("window", DEFAULT_TIME_WINDOW);
     next.set("since", sinceForWindowPreset(DEFAULT_TIME_WINDOW));
+    next.set("until", untilNowIso());
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
   function updateParam(key: string, value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setSearchParams(next);
+    // 函数式更新：从 prev 拷贝后再改本字段，禁止闭包快照（Spec §5.2 写入契约）。
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      return next;
+    });
     setPage(0);
   }
 
@@ -376,7 +413,7 @@ export function PublishHistory() {
     } else {
       next.set("window", preset);
       next.set("since", sinceForWindowPreset(preset));
-      next.delete("until");
+      next.set("until", untilNowIso());
     }
     setSearchParams(next);
     setPage(0);
@@ -487,15 +524,16 @@ export function PublishHistory() {
           <option value="">全部触发方式</option>
           <option value="webui_publish">WebUI 发布</option>
           <option value="webui_manual_reindex">WebUI 强制重建索引</option>
+          <option value="webui_restore">整批恢复</option>
         </select>
         <select
           className="pl-input w-36"
           value={reindexStatus}
           onChange={(e) => updateParam("reindexStatus", e.target.value)}
-          aria-label="Reindex 状态"
+          aria-label="重建索引状态"
           data-testid="publish-history-reindex-filter"
         >
-          <option value="">全部 Reindex 状态</option>
+          <option value="">全部重建索引状态</option>
           <option value="success">成功</option>
           <option value="failed">失败</option>
           <option value="running">进行中</option>
@@ -505,8 +543,8 @@ export function PublishHistory() {
           className="pl-input w-40 notranslate"
           translate="no"
           placeholder="操作人"
-          value={actor}
-          onChange={(e) => updateParam("actor", e.target.value)}
+          value={actorMirror.value}
+          onChange={(e) => actorMirror.onChange(e.target.value)}
           aria-label="操作人"
           data-testid="publish-history-actor"
         />
@@ -567,12 +605,7 @@ export function PublishHistory() {
                       <th scope="col">操作人</th>
                       <th scope="col">变更范围</th>
                       <th scope="col">规模</th>
-                      <th scope="col">
-                        <span className="notranslate" translate="no">
-                          Reindex
-                        </span>{" "}
-                        状态
-                      </th>
+                      <th scope="col">重建索引状态</th>
                       <th scope="col">操作</th>
                     </tr>
                   </thead>
@@ -638,6 +671,17 @@ export function PublishHistory() {
                             </span>
                           </td>
                           <td>
+                            {coerceTrigger(record.trigger) !== "webui_manual_reindex" ? (
+                              <button
+                                type="button"
+                                className="pl-row-action-link"
+                                disabled={!record.snapshotId || record.terminalAuditPending === true}
+                                onClick={() => setRestoreReleaseId(record.id)}
+                                data-testid="publish-history-restore"
+                              >
+                                {record.snapshotId ? "可预检恢复" : "快照不可用"}
+                              </button>
+                            ) : null}
                             <RowActions
                               record={record}
                               expandedDiff={isDiffOpen ? record.diff ?? "" : null}
@@ -701,6 +745,14 @@ export function PublishHistory() {
             </div>
           );
         })}
+        {restoreReleaseId ? (
+          <RestoreReleaseDrawer
+            releaseId={restoreReleaseId}
+            createdAt={records.find((record) => record.id === restoreReleaseId)?.createdAt ?? ""}
+            actor={records.find((record) => record.id === restoreReleaseId)?.actor ?? ""}
+            onClose={() => setRestoreReleaseId(null)}
+          />
+        ) : null}
       </section>
     </div>
   );

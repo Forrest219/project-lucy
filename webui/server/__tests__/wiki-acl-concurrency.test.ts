@@ -110,48 +110,100 @@ describe("two administrators saving the same Wiki page", () => {
 
 describe("replace-style writes keep the page audience unless the owner chooses otherwise", () => {
   it("upload replace requires the current version and carries the existing ACL over", async () => {
+    // Spec 193 §5.4 — the commit needs the original Markdown, an explicit
+    // access selection and the preview digest.
     await expect(
-      commitWikiUpload(projectRoot, { key: KEY, markdown: "# Replaced\n", overwrite: true })
-    ).rejects.toMatchObject({ statusCode: 428 });
+      commitWikiUpload(projectRoot, { key: KEY, markdown: "# Replaced\n", mode: "replace" })
+    ).rejects.toMatchObject({ statusCode: 400, code: "wiki_upload_access_required" });
     await expect(
-      commitWikiUpload(projectRoot, { key: KEY, markdown: "# Replaced\n", overwrite: true, expected_version: "sha256:stale" })
-    ).rejects.toMatchObject({ statusCode: 409 });
+      commitWikiUpload(projectRoot, {
+        key: KEY,
+        markdown: "# Replaced\n",
+        mode: "replace",
+        access: { mode: "preserve_current" }
+      })
+    ).rejects.toMatchObject({ statusCode: 409, code: "wiki_upload_preview_stale" });
 
-    const preview = await previewWikiUpload(projectRoot, { key: KEY, markdown: "# Replaced\n", overwrite: true });
+    const preview = await previewWikiUpload(projectRoot, { key: KEY, markdown: "# Replaced\n", mode: "replace" });
     expect(preview.currentFileVersion).toBe((await readWiki(projectRoot, KEY)).file_version);
+    expect(preview.access.suggested_selection).toEqual({ mode: "preserve_current" });
+    expect(preview.access.final_acl).toEqual({ state: "roles", roles: ["finance"] });
     await commitWikiUpload(projectRoot, {
       key: KEY,
       markdown: "# Replaced\n",
-      overwrite: true,
-      expected_version: preview.currentFileVersion ?? ""
+      mode: "replace",
+      access: { mode: "preserve_current" },
+      expected_version: preview.currentFileVersion ?? "",
+      preview_digest: preview.access.preview_digest
     });
     const page = await readWiki(projectRoot, KEY);
     expect(page.content).toContain("# Replaced");
     expect(page.frontmatter.allowed_roles).toEqual(["finance"]);
   });
 
-  it("an upload that declares its own valid ACL changes it; an invalid one is refused before any write", async () => {
+  it("an upload only changes the ACL when the admin asks for it; a corrupt declaration is refused", async () => {
     const version = (await readWiki(projectRoot, KEY)).file_version;
+    const corrupt = await previewWikiUpload(projectRoot, {
+      key: KEY,
+      markdown: "---\nallowed_roles: ['*', finance]\n---\n# X\n",
+      mode: "replace",
+      access: { mode: "use_uploaded" }
+    });
+    // The corrupt declaration cannot be adopted.
+    expect(corrupt.access.uploaded_acl.state).toBe("corrupt");
+    expect(corrupt.access.issues.some((issue) => issue.blocking)).toBe(true);
     await expect(
       commitWikiUpload(projectRoot, {
         key: KEY,
         markdown: "---\nallowed_roles: ['*', finance]\n---\n# X\n",
-        overwrite: true,
-        expected_version: version
+        mode: "replace",
+        access: { mode: "use_uploaded" },
+        expected_version: version,
+        preview_digest: corrupt.access.preview_digest
       })
     ).rejects.toMatchObject({ code: "CONTEXT_ACL_INVALID" });
+
+    // The default keeps the current audience even when the file declares one.
+    const preserved = await previewWikiUpload(projectRoot, {
+      key: KEY,
+      markdown: "---\nallowed_roles: [ops]\n---\n# X\n",
+      mode: "replace"
+    });
+    expect(preserved.access.final_acl).toEqual({ state: "roles", roles: ["finance"] });
     await commitWikiUpload(projectRoot, {
       key: KEY,
       markdown: "---\nallowed_roles: [ops]\n---\n# X\n",
-      overwrite: true,
-      expected_version: version
+      mode: "replace",
+      access: { mode: "preserve_current" },
+      expected_version: version,
+      preview_digest: preserved.access.preview_digest
+    });
+    expect((await readWiki(projectRoot, KEY)).frontmatter.allowed_roles).toEqual(["finance"]);
+
+    // Adopting the uploaded declaration is an explicit choice.
+    const current = (await readWiki(projectRoot, KEY)).file_version;
+    const adopted = await previewWikiUpload(projectRoot, {
+      key: KEY,
+      markdown: "---\nallowed_roles: [ops]\n---\n# X\n",
+      mode: "replace",
+      access: { mode: "use_uploaded" }
+    });
+    expect(adopted.access.final_acl).toEqual({ state: "roles", roles: ["ops"] });
+    await commitWikiUpload(projectRoot, {
+      key: KEY,
+      markdown: "---\nallowed_roles: [ops]\n---\n# X\n",
+      mode: "replace",
+      access: { mode: "use_uploaded" },
+      expected_version: current,
+      preview_digest: adopted.access.preview_digest
     });
     expect((await readWiki(projectRoot, KEY)).frontmatter.allowed_roles).toEqual(["ops"]);
   });
 
   it("a new upload without an ACL warns that nobody can see it", async () => {
     const preview = await previewWikiUpload(projectRoot, { key: "global/new-upload.md", markdown: "# New\n" });
-    expect(preview.warnings.join("\n")).toContain("无人可见");
+    expect(preview.access.final_acl.state).toBe("missing");
+    expect(preview.access.issues.map((issue) => issue.code)).toContain("confirm_empty_required");
   });
 
   it("version restore never revives an older, wider ACL", async () => {
@@ -166,7 +218,16 @@ describe("replace-style writes keep the page audience unless the owner chooses o
     const versions = await listWikiVersions(projectRoot, "global/restore.md");
     const oldest = versions.versions.at(-1);
     expect(oldest).toBeTruthy();
-    await restoreWikiVersion(projectRoot, "global/restore.md", oldest?.versionId ?? "");
+    await expect(
+      restoreWikiVersion(projectRoot, "global/restore.md", oldest?.versionId ?? "")
+    ).rejects.toMatchObject({ statusCode: 428, code: "wiki_expected_version_required" });
+    await restoreWikiVersion(
+      projectRoot,
+      "global/restore.md",
+      oldest?.versionId ?? "",
+      undefined,
+      (await readWiki(projectRoot, "global/restore.md")).file_version
+    );
     const restored = await readWiki(projectRoot, "global/restore.md");
     expect(restored.content).toContain("# Old");
     expect(restored.frontmatter.allowed_roles).toEqual(["finance"]);

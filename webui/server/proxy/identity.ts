@@ -48,6 +48,14 @@ interface RoleAllow {
   /** Spec 131 — catalog_bound: sources = source map ∩ connections ∩ enabled_tables. */
   source_scope?: "catalog_bound";
   tools?: string[];
+  /**
+   * L25-16 — 控制面授权维度（Spec §3.2.1）。
+   *
+   * 与 `tools`（数据面）**完全独立**：每条 grant 形如
+   * `{ tools: [...], asset_kinds: [...], connections?: [...], instance_scope?: "read_only" }`。
+   * 规范化与判定在 `webui/server/ops/ops-grants.ts`；此处只保留原始形状。
+   */
+  ops?: unknown[];
 }
 
 interface RoleConfig {
@@ -64,6 +72,13 @@ interface UserConfig {
   roles?: string[];
   tokens: UserToken[];
   allow?: UserAllow;
+  /**
+   * L25-16 — 委托人（`admins.yaml` 中的管理员 id，Spec §3.2.2 规则 6）。
+   *
+   * 只用于**提升到 owner-only 操作**与审计归因，**不得扩大** `allow.ops` 已声明的
+   * 域与连接范围（规则 7）。
+   */
+  delegated_from?: string;
   /** Spec 100 — Agent Constraints (compiled in acl; Role must not have this field). */
   constraints?: unknown;
 }

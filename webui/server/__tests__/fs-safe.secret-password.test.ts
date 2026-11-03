@@ -2,9 +2,12 @@ import { access, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ContentPaths } from "../paths";
 import {
   assertReadable,
   ForbiddenPathError,
+  safeOverwriteSecretPassword,
+  safeReadSecretPasswordBytesIfExists,
   safeRemoveSecretPasswordIfExists,
   safeWrite,
   safeWriteNewSecretPassword,
@@ -12,6 +15,18 @@ import {
 } from "../fs-safe";
 
 let projectRoot: string;
+
+/** Legacy sibling layout: configDir == projectRoot (post-A2 default uses config/ subdir). */
+function legacyPaths(): ContentPaths {
+  return {
+    configDir: projectRoot,
+    semanticLayer: path.join(projectRoot, "semantic-layer"),
+    wiki: path.join(projectRoot, "wiki"),
+    evals: path.join(projectRoot, "evals"),
+    skills: path.join(projectRoot, "skills"),
+    source: "default"
+  };
+}
 
 async function makeProjectRoot() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-secret-"));
@@ -45,13 +60,15 @@ describe("safeWriteNewSecretPassword (Spec 124 Phase A)", () => {
   });
 
   it("still rejects generic safeWrite into .ktx/secrets", async () => {
-    await expectForbidden(() => safeWrite(projectRoot, ".ktx/secrets/demo-mysql-password", "x"));
+    await expectForbidden(() =>
+      safeWrite(legacyPaths(), projectRoot, ".ktx/secrets/demo-mysql-password", "x")
+    );
   });
 
   it("still rejects assertReadable on the written secret", async () => {
     const relPath = ".ktx/secrets/demo-mysql-password";
     await safeWriteNewSecretPassword(projectRoot, relPath, "s3cret-value");
-    await expectForbidden(() => assertReadable(projectRoot, relPath));
+    await expectForbidden(() => assertReadable(legacyPaths(), projectRoot, relPath));
   });
 
   it("refuses overwrite when the password file already exists", async () => {
@@ -98,6 +115,22 @@ describe("safeWriteNewSecretPassword (Spec 124 Phase A)", () => {
     } finally {
       await rm(outside, { recursive: true, force: true });
     }
+  });
+});
+
+describe("safeOverwriteSecretPassword (endpoint edit)", () => {
+  it("overwrites existing secret bytes and create new-only still rejects", async () => {
+    const relPath = ".ktx/secrets/demo-mysql-password";
+    await safeWriteNewSecretPassword(projectRoot, relPath, "first");
+    await safeOverwriteSecretPassword(projectRoot, relPath, "second");
+    await expect(readFile(path.join(projectRoot, relPath), "utf8")).resolves.toBe("second");
+    const mode = (await stat(path.join(projectRoot, relPath))).mode & 0o777;
+    expect(mode).toBe(0o600);
+    await expect(safeWriteNewSecretPassword(projectRoot, relPath, "third")).rejects.toBeInstanceOf(
+      SecretAlreadyExistsError
+    );
+    const bytes = await safeReadSecretPasswordBytesIfExists(projectRoot, relPath);
+    expect(bytes?.toString("utf8")).toBe("second");
   });
 });
 

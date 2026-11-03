@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Copy, Check, ExternalLink, Sparkles, CheckCircle2, Key, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiPost, isStaleResponseError } from "../../lib/apiClient";
+import { CLIPBOARD_COPY_FAILED_MESSAGE, copyTextToClipboard } from "../../lib/clipboard";
 import {
   buildClientConfigs,
   buildHelloWorldPrompt,
@@ -155,26 +156,26 @@ export function Step6ConnectAgent({
         : "表结构尚未准备";
 
   const copyToClipboard = async (text: string, isPrompt = false, isToken = false) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      if (isPrompt) {
-        setCopiedPrompt(true);
-        setTimeout(() => setCopiedPrompt(false), 2000);
-      } else if (isToken) {
-        setCopiedToken(true);
-        toast.success("已复制 Token 明文");
-        setTimeout(() => setCopiedToken(false), 2000);
+    const result = await copyTextToClipboard(text);
+    if (!result.ok) {
+      toast.error(CLIPBOARD_COPY_FAILED_MESSAGE);
+      return;
+    }
+    if (isPrompt) {
+      setCopiedPrompt(true);
+      setTimeout(() => setCopiedPrompt(false), 2000);
+    } else if (isToken) {
+      setCopiedToken(true);
+      toast.success("已复制 Token 明文");
+      setTimeout(() => setCopiedToken(false), 2000);
+    } else {
+      setCopiedSnippet(true);
+      if (!generatedToken) {
+        toast.info("已复制配置（当前包含占位符，可点击上方「一键签发」获取真实 Token）");
       } else {
-        setCopiedSnippet(true);
-        if (!generatedToken) {
-          toast.info("已复制配置（当前包含占位符，可点击上方「一键签发」获取真实 Token）");
-        } else {
-          toast.success("已复制即用 MCP 配置");
-        }
-        setTimeout(() => setCopiedSnippet(false), 2000);
+        toast.success("已复制即用 MCP 配置");
       }
-    } catch {
-      // Fallback
+      setTimeout(() => setCopiedSnippet(false), 2000);
     }
   };
 

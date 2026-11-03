@@ -30,6 +30,20 @@ const RPC_POLICY_DENY_CODES = new Set([-32001, -32003, -32600, -32601, -32602]);
 /** C1 explicit deny reason allowlist. The real server emits `Access denied: <reason>...` so
  *  lookups are done by PREFIX (the reason comes after `Access denied: ` and may have a hint
  *  suffix). The list is intentionally narrow. */
+/** C1 explicit deny reason allowlist. The real server emits `Access denied: <reason>...` so
+ * lookups are done by CLASS: the reason comes after `Access denied: `, may carry a
+ * `<detail>` suffix (`table_forbidden:<table>`, `role_resolution_failed:<roleId>`,
+ * `explicit_table_required:<table>`) and may be followed by a space-separated hint.
+ *
+ * The list stays narrow, but it must cover the vocabulary the product actually emits
+ * (`webui/server/proxy/acl.ts` documents it on `AclDecision.reason`). A reason is
+ * RECOGNISED when it equals an entry or when it starts with an entry followed by `:`
+ * (the class + detail form) — the same prefix discipline the product's own audit
+ * classification uses (`webui/server/proxy/audit-classification.ts`).
+ *
+ * Recognition is deliberately separate from MATCHING: `denyReasonMatches` still compares
+ * the FULL extracted reason, so a case that demands a specific reason (e.g.
+ * `tool_absolute_deny:sl_query`) is not satisfied by a different one. */
 const DENY_REASON_ALLOWLIST = new Set([
   // AC-P0 capability / auth
   "AUTH_INVALID",
@@ -46,6 +60,7 @@ const DENY_REASON_ALLOWLIST = new Set([
   "row_policy_op_forbidden",
   "row_policy_predicates_empty",
   // AC-P0 absolute deny
+  "tool_absolute_deny",
   "tool_absolute_deny:sl_query",
   "tool_absolute_deny:sl_read_source",
   "tool_absolute_deny:sql_execution",
@@ -62,6 +77,17 @@ const DENY_REASON_ALLOWLIST = new Set([
   "context_not_available",
   "context_role_required",
   "role_resolution_failed",
+  "source_map_compile_failed",
+  // ACL vocabulary (webui/server/proxy/acl.ts — AclDecision.reason)
+  "tool_forbidden",
+  "tool_forbidden_global",
+  "tool_unclassified",
+  "agent_disabled",
+  "query_concurrency_exceeded",
+  "sensitive_metadata_forbidden",
+  "table_forbidden",
+  "policy_degraded_deny",
+  "wiki_forbidden",
   // MCP / generic
   "method_not_found",
   "invalid_request",
@@ -69,6 +95,60 @@ const DENY_REASON_ALLOWLIST = new Set([
   "WIKI_FRONTMATTER_UNSUPPORTED",
   "AUDIT_UNAVAILABLE"
 ]);
+
+/** The envelope sources that carry an explicit product refusal. */
+const REFUSAL_SOURCES = new Set(["mcp_iserror_access_denied", "mcp_iserror_invalid_arguments"]);
+
+/**
+ * True when the extracted reason is one of the documented product denial classes.
+ * The exact reason (class + optional detail) is what callers match against; this only
+ * decides whether the response IS an explicit denial at all.
+ */
+function isAllowlistedDenyReason(reason) {
+  if (!reason) return false;
+  if (DENY_REASON_ALLOWLIST.has(reason)) return true;
+  for (const allowed of DENY_REASON_ALLOWLIST) {
+    if (reason.startsWith(`${allowed}:`)) return true;
+  }
+  return false;
+}
+
+/**
+ * The product's refusal prefixes.
+ *
+ * `Access denied: ` is the ACL / policy refusal (`webui/server/proxy/mcp-proxy.ts`).
+ * `Invalid arguments: ` is the INPUT-VALIDATION refusal (the same file): it carries a
+ * reason token from the SAME vocabulary (`invalid_arguments:lucy_query:...`), so it is
+ * just as explicit a denial. Recognising only the first prefix made the harness report
+ * legitimate refusals as "not a recognized denial envelope".
+ */
+const REFUSAL_PREFIXES = ["Access denied:", "Invalid arguments:"];
+
+/** The refusal prefix a message carries, or null when it carries none. */
+export function refusalPrefix(text) {
+  if (typeof text !== "string") return null;
+  for (const prefix of REFUSAL_PREFIXES) {
+    if (text.startsWith(prefix)) return prefix;
+  }
+  return null;
+}
+
+/**
+ * The reason token carried by a denial message.
+ *
+ * The product emits `Access denied: <reason>[<hint>]` — the hint may be attached with a
+ * `:` (a detail suffix such as `table_forbidden:<table>`) or separated by a SPACE (a
+ * human hint). A reason token never contains whitespace, so the leading token after the
+ * `Access denied: ` prefix IS the reason.
+ */
+function denyReasonToken(message) {
+  const text = typeof message === "string" ? message : "";
+  const prefix = refusalPrefix(text);
+  const withoutPrefix = prefix ? text.slice(prefix.length).trim() : text.trim();
+  // A reason token carries a class, an optional `:detail` and source names with dots
+  // (`table_forbidden:analytics.orders_masked`), so `.` belongs to the token alphabet.
+  return (/^[A-Za-z0-9_\-/:.]+/.exec(withoutPrefix)?.[0]) ?? withoutPrefix;
+}
 
 /** Extract the deny reason from the documented MCP envelope. Returns `{ matched, reason,
  *  raw, source }` where:
@@ -89,8 +169,9 @@ export function extractDenyReason(res) {
   // `http_403` is the verbatim reason and the case must report "wrong reason".
   if (res.status === 401 || res.status === 403) {
     const errMessage = res.json?.error?.message ?? "";
-    for (const allowed of DENY_REASON_ALLOWLIST) {
-      if (errMessage === allowed) return { matched: allowed, reason: allowed, raw: errMessage, source: `http_${res.status}` };
+    const reason = denyReasonToken(errMessage);
+    if (isAllowlistedDenyReason(reason)) {
+      return { matched: reason, reason, raw: errMessage, source: `http_${res.status}` };
     }
     return { matched: `http_${res.status}`, reason: `http_${res.status}`, raw: errMessage, source: `http_${res.status}_unmatched` };
   }
@@ -103,10 +184,11 @@ export function extractDenyReason(res) {
     if (!RPC_POLICY_DENY_CODES.has(err.code)) {
       return { matched: null, reason: null, raw: err.message ?? "", source: `jsonrpc_${err.code}` };
     }
-    for (const allowed of DENY_REASON_ALLOWLIST) {
-      if (err.message === allowed) return { matched: allowed, reason: allowed, raw: err.message, source: "jsonrpc_error" };
+    const reason = denyReasonToken(err.message);
+    if (isAllowlistedDenyReason(reason)) {
+      return { matched: reason, reason, raw: err.message ?? "", source: "jsonrpc_error" };
     }
-    return { matched: null, reason: null, raw: err.message ?? "", source: "jsonrpc_error_unmatched" };
+    return { matched: null, reason, raw: err.message ?? "", source: "jsonrpc_error_unmatched" };
   }
   // MCP tools/call result envelope (HTTP 200, with `result.isError` / `result.content[0].text`)
   const result = res.json?.result;
@@ -115,16 +197,16 @@ export function extractDenyReason(res) {
     const text = first?.text ?? "";
     if (result.isError === true) {
       // Real server emits "Access denied: <reason><hint>". Strip the prefix and match the rest
-      // against the allowlist. The reason is taken verbatim up to the first `:` hint delimiter.
-      const accessPrefix = "Access denied:";
-      if (typeof text === "string" && text.startsWith(accessPrefix)) {
-        const tail = text.slice(accessPrefix.length).trim();
-        // Reason ends at the first `:` that is followed by a hint (lower-case, 'hint', or '<')
-        // OR at end-of-string when there is no hint.
-        const hintMatch = tail.match(/^([A-Za-z0-9_\-/:]+)(?::.*)?$/);
-        const reason = hintMatch ? hintMatch[1] : tail;
-        if (DENY_REASON_ALLOWLIST.has(reason)) {
-          return { matched: reason, reason, raw: text, source: "mcp_iserror_access_denied" };
+      // against the allowlist. The reason is a TOKEN (no whitespace): it may carry a `:detail`
+      // suffix (`table_forbidden:<table>`), and the hint that follows is separated by a SPACE
+      // (e.g. "table_forbidden:analytics.x 可用连接：fin-db。"). Anchoring the token at the
+      // START — instead of requiring the whole tail to be one token — is what lets the class
+      // be recognised when the product appends a hint.
+      const prefix = refusalPrefix(text);
+      if (prefix) {
+        const reason = denyReasonToken(text);
+        if (isAllowlistedDenyReason(reason)) {
+          return { matched: reason, reason, raw: text, source: prefix === "Access denied:" ? "mcp_iserror_access_denied" : "mcp_iserror_invalid_arguments" };
         }
         return { matched: null, reason, raw: text, source: "mcp_iserror_unmatched_reason" };
       }
@@ -137,9 +219,65 @@ export function extractDenyReason(res) {
   return { matched: null, reason: null, raw: res.text?.slice(0, 200) ?? "", source: "unrecognized" };
 }
 
+/**
+ * Reads the aggregate out of the CURRENT `lucy_query` envelope.
+ *
+ * The product answers a semantic query with `{ headers: [...], rows: [[...]] }`: the column
+ * names live in `headers` and the values are positional, with the DIMENSION columns first
+ * and the MEASURE columns after them (a `measures: ["order_count"]` query over
+ * `dimensions: ["region"]` answers `headers: ["region","order_count"]`). The gold binder
+ * needs ONE number, so the measure column is the LAST column of the first row.
+ *
+ * When the envelope has no headers, no rows, or a non-numeric value, the aggregate is
+ * `null` — never a guessed number. A missing measurement must fail the gold check, not
+ * approximate it.
+ *
+ * `measureNames`, when given, pins the column BY NAME: the first header that matches one
+ * of the requested measures wins. This is the precise form and is preferred whenever the
+ * caller knows what it asked for.
+ */
+export function measureValue(parsed, measureNames = null) {
+  const headers = parsed?.headers;
+  const rows = parsed?.rows;
+  if (!Array.isArray(headers) || !Array.isArray(rows) || rows.length === 0 || !Array.isArray(rows[0])) return null;
+  let index = -1;
+  if (Array.isArray(measureNames) && measureNames.length > 0) {
+    index = headers.findIndex((header) => measureNames.includes(header));
+    if (index < 0) return null;
+  } else {
+    index = headers.length - 1;
+  }
+  if (index < 0) return null;
+  const raw = rows[0][index];
+  if (raw === null || raw === undefined || raw === "") return null;
+  const value = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
 /** True only when the response is an explicit, allowlisted denial. */
 export function explicitDeny(res) {
   return extractDenyReason(res).matched !== null;
+}
+
+/**
+ * True when the response is a REFUSAL in any of the forms the product uses.
+ *
+ * Two forms count:
+ *   - an allowlisted denial envelope ("Access denied: <reason>" / "Invalid arguments:
+ *     <reason>"), and
+ *   - a TRANSPORT-level refusal (HTTP 4xx). The product refuses the protocol-level
+ *     negatives with a 4xx status — a malformed JSON-RPC envelope answers 400, an
+ *     unknown method or path answers 404, an over-sized upload answers 413 — and the
+ *     FROZEN catalog asks exactly those cases to be "被拒" WITHOUT pinning a status
+ *     (`SEC-08-V05…V08`, `SEC-15-V05`, `SEC-22-V06`). Requiring the "Access denied:"
+ *     envelope there made the cases unpassable against a correct product.
+ *
+ * A 5xx is NEVER a refusal: a server fault must not be scored as a green refusal.
+ */
+export function isRefusal(res) {
+  if (!res) return false;
+  if (typeof res.status === "number" && res.status >= 400 && res.status < 500) return true;
+  return explicitDeny(res);
 }
 
 /** True only when the response is an explicit allowlisted denial whose reason matches the
@@ -151,7 +289,7 @@ export function denyReasonMatches(res, expectedReason) {
   if (matched === expectedReason) return true;
   // Allow the case to match on a substring (e.g. expectedReason = "tool_absolute_deny:sl_query" matches
   // an emitted reason of the same allowlisted value). Equality is the safe default.
-  if (matched.includes(expectedReason) && source === "mcp_iserror_access_denied") return true;
+  if (matched.includes(expectedReason) && REFUSAL_SOURCES.has(source)) return true;
   return false;
 }
 
@@ -196,12 +334,68 @@ export function projectDigest(projectDir) {
 
 const MCP_ACCEPT = "application/json, text/event-stream";
 
+/** The tools the product counts against the per-question budget (see `mcpWithQuestionScope`). */
+const DATA_TOOLS = new Set([
+  "lucy_query",
+  "lucy_read_source",
+  "lucy_freshness",
+  "lucy_explain_query",
+  "wiki_search",
+  "wiki_read"
+]);
+
+/** The product's answer when a question scope is spent: HTTP 200, a partial result, no content. */
+function isBudgetExhausted(res) {
+  if (!res) return false;
+  if (res.status >= 500) return false;
+  const text = res.json?.result?.content?.[0]?.text ?? res.text ?? "";
+  return String(text).includes("question_budget_exhausted");
+}
+
+/** The turn id `lucy_begin_question` hands back. */
+function parseTurnId(res) {
+  const text = res?.json?.result?.content?.[0]?.text;
+  if (typeof text !== "string") return null;
+  try {
+    const parsed = JSON.parse(text);
+    return typeof parsed?.turnId === "string" && parsed.turnId ? parsed.turnId : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The origin the DELIBERATE rate-limit flood runs from.
+ *
+ * D-34 (2026-10-29): the product buckets logins by source
+ * (`webui/server/auth/rate-limit.ts`: `sourceTotal` = 30 per 5 minutes, keyed on the
+ * normalized remote address). SEC-05-V02/V03/V04/V05 MUST burn that bucket — V03 fires 40
+ * bad-password logins on purpose to prove the source-wide limit fires — but the legitimate
+ * traffic of the run used to share the same bucket. Whenever the management leg started
+ * within 5 minutes of the security leg ending, it inherited a saturated bucket and the
+ * SAME full management leg scored 16 passed in one run and 1 passed in the next.
+ *
+ * The flood therefore gets its OWN source address: on a locally started instance the
+ * WebUI listens dual-stack, so the IPv6 loopback reaches the same server while the
+ * server sees `::1` instead of `::ffff:127.0.0.1`. The product still counts every attempt
+ * from that address against that address's buckets; the rest of the run keeps its own.
+ * No threshold, window or key is changed, and the assertions keep testing exactly the
+ * same control.
+ */
 export class SecurityContext {
+  /** The data tools that need an open question scope. */
+  static DATA_TOOLS = DATA_TOOLS;
+
   constructor({ run, lucy, capabilities, observerFactory }) {
     this.run = run;
     this.lucy = lucy;
     this.capabilities = capabilities;
     this.web = new LucyHttp(run.instance.baseUrl);
+    // The deliberate rate-limit flood runs from its OWN source (D-34): the product buckets
+    // logins by source, so the flood must not consume the bucket the rest of the run
+    // depends on. Resolved once, lazily, by `floodClient()`.
+    this.floodClientPromise = null;
+    this.floodIsolation = null;
     // Use the registered MCP URL verbatim (Spec §6.2 / §6.5 / §8.3): it already encodes the proxy port,
     // the non-default pathname and any query prefix the operator chose. Building a new
     // `http://${host}:${proxyPort}` URL would silently drop the pathname/query and, on a real
@@ -248,6 +442,8 @@ export class SecurityContext {
     // The observer factory: per-run, returns an asynchronous `observe` callback that the
     // execution-observer module understands. Default is no provider => `unknown`.
     this._observerFactory = typeof observerFactory === "function" ? observerFactory : null;
+    // The open question scope per Agent credential (see `mcp`).
+    this._turns = new Map();
   }
 
   /** Register a freshly created secret (token, password) so the leak scan sees it.
@@ -428,6 +624,61 @@ export class SecurityContext {
     return { res, cookie: res.status === 200 ? res.cookie : null };
   }
 
+  /**
+   * A login issued from the flood's OWN source (see the class-level note on D-34).
+   *
+   * Only the rate-limit cases may use it: they exist to prove the limit fires, so their
+   * attempts must consume a bucket that nobody else depends on.
+   *
+   * When no separate source is available (an externally started instance we may not
+   * re-bind), the flood falls back to the MAIN source and says so in `floodIsolation`.
+   * The fallback keeps the rate-limit coverage intact; the management leg is then
+   * protected by the rate-limit wait in the Playwright helper (`uiLoginWithRateLimitWait`).
+   */
+  async floodLogin(adminId, password) {
+    const client = await this.floodClient();
+    const res = await client.request("POST", "/api/auth/login", { body: { adminId, password } });
+    return { res, cookie: res.status === 200 ? res.cookie : null };
+  }
+
+  /** The client the flood uses, plus WHY it is (or is not) source-isolated. */
+  async floodClient() {
+    if (this.floodClientPromise) return this.floodClientPromise;
+    this.floodClientPromise = (async () => {
+      const floodBaseUrl = this.run.instance?.floodBaseUrl ?? null;
+      if (!floodBaseUrl) {
+        this.floodIsolation = { isolated: false, reason: "no_flood_origin" };
+        return this.web;
+      }
+      try {
+        const probe = await new LucyHttp(floodBaseUrl).request("GET", "/api/auth/status");
+        if (probe.status !== 200) throw new Error(`probe returned HTTP ${probe.status}`);
+        this.floodIsolation = { isolated: true, origin: floodBaseUrl };
+        return new LucyHttp(floodBaseUrl);
+      } catch (error) {
+        this.floodIsolation = { isolated: false, reason: `flood_origin_unreachable: ${error?.message ?? String(error)}` };
+        return this.web;
+      }
+    })();
+    return this.floodClientPromise;
+  }
+
+  /**
+   * A login refused by the product's OWN rate limit is a missing precondition, not a
+   * product failure: the case could not be evaluated at all, so it must be BLOCKED.
+   *
+   * The product's limit (5 logins per account+source per 15 min, 30 per source per
+   * 5 min) is a security control and must not be raised for the test suite. This leg
+   * establishes a FRESH operator session per case, so a full run can exhaust the
+   * per-source budget; the honest verdict for a case that could not get a session is
+   * "blocked", never "failed".
+   */
+  static rateLimitError(message) {
+    const error = new Error(message);
+    error.blockedReason = "login_rate_limited";
+    return error;
+  }
+
   /** Bootstraps the first owner exactly once for the run; later calls just log the owner in. */
   async ownerCookie() {
     if (this.cookies.owner) return this.cookies.owner;
@@ -443,7 +694,10 @@ export class SecurityContext {
       return res.cookie;
     }
     const { res, cookie } = await this.login(owner.adminId, owner.password);
-    if (!cookie) throw new Error(`owner login failed: HTTP ${res.status}`);
+    if (!cookie) {
+      if (res.status === 429) throw SecurityContext.rateLimitError(`owner login refused by the rate limit: HTTP ${res.status}`);
+      throw new Error(`owner login failed: HTTP ${res.status}`);
+    }
     this.cookies.owner = res.cookie;
     return cookie;
   }
@@ -489,7 +743,10 @@ export class SecurityContext {
   async freshOperatorSession() {
     const creds = await this.createAdmin("operator");
     const { res, cookie } = await this.login(creds.adminId, creds.password);
-    if (!cookie) throw new Error(`fresh operator login failed: HTTP ${res.status}`);
+    if (!cookie) {
+      if (res.status === 429) throw SecurityContext.rateLimitError(`fresh operator login refused by the rate limit: HTTP ${res.status}`);
+      throw new Error(`fresh operator login failed: HTTP ${res.status}`);
+    }
     return { ...creds, cookie };
   }
 
@@ -526,6 +783,63 @@ export class SecurityContext {
     // `pathname` defaults to empty string so LucyHttp resolves it against the registered MCP baseUrl
     // verbatim. A real external run may register a non-default pathname like `/lucy-v2/mcp`; passing
     // the literal `/mcp` here would silently strip the prefix and reach a different endpoint.
+    return this.mcpWithQuestionScope(token, body, { method, pathname, headers, rawBody });
+  }
+
+  /**
+   * Sends an MCP request, carrying an OPEN QUESTION SCOPE for the data tools.
+   *
+   * The product budgets the data tools (`lucy_query`, `lucy_read_source`, `lucy_freshness`,
+   * `lucy_explain_query`, `wiki_search`, `wiki_read`) per question: 20 calls or 2 minutes per
+   * turn. A request without a turn id falls back to a per-credential scope that is PERSISTED,
+   * so a leg that never opens a question burns that scope once and then gets
+   * `question_budget_exhausted` back for every later call — a missing precondition that reads
+   * like a denial (the body carries no content, so nothing leaks, but the case cannot tell a
+   * refusal from a spent budget).
+   *
+   * A real client opens a question with `lucy_begin_question` and every later call is
+   * attributed to that turn. This helper does the same: it opens one scope per credential,
+   * carries the turn id, and — when the scope is spent — opens a NEW question and retries once.
+   */
+  async mcpWithQuestionScope(token, body, options) {
+    const toolName = body?.method === "tools/call" ? body?.params?.name : undefined;
+    if (!token || !SecurityContext.DATA_TOOLS.has(toolName)) return this.mcpOnce(token, body, options);
+    let res = await this.mcpWithTurn(token, body, options);
+    if (isBudgetExhausted(res)) {
+      // The scope is spent: a new business question gets a new budget, exactly as a real
+      // client's next question would.
+      this._turns.delete(token);
+      res = await this.mcpWithTurn(token, body, options);
+    }
+    return res;
+  }
+
+  async mcpWithTurn(token, body, options) {
+    const turnId = await this.ensureQuestionScope(token, body);
+    const headers = turnId ? { ...(options.headers ?? {}), "x-lucy-turn-id": turnId } : { ...(options.headers ?? {}) };
+    return this.mcpOnce(token, body, { ...options, headers });
+  }
+
+  /** Opens a question scope for the credential if none is open yet; returns the turn id. */
+  async ensureQuestionScope(token, body) {
+    const cached = this._turns.get(token);
+    if (cached) return cached;
+    const requested = body?.params?.arguments?.intentSummary;
+    const intentSummary = (typeof requested === "string" && requested.trim())
+      ? requested.trim().slice(0, 500)
+      : "security leg read";
+    const res = await this.mcpOnce(token, {
+      jsonrpc: "2.0",
+      id: 0,
+      method: "tools/call",
+      params: { name: "lucy_begin_question", arguments: { intentSummary } }
+    }, { method: "POST", pathname: "", headers: {}, rawBody: undefined });
+    const turnId = parseTurnId(res);
+    if (turnId) this._turns.set(token, turnId);
+    return turnId ?? null;
+  }
+
+  mcpOnce(token, body, { method = "POST", pathname = "", headers = {}, rawBody } = {}) {
     return this.mcpHttp.request(method, pathname, {
       headers: this.mcpHeaders(token, headers),
       ...(rawBody !== undefined ? { rawBody } : method === "GET" || method === "DELETE" ? {} : { body })

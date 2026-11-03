@@ -7,8 +7,8 @@ import { auditedWriteFile } from "./config-audit-write.js";
 import { withDisplayWriteBarrier } from "../display-generation.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
-import type { YamlAccessConfig } from "./agents.js";
-import { getLastUsedMap } from "./agents.js";
+import type { TokenUsageSnapshot, YamlAccessConfig, YamlToken, YamlUser } from "./agents.js";
+import { getLastBusinessUseMap, getLastUsedMap } from "./agents.js";
 import {
   evaluateAccessGovernanceGate,
   evaluateGovernanceOverride,
@@ -20,9 +20,18 @@ import {
 import { resolveRoleIds } from "../proxy/acl.js";
 import { invalidateAccessConfigCache, isTokenExpired } from "../proxy/identity.js";
 import { narrowAuthorization, tokenHashPrefixOf } from "../proxy/authorization-barrier.js";
-import { actorIdFromRequest } from "../auth/guard.js";
+import { actorIdFromRequest, requireOwnerForOps } from "../auth/guard.js";
 import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
-import { normalizeNewTokenExpiry, TokenExpiryPolicyError } from "./token-expiry-policy.js";
+import {
+  assertStrictExtension,
+  expiryNormalizedEqual,
+  normalizeNewTokenExpiry,
+  resolveIssuedTokenExpiry,
+  TokenExpiryPolicyError
+} from "./token-expiry-policy.js";
+import { buildTokenDisplayHint, isValidTokenDisplayHint } from "./token-display-hint.js";
+import { resolveMcpEndpoint } from "../runtime-config.js";
+import { buildClientConfigs } from "../../src/lib/setupAssistant.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -41,6 +50,69 @@ function withTokenWriteLock<T>(fn: () => Promise<T>): Promise<T> {
 
 function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
+}
+
+type TokenListRow = {
+  hashPrefix: string;
+  tokenHint: string | null;
+  label: string;
+  created: string;
+  expires_at: string | null;
+  device_name: string | null;
+  agent: { id: string; name: string; enabled: boolean; roles: string[] };
+  last_used?: string;
+  last_business_use?: string;
+  last_tool?: string;
+  last_outcome?: string;
+  last_ip?: string | null;
+  last_user_agent?: string | null;
+  last_client?: string | null;
+  last_client_version?: string | null;
+  last_device_name_seen?: string | null;
+  distinct_ips_7d?: number;
+  status: "available" | "expired" | "agent_disabled";
+};
+
+/** Same non-sensitive row as GET /api/admin/tokens. Never includes plaintext. */
+export function projectTokenListRow(
+  user: YamlUser,
+  token: YamlToken,
+  nowMs: number,
+  usage?: TokenUsageSnapshot,
+  lastBusinessUse?: string
+): TokenListRow {
+  const hashPrefix = token.hash ? token.hash.slice(0, 19) : "";
+  const isAgentEnabled = user.enabled !== false;
+  const resolvedRoles = resolveRoleIds(user);
+  const expired = isTokenExpired(token.expires_at, nowMs);
+  let status: TokenListRow["status"] = "available";
+  if (!isAgentEnabled) status = "agent_disabled";
+  else if (expired) status = "expired";
+  return {
+    hashPrefix,
+    tokenHint: isValidTokenDisplayHint(token.token_hint) ? token.token_hint : null,
+    label: token.label,
+    created: token.created,
+    expires_at: token.expires_at ?? null,
+    device_name: token.device_name ?? null,
+    agent: {
+      id: user.id,
+      name: user.name || user.id,
+      enabled: isAgentEnabled,
+      roles: resolvedRoles.ok ? resolvedRoles.roleIds : []
+    },
+    last_used: usage?.lastUsed,
+    last_business_use: lastBusinessUse,
+    last_tool: usage?.lastTool,
+    last_outcome: usage?.lastOutcome,
+    last_ip: usage?.lastIp ?? null,
+    last_user_agent: usage?.lastUserAgent ?? null,
+    last_client: usage?.lastClient ?? null,
+    last_client_version: usage?.lastClientVersion ?? null,
+    last_device_name_seen: usage?.lastDeviceNameSeen ?? null,
+    distinct_ips_7d: usage?.distinctIps7d,
+    status
+  };
 }
 
 function defaultActor(request?: FastifyRequest): AccessGovernanceApprover {
@@ -145,7 +217,10 @@ export function registerTokenRoutes(app: FastifyInstance) {
 
     const users = config.users || [];
     const userIds = users.map((u) => u.id);
-    const lastUsedMap = await getLastUsedMap(userIds);
+    const [lastUsedMap, lastBusinessUseMap] = await Promise.all([
+      getLastUsedMap(userIds),
+      getLastBusinessUseMap(userIds)
+    ]);
 
     const now = Date.now();
     const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
@@ -153,6 +228,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
 
     type TokenInventoryItem = {
       hashPrefix: string;
+      /** Spec lucy-20261102-token-display-hint — human核对片段；非法／缺失为 null。 */
+      tokenHint: string | null;
       label: string;
       created: string;
       expires_at: string | null;
@@ -163,7 +240,14 @@ export function registerTokenRoutes(app: FastifyInstance) {
         enabled: boolean;
         roles: string[];
       };
+      /** 最近 MCP 访问 — any access_log row for this token. */
       last_used?: string;
+      /**
+       * Spec 189 §6 — 最近业务使用: the latest Default Usage Call of this
+       * token. Protocol traffic and default-view-excluded eval probes do not
+       * update it.
+       */
+      last_business_use?: string;
       last_tool?: string;
       last_outcome?: string;
       last_ip?: string | null;
@@ -179,53 +263,26 @@ export function registerTokenRoutes(app: FastifyInstance) {
 
     for (const user of users) {
       const userUsage = lastUsedMap.get(user.id);
-      const isAgentEnabled = user.enabled !== false;
-      const resolvedRoles = resolveRoleIds(user);
-      const roles = resolvedRoles.ok ? resolvedRoles.roleIds : [];
+      const userBusinessUse = lastBusinessUseMap.get(user.id);
 
       for (const t of user.tokens || []) {
         const hashPrefix = t.hash ? t.hash.slice(0, 19) : "";
         const usage = hashPrefix ? userUsage?.get(hashPrefix) : undefined;
-        const expired = isTokenExpired(t.expires_at, now);
-
-        let status: "available" | "expired" | "agent_disabled" = "available";
-        if (!isAgentEnabled) {
-          status = "agent_disabled";
-        } else if (expired) {
-          status = "expired";
-        }
-
-        allTokens.push({
-          hashPrefix,
-          label: t.label,
-          created: t.created,
-          expires_at: t.expires_at ?? null,
-          device_name: t.device_name ?? null,
-          agent: {
-            id: user.id,
-            name: user.name || user.id,
-            enabled: isAgentEnabled,
-            roles
-          },
-          last_used: usage?.lastUsed,
-          last_tool: usage?.lastTool,
-          last_outcome: usage?.lastOutcome,
-          last_ip: usage?.lastIp ?? null,
-          last_user_agent: usage?.lastUserAgent ?? null,
-          last_client: usage?.lastClient ?? null,
-          last_client_version: usage?.lastClientVersion ?? null,
-          last_device_name_seen: usage?.lastDeviceNameSeen ?? null,
-          distinct_ips_7d: usage?.distinctIps7d,
-          status
-        });
+        allTokens.push(
+          projectTokenListRow(user, t, now, usage, userUsage ? userBusinessUse?.get(hashPrefix) : undefined)
+        );
       }
     }
 
     const totalTokens = allTokens.length;
     const availableTokens = allTokens.filter((t) => t.status === "available").length;
+    // Spec 189 §6 — "近 7 天业务活跃 Token" is judged by the **business use**
+    // time. A token whose only recent traffic was a handshake or a
+    // default-view-excluded eval probe is not business-active, even though
+    // `last_used` (最近 MCP 访问) is recent.
     const activeLast7dTokens = allTokens.filter((t) => {
-      if (!t.last_used) return false;
-      const ts = Date.parse(t.last_used);
+      if (!t.last_business_use) return false;
+      const ts = Date.parse(t.last_business_use);
       return !Number.isNaN(ts) && now - ts <= sevenDaysMs;
     }).length;
     const expiringSoonTokens = allTokens.filter((t) => {
@@ -254,7 +311,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
           t.agent.name.toLowerCase().includes(q) ||
           t.agent.roles.some((r) => r.toLowerCase().includes(q)) ||
           (t.last_device_name_seen && t.last_device_name_seen.toLowerCase().includes(q)) ||
-          (t.last_client && t.last_client.toLowerCase().includes(q))
+          (t.last_client && t.last_client.toLowerCase().includes(q)) ||
+          (t.tokenHint && t.tokenHint.toLowerCase().includes(q))
       );
     }
 
@@ -280,21 +338,25 @@ export function registerTokenRoutes(app: FastifyInstance) {
       dryRun?: boolean;
       label: string;
       device_name?: string | null;
-      expires_at: string;
+      expires_at?: string;
+      expires_in?: string;
+      includeClientConfigs?: boolean;
       override?: AccessGovernanceOverrideRequest;
     };
   }>("/api/admin/agents/:userId/tokens", async (request, reply) => {
+    const t0 = Date.now();
     const { userId } = request.params;
     const { label } = request.body ?? {};
     const deviceNameRaw = request.body?.device_name;
     const dryRun = request.body?.dryRun === true;
+    const includeClientConfigs = request.body?.includeClientConfigs === true;
     reply.header("Cache-Control", "private, no-store");
     reply.header("Pragma", "no-cache");
     reply.header("Expires", "0");
 
     let expires_at: string;
     try {
-      expires_at = normalizeNewTokenExpiry(request.body?.expires_at);
+      expires_at = resolveIssuedTokenExpiry(request.body?.expires_at, request.body?.expires_in, t0);
     } catch (error) {
       return reply.status(400).send({
         ok: false,
@@ -327,8 +389,32 @@ export function registerTokenRoutes(app: FastifyInstance) {
       }
 
       const user = config.users[userIndex];
-      if (user.tokens.some((t) => t.label === label)) {
-        return reply.status(409).send({ ok: false, error: { code: "TOKEN_LABEL_TAKEN", message: `Token label '${label}' already exists for this agent` } });
+      const taken = user.tokens.find((t) => t.label === label);
+      if (taken) {
+        const [lastUsedMap, lastBusinessUseMap] = await Promise.all([
+          getLastUsedMap([user.id]),
+          getLastBusinessUseMap([user.id])
+        ]);
+        const hashPrefix = taken.hash ? taken.hash.slice(0, 19) : "";
+        const usage = hashPrefix ? lastUsedMap.get(user.id)?.get(hashPrefix) : undefined;
+        const businessUse = lastUsedMap.get(user.id) ? lastBusinessUseMap.get(user.id)?.get(hashPrefix) : undefined;
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "TOKEN_LABEL_TAKEN",
+            message: `Token label '${label}' already exists for this agent`,
+            detail: {
+              existingToken: projectTokenListRow(user, taken, Date.now(), usage, businessUse)
+            }
+          }
+        });
+      }
+
+      // L25-16 / G13 — 为**已有委托**的 Agent 签发 Token 必须 owner：
+      // 否则 operator 可以借「委托链」给一个已被委托的 Agent 增发凭证，
+      // 而该 Agent 的控制面操作将以 owner 身份生效。
+      if (user.delegated_from) {
+        if (!(await requireOwnerForOps(request, reply, "仅所有者可为已有委托的 Agent 签发 Token"))) return;
       }
 
       // Access Governance Gate — Token create escalates to P1 when the
@@ -389,15 +475,33 @@ export function registerTokenRoutes(app: FastifyInstance) {
         await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       }
 
-      // Generate token — plaintext never written anywhere except the HTTP response
+      let clientConfigEndpoint: string | undefined;
+      if (includeClientConfigs) {
+        const endpoint = resolveMcpEndpoint();
+        if (endpoint.status !== "configured" || !endpoint.url) {
+          return reply.status(503).send({
+            ok: false,
+            error: {
+              code: "MCP_ENDPOINT_UNAVAILABLE",
+              message: "公开 MCP 地址未配置为可签发端点，本次未签发 Token",
+              detail: { status: endpoint.status, diagnostics: endpoint.diagnostics }
+            }
+          });
+        }
+        clientConfigEndpoint = endpoint.url;
+      }
+
+      // Full plaintext only in the HTTP response; YAML may store fixed truncation hint.
       const plainToken = randomBytes(32).toString("hex");
       const tokenHash = hashToken(plainToken);
+      const tokenHint = buildTokenDisplayHint(plainToken);
       const created = new Date().toISOString().slice(0, 10);
 
       const newToken = {
         hash: tokenHash,
         label,
         created,
+        token_hint: tokenHint,
         ...(deviceName ? { device_name: deviceName } : {}),
         expires_at
       };
@@ -422,6 +526,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
             label,
             device_name: deviceName,
             hashPrefix: tokenHash.slice(0, 19),
+            token_hint: tokenHint,
             expires_at
           }
         });
@@ -435,12 +540,16 @@ export function registerTokenRoutes(app: FastifyInstance) {
           written: true,
           token: plainToken,
           hash: tokenHash,
+          token_hint: tokenHint,
           label,
           device_name: deviceName,
           created,
           expires_at,
           ...runtime,
-          gate
+          gate,
+          ...(clientConfigEndpoint
+            ? { clientConfigs: buildClientConfigs(clientConfigEndpoint, plainToken) }
+            : {})
         }
       };
     });
@@ -546,6 +655,247 @@ export function registerTokenRoutes(app: FastifyInstance) {
       });
 
       return { ok: true, data: { written: true, revokedAt, ...runtime, gate } };
+    });
+  });
+
+  // POST /api/admin/agents/:userId/tokens/:label/renew
+  // Spec lucy-20261101-token-renewal — extend expires_at only; no plaintext rotation.
+  app.post<{
+    Params: { userId: string; label: string };
+    Body: {
+      dryRun?: boolean;
+      repair?: boolean;
+      expires_at: string;
+      override?: AccessGovernanceOverrideRequest;
+    };
+  }>("/api/admin/agents/:userId/tokens/:label/renew", async (request, reply) => {
+    const { userId, label } = request.params;
+    const dryRun = request.body?.dryRun === true;
+    const repairRequested = request.body?.repair === true;
+    reply.header("Cache-Control", "private, no-store");
+    reply.header("Pragma", "no-cache");
+    reply.header("Expires", "0");
+
+    let expires_at: string;
+    try {
+      expires_at = normalizeNewTokenExpiry(request.body?.expires_at);
+    } catch (error) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: error instanceof TokenExpiryPolicyError ? error.code : "EXPIRES_AT_INVALID",
+          message: error instanceof Error ? error.message : "expires_at invalid"
+        }
+      });
+    }
+
+    return withTokenWriteLock(async () => {
+      const projectRoot = await resolveProjectRoot();
+      const filePath = path.join(projectRoot, ACCESS_YAML_REL);
+      const raw = await readFile(filePath, "utf-8");
+      const config = parse(raw) as YamlAccessConfig;
+      if (!config.users) config.users = [];
+
+      const userIndex = config.users.findIndex((u) => u.id === userId);
+      if (userIndex === -1) {
+        return reply.status(404).send({
+          ok: false,
+          error: { code: "AGENT_NOT_FOUND", message: `Agent '${userId}' not found` }
+        });
+      }
+
+      const user = config.users[userIndex];
+      const token = user.tokens.find((t) => t.label === label);
+      if (!token) {
+        return reply.status(404).send({
+          ok: false,
+          error: { code: "TOKEN_NOT_FOUND", message: `Token '${label}' not found` }
+        });
+      }
+
+      let revokedHit = false;
+      try {
+        const db = await getAuditDb();
+        const row = db
+          .prepare("SELECT 1 AS hit FROM revoked_tokens WHERE token_hash = ?")
+          .get(token.hash) as { hit?: number } | undefined;
+        revokedHit = Boolean(row);
+      } catch (error) {
+        return reply.status(500).send({
+          ok: false,
+          error: {
+            code: "REVOKED_LOOKUP_FAILED",
+            message: error instanceof Error ? error.message : "revoked_tokens lookup failed"
+          }
+        });
+      }
+      if (revokedHit) {
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "TOKEN_REVOKED_NOT_RENEWABLE",
+            message: "已撤销的 Token 不能续期"
+          }
+        });
+      }
+
+      if (user.delegated_from) {
+        if (!(await requireOwnerForOps(request, reply, "仅所有者可为已有委托的 Agent 续期 Token"))) {
+          return;
+        }
+      }
+
+      // Repair is only the ack/runtime retry: disk already equals the request AND
+      // the client sets body.repair. An equal expiry without that flag is not an
+      // extension (SC-14) and must not succeed as an empty write.
+      const diskEqualsRequested = expiryNormalizedEqual(token.expires_at ?? null, expires_at);
+      const isRepair = diskEqualsRequested && repairRequested;
+      if (!isRepair) {
+        try {
+          assertStrictExtension(token.expires_at ?? null, expires_at);
+        } catch (error) {
+          return reply.status(400).send({
+            ok: false,
+            error: {
+              code: error instanceof TokenExpiryPolicyError ? error.code : "EXPIRES_AT_NOT_EXTENDED",
+              message: error instanceof Error ? error.message : "expires_at must extend"
+            }
+          });
+        }
+      }
+
+      const callsLast7d = await agentCallsLast7d(userId);
+      const gate = evaluateAccessGovernanceGate({
+        targetKind: "token",
+        targetId: `${userId}:${label}`,
+        newValue: { userId, label, hashPrefix: token.hash.slice(0, 19) },
+        highTrafficCalls7d: callsLast7d
+      });
+
+      const oldExpires = token.expires_at ?? null;
+
+      if (dryRun) {
+        return {
+          ok: true,
+          data: {
+            dryRun: true,
+            gate,
+            proposed: {
+              userId,
+              label,
+              expires_at,
+              old_expires_at: oldExpires,
+              repair: isRepair
+            }
+          }
+        };
+      }
+
+      if (gate.decision === "block") {
+        await writeGateTrace(gate, undefined, undefined, defaultActor(request));
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_BLOCKED",
+            message: "Access Governance Gate blocked this token renew",
+            detail: { gate }
+          }
+        });
+      }
+
+      if (gate.decision === "override_required") {
+        const override = evaluateGovernanceOverride(request.body?.override, gate);
+        if (!override.ok) {
+          await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+              message: `Override required: ${override.reason ?? "missing override fields"}`,
+              detail: { gate, override }
+            }
+          });
+        }
+        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+      } else {
+        await writeGateTrace(gate, undefined, undefined, defaultActor(request));
+      }
+
+      const updatedTokens = user.tokens.map((t) =>
+        t.label === label ? { ...t, expires_at } : t
+      );
+      const updatedUser = { ...user, tokens: updatedTokens };
+      const newUsers = [...config.users];
+      newUsers[userIndex] = updatedUser;
+      const newConfig: YamlAccessConfig = { ...config, users: newUsers };
+      const content = stringify(newConfig, { lineWidth: 0 });
+
+      try {
+        const runtime = await withDisplayWriteBarrier(["P"], async () => {
+          await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+            enabled: true,
+            changeType: "token_renew",
+            assetKind: "governance",
+            ...auditActorFields(trustedActorFromRequest(request)),
+            source: "admin_tokens_api",
+            targetId: userId,
+            oldSummary: {
+              label,
+              hashPrefix: token.hash.slice(0, 19),
+              expires_at: oldExpires
+            },
+            newSummary: {
+              label,
+              hashPrefix: token.hash.slice(0, 19),
+              expires_at,
+              repair: isRepair
+            }
+          });
+          invalidateAccessConfigCache();
+          return commitPolicyRuntimeAck(content);
+        });
+
+        if (!runtime.runtimeAck) {
+          return reply.status(503).send({
+            ok: false,
+            error: {
+              code: "RUNTIME_ACK_FAILED",
+              message: "Token expiry updated but runtime ack failed; retry renew with the same expires_at",
+              detail: {
+                expires_at,
+                runtimeAck: false,
+                repairSuggested: true
+              }
+            }
+          });
+        }
+
+        return {
+          ok: true,
+          data: {
+            written: true,
+            label,
+            old_expires_at: oldExpires,
+            expires_at,
+            repair: isRepair,
+            ...runtime,
+            gate
+          }
+        };
+      } catch (error) {
+        return reply.status(500).send({
+          ok: false,
+          error: {
+            code: "TOKEN_RENEW_WRITE_FAILED",
+            message: error instanceof Error ? error.message : "token renew write failed",
+            detail: {
+              expires_at,
+              runtimeAck: false,
+              repairSuggested: true
+            }
+          }
+        });
+      }
     });
   });
 }

@@ -9,6 +9,7 @@ import {
 import { authenticateSession } from "./account-state.js";
 import type { SessionClaims } from "./session.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
+import { diagnoseApiRoute } from "./api-route-diagnosis.js";
 
 export type RequestAdminContext = {
   session: SessionClaims | null;
@@ -40,10 +41,15 @@ export function isPublicApi(method: string, url: string): boolean {
   if (!pathOnly.startsWith("/api/")) return true;
   const m = method.toUpperCase();
   if (m === "GET" && pathOnly === "/api/health") return true;
+  // Admin OpenAPI is public and exact. Do not open the rest of /api/auth/*.
+  if (m === "GET" && pathOnly === "/api/openapi.json") return true;
   if (m === "GET" && pathOnly === "/api/auth/status") return true;
   if (m === "POST" && pathOnly === "/api/auth/login") return true;
   if (m === "POST" && pathOnly === "/api/auth/bootstrap") return true;
   if (m === "POST" && pathOnly === "/api/auth/logout") return true;
+  // L25-06 OIDC: the provider redirects the browser here, so both entries stay public.
+  if (m === "POST" && pathOnly === "/api/auth/oidc/start") return true;
+  if (m === "GET" && pathOnly === "/api/auth/oidc/callback") return true;
   if (m === "GET" && pathOnly.startsWith("/api/help")) return true;
   // Spec 126: login + shell brand mark need branding before auth.
   if (m === "GET" && pathOnly === "/api/branding") return true;
@@ -72,6 +78,34 @@ export async function requireWebuiAuthHook(
   reply: FastifyReply
 ): Promise<void> {
   if (isSensitiveApi(request.method, request.url)) reply.header("Cache-Control", "no-store");
+
+  // D3: CSRF already ran. Diagnose with the live router before any session denial.
+  const requestPath = request.url.split("?")[0]?.split("#")[0] ?? request.url;
+  if (requestPath.startsWith("/api/")) {
+    const diagnosis = diagnoseApiRoute(request.server, request.method, request.url);
+    if (diagnosis.kind === "none") {
+      return reply.status(404).send({
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: `Route ${request.method} ${request.url} not found`,
+          detail: { allowedMethods: [] as string[] }
+        }
+      });
+    }
+    if (diagnosis.kind === "method_not_allowed") {
+      reply.header("Allow", diagnosis.allowedMethods.join(", "));
+      return reply.status(405).send({
+        ok: false,
+        error: {
+          code: "METHOD_NOT_ALLOWED",
+          message: "此路径不允许使用该 HTTP 方法",
+          detail: { allowedMethods: diagnosis.allowedMethods }
+        }
+      });
+    }
+  }
+
   const ctx = await attachAdminContext(request);
   const mode = await resolveAuthMode();
   ctx.authMode = mode;
@@ -119,19 +153,74 @@ export function actorIdFromRequest(request: FastifyRequest): string {
   return trustedActorFromRequest(request).actorId;
 }
 
-export function requireOwner(request: FastifyRequest, reply: FastifyReply): boolean {
+/**
+ * Owner-only gate.
+ *
+ * The denial is AWAITED, not fired and forgotten. A `void reply.send(...)` plus a
+ * handler that returns `undefined` makes Fastify send a SECOND response after the
+ * first one: `reply.sent` is only true once the response has ENDED, so the
+ * framework's own send races the first one and `writeHead` throws
+ * `ERR_HTTP_HEADERS_SENT` from the onSend hook chain — an uncaught exception that
+ * kills the whole server process. A non-owner calling `POST /api/admin/admins`
+ * could therefore take the instance down with one request.
+ *
+ * `await reply.send(...)` waits for the response to end (Fastify's reply is
+ * thenable), so the handler returns only after the denial is on the wire and the
+ * framework correctly skips its own send.
+ */
+export async function requireOwner(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  ownerMessage = "仅所有者可管理管理员账户"
+): Promise<boolean> {
   const admin = request.lucyAdmin?.admin;
   if (!admin) {
-    void reply.status(401).send({
+    await reply.status(401).send({
       ok: false,
       error: { code: "AUTH_REQUIRED", message: "需要登录" }
     });
     return false;
   }
   if (admin.role !== "owner") {
-    void reply.status(403).send({
+    await reply.status(403).send({
       ok: false,
-      error: { code: "OWNER_REQUIRED", message: "仅所有者可管理管理员账户" }
+      error: { code: "OWNER_REQUIRED", message: ownerMessage }
+    });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * L25-16 / G13 — 委托与 Token 面的 owner 门禁。
+ *
+ * 与 `requireOwner` 的唯一差别：**open 模式**（`LUCY_WEBUI_AUTH=off`）下实例只有一个
+ * 隐式管理者 `local-admin`，根本不存在 operator / owner 之分，因此门禁视为已满足。
+ * `required` 模式下必须是已登录且 `role === "owner"` 的管理员。
+ *
+ * 适用范围（Spec §3.2.2 规则 8）：设置 / 修改 / 撤销 `delegated_from`；为已有 owner
+ * 委托的 Agent 签发 Token；授予含 owner-only 工具的角色；修改影响控制面可达范围的
+ * Agent `role` / `roles` / `allow.ops`。
+ */
+export async function requireOwnerForOps(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  ownerMessage = "仅所有者可管理委托与控制面授权"
+): Promise<boolean> {
+  const ctx = request.lucyAdmin;
+  // open 模式：唯一的管理者就是实例所有者本人，不存在越权面。
+  if (ctx?.authMode === "open") return true;
+  if (!ctx?.admin) {
+    await reply.status(401).send({
+      ok: false,
+      error: { code: "AUTH_REQUIRED", message: "需要登录" }
+    });
+    return false;
+  }
+  if (ctx.admin.role !== "owner") {
+    await reply.status(403).send({
+      ok: false,
+      error: { code: "OWNER_REQUIRED", message: ownerMessage }
     });
     return false;
   }

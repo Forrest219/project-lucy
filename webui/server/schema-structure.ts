@@ -1,9 +1,11 @@
 import { stringify } from "yaml";
+import { quoteMysqlIdent, showFullColumnsSql, showTablesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const CATALOG_STRUCTURE_MAX_TABLES = 200;
 
 const NUMBER_TYPES = new Set([
   "int",
@@ -56,6 +58,26 @@ export type SchemaStructureColumn = {
   column: string;
   rawType: string;
 };
+
+/** One physical column of a Schema, as the database reports it. */
+export type SchemaColumnRow = {
+  table: string;
+  column: string;
+  dataType: string;
+  nullable: boolean;
+  primaryKey: boolean;
+  comment: string;
+};
+
+/**
+ * Result of a column read. The three shapes let the caller map the outcome
+ * onto its own vocabulary — Spec 190 needs `TABLE_LIST_TOO_LARGE` where Spec
+ * 164 reports a plain read failure.
+ */
+export type SchemaColumnsRead =
+  | { status: "ok"; columns: SchemaColumnRow[] }
+  | { status: "too_large" }
+  | { status: "error"; message: string };
 
 export type SchemaStructurePreview = {
   schema: string;
@@ -204,6 +226,21 @@ function structureRows(result: SqlResult): unknown[] {
   return rows;
 }
 
+function mapShowFullColumn(table: string, row: unknown[]): ColumnInput | null {
+  if (!Array.isArray(row) || row.length < 4) return null;
+  const column = String(row[0] ?? "").trim();
+  if (!column || column.length > 256 || /[\0\r\n]/.test(column)) return null;
+  const comment = row.length >= 9 ? String(row[8] ?? "") : "";
+  return {
+    table,
+    column,
+    dataType: String(row[1] ?? ""),
+    nullable: String(row[3] ?? "YES").toUpperCase() !== "NO",
+    primaryKey: String(row[4] ?? "").toUpperCase() === "PRI",
+    comment
+  };
+}
+
 function parseColumns(rows: unknown[]): ColumnInput[] {
   const columns: ColumnInput[] = [];
   for (const row of rows) {
@@ -223,7 +260,14 @@ function parseColumns(rows: unknown[]): ColumnInput[] {
   return columns;
 }
 
-export async function previewSchemaStructure(
+/**
+ * Read the column rows of one Schema.
+ *
+ * The query shape is the one Spec 164 established; Spec 190 §7.4 reuses it for
+ * the on-demand column-level deep check. A full page means the answer may be
+ * truncated, so it is reported as `too_large` instead of a partial list.
+ */
+export async function readSchemaColumns(
   projectRoot: string,
   connectionId: string,
   schema: string,
@@ -231,7 +275,7 @@ export async function previewSchemaStructure(
     readConnectionsImpl?: typeof readConnections;
     runSqlImpl?: typeof runSql;
   } = {}
-): Promise<SchemaStructurePreview> {
+): Promise<SchemaColumnsRead> {
   const safeSchema = assertSchemaIdent(schema);
   const read = deps.readConnectionsImpl ?? readConnections;
   const connections = await read(projectRoot);
@@ -243,9 +287,81 @@ export async function previewSchemaStructure(
     throw new SchemaStructureError("SCHEMA_UNSUPPORTED", "当前数据库类型请上传 Schema Manifest");
   }
   const execute = deps.runSqlImpl ?? runSql;
-  const result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
-    maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-    timeoutMs: 30000
-  });
-  return buildMinimalSchemaManifest(safeSchema, parseColumns(structureRows(result)));
+  const catalog = protocolOf(connection) === "mysql" ? splitCatalogDatabase(connection.database) : null;
+  try {
+    if (catalog) {
+      const tablesResult = await execute(
+        projectRoot,
+        connectionId,
+        showTablesFromCatalogSql(catalog.catalog, safeSchema),
+        { maxRows: SCHEMA_STRUCTURE_MAX_ROWS, timeoutMs: 30000 }
+      );
+      const tableNames = structureRows(tablesResult)
+        .map((row) => (Array.isArray(row) ? String(row[0] ?? "").trim() : ""))
+        .filter((name) => {
+          try {
+            quoteMysqlIdent(name);
+            return true;
+          } catch {
+            return false;
+          }
+        });
+      if (tableNames.length > CATALOG_STRUCTURE_MAX_TABLES) {
+        return { status: "too_large" };
+      }
+      const columns: ColumnInput[] = [];
+      for (const table of tableNames) {
+        const columnResult = await execute(projectRoot, connectionId, showFullColumnsSql(catalog.catalog, safeSchema, table), {
+          maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+          timeoutMs: 30000
+        });
+        for (const row of structureRows(columnResult)) {
+          if (!Array.isArray(row)) continue;
+          const mapped = mapShowFullColumn(table, row);
+          if (mapped) columns.push(mapped);
+        }
+        if (columns.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
+          return { status: "too_large" };
+        }
+      }
+      return { status: "ok", columns };
+    }
+    const result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
+      maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+      timeoutMs: 30000
+    });
+    const rows = structureRows(result);
+    if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
+      return { status: "too_large" };
+    }
+    return { status: "ok", columns: parseColumns(rows) };
+  } catch (error) {
+    if (error instanceof SchemaStructureError) {
+      if (error.message.includes("超过一次可读取的上限")) {
+        return { status: "too_large" };
+      }
+      return { status: "error", message: error.message };
+    }
+    return { status: "error", message: "读取表结构失败。" };
+  }
+}
+
+export async function previewSchemaStructure(
+  projectRoot: string,
+  connectionId: string,
+  schema: string,
+  deps: {
+    readConnectionsImpl?: typeof readConnections;
+    runSqlImpl?: typeof runSql;
+  } = {}
+): Promise<SchemaStructurePreview> {
+  const safeSchema = assertSchemaIdent(schema);
+  const read = await readSchemaColumns(projectRoot, connectionId, schema, deps);
+  if (read.status === "too_large") {
+    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
+  }
+  if (read.status === "error") {
+    throw new SchemaStructureError("READ_FAILED", read.message);
+  }
+  return buildMinimalSchemaManifest(safeSchema, read.columns);
 }

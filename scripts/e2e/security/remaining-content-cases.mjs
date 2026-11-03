@@ -39,6 +39,8 @@
 // (lib/instance.mjs / lib/common.mjs). No invented helpers.
 
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { Checks, explicitDeny, extractDenyReason } from "./context.mjs";
 import { sleep } from "../lib/instance.mjs";
 
@@ -83,10 +85,14 @@ async function sec15s01(ctx) {
   // /api/branding JSON in a way that an inline-script block could fire.
   const xssRead = await ctx.web.request("GET", "/api/branding");
   const cspHeader = xssRead.headers["content-security-policy"] ?? xssRead.headers["Content-Security-Policy"] ?? "";
+  // The security property is about INLINE SCRIPT, so the check must read the `script-src`
+  // DIRECTIVE. A whole-header scan for `unsafe-inline` also trips on `style-src`, which the
+  // product ships on purpose and which cannot execute script.
+  const scriptSrc = (/script-src([^;]*)/i.exec(cspHeader)?.[1] ?? "").trim();
   checks.expect(
     "deny",
-    /script-src 'self'/.test(cspHeader) && !/unsafe-inline/.test(cspHeader),
-    `GET /api/branding carries a CSP that forbids inline script (got "${cspHeader}")`
+    /'self'/.test(scriptSrc) && !/unsafe-inline/i.test(scriptSrc),
+    `GET /api/branding carries a CSP whose script-src forbids inline script (got script-src="${scriptSrc}")`
   );
   // The XSS payload is stored verbatim in the productTitle field (allowed by
   // design — the field is text). The security property is that it lands in
@@ -102,10 +108,11 @@ async function sec15s01(ctx) {
   // header — web-security.ts sets it on EVERY response via onSend.
   const page = await ctx.web.request("GET", "/", {});
   const pageCsp = page.headers["content-security-policy"] ?? "";
+  const pageScriptSrc = (/script-src([^;]*)/i.exec(pageCsp)?.[1] ?? "").trim();
   checks.expect(
     "deny",
-    /script-src 'self'/.test(pageCsp) && !/unsafe-inline/.test(pageCsp),
-    `the page that embeds the brand surface forbids inline script (got "${pageCsp}")`
+    /'self'/.test(pageScriptSrc) && !/unsafe-inline/i.test(pageScriptSrc),
+    `the page that embeds the brand surface forbids inline script (got script-src="${pageScriptSrc}")`
   );
 
   // (3) Malicious logo — an SVG payload is rejected by the product's own

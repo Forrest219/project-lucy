@@ -29,6 +29,7 @@
 | v0.2 | 改为误操作软门禁。补上单进程写锁内复核、冲突路径只接受一个 Schema、用户名不同不得默认复用、多条匹配不能再新建、非 MySQL 同服务器确认字段，以及现有错误信封 |
 | v0.3 | 按 v0.2 落地新建连接与接入向导第 1 步 |
 | v0.4 | 修复验收 P1：复用检查强制绕过目录缓存；补齐 SQL Server / Oracle live-schemas；冲突分支统一先校验 Schema 数量；所有正式 `ktx.yaml` 写入共用单进程队列；补齐失败重试与关键交互测试 |
+| v0.5 | `catalog.database`（如 `hive_jd.app`）按点号前的外部目录名匹配。不同外部目录不进入「选择已有连接」，确认后新建卡片；同一外部目录仍添加 Schema |
 
 本文件阻止「新建连接」和接入向导在未确认时再写一条同端点连接。它不保证一个 host 永远只有一张卡片。历史重复卡片保留。显式确认后，唯一匹配仍可以新建第二条。
 
@@ -61,7 +62,7 @@
 - 不把「一个端点只有一张卡片」写成不变式。唯一匹配在显式确认后仍可有第二张卡片。
 - 不自动合并、改名或删除历史重复连接。
 - 不把 `localhost`、`127.0.0.1` 与主机名解析成同一端点。不做 DNS 比较。
-- 不修改已有连接的 host、端口、用户名或密码。
+- 不修改已有连接的 host、端口、用户名或密码。**后继例外**：[`lucy-20261101-connection-endpoint-edit-spec.md`](../../docs/specs/lucy-20261101-connection-endpoint-edit-spec.md) 允许编辑当前连接的 endpoint；该路径复用本 Spec 匹配键，但冲突集**排除自身** connection id，且不是「新建第二条连接」主路径。
 - 不把 live-schemas 可见性写进既有「添加 Schema」接口。该接口仍做连接级连通测试。可见性只约束从本软门禁进入的复用路径。
 - 不引入跨进程锁、多副本锁或分布式事务。一致性边界是单进程，与 `docs/governance/DEVELOPMENT.md` 的部署约束一致。
 - 不把 live-schemas 的缓存整体取消。普通目录浏览仍可使用缓存；本软门禁的复用确认必须显式 `refresh=1` 绕过缓存。
@@ -74,7 +75,7 @@
 
 | 名称 | 键 | 用途 |
 |---|---|---|
-| 端点匹配 | MySQL、StarRocks、Doris：`driver + host + port`。PostgreSQL、SQL Server、Oracle：再加 `database` | 决定能不能把本次 Schema 加到已有卡片 |
+| 端点匹配 | MySQL、StarRocks、Doris 的普通库名：`driver + host + port`。`catalog.database` 再加外部目录名（点号前）。PostgreSQL、SQL Server、Oracle：`driver + host + port + database` | 决定能不能把本次 Schema 加到已有卡片 |
 | 同服务器匹配 | `driver + host + port` | 端点匹配为空时，发现同一主机端口上的其他 database |
 
 同一 driver 才比较。MySQL 协议只看 driver、host、端口，不看 `engine` 文案。SQLite、不同端口、不同 driver 都不是匹配。
@@ -102,6 +103,7 @@
 | live-schemas 返回失败 | 无 | 无 | 展示失败原因。不复用，不新建。用户可重试读取 |
 | 多条端点匹配 | 添加到所选连接 | 无 | 用户选定一条。不能新建第三条 |
 | 非 MySQL，同服务器但 database 不同 | 新建连接 | 取消 | 未带 `acknowledgeDifferentDatabase: true` 时停住。确认文案写明将新增一张连接卡片 |
+| MySQL 协议，database 为 `catalog.database`，外部目录名与已有连接都不同 | 新建连接 | 取消 | 不出现「选择已有连接」，也不把 Schema 加进其他目录的卡片。确认文案写明不会加到已有连接 |
 
 接入向导在添加 Schema 成功后，用已有连接 ID 和新 Schema 进入第 2 步。新建连接抽屉成功添加后回到这张已有卡片，并刷新连接列表。
 
@@ -122,10 +124,20 @@ sameServer(existing, input):
   if normalizeHost(existing.host) != normalizeHost(input.host): return false
   return int(existing.port) == int(input.port)
 
+catalogQualified(database):
+  return trim(database) matches ^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$
+
 endpointMatches(existing, input):
   if not sameServer(existing, input): return false
-  if isMysqlWire(input): return true
-  return trim(existing.database) == trim(input.database)
+  requested = trim(input.database)
+  saved = trim(existing.database)
+  if isMysqlWire(input):
+    requestedCatalog = catalog name before the dot, or empty when not catalog-qualified
+    savedCatalog = catalog name before the dot, or empty when not catalog-qualified
+    if requestedCatalog or savedCatalog:
+      return requestedCatalog == savedCatalog
+    return true
+  return saved == requested
 
 usernamesMatch(existing, input):
   saved = existing.username
@@ -315,7 +327,7 @@ Gate B 批准前不改术语标准正文。批准后再把上表补进 `webui/do
 9. PostgreSQL 同一 host、端口、database 按端点匹配处理。database 不同且未带 `acknowledgeDifferentDatabase: true` 时，`dryRun: false` 返回 `SAME_SERVER_DIFFERENT_DATABASE` 并不写入。带上该字段后允许第二张卡片。只在界面展示说明、请求却不带字段时，服务端拒绝。
 10. SQLite、不同端口、不同 driver、以及仅大小写不同的 host 比较：后者算匹配；前三者不返回本 Spec 的端点错误。`localhost` 与 `127.0.0.1` 不互配。
 11. 接入向导添加 Schema 成功后，第 2 步使用已有连接 ID。
-12. 现有不同 host 的连接保持原卡片。本 Spec 不改它们的 host、密码或 Schema 列表。
+12. 现有不同 host 的连接保持原卡片。本 Spec（新建软门禁路径）不改它们的 host、密码或 Schema 列表。就地改 host 见后继 `lucy-20261101-connection-endpoint-edit`。
 13. SQL Server 与 Oracle 的 live-schemas 分别使用其原生系统目录查询；不能因协议识别为 `unknown` 而让复用路径永久失败。
 14. 新建连接与添加 / 删除 Schema、删除连接等正式 `ktx.yaml` 写入并发时，最终 YAML 同时保留各自变更，不发生最后写入覆盖前一项变更。
 

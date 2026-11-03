@@ -7,6 +7,8 @@ import { KtxCliError, testConnection } from "./ktx";
 import { formatConnectionErrorMessage } from "./connection-errors";
 import {
   ForbiddenPathError,
+  safeOverwriteSecretPassword,
+  safeReadSecretPasswordBytesIfExists,
   safeRemove,
   safeRemoveSecretPasswordIfExists,
   safeWrite,
@@ -30,11 +32,19 @@ import type {
   RemoveSchemaResult
 } from "./model";
 import { previewDiff } from "./diff";
-import { assertEndpointGate, type EndpointFlags } from "./connection-endpoint-gate.js";
+import {
+  assertEndpointEditGate,
+  assertEndpointGate,
+  type EndpointEditFlags,
+  type EndpointFlags
+} from "./connection-endpoint-gate.js";
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock.js";
+import { withPublishCoordinator } from "./publish-coordinator.js";
 import type { ConnectionTestResult } from "./ktx";
 import { withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
 import { connectionDeleteBlockText } from "../src/lib/deleteConnectionGuard.js";
+import { schemaInferredFromEnabledTable } from "../src/lib/enabled-table-identity.js";
+import { OPS_EVIDENCE_CONNECTION_ID } from "./ops-evidence/contract.js";
 
 const KTX_YAML_DISPLAY_SCOPES: DisplayScope[] = ["C", "D", "P", "L"];
 
@@ -212,6 +222,108 @@ export class ConnectionPasswordRequiredError extends Error {
   }
 }
 
+/** Spec lucy-20261101-connection-endpoint-edit */
+export class ConnectionEndpointNoChangeError extends Error {
+  code = "CONNECTION_ENDPOINT_NO_CHANGE";
+  statusCode = 400;
+  constructor(message = "连接服务器地址无变更") {
+    super(message);
+    this.name = "ConnectionEndpointNoChangeError";
+  }
+}
+
+export class ConnectionEndpointUnsupportedDriverError extends Error {
+  code = "CONNECTION_ENDPOINT_UNSUPPORTED_DRIVER";
+  statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionEndpointUnsupportedDriverError";
+  }
+}
+
+export class ConnectionEndpointForbiddenError extends Error {
+  code = "CONNECTION_ENDPOINT_FORBIDDEN";
+  statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionEndpointForbiddenError";
+  }
+}
+
+export class ConnectionPasswordSourceNotEditableError extends Error {
+  code = "CONNECTION_PASSWORD_SOURCE_NOT_EDITABLE";
+  statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionPasswordSourceNotEditableError";
+  }
+}
+
+export class ConnectionEndpointInvalidFieldError extends Error {
+  code = "CONNECTION_ENDPOINT_INVALID_FIELD";
+  statusCode = 400;
+  detail?: { field?: string };
+  constructor(message: string, detail?: { field?: string }) {
+    super(message);
+    this.name = "ConnectionEndpointInvalidFieldError";
+    this.detail = detail;
+  }
+}
+
+export type PresenceResult =
+  | { status: "ok"; missingEnabledTables: [] }
+  | { status: "missing"; missingEnabledTables: string[] }
+  | { status: "not_completed"; reason: string; missingEnabledTables?: string[] };
+
+export type UpdateConnectionEndpointInput = {
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+};
+
+export type UpdateConnectionEndpointCurrent = {
+  host: string;
+  port: number;
+  username: string;
+};
+
+export type UpdateConnectionEndpointPreview = {
+  diff: string;
+  proposedYaml: string;
+  current: UpdateConnectionEndpointCurrent;
+  passwordAction: "keep" | "replace";
+  connection?: ConnectionInfo;
+};
+
+export type UpdateConnectionEndpointResult = {
+  written: true;
+  auditId?: number;
+  current: UpdateConnectionEndpointCurrent;
+  connection: ConnectionInfo;
+  passwordAction: "keep" | "replace";
+  test: {
+    status: "ok";
+    message?: string;
+    durationMs?: number;
+  };
+  presence: PresenceResult;
+  executionRuntimePending: true;
+};
+
+export type UpdateConnectionEndpointOptions = {
+  recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
+  testConnectionFn?: typeof testConnection;
+  presenceCheckFn?: (
+    root: string,
+    connId: string,
+    enabledTables: string[]
+  ) => Promise<PresenceResult>;
+  execFileImpl?: Parameters<typeof testConnection>[2];
+  endpointFlags?: EndpointEditFlags;
+  lockHeld?: boolean;
+};
+
 export class ConnectionCreateValidationError extends Error {
   code = "CONNECTION_CREATE_INVALID";
   statusCode = 400;
@@ -243,6 +355,22 @@ export class ConnectionReferencesRemainError extends Error {
     super(message);
     this.name = "ConnectionReferencesRemainError";
     this.detail = { blockers };
+  }
+}
+
+/**
+ * Spec 149 §8 — 运维问数连接受删除保护。
+ *
+ * dryRun 与确认写入都返回 HTTP 400 `OPS_EVIDENCE_CONNECTION_PROTECTED`，
+ * 不写 `config_change_log`，不删审计库、内容根资产或项目根镜像。
+ */
+export class OpsEvidenceConnectionProtectedError extends Error {
+  code = "OPS_EVIDENCE_CONNECTION_PROTECTED";
+  statusCode = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "OpsEvidenceConnectionProtectedError";
   }
 }
 
@@ -382,7 +510,9 @@ export async function readProject(projectRoot: string): Promise<ProjectInfo> {
     const enabledTables = stringArray(conn.enabled_tables);
     const enabledSchemas = driverName === "athena"
       ? []
-      : enabledTables.map((table) => table.split(".")[0]).filter(Boolean);
+      : enabledTables
+          .map((table) => schemaInferredFromEnabledTable(table))
+          .filter((schema): schema is string => Boolean(schema));
     const schemas = Array.from(new Set([...explicitSchemas, ...enabledSchemas])).sort();
     const engine = connectionEngine(conn);
     const readOnlyExpected = booleanValue(conn.readonly ?? conn.read_only ?? conn.readOnly) ?? true;
@@ -491,6 +621,8 @@ export type AddSchemaOptions = {
   recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
   testConnectionFn?: typeof testConnection;
   execFileImpl?: Parameters<typeof testConnection>[2];
+  /** Caller already holds withKtxYamlWriteLock. Re-entering the lock self-waits. */
+  lockHeld?: boolean;
 };
 
 function schemasList(node: import("yaml").YAMLSeq | undefined): string[] {
@@ -641,9 +773,35 @@ export async function addSchema(
   dryRun: boolean,
   options: AddSchemaOptions = {}
 ): Promise<AddSchemaPreview | AddSchemaResult> {
-  // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
-  if (dryRun) return addSchemaUnbarriered(root, connId, schema, dryRun, options);
-  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => addSchemaUnbarriered(root, connId, schema, dryRun, options));
+  if (dryRun || options.lockHeld) return addSchemaUnbarriered(root, connId, schema, dryRun, options);
+  // Connection test stays outside the lock: it shells out to ktx and must not
+  // block every other ktx.yaml writer. The read that produces the patch and the
+  // write both happen inside the lock below.
+  if (typeof schema !== "string" || !SCHEMA_NAME_RE.test(schema)) {
+    throw new SchemaNameInvalidError(
+      `Schema name '${schema}' does not match pattern ${SCHEMA_NAME_PATTERN}`
+    );
+  }
+  const testFn = options.testConnectionFn ?? testConnection;
+  const execFileImpl = options.execFileImpl ?? execFile;
+  const testResult = await testFn(root, connId, execFileImpl);
+  if (testResult.status !== "ok") {
+    throw new ConnectionTestFailedError(
+      `ktx connection test failed for '${connId}': ${testResult.reason ?? "unknown error"}`,
+      {
+        stdout: testResult.stdout ?? testResult.detail ?? "",
+        stderr: testResult.stderr ?? testResult.reason ?? "",
+        reason: testResult.reason ?? "Connection test failed"
+      }
+    );
+  }
+  // L25-16 N05 — same order as the control-plane batch path and removeSchema:
+  // withKtxYamlWriteLock → withDisplayWriteBarrier → read + write.
+  return withKtxYamlWriteLock(() =>
+    withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+      addSchema(root, connId, schema, false, { ...options, lockHeld: true })
+    )
+  );
 }
 
 async function addSchemaUnbarriered(
@@ -679,26 +837,29 @@ async function addSchemaUnbarriered(
     };
   }
 
-  // Phase 2 — write path. Pre-flight `ktx connection test` first; if it fails
-  // we have not touched ktx.yaml yet, so no rollback is needed.
-  const testFn = options.testConnectionFn ?? testConnection;
-  const execFileImpl = options.execFileImpl ?? execFile;
-  const testResult = await testFn(root, connId, execFileImpl);
-  if (testResult.status !== "ok") {
-    throw new ConnectionTestFailedError(
-      `ktx connection test failed for '${connId}': ${testResult.reason ?? "unknown error"}`,
-      {
-        stdout: testResult.stdout ?? testResult.detail ?? "",
-        stderr: testResult.stderr ?? testResult.reason ?? "",
-        reason: testResult.reason ?? "Connection test failed"
-      }
-    );
+  // Phase 2 — connection test already ran outside the lock when lockHeld is set.
+  // A direct call that still reaches here without the lock re-checks, so a
+  // failed test never writes.
+  if (!options.lockHeld) {
+    const testFn = options.testConnectionFn ?? testConnection;
+    const execFileImpl = options.execFileImpl ?? execFile;
+    const testResult = await testFn(root, connId, execFileImpl);
+    if (testResult.status !== "ok") {
+      throw new ConnectionTestFailedError(
+        `ktx connection test failed for '${connId}': ${testResult.reason ?? "unknown error"}`,
+        {
+          stdout: testResult.stdout ?? testResult.detail ?? "",
+          stderr: testResult.stderr ?? testResult.reason ?? "",
+          reason: testResult.reason ?? "Connection test failed"
+        }
+      );
+    }
   }
 
-  // Phase 3 — actually persist via fs-safe. Re-run the same mutator (idempotent
-  // because the doc still has the original `schemas` list — writeKtxYaml reads
-  // fresh text from disk each call).
-  await writeKtxYaml(root, mutator, { dryRun: false });
+  // Phase 3 — persist. The public write path already holds the ktx lock; passing
+  // lockHeld avoids self-wait. A caller that has not taken the lock still goes
+  // through writeKtxYaml's own lock.
+  await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: options.lockHeld === true });
 
   let auditId: number | undefined;
   if (options.recordConfigChange) {
@@ -783,7 +944,23 @@ export async function removeSchema(
 ): Promise<RemoveSchemaPreview | RemoveSchemaResult> {
   // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
   if (dryRun) return removeSchemaUnbarriered(root, connId, schema, dryRun, options);
-  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => removeSchemaUnbarriered(root, connId, schema, dryRun, options));
+  // L25-16 N05 / F5-04 — the legacy Schema removal entry joins the SAME ktx.yaml write lock as
+  // the control-plane batch services. Its write set is wider than ktx.yaml (optional Manifest /
+  // Overlay deletion), so when it does delete semantic content files it also takes the publish
+  // window — the mandated order is
+  // `withKtxYamlWriteLock → withDisplayWriteBarrier → withPublishCoordinator → write`.
+  const deletesSemanticContent = Boolean(options.deleteManifest || options.deleteOverlays);
+  return withKtxYamlWriteLock(() =>
+    withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+      deletesSemanticContent
+        ? withPublishCoordinator(
+            "manifest_upload",
+            () => removeSchemaUnbarriered(root, connId, schema, dryRun, options),
+            { projectRoot: root }
+          )
+        : removeSchemaUnbarriered(root, connId, schema, dryRun, options)
+    )
+  );
 }
 
 async function removeSchemaUnbarriered(
@@ -944,12 +1121,66 @@ async function removeSchemaUnbarriered(
     }
   }
 
-  await writeKtxYaml(root, mutator, { dryRun: false });
+  // L25-16 N05 / F5-04 — the caller already holds withKtxYamlWriteLock; re-entering it
+  // would self-wait. Use the existing `lockHeld: true` path.
+  await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: true });
 
   const deletedFiles: string[] = [];
+  // L25-16 F5-04 — keep the pre-image of every deleted semantic content file so the
+  // deletion can be reversed / audited.
+  const deletedFilePreImages: Array<{ filePath: string; content: string }> = [];
+  const semanticDeleteTargets = [
+    ...(options.deleteManifest && hasManifest ? [manifestPath] : []),
+    ...(options.deleteOverlays ? overlayPaths : [])
+  ];
+  let semanticDeleteJournalId: string | null = null;
+  let semanticDeleteReleaseId: string | null = null;
+  let semanticDeleteAttemptId: string | null = null;
+  if (semanticDeleteTargets.length > 0) {
+    const { openPromotingContentRelease } = await import("./semantic-assets.js");
+    const { createRecoveryJournal, readOrCreateInstanceForDelete } = {
+      createRecoveryJournal: (await import("./semantic-recovery-journal.js")).createRecoveryJournal,
+      readOrCreateInstanceForDelete: (await import("./semantic-release-snapshots.js"))
+        .readOrCreateSemanticInstanceId
+    };
+    const opened = await openPromotingContentRelease({
+      projectRoot: root,
+      actor: "local-admin",
+      targets: semanticDeleteTargets.map((targetPath) => ({
+        targetPath,
+        expectedNewDigest: null,
+        assetKind: targetPath.includes("/_schema/") ? ("manifest" as const) : ("overlay" as const),
+        identity: { connectionId: connId, schema, table: schema }
+      }))
+    });
+    semanticDeleteReleaseId = opened.releaseId;
+    semanticDeleteAttemptId = opened.attemptId;
+    // L25-15 — the journal covers the content-root target only. The general
+    // mirror never deletes (Spec §2.3), so the ktx sibling target of a
+    // deleted file is deliberately left in place; the controlled mirror
+    // delete belongs to the restore plan alone.
+    const journal = await createRecoveryJournal(root, {
+      releaseId: opened.releaseId,
+      operationId: opened.releaseId,
+      actor: "local-admin",
+      instanceId: await readOrCreateInstanceForDelete(root),
+      targets: semanticDeleteTargets.map((targetPath) => ({
+        targetPath,
+        newContent: null,
+        identity: { connectionId: connId, schema, table: schema }
+      }))
+    });
+    semanticDeleteJournalId = journal.journalId;
+  }
 
   // Optional: delete manifest (safeRemove no-ops ENOENT).
   if (options.deleteManifest && hasManifest) {
+    deletedFilePreImages.push({
+      filePath: manifestPath,
+      content: await readFile(path.join(paths.semanticLayer, connId, "_schema", `${schema}.yaml`), "utf8").catch(
+        () => ""
+      )
+    });
     await safeRemove(paths, root, manifestPath);
     deletedFiles.push(manifestPath);
   }
@@ -957,8 +1188,39 @@ async function removeSchemaUnbarriered(
   // Optional: delete overlays.
   if (options.deleteOverlays) {
     for (const overlayPath of overlayPaths) {
+      deletedFilePreImages.push({
+        filePath: overlayPath,
+        content: await readFile(path.join(paths.semanticLayer, connId, overlayPath.slice(overlayPath.lastIndexOf("/") + 1)), "utf8").catch(
+          () => ""
+        )
+      });
       await safeRemove(paths, root, overlayPath);
       deletedFiles.push(overlayPath);
+    }
+  }
+  if (semanticDeleteJournalId) {
+    const { markRecoveryJournalFilesSaved } = await import("./semantic-recovery-journal.js");
+    try {
+      await markRecoveryJournalFilesSaved(root, semanticDeleteJournalId);
+      const { closeContentBatch } = await import("./semantic-assets.js");
+      await closeContentBatch(root, {
+        releaseId: semanticDeleteReleaseId!,
+        attemptId: semanticDeleteAttemptId!,
+        actor: "local-admin",
+        journalId: semanticDeleteJournalId,
+        changeType: "semantic_schema_delete_terminal",
+        source: "project_schema_remove_api",
+        targetId: `${connId}:${schema}`,
+        operation: "schema_remove_terminal",
+        newSummary: { connectionId: connId, schema, deletedFileCount: semanticDeleteTargets.length }
+      });
+    } catch (error) {
+      const { failContentBatch } = await import("./semantic-assets.js");
+      await failContentBatch(root, {
+        releaseId: semanticDeleteReleaseId!,
+        journalId: semanticDeleteJournalId
+      });
+      throw error;
     }
   }
 
@@ -980,7 +1242,8 @@ async function removeSchemaUnbarriered(
     oldSchemas,
     newSchemas,
     removedEnabledTables,
-    deletedFiles
+    deletedFiles,
+    deletedFilePreImages
   };
 }
 
@@ -991,6 +1254,8 @@ export type RemoveConnectionOptions = {
   listWikiFn?: typeof import("./wiki").listWiki;
   deleteSecret?: boolean;
   deleteAssets?: boolean;
+  /** Caller already holds withKtxYamlWriteLock. Re-entering the lock self-waits. */
+  lockHeld?: boolean;
 };
 
 function yamlScalarString(item: unknown): string | null {
@@ -1218,9 +1483,22 @@ export async function removeConnection(
   dryRun: boolean,
   options: RemoveConnectionOptions = {}
 ): Promise<DeleteConnectionPreview | DeleteConnectionResult> {
-  // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
-  if (dryRun) return removeConnectionUnbarriered(root, connId, dryRun, options);
-  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => removeConnectionUnbarriered(root, connId, dryRun, options));
+  if (dryRun || options.lockHeld) return removeConnectionUnbarriered(root, connId, dryRun, options);
+  // L25-16 N05 — read and write stay in one critical section, same order as
+  // removeSchema: withKtxYamlWriteLock → withDisplayWriteBarrier → (publish
+  // window when semantic files are deleted) → write.
+  const deletesSemanticContent = Boolean(options.deleteAssets);
+  return withKtxYamlWriteLock(() =>
+    withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+      deletesSemanticContent
+        ? withPublishCoordinator(
+            "manifest_upload",
+            () => removeConnection(root, connId, false, { ...options, lockHeld: true }),
+            { projectRoot: root }
+          )
+        : removeConnection(root, connId, false, { ...options, lockHeld: true })
+    )
+  );
 }
 
 async function removeConnectionUnbarriered(
@@ -1233,6 +1511,12 @@ async function removeConnectionUnbarriered(
     throw new ConnectionIdInvalidError(
       `Connection ID '${connId}' does not match pattern ${CONNECTION_ID_PATTERN}`
     );
+  }
+
+  // Spec 149 §8 — 运维问数连接不可删除。检查放在 dryRun 早返回**之前**，
+  // 因此预览与确认写入都拒绝；也不会走到下面的 `recordConfigChange`。
+  if (connId === OPS_EVIDENCE_CONNECTION_ID) {
+    throw new OpsEvidenceConnectionProtectedError("运维问数连接不能删除");
   }
 
   const ktxPath = path.join(root, "ktx.yaml");
@@ -1339,7 +1623,7 @@ async function removeConnectionUnbarriered(
     }
   }
 
-  await writeKtxYaml(root, mutator, { dryRun: false });
+  await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: options.lockHeld === true });
 
   const deletedFiles: string[] = [];
   if (options.deleteSecret && secretRelPath) {
@@ -1350,14 +1634,78 @@ async function removeConnectionUnbarriered(
       // yaml already committed; leftover secret is recoverable by hand
     }
   }
-  if (options.deleteAssets) {
-    for (const assetPath of yamlAssetPaths) {
+  if (options.deleteAssets && yamlAssetPaths.length > 0) {
+    const semanticPaths = yamlAssetPaths.filter(
+      (assetPath) => assetPath.startsWith("semantic-layer/") && assetPath.endsWith(".yaml")
+    );
+    if (semanticPaths.length > 0) {
+      const { openPromotingContentRelease, closeContentBatch, failContentBatch } = await import(
+        "./semantic-assets.js"
+      );
+      const { createRecoveryJournal, markRecoveryJournalFilesSaved } = await import(
+        "./semantic-recovery-journal.js"
+      );
+      const { readOrCreateSemanticInstanceId } = await import("./semantic-release-snapshots.js");
+      const opened = await openPromotingContentRelease({
+        projectRoot: root,
+        actor: "local-admin",
+        targets: semanticPaths.map((targetPath) => ({
+          targetPath,
+          expectedNewDigest: null,
+          assetKind: targetPath.includes("/_schema/") ? ("manifest" as const) : ("overlay" as const)
+        }))
+      });
+      const journal = await createRecoveryJournal(root, {
+        releaseId: opened.releaseId,
+        operationId: opened.releaseId,
+        actor: "local-admin",
+        instanceId: await readOrCreateSemanticInstanceId(root),
+        // The general mirror never deletes (Spec §2.3): only the content-root
+        // target is deleted, so only it belongs in the journal.
+        targets: semanticPaths.map((targetPath) => ({
+          targetPath,
+          newContent: null,
+          surface: "content_root" as const
+        }))
+      });
+      for (const assetPath of yamlAssetPaths) {
+        try {
+          const paths = await loadContentPaths();
+          await safeRemove(paths, root, assetPath);
+          deletedFiles.push(assetPath);
+        } catch {
+          // leftover YAML assets are recoverable by hand
+        }
+      }
       try {
-        const paths = await loadContentPaths();
-        await safeRemove(paths, root, assetPath);
-        deletedFiles.push(assetPath);
-      } catch {
-        // leftover YAML assets are recoverable by hand
+        await markRecoveryJournalFilesSaved(root, journal.journalId);
+        await closeContentBatch(root, {
+          releaseId: opened.releaseId,
+          attemptId: opened.attemptId,
+          actor: "local-admin",
+          journalId: journal.journalId,
+          changeType: "semantic_connection_delete_terminal",
+          source: "project_connection_remove_api",
+          targetId: connId,
+          operation: "connection_remove_terminal",
+          newSummary: { connectionId: connId, deletedFileCount: semanticPaths.length }
+        });
+      } catch (error) {
+        await failContentBatch(root, {
+          releaseId: opened.releaseId,
+          journalId: journal.journalId
+        });
+        throw error;
+      }
+    } else {
+      for (const assetPath of yamlAssetPaths) {
+        try {
+          const paths = await loadContentPaths();
+          await safeRemove(paths, root, assetPath);
+          deletedFiles.push(assetPath);
+        } catch {
+          // leftover YAML assets are recoverable by hand
+        }
       }
     }
   }
@@ -1584,12 +1932,20 @@ function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRe
       doc.set("setup", setup);
     }
     if (isMap(setup)) {
-      let ids = setup.get("database_connection_ids", true);
-      if (!ids) {
+      // `setup.get(..., true)` keeps the raw node: a missing key is `undefined`,
+      // an empty YAML value is `null`, an existing key may be a YAMLSeq (append)
+      // or any other node (left as-is).
+      // `undefined` 与 `null` 都按「没有列表」处理，与旧实现 `if (!ids)` 的运行时
+      // 行为一致：空值会被补成新列表并登记本次连接 id，不静默丢弃。
+      const existingIds = setup.get("database_connection_ids", true);
+      let ids: YAMLSeq<unknown> | undefined;
+      if (existingIds === undefined || existingIds === null) {
         ids = new YAMLSeq();
         setup.set("database_connection_ids", ids);
+      } else if (isSeq(existingIds)) {
+        ids = existingIds;
       }
-      if (isSeq(ids)) {
+      if (ids) {
         const existing = schemasList(ids);
         if (!existing.includes(input.id)) {
           ids.items.push(input.id);
@@ -1791,6 +2147,361 @@ export async function createConnection(
   };
 }
 
+function isCanonicalFilePassword(projectRoot: string, connId: string, passwordField: unknown): boolean {
+  if (typeof passwordField !== "string" || !passwordField.startsWith("file:")) return false;
+  const ref = passwordField.slice("file:".length).trim();
+  const expectedAbs = path.join(projectRoot, ".ktx", "secrets", `${connId}-password`);
+  const expectedRel = connectionSecretRelPath(connId);
+  if (ref === expectedRel || ref === expectedAbs) return true;
+  try {
+    return path.resolve(ref) === path.resolve(expectedAbs) || path.resolve(projectRoot, ref) === path.resolve(expectedAbs);
+  } catch {
+    return false;
+  }
+}
+
+function portScalarForWrite(existing: unknown, port: number): string | number {
+  if (typeof existing === "string") return String(port);
+  return port;
+}
+
+async function defaultPresenceCheck(
+  root: string,
+  connId: string,
+  enabledTables: string[]
+): Promise<PresenceResult> {
+  if (enabledTables.length === 0) {
+    return { status: "ok", missingEnabledTables: [] };
+  }
+  const schemas = Array.from(
+    new Set(
+      enabledTables
+        .map((table) => schemaInferredFromEnabledTable(table))
+        .filter((schema): schema is string => Boolean(schema))
+    )
+  );
+  if (schemas.length > 3) {
+    return { status: "not_completed", reason: "budget_exceeded" };
+  }
+  const started = Date.now();
+  try {
+    const { readLiveTables } = await import("./live-tables.js");
+    const missing: string[] = [];
+    for (const schema of schemas) {
+      if (Date.now() - started > 10_000) {
+        return { status: "not_completed", reason: "timeout", missingEnabledTables: missing };
+      }
+      const live = await readLiveTables(root, connId, schema, { refresh: true });
+      if (live.status !== "ok") {
+        const code = "error" in live ? String((live as { error?: { code?: string } }).error?.code ?? "") : "";
+        if (code.includes("UNSUPPORTED") || code === "TABLE_LIST_UNSUPPORTED" || code === "PROTOCOL_UNSUPPORTED") {
+          return { status: "not_completed", reason: "unsupported_driver" };
+        }
+        return { status: "not_completed", reason: "probe_error" };
+      }
+      const names = new Set((live.tables ?? []).map((row) => `${schema}.${row.table}`));
+      // also allow bare table match for same schema
+      const bare = new Set((live.tables ?? []).map((row) => row.table));
+      for (const entry of enabledTables) {
+        if (schemaInferredFromEnabledTable(entry) !== schema) continue;
+        const table = entry.includes(".") ? entry.slice(entry.indexOf(".") + 1) : entry;
+        if (!names.has(entry) && !bare.has(table)) {
+          missing.push(entry);
+        }
+      }
+    }
+    if (missing.length === 0) return { status: "ok", missingEnabledTables: [] };
+    return { status: "missing", missingEnabledTables: missing };
+  } catch {
+    return { status: "not_completed", reason: "probe_error" };
+  }
+}
+
+function connectionEndpointMutatorFactory(
+  connId: string,
+  host: string,
+  port: number,
+  username: string
+) {
+  return (doc: ReturnType<typeof parseDocument>) => {
+    const conns = doc.get("connections", true);
+    if (!isMap(conns) || !conns.has(connId)) {
+      throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+    }
+    const conn = conns.get(connId, true);
+    if (!isMap(conn)) {
+      throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+    }
+    const existingPort = conn.get("port");
+    conn.set("host", host);
+    conn.set("port", portScalarForWrite(isScalar(existingPort) ? existingPort.value : existingPort, port));
+    conn.set("username", username);
+  };
+}
+
+export function updateConnectionEndpoint(
+  root: string,
+  connId: string,
+  rawInput: UpdateConnectionEndpointInput,
+  dryRun: true,
+  options?: UpdateConnectionEndpointOptions
+): Promise<UpdateConnectionEndpointPreview>;
+export function updateConnectionEndpoint(
+  root: string,
+  connId: string,
+  rawInput: UpdateConnectionEndpointInput,
+  dryRun: false,
+  options?: UpdateConnectionEndpointOptions
+): Promise<UpdateConnectionEndpointResult>;
+export function updateConnectionEndpoint(
+  root: string,
+  connId: string,
+  rawInput: UpdateConnectionEndpointInput,
+  dryRun: boolean,
+  options?: UpdateConnectionEndpointOptions
+): Promise<UpdateConnectionEndpointPreview | UpdateConnectionEndpointResult>;
+export async function updateConnectionEndpoint(
+  root: string,
+  connId: string,
+  rawInput: UpdateConnectionEndpointInput,
+  dryRun: boolean,
+  options: UpdateConnectionEndpointOptions = {}
+): Promise<UpdateConnectionEndpointPreview | UpdateConnectionEndpointResult> {
+  if (dryRun === false && !options.lockHeld) {
+    return withKtxYamlWriteLock(() =>
+      withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+        updateConnectionEndpoint(root, connId, rawInput, false, { ...options, lockHeld: true })
+      )
+    );
+  }
+
+  if (connId === OPS_EVIDENCE_CONNECTION_ID) {
+    throw new ConnectionEndpointForbiddenError(`连接「${connId}」禁止在界面编辑服务器地址`);
+  }
+
+  const yamlText = await readFile(path.join(root, "ktx.yaml"), "utf8");
+  const config = valueAsRecord(parse(yamlText));
+  const connectionsConfig = valueAsRecord(config.connections);
+  const rawConn = connectionsConfig[connId];
+  if (!rawConn || typeof rawConn !== "object") {
+    throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+  }
+  const conn = valueAsRecord(rawConn);
+  const driver = typeof conn.driver === "string" ? conn.driver : "";
+  if (driver === "sqlite" || driver === "athena" || !driver) {
+    throw new ConnectionEndpointUnsupportedDriverError(
+      `连接类型「${driver || "unknown"}」不支持在界面修改服务器地址`
+    );
+  }
+
+  const host = typeof rawInput.host === "string" ? rawInput.host.trim() : "";
+  const username = typeof rawInput.username === "string" ? rawInput.username.trim() : "";
+  const port = rawInput.port;
+  if (!host) {
+    throw new ConnectionEndpointInvalidFieldError("host is required", { field: "host" });
+  }
+  if (!username) {
+    throw new ConnectionEndpointInvalidFieldError("username is required", { field: "username" });
+  }
+  if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new ConnectionEndpointInvalidFieldError("port must be an integer between 1 and 65535", {
+      field: "port"
+    });
+  }
+
+  const current: UpdateConnectionEndpointCurrent = {
+    host: typeof conn.host === "string" ? conn.host : "",
+    port: Number(conn.port) || 0,
+    username: typeof conn.username === "string" ? conn.username : ""
+  };
+
+  const passwordTrimmed =
+    typeof rawInput.password === "string" ? rawInput.password.trim() : "";
+  const passwordAction: "keep" | "replace" = passwordTrimmed.length > 0 ? "replace" : "keep";
+  if (passwordAction === "replace" && !isCanonicalFilePassword(root, connId, conn.password)) {
+    throw new ConnectionPasswordSourceNotEditableError(
+      "该连接的密码不是约定的密码文件引用，界面不能覆盖密码"
+    );
+  }
+
+  const database = typeof conn.database === "string" ? conn.database : "";
+  const engine = typeof conn.engine === "string" ? conn.engine : undefined;
+  await assertEndpointEditGate(
+    root,
+    connId,
+    { driver, engine, host, port, database, username },
+    options.endpointFlags ?? {}
+  );
+
+  const hostChanged = normalizeHostCompare(current.host) !== normalizeHostCompare(host);
+  const portChanged = Number(current.port) !== port;
+  const userChanged = current.username.trim() !== username;
+  if (!hostChanged && !portChanged && !userChanged && passwordAction === "keep") {
+    if (dryRun) {
+      return {
+        diff: "",
+        proposedYaml: redactKtxYamlForPreview(yamlText),
+        current: { host: current.host, port: Number(current.port) || port, username: current.username },
+        passwordAction: "keep"
+      };
+    }
+    throw new ConnectionEndpointNoChangeError();
+  }
+
+  const mutator = connectionEndpointMutatorFactory(connId, host, port, username);
+  const preview = await writeKtxYaml(root, mutator, { dryRun: true, lockHeld: options.lockHeld });
+  const safeProposed = redactKtxYamlForPreview(preview.serialized);
+  const safeOld = redactKtxYamlForPreview(preview.oldText);
+  const diff = previewDiff(safeOld, safeProposed, "ktx.yaml");
+  const projectAfterPreview = await readProject(root);
+  const connectionInfo = projectAfterPreview.connections.find((item) => item.id === connId);
+
+  if (dryRun) {
+    return {
+      diff,
+      proposedYaml: safeProposed,
+      current: { host: current.host, port: Number(current.port) || port, username: current.username },
+      passwordAction,
+      ...(connectionInfo ? { connection: { ...connectionInfo, host, port: String(port) } } : {})
+    };
+  }
+
+  // Commit path: re-validate under lock (caller holds lock when lockHeld).
+  const secretRelPath = connectionSecretRelPath(connId);
+  let oldSecret: Buffer | null = null;
+  if (passwordAction === "replace") {
+    oldSecret = await safeReadSecretPasswordBytesIfExists(root, secretRelPath);
+  }
+
+  let secretWritten = false;
+  let yamlWritten = false;
+  const rollback = async () => {
+    if (yamlWritten) {
+      const paths = await loadContentPaths();
+      await safeWrite(paths, root, "ktx.yaml", preview.oldText);
+      yamlWritten = false;
+    }
+    if (secretWritten) {
+      if (oldSecret) {
+        await safeOverwriteSecretPassword(root, secretRelPath, oldSecret.toString("utf8"));
+      } else {
+        await safeRemoveSecretPasswordIfExists(root, secretRelPath);
+      }
+      secretWritten = false;
+    }
+  };
+
+  try {
+    if (passwordAction === "replace") {
+      await safeOverwriteSecretPassword(root, secretRelPath, passwordTrimmed);
+      secretWritten = true;
+    }
+    await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: true });
+    yamlWritten = true;
+  } catch (error) {
+    await rollback();
+    throw error;
+  }
+
+  const testFn = options.testConnectionFn ?? testConnection;
+  const execFileImpl = options.execFileImpl ?? execFile;
+  let testMessage: string | undefined;
+  let durationMs: number | undefined;
+  try {
+    const testResult: ConnectionTestResult = await testFn(root, connId, execFileImpl);
+    durationMs = testResult.latencyMs;
+    if (testResult.status !== "ok") {
+      await rollback();
+      throw new ConnectionTestFailedError(testResult.reason?.trim() || "连接失败", {
+        reason: testResult.reason ?? "",
+        stdout: testResult.stdout ?? "",
+        stderr: testResult.stderr ?? ""
+      });
+    }
+    testMessage = testResult.detail;
+  } catch (error) {
+    if (error instanceof ConnectionTestFailedError) throw error;
+    await rollback();
+    if (error instanceof KtxCliError) {
+      throw new ConnectionTestFailedError("无法执行连通测试：未找到 ktx CLI", {
+        reason: "ktx_cli_missing",
+        stdout: "",
+        stderr: error instanceof Error ? error.message : ""
+      });
+    }
+    throw error;
+  }
+
+  let presence: PresenceResult;
+  try {
+    const check = options.presenceCheckFn ?? defaultPresenceCheck;
+    const enabledTables = stringArray(conn.enabled_tables);
+    presence = await check(root, connId, enabledTables);
+  } catch {
+    presence = { status: "not_completed", reason: "probe_error" };
+  }
+
+  let auditId: number | undefined;
+  if (options.recordConfigChange) {
+    const passwordBytes =
+      passwordAction === "replace" ? Buffer.byteLength(passwordTrimmed, "utf8") : 0;
+    try {
+      auditId = await options.recordConfigChange({
+        filePath: "ktx.yaml",
+        changeType: "connection_endpoint_update",
+        targetId: connId,
+        oldSummary: {
+          host: current.host,
+          port: current.port,
+          username: current.username
+        },
+        newSummary: {
+          connectionId: connId,
+          host,
+          port,
+          username,
+          passwordAction,
+          passwordBytes,
+          testStatus: "ok"
+        },
+        diff
+      });
+    } catch (error) {
+      await rollback();
+      throw error;
+    }
+  }
+
+  const after = await readProject(root);
+  const updated = after.connections.find((item) => item.id === connId);
+  return {
+    written: true,
+    auditId,
+    current: { host, port, username },
+    connection: updated ?? {
+      id: connId,
+      driver,
+      host,
+      port: String(port),
+      database,
+      schemas: stringArray(conn.schemas),
+      enabledTables: stringArray(conn.enabled_tables)
+    },
+    passwordAction,
+    test: { status: "ok", message: testMessage, durationMs },
+    presence,
+    executionRuntimePending: true
+  };
+}
+
+function normalizeHostCompare(host: string): string {
+  const text = host.trim().toLowerCase();
+  if (text.startsWith("[") && text.endsWith("]") && text.length > 2) {
+    return text.slice(1, -1);
+  }
+  return text;
+}
+
 const PROBE_CONNECTION_ID = "probe";
 
 export async function probeConnection(
@@ -1990,6 +2701,11 @@ export type ApplyConnectionIdChangeOptions = {
    * at the Spec 181 injection point.
    */
   injectFailure?: "before_wiki";
+  /**
+   * Internal. The shared publish window is held for mutual exclusion only.
+   * A connection id change does not capture a content snapshot.
+   */
+  publishWindowHeld?: boolean;
 };
 
 export type PlanConnectionIdChangeOptions = {
@@ -2650,6 +3366,17 @@ export async function applyConnectionIdChange(
     );
   }
   validateConnectionIdsForRename(fromId, toId);
+  if (options.publishWindowHeld !== true) {
+    return withPublishCoordinator(
+      "batch_import",
+      () =>
+        applyConnectionIdChange(projectRoot, fromId, toId, {
+          ...options,
+          publishWindowHeld: true
+        }),
+      { projectRoot }
+    );
+  }
 
   // Snapshot the files we may mutate so a partial failure can restore them.
   const ktxPath = path.join(projectRoot, "ktx.yaml");

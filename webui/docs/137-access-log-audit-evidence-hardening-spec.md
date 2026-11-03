@@ -73,10 +73,19 @@ Protected DOM：`Manifest`、`policyVersion`、`capabilityDigest`、`trace_id`�
 ```text
 FUNCTION summarizeArgsForAudit(tool, args) -> summary:
   base = filterKeys(args, drop=SENSITIVE_ARG_KEY_RE, maxKeys=8)
+  base = preserveToolAwareParameterPresence(tool, args, base)
+  base = boundEachSerializedValue(base, maxBytes=512, preserveUnicodeAndJson=true)
   IF tool == "lucy_begin_question" OR base has keys {question, intentSummary}:
     RETURN base WITHOUT {question, questionPreview, intentSummary}
     # natural language belongs only in conversation_turns, where retention applies
   RETURN base
+
+FUNCTION buildQueryPreview(tool, args) -> preview:
+  raw = selectActualSearchOrQueryParameter(tool, args)
+  redacted = applyExistingRedaction(raw)
+  RETURN boundedUnicode(redacted, maxCodePoints=500,
+    preview_version="v2p5-1", recordTruncated=true, recordOriginalUtf8Bytes=true)
+  # 旧实现 180 码点是历史基线；digest 取完整受控规范化输入，不取截断预览
 
 FUNCTION auditMeta(identity, decisionReason) -> fields:
   fields = { decisionReason, tokenLabel, tokenHashPrefix, clientVersion }
@@ -136,30 +145,47 @@ FUNCTION applyScrub(actor, reason, requestId):
                                  beforeDigest, afterDigest)
   RETURN counts + digests + maintenanceEventId
 
-FUNCTION buildExportManifest(normalizedFilter, files[], completeness, limits, appVersion) -> manifest:
+FUNCTION buildExportManifest(exportContext, normalizedFilter, files[], completeness, limits, appVersion) -> manifest:
   RETURN {
-    schemaVersion: "audit-export-manifest/v1",
+    schemaVersion: "audit-export-manifest/v2",
+    exportId: exportContext.exportId,
+    prevExportId: exportContext.prevExportId OR null,
     generatedAt: nowISO8601(),
     timezone: "UTC",
     appVersion,
     filter: normalizedFilter,
     includeProtocol: normalizedFilter.includeProtocol == true,
+    watermarkSeq: exportContext.S,
+    cutoff: { ledgerWatermark: exportContext.S, snapshotId: exportContext.snapshotId },
+    classificationVersion: exportContext.classificationVersion,
+    derivationVersion: exportContext.derivationVersion,
     completeness,
+    exclusions: exportContext.exclusions,  # 范围外类型、脱敏项及不可观测项逐项声明
+    provenance: {
+      exportedBy: exportContext.actor,
+      exportReason: exportContext.reason,
+      exportApprovalRef: exportContext.approvalRef OR null
+    },
     limits,
-    files: [{ name, rowCount, filterScope, sha256 } for each file]
+    files: [{ name, rowCount, filterScope, relationKeys, sha256 } for each file]
   }
 
-FUNCTION buildEvidencePack(filter) -> zip:
-  accessCsv = renderAccessLogCsv(filter)           # UTF-8 BOM
-  sourcesCsv = renderSourcesCsv(filter)            # W3
-  snapshotsJsonl = renderSnapshotsJsonl(filter)    # W3, dedupe by hash
-  authFailCsv = renderAuthFailureCsv(time + user + clientIp)
-  maintenanceJsonl = renderMaintenanceJsonl(time)
+FUNCTION buildEvidencePack(filter, actor, reason, approvalRef, prevExportId = null) -> zip:
+  S = canonicalLedger.committedWatermark()
+  catchProjectionUpTo(S, deadline=60s) ELSE rejectFormalExport()
+  snapshot = freezeConsistentProjectionSnapshotCovering(S)
+  exportContext = allocateExportContext(actor, reason, approvalRef, prevExportId, S, snapshot.id)
+  accessCsv = renderAccessLogCsv(snapshot, filter, S)       # UTF-8 BOM
+  sourcesCsv = renderSourcesCsv(snapshot, filter, S)        # W3
+  snapshotsJsonl = renderSnapshotsJsonl(snapshot, filter, S) # W3, dedupe by hash
+  authFailCsv = renderAuthFailureCsv(snapshot, filter, S)
+  maintenanceJsonl = renderMaintenanceJsonl(snapshot, filter, S)
   files = [accessCsv, sourcesCsv, snapshotsJsonl, authFailCsv, maintenanceJsonl]
   completeness = find missing snapshot hashes, rows without snapshot, successful lucy_query without sources
   REQUIRE access rows <= MAX_ROWS AND uncompressed bytes <= MAX_BYTES ELSE HTTP 413
-  manifest = buildExportManifest(normalizeEffectiveFilter(filter), files, completeness, limits,
+  manifest = buildExportManifest(exportContext, normalizeEffectiveFilter(filter), files, completeness, limits,
                                  resolveLucyVersion())
+  verifyCrossFileRelationsAndExclusions(manifest, files)
   RETURN zip named audit-pack-YYYYMMDDTHHMMSSZ-<8hex>.zip
 ```
 
@@ -185,14 +211,26 @@ FUNCTION buildEvidencePack(filter) -> zip:
 
 ### 6.3 Manifest schema
 
+v0.25 新包使用 `audit-export-manifest/v2`；旧 v1 包保持原样读取，不补造版本链或来源。`exportId` 是每次导出的唯一身份，`prevExportId` 仅在实际存在前序导出时填写；同一版本链不表示历史文件被重写。所有文件共用固定筛选、账本上界 `watermarkSeq=S` 与 `snapshotId`，`relationKeys` 至少声明 `accessLogId / permissionSnapshotHash / turnId / operationId / attemptId` 中该文件实际使用的键；跨文件缺失、额外、重复与冲突集合进入覆盖检查，不由文件 hash 替代。
+
+`exclusions` 逐项列出范围外事件类型、脱敏字段、未接入客户端及其他不可观测项与原因；`complete=true` 不得掩盖这些排除项。`exportedBy / exportReason / exportApprovalRef` 分别记录导出人、导出原因与已有审批引用；没有审批流程时后项为 `null` 并配空值原因，不虚构批准。
+
 ```jsonc
 {
-  "schemaVersion": "audit-export-manifest/v1",
+  "schemaVersion": "audit-export-manifest/v2",
+  "exportId": "exp_01...",
+  "prevExportId": null,
   "generatedAt": "2026-09-02T12:00:00.000Z",
   "timezone": "UTC",
   "appVersion": "string",
   "filter": { "user": null, "since": null, "until": null, "callSource": null, "includeProtocol": false },
   "includeProtocol": false,
+  "watermarkSeq": 2602,
+  "cutoff": { "ledgerWatermark": 2602, "snapshotId": "snap_01..." },
+  "classificationVersion": "v2p5-1",
+  "derivationVersion": "v2p5-1",
+  "exclusions": [],
+  "provenance": { "exportedBy": "actor-id", "exportReason": "investigation", "exportApprovalRef": null },
   "limits": { "maxRows": 10000, "maxBytes": 67108864, "exportedUncompressedBytes": 1234 },
   "completeness": {
     "rowsWithoutPermissionSnapshot": 0,
@@ -201,7 +239,7 @@ FUNCTION buildEvidencePack(filter) -> zip:
     "complete": true
   },
   "files": [
-    { "name": "access_log.csv", "rowCount": 42, "filterScope": "normalized_access_log_filter", "sha256": "hex" }
+    { "name": "access_log.csv", "rowCount": 42, "filterScope": "normalized_access_log_filter", "relationKeys": ["accessLogId", "turnId"], "sha256": "hex" }
   ]
 }
 ```

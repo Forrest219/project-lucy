@@ -634,7 +634,17 @@ describe("Help handbook", () => {
     const handbook = await readHelpHandbook(realAppRoot);
 
     // Content markers — operations runbook must be self-contained and explicit.
-    expect(handbook.markdown).toContain("WebUI 不负责新建物理数据库连接");
+    // 70f27ba0 taught the handbook that WebUI *can* create a connection and edit its endpoint
+    // (src/pages/connections/ConnectionOverview.tsx「新建连接」/ CreateConnectionDrawer), so the
+    // old「WebUI 不负责新建物理数据库连接」marker became false. The boundary the runbook still
+    // has to state is the credential one: WebUI writes the connection, it never reads the
+    // password back, and the hand-written ktx.yaml path stays available.
+    expect(handbook.markdown).toContain("WebUI 可**新建连接**");
+    expect(handbook.markdown).toContain("WebUI 不回读密码明文");
+    // 职责边界那半句（§「WebUI 与 ktx.yaml 的职责边界」）：新建的是连接声明，
+    // 物理库与凭据管理仍在 ktx.yaml／secrets 侧。别让「可新建连接」被读成
+    // 「WebUI 负责建物理库」。
+    expect(handbook.markdown).toContain("不承担物理数据库连接的创建与凭据管理");
     expect(handbook.markdown).toContain("新增数据库连接（运维 Runbook）");
     expect(handbook.markdown).toContain("Agent 可见性与 ACL 同步");
     expect(handbook.markdown).toContain("连接形态与配置字段");

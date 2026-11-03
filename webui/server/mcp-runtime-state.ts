@@ -42,6 +42,18 @@ export function listExecutionRuntimeObservations(
     .map((observation) => ({ ...observation }));
 }
 
+/**
+ * Spec 191 §5.4 — invalidate the old evidence.
+ *
+ * After the execution layer restarts, the previous observations describe a
+ * process that no longer exists: they must not be reused as proof that the
+ * new configuration was loaded. Clearing them leaves the status at "unknown"
+ * until a connection level verification writes fresh evidence.
+ */
+export function clearExecutionRuntimeObservations(): void {
+  observations.clear();
+}
+
 export function resetExecutionRuntimeObservationsForTests(): void {
   observations.clear();
 }

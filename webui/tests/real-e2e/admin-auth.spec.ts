@@ -2,9 +2,9 @@
 // The first test needs the instance still awaiting its first owner; the run prepared by prepare-environment.mjs
 // is fresh. Sessions are held in memory only (never written to disk, trace or screenshot).
 
-import { expect, test, type Browser, type BrowserContext } from "@playwright/test";
+import { expect, test, type Browser, type BrowserContext, type TestInfo } from "@playwright/test";
 import { assertion, covers } from "./helpers/blocked";
-import { adminCredentials, bootstrapKey, fixtureAgentTokens, uiLogin } from "./helpers/run-context";
+import { adminCredentials, bootstrapKey, fixtureAgentTokens, ownerContext as sharedOwnerContext, uiLogin } from "./helpers/run-context";
 import { vault } from "./helpers/secret-capture";
 
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
@@ -15,9 +15,31 @@ async function authStatus(baseURL: string): Promise<string | undefined> {
   return ((await res.json()) as { data?: { mode?: string } }).data?.mode;
 }
 
-async function ownerContext(browser: Browser): Promise<BrowserContext> {
-  if (!sessions.owner) throw new Error("owner session is missing: the bootstrap test must run first");
-  return browser.newContext({ storageState: sessions.owner, viewport: { width: 1440, height: 900 } });
+/**
+ * The owner session for the cases that govern accounts.
+ *
+ * `sessions.owner` is captured by the bootstrap case (SEC-02-V06) in THIS file. When
+ * that case is BLOCKED — the instance had already been bootstrapped by another spec,
+ * so the one-shot UI bootstrap could not be proven on a fresh instance — the
+ * file-scoped session does not exist.
+ *
+ * The old behaviour threw a raw Error, and the collector turned that into a PRODUCT
+ * FAILURE of SEC-03-V05. It was not a product failure: the owner-only endpoint was
+ * never exercised. A missing precondition is BLOCKED with its reason, never failed.
+ *
+ * The shared helper logs the run's owner in (or bootstraps it), so the case still
+ * produces REAL evidence whenever the instance has an owner at all.
+ */
+async function ownerSession(browser: Browser, testInfo: TestInfo): Promise<BrowserContext> {
+  if (sessions.owner) return browser.newContext({ storageState: sessions.owner, viewport: { width: 1440, height: 900 } });
+  try {
+    return await sharedOwnerContext(browser);
+  } catch (error) {
+    const reason = `owner session unavailable: ${error instanceof Error ? error.message : String(error)}`;
+    testInfo.annotations.push({ type: "blocked", description: reason });
+    testInfo.skip(true, `BLOCKED: ${reason}`);
+    throw error;
+  }
 }
 
 test.describe.configure({ mode: "serial" });
@@ -67,17 +89,18 @@ test("the first owner is created through the UI with the one-time bootstrap key"
 test("owner adds an operator in the UI; the operator cannot govern accounts but can do daily work", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-03-V05");
   const { operator } = adminCredentials();
-  const ownerCtx = await ownerContext(browser);
+  const ownerCtx = await ownerSession(browser, testInfo);
   try {
     const page = await ownerCtx.newPage();
-    await page.goto("/admin/admins");
-    await expect(page.getByRole("heading", { name: "添加登录账户" })).toBeVisible();
-    const form = page.locator("form", { has: page.getByRole("heading", { name: "添加登录账户" }) });
-    await form.getByLabel("登录账户").fill(operator.adminId);
-    await form.getByLabel("显示名").fill("E2E Operator");
-    await form.getByLabel("角色").selectOption("operator");
-    await form.getByLabel("初始密码").fill(operator.password);
-    await form.getByRole("button", { name: "创建账户" }).click();
+    await page.goto("/admin/accounts");
+    await page.getByRole("button", { name: "新建账户" }).click();
+    const createDialog = page.getByTestId("admin-account-create-modal");
+    await expect(createDialog).toBeVisible();
+    await createDialog.getByLabel("登录账户").fill(operator.adminId);
+    await createDialog.getByLabel("显示名").fill("E2E Operator");
+    await createDialog.getByLabel("角色").selectOption("operator");
+    await createDialog.getByLabel("初始密码").fill(operator.password);
+    await createDialog.getByRole("button", { name: "创建账户" }).click();
     await expect(page.getByTestId("admin-accounts-table").getByText(operator.adminId)).toBeVisible();
   } finally {
     await ownerCtx.close();
@@ -87,10 +110,11 @@ test("owner adds an operator in the UI; the operator cannot govern accounts but 
   try {
     const page = await opCtx.newPage();
     await uiLogin(page, operator);
-    await page.goto("/admin/admins");
-    const governs = await page.getByRole("heading", { name: "添加登录账户" }).count();
+    await page.goto("/admin/accounts");
+    const governs = await page.getByRole("button", { name: "新建账户" }).count();
+    const manageButtons = await page.getByRole("button", { name: "管理" }).count();
     const disableButtons = await page.getByRole("button", { name: "禁用" }).count();
-    assertion(testInfo, "deny", governs === 0 && disableButtons === 0, `operator sees account governance controls: form=${governs} buttons=${disableButtons}`);
+    assertion(testInfo, "deny", governs === 0 && manageButtons === 0 && disableButtons === 0, `operator sees account governance controls: create=${governs} manage=${manageButtons} buttons=${disableButtons}`);
     const apiDenied = await page.request.post(new URL("/api/admin/admins", baseURL!).toString(), {
       data: { adminId: "e2e-ui-made-owner", password: "Ui-made-password-1", role: "owner" }
     });
@@ -110,18 +134,25 @@ test("owner adds an operator in the UI; the operator cannot govern accounts but 
 test("a session revoked from the UI stops working immediately in the other browser", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-04-V11");
   const { operator } = adminCredentials();
-  if (!sessions.operator) throw new Error("operator session is missing: the previous test must run first");
+  if (!sessions.operator) {
+    const reason = "operator session is missing: the operator-account case must run first";
+    testInfo.annotations.push({ type: "blocked", description: reason });
+    testInfo.skip(true, `BLOCKED: ${reason}`);
+  }
   const opCtx = await browser.newContext({ storageState: sessions.operator, viewport: { width: 1440, height: 900 } });
   const opPage = await opCtx.newPage();
   await opPage.goto("/admin/roles");
   await expect(opPage).not.toHaveURL(/\/login/);
 
-  const ownerCtx = await ownerContext(browser);
+  const ownerCtx = await ownerSession(browser, testInfo);
   try {
     const ownerPage = await ownerCtx.newPage();
-    await ownerPage.goto("/admin/admins");
+    await ownerPage.goto("/admin/accounts");
     const row = ownerPage.locator("tr", { hasText: operator.adminId });
-    await row.getByRole("button", { name: "禁用" }).click();
+    await row.getByRole("button", { name: "管理" }).click();
+    const drawer = ownerPage.getByTestId(`admin-account-drawer-${operator.adminId}`);
+    await expect(drawer).toBeVisible();
+    await drawer.getByRole("button", { name: "禁用" }).click();
     await expect(row.getByText("已禁用")).toBeVisible();
   } finally {
     await ownerCtx.close();

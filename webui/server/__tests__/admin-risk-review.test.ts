@@ -119,7 +119,10 @@ vi.mock("../admin/audit.js", () => ({
           run: vi.fn()
         };
       }
-      if (sql.includes("COUNT(*) AS calls,") || sql.includes("COUNT(*) AS calls\n")) {
+      // Spec 189 — the per-user risk input is a conditional aggregate over
+      // the Raw Business layer, so the matcher keys on the result shape
+      // instead of the former `COUNT(*) AS calls` text.
+      if (sql.includes("AS calls,") && sql.includes("AS active_tokens")) {
         return {
           all: vi.fn((userIds: string[], isoCutoff: string) => {
             const cutoffMs = Date.parse(isoCutoff);

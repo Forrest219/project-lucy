@@ -66,6 +66,50 @@ describe("RoleTableGrants", () => {
     expect(screen.getByTestId("scope-value")).toHaveTextContent('"connections":["rds-test"]');
   });
 
+  it("marks grants outside current candidates as stale and can clear them without touching live grants", () => {
+    render(
+      <Controlled
+        initial={{
+          mode: "names",
+          tables: [
+            { connection: "rds-test", schema: "rds_schema", name: "table_a", predicates: [{ field: "region", op: "eq", value: "East" }] },
+            { connection: "openclaw_db", schema: "public", name: "old_orders" }
+          ]
+        }}
+      />
+    );
+    const stale = screen.getByTestId("stale-table-grants");
+    expect(stale).toHaveTextContent("失效授权 1 条");
+    expect(stale).toHaveTextContent("openclaw_db/public/old_orders");
+    expect(screen.getByText("已选 2 张表")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("stale-table-grants-clear"));
+    expect(screen.queryByTestId("stale-table-grants")).not.toBeInTheDocument();
+    expect(screen.getByText("已选 1 张表")).toBeInTheDocument();
+    expect(screen.getByTestId("scope-value")).toHaveTextContent('"name":"table_a"');
+    expect(screen.getByTestId("scope-value")).toHaveTextContent('"field":"region"');
+    expect(screen.getByTestId("scope-value")).not.toHaveTextContent("openclaw_db");
+  });
+
+  it("removes a selected table from the selected list, including names missing from candidates", () => {
+    render(
+      <Controlled
+        initial={{
+          mode: "names",
+          tables: [
+            { connection: "rds-test", schema: "rds_schema", name: "table_a" },
+            { connection: "rds-test", schema: "rds_schema", name: "ghost_table" }
+          ]
+        }}
+      />
+    );
+    fireEvent.click(screen.getByText("查看已选表"));
+    fireEvent.click(screen.getByRole("button", { name: "移除 rds-test/rds_schema/ghost_table" }));
+    expect(screen.getByTestId("scope-value")).not.toHaveTextContent("ghost_table");
+    expect(screen.getByTestId("scope-value")).toHaveTextContent('"name":"table_a"');
+    fireEvent.click(screen.getByRole("button", { name: "清除" }));
+    expect(screen.getByText("已选 0 张表")).toBeInTheDocument();
+  });
+
   it("returns to an empty names scope after disabling catalog_bound", () => {
     render(<Controlled initial={{ mode: "catalog_bound", connections: ["rds-test"] }} />);
     fireEvent.click(screen.getByText("高级设置"));

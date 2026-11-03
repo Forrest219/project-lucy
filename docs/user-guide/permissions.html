@@ -228,7 +228,7 @@ users:
       <h2><span translate="no" class="notranslate">Agent</span> 与 <span translate="no" class="notranslate">Token</span> 凭据边界</h2>
       <ul>
         <li><strong>明文只出现一次</strong>：<span translate="no" class="notranslate">Token</span> 明文在签发时返回一次，<code class="notranslate" translate="no">access.yaml</code> 里只保存 <code class="notranslate" translate="no">sha256:&lt;hex&gt;</code>。页面上的「复制 <span translate="no" class="notranslate">MCP</span> 配置」只产出占位符模板。</li>
-        <li><strong>必须设置过期时间</strong>：<code class="notranslate" translate="no">expires_at</code> 是必填项，管理页默认 90 天、最长 365 天。到期后 <span translate="no" class="notranslate">Proxy</span> 鉴权<strong>硬拒绝 401</strong>（裁决原因 <code class="notranslate" translate="no">token_expired</code>），不是软警告；到期后仍建议在页面显式撤销，避免配置残留。</li>
+        <li><strong>必须设置过期时间</strong>：新建签发须提供 <code class="notranslate" translate="no">expires_at</code> 或 <code class="notranslate" translate="no">expires_in</code>（<code class="notranslate" translate="no">30d</code>／<code class="notranslate" translate="no">90d</code>／<code class="notranslate" translate="no">180d</code>／<code class="notranslate" translate="no">365d</code>）；管理页默认 365 天、最长 365 天。到期后 <span translate="no" class="notranslate">Proxy</span> 鉴权<strong>硬拒绝 401</strong>（裁决原因 <code class="notranslate" translate="no">token_expired</code>），不是软警告；到期后仍建议在页面显式撤销，避免配置残留。</li>
         <li><strong>一设备一 <span translate="no" class="notranslate">Token</span></strong>：用标签或设备名区分，标签里不要放任何明文；明文不要进仓库、聊天记录、截图或业务 <span translate="no" class="notranslate">Wiki</span>。</li>
         <li><strong>撤销即刻生效</strong>：单条撤销在 <code class="notranslate" translate="no">/admin/tokens</code> 行内操作；人员离职或整体轮换时，先在 <span translate="no" class="notranslate">Agent</span> 详情撤销全部 <span translate="no" class="notranslate">Token</span>，再禁用 <span translate="no" class="notranslate">Agent</span>。</li>
         <li><strong>上游内部凭据不出门</strong>：<code class="notranslate" translate="no">KTX_INTERNAL_TOKEN</code> 只用于 <span translate="no" class="notranslate">Lucy Proxy</span> 调 <span translate="no" class="notranslate">KTX</span> 上游，<strong>不得</strong>分发给任何外部 <span translate="no" class="notranslate">Agent</span>。</li>
@@ -237,6 +237,21 @@ users:
         接入请求必须携带 <code class="notranslate" translate="no">Authorization: Bearer &lt;token&gt;</code>。未携带、<span translate="no" class="notranslate">Token</span> 不匹配、已撤销、已过期，一律返回 401。
       </div>
       <p>离线接入模板与工具面见<a href="mcp-reference.html">「<span translate="no" class="notranslate">MCP</span> 接入参考」</a>。</p>
+    </section>
+
+    <section>
+      <h2>用 Admin API 脚本开通（可选）</h2>
+      <p>若要用 curl／运维 <span translate="no" class="notranslate">Agent</span>／自建脚本完成建 <span translate="no" class="notranslate">Agent</span>、改角色、签发或撤销 <span translate="no" class="notranslate">Token</span>，不要反解前端 JS：</p>
+      <ul>
+        <li>先拉公开契约 <code class="notranslate" translate="no">GET /api/openapi.json</code>（无需登录）。</li>
+        <li>Admin API 只认 WebUI 会话 Cookie <code class="notranslate" translate="no">lucy_admin_session</code>；登录字段是 <code class="notranslate" translate="no">adminId</code>／<code class="notranslate" translate="no">password</code>。<strong>没有</strong> scoped 管理员 Bearer；数据面 <span translate="no" class="notranslate">MCP</span> <span translate="no" class="notranslate">Token</span> 不能调 <code class="notranslate" translate="no">/api/admin/*</code>。</li>
+        <li><span translate="no" class="notranslate">Agent</span>／角色写接口：省略 <code class="notranslate" translate="no">dryRun</code> = 预览，确认写入须 <code class="notranslate" translate="no">dryRun: false</code>。<span translate="no" class="notranslate">Token</span> 签发／续期：省略 = 真写入。</li>
+      </ul>
+      <div class="callout">
+        最小示例、易踩坑与 <code class="notranslate" translate="no">expires_in</code>／客户端配置片段说明，见 WebUI 帮助中心深链
+        <code class="notranslate" translate="no">/help?section=admin-api-script-provisioning</code>
+        （系统手册「用 Admin API 脚本开通」）。
+      </div>
     </section>
 
     <section>

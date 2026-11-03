@@ -37,6 +37,8 @@
 6. 问询列表和问询 CSV 写出客户端与会话 ID。自报名是空的、`lucy` 或 `lucy-mcp-proxy`，且 User-Agent 属于已知产品时，客户端名和版本用该产品；否则用握手自报的 `clientInfo.name`。自报名另记在 `reported_client`。
 7. 配对 zip 里的问询 CSV 与调用 CSV 来自同一次查询，调用上的问询 ID 都能在问询 CSV 里找到。
 
+**v0.25 替代声明**：§2 第 4 条、§4 中“问询前 2 秒补绑”、§6 的 `PRIOR_BIND_MS = 2000` 及 `onBeginQuestion` 前向回绑伪代码、§8 的 SC-3 均被 Spec 173 v0.3 与 v0.25 审计增量撤销，不再作为实现或验收依据。不得按时间近邻回绑旧调用；自动会话归属只形成 `candidate + low`。握手 attachment 可以保留，但其来源单列，不冒充已确认用户问询。历史条文保留用于解释旧记录。
+
 ## 3. 非目标
 
 - 不新增 Spec 138 的归因枚举。仍是 `explicit` / `session_bound` / `identity_inferred` / `unassigned`。

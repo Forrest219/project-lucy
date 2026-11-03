@@ -96,7 +96,13 @@ describe("template Skill ACLs", () => {
     const named = skills.filter(({ parsed }) => parsed.data.status === "published");
     expect(named.map(({ rel }) => rel).sort()).toEqual([
       path.join("skills", "answer-style", "SKILL.md"),
-      path.join("skills", "domains", "superstore", "profit-breakdown.skill.md")
+      path.join("skills", "domains", "superstore", "profit-breakdown.skill.md"),
+      // 70f27ba0 shipped the lucy-ops governed Skill: `status: published` + an explicit
+      // `roles_allowed: [lucy_ops_reader]`, so it is a governed template Skill exactly like the
+      // two above (skills/loader.ts:137 loads every skills/**\/*.md that carries a frontmatter
+      // name, whatever the file is called). Its role is defined by the docker-demo template's
+      // access.yaml, which is what the next case checks.
+      path.join("skills", "lucy-ops", "ops-questioning.md")
     ]);
   });
 

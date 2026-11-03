@@ -63,6 +63,9 @@ defaults:
     - sql_dialect_notes
     - memory_ingest
     - memory_ingest_status
+    # L25-16 — 控制面工具（由 role.allow.ops 授权，不在 allow.tools 里授予）
+    - lucy_ops_connection_tables
+    - lucy_ops_source_import
   table_touching_tools:
     - lucy_query
     - lucy_read_source

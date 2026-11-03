@@ -103,6 +103,6 @@ Spec 144 交付了只读「业务 Skill」页与 Agent 已发布过滤。Demo �
 | SC-147-05 | `published` 且角色匹配时 `canAccessSkill` 放行；`draft` → `skill_not_published`；`deprecated` → `skill_deprecated` |
 | SC-147-06 | 已发布且无 `eval_cases` 保存成功，`validation.valid === true`；损坏 frontmatter 保存失败 |
 | SC-147-07 | demo 模板与幂等补丁后 YAML 含两工具且各一次 |
-| SC-147-08 | `cd webui && npm run lint:terminology`；Skill 管理相关 vitest 通过 |
+| SC-147-08 | Skill 管理相关 vitest 通过。术语 lint **拆出**，不在本条出口 |
 
 浏览器与 Demo 重建验收不在静态门禁内。

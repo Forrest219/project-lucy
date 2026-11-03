@@ -17,7 +17,7 @@
 | Spec 编号 | 72 |
 | 关联工单 | `webui/docs/plans/wo-202608-04-connections-catalog-grid-visual-consistency.md` |
 | 关联页面 | `/connections`、`/connections/enabled-tables`、`/catalog` |
-| 状态 | Draft |
+| 状态 | **已实现**（提交 `2319fd2e` `fix(webui): unify connections grid style and upload terminology`） |
 | 日期 | 2026-08-04 |
 | 范围 | 网格字体、字重、颜色、对齐、列宽、行高与视觉密度统一 |
 

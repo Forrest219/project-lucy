@@ -51,8 +51,8 @@
 ## 失败预算与交付时限
 
 - 对失败建立错误指纹（tool + source + normalized reason + relevant argument shape）。同一指纹最多做一次有信息增益的修正重试；只在 `eq` / `=` / `in` 之间循环不算修正。
-- 同一问询最多 20 次数据工具调用，或墙钟 120 秒，以先到者为准。同一输入最多重复 1 次；已成功读取的 source 不重复读取，只有瞬时错误可额外重试一次。协议方法（含 `lucy_begin_question`）不占这个预算。
-- 问询预算用尽时停止循环，交付已验证的部分结果，并说明缺口。代理返回 `question_budget_exhausted`。同一问询可以继续一次；继续后计数清零。不要在未继续的情况下把已停止的问询再查一遍。
+- 同一问询最多 20 次数据工具调用，或累计 120 秒数据处理时长（不含思考时间），以先到者为准。同一输入最多重复 1 次；已成功读取的 source 不重复读取，只有瞬时错误可额外重试一次。协议方法（含 `lucy_begin_question` 与 `lucy_continue_question`）不占这个预算。
+- 问询预算用尽时停止循环。代理返回 `question_budget_exhausted`。若 `continuable` 为 true，调用 `lucy_continue_question`，传入返回的 `continueToken`，然后继续查数。若 `continuable` 为 false，直接交付已验证的部分结果并说明缺口，不要重试。同一问询只能继续一次。
 - 部分可回答时仍必须回复：逐项给出 `ok` / `no_data` / `unavailable` / `partial`，说明期间、版本/批次、情景、失败影响与 provenance。不得因一个子问题失败而丢弃整轮已取得的结果。
 
 ## `lucy_query` 参数形态

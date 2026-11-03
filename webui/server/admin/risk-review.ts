@@ -31,6 +31,16 @@ import {
   type YamlUser
 } from "./access-config.js";
 import { getAuditDb } from "./audit.js";
+import { rawBusinessConditionSql } from "../proxy/usage-classification.js";
+
+/**
+ * Spec 189 §5.3 — the governance risk input is the **Raw Business** layer:
+ * protocol events are excluded, but real evaluation business calls keep
+ * contributing to the governance risk.
+ */
+const RAW_BUSINESS_CONDITION = rawBusinessConditionSql().sql;
+/** The same condition, qualified for the `access_log al` alias. */
+const RAW_BUSINESS_CONDITION_AL = rawBusinessConditionSql("al").sql;
 import { writeEvidenceEvents } from "../trace/evidence.js";
 import { ROLE_TEMPLATES } from "./role-templates.js";
 
@@ -170,8 +180,12 @@ async function readAgentCallStats(
     const row = db
       .prepare(
         `SELECT
-           COUNT(*) AS calls,
-           SUM(CASE WHEN outcome = 'denied' THEN 1 ELSE 0 END) AS denied,
+           -- Spec 189 §5.3: the high-denial risk input is Raw Business, so a
+           -- pure protocol event never inflates the risk denominator while a
+           -- real evaluation business call still contributes.
+           SUM(CASE WHEN ${RAW_BUSINESS_CONDITION} THEN 1 ELSE 0 END) AS calls,
+           SUM(CASE WHEN ${RAW_BUSINESS_CONDITION} AND outcome = 'denied' THEN 1 ELSE 0 END) AS denied,
+           -- 最近 MCP 访问 and the credential facts are NOT usage-filtered.
            MAX(ts) AS last_seen,
            MAX(CASE WHEN token_hash_prefix IS NOT NULL THEN ts ELSE NULL END) AS last_used,
            COUNT(DISTINCT CASE WHEN token_hash_prefix IS NOT NULL THEN token_hash_prefix ELSE NULL END) AS active_tokens
@@ -224,6 +238,7 @@ async function readRevokedTokenAttempts(
          WHERE user_id = ?
            AND outcome = 'denied'
            AND token_hash_prefix IS NOT NULL
+           AND ${RAW_BUSINESS_CONDITION}
            AND substr(?, 1, ${TOKEN_HASH_PREFIX_LEN}) = ''  -- intentionally false, replaced below
            AND ts >= ?
          ORDER BY ts DESC
@@ -423,7 +438,8 @@ async function roleHasRecentUse(
         `SELECT COUNT(*) AS cnt
          FROM access_log al
          JOIN json_each(CASE WHEN json_valid(al.role_ids) THEN al.role_ids ELSE '[]' END) role
-         WHERE al.ts >= ? AND role.value = ?`
+         WHERE al.ts >= ? AND role.value = ?
+           AND ${RAW_BUSINESS_CONDITION_AL}`
       )
       .get(isoCutoff, roleId) as { cnt: number | null };
     return { available: (row?.cnt ?? 0) > 0, denominator: row?.cnt ?? 0 };

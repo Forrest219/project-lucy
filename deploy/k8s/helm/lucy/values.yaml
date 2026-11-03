@@ -31,7 +31,7 @@ fullnameOverride: ""
 # non-local install. The default value `project-lucy` is only valid for
 # `kind` / `docker compose` local development where the image is loaded
 # from the local Docker cache. On a real customer K8s cluster the literal
-# default will fail to pull because there is no public `project-lucy:0.20.0`
+# default will fail to pull because there is no public `project-lucy:0.25.0`
 # on Docker Hub.
 #
 # Default platforms shipped from CI:
@@ -51,8 +51,8 @@ image:
   # Production must override to a customer registry path.
   repository: project-lucy
   # Lucy product version (see repo-root VERSION). Override with immutable
-  # customer tag e.g. customer-amd64-0.20.0-YYYYMMDD-<sha>.
-  tag: "0.20.0"
+  # customer tag e.g. customer-amd64-0.25.0-YYYYMMDD-<sha>.
+  tag: "0.25.0"
   # Optional immutable digest (sha256:…). When set, the chart pins the image
   # by digest and ignores tag for the rendered image reference.
   digest: ""
@@ -204,10 +204,19 @@ security:
   insecureHttpTestProfile: false
 
 # -------------------------------------------------------------------
-# Reserved for v2.5 enterprise OIDC. v2.0 does not inject this block into
-# the pod and does not contact the issuer. Fill it only as a record of the
-# future client registration. Keep the client secret in a Kubernetes Secret,
-# never in this file.
+# Enterprise OIDC single sign-on (Lucy v0.25 / L25-06).
+#
+# DEFAULT OFF. `oidc.enabled=false` renders NO OIDC ConfigMap, NO OIDC
+# Secret volume, NO mounts and NO env vars — the install is identical to a
+# pre-OIDC deployment. Local login, first-owner bootstrap and break-glass
+# are never affected by OIDC (Spec §10.1 / D10).
+#
+# When enabled, the pod receives exactly two env vars, both FILE paths:
+#   LUCY_OIDC_CONFIG_FILE        -> /data/lucy/oidc/profile.yaml
+#   LUCY_OIDC_CLIENT_SECRET_FILE -> /data/lucy/oidc/client-secret
+# The client secret VALUE never appears in this file, in a ConfigMap, in
+# the pod env, or in a command-line argument. It is referenced by the name
+# of a customer-managed Kubernetes Secret only.
 #
 # Example for an intranet authorization-code client (not applied):
 #   issuer: https://oidc.ksyun.com
@@ -219,9 +228,16 @@ security:
 # -------------------------------------------------------------------
 webui:
   # HTTPS origin that will be registered as the OIDC redirect_uri origin.
+  # Must be an https origin without path, query or fragment. The chart
+  # refuses to render when oidc.enabled=true and this is empty or http.
   publicUrl: ""
 
 oidc:
+  # Master switch. Keep it false unless the customer has an existing OIDC
+  # provider registration AND a client-secret Secret ready. This is the
+  # single most important safety property of the OIDC delivery.
+  enabled: false
+
   issuer: ""
   discoveryUrl: ""
   authorizationEndpoint: ""
@@ -229,10 +245,64 @@ oidc:
   jwksUri: ""
   endSessionEndpoint: ""
   clientId: ""
-  scopes: "openid profile email offline_access"
+  # Spec §4.2: `openid` is mandatory. The default must NOT request
+  # `offline_access` (D12 — no refresh token is stored or used).
+  scopes: "openid profile email"
   tokenEndpointAuth: client_secret_post
   logoutStyle: id_token_hint
   redirectPath: /api/auth/oidc/callback
+
+  # Name of the customer's EXISTING Kubernetes Secret that holds the OIDC
+  # client secret. The chart mounts it read-only and never renders it.
+  # NEVER put the secret value in this file.
+  existingSecret: ""
+  # Key inside `existingSecret` that holds the client secret value.
+  clientSecretKey: ""
+
+# -------------------------------------------------------------------
+# Optional SMTP notifications (Lucy v0.25 / L25-05, P2 optional).
+#
+# The customer provides the SMTP server in their OWN network; Lucy never
+# reaches a public mail service and never sends mail when this block is off.
+# -------------------------------------------------------------------
+smtp:
+  # Master switch. Keep it false unless the customer has an SMTP server in
+  # their network AND (when a username is set) a Secret with the SMTP
+  # password ready. With the default false, the chart renders NO SMTP
+  # ConfigMap, NO Secret mount and NO SMTP env var at all (SMTP-22).
+  enabled: false
+
+  # Host name or IP of the customer's SMTP server. No scheme, no path, no
+  # port, no userinfo.
+  host: ""
+  # 1-65535. The port is always explicit: the security mode is never inferred.
+  port: 587
+  # `tls` = direct TLS; `starttls` = upgrade in place before any credential
+  # is sent. Plaintext SMTP is not an option and fails the render.
+  security: starttls
+  # A single mailbox address, no display name.
+  from: ""
+  # Optional. When set, smtp.existingSecret + smtp.passwordKey are required.
+  username: ""
+  # 1-20 mailbox addresses. They only ever appear in Bcc.
+  recipients: []
+  # Whether the audit-ledger incident/recovery alerts are sent.
+  auditHealth: false
+
+  # Name of the customer's EXISTING Kubernetes Secret that holds the SMTP
+  # password. The chart mounts it read-only and never renders it.
+  # NEVER put the password value in this file — `smtp.password` is a hard
+  # render failure.
+  existingSecret: ""
+  # Key inside `existingSecret` that holds the SMTP password value.
+  passwordKey: password
+
+  # Optional private CA, mounted from the customer's own Secret. It only
+  # appends trust; certificate verification is never disabled.
+  ca:
+    enabled: false
+    existingSecret: ""
+    key: ca.pem
 
 # Extra env sources — for example, projecting keys from existingSecret as
 # env vars (NOT as files). Use sparingly; most customer secrets should
@@ -327,7 +397,7 @@ lucy:
   # Proxy env block (used by templates to keep parity with Compose).
   enabled: true
   # Customer-facing Lucy product version — must match Chart.appVersion / VERSION.
-  version: "0.20.0"
+  version: "0.25.0"
   # Bundled KTX version baked into the image — must match the Dockerfile ARG.
   # Independent of lucy.version; only change when upgrading @kaelio/ktx.
   bundledKtxVersion: "0.16.0"

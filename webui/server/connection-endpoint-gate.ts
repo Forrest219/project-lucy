@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
+import { externalCatalogName, schemaNameFromDatabase, splitCatalogDatabase } from "./catalog-database.js";
 import type { CreateConnectionInput } from "./project.js";
 
 const SCHEMA_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/;
@@ -117,8 +118,15 @@ function sameServer(existing: StoredConnection, input: CreateConnectionInput): b
 
 function endpointMatches(existing: StoredConnection, input: CreateConnectionInput): boolean {
   if (!sameServer(existing, input)) return false;
-  if (isMysqlWire(input)) return true;
-  return existing.database.trim() === (input.database ?? "").trim();
+  const requested = (input.database ?? "").trim();
+  const saved = existing.database.trim();
+  if (!isMysqlWire(input)) return saved === requested;
+  const requestedCatalog = externalCatalogName(requested);
+  const savedCatalog = externalCatalogName(saved);
+  // Plain MySQL still matches on host and port. An external directory such as
+  // hive_jd is not the same connection as hive or an unqualified internal database.
+  if (requestedCatalog || savedCatalog) return requestedCatalog === savedCatalog;
+  return true;
 }
 
 function usernamesMatch(existing: StoredConnection, input: CreateConnectionInput): boolean {
@@ -129,7 +137,8 @@ function usernamesMatch(existing: StoredConnection, input: CreateConnectionInput
 
 function conflictSchema(input: CreateConnectionInput): string {
   const names = (input.schemas ?? []).map((item) => (typeof item === "string" ? item.trim() : ""));
-  const resolved = isMysqlWire(input) && names.length === 0 ? [(input.database ?? "").trim()] : names;
+  const resolved =
+    isMysqlWire(input) && names.length === 0 ? [schemaNameFromDatabase(input.database)] : names;
   const schema = resolved[0] ?? "";
   if (resolved.length !== 1 || !SCHEMA_NAME_RE.test(schema)) {
     throw new EndpointSchemaCountError(
@@ -176,8 +185,11 @@ export function decideEndpointGate(
   if (sameServerHits.length > 0) {
     conflictSchema(input);
     if (flags.acknowledgeDifferentDatabase !== true) {
+      const differentCatalog = Boolean(splitCatalogDatabase((input.database ?? "").trim()));
       throw new SameServerDifferentDatabaseError(
-        "同一主机端口上的另一个 database 将新增一张连接卡片。",
+        differentCatalog
+          ? "这是另一个外部目录，不会加到已有连接。确认后将新增一张连接卡片。"
+          : "同一主机端口上的另一个 database 将新增一张连接卡片。",
         {
           matches: sameServerHits.map(publicMatch),
           requestedDatabase: (input.database ?? "").trim()
@@ -257,4 +269,121 @@ export async function assertEndpointGate(
 ): Promise<EndpointGateDecision> {
   const text = await readFile(path.join(root, "ktx.yaml"), "utf8");
   return decideEndpointGate(storedConnections(parse(text)), input, flags);
+}
+
+/** Flags for Spec lucy-20261101-connection-endpoint-edit (not Spec 160 create). */
+export type EndpointEditFlags = {
+  acknowledgeSharedEndpoint?: boolean;
+  acknowledgeSameServerDifferentDatabase?: boolean;
+};
+
+export type EndpointEditCandidate = {
+  driver: string;
+  engine?: string;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+};
+
+export class EndpointEditConflictError extends Error {
+  code = "ENDPOINT_EDIT_CONFLICT";
+  statusCode = 409;
+  detail: {
+    reason: "shared_endpoint" | "multiple" | "same_server_different_database";
+    matches: EndpointMatch[];
+    requestedDatabase?: string;
+  };
+
+  constructor(message: string, detail: EndpointEditConflictError["detail"]) {
+    super(message);
+    this.name = "EndpointEditConflictError";
+    this.detail = detail;
+  }
+}
+
+export type EndpointEditGateDecision = {
+  action: "allow";
+  acknowledgedSharedEndpoint?: boolean;
+  acknowledgedSameServerDifferentDatabase?: boolean;
+};
+
+/**
+ * Edit-path soft gate: reuses Spec 160 match keys, excludes `connId`, never calls
+ * `conflictSchema` / create decision branches.
+ */
+export function decideEndpointEditGate(
+  connections: StoredConnection[],
+  connId: string,
+  candidate: EndpointEditCandidate,
+  flags: EndpointEditFlags = {}
+): EndpointEditGateDecision {
+  if (candidate.driver === "sqlite" || candidate.driver === "athena") {
+    return { action: "allow" };
+  }
+
+  const asCreateInput: CreateConnectionInput = {
+    id: connId,
+    driver: candidate.driver as CreateConnectionInput["driver"],
+    ...(candidate.engine ? { engine: candidate.engine } : {}),
+    host: candidate.host,
+    port: candidate.port,
+    database: candidate.database,
+    username: candidate.username,
+    schemas: []
+  };
+
+  const others = connections.filter((row) => row.id !== connId);
+  const endpoint = others.filter((row) => endpointMatches(row, asCreateInput));
+
+  if (endpoint.length === 1) {
+    if (flags.acknowledgeSharedEndpoint === true) {
+      return { action: "allow", acknowledgedSharedEndpoint: true };
+    }
+    throw new EndpointEditConflictError("新服务器地址与另一条连接相同。", {
+      reason: "shared_endpoint",
+      matches: endpoint.map(publicMatch)
+    });
+  }
+
+  if (endpoint.length > 1) {
+    if (flags.acknowledgeSharedEndpoint === true) {
+      return { action: "allow", acknowledgedSharedEndpoint: true };
+    }
+    throw new EndpointEditConflictError("新服务器地址与多条连接相同。", {
+      reason: "multiple",
+      matches: endpoint.map(publicMatch)
+    });
+  }
+
+  const sameServerHits = others.filter((row) => sameServer(row, asCreateInput));
+  if (sameServerHits.length > 0) {
+    if (flags.acknowledgeSameServerDifferentDatabase === true) {
+      return { action: "allow", acknowledgedSameServerDifferentDatabase: true };
+    }
+    throw new EndpointEditConflictError(
+      "新服务器地址与另一条连接位于同一主机端口但 database 不同。",
+      {
+        reason: "same_server_different_database",
+        matches: sameServerHits.map(publicMatch),
+        requestedDatabase: candidate.database.trim()
+      }
+    );
+  }
+
+  return { action: "allow" };
+}
+
+export async function assertEndpointEditGate(
+  root: string,
+  connId: string,
+  candidate: EndpointEditCandidate,
+  flags: EndpointEditFlags = {}
+): Promise<EndpointEditGateDecision> {
+  const text = await readFile(path.join(root, "ktx.yaml"), "utf8");
+  return decideEndpointEditGate(storedConnections(parse(text)), connId, candidate, flags);
+}
+
+export function loadStoredConnectionsFromYaml(text: string): StoredConnection[] {
+  return storedConnections(parse(text));
 }

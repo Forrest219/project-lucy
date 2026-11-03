@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   authoringHowToNotes,
   downloadAuthoringHowTo,
   type AuthoringHowToKind
 } from "../../lib/authoringHowTo";
+import { CLIPBOARD_COPY_FAILED_MESSAGE, copyTextToClipboard } from "../../lib/clipboard";
 
 export type AuthoringHowToProps = {
   kind: AuthoringHowToKind;
@@ -22,7 +24,11 @@ export function AuthoringHowTo({ kind, autoOpen = false }: AuthoringHowToProps) 
   }, [autoOpen]);
 
   async function copyNotes() {
-    await navigator.clipboard.writeText(authoringHowToNotes(kind));
+    const result = await copyTextToClipboard(authoringHowToNotes(kind));
+    if (!result.ok) {
+      toast.error(CLIPBOARD_COPY_FAILED_MESSAGE);
+      return;
+    }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   }

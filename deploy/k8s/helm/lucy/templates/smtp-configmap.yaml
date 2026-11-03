@@ -1,0 +1,28 @@
+{{- /*
+SMTP profile (non-sensitive).
+
+Rendered ONLY when smtp.enabled=true. With the default `smtp.enabled=false`
+this file produces nothing at all — no ConfigMap, no Secret volume, no
+mounts, no env vars, no network behaviour (SMTP-22).
+
+The SMTP password is deliberately NOT here: it stays in the customer's own
+Kubernetes Secret and is mounted separately as a read-only file (see
+deployment.yaml). The chart renders no Secret for SMTP, and `smtp.password` in
+values is a render failure (SMTP-23).
+
+The chart never reaches the network while rendering: the SMTP host is a plain
+value and nothing is contacted at install time (SMTP-24).
+*/}}
+{{- $smtp := .Values.smtp | default dict -}}
+{{- if $smtp.enabled }}
+{{- include "lucy.smtp.validate" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lucy.fullname" . }}-smtp-profile
+  labels:
+    {{- include "lucy.labels" . | nindent 4 }}
+data:
+  profile.yaml: |-
+    {{- include "lucy.smtp.profile" . | nindent 4 }}
+{{- end }}

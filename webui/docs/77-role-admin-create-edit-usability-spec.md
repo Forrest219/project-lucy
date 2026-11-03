@@ -19,7 +19,7 @@
 | 关联页面 | `/admin/roles/new`、`/admin/roles/:roleId`、`/admin/roles` |
 | 关联台账 | `docs/ui-ux-feedback/pages/admin-agents.md`（新增 `UX-ADMIN-AGENTS-016` ~ `UX-ADMIN-AGENTS-021`） |
 | 上游 Spec | `webui/docs/15-role-admin-spec.md`（补齐 §5.3 多选欠账）；`webui/docs/59-role-admin-ops-ux-clarification-spec.md`；与 Spec 76 并行、边界不重叠 |
-| 状态 | Draft (v1.1 review-hardened) |
+| 状态 | **已实现**（提交 `1cdd6691` `fix(webui): improve Role create/edit usability and capability filters`） |
 | 日期 | 2026-08-04 |
 | 范围 | Wave A：新建页标题去重、角色标识/说明中文化、连接/工具/表范围选择器化（含受控手输回退）、names/prefix 中文说明；Wave B：列表能力筛选 + `sourceNames` |
 

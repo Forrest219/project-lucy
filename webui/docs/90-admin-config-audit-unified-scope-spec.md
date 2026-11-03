@@ -17,7 +17,7 @@
 | Spec 编号 | 90 |
 | 关联工单 | `webui/docs/plans/wo-202608-23-admin-config-audit-unified-scope.md` |
 | 关联页面 | `/admin/config-audit` |
-| 状态 | Draft |
+| 状态 | **已实现**（提交 `d5cbf706` `feat(webui): unify config audit scope across governance assets`） |
 | 日期 | 2026-08-05 |
 
 ### Changelog

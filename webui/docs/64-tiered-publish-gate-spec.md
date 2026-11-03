@@ -11,6 +11,8 @@
 | Related work order | `webui/docs/plans/wo-202608-03-tiered-publish-gate.md` |
 | Scope | Agent / Role / Token / `access.yaml` governance gate, risk tiers, override evidence |
 
+> **Spec 189 修订（2026-10-27）**：本文 §P1 规则中的「high-traffic Agent」此前**未定义调用计数口径**。现由 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md` §6 固定为 **Raw Business Tool Call**（`buildAgentGateInput.callsLast7d` 读取 `businessCallsLast7d`），而非全量访问或默认用量口径：纯协议访问不再抬高「高流量」计数，真实评测业务调用仍保留治理贡献。`HIGH_TRAFFIC_TARGET` 的 **P1 `warn`** 判定、阈值与裁决算法均不变。数值会因口径收敛而预期下降，属发布说明须提示项。
+
 ## 1. Background
 
 Lucy 已有 Role-first ACL、Admin dryRun / diff、`config_change_log` 和 runtime audit。202608 需要把 Agent / Role / Token 变更从“可保存 + 可审计”升级为“高风险变更可分级拦截 + 可追溯证据”。

@@ -11,6 +11,8 @@
 | 基于材料 | `9a6af9d` 接线恢复；Spec 99 §6；Spec 100；`inbox/20260923-row-policy-status-review.md` 交叉验证结论 |
 | 适用范围 | 把 `68db68a` 抹掉的 `lucy_query` 强制谓词注入和 `lucy_explain_query` 诊断接线恢复到 `main` |
 | 输出位置 | `webui/docs/146-restore-row-policy-proxy-wiring-spec.md` |
+| 状态 | **已实现**。提交 `9a6af9d` `fix(webui): restore row-policy proxy wiring dropped by 68db68a`；接线落点 `webui/server/proxy/mcp-proxy.ts`（`lucy_query` 强制谓词注入与 `lucy_explain_query` 诊断） |
+| 关联工单 | 无独立工单文件；实现随 `9a6af9d` 提交落地 |
 
 144 号留给 Skill Hub。本文由 `9a6af9d` 上的 144 号草稿改号落地。
 

@@ -62,6 +62,19 @@ function scalarEncode(value: string | number | boolean): string {
 }
 
 /**
+ * Spec 100 §5.4 — literal domain intersection (typed strict equality, no case fold).
+ *
+ * Kept as its own function so the intersection does not read back the very
+ * accumulator it is assigned to: `domain = new Set([...domain].filter(...))`
+ * makes the compiler resolve the spread's element type circularly, and the
+ * predicate parameter then collapses to `never`. The runtime semantics are
+ * unchanged — this is the same intersection, just not self-referential.
+ */
+function intersectDomains(a: Set<string>, b: Set<string>): Set<string> {
+  return new Set([...a].filter((item) => b.has(item)));
+}
+
+/**
  * Spec 100 §5.4 — same-field literal unsatisfiability on an AND group.
  * Values compared with typed strict equality (no case fold).
  */
@@ -90,7 +103,7 @@ export function isAndGroupUnsatisfiable(predicates: ResolvedRowPolicyPredicate[]
       if (domain === null) {
         domain = next;
       } else {
-        domain = new Set([...domain].filter((item) => next.has(item)));
+        domain = intersectDomains(domain, next);
       }
       if (domain.size === 0) return true;
     }
@@ -342,7 +355,14 @@ export function finalRowsDigest(orArms: ResolvedRowPolicyPredicate[][]): string 
   return createHash("sha256").update(JSON.stringify(normDnf)).digest("hex").slice(0, 16);
 }
 
-function scopedFinalRows(orArms: ResolvedRowPolicyPredicate[]): Extract<RowGrant, { kind: "scoped" }> {
+/**
+ * Spec 100 §5 — build the scoped FinalRows grant from a DNF (OR of AND groups).
+ *
+ * `orArms` is the DNF itself: one inner array per OR arm, each inner array the
+ * AND predicates of that arm. `predicates` is the flattened view (debug / digest
+ * input), `orArms` is the evaluated shape.
+ */
+function scopedFinalRows(orArms: ResolvedRowPolicyPredicate[][]): Extract<RowGrant, { kind: "scoped" }> {
   const predicates = orArms.flat();
   return {
     kind: "scoped",

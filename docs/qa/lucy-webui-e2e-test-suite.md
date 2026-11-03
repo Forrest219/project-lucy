@@ -191,16 +191,16 @@ export default defineConfig({
 | **L3 Nightly Full** | 全部 P0 + P1 | ≈ 30 | 每日定时 | 失败告警，issue 自动创建 |
 | **L4 Release Full** | 全部 P0 + P1 + P2 + 3 浏览器 | ≈ 35 × 3 | release tag | 阻塞 release |
 
-L1 PR Smoke 8 条（与 §10 用例矩阵对齐）：
+L1 这份清单剩 6 条。2026-11-02 起，原来的两条导航抽样已作废：
 
 1. `E2E-PUB-02` `/review` 重定向
 2. `E2E-CON-01` 连接卡片术语与 Header 治理
 3. `E2E-CON-03` 受控 YAML 上传
 4. `E2E-WIKI-01` Wiki 阅读态默认
-5. `E2E-NAV-01` 导航 `语义发布` 2 个二级
-6. `E2E-NAV-02` 面包屑展示
-7. `E2E-SEC-01` 上传路径越权拦截
-8. `E2E-I18N-01` 关键页 forbidden terms 0 命中
+5. `E2E-SEC-01` 上传路径越权拦截
+6. `E2E-I18N-01` 关键页 forbidden terms 0 命中
+
+`E2E-NAV-01`、`E2E-NAV-02`、`E2E-NAV-03` 已作废。侧栏一级、二级的壳层检查是 `cd webui && npm run e2e:release-ux`，不进入 `@pr-smoke`。
 
 > **纠正 v0.1 自相矛盾**：v0.1 §6"约 8 个"与下方 16 个 P0 同时出现，v0.2 明确以本节 L1=8 为 PR 阻塞基线；其余 P0 在 L2 / L3 中跑。
 
@@ -394,7 +394,8 @@ export async function assertProfessionalTermsProtected(page: Page) {
     "/connections":        ["E2E-CON-01", "E2E-CON-02", "E2E-CON-03", "E2E-CON-04", "E2E-CON-05", "E2E-CON-06"],
     "/connections/whitelist": ["E2E-WHL-01", "E2E-WHL-02"],
     "/wiki":               ["E2E-WIKI-01", "E2E-WIKI-02", "E2E-WIKI-03", "E2E-WIKI-04", "E2E-WIKI-05"],
-    "/sources/:conn/:schema/:table": ["E2E-SEM-01", "E2E-SEM-02", "E2E-SEM-03", "E2E-SEM-04"]
+    "/sources/:conn/:schema/:table": ["E2E-SEM-01", "E2E-SEM-02", "E2E-SEM-03", "E2E-SEM-04"],
+    "/admin/mcp-playground": ["E2E-MCP-01"]
   },
   "component": {
     "AddSchemaDrawer":       ["E2E-CON-02"],
@@ -408,7 +409,8 @@ export async function assertProfessionalTermsProtected(page: Page) {
     "PublishWorkbench":      ["E2E-PUB-01", "E2E-PUB-03", "E2E-PUB-04", "E2E-PUB-05", "E2E-PUB-07"],
     "PublishHistory":        ["E2E-PUB-06"],
     "SemanticAssetPublishDrawer": ["E2E-PUB-01", "E2E-PUB-04"],
-    "TableEditor":           ["E2E-SEM-01", "E2E-SEM-02", "E2E-SEM-03", "E2E-SEM-04"]
+    "TableEditor":           ["E2E-SEM-01", "E2E-SEM-02", "E2E-SEM-03", "E2E-SEM-04"],
+    "McpRuntimeStatusPanel": ["E2E-MCP-01"]
   },
   "api": {
     "POST /api/catalog/assets/upload":   ["E2E-CON-03", "E2E-CON-04", "E2E-SEC-01"],
@@ -420,7 +422,15 @@ export async function assertProfessionalTermsProtected(page: Page) {
     "GET /api/semantic-assets/releases": ["E2E-PUB-06"],
     "GET /api/semantic-assets/releases/:id/status": ["E2E-PUB-04", "E2E-PUB-06"],
     "POST /api/semantic-assets/export":  ["E2E-PUB-07", "E2E-SEC-02"],
-    "PUT /api/wiki/:key":                ["E2E-WIKI-04"]
+    "PUT /api/wiki/:key":                ["E2E-WIKI-04"],
+    "GET /api/admin/mcp-runtime/status": ["E2E-MCP-01"],
+    "POST /api/admin/mcp-runtime/reload": ["E2E-MCP-01"]
+  },
+  "selectorTestId": {
+    "mcp-runtime-status-chips": ["E2E-MCP-01"],
+    "mcp-runtime-remediation": ["E2E-MCP-01"],
+    "mcp-runtime-reload-${testConnectionId}": ["E2E-MCP-01"],
+    "mcp-runtime-reload-outcome": ["E2E-MCP-01"]
   }
 }
 ```
@@ -555,9 +565,9 @@ E2E-<模块>-<序号>[-<变体>]
 | E2E-PUB-05 | `强制重建索引` 终端输出回显 | P0 | L2 | PUB |
 | E2E-PUB-06 | 发布记录表格列与状态 | P0 | L2 | PUB |
 | E2E-PUB-07 | `导出当前快照 (.zip)` 辅助动作 | P1 | L3 | PUB |
-| E2E-NAV-01 | 一级菜单 `语义发布` + 2 个二级 | P0 | L1 | NAV |
-| E2E-NAV-02 | 面包屑全场景 | P0 | L2 | NAV |
-| E2E-NAV-03 | 跨模块跳转完整链路 | P1 | L3 | NAV |
+| E2E-NAV-01 | 已作废。原抽样「语义发布」2 个二级 | — | 作废 | NAV |
+| E2E-NAV-02 | 已作废。原只看连接概览页头 | — | 作废 | NAV |
+| E2E-NAV-03 | 已作废。未实现的跨模块跳转 | — | 作废 | NAV |
 | E2E-I18N-01 | 关键页 Forbidden Terms 0 命中 | P0 | L1 | I18N |
 | E2E-I18N-02 | 专业术语 / 路径 / DB 对象 `translate="no"` 防御 | P0 | L1 | I18N |
 | E2E-A11Y-01 | 阅读 / 编辑切换按钮可访问名 | P1 | L3 | A11Y |
@@ -566,8 +576,9 @@ E2E-<模块>-<序号>[-<变体>]
 | E2E-RES-02 | 1280×800 Wiki 阅读态纵向堆叠 | P1 | L3 | RES |
 | E2E-SEC-01 | 上传时前端无法写任意路径 | P0 | L1 | SEC |
 | E2E-SEC-02 | `inline` 凭据不被 `导出当前快照` 包含 | P0 | L2 | SEC |
+| E2E-MCP-01 | MCP Runtime 执行层状态面：三段事实分开呈现、重载入口 owner-only、拒绝不伪报成功 | P0 | L2 | MCP |
 
-**L1 PR Smoke 8 条**（按矩阵中 `准入层=L1` 行筛选）：E2E-PUB-02 / E2E-CON-01 / E2E-CON-03 / E2E-WIKI-01 / E2E-WIKI-03 / E2E-PUB-04 / E2E-NAV-01 / E2E-SEC-01。
+**L1 PR Smoke**（按矩阵中 `准入层=L1` 行筛选）：E2E-PUB-02 / E2E-CON-01 / E2E-CON-03 / E2E-WIKI-01 / E2E-WIKI-03 / E2E-PUB-04 / E2E-SEC-01。`E2E-NAV-01` 已从这组移除。
 
 ---
 
@@ -644,10 +655,41 @@ E2E-<模块>-<序号>[-<变体>]
 | E2E-WIKI-01 | `/wiki` 默认 `wiki-mode-read`；`textarea` 计数 0；Tree 节点主标签为文档标题 |
 | E2E-WIKI-03 | `sl-ref-badge-mysql-aliyun-dataforai-superstore_orders` 点击 → URL 跳 `/sources/...`；反向跳转回 `/wiki?key=...` |
 | E2E-PUB-04 | `workbench-pending-count` = `2 个待发布文件` → `workbench-validate` 后 2 行 `通过` → `workbench-publish-and-reindex` enabled |
-| E2E-NAV-01 | 侧栏 `sidebar-nav-group-语义发布` 包含 2 个 `sidebar-nav-item-`，**不**含 `变更审阅` / `待发布变更` / `索引生效` / `资产包` |
+| E2E-NAV-01 | 已作废。菜单壳层改由 `e2e:release-ux` 点击全部一级分组和二级入口 |
 | E2E-SEC-01 | `page.route` 拦截 `POST /api/catalog/assets/upload` 篡改 `targetPath` 为 `../etc/passwd` → 响应 4xx；UI Toast `目标路径非法` |
 
-### 11.3 L2 / L3 用例索引
+### 11.3 MCP Runtime 执行层 `E2E-MCP-01`
+
+**用例 ID 与名称**：`E2E-MCP-01 / MCP Runtime 执行层状态面：三段事实分开呈现、重载入口 owner-only、拒绝不伪报成功`
+**优先级 / 准入层**：P0 / L2 PR Impacted
+**涉及 Selector**：`mcp-runtime-status-${testConnectionId}` / `mcp-runtime-status-chips` / `mcp-runtime-remediation` / `mcp-runtime-recheck-${testConnectionId}` / `mcp-runtime-reload-${testConnectionId}` / `mcp-runtime-reload-outcome`
+**源码**：`webui/tests/e2e/specs/mcp-runtime-reload.spec.ts`
+
+**前置条件**：
+- Fixture Project `/tmp/lucy-e2e-fixture` 已由 `scripts/demo/init-e2e-fixture.sh` 初始化
+- WebUI 进程 `LUCY_PROJECT_DIR=/tmp/lucy-e2e-fixture` 启动（development 部署，`LUCY_WEBUI_AUTH=off`）
+- 该形态下 `resolveAuthMode()` 解析为 `open` ⇒ 无登录会话 ⇒ `/api/auth/status` 的 `me` 为 null ⇒ **非 owner**
+- 状态端点由 spec 用 `page.route` 注入确定值（`activation=reload_required` / `reload.state=idle` / `verification.state=unverified` / `missingConnections=[]`），断言不依赖环境里 KTX daemon 的实际连接状态
+
+**浏览器操作步骤**（压缩版，完整步骤见 `specs/mcp-runtime-reload.spec.ts`）：
+
+1. 导航 `/admin/mcp-playground?mode=live-smoke`（`live-smoke` 让页面直接进入「检查能不能连上」分支，状态面板才渲染）。
+2. 断言 `mcp-runtime-status-unselected` 可见；`mcp-runtime-status-chips` 内 4 个 chip：`Config` / `Catalog` / `Policy Runtime` / `MCP Execution`。
+3. 断言 `mcp-runtime-remediation` 显示 `配置已写入，执行层尚未加载。`。
+4. 断言 `mcp-runtime-recheck-unselected` 可见且文案为 `重新检测执行层`；断言 `[data-testid^='mcp-runtime-reload-']` 计数为 0。
+5. 调 `GET /api/admin/mcp-runtime/status`，断言 `execution` 下 `activation` / `reload` / `verification` 三字段各自存在且取值落在各自枚举内，且 `execution` 上没有 `ok` / `success` 这类合并标志。
+6. 调 `POST /api/admin/mcp-runtime/reload`，断言 400 + `AUTH_NOT_CONFIGURED`，响应体不含任何成功负载。
+
+**预期 UI 视觉与交互响应**：
+- 未选连接时 `Config` 与 `Catalog` 两段事实显示 `—`，不得伪造为「已读取」/「已同步」
+- 「待重载」是**配置状态**，提示说「尚未加载」，不得说「已生效」；生效方式指向「重载执行层」，不再提示人工重启
+- 非 owner 形态下不提供「重载执行层」入口，且**不得**用只读的「重新检测执行层」顶替它
+
+**断言与侧面验证**：
+- §0 Forbidden Terms 0 命中（`assertNoForbiddenTerms`）
+- **范围声明**：本用例只覆盖浏览器契约层。成功重载路径（daemon 旧 PID 退出、新 PID 就绪、连接级验证通过）是**进程级事实**，浏览器无法断言——E2E fixture 跑 `npm run dev` 而非容器入口脚本，本就没有 KTX supervisor 与重载通道能力文件。该路径由 `scripts/verify/verify-ktx-reload-lifecycle.sh --container` 负责（Spec 191 AC-12）。
+
+### 11.4 L2 / L3 用例索引
 
 完整列表见 §10 矩阵 + `webui/tests/e2e/specs/`。每条 L2 用例在 CI 中由 §7 变更影响映射自动选择是否加入本次 PR 的 L2 跑集。
 

@@ -17,15 +17,16 @@
 
 ## 同一版本线按数值递增
 
-同一产品版本线必须保持数值递增。当前 `0.x` 版本线为 `0.20.0 > 0.17.0 > 0.2.0`；`0.20.0` 接替短命的 `0.2.0`。错误的 `2.0.0` 切线已废止，其 tag 与 Release 仅作为历史事实保留，不作为当前 `0.x` 版本线的承接基准。
+同一产品版本线必须保持数值递增。当前 `0.x` 版本线为 `0.25.0 > 0.20.0 > 0.17.0 > 0.2.0`。`0.25.0` 是分支 `lucy-v0.25` 的当前产品版本，尚未打 tag。`0.20.0` 是上一已发布版本，它接替了短命的 `0.2.0`。错误的 `2.0.0` 切线已废止，其 tag 与 Release 仅作为历史事实保留，不作为当前 `0.x` 版本线的承接基准。
 
-判断客户运行的是哪一个具体构建，使用**构建提交**（40 位 commit）：`/api/health.data.gitSha`、WebUI「系统设置 / 版本信息」页、镜像内 `/app/BUILD_REVISION`。构建提交是对产品版本的补充，不能用来允许当前版本线倒退。
+判断客户运行的是哪一个具体构建，使用**构建提交**（40 位 commit）。完整提交看 `/api/health.data.gitSha`、镜像内 `/app/BUILD_REVISION`，或 WebUI「系统设置 / 版本信息」页的复制内容；该页可见文本是前 12 位。构建提交是对产品版本的补充，不能用来允许当前版本线倒退。
 
 产品版本与 Docker、Helm Chart、纯 Manifest 等部署制品解耦。同一产品版本可以发布一种或多种制品，每种制品分别记录支持状态和门禁结果；未发布的制品必须写明原因，不得由其他制品的验收结果推定。
 
 ## 文件
 
-- `v0.20.0.json` — 当前版本，annotated tag 已指向 `abb503c`，正式 GitHub Release 已按 `v0.20.0-release-notes.md` 创建。main 跑批 `40088995603` 与 tag 跑批 `40097259604` 的四项 Required checks 均通过；项目所有者确认客户已成功部署且版本与当前 `0.20.0` 一致，**仅客户实际部署路径按人工验收放行**。两项既有非必需 demo 冒烟检查失败并获准留到下一轮修复；GHCR 权限问题导致 GitHub 客户放行链未执行，其他制品不在放行范围内。本版未新登记交付包、镜像摘要或包哈希。
+- `v0.25.0.json` — 当前产品版本。分支 `lucy-v0.25` 与 `VERSION` 对齐为 `0.25.0`；`commit` 仍是 `PENDING`，尚未打 tag、尚未创建 GitHub Release，也没有客户交付包。
+- `v0.20.0.json` — 上一已发布版本，annotated tag 已指向 `abb503c`，正式 GitHub Release 已按 `v0.20.0-release-notes.md` 创建。main 跑批 `40088995603` 与 tag 跑批 `40097259604` 的四项 Required checks 均通过；项目所有者确认客户已成功部署且版本与该版本 `0.20.0` 一致，**仅客户实际部署路径按人工验收放行**。两项既有非必需 demo 冒烟检查失败并获准留到下一轮修复；GHCR 权限问题导致 GitHub 客户放行链未执行，其他制品不在放行范围内。本版未新登记交付包、镜像摘要或包哈希。
 - `v0.2.0.json` — 历史版本，已被 `v0.20.0` 取代。原提交、tag、Release 与门禁事实保持不变；其中“版本号不承担大小序”是当时已撤销的错误口径。
 - `v2.0.0.json` — 历史版本。`v2.0.0` tag 与 Release 保留为历史事实，未删除、未移动。该版本号的客户候选包 `20261021-r7` 实际构建自 `a93880e`（比 tag 早 36 个提交，不含本次 11 项门禁修复），台账用 `builtFromDiffersFromReleaseCommit` 如实留痕。
 
@@ -36,8 +37,9 @@
 3. **`deliveryPackage: null` 必须写 `noDeliveryReason`** ——「本版无交付包」是合法状态，但必须显式说明，不能靠字段缺失蒙混。
 4. **`notExecuted` 的门禁必须写 `reason`** ——未跑的门禁不是缺失信息，是交付结论的一部分。
 5. **交付包与发布提交不一致时**，必须显式设 `builtFromDiffersFromReleaseCommit: true` 并在 `builtFromDiffNote` 解释；否则门禁直接判失败。
-6. **`runs[]` 必须列出这次发布涉及的全部跑批**，每条要有 `id` 与 `trigger`；每条 `gates[].run` 必须是 `runs[]` 里的某个 id，否则门禁判失败。
+6. **已经发布的条目，`runs[]` 必须列出这次发布涉及的全部跑批**，每条要有 `id` 与 `trigger`；每条 `gates[].run` 必须是 `runs[]` 里的某个 id，否则门禁判失败。`commit` 仍是 `PENDING` 且 `deliveryPackage` 为 `null` 时，还没有发布，`runs` 省略或留空；不要填占位跑批号。这种条目里的门禁只能是 `notExecuted`。
 7. 跑 `npm run lint:release-ledger` 校验。
+8. **从 v0.20.0 的下一产品版本起**，`deliveryPackage.productionReady === true` 必须有一条 `webui-ux-review`：`required: true`、`manual: true`、`status: passed`，`evidence` 指向已存在的 `docs/releases/ux/<产品版本>.md`，且该文件的结果块是 passed 组合。手工通过不填 CI `run`。v0.20.0 不追补这条门禁。三个阻断原因类不能被记成 passed。记录格式见 [`ux/README.md`](ux/README.md)。
 
 ## 一次发布不止一次跑批
 
@@ -59,7 +61,7 @@ npm run lint:release-ledger        # 校验台账完整性
 npm run lint:release-ledger:test   # 校验器自身的测试
 ```
 
-门禁检查：当前 `VERSION` 必须有对应条目；每条必需字段齐全；`releaseTag` 与 `productVersion` 一致；`commit` 是完整 40 位 SHA（或 `PENDING`）；同一版本号不重复；`runs[]` 非空且每条有 `id` + `trigger`；每条 `gates[].run` 必须是 `runs[]` 里的 id。
+门禁检查：当前 `VERSION` 必须有对应条目；每条必需字段齐全；`releaseTag` 与 `productVersion` 一致；`commit` 是完整 40 位 SHA（或 `PENDING`）；同一版本号不重复。已发布条目的 `runs[]` 非空且每条有 `id` + `trigger`；未发布条目（`PENDING` 且没有交付包）的 `runs` 可以留空。已填写的 `gates[].run` 必须是 `runs[]` 里的 id。
 
 ### 门禁状态是三态，不是两态
 

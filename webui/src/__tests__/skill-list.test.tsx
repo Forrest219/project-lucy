@@ -19,11 +19,20 @@ const skill: SkillAsset = {
   triggers: ["profit"],
   eval_cases: [],
   description: "Check profit",
+  owner: "",
   uri: "lucy-skill://kx_financial/profit-check",
   relativePath: "skills/kx_financial/SKILL.md",
   file_version: "version-1",
   content: "# Body\n\n## First\nText\n\n## Second\nText",
   validation: { valid: true, issues: [] }
+};
+
+const corruptOwnerSkill: SkillAsset = {
+  ...skill,
+  name: "corrupt-owner",
+  owner: "",
+  owner_invalid: true,
+  uri: "lucy-skill://kx_financial/corrupt-owner"
 };
 
 function previewFor(body: Record<string, unknown>, operation: "create" | "update" = "update"): SkillWritePreview {
@@ -38,6 +47,7 @@ function previewFor(body: Record<string, unknown>, operation: "create" | "update
     impact: {
       status: { from: operation === "create" ? null : "draft", to: (body.status as "draft") ?? "draft" },
       rolesAllowed: { from: operation === "create" ? [] : ["analyst"], to: roles },
+      owner: { from: operation === "create" ? null : "", to: (body.owner as string) ?? "" },
       enteredWildcard: roles.includes("*"),
       exitedWildcard: false,
       affectedRoleIds: roles.includes("*") ? ["analyst", "finance_reader"] : roles,
@@ -58,7 +68,8 @@ function renderPage(path = "/skills?skill=kx_financial/profit-check") {
   );
 }
 
-function stubApis() {
+function stubApis(options: { detail?: SkillAsset } = {}) {
+  const detail = options.detail ?? skill;
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -67,7 +78,7 @@ function stubApis() {
       return new Response(JSON.stringify({ ok: true, count: 1, skills: [summary] }));
     }
     if (url === "/api/skills/kx_financial/profit-check" && method === "GET") {
-      return new Response(JSON.stringify({ ok: true, skill }));
+      return new Response(JSON.stringify({ ok: true, skill: detail }));
     }
     if (url === "/api/admin/roles?includeTemplates=false") {
       return new Response(JSON.stringify({
@@ -207,5 +218,70 @@ describe("unified Skill workbench", () => {
     expect(screen.getByTestId("skill-metadata-toggle")).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("skill-field-domain")).toHaveValue("kx_financial");
     expect(screen.queryByTestId("skill-role-none")).not.toBeInTheDocument();
+  });
+});
+
+describe("L25-04 业务 Skill 负责人", () => {
+  it("SKO-01 总览有负责人列，缺省显示「未指定」", async () => {
+    stubApis();
+    renderPage("/skills");
+    expect(await screen.findByTestId("skills-table")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "负责人" })).toBeInTheDocument();
+    expect(screen.getByTestId("skill-owner")).toHaveTextContent("未指定");
+  });
+
+  it("SKO-02/03 编辑态可填写负责人，保存时随载荷提交", async () => {
+    const fetchMock = stubApis();
+    renderPage();
+    fireEvent.click(await screen.findByTestId("skill-edit"));
+    fireEvent.click(screen.getByTestId("skill-metadata-toggle"));
+
+    const field = screen.getByTestId("skill-field-owner");
+    expect(field).toHaveValue("");
+    fireEvent.change(field, { target: { value: "数据治理组" } });
+    expect(screen.getByTestId("skill-dirty")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("skill-save"));
+    const dialog = await screen.findByTestId("skill-preflight");
+    fireEvent.click(within(dialog).getByTestId("skill-preflight-confirm"));
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+      expect(put).toBeTruthy();
+      expect(JSON.parse(String(put![1]?.body)).owner).toBe("数据治理组");
+    });
+  });
+
+  it("SKO-05 预检显示负责人旧值 → 新值", async () => {
+    stubApis();
+    renderPage();
+    fireEvent.click(await screen.findByTestId("skill-edit"));
+    fireEvent.click(screen.getByTestId("skill-metadata-toggle"));
+    fireEvent.change(screen.getByTestId("skill-field-owner"), { target: { value: "财务 BP 团队" } });
+    fireEvent.click(screen.getByTestId("skill-save"));
+    const dialog = await screen.findByTestId("skill-preflight");
+    expect(within(dialog).getByTestId("skill-preflight-owner")).toHaveTextContent("未指定 → 财务 BP 团队");
+  });
+
+  it("SKO-06 损坏声明在阅读态披露，且不显示为负责人", async () => {
+    stubApis({ detail: corruptOwnerSkill });
+    renderPage();
+    expect(await screen.findByTestId("skill-detail-owner")).toHaveTextContent("负责人声明无效，请编辑修复");
+  });
+
+  it("SKO-07 损坏声明未修复前不随保存静默清除", async () => {
+    const fetchMock = stubApis({ detail: corruptOwnerSkill });
+    renderPage();
+    fireEvent.click(await screen.findByTestId("skill-edit"));
+    fireEvent.click(screen.getByTestId("skill-metadata-toggle"));
+    expect(screen.getByTestId("skill-field-owner")).toHaveValue("");
+    fireEvent.click(screen.getByTestId("skill-save"));
+    const dialog = await screen.findByTestId("skill-preflight");
+    fireEvent.click(within(dialog).getByTestId("skill-preflight-confirm"));
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+      expect(put).toBeTruthy();
+      // The corrupt declaration is never rewritten implicitly.
+      expect(JSON.parse(String(put![1]?.body)).owner).toBeUndefined();
+    });
   });
 });

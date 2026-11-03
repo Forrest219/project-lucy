@@ -24,6 +24,14 @@ import {
 
 const FIXTURE_ROOT = path.join(REPO_ROOT, "examples", "security-e2e");
 const PROFILE_DIR = path.join(REPO_ROOT, "scripts", "e2e", "profiles");
+const DB_ENGINES = new Set(["mysql", "postgres"]);
+
+/** MySQL is the floor. PostgreSQL is selected only with --db-engine postgres. */
+function resolveDbEngine(value) {
+  const engine = value ?? "mysql";
+  if (!DB_ENGINES.has(engine)) throw new PrepareError(`--db-engine must be mysql or postgres, got ${engine}`);
+  return engine;
+}
 
 export const AGENT_TOKENS = [
   ["e2e_finance", "FINANCE"],
@@ -146,6 +154,7 @@ export async function prepareEnvironment(options) {
   }
   if (!RUN_ID_RE.test(runId ?? "")) throw new PrepareError(`run id must match ${RUN_ID_RE}`);
   if (mode !== "local" && mode !== "release") throw new PrepareError('mode must be "local" or "release"');
+  const dbEngine = resolveDbEngine(options.dbEngine);
   for (const envName of ["KTX_PROJECT_ROOT", "LUCY_PROJECT_DIR"]) {
     const value = process.env[envName];
     if (value && existsSync(path.join(value, ".ktx", "secrets"))) {
@@ -186,12 +195,12 @@ export async function prepareEnvironment(options) {
   secretFile(path.join(paths.checker, "seed-data.sql"), seedDataSql);
   writeFileSync(path.join(paths.outside, "canary.txt"), `${dataset.canaries.outsideFile}\n`);
 
-  const { hashes, fingerprints } = makeSecrets(secretsDir);
+  const { hashes, fingerprints, readerPassword } = makeSecrets(secretsDir);
   const fixtureDigest = treeDigest(FIXTURE_ROOT);
   const logicalInstanceId = randomUUID();
   const markerKey = "shared/e2e-instance-marker";
   const dbHost = options.dbHost ?? "127.0.0.1";
-  const dbPort = Number(options.dbPort ?? 5432);
+  const dbPort = Number(options.dbPort ?? (dbEngine === "postgres" ? 5432 : 3306));
   // Per-run isolation id flows from the run id (a long random hex) so every
   // disposable database / role is owned by THIS run; a leftover from a prior
   // run cannot satisfy a check. The same string is used in runOwnerIsolationId
@@ -204,13 +213,27 @@ export async function prepareEnvironment(options) {
   const dbFinName = `lucy_e2e_fin_${safeIso}`;
   const dbSalesName = `lucy_e2e_sales_${safeIso}`;
   const dbReaderRole = `lucy_e2e_reader_${safeIso}`;
-  const dbOwnerRole = options.dbOwnerRole ?? "postgres";
+  const dbOwnerRole = options.dbOwnerRole ?? (dbEngine === "postgres" ? "postgres" : "root");
   const secretFilePath = path.join(secretsDir, "db-reader.password");
-  const secretMountPath = options.dbSecretMountPath ?? "/var/run/secrets/lucy/db";
+  // Where the reader password must be READABLE.
+  //
+  // In a customer deployment the WebUI and the KTX upstream run inside the pod
+  // and the password arrives through a mounted Secret at `/var/run/secrets/...`.
+  // In a LOCAL run both processes run on the host, where that path does not
+  // exist — so the run keeps its own copy inside the run directory. Without it
+  // the host-side processes cannot read the password, the database stays
+  // unreachable and every data-plane call answers empty.
+  const defaultSecretMount = mode === "local" ? path.join(secretsDir, "db") : "/var/run/secrets/lucy/db";
+  const secretMountPath = options.dbSecretMountPath ?? defaultSecretMount;
   const containerPasswordPath = path.join(secretMountPath, "password");
+  if (mode === "local" && options.dbSecretMountPath === undefined) {
+    mkdirSync(secretMountPath, { recursive: true, mode: 0o700 });
+    secretFile(containerPasswordPath, readerPassword);
+  }
   const ownerPasswordFile = path.join(secretsDir, "db-owner.password");
   renderTemplates(path.join(FIXTURE_ROOT, "project-template"), paths.project, {
     ...hashes,
+    DB_DRIVER: dbEngine,
     DB_HOST: dbHost,
     DB_PORT: dbPort,
     DB_FIN_NAME: dbFinName,
@@ -235,12 +258,17 @@ export async function prepareEnvironment(options) {
   const proxyPort = Number(options.proxyPort ?? 17879);
   // An external (K8s) instance is addressed by its ingress URLs; the runner then never starts a process.
   const external = Boolean(options.baseUrl);
+  // The dual-stack flood origin exists ONLY for the locally started development instance:
+  // an externally started instance and the release-mode image keep their own bind
+  // address, because their networking is not the harness' to change.
+  const floodOriginAvailable = !external && mode === "local";
   if (external && mode !== "release") throw new PrepareError("--base-url (external instance) is only valid in release mode");
   if (external && !options.mcpUrl) throw new PrepareError("--base-url requires --mcp-url");
-  // --apply-db opts the run into the postgresql probe. prepare-environment only
-  // DECLARES the contract (host/port/role/password file paths/digests); it does
-  // NOT touch the database. The actual apply + measurement is performed by
-  // scripts/e2e/apply-db.mjs, which then writes back `run.db.applied = true`
+  // --apply-db asks for a measured seed. prepare-environment only DECLARES the
+  // contract (engine/host/port/role/password file paths/digests); it does NOT
+  // touch the database. The floor engine is mysql. PostgreSQL is selected with
+  // --db-engine postgres, and only that engine has a seed producer
+  // (scripts/e2e/apply-db.mjs). The producer writes `run.db.applied = true`
   // only after applySyntheticDbSeed returns applied=true. Until that step runs,
   // `run.db.applied` is false and the harness records `applyRequested: true`.
   const applyDb = options.applyDb === true;
@@ -269,10 +297,23 @@ export async function prepareEnvironment(options) {
       mcpUrl: external ? options.mcpUrl : `http://127.0.0.1:${proxyPort}/mcp`,
       startedBy: external ? "external" : "runner",
       markerWikiKey: markerKey,
+      // The rate-limit flood of the security leg needs a SOURCE ADDRESS of its own: the
+      // product buckets logins by source (`webui/server/auth/rate-limit.ts`,
+      // `sourceTotal` = 30 per 5 minutes), and the flood deliberately burns that bucket.
+      // On a locally started instance the WebUI listens dual-stack, so the IPv6 loopback
+      // reaches the SAME server while the server sees `::1` instead of `::ffff:127.0.0.1`
+      // — a different bucket, with no product threshold, window or key touched.
+      // An externally started instance (customer K8s) and the release-mode image are not
+      // ours to re-bind, so they have no flood origin and the flood falls back to the main
+      // source (see `SecurityContext.floodLogin`).
+      floodBaseUrl: floodOriginAvailable ? `http://[::1]:${webuiPort}` : null,
       env: {
         LUCY_DEPLOYMENT_MODE: "customer",
         LUCY_WEBUI_AUTH: "required",
-        LUCY_WEBUI_HOST: "127.0.0.1",
+        // Dual-stack on a locally started instance: the main traffic keeps arriving on
+        // 127.0.0.1 (the server sees `::ffff:127.0.0.1`, normalized to `127.0.0.1`),
+        // while the rate-limit flood can arrive over the IPv6 loopback as `::1`.
+        LUCY_WEBUI_HOST: floodOriginAvailable ? "::" : "127.0.0.1",
         LUCY_WEBUI_PORT: String(webuiPort),
         LUCY_PROXY_PORT: String(proxyPort),
         // The WebUI generates copyable client configs from this value; pointing it at the run keeps copied configs on the run's own instance.
@@ -291,6 +332,7 @@ export async function prepareEnvironment(options) {
       }
     },
     db: {
+      engine: dbEngine,
       host: dbHost,
       port: dbPort,
       name: seededDbName,
@@ -337,7 +379,7 @@ if (invokedDirectly) {
   try {
     const args = parseArgv(process.argv.slice(2), {
       "run-id": "value", mode: "value", candidate: "value", profile: "value", "run-root": "value", seed: "value",
-      "db-host": "value", "db-port": "value", "webui-port": "value", "proxy-port": "value", "project-dir": "value", "base-url": "value", "mcp-url": "value", reset: "boolean",
+      "db-host": "value", "db-port": "value", "db-engine": "value", "webui-port": "value", "proxy-port": "value", "project-dir": "value", "base-url": "value", "mcp-url": "value", reset: "boolean",
       "apply-db": "boolean", "db-name": "value", "db-readonly-roles": "value", "db-secret-mount-path": "value",
       "db-owner-role": "value"
     });
@@ -350,6 +392,7 @@ if (invokedDirectly) {
       seed: args.seed,
       dbHost: args["db-host"],
       dbPort: args["db-port"],
+      dbEngine: args["db-engine"],
       webuiPort: args["webui-port"],
       proxyPort: args["proxy-port"],
       projectDir: args["project-dir"],

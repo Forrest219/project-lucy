@@ -608,3 +608,102 @@ describe("P2 — non-conformance is measurable, diagnosable, and cannot split th
     }
   });
 });
+
+/**
+ * Spec 191 §7.2 / AC-10 — the reload window boundaries.
+ *
+ * A KTX daemon restart invalidates the transport session, exactly like the
+ * "session no longer accepted" case above. The promise is narrow: a SUPPORTED
+ * buffered call recovers on its own, the client never has to reconnect. The
+ * boundaries are explicit — a client supplied session id is discarded, and a
+ * streaming passthrough is NOT recovered.
+ */
+describe("Spec 191 — the reload window boundaries", () => {
+  it("discards a client supplied stale session and retries with a fresh one", async () => {
+    const seen: UpstreamRequest[] = [];
+    let issuedSessions = 0;
+    let acceptedSession = "";
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      const body = recordUpstream(seen, req, await readRequestBody(req));
+      if (body?.method === "initialize") {
+        issuedSessions += 1;
+        acceptedSession = `ktx-session-${issuedSessions}`;
+        res.writeHead(200, { "content-type": "application/json", "mcp-session-id": acceptedSession });
+        res.end(okInitializeResult(body.id));
+        return;
+      }
+      if (req.headers["mcp-session-id"] !== acceptedSession) {
+        res.writeHead(400, { "content-type": "text/plain" });
+        res.end(SESSION_REQUIRED_BODY);
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(okToolResult(body?.id));
+    });
+
+    try {
+      // The client kept the session id it was given before the daemon restarted.
+      const res = await post(proxyPort, lucyQueryBody("reload-client-session"), {
+        "mcp-session-id": "client-stale-session"
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json() as { error?: unknown; result?: { _meta?: { lucy?: { tool?: string } } } };
+      expect(body.error).toBeUndefined();
+      expect(body.result?._meta?.lucy?.tool).toBe("lucy_query");
+
+      // The gateway re-handshaked and retried WITHOUT the client's stale id.
+      const handshakes = seen.filter((entry) => entry.rpcMethod === "initialize");
+      expect(handshakes.length).toBeGreaterThanOrEqual(1);
+      const retries = seen.filter((entry) => entry.toolName === "sl_query");
+      expect(retries.length).toBeGreaterThanOrEqual(1);
+      expect(retries.every((entry) => entry.sessionId !== "client-stale-session")).toBe(true);
+      expect(retries.some((entry) => entry.sessionId === "ktx-session-1")).toBe(true);
+
+      const audit = await waitForAuditRow("reload-client-session");
+      expect(audit.decision_reason).toBe("upstream_session_recovered");
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("does NOT recover a streaming passthrough request", async () => {
+    const seen: UpstreamRequest[] = [];
+    let issuedSessions = 0;
+    let acceptedSession = "";
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      const body = recordUpstream(seen, req, await readRequestBody(req));
+      if (body?.method === "initialize") {
+        issuedSessions += 1;
+        acceptedSession = `ktx-session-${issuedSessions}`;
+        res.writeHead(200, { "content-type": "application/json", "mcp-session-id": acceptedSession });
+        res.end(okInitializeResult(body.id));
+        return;
+      }
+      if (req.headers["mcp-session-id"] !== acceptedSession) {
+        res.writeHead(400, { "content-type": "text/plain" });
+        res.end(SESSION_REQUIRED_BODY);
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(okToolResult(body?.id));
+    });
+
+    try {
+      // `ping` is not a buffered path: it is piped straight through, so a
+      // refused session cannot be retried.
+      const res = await post(proxyPort, { jsonrpc: "2.0", id: "reload-stream", method: "ping" }, {
+        "mcp-session-id": "client-stale-session"
+      });
+      expect(res.ok).toBe(false);
+      // The upstream refusal is passed through as-is — a streamed response is
+      // never rewritten into a JSON-RPC error envelope.
+      const raw = await res.text();
+      expect(raw).toContain("initialize");
+
+      // No recovery handshake was attempted for the streamed request.
+      expect(seen.filter((entry) => entry.rpcMethod === "initialize")).toHaveLength(0);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+});

@@ -5,6 +5,13 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot, readConnections } from "../project.js";
 import { loadContentPaths } from "../paths.js";
+import {
+  OPS_EVIDENCE_CONNECTION_CONFLICT,
+  OPS_EVIDENCE_CONNECTION_ID,
+  OPS_EVIDENCE_RUNTIME_NOT_READY
+} from "../ops-evidence/contract.js";
+import { isAccessRecoveryRequired, readAccessRecoveryMarkerState } from "../access-recovery.js";
+import { stableJson as canonicalStableJson } from "../config-digest.js";
 import { countEntryPerf } from "../entry-performance-timing.js";
 import {
   getAccessConfig,
@@ -16,6 +23,7 @@ import type { Identity, PermissionModelVersion } from "./identity.js";
 import {
   buildForcedFiltersPayload,
   compileScopedRowGrant,
+  formatRowPolicyAttribution,
   isUpstreamForcedPredicateProven,
   mergeRowGrants,
   rowGrantDigest,
@@ -29,6 +37,22 @@ import {
   compileFinalRowsBySource,
   lookupFinalRows
 } from "./agent-constraints.js";
+import {
+  expandRowPolicySelector as expandRowPolicyTemplateSelector,
+  templateNameOf as rowPolicyTemplateNameOf,
+  validateRowPolicyTemplateCatalog,
+  type AccessConfigWithTemplates,
+  type RowPolicyTemplateCatalog,
+  type RowPolicyTemplateSelectorShape
+} from "../admin/row-policy-templates.js";
+// L25-16 — 控制面工具登记表（工具名单 / 适用域的唯一事实源）。
+// 本模块不得反向 import `ops/*` 中除 `control-plane.js` 与 `ops-grants.js` 之外的文件：
+// 那两个文件不依赖 acl.ts，导入不会形成循环。
+import {
+  CONTROL_PLANE_TOOL_NAMES,
+  isControlPlaneTool
+} from "../ops/control-plane.js";
+import { collectOpsGrants, normalizeOpsGrant, type OpsGrant } from "../ops/ops-grants.js";
 
 export interface AclDecision {
   allowed: boolean;
@@ -40,7 +64,13 @@ export interface AclDecision {
 /** AC-P0 Spec 98 §4.3 — bumps with classification table changes; feeds policyVersion (WP-I5). */
 export const TOOL_CLASSIFICATION_VERSION = "ac-p0-cls-1";
 
-export type ToolClass = "AbsoluteDeny" | "DataPlane" | "Meta";
+/**
+ * L25-16 — `ControlPlane` 是第四类工具（Spec §3.1 / G1）。
+ *
+ * 控制面工具走**独立于数据面**的授权维度（`role.allow.ops`），既不要求数据面能力，
+ * 也不能被 `allow.tools` 授予。
+ */
+export type ToolClass = "AbsoluteDeny" | "DataPlane" | "Meta" | "ControlPlane";
 
 /** Spec 98 §4.2 AbsoluteDeny — code baseline; YAML cannot remove (U-DENY-01). */
 export const ABSOLUTE_DENY_TOOLS = [
@@ -72,6 +102,7 @@ export const META_TOOLS = [
   "wiki_search",
   "wiki_read",
   "lucy_begin_question",
+  "lucy_continue_question",
   "lucy_skill_search",
   "lucy_skill_read",
   // Spec 162 §7.8 — certified route / template run through lucy_query's ACL.
@@ -82,6 +113,8 @@ export const META_TOOLS = [
 const ABSOLUTE_DENY_TOOL_SET = new Set<string>(ABSOLUTE_DENY_TOOLS);
 const DATA_PLANE_TOOL_SET = new Set<string>(DATA_PLANE_TOOLS);
 const META_TOOL_SET = new Set<string>(META_TOOLS);
+/** L25-16 — 控制面工具集合（与 `ops/control-plane.ts` 的登记表同源）。 */
+const CONTROL_PLANE_TOOL_SET = new Set<string>(CONTROL_PLANE_TOOL_NAMES);
 
 /**
  * Business context tools (Wiki / Skill discover + read channels). Spec §4.2: a channel is
@@ -98,14 +131,18 @@ const CONTEXT_TOOL_SET = new Set<string>(CONTEXT_TOOLS);
 
 export function classifyTool(toolName: string): ToolClass {
   if (ABSOLUTE_DENY_TOOL_SET.has(toolName)) return "AbsoluteDeny";
+  // L25-16 — 控制面先于数据面判定：控制面工具不得被 `lucy_` 前缀分支误判为数据面。
+  if (CONTROL_PLANE_TOOL_SET.has(toolName)) return "ControlPlane";
   if (DATA_PLANE_TOOL_SET.has(toolName)) return "DataPlane";
   if (META_TOOL_SET.has(toolName)) return "Meta";
   return "AbsoluteDeny"; // unclassified → fail-closed
 }
 
-/** Returns deny reason when tool is AbsoluteDeny baseline or unclassified; undefined if DataPlane/Meta. */
+/** Returns deny reason when tool is AbsoluteDeny baseline or unclassified; undefined if DataPlane/Meta/ControlPlane. */
 export function absoluteDenyOrUnclassifiedReason(toolName: string): string | undefined {
   if (ABSOLUTE_DENY_TOOL_SET.has(toolName)) return `tool_absolute_deny:${toolName}`;
+  // L25-16 — 控制面工具已登记，不是「未分类」。
+  if (CONTROL_PLANE_TOOL_SET.has(toolName)) return undefined;
   if (!DATA_PLANE_TOOL_SET.has(toolName) && !META_TOOL_SET.has(toolName)) {
     return `tool_unclassified:${toolName}`;
   }
@@ -121,10 +158,13 @@ const DEFAULT_DENY_TOOLS = [
   "sl_read_source"
 ] as const;
 
-const DEFAULT_KNOWN_TOOLS = [
+export const DEFAULT_KNOWN_TOOLS = [
   ...ABSOLUTE_DENY_TOOLS,
   ...DATA_PLANE_TOOLS,
-  ...META_TOOLS
+  ...META_TOOLS,
+  // L25-16 — 控制面工具同样是「已登记工具」，必须在 known_tools 里，
+  // 否则 `allowedToolNames` 的 `policy.knownTools.has(tool)` 会把它们全部藏掉。
+  ...CONTROL_PLANE_TOOL_NAMES
 ] as const;
 
 const DEFAULT_TABLE_TOUCHING_TOOLS = [
@@ -188,12 +228,55 @@ function aclPolicy(config: AccessConfig): AclPolicy {
   };
 }
 
+// ─── L25-16 控制面授权维度（Spec §3.2.1 / §3.2.2） ─────────────────────────
+
+/**
+ * 读取一个角色的 `allow.ops` grant 列表。
+ *
+ * ⚠️ 只读 `role.allow.ops`。旧式 `user.allow` 直配（`hasLegacyDirectAllow`）
+ * **不获得任何 ops 授权**（Spec §3.2.2 规则 3）。
+ *
+ * 非法 grant（`*` 通配、域词汇非法、连接域类型非法）**整条丢弃**而不是让整个角色编译失败：
+ * 一条写错的 grant 只能让它自己不生效，不得连带关停该 Agent 的全部权限。
+ */
+function roleOpsGrants(role: { allow?: { ops?: unknown } } | undefined): OpsGrant[] {
+  const raw = role?.allow?.ops;
+  if (!Array.isArray(raw)) return [];
+  const grants: OpsGrant[] = [];
+  for (const item of raw) {
+    const normalized = normalizeOpsGrant(item);
+    if (!normalized.ok) continue;
+    grants.push(normalized.value);
+  }
+  return grants;
+}
+
+/** 角色上显式授予的控制面工具名（`allow.ops[].tools` 的并集）。 */
+function roleOpsToolNames(role: { allow?: { ops?: unknown } } | undefined): string[] {
+  const names = new Set<string>();
+  for (const grant of roleOpsGrants(role)) {
+    for (const tool of grant.tools) {
+      // 只有登记在案的控制面工具才算授予；未知工具名一律忽略（fail-closed）。
+      if (isControlPlaneTool(tool)) names.add(tool);
+    }
+  }
+  return [...names].sort();
+}
+
 // ─── Canonical Source Map: (connectionId, sourceName) / (connectionId, physicalTable) ─
 
 export interface SourceMapEntry {
   physicalTable: string; // e.g. "dataforai.superstore_orders"
   connectionId: string;
   schema: string;
+  /**
+   * Lucy v0.25 (L25-14) — the schema name exactly as the Manifest file is named on
+   * disk (`BIDM.yaml` → `BIDM`). Diagnostics and the Admin preview show this so an
+   * operator can locate the file. It NEVER feeds a manifest path: the runtime keeps
+   * using the normalized `schema`, which is what makes D-03 (G5) observable instead
+   * of silently fixed.
+   */
+  schemaDisplay?: string;
   sourceName: string;
 }
 
@@ -297,7 +380,8 @@ async function buildSourceMapFromDisk(now: number): Promise<SourceMapState | nul
       const rel = path.relative(semanticLayerDir, schemaFile);
       const parts = rel.split(path.sep);
       const connectionId = normalizeRef(parts[0] ?? "");
-      const schema = normalizeRef(path.basename(schemaFile, ".yaml"));
+      const schemaFileName = path.basename(schemaFile, ".yaml");
+      const schema = normalizeRef(schemaFileName);
       for (const [sourceName, tableDef] of Object.entries(yaml.tables)) {
         if (!tableDef?.table) continue;
         const normalizedSource = normalizeRef(sourceName);
@@ -306,6 +390,7 @@ async function buildSourceMapFromDisk(now: number): Promise<SourceMapState | nul
           physicalTable,
           connectionId,
           schema,
+          schemaDisplay: schemaFileName,
           sourceName: normalizedSource
         };
         const fKey = forwardSourceKey(connectionId, normalizedSource);
@@ -325,7 +410,16 @@ async function buildSourceMapFromDisk(now: number): Promise<SourceMapState | nul
     .update(JSON.stringify(
       [...forward.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, entry]) => [key, entry])
+        // `schemaDisplay` is a diagnostics-only field; it must not move the digest.
+        .map(([key, entry]) => [
+          key,
+          {
+            physicalTable: entry.physicalTable,
+            connectionId: entry.connectionId,
+            schema: entry.schema,
+            sourceName: entry.sourceName
+          }
+        ])
     ))
     .digest("hex")
     .slice(0, 16);
@@ -682,6 +776,20 @@ export interface EffectivePermissions {
   capabilities: EffectiveCapability[];
   /** Spec 98 §5.1 EffectiveMetaTools */
   metaTools: string[];
+  /**
+   * L25-16 — 控制面工具授予集合（`role.allow.ops[].tools` 的并集）。
+   *
+   * 与数据面 `tools` **完全独立**：出现在这里不代表有数据面能力，反之亦然。
+   * 旧式 `user.allow` 直配的用户恒为空集（Spec §3.2.2 规则 3）。
+   */
+  opsTools: string[];
+  /**
+   * L25-16 — 控制面 grant 全集（多角色并集）。
+   *
+   * 逐对象授权判定（Spec §3.2.2 规则 4）需要 grant 的**完整**三元组
+   * （工具 / 域 / 连接），`opsTools` 只有工具名，不够用。
+   */
+  opsGrants: OpsGrant[];
   /** Per-role Meta grants, retained so Skill audience and channel grants cannot be stitched across Roles. */
   roleMetaTools?: Record<string, string[]>;
   capabilityDigest: string;
@@ -778,12 +886,8 @@ function isWildcardList(value: string[] | undefined): boolean {
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
+  // Lucy v0.25 — one canonicalization for every digest in the system.
+  return canonicalStableJson(value);
 }
 
 function makePermissions(input: Omit<EffectivePermissions, "snapshotHash">): EffectivePermissions {
@@ -800,7 +904,10 @@ function makePermissions(input: Omit<EffectivePermissions, "snapshotHash">): Eff
     legacyAllow: input.legacyAllow,
     roleMetaTools: input.roleMetaTools ?? null,
     agentConstraintsBySource: input.agentConstraintsBySource ?? null,
-    finalRowsBySource: input.finalRowsBySource ?? null
+    finalRowsBySource: input.finalRowsBySource ?? null,
+    // L25-16 — 控制面授予参与快照摘要：授予变化必须让快照失效。
+    opsTools: input.opsTools ?? [],
+    opsGrants: input.opsGrants ?? []
   };
   return {
     ...input,
@@ -912,7 +1019,14 @@ function dedupeCapabilities(capabilities: EffectiveCapability[]): EffectiveCapab
   );
 }
 
-function capabilityDigest(capabilities: EffectiveCapability[]): string {
+/**
+ * Digest of a capability set.
+ *
+ * Exported so every Admin read surface (P1-2 授权摘要, P1-3 访问关系图) derives
+ * the SAME digest from the SAME capabilities — the reconciliation contract
+ * ("同源") is only true if the algorithm is literally one implementation.
+ */
+export function capabilityDigest(capabilities: EffectiveCapability[]): string {
   return createHash("sha256")
     .update(
       capabilities
@@ -1008,6 +1122,10 @@ interface CompiledRole {
   dataPlaneTools: string[];
   metaTools: string[];
   deniedTools: string[];
+  /** L25-16 — 该角色通过 `allow.ops` 授予的控制面工具。 */
+  opsTools: string[];
+  /** L25-16 — 该角色的控制面 grant 全集（逐对象授权判定需要完整三元组）。 */
+  opsGrants: OpsGrant[];
   sources: EffectiveSource[];
   /** Per (connectionId, physicalTable) row grant for this Role. */
   sourceGrants: Map<string, RowGrant>;
@@ -1051,6 +1169,34 @@ async function loadEnabledTablesByConnection(): Promise<Map<string, Set<string>>
 /** lucy_admin follows every configured connection, including ones added later. */
 const LUCY_ADMIN_ROLE_ID = "lucy_admin";
 
+/**
+ * Spec 149 §6 — 运维问数连接（`lucy-ops`）只认**显式列出**。
+ *
+ * `*`（含 `lucy_admin` 的通配）与 `catalog_bound` 都不算显式写出，
+ * 因此编译期就把该连接从通配 / 目录绑定路径里剔除。
+ */
+function isOpsEvidenceConnection(connectionId: string): boolean {
+  return normalizeRef(connectionId) === OPS_EVIDENCE_CONNECTION_ID;
+}
+
+/**
+ * Spec 149 §6 / §8 — 运维问数连接的就绪门。
+ *
+ * 返回 `undefined` 表示放行；否则返回拒绝原因码：
+ * - `conflict` → `OPS_EVIDENCE_CONNECTION_CONFLICT`
+ * - 其它非 `current` → `OPS_EVIDENCE_RUNTIME_NOT_READY`
+ *
+ * 动态 import：`ops-evidence/readiness` 依赖 `project.js`，静态引入会形成
+ * 模块初始化环。
+ */
+async function opsEvidenceReadinessDenial(): Promise<string | undefined> {
+  const { readOpsEvidenceReadiness } = await import("../ops-evidence/readiness.js");
+  const state = await readOpsEvidenceReadiness();
+  if (state.readiness === "conflict") return OPS_EVIDENCE_CONNECTION_CONFLICT;
+  if (state.readiness !== "current") return OPS_EVIDENCE_RUNTIME_NOT_READY;
+  return undefined;
+}
+
 function resolveCatalogConnections(
   roleId: string,
   declaredConnections: string[],
@@ -1061,7 +1207,11 @@ function resolveCatalogConnections(
     return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_wildcard_forbidden` };
   }
   if (roleId === LUCY_ADMIN_ROLE_ID) {
-    return { ok: true, connections: [...enabledByConnection.keys()] };
+    // Spec 149 §6 — `lucy-ops` 不随通配生效：运维问数连接只认显式列出的 Role。
+    return {
+      ok: true,
+      connections: [...enabledByConnection.keys()].filter((id) => !isOpsEvidenceConnection(id))
+    };
   }
   return { ok: true, connections: declaredConnections };
 }
@@ -1091,6 +1241,8 @@ function catalogBoundSources(
   const matches: EffectiveSource[] = [];
   for (const entry of state.forward.values()) {
     if (!allowedConnections.has(entry.connectionId)) continue;
+    // Spec 149 §6 — `catalog_bound` 不构成对运维问数连接的显式授权。
+    if (isOpsEvidenceConnection(entry.connectionId)) continue;
     if (!isInEnabledTableRange(entry, enabledByConnection)) continue;
     matches.push({
       connectionId: entry.connectionId,
@@ -1102,6 +1254,77 @@ function catalogBoundSources(
   return [...new Map(matches.map((source) => [`${source.connectionId}:${source.sourceName}`, source])).values()];
 }
 
+/**
+ * Lucy v0.25 P1 (L25-14 R1 §5.1) — the template catalog of a configuration.
+ *
+ * An invalid catalog yields an EMPTY catalog, so every reference fails closed
+ * (`row_policy_template_not_found`) instead of silently matching nothing.
+ */
+function rowPolicyTemplateCatalogOf(config: AccessConfig): RowPolicyTemplateCatalog {
+  return validateRowPolicyTemplateCatalog(
+    (config as AccessConfigWithTemplates).row_policy_templates
+  ).templates;
+}
+
+/**
+ * Lucy v0.25 P1 (L25-14 R1 §5.1) — expand `row_policy.template` references into the
+ * SAME `predicates` list an inline policy uses (P1-D2).
+ *
+ * Why the expansion happens HERE and not in the config loader:
+ *
+ *  - The existing compiler (`proxy/row-policy.ts` `parseRowPolicyShape`) accepts a
+ *    `row_policy` object with exactly one key: `predicates`. A `row_policy.template`
+ *    reference has to be expanded into that list before the parser sees it, otherwise
+ *    the role fails closed with `row_policy_invalid_key` and the template never applies.
+ *  - **The config object itself is never rewritten.** `accessConfigDigest` is the digest
+ *    of the COMMITTED configuration, and `admin/access-config.ts` verifies a rollback by
+ *    comparing the runtime digest against the digest of the raw file bytes. If the
+ *    config were expanded before it was digested, those two would disagree for every
+ *    configuration that uses a template, and a successful rollback would be misreported
+ *    as 「回滚未验证」→ the recovery gate would degrade the runtime globally.
+ *  - A selector that does NOT reference a template is passed through byte-identically.
+ *    An existing configuration therefore keeps its current compile behaviour, including
+ *    the reason code it reports for an invalid inline policy.
+ */
+function expandTemplateSelectorsForCompile(
+  roleId: string,
+  selectors: SelectorShape[],
+  templates: RowPolicyTemplateCatalog,
+  permissionModelVersion: PermissionModelVersion
+): { ok: true; selectors: SelectorShape[] } | { ok: false; reason: string } {
+  if (!Array.isArray(selectors) || selectors.length === 0) return { ok: true, selectors: [] };
+  let changed = false;
+  const next: SelectorShape[] = [];
+  for (const selector of selectors) {
+    if (!selector || typeof selector !== "object") {
+      next.push(selector);
+      continue;
+    }
+    const shaped = selector as RowPolicyTemplateSelectorShape;
+    if (rowPolicyTemplateNameOf(shaped) === undefined) {
+      // No template reference: the existing compiler owns this selector unchanged.
+      next.push(selector);
+      continue;
+    }
+    const expanded = expandRowPolicyTemplateSelector(shaped, templates, {
+      roleId,
+      permissionModelVersion
+    });
+    if (!expanded.ok) {
+      // Fail closed: a reference that cannot be resolved never becomes 「全部行」.
+      // The concrete issue code is kept so the operator sees WHY it was refused.
+      return { ok: false, reason: expanded.issues[0]?.code ?? "row_policy_template_unresolved" };
+    }
+    if (!expanded.rowPolicy) {
+      next.push(selector);
+      continue;
+    }
+    changed = true;
+    next.push({ ...shaped, row_policy: expanded.rowPolicy });
+  }
+  return { ok: true, selectors: changed ? next : selectors };
+}
+
 async function compileRole(
   roleId: string,
   role: NonNullable<AccessConfig["roles"]>[string] | undefined,
@@ -1109,7 +1332,8 @@ async function compileRole(
   state: SourceMapState,
   enabledTables: Map<string, Set<string>> | undefined,
   stepOut: RoleCompileStep[] | undefined,
-  ordinal: number
+  ordinal: number,
+  templates: RowPolicyTemplateCatalog
 ): Promise<CompiledRoleResult> {
   const recordStep = (step: Omit<RoleCompileStep, "roleId" | "ordinal">) => {
     if (stepOut) stepOut.push({ roleId, ordinal, ...step });
@@ -1132,7 +1356,10 @@ async function compileRole(
   }
 
   const roleTools = configList(role.allow.tools, []);
-  if (roleTools.length === 0 || roleTools.includes("*")) {
+  // L25-16 — 控制面维度与数据面维度相互独立：只声明 `allow.ops` 的**纯控制面角色**
+  // 必须能编译成功（`allow.tools` 为空是合法的）。两个维度都为空才是无效声明。
+  const hasOpsDimension = Array.isArray(role.allow.ops) && role.allow.ops.length > 0;
+  if ((roleTools.length === 0 && !hasOpsDimension) || roleTools.includes("*")) {
     recordStep({ status: "failed", code: "role_resolution_failed", stage: "role_declaration" });
     return failed;
   }
@@ -1140,6 +1367,12 @@ async function compileRole(
     if (!policy.knownTools.has(tool)) {
       recordStep({ status: "failed", code: "role_resolution_failed", stage: "tool_classification" });
       return failed;
+    }
+    // L25-16 — 控制面工具**只能**由 `allow.ops` 授予；写进 `allow.tools` 是两个平面的
+    // 混用，必须 fail-closed（否则 `allow.tools` 会被当成控制面授权的旁路）。
+    if (isControlPlaneTool(tool)) {
+      recordStep({ status: "failed", code: "role_resolution_failed:control_plane_tool_in_allow_tools", stage: "tool_classification" });
+      return { ok: false, reason: `role_resolution_failed:${roleId}:control_plane_tool_in_allow_tools` };
     }
     const absoluteOrUnclassified = absoluteDenyOrUnclassifiedReason(tool);
     if (absoluteOrUnclassified) {
@@ -1159,7 +1392,20 @@ async function compileRole(
     return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_requires_v2` };
   }
 
-  const selectors = Array.isArray(role.allow.tableSelectors) ? role.allow.tableSelectors : [];
+  // Lucy v0.25 P1 (L25-14 R1 §5.1) — a `row_policy.template` reference is expanded
+  // into the same `predicates` list an inline policy uses, right before the existing
+  // compiler reads the selectors. The configuration object is NOT rewritten here.
+  const templateExpansion = expandTemplateSelectorsForCompile(
+    roleId,
+    Array.isArray(role.allow.tableSelectors) ? role.allow.tableSelectors : [],
+    templates,
+    modelVersion.version
+  );
+  if (!templateExpansion.ok) {
+    recordStep({ status: "failed", code: `role_resolution_failed:${templateExpansion.reason}`, stage: "row_grant" });
+    return { ok: false, reason: `role_resolution_failed:${roleId}:${templateExpansion.reason}` };
+  }
+  const selectors = templateExpansion.selectors;
   const declaredConnections = configList(role.allow.connections, [], { normalize: true });
   if (catalogBound && selectors.length > 0) {
     recordStep({ status: "failed", code: "role_resolution_failed:catalog_bound_selectors_forbidden", stage: "source_scope" });
@@ -1245,12 +1491,20 @@ async function compileRole(
           matches.map((entry) => ({
             connectionId: entry.connectionId,
             sourceName: entry.sourceName,
-            schema: entry.schema
+            schema: entry.schema,
+            schemaDisplay: entry.schemaDisplay
           }))
         );
         if (!compiled.ok) {
-          recordStep({ status: "failed", code: `role_resolution_failed:${compiled.reason}`, stage: "row_grant", selectorIndex });
-          return { ok: false, reason: `role_resolution_failed:${roleId}:${compiled.reason}` };
+          // Lucy v0.25 (L25-14 §3.5) — the failure reason carries the four-tuple
+          // (connection / schema / table / field) and the R5 attribution code, so an
+          // operator can tell 「字段不存在」 from 「清单不可用」 / 「目录能力未知」.
+          const detail = compiled.attribution
+            ? `:row_policy_attribution:${formatRowPolicyAttribution(compiled.attribution)}`
+            : "";
+          const reason = `${compiled.reason}${detail}`;
+          recordStep({ status: "failed", code: `role_resolution_failed:${reason}`, stage: "row_grant", selectorIndex });
+          return { ok: false, reason: `role_resolution_failed:${roleId}:${reason}` };
         }
         if (compiled.grant.kind !== "scoped") {
           recordStep({ status: "failed", code: "role_resolution_failed:row_policy_invalid", stage: "row_grant", selectorIndex });
@@ -1324,6 +1578,8 @@ async function compileRole(
       dataPlaneTools: dataPlane,
       metaTools: meta,
       deniedTools: denied,
+      opsTools: roleOpsToolNames(role),
+      opsGrants: roleOpsGrants(role),
       sources: [...new Map(sourceMatches.map((source) => [`${source.connectionId}:${source.sourceName}`, source])).values()],
       sourceGrants,
       declaredConnections: catalogBound ? effectiveConnections : declaredConnections,
@@ -1444,6 +1700,9 @@ async function resolveEffectivePermissions(
         capabilities,
         metaTools: uniqueSorted(meta),
         roleMetaTools: { __legacy__: uniqueSorted(meta) },
+        // L25-16 — 旧式 `user.allow` 直配**不获得任何 ops 授权**（Spec §3.2.2 规则 3）。
+        opsTools: [],
+        opsGrants: [],
         capabilityDigest: capabilityDigest(capabilities),
         sourceMapVersion,
         rolesJson: null,
@@ -1456,9 +1715,10 @@ async function resolveEffectivePermissions(
 
   const compiledRoles: CompiledRole[] = [];
   const steps: RoleCompileStep[] = [];
+  const roleTemplates = rowPolicyTemplateCatalogOf(config);
   for (let ordinal = 0; ordinal < roleSet.roleIds.length; ordinal += 1) {
     const roleId = roleSet.roleIds[ordinal];
-    const compiled = await compileRole(roleId, config.roles?.[roleId], policy, state, options.enabledTables, steps, ordinal);
+    const compiled = await compileRole(roleId, config.roles?.[roleId], policy, state, options.enabledTables, steps, ordinal, roleTemplates);
     if (!compiled.ok) {
       // Spec 177 — failed role's step is already appended by compileRole with
       // status="failed"; every subsequent declared role is "not_run".
@@ -1549,10 +1809,18 @@ async function resolveEffectivePermissions(
   const roleMetaTools = Object.fromEntries(
     compiledRoles.map((role) => [role.roleId, uniqueSorted(role.metaTools)])
   );
+  // L25-16 — 多角色的 ops grant 取并集（与数据面工具的多角色语义一致）。
+  const opsTools = uniqueSorted(compiledRoles.flatMap((role) => role.opsTools));
+  // L25-16 — 多角色的 ops grant 取并集；判定仍逐条 grant、逐个对象进行（禁止跨 grant 拼接）。
+  const opsGrants = compiledRoles.flatMap((role) => role.opsGrants);
   const tools = uniqueSorted([...capabilityTools, ...metaTools]);
   const sources = sourcesFromCapabilities(capabilities);
   const tables = uniqueSorted(sources.map((source) => source.table));
   // Roles with selectors derive their connections from capabilities; pure Meta Roles use the declared list.
+  //
+  // Spec 149 §6 — 这里**不**按就绪状态剔除 `lucy-ops`：查询门要靠它在
+  // `connections.length > 0` 分支里触发就绪判定（`OPS_EVIDENCE_RUNTIME_NOT_READY`）。
+  // 目录侧的不列出由 `lucyCatalog` / `connectionList` 负责。
   const connections = uniqueSorted([
     ...capabilities.map((capability) => capability.connectionId),
     ...compiledRoles.filter((role) => !role.hasSelectors).flatMap((role) => role.declaredConnections)
@@ -1567,6 +1835,9 @@ async function resolveEffectivePermissions(
     sources,
     capabilities,
     roleMetaTools,
+    // L25-16 — 控制面授予在解析结果里可见（管理面可核对「授了什么」）。
+    opsTools,
+    opsGrants,
     sourceMapVersion,
     agentConstraintsBySource: agentConstraintsBySource ?? null,
     finalRowsBySource
@@ -1583,6 +1854,8 @@ async function resolveEffectivePermissions(
       capabilities,
       metaTools,
       roleMetaTools,
+      opsTools,
+      opsGrants,
       capabilityDigest: capabilityDigest(capabilities),
       sourceMapVersion,
       rolesJson,
@@ -1724,8 +1997,15 @@ export async function lucyCatalog(identity: Identity): Promise<{
   if (!resolved.ok) {
     return { connections: [], sources: [], examples: [] };
   }
-  const connections = resolved.permissions.connections;
+  // Spec 149 §6 — 连接未就绪时，目录里既不出现连接，也不出现它的 source。
+  const opsEvidenceHidden = resolved.permissions.connections.some((id) => isOpsEvidenceConnection(id))
+    ? (await opsEvidenceReadinessDenial()) !== undefined
+    : false;
+  const connections = opsEvidenceHidden
+    ? resolved.permissions.connections.filter((id) => !isOpsEvidenceConnection(id))
+    : resolved.permissions.connections;
   const sources = resolved.permissions.sources
+    .filter((source) => !(opsEvidenceHidden && isOpsEvidenceConnection(source.connectionId)))
     .map((source) => ({
       connectionId: source.connectionId,
       schema: source.schema,
@@ -1898,6 +2178,80 @@ export async function previewAgentPermissionsForAdmin(
 }
 
 /**
+ * Lucy v0.25 (L25-14 §3.2) — does a source-map entry match the table identity the
+ * Admin asked for?
+ *
+ * The comparison is case-insensitive on the schema, exactly like the runtime's
+ * selector matching: the source map lower-cases the schema name when it reads the
+ * Manifest file names, so a requested `BIDM` must still find the entry that carries
+ * `bidm`. The entry's `schemaDisplay` keeps the on-disk case for diagnostics.
+ */
+export function sourceMapEntryMatchesTable(
+  entry: SourceMapEntry,
+  table: { connection: string; schema: string; name: string }
+): boolean {
+  const connection = normalizeRef(table.connection);
+  const schema = normalizeRef(table.schema);
+  const name = normalizeRef(table.name);
+  if (entry.connectionId !== connection) return false;
+  if (entry.schema !== schema) return false;
+  return entry.sourceName === name || entry.physicalTable === name;
+}
+
+/**
+ * Lucy v0.25 (L25-14 §3.2 / §5.3) — read-only preview entry point.
+ *
+ * Resolves ONE subject against an in-memory CANDIDATE configuration through the
+ * runtime's own compile path (`resolveEffectivePermissions`). Nothing is written,
+ * the committed policy is not swapped in, and no second permission algebra is
+ * introduced: the preview and the runtime share this exact function.
+ *
+ * The candidate is built by the caller (draft overlaid on the current config) and
+ * is never read back from disk, so a preview can never describe a stale baseline.
+ */
+export async function previewSubjectPermissionsForCandidate(
+  candidate: AccessConfig,
+  subject: {
+    userId: string;
+    name?: string;
+    enabled?: boolean;
+    role?: string;
+    roles?: string[];
+    constraints?: unknown;
+  },
+  options: {
+    freshSourceMap?: boolean;
+    sourceMap?: SourceMapState;
+    enabledTables?: Map<string, Set<string>>;
+  } = {}
+): Promise<RoleResolutionResult> {
+  const policy = aclPolicy(candidate);
+  const previewUser = {
+    id: subject.userId,
+    name: subject.name ?? subject.userId,
+    enabled: subject.enabled ?? true,
+    ...(subject.role !== undefined ? { role: subject.role } : {}),
+    ...(subject.roles !== undefined ? { roles: subject.roles } : {}),
+    ...(subject.constraints !== undefined ? { constraints: subject.constraints } : {}),
+    tokens: []
+  } as AccessConfig["users"][number];
+  const previewConfig: AccessConfig = {
+    ...candidate,
+    users: [...candidate.users.filter((user) => user.id !== subject.userId), previewUser]
+  };
+  return resolveEffectivePermissions(
+    { userId: subject.userId, tokenLabel: "admin-preview", tokenHashPrefix: "admin-preview" },
+    previewConfig,
+    policy,
+    {
+      freshSourceMap: options.freshSourceMap ?? true,
+      sourceMap: options.sourceMap,
+      enabledTables: options.enabledTables
+    }
+  );
+}
+
+/**
  * Spec 174 §3.1 — read-only inputs for one Admin display batch. Built from
  * pure reads: it never updates the identity config cache, `sourceMapState`
  * or the committed EffectivePolicy, so display preparation cannot change
@@ -1948,6 +2302,64 @@ export async function resolveEffectivePermissionsBatchForAdmin(
   return results;
 }
 
+/**
+ * One Role compiled ON ITS OWN.
+ *
+ * The merged `EffectivePermissions.sources` of an Agent is a UNION over its
+ * Roles, and a union loses "which table came from which Role". Any surface
+ * that needs per-Role attribution must therefore compile each Role
+ * separately — it may not take the merged result and try to split it.
+ *
+ * P1-3 §4.3 makes this normative ("不得复用合并结果再尝试拆分"), and P1-2 §2.2
+ * needs the same thing for its role-source column.
+ */
+export interface PerRoleCompilation {
+  roleId: string;
+  ok: boolean;
+  /** Failure reason; present only when `ok` is false. */
+  reason?: string;
+  /** This Role's own capabilities (tool × source × rowGrant). Never merged with other Roles. */
+  capabilities?: EffectiveCapability[];
+  /** This Role's own granted sources. */
+  sources?: EffectiveSource[];
+  /** This Role's own data-plane tools. */
+  dataPlaneTools?: string[];
+  /** This Role's own meta tools. */
+  metaTools?: string[];
+}
+
+/**
+ * Compile a single Role against an existing admin context.
+ *
+ * Shares the exact compiler the runtime uses, so the contribution shown in the
+ * Admin surfaces is the contribution the runtime enforces.
+ */
+export async function compileRoleForAdmin(
+  roleId: string,
+  context: AdminPermissionContext
+): Promise<PerRoleCompilation> {
+  const policy = aclPolicy(context.config);
+  const compiled = await compileRole(
+    roleId,
+    context.config.roles?.[roleId],
+    policy,
+    context.sourceMap,
+    context.enabledTables,
+    undefined,
+    0,
+    rowPolicyTemplateCatalogOf(context.config)
+  );
+  if (!compiled.ok) return { roleId, ok: false, reason: compiled.reason };
+  return {
+    roleId,
+    ok: true,
+    capabilities: buildCapabilities(compiled.role.dataPlaneTools, compiled.role.sources, compiled.role.sourceGrants),
+    sources: compiled.role.sources,
+    dataPlaneTools: compiled.role.dataPlaneTools,
+    metaTools: compiled.role.metaTools
+  };
+}
+
 /** Spec 174 §3.3 — the compile inputs a display permission result was derived from. */
 export type DisplayPolicyInputs = Pick<
   AdminPermissionContext,
@@ -1993,13 +2405,19 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
     ? [...policy.knownTools]
     : resolved.permissions.tools;
 
+  // L25-16 — 控制面授予独立于数据面：可见性只看 `allow.ops`，不要求任何数据面能力。
+  const opsTools = resolved.permissions.opsTools ?? [];
+
   const capabilityTools = new Set(resolved.permissions.capabilities.map((capability) => capability.tool));
 
-  const listed = uniqueSorted(tools.filter((tool) => {
+  const listed = uniqueSorted([...tools, ...opsTools].filter((tool) => {
     if (absoluteDenyOrUnclassifiedReason(tool)) return false;
     if (!policy.knownTools.has(tool) || policy.denyTools.has(tool)) return false;
     // Spec 98 §8.5 — global degrade hides DataPlane / data Meta from listTools; Wiki may remain.
     if (runtime.degradedGlobal && isDegradedBlockedTool(tool)) return false;
+    // ⚠️ 控制面分支必须**先于** `lucy_` 前缀分支：控制面工具名以 `lucy_ops_` 开头，
+    //    若先落到前缀分支会被误要求数据面能力（Spec §3.1 规则 2 / G12）。
+    if (CONTROL_PLANE_TOOL_SET.has(tool)) return opsTools.includes(tool);
     const wildcardTables = resolved.permissions.tables.includes("*");
     // P-GATE-03: DataPlane visible iff ≥1 capability — except legacy tables:* (capability list empty by design).
     if (DATA_PLANE_TOOL_SET.has(tool)) return wildcardTables || capabilityTools.has(tool);
@@ -2310,6 +2728,46 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
     return getPolicyRuntimeStatus();
   }
 
+  // Lucy v0.25 (L25-14 §5.3) — an unresolved access-config recovery must fail closed
+  // even when the file parses: the on-disk state is not known to be the intended one,
+  // so the data plane must not serve rows under an unverified policy.
+  //
+  // Spec §14.3.1 — the MARKER state is checked here, not the full intent state:
+  // the affected data plane must not depend on the availability of the audit
+  // store. The unterminated intents are verified at process startup and before
+  // every access write, and both of them set the in-memory latch, which this
+  // path honours through `isAccessRecoveryRequired()`.
+  const recoveryState = await readAccessRecoveryMarkerState(await resolveProjectRoot());
+  if (recoveryState.required) {
+    const recoveryDegraded: EffectivePolicySnapshot = {
+      policyVersion: previous?.policyVersion ?? "",
+      accessConfigDigest: previous?.accessConfigDigest ?? "",
+      sourceMapVersion: previous?.sourceMapVersion ?? "",
+      toolClassificationVersion: TOOL_CLASSIFICATION_VERSION,
+      enabledTablesDigest: previous?.enabledTablesDigest ?? "",
+      degradedGlobal: true,
+      degradedAgents: new Set(),
+      config: previous?.config ?? { users: [] },
+      sourceMap: previous?.sourceMap ?? emptySourceMapState(Date.now()),
+      byUserId: previous?.byUserId ?? new Map(),
+      expandableScopeSourceKeys: previous?.expandableScopeSourceKeys ?? new Map()
+    };
+    effectivePolicyRef = recoveryDegraded;
+    console.error(
+      `[acl] policy_degraded_global: access config recovery required (${recoveryState.reason ?? "unknown"})`
+    );
+    if (!previous?.degradedGlobal) {
+      await recordPolicyDegradeEvent({
+        changeType: "policy_degraded_enter",
+        degradedGlobal: true,
+        degradedAgents: [],
+        policyVersion: recoveryDegraded.policyVersion,
+        errorReason: `access_recovery_required:${recoveryState.reason ?? "unknown"}`
+      });
+    }
+    return getPolicyRuntimeStatus();
+  }
+
   primeAccessConfigCache(config, configPath);
   const state = await loadSourceMap({ fresh: true });
   const policy = aclPolicy(config);
@@ -2573,6 +3031,12 @@ export async function authorizeAndRewrite(
   toolName: string,
   args: unknown
 ): Promise<AclDecision> {
+  // Spec §14.3.1 — the IN-MEMORY recovery latch is checked on the hot path.
+  // A recovery that just closed must deny immediately; waiting for the next
+  // policy recompile would keep serving rows under an unverified policy.
+  if (isAccessRecoveryRequired() && isDegradedBlockedTool(toolName)) {
+    return { allowed: false, reason: "policy_degraded_deny" };
+  }
   const runtime = await ensurePolicyRuntime();
   const config = runtime.config;
   const policy = aclPolicy(config);
@@ -2601,6 +3065,20 @@ export async function authorizeAndRewrite(
 
   const resolved = runtime.byUserId.get(identity.userId)
     ?? await resolveEffectivePermissions(identity, config, policy, { sourceMap: runtime.sourceMap });
+
+  // ─── L25-16 控制面门禁（Spec §6.1 步骤 5 / 7） ─────────────────────────
+  // 控制面工具**不进入**数据面的能力 / 表级判定：它们的授权维度是 `role.allow.ops`。
+  // 本分支只做「工具级」判定（是否被 allow.ops 授予）；**逐对象**判定由控制面工具
+  // 自身在解析出目标连接后完成（Spec §3.2.2 规则 4）。
+  if (CONTROL_PLANE_TOOL_SET.has(toolName)) {
+    if (!resolved.ok) return { allowed: false, reason: resolved.reason };
+    const opsTools = resolved.permissions.opsTools ?? [];
+    if (!opsTools.includes(toolName)) {
+      return { allowed: false, reason: `ops_not_granted:${toolName}` };
+    }
+    return { allowed: true };
+  }
+
   if (CONTEXT_TOOL_SET.has(toolName)) {
     // Spec §4.1/4.2: a degraded or unresolvable policy cannot prove an ACL → deny; legacy
     // direct-allow has no formal Role → `context_role_required`; otherwise the tool must be
@@ -2648,6 +3126,12 @@ export async function authorizeAndRewrite(
         return { allowed: false, reason: "unknown_or_forbidden_connection:<missing>" };
       }
       for (const connection of requestedConnections) {
+        // Spec 149 §8 `authorizeQuery` — 就绪判定先于可见性判定：
+        // 冲突 → OPS_EVIDENCE_CONNECTION_CONFLICT；未就绪 → OPS_EVIDENCE_RUNTIME_NOT_READY。
+        if (isOpsEvidenceConnection(connection)) {
+          const denial = await opsEvidenceReadinessDenial();
+          if (denial) return { allowed: false, reason: denial };
+        }
         if (!connections.includes(connection)) {
           return { allowed: false, reason: `unknown_or_forbidden_connection:${connection}` };
         }

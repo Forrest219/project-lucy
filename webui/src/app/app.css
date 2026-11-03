@@ -695,6 +695,11 @@
      instead of two unrelated components. */
   .pl-btn--xs { @apply h-8 min-w-[7.5rem] px-3 text-xs font-medium; }
   .pl-btn:disabled { @apply opacity-50 cursor-not-allowed; }
+  /* A button blocked by a precondition stays focusable (it must be able to
+     show the reason on hover and on focus), so it cannot use the native
+     `disabled`. `aria-disabled="true"` carries the same appearance as
+     `:disabled` — translucent, not-allowed cursor. */
+  .pl-btn[aria-disabled="true"] { @apply opacity-50 cursor-not-allowed; }
   .pl-row-action-link { @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm text-sm font-normal text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
   /* M39 polish: lightweight text-link CTA used by the snapshot / risk /
      action-required cards on the ops dashboard. Replaces the ad-hoc
@@ -895,10 +900,51 @@
   .pl-audit-id-copy {
     @apply inline max-w-[14rem] truncate rounded-sm px-0.5 text-left hover:bg-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
   }
+  /* Spec lucy-20261102-audit-turns-column-density: inquiry serial is short; drop UUID-era 14rem reserve. */
+  .pl-audit-turns-table {
+    table-layout: fixed;
+    min-width: 90rem;
+  }
+  .pl-audit-turns-col-index { width: 3rem; }
+  .pl-audit-turns-col-id { width: 7rem; }
+  .pl-audit-turns-col-time { width: 6rem; }
+  .pl-audit-turns-col-duration { width: 7.5rem; }
+  .pl-audit-turns-col-agent { width: 8rem; }
+  .pl-audit-turns-col-client { width: 8rem; }
+  .pl-audit-turns-col-session { width: 7rem; }
+  .pl-audit-turns-col-kind { width: 5.75rem; }
+  .pl-audit-turns-col-summary { width: 12rem; }
+  .pl-audit-turns-col-calls { width: 3.5rem; }
+  .pl-audit-turns-col-budget { width: 3.75rem; }
+  .pl-audit-turns-col-tables { width: 10rem; }
+  .pl-audit-turns-col-result { width: 9rem; }
+  .pl-audit-turns-col-source { width: 6.5rem; }
+  .pl-audit-turns-table th.pl-audit-turns-col-calls,
+  .pl-audit-turns-table th.pl-audit-turns-col-budget,
+  .pl-audit-turns-table th.pl-audit-turns-col-client,
+  .pl-audit-turns-table th.pl-audit-turns-col-session,
+  .pl-audit-turns-table th.pl-audit-turns-col-duration {
+    white-space: normal;
+    line-height: 1.25;
+    vertical-align: bottom;
+  }
+  .pl-audit-turns-table td.pl-audit-turns-col-session,
+  .pl-audit-turns-table td.pl-audit-turns-col-client {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+    line-height: 1.25;
+  }
+  .pl-audit-duration-stack {
+    @apply grid whitespace-nowrap tabular-nums leading-4;
+  }
+  .pl-audit-duration-stack [data-part="exec"] {
+    @apply text-fg-muted;
+  }
   .pl-audit-turn-id-cell {
-    width: 14rem;
-    min-width: 11rem;
-    max-width: 14rem;
+    width: 7rem;
+    min-width: 6rem;
+    max-width: 7rem;
   }
   .pl-audit-turn-id-cell .pl-audit-id-copy {
     @apply block max-w-none whitespace-normal break-all leading-4;
@@ -949,6 +995,11 @@
   .pl-usage-rank-empty { @apply m-0 py-4 text-center text-sm text-fg-muted; }
   .pl-catalog-table { min-width: 0; }
   .pl-catalog-table-name { @apply grid gap-0.5; }
+  /* Lucy v0.25 / L25-11 §3.1：多选列与批量动作条 */
+  .pl-catalog-table-select-col { @apply w-10 whitespace-nowrap text-left; }
+  .pl-catalog-table-select-col input[type="checkbox"] { @apply h-4 w-4 cursor-pointer; }
+  .pl-catalog-batch-bar { @apply flex flex-wrap items-center gap-2 border-t border-border-default px-3 py-2; }
+  .pl-catalog-batch-count { @apply text-xs text-fg-muted tabular-nums; }
   .pl-catalog-table-name-cell { @apply flex flex-wrap items-center gap-2; }
   .pl-catalog-table-name-link { @apply text-sm font-normal text-fg-default no-underline hover:underline; }
   .pl-catalog-table-structure { @apply whitespace-nowrap text-xs text-fg-muted; }
@@ -1050,6 +1101,8 @@
   .pl-connection-card-identity { @apply hidden; }
   .pl-connection-card-header-actions { @apply hidden; }
   .pl-connection-card-body { @apply grid gap-3 px-4 py-4; }
+  .pl-connection-schema-toolbar { @apply flex items-center justify-between gap-3; }
+  .pl-connection-schema-toolbar-title { @apply text-sm font-semibold text-fg-default; }
   /* M46: Host / Database use the same column rhythm as the Schema asset table:
      Host starts at Schema, Database starts at Manifest 状态. */
   .pl-connection-kv-grid {
@@ -1103,13 +1156,16 @@
   .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-1.5 align-middle text-xs font-medium leading-4 text-fg-default; }
   .pl-schema-asset-table code { @apply font-mono text-xs font-medium text-fg-default; }
   /* Spec 107: Schema | Manifest | 库内表数 | 已发现 | 已启用 | 操作
-     Count cols stay near header width; action gets residual so 5 row links fit one line at ~1440. */
-  .pl-schema-asset-col-schema { width: 14%; }
-  .pl-schema-asset-col-status { width: 14%; }
-  .pl-schema-asset-col-live-count { width: 10%; }
-  .pl-schema-asset-col-local-count { width: 10%; }
-  .pl-schema-asset-col-enabled-count { width: 10%; }
-  .pl-schema-asset-col-action { width: 42%; }
+     Count cols stay near header width; action gets residual so 5 row links fit one line at ~1440.
+     Spec 190 adds 库内表清单 and 持续感知; the four count facts stay in separate columns. */
+  .pl-schema-asset-col-schema { width: 11%; }
+  .pl-schema-asset-col-status { width: 11%; }
+  .pl-schema-asset-col-live-count { width: 8%; }
+  .pl-schema-asset-col-live-tables { width: 12%; }
+  .pl-schema-asset-col-local-count { width: 8%; }
+  .pl-schema-asset-col-enabled-count { width: 8%; }
+  .pl-schema-asset-col-discovery { width: 14%; }
+  .pl-schema-asset-col-action { width: 28%; }
   .pl-schema-asset-table th.pl-schema-asset-table-num-head { @apply text-left; }
   .pl-schema-asset-table-num { @apply text-left font-normal tabular-nums whitespace-nowrap text-fg-body; }
   .pl-schema-asset-table-action { @apply whitespace-normal text-left; }
@@ -1140,6 +1196,19 @@
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-schema-asset-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-schema-asset-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
+  /* Spec 190 §7.9 — 库内表清单 entry and the continuous discovery state cell. */
+  .pl-schema-live-table-list { @apply mt-1 max-h-48 overflow-y-auto rounded-md border border-border-default bg-bg-subtle p-2; }
+  .pl-schema-live-table-items { @apply grid gap-0.5 list-none p-0 m-0; }
+  .pl-schema-live-table-item { @apply flex items-center justify-between gap-2 text-xs text-fg-body; }
+  .pl-schema-live-table-columns { @apply tabular-nums text-fg-muted; }
+  .pl-schema-live-table-hint { @apply text-xs text-fg-muted; }
+  .pl-schema-discovery-state { @apply mr-1 font-semibold text-fg-muted; }
+  .pl-schema-discovery-state--success { @apply text-success-strong; }
+  .pl-schema-discovery-state--danger { @apply text-danger-strong; }
+  .pl-schema-discovery-meta { @apply block text-xs text-fg-muted; }
+  .pl-schema-discovery-reason { @apply block text-xs text-danger-strong; }
+  .pl-schema-discovery-diff { @apply block text-xs text-fg-body; }
+  .pl-connection-discovery-notice { @apply text-danger-strong; }
   /* UX-CONNECTIONS-005: when local Manifest read 0 but enabled_tables is
      non-empty, the row's local-count cell surfaces the dual-source origin
      via `data-state="drift"`. The drift state visually differentiates the
@@ -1495,6 +1564,16 @@
   .pl-policy-degrade-notice-actions { @apply ml-2 inline-flex flex-wrap gap-x-3; }
   .pl-policy-degrade-notice-actions a { @apply text-accent underline; }
   .pl-policy-degrade-notice-foot { @apply text-xs text-fg-muted; }
+  /* Agent 名册 Spec v1.4 — fourth KPI expand sits under the card, not a page-top banner. */
+  .pl-policy-degrade-metric { @apply grid content-start gap-2; }
+  .pl-policy-degrade-metric-expand { @apply grid gap-2; }
+  .pl-policy-degrade-metric-toggle {
+    @apply justify-self-start text-xs font-medium text-accent underline;
+  }
+  .pl-policy-degrade-metric-panel { @apply m-0; }
+  .pl-policy-degrade-metric-panel--danger {
+    @apply border-danger-strong/40 bg-danger-soft/70;
+  }
   .pl-error { @apply text-sm text-danger; }
 
   /* Spec 174 — static region placeholder / local error (DS 99 临时模式). No animation. */
@@ -1686,6 +1765,7 @@
   .pl-inspector-title-row { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-segmented-control { @apply grid grid-cols-3 gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
   .pl-segmented-control--cols-2 { @apply grid-cols-2; }
+  .pl-segmented-control--cols-3 { @apply grid-cols-3; }
   .pl-segmented-control--cols-4 { @apply grid-cols-4; }
   .pl-segmented-control--auto {
     @apply flex w-fit max-w-full flex-wrap;
@@ -1826,6 +1906,21 @@
   .pl-diff-stat { @apply text-xs font-mono font-medium px-1 py-0.5 rounded; }
   .pl-diff-stat--add { @apply text-success-strong bg-success-soft/60; }
   .pl-diff-stat--del { @apply text-danger-strong bg-danger-soft/60; }
+
+  /* 发布工作台三栏（Spec 20261030 §4 / §4.5.2）——
+     只作用于 /publish/workbench 本页：不修改共享的 .pl-review-layout 或
+     .pl-drawer-panel，其它页面不会跟随变化。确认侧栏的宽度由组件内联给出，
+     避免把「宽确认侧栏」变成全局抽屉规则。 */
+  .pl-publish-workbench-layout { @apply grid items-stretch gap-4; grid-template-columns: minmax(260px, 4fr) minmax(0, 5fr) minmax(240px, 3fr); }
+  .pl-publish-workbench-column { @apply min-w-0 rounded-md border border-border-default bg-bg-surface p-4; }
+  .pl-publish-workbench-column--pending { @apply flex flex-col gap-3; }
+  .pl-publish-workbench-pending-list { @apply grid gap-1.5 overflow-y-auto pr-1; max-height: 62vh; }
+  .pl-publish-workbench-group { @apply grid gap-1.5; }
+  .pl-publish-workbench-group-title { @apply text-xs text-fg-muted; }
+  .pl-publish-workbench-identity { @apply break-all text-sm; }
+  .pl-publish-workbench-reason { @apply text-sm text-fg-body; }
+  .pl-publish-workbench-recent-list { @apply grid gap-2; }
+  .pl-publish-workbench-recent-item { @apply grid gap-1 rounded-md border border-border-default/60 bg-bg-base/40 px-2.5 py-2 text-sm; }
 
   /* 流水线状态机 Stepper */
   .pl-pipeline-stepper { @apply grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 rounded-lg border border-border-default bg-bg-base/60 p-3 list-none m-0; }
@@ -2191,7 +2286,7 @@
   }
   .pl-wiki-library-document { @apply min-w-0; }
   .pl-wiki-library-document-button {
-    @apply grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border border-transparent bg-bg-surface px-2 py-1.5 text-left transition hover:border-border-default hover:bg-bg-muted;
+    @apply grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-transparent bg-bg-surface px-2 py-1.5 text-left transition hover:border-border-default hover:bg-bg-muted;
   }
   .pl-wiki-library-md-icon {
     @apply inline-flex h-5 items-center rounded-sm border border-border-default bg-bg-muted px-1.5 font-mono text-[10px] uppercase text-fg-muted;
@@ -2229,6 +2324,20 @@
      vertically spaced the title away from the body (UX-WIKI-036). */
   .pl-wiki-read-view { @apply grid content-start gap-3 rounded-md border border-border-default bg-bg-surface p-4; }
   .pl-wiki-read-header { @apply grid gap-2; }
+  .pl-wiki-agent-access { @apply grid gap-1 rounded-md border px-3 py-2 text-sm; }
+  .pl-wiki-agent-access--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-wiki-agent-access--ok { @apply border-border-default bg-bg-muted text-fg-body; }
+  .pl-wiki-agent-access--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-wiki-agent-access--compact {
+    @apply inline-flex max-w-[11rem] truncate px-1.5 py-0.5 text-[11px] leading-tight;
+  }
+  .pl-wiki-agent-access-label { @apply m-0 font-medium; }
+  .pl-wiki-agent-access-detail { @apply m-0 text-xs; }
+  .pl-wiki-agent-access-action { @apply mt-1 justify-self-start text-xs; }
+  .pl-wiki-edit-acl {
+    @apply grid gap-2 rounded-md border border-border-default bg-bg-subtle p-3;
+  }
+  .pl-wiki-edit-acl-kicker { @apply m-0 text-sm font-medium text-fg-default; }
   .pl-wiki-read-title { @apply text-2xl font-semibold leading-tight text-fg-default; }
   .pl-wiki-read-key { @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-muted; }
   .pl-wiki-read-summary { @apply text-sm text-fg-body; }
@@ -2609,9 +2718,89 @@
   .pl-wiki-meta-description { @apply text-xs text-fg-muted; }
   .pl-wiki-meta-close { @apply justify-self-end; }
   .pl-acl-field { @apply grid gap-2 border-0 p-0 m-0; }
+  .pl-acl-hint { @apply m-0 text-xs text-fg-muted; }
   .pl-acl-option, .pl-acl-role { @apply flex items-center gap-2 text-sm text-fg-default; }
+  .pl-acl-option-row { @apply flex flex-wrap items-center gap-x-2 gap-y-0.5; }
+  .pl-acl-option-note { @apply text-xs font-normal text-fg-muted; }
   .pl-acl-roles, .pl-acl-confirm { @apply grid gap-1 pl-6; }
   .pl-acl-role--unknown small { @apply text-xs text-fg-muted; }
+
+  /* Spec 193 — Business Wiki access management.
+     Scoped rules only: semantic colour / spacing / focus / button tokens,
+     no raw colours and no second global form system. */
+  .pl-wiki-access-editor { @apply grid gap-3; }
+  .pl-wiki-access-editor-head {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-access-source {
+    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted;
+  }
+  .pl-wiki-access-confirm {
+    @apply flex items-start gap-2 rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+  .pl-wiki-access-corrupt { @apply grid gap-2; }
+  .pl-wiki-access-effects { @apply grid gap-2; }
+  .pl-wiki-access-effects-summary {
+    @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted;
+  }
+  .pl-wiki-access-count {
+    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5;
+  }
+  .pl-wiki-access-effect-list { @apply grid gap-1 p-0 m-0 list-none; }
+  .pl-wiki-access-effect-row {
+    @apply flex flex-wrap items-center gap-2 text-xs text-fg-body;
+  }
+  .pl-wiki-access-role-id {
+    @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-[11px] text-fg-default;
+  }
+  .pl-wiki-access-effect-state { @apply text-fg-body; }
+  .pl-wiki-access-effect-agents { @apply text-fg-muted; }
+  .pl-wiki-access-effect-agent-ids { @apply inline-flex flex-wrap gap-1; }
+  .pl-wiki-access-effect-agent-ids code {
+    @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-[10px] text-fg-muted;
+  }
+  .pl-wiki-access-summary {
+    @apply flex flex-wrap items-center gap-1 text-xs text-fg-muted;
+  }
+  .pl-wiki-access-summary code {
+    @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-[11px] text-fg-default;
+  }
+  .pl-wiki-access-summary-warning { @apply text-warning-strong; }
+  .pl-wiki-access-status {
+    @apply inline-flex flex-wrap items-center gap-1 text-[11px] text-fg-muted;
+  }
+  .pl-wiki-access-status-primary {
+    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5;
+  }
+  .pl-wiki-access-status-secondary { @apply text-warning-strong; }
+  .pl-wiki-read-access {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-access-drawer-title { @apply text-base font-semibold text-fg-default; }
+  .pl-wiki-access-drawer-description { @apply text-xs text-fg-muted; }
+  .pl-wiki-access-drawer-section { @apply grid gap-2; }
+  .pl-wiki-library-toolbar {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-library-selection-count { @apply text-xs text-fg-muted; }
+  .pl-wiki-library-selection-reason { @apply text-xs text-fg-muted; }
+  .pl-wiki-library-selection-notice {
+    @apply w-full rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+  .pl-wiki-library-select { @apply shrink-0; }
+  .pl-wiki-library-document { @apply min-w-0 flex-wrap items-center gap-2; }
+  .pl-wiki-batch-modes { @apply grid gap-1; }
+  .pl-wiki-batch-result { @apply grid gap-3; }
+  .pl-wiki-batch-result-head { @apply grid gap-1; }
+  .pl-wiki-batch-result-total { @apply text-sm font-medium text-fg-default; }
+  .pl-wiki-batch-result-note { @apply block text-[11px] text-fg-muted; }
+  .pl-wiki-batch-result-title { @apply ml-2 text-xs text-fg-muted; }
+  .pl-wiki-batch-result-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-batch-result-table code {
+    @apply break-all font-mono text-[11px];
+  }
   .pl-wiki-upload-ref {
     @apply ml-1 inline-flex rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs;
   }

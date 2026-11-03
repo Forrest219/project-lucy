@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { registerSkillsRoutes } from "../admin/skills.js";
 import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -46,7 +46,7 @@ Body content
 
     invalidateSkillsCache();
     app = Fastify();
-    app.addHook("onRequest", async (request) => {
+    app.addHook("onRequest", async (request: FastifyRequest) => {
       // Stand-in for requireWebuiAuthHook: this harness runs in open mode.
       request.lucyAdmin = { session: null, admin: null, stateUnavailable: false, authMode: "open" };
     });

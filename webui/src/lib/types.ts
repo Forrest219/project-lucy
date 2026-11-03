@@ -149,6 +149,8 @@ export type ConnectionsResponse = {
 
 export type ConnectionTablesResponse = {
   tables: string[];
+  /** 逻辑名 → Manifest `table:` 物理名。保存启用表时以物理名为准。 */
+  physicalNames?: Record<string, string>;
 };
 
 export type IngestResult = {
@@ -299,6 +301,82 @@ export type LiveSchemasResponse = {
   wireProtocol?: "mysql" | "postgres" | "sqlserver" | "oracle" | "unknown";
 };
 
+/** Spec 190 §7.1 — one entry of the Schema-level live table list. */
+export type LiveTableEntry = {
+  table: string;
+  tableType: "BASE TABLE" | "VIEW";
+  columnCount: number;
+  tableComment?: string;
+};
+
+/** Spec 190 §7.1 — GET /api/connections/:connId/live-tables payload. */
+export type LiveTablesResponse = {
+  status: "ok" | "error";
+  connectionId: string;
+  schema: string;
+  tables: LiveTableEntry[];
+  fetchedAt: string;
+  cached: boolean;
+  latencyMs?: number;
+  reason?: string;
+  wireProtocol: "mysql" | "postgres" | "unknown";
+};
+
+/** Spec 190 §7.5 — GET /api/connections/:connId/discovery payload. */
+export type DiscoveryStatusResponse = {
+  connectionId: string;
+  enabled: boolean;
+  intervalMs: number;
+  generation: number;
+  status: "ok" | "partial" | "error" | "paused" | "never_run";
+  lastAttemptAt: string | null;
+  lastCompletedAt: string | null;
+  /** Reason of the connection-level aggregate (added for the paused notice). */
+  lastReason?: string | null;
+  schemas: Array<{
+    schema: string;
+    status: "ok" | "error" | "paused";
+    lastAttemptAt: string;
+    lastCompletedAt: string | null;
+    lastReason: string | null;
+    consecutiveFailures: number;
+    nextAttemptAt: string | null;
+  }>;
+  diffCount: { added: number; missing: number; columnCountChanged: number };
+};
+
+/** Spec 190 §7.3 — GET /api/connections/:connId/table-diff payload. */
+export type TableDiffResponse = {
+  connectionId: string;
+  generation: number;
+  computedAt: string;
+  schemas: Array<{
+    schema: string;
+    reconciliation: {
+      discoveredInLibrary: string[];
+      missingInManifest: string[];
+      missingInEnabled: string[];
+      notInLibrary: string[];
+    };
+    listDiff: {
+      added: string[];
+      missing: string[];
+      columnCountChanged: Array<{ table: string; before: number; after: number }>;
+    };
+    snapshotAt: string | null;
+  }>;
+  events?: Array<{
+    connectionId: string;
+    schema: string;
+    generation: number;
+    at: string;
+    kind: "added" | "missing" | "column_count_changed";
+    tables: string[];
+    provider: "ktx_sql" | "ktx_scan";
+  }>;
+  eventCount: number;
+};
+
 /** Spec 174 §3.3 — display snapshot metadata; counts are unknown unless state is ok. */
 export type SourcesDisplayMeta = {
   snapshotVersion: string;
@@ -398,6 +476,103 @@ export type ChangedFilesResponse = {
   /** Semantic YAML present only in the ktx mirror (Spec 180). Empty when there is no separate mirror. */
   mirrorOnlySemanticFiles?: string[];
   mirrorDriftTruncated?: boolean;
+  /**
+   * Spec `lucy-20261030-publish-workbench-three-column-spec.md` §6 — the
+   * version of the content snapshot this list was derived from. The list, the
+   * validation, the confirmation and the submission all reference it.
+   */
+  pendingDigest?: string;
+  /** Whether the proven-consumed baseline is usable, absent, or needs a check. */
+  baselineState?: PublishBaselineState;
+  /** The monotonic baseline generation this snapshot was taken against. */
+  baselineGeneration?: number;
+  /** The server-computed impact of this batch — never re-derived in the browser. */
+  impact?: PublishImpact;
+};
+
+/**
+ * Spec `lucy-20261030-publish-workbench-three-column-spec.md` §5.1.
+ *
+ * - `ready`: a proven baseline exists and the pending range is trustworthy.
+ * - `uninitialized`: there is no baseline yet. The current content is pending
+ *   as a FIRST VERIFICATION — never as "already published".
+ * - `needs_verification`: the baseline is damaged or bound to another content
+ *   root. The range cannot be submitted until it is resolved.
+ */
+export type PublishBaselineState = "ready" | "uninitialized" | "needs_verification";
+
+export type PublishImpactReasonKind =
+  | "overlay_change"
+  | "manifest_table_change"
+  | "first_verification";
+
+/** How the table entered this batch — not a business motive, not a modifier's intent. */
+export type PublishImpactSource = "staged_candidate" | "pending_disk_change";
+
+export type PublishImpactReason = {
+  kind: PublishImpactReasonKind;
+  /** Evidence-supported reason for including this table. */
+  summary: string;
+  source: PublishImpactSource;
+  /** The logical, content-root relative path the reason comes from. */
+  filePath: string;
+  /** A server-constrained reference into the SAME snapshot. */
+  evidenceRef: string;
+};
+
+export type PublishImpactTable = {
+  identity: SemanticTableIdentity;
+  reasons: PublishImpactReason[];
+};
+
+export type PublishImpactWikiChange = {
+  filePath: string;
+  title?: string;
+  changeType: string;
+};
+
+export type PublishImpactSchemaChange = {
+  connectionId: string;
+  schema: string;
+  evidenceRef: string;
+};
+
+export type PublishImpactRelatedScope = {
+  identity: SemanticTableIdentity;
+  relationKind: string;
+  evidenceRef: string;
+};
+
+export type PublishImpactOtherChange = {
+  filePath: string;
+  changeType: string;
+};
+
+export type PublishImpactUnresolved = {
+  filePath: string;
+  reason: string;
+  /** True when the missing evidence makes the synced range unknowable. */
+  blocking: boolean;
+};
+
+export type PublishImpact = {
+  pendingDigest: string;
+  planDigest?: string;
+  /** False when the synced range could not be fully resolved. */
+  complete: boolean;
+  counts: { files: number; tables: number; manifests: number; wikiPages: number };
+  tables: PublishImpactTable[];
+  wikiChanges: PublishImpactWikiChange[];
+  schemaChanges: PublishImpactSchemaChange[];
+  relatedScope: PublishImpactRelatedScope[];
+  otherChanges: PublishImpactOtherChange[];
+  unresolved: PublishImpactUnresolved[];
+};
+
+export type PublishEvidenceResponse = {
+  kind: "diff" | "snapshot" | "baseline";
+  logicalPath: string;
+  content: string;
 };
 
 export type ValidateChangedResponse = {
@@ -407,6 +582,9 @@ export type ValidateChangedResponse = {
     table: string;
     validation: ValidationResult;
   }>;
+  /** The content version this validation was derived from. */
+  pendingDigest?: string;
+  baselineState?: PublishBaselineState;
 };
 
 export type WikiFrontmatter = {
@@ -426,11 +604,236 @@ export type WikiAclState =
   | { state: "roles"; roles: string[] }
   | { state: "corrupt"; detail: string };
 
+/**
+ * Spec 193 §4.3 — the direction of an authorization change, computed on the
+ * normalized runtime set (not on YAML text or Role order).
+ */
+export type WikiAccessDirection = "narrow" | "widen" | "neutral";
+
+/**
+ * Spec 193 §4.2 — one declared Role's channel effect.
+ *
+ * `known=false` means the Role id does not exist any more: it matches no Agent
+ * and is never remapped to a newly created same-name Role.
+ */
+export type WikiAccessRoleEffect = {
+  role_id: string;
+  known: boolean;
+  /** The Role grants `wiki_search`. */
+  discover_enabled: boolean;
+  /** The Role grants `wiki_read`. */
+  read_enabled: boolean;
+  /** Enabled Agents that actually bind this formal Role. */
+  assigned_agent_count: number;
+  assigned_agent_ids: string[];
+};
+
+/** Spec 193 §6.2 — a pending / unresolved widening blocks every write on that key. */
+export type WikiAccessPendingChange = {
+  operation_id: string;
+  state: "pending" | "needs_review";
+};
+
+/**
+ * Spec 193 §10.1 — the per-document authorization summary.
+ *
+ * `declared_role_count` is `null` for `all` / `corrupt`, `0` for
+ * `missing` / `empty`, and the declared Role count for `roles`.
+ */
+export type WikiAccessSummary = {
+  key: string;
+  file_version: string;
+  acl: WikiAclState;
+  declared_role_count: number | null;
+  role_effects: WikiAccessRoleEffect[];
+  declared_without_discover: number;
+  declared_without_read: number;
+  role_channel_version: string;
+  pending_change?: WikiAccessPendingChange;
+};
+
+/**
+ * Spec 193 §6.1 — the aggregate list entry. The list never embeds the body,
+ * the full Agent id list or the per-Role effect detail.
+ */
+export type WikiAccessListEntry = {
+  file_version: string;
+  acl: WikiAclState;
+  declared_role_count: number | null;
+  declared_without_discover: number;
+  declared_without_read: number;
+  pending_change?: WikiAccessPendingChange;
+};
+
+/** Spec 193 §5.4 — the explicit upload authorization selection. */
+export type WikiUploadAccessSelection =
+  | { mode: "preserve_current" }
+  | { mode: "use_uploaded" }
+  | { mode: "set"; allowed_roles: string[] };
+
+/** Spec 193 §7.2 — the two supported bulk authorization actions. */
+export type WikiBatchAccessAction =
+  | { mode: "add"; role_ids: string[] }
+  | { mode: "replace"; allowed_roles: string[] };
+
+/** Spec 193 §7.3 — one item of a bulk authorization plan. */
+export type WikiBatchAccessPlanItem = {
+  key: string;
+  title?: string;
+  file_version: string;
+  current_acl: WikiAclState;
+  next_acl: WikiAclState;
+  direction: WikiAccessDirection;
+  noop: boolean;
+  issues: WikiAccessIssue[];
+};
+
+/** Spec 193 §7.3 — a per-document problem found while planning. */
+export type WikiAccessIssue = {
+  code: string;
+  message: string;
+  blocking: boolean;
+};
+
+/** Spec 193 §7.3 — the bulk plan summary. */
+export type WikiBatchAccessPlanSummary = {
+  total: number;
+  widening: number;
+  narrowing: number;
+  unchanged: number;
+  corrupt: number;
+  missing_channel: number;
+  affected_agent_count: number;
+  blocking: number;
+};
+
+/** Spec 193 §7.3 — the bulk authorization preview. */
+export type WikiBatchAccessPlan = {
+  operation_id: string;
+  plan_digest: string;
+  action: WikiBatchAccessAction;
+  role_channel_version: string;
+  items: WikiBatchAccessPlanItem[];
+  summary: WikiBatchAccessPlanSummary;
+  blocking: boolean;
+};
+
+/** Spec 193 §7.4 — the per-document result of a bulk authorization run. */
+export type WikiBatchItemStatus =
+  | "pending"
+  | "applied"
+  | "noop"
+  | "conflict"
+  | "failed"
+  | "not_run"
+  | "needs_review";
+
+/** Spec 193 §7.4 — one per-document result row. */
+export type WikiBatchAccessResultItem = {
+  key: string;
+  title?: string;
+  status: WikiBatchItemStatus;
+  file_version?: string;
+  current_acl?: WikiAclState;
+  next_acl?: WikiAclState;
+  direction?: WikiAccessDirection;
+  error_code?: string;
+  error_message?: string;
+};
+
+/** Spec 193 §7.4 — the durable bulk authorization result. */
+export type WikiBatchAccessResult = {
+  operation_id: string;
+  plan_digest: string;
+  action: WikiBatchAccessAction;
+  role_channel_version: string;
+  status: "pending" | "completed" | "failed";
+  items: WikiBatchAccessResultItem[];
+  summary: WikiBatchAccessPlanSummary;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Spec 193 §6.2 — the request body of the single-document access preview. */
+export type WikiAccessPreviewRequest = {
+  allowed_roles: string[];
+  expected_version: string;
+};
+
+/** Spec 193 §6.2 — the request body of the single-document access save. */
+export type WikiAccessSaveRequest = {
+  allowed_roles: string[];
+  expected_version: string;
+  preview_digest: string;
+};
+
+/** Spec 193 §6.2 — the single-document access preview response. */
+export type WikiAccessPreview = {
+  key: string;
+  file_version: string;
+  current_acl: WikiAclState;
+  next_acl: WikiAclState;
+  direction: WikiAccessDirection;
+  noop: boolean;
+  role_effects: WikiAccessRoleEffect[];
+  declared_role_count: number | null;
+  declared_without_discover: number;
+  declared_without_read: number;
+  role_channel_version: string;
+  preview_digest: string;
+};
+
+/** Spec 193 §6.2 — the single-document access save response. */
+export type WikiAccessSaveResult = {
+  status: "applied" | "noop";
+  key: string;
+  file_version: string;
+  acl: WikiAclState;
+  direction: WikiAccessDirection;
+  role_effects: WikiAccessRoleEffect[];
+  role_channel_version: string;
+};
+
+/** Spec 193 §5.4 — the upload commit request body. */
+export type WikiUploadCommitRequest = {
+  key: string;
+  /** The ORIGINAL selected file text. The preflight's proposed markdown is never the source. */
+  markdown: string;
+  mode: WikiUploadMode;
+  sourceFileName?: string;
+  access: WikiUploadAccessSelection;
+  confirmed_empty?: boolean;
+  confirmed_all?: boolean;
+  expected_version?: string;
+  preview_digest: string;
+};
+
+/** Spec 193 §7.3 — the bulk preview request body. */
+export type WikiBatchAccessPreviewRequest = {
+  items: Array<{ key: string; expected_version: string }>;
+  action: WikiBatchAccessAction;
+};
+
+/** Spec 193 §7.4 — the bulk commit request body. */
+export type WikiBatchAccessCommitRequest = {
+  operation_id: string;
+  plan_digest: string;
+  idempotency_key: string;
+  items: Array<{ key: string; expected_version: string }>;
+  action: WikiBatchAccessAction;
+  confirmed_empty?: boolean;
+  confirmed_all?: boolean;
+};
+
 export type WikiSummary = {
   key: string;
   summary?: string;
   tags: string[];
   slRefs: string[];
+  /** Spec 193 §6.1 — authorization status for this row, from one aggregate response. */
+  access: WikiAccessListEntry;
+  /** Present for Agent visibility notice helpers that read the ACL state directly. */
+  acl?: WikiAclState;
 };
 
 export type WikiDirectorySummary = {
@@ -500,6 +903,8 @@ export type WikiMoveInput = {
 export type WikiListResponse = {
   pages: WikiSummary[];
   directories?: WikiDirectorySummary[];
+  /** Spec 193 §6.1 — the global Role / channel / Agent binding version behind the list. */
+  role_channel_version?: string;
 };
 
 export type WikiPage = {
@@ -523,6 +928,31 @@ export type WikiPreview = {
 
 export type WikiUploadMode = "create" | "replace";
 
+/**
+ * Spec 193 §5.4 — the authorization facts the upload preflight reports.
+ *
+ * `current_acl` is `null` when the target does not exist yet; `uploaded_acl`
+ * is the declaration inside the uploaded file.
+ */
+export type WikiUploadAccessPreview = {
+  current_acl: WikiAclState | null;
+  uploaded_acl: WikiAclState;
+  /** The authorization that will be written when the current selection commits. */
+  final_acl: WikiAclState;
+  /** The selection the server suggests for the current target state. */
+  suggested_selection: WikiUploadAccessSelection;
+  direction: WikiAccessDirection;
+  role_effects: WikiAccessRoleEffect[];
+  declared_role_count: number | null;
+  declared_without_discover: number;
+  declared_without_read: number;
+  role_channel_version: string;
+  /** Binding digest of target key + mode + content hash + version + selection + role version. */
+  preview_digest: string;
+  /** Blocking problems — a commit is refused while any of them is present. */
+  issues: WikiAccessIssue[];
+};
+
 export type WikiUploadPreview = WikiPreview & {
   exists: boolean;
   mode: WikiUploadMode;
@@ -538,6 +968,8 @@ export type WikiUploadPreview = WikiPreview & {
   title: string;
   slRefs: string[];
   warnings: string[];
+  /** Spec 193 §5.1 — the authorization section, rendered before the diff. */
+  access: WikiUploadAccessPreview;
 };
 
 export type WikiMovePreview = WikiPreview & {
@@ -568,7 +1000,9 @@ export type WikiVersionOperation =
   | "restore"
   | "move"
   | "rename"
-  | "delete";
+  | "delete"
+  /** Spec 193 §6.2 — an authorization-only change written by the access drawer. */
+  | "access_update";
 
 export type WikiVersionSummary = {
   versionId: string;
@@ -848,9 +1282,43 @@ export type AccessWriteAck = {
   policyVersion?: string;
   policyRuntimeAck?: boolean;
   runtimeAck?: boolean;
+  /**
+   * Spec §14.3.2 — the terminal state of an access-configuration write.
+   *
+   * Only `committed` is a success: a `rolled_back` write reverted the change and
+   * a `recovery_required` write left the affected reads and the subsequent
+   * writes blocked. The UI must not derive success from the HTTP status alone.
+   */
+  status?: "committed" | "rolled_back" | "recovery_required";
+  /** The recovery gate is closed: the affected reads and the writes are blocked. */
+  recoveryRequired?: boolean;
+  /** The durable audit record id — the intent id of this write. */
+  auditId?: number;
 };
 
 export type ExecutionRuntimeStatus = "unknown" | "ok" | "stale" | "unavailable" | "error";
+
+/**
+ * Spec 191 §5 — three orthogonal facts about the execution layer.
+ * `activation` is the configuration state, `reload` is the last operation and
+ * `verification` is the evidence state. They must never be merged.
+ */
+export type ExecutionRuntimeActivation = "current" | "reload_required" | "unknown";
+export type ExecutionRuntimeReloadState = "idle" | "running" | "succeeded" | "failed";
+export type ExecutionRuntimeVerificationState = "unverified" | "verifying" | "verified" | "failed";
+
+export type McpRuntimeReloadResult = {
+  requestId: string;
+  reloadStatus: "succeeded" | "failed" | "already_running" | "unsupported";
+  configVerification: "verified" | "failed" | "unverified";
+  mcpReachable?: "reachable" | "unavailable" | "error";
+  requestedDigest: string;
+  actualDigest?: string;
+  startedAt: string;
+  finishedAt?: string;
+  durationMs?: number;
+  detail?: string;
+};
 
 export type RuntimeAcks = Omit<AccessWriteAck, "policyRuntimeAck"> & {
   policyRuntimeAck: boolean;
@@ -891,6 +1359,24 @@ export type McpRuntimeStatus = {
     missingConnections?: string[];
     unknownConnections?: string[];
     lastError?: string;
+    /** Spec 191 — the configuration activation state. */
+    activation?: ExecutionRuntimeActivation;
+    /** Spec 191 — the state of the last reload operation. */
+    reload?: {
+      state: ExecutionRuntimeReloadState;
+      requestId?: string;
+      digest?: string;
+      startedAt?: string;
+      finishedAt?: string;
+      detail?: string;
+    };
+    /** Spec 191 — the connection level evidence state. */
+    verification?: {
+      state: ExecutionRuntimeVerificationState;
+      digest?: string;
+      checkedAt?: string;
+      detail?: string;
+    };
   };
 };
 
@@ -937,6 +1423,17 @@ export type AgentStats = {
   businessCallsLast7d?: number | null;
   /** Windowed MCP handshake/discovery requests. */
   protocolCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — windowed Default Usage Calls (business calls minus the
+   * default-view-excluded eval probes). This is the metric business activity
+   * and business call volume must read.
+   */
+  usageCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — windowed eval probes excluded from the default usage
+   * view. Reconciliation aid: `businessCallsLast7d = usageCallsLast7d + evalProbeCallsLast7d`.
+   */
+  evalProbeCallsLast7d?: number | null;
   /** Spec 128 HR-1: null when metricsState=unavailable */
   deniedLast7d: number | null;
   lastSeen?: string;
@@ -987,12 +1484,29 @@ export type AgentsResponseSummary = {
   callsLast7d: number | null;
   businessCallsLast7d?: number | null;
   protocolCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — windowed Default Usage Calls across the current
+   * configured Agents. Authoritative server-side value.
+   */
+  usageCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — windowed eval probes excluded from the default usage view.
+   */
+  evalProbeCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — current configured Agents with at least one default usage
+   * business call. The frontend `summarizeAgents` is only a compatibility
+   * path for legacy responses that carry no summary.
+   */
+  usageActiveAgentCountLast7d?: number | null;
   /** Spec 128 HR-1: null when metricsState=unavailable */
   deniedLast7d: number | null;
   /** Spec 128 §3.1: ok or unavailable */
   metricsState?: "ok" | "unavailable";
   windowStart?: string;
   windowEnd?: string;
+  /** Selected stats window; `callsLast7d` etc. are counts inside this window. */
+  range?: "7d" | "14d" | "30d";
   auditCompleteness?: {
     state: "ok" | "partial" | "unavailable";
     scope: "current_process";
@@ -1038,6 +1552,8 @@ export type CreateTokenResponse = {
 
 export type TokenInventoryItem = {
   hashPrefix: string;
+  /** Spec lucy-20261102-token-display-hint — human核对片段；缺失为 null。 */
+  tokenHint: string | null;
   label: string;
   created: string;
   expires_at: string | null;
@@ -1048,7 +1564,13 @@ export type TokenInventoryItem = {
     enabled: boolean;
     roles: string[];
   };
+  /** 最近 MCP 访问 — any access_log row for this token. */
   last_used?: string;
+  /**
+   * Spec 189 §6 — 最近业务使用: the latest Default Usage Call of this token.
+   * Protocol traffic and default-view-excluded eval probes do not update it.
+   */
+  last_business_use?: string;
   last_tool?: string;
   last_outcome?: string;
   last_ip?: string | null;
@@ -1073,6 +1595,51 @@ export type TokensResponse = {
   stats: TokenInventoryStats;
 };
 
+/**
+ * B27 八桶汇总主状态（`primary_status`）。历史行 NULL → `unknown`。
+ * 与后端 `webui/server/proxy/audit-derivation.ts` 的 `PRIMARY_STATUSES` 同值域。
+ */
+export type AuditPrimaryStatus =
+  | "succeeded"
+  | "failed"
+  | "denied"
+  | "budget_stopped"
+  | "cancelled"
+  | "timeout"
+  | "indeterminate"
+  | "unknown";
+
+/** 执行轴（五值）。 */
+export type AuditExecutionStatus =
+  | "succeeded"
+  | "failed"
+  | "not_executed"
+  | "interrupted"
+  | "unknown";
+
+/** 授权轴（四值）。 */
+export type AuditAuthorizationStatus = "allowed" | "denied" | "not_evaluated" | "unknown";
+
+/** 关联轴（五态）。 */
+export type AuditAssociationStatus =
+  | "confirmed"
+  | "candidate"
+  | "unassigned"
+  | "conflict"
+  | "legacy_unverified";
+
+/** 送达状态（本期写入值域）。 */
+export type AuditDeliveryStatus = "prepared" | "sent" | "acknowledged" | "unknown";
+
+/** 六值空值原因（U2 冻结枚举）。历史空白 → `unknown`，**不得**推定为 `not_collected`。 */
+export type AuditNullReason =
+  | "not_applicable"
+  | "not_collected"
+  | "redacted"
+  | "parse_failed"
+  | "unknown"
+  | "not_supported";
+
 export type AuditLogEntry = {
   id: number;
   ts: string;
@@ -1083,6 +1650,10 @@ export type AuditLogEntry = {
   lucyTurnId?: string;
   /** Present when lucyTurnId is empty and an inferred turn currently links this call. */
   inferredTurnId?: string;
+  /** Instance inquiry serial. Empty when the call is not linked to an inquiry. */
+  inquiryNo?: number;
+  /** Exclusive access grade from accessGrade(tool). */
+  accessGrade?: "connect" | "browse" | "prepare" | "ask" | "query" | "control" | "unclassified";
   turnAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
   turnAttributionConfidence?: "high" | "low" | "none";
   turnAttributionReason?: "turn_attribution_rejected";
@@ -1124,6 +1695,29 @@ export type AuditLogEntry = {
   matchedRoleId?: string;
   /** Spec 162 SC-20b. Stored `is_slow_call` on the calls list, not the P95 `isSlowCall`. */
   usageSlowCall?: boolean;
+  /**
+   * B27 八桶汇总主状态（历史行 NULL → `unknown`，不重解释历史数据）。
+   * 旧 `outcome` 只是 legacy 直方图，**不是**执行状态。
+   */
+  primaryStatus?: AuditPrimaryStatus;
+  /**
+   * 三条**独立**判断轴（20261019 §5）。各读各的列，互不推导：
+   * 执行成功不自动使关联或证据覆盖显示为绿色已完成。
+   */
+  executionStatus?: AuditExecutionStatus;
+  authorizationStatus?: AuditAuthorizationStatus;
+  associationStatus?: AuditAssociationStatus;
+  deliveryStatus?: AuditDeliveryStatus;
+  /** 六值空值原因（U2 冻结枚举）；历史空白 → `unknown`。 */
+  nullReason?: AuditNullReason;
+  /** 结果可用性（usable / empty / partial / metadata_missing / not_applicable / unknown）。 */
+  usabilityStatus?: string;
+  /** 受控客户端 observation 事件 ID；有值才可显示「客户端已采集」。 */
+  clientEventId?: string;
+  /** 已提交 received 事件的入口事件 ID。 */
+  ingressEventId?: string;
+  /** 凭证主体 ID（与「Agent」产品含义并列展示，不替代它）。 */
+  credentialPrincipalId?: string;
 };
 
 export type AuditQuery = {
@@ -1162,7 +1756,7 @@ export type ConfigAuditEntry = {
   newSummary?: unknown;
   diff?: string;
   requestId?: string;
-  writeStatus: "pending" | "committed" | "failed";
+  writeStatus: "pending" | "committed" | "failed" | "rolled_back";
 };
 
 export type ConfigAuditResponse = {
@@ -1179,14 +1773,35 @@ export type AuditSourcesResponse = {
   deniedTables: Array<{ table: string; calls: number; denied: number }>;
 };
 
+/**
+ * 审计投影状态（`runProjection` 的结果）。
+ * `delayMs` = 最老未投影事件的滞留时长 = 顶部元条的「审计同步延迟」。
+ */
+export type AuditProjectionStatus = {
+  complete: boolean;
+  cursor: number;
+  latestSeq: number;
+  lag: number;
+  delayMs: number;
+  reason?: string;
+};
+
 export type AuditResponse = {
   total: number;
   entries: AuditLogEntry[];
+  /** 审计投影状态（同步延迟 / 是否追平账本上界）。 */
+  projection?: AuditProjectionStatus;
   summary?: {
     protocolCalls: number;
     businessCalls: number;
     deniedCalls: number;
     dataBearingCalls: number;
+    /** B27：八桶主状态汇总（与列表 / CSV / v2 导出同源同函数）。 */
+    primaryStatus?: Record<AuditPrimaryStatus, number>;
+    /** 闭合断言：八桶之和 == 集合总数。 */
+    primaryStatusClosed?: boolean;
+    /** 旧 outcome 直方图，单列，不作为新执行状态。 */
+    legacyOutcome?: Record<string, number>;
   };
 };
 
@@ -1194,11 +1809,17 @@ export type AuditTurnOutcomeSummary = {
   ok: number;
   denied: number;
   error: number;
+  budgetStop?: number;
 };
+
+export type AuditInquiryKind = "real" | "unreported_query" | "session_visit";
 
 export type AuditTurnEntry = {
   id: string;
   source: "inferred" | "reported";
+  inquiryNo?: number;
+  correlationKey?: string;
+  inquiryKind?: AuditInquiryKind;
   userId: string;
   client?: string;
   sessionId?: string;
@@ -1217,6 +1838,11 @@ export type AuditTurnEntry = {
   maxCallDurationMs?: number;
   slowCallCount?: number;
   outcomeSummary?: AuditTurnOutcomeSummary;
+  /**
+   * B27 八桶主状态汇总（该问询下所有关联调用）。
+   * 与列表 / CSV / v2 导出**同源同函数**（`countPrimaryStatuses`）。
+   */
+  primaryStatusSummary?: Record<AuditPrimaryStatus, number>;
 };
 
 export type AuditTurnReferenceLatency = {
@@ -1230,10 +1856,17 @@ export type AuditTurnsResponse = {
   total: number;
   entries: AuditTurnEntry[];
   referenceLatency: AuditTurnReferenceLatency;
+  /** 审计投影状态（同步延迟 / 是否追平账本上界）。 */
+  projection?: AuditProjectionStatus;
   summary: {
     reportedCount: number;
     inferredCount: number;
     reportedShare: number;
+  };
+  kindCounts?: {
+    real: number;
+    unreportedQuery: number;
+    sessionVisit: number;
   };
 };
 
@@ -1253,6 +1886,9 @@ export type AuditTurnCallLog = {
 export type AuditTurnDetailResponse = {
   id: string;
   source: "inferred" | "reported";
+  inquiryNo?: number;
+  correlationKey?: string;
+  inquiryKind?: AuditInquiryKind;
   userId: string;
   client?: string;
   sessionId?: string;
@@ -1871,6 +2507,7 @@ export type SemanticAssetValidateResponse = {
 
 export type SemanticAssetReleaseStatus =
   | "blocked"
+  | "promoting"
   | "promote_failed"
   | "reindexing"
   | "published"
@@ -1900,7 +2537,7 @@ export type SemanticAssetReindexRecord = {
   stderr?: string;
 };
 
-export type SemanticAssetReleaseTrigger = "webui_publish" | "webui_manual_reindex";
+export type SemanticAssetReleaseTrigger = "webui_publish" | "webui_manual_reindex" | "webui_restore";
 
 export type SemanticAssetReleaseRecord = {
   id: string;
@@ -1925,6 +2562,44 @@ export type SemanticAssetReleaseRecord = {
       message: string;
     }>;
   };
+  /** Lucy v0.25 L25-11 §7.1 — a recovery obligation is open for this release. */
+  recoveryRequired?: boolean;
+  /**
+   * Lucy v0.25 L25-11 §7.1 — whether the activation is CONFIRMED.
+   * A legacy `published` record is never upgraded to `confirmed`.
+   */
+  activationStatus?: "unconfirmed" | "confirmed" | "unknown";
+  /** The index attempt that produced the current status. */
+  attemptId?: string;
+  /** The plan digest the confirmation was bound to. */
+  planDigest?: string;
+  /** The batch this release came from. */
+  batchId?: string;
+  /** The scope snapshot this release came from. */
+  scopeId?: string;
+  /** L25-15 — this batch's pre-write snapshot. Missing means unknown. */
+  snapshotId?: string;
+  restoreOfReleaseId?: string;
+  restoreSourceSnapshotId?: string;
+  restorePlanDigest?: string;
+  /** When true, public copy must say 生效待确认. */
+  terminalAuditPending?: boolean;
+  /** L25-15 — force rebuild when the batch's semantic deletion set is not empty. */
+  reindexMode?: "incremental" | "force";
+  recoveryJournalId?: string;
+  /** L25-15 — the index range confirmation object of a restore batch. */
+  restoreIndexScope?: {
+    scope: string[];
+    /** The restore write set — excluded from the drift list, like the preview. */
+    restoreWriteSet: string[];
+    mirrorSyncWriteSet: Array<{
+      contentRelPath: string;
+      contentDigest: string | null;
+      siblingDigest: string | null;
+    }>;
+    reindexMode: "incremental" | "force";
+    scopeDigest: string;
+  };
 };
 
 export type SemanticAssetReleasesResponse = {
@@ -1939,12 +2614,177 @@ export type SemanticAssetReleaseStatusResponse = {
 
 export type SemanticAssetPublishRequest = {
   validationId: string;
+  /** @deprecated L25-11 §7.2 — the plan digest replaces the global boolean. */
   confirmOverwrite?: boolean;
+  /** The digest of the complete plan the operator confirmed. */
+  planDigest?: string;
+  /** The exact overwrite set the confirmation covers. */
+  overwriteTargets?: string[];
+  /** The client idempotency key. */
+  idempotencyKey?: string;
 };
 
 export type SemanticAssetPublishResponse = {
   accepted: boolean;
   release: SemanticAssetReleaseRecord;
+};
+
+// ─── Lucy v0.25 / L25-11: the semantic batch loop ───────────────────────────
+
+/** The full table identity — never a bare table name (L25-11 §4.1). */
+export type SemanticTableIdentity = {
+  connectionId: string;
+  schema: string;
+  table: string;
+};
+
+export type SemanticScopeResponse = {
+  scopeId: string;
+  createdAt: string;
+  expiresAt: string;
+  baselineDigest: string;
+  refs: string[];
+  dependencies: string[];
+  targets: Array<{ path: string; digest: string | null; identity: SemanticTableIdentity | null }>;
+  dependencyTargets: Array<{ path: string; digest: string | null; identity: SemanticTableIdentity | null }>;
+};
+
+export type SemanticMaintenanceExportResponse = {
+  packageKind: "semantic-maintenance-package/v1";
+  exportId: string;
+  filename: string;
+  sizeBytes: number;
+  sha256: string;
+  downloadUrl: string;
+  scopeId: string;
+  baselineDigest: string;
+  expiresAt: string;
+  selected: SemanticTableIdentity[];
+  dependencies: SemanticTableIdentity[];
+  includedFiles: string[];
+  entryCount: number;
+};
+
+export type SemanticBatchCheckRequest = {
+  scopeId: string;
+};
+
+export type SemanticBatchCheckAccepted = {
+  operationId: string;
+  taskId: string;
+  scopeId: string;
+  status: string;
+  selectedCount: number;
+  dependencyCount: number;
+};
+
+export type SemanticVerdict = "passed" | "failed" | "not_run" | "stale";
+
+export type SemanticExecutionEvidence =
+  | "not_applicable"
+  | "evidence_available"
+  | "blocked_evidence"
+  | "unknown";
+
+export type SemanticTableCheckResult = {
+  identity: SemanticTableIdentity;
+  verdict: SemanticVerdict;
+  severity: "blocking" | "warning" | "info";
+  reasons: Array<{ code: string; message: string; severity: "blocking" | "warning" | "info" }>;
+  layers: {
+    scopeInput: { verdict: SemanticVerdict; reasons: unknown[] };
+    semantics: { verdict: SemanticVerdict; reasons: unknown[] };
+    completeness: {
+      hasDescription: boolean;
+      hasGrain: boolean;
+      columnCount: number;
+      describedColumnCount: number;
+      measureCount: number;
+      segmentCount: number;
+    };
+    executionEvidence: { status: SemanticExecutionEvidence; note: string };
+  };
+  durationMs: number;
+};
+
+export type SemanticBatchSummary = {
+  selected: number;
+  passed: number;
+  failed: number;
+  notRun: number;
+  stale: number;
+  dependencies: number;
+};
+
+export type SemanticBatchOperation = {
+  operationId: string;
+  taskId: string;
+  scopeId: string;
+  status: "queued" | "running" | "completed" | "cancelled" | "failed";
+  cancelled: boolean;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  baselineDigest: string;
+  summary: SemanticBatchSummary;
+  results: SemanticTableCheckResult[];
+  reportJsonUrl?: string;
+  reportCsvUrl?: string;
+  cancelRequested?: boolean;
+  alreadyTerminal?: boolean;
+};
+
+/**
+ * The COMPLETE publish plan of a staged batch (L25-11 §3.2 / §7.2).
+ *
+ * It covers this batch's candidates AND the pending disk changes that would be
+ * indexed together with them — the index is batch-wide, so a partial view
+ * would misrepresent the effect.
+ */
+export type SemanticBatchPlanResponse = {
+  validationId: string;
+  batchId: string;
+  scopeId: string;
+  planDigest: string;
+  candidateDigest: string;
+  candidates: Array<{
+    targetPath: string;
+    identity: SemanticTableIdentity | null;
+    expectedDigest: string | null;
+    overwrite: boolean;
+  }>;
+  unrelatedDiskChanges: Array<{ targetPath: string; expectedDigest: string | null }>;
+  overwriteSet: string[];
+  effectiveTargets: string[];
+  dependencies: SemanticTableIdentity[];
+  readonlyDependencies: SemanticTableIdentity[];
+  /**
+   * Spec `lucy-20261030-publish-workbench-three-column-spec.md` §6 — the
+   * staged batch carries the SAME impact model the regular sync uses, so the
+   * confirm side panel explains both with one set of rules.
+   */
+  impact?: PublishImpact;
+};
+
+/** The staged state of an imported maintenance package (L25-11 §5 / §7.2). */
+export type SemanticBatchStaging = {  valid: boolean;
+  validationId: string;
+  batchId: string;
+  status: "staged" | "no_change";
+  noChange: boolean;
+  scopeId: string;
+  exportId: string;
+  candidateDigest: string;
+  planDigest: string;
+  targetDigests: Array<{ path: string; digest: string | null }>;
+  overwriteSet: string[];
+  dependencies: SemanticTableIdentity[];
+  readonlyEntries: Array<{ packagePath: string; identity: SemanticTableIdentity }>;
+  files: SemanticAssetFilePreview[];
+  changedSources: SemanticAssetChangedSource[];
+  diff: string;
+  warnings: SemanticAssetWarning[];
+  errors: SemanticAssetError[];
 };
 
 export type SemanticAssetManualReindexResponse = {
@@ -1953,6 +2793,10 @@ export type SemanticAssetManualReindexResponse = {
   startedAt: string;
   finishedAt: string;
   reindex: SemanticAssetReindexRecord;
+  /** The content version after the sync — the workbench refreshes from it. */
+  pendingDigest?: string;
+  baselineState?: PublishBaselineState;
+  baselineGeneration?: number;
 };
 
 export type SemanticAssetExportRequest = {

@@ -1,9 +1,10 @@
 import { constants as fsConstants } from "node:fs";
-import { lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { mirrorContentFileToProjectRoot } from "./content-mirror";
 import type { ContentPaths } from "./paths";
-import { scopesForPath, withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
+import { registerDisplayTouchedPath, scopesForPath, withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
 
 /** Spec 174 §3.2 — display scopes touched by writing these absolute targets. */
 function displayScopesFor(contentPaths: ContentPaths, projectRoot: string, targets: string[]): DisplayScope[] {
@@ -242,7 +243,43 @@ export async function safeWrite(
   const normalized = normalizeRelative(relPath);
   const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => writeFile(target, content, "utf8"));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(target, scopes);
+    await writeFile(target, content, "utf8");
+  });
+  await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
+}
+
+/**
+ * Atomic write under the same allow-list as {@link safeWrite}.
+ *
+ * The content is written to a temporary file in the SAME directory and then renamed over
+ * the target. A reader therefore never observes a partially written file, and a crash
+ * mid-write leaves the previous content intact. This is the write shape required for
+ * configuration and semantic-asset replacement (v0.25 P0-3 §7.2).
+ */
+export async function safeWriteAtomic(
+  contentPaths: ContentPaths,
+  projectRoot: string,
+  relPath: string,
+  content: string
+): Promise<void> {
+  const normalized = normalizeRelative(relPath);
+  const target = await resolveWritable(contentPaths, projectRoot, normalized);
+  await mkdir(path.dirname(target), { recursive: true });
+  const tmp = path.join(path.dirname(target), `.${path.basename(target)}.tmp-${randomUUID()}`);
+  try {
+    const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+    await withDisplayWriteBarrier(scopes, async () => {
+      registerDisplayTouchedPath(target, scopes);
+      await writeFile(tmp, content, "utf8");
+      await rename(tmp, target);
+    });
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => undefined);
+    throw err;
+  }
   await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
@@ -256,7 +293,11 @@ export async function safeWriteBinary(
   const normalized = normalizeRelative(relPath);
   const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => writeFile(target, content));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(target, scopes);
+    await writeFile(target, content);
+  });
   await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
@@ -290,7 +331,11 @@ export async function safeRemove(
     }
     throw error;
   }
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => rm(target, { force: true }));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(target, scopes);
+    await rm(target, { force: true });
+  });
 }
 
 /**
@@ -347,7 +392,11 @@ export async function safeRemoveDirectory(
   // `rm` on macOS refuses to remove a directory without `recursive`,
   // and `rmdir` already enforces the "empty" invariant we just
   // verified, so it is the safe primitive here.
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => rmdir(target));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(target, scopes);
+    await rmdir(target);
+  });
 }
 
 /**
@@ -393,7 +442,12 @@ export async function safeRenameDirectory(
   }
 
   await mkdir(path.dirname(target), { recursive: true });
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [source, target]), () => rename(source, target));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [source, target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(source, scopes);
+    registerDisplayTouchedPath(target, scopes);
+    await rename(source, target);
+  });
 }
 
 /**
@@ -537,6 +591,76 @@ export async function safeWriteNewSecretPassword(
   }
 
   await withDisplayWriteBarrier(["C", "L"], () => writeFile(target, passwordPlaintext, { encoding: "utf8", mode: 0o600 }));
+  return { relPath: normalized };
+}
+
+/**
+ * Spec lucy-20261101-connection-endpoint-edit — read canonical secret bytes for
+ * rollback backup. Never follows symlinks. Returns null on ENOENT.
+ */
+export async function safeReadSecretPasswordBytesIfExists(
+  projectRoot: string,
+  relPath: string
+): Promise<Buffer | null> {
+  const { target, normalized } = await resolveNewSecretPasswordTarget(projectRoot, relPath);
+  try {
+    const existing = await lstat(target);
+    if (existing.isSymbolicLink()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a symlink`);
+    }
+    if (existing.isDirectory()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a directory`);
+    }
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  return readFile(target);
+}
+
+/**
+ * Spec lucy-20261101-connection-endpoint-edit — overwrite an existing (or create)
+ * canonical connection password file via temp + rename. Does not weaken
+ * {@link safeWriteNewSecretPassword} new-only semantics.
+ */
+export async function safeOverwriteSecretPassword(
+  projectRoot: string,
+  relPath: string,
+  passwordPlaintext: string
+): Promise<{ relPath: string }> {
+  if (typeof passwordPlaintext !== "string" || passwordPlaintext.length === 0) {
+    throw new ForbiddenPathError("Connection password must be a non-empty string");
+  }
+
+  const { secretsDirReal, target, normalized } = await resolveNewSecretPasswordTarget(
+    projectRoot,
+    relPath
+  );
+
+  try {
+    const existing = await lstat(target);
+    if (existing.isSymbolicLink()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a symlink`);
+    }
+    if (existing.isDirectory()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a directory`);
+    }
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  const fileName = path.basename(normalized);
+  const tmp = path.join(secretsDirReal, `.${fileName}.${randomUUID()}.tmp`);
+  await withDisplayWriteBarrier(["C", "L"], async () => {
+    await writeFile(tmp, passwordPlaintext, { encoding: "utf8", mode: 0o600 });
+    await rename(tmp, target);
+  });
   return { relPath: normalized };
 }
 

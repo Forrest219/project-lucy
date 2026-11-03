@@ -5,6 +5,12 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentDetail, constraintsFromAgent, serializeConstraints } from "../pages/admin/AgentDetail";
+import {
+  LUCY_ADMIN_WARNING_PRIMARY,
+  PERSONAL_CONSTRAINT_CATALOG_BOUND_HELP,
+  PERSONAL_CONSTRAINT_CAVEAT,
+  PERSONAL_CONSTRAINT_DEFAULT_HELP
+} from "../lib/lucyAdminRole";
 import type { Agent } from "../lib/types";
 
 function renderAgentDetail(initialPath = "/admin/agents/zhangsan") {
@@ -471,7 +477,10 @@ describe("AgentDetail", () => {
     expect(list).not.toHaveTextContent("身份");
 
     const sparse = screen.getByTestId("agent-token-row-sparse");
-    expect(sparse).toHaveTextContent("尚未使用");
+    // Spec 189 §6 — the Token column shows "最近 MCP 访问", so the empty
+    // state is "尚未访问" (not "尚未使用", which conflated MCP access with
+    // business use).
+    expect(sparse).toHaveTextContent("尚未访问");
     expect(sparse).not.toHaveTextContent("备注");
     expect(sparse).not.toHaveTextContent("Agent 类型");
     expect(sparse).not.toHaveTextContent("最近设备名");
@@ -485,7 +494,7 @@ describe("AgentDetail", () => {
     expect(screen.getByTestId("agent-token-row-client-only")).toHaveTextContent("codex");
     expect(screen.getByTestId("agent-token-row-client-only")).not.toHaveTextContent("备注");
     expect(screen.getByTestId("agent-token-row-expiring")).toHaveTextContent("过期 2026-12-01");
-    expect(screen.getByTestId("agent-token-row-unused")).toHaveTextContent("尚未使用");
+    expect(screen.getByTestId("agent-token-row-unused")).toHaveTextContent("尚未访问");
   });
 
   it("opens Token tab from the tab query parameter", async () => {
@@ -599,20 +608,198 @@ describe("AgentDetail", () => {
     expect(typeof serialized?.sources?.[0]?.predicates?.[0]?.value).toBe("number");
   });
 
-  it("personal row limit editor explains the tightening and picks granted tables", async () => {
+  it("personal row limit editor shows title, empty summary, and caveat tooltip only", async () => {
     stubAgentEndpoints();
     renderAgentDetail();
     const editor = await screen.findByTestId("agent-constraints-editor");
     expect(editor).toHaveTextContent("个人行限制");
-    expect(editor).toHaveTextContent("未添加个人行限制");
-    expect(editor).toHaveTextContent("在这个 Agent 已绑定角色的行级策略之上");
-    expect(editor.querySelector(".notranslate")).toBeTruthy();
-    expect(editor.textContent ?? "").toMatch(/不表示行级取数已生效/);
+    expect(editor).toHaveTextContent("未设置");
+    expect(editor).not.toHaveTextContent("未添加个人行限制");
+    expect(editor).not.toHaveTextContent("在这个 Agent 已绑定角色的行级策略之上");
+    expect(editor).not.toHaveTextContent("不表示行级取数已生效");
+    expect(within(editor).getByRole("button", { name: "添加行限制" })).toBeEnabled();
+    expect(
+      within(editor).getByTestId("agent-constraints-caveat-tooltip")
+    ).toHaveAttribute("aria-label", PERSONAL_CONSTRAINT_CAVEAT);
     fireEvent.click(within(editor).getByRole("button", { name: "添加行限制" }));
     expect(within(editor).getByText(/行限制 1/)).toBeInTheDocument();
+    expect(within(editor).getByText(PERSONAL_CONSTRAINT_DEFAULT_HELP)).toBeInTheDocument();
     expect(within(editor).getByRole("checkbox", { name: "superstore_orders" })).toBeInTheDocument();
     expect(within(editor).queryByRole("textbox", { name: "connection" })).not.toBeInTheDocument();
     expect(await screen.findByTestId("sticky-save-bar")).toBeInTheDocument();
+  });
+
+  it("shows lucy_admin warning with split primary/secondary copy", async () => {
+    stubAgentEndpoints([
+      {
+        id: "lucy_admin",
+        description: "平台运维数据面（非 WebUI 登录账户）",
+        source: "yaml",
+        source_scope: "catalog_bound",
+        tools: ["lucy_query"],
+        connections: ["mysql-aliyun"],
+        sourceNames: ["superstore_orders"],
+        sourceCount: 1,
+        invalid: false,
+        warnings: []
+      }
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/admin/agents/zhangsan" && (!init || !init.method || init.method === "GET")) {
+          return new Response(
+            JSON.stringify(
+              makeAgentDetailResponse({
+                roles: ["analyst", "lucy_admin"],
+                role: undefined,
+                effectivePermissions: {
+                  roleIds: ["analyst", "lucy_admin"],
+                  snapshotHash: "snap-1234",
+                  sourceMapVersion: "v1",
+                  tools: ["lucy_query"],
+                  connections: ["mysql-aliyun"],
+                  sources: [
+                    { connectionId: "mysql-aliyun", schema: "dataforai", sourceName: "superstore_orders", table: "dataforai.superstore_orders" },
+                    { connectionId: "mysql-aliyun", schema: "dataforai", sourceName: "superstore_returns", table: "dataforai.superstore_returns" }
+                  ],
+                  legacyAllow: false
+                }
+              })
+            )
+          );
+        }
+        if (url.startsWith("/api/admin/roles")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                roles: [
+                  {
+                    id: "analyst",
+                    description: "Analyst role",
+                    source: "yaml",
+                    tools: ["lucy_query"],
+                    connections: ["mysql-aliyun"],
+                    sourceNames: ["superstore_orders"],
+                    sourceCount: 2,
+                    invalid: false,
+                    warnings: []
+                  },
+                  {
+                    id: "lucy_admin",
+                    description: "平台运维数据面（非 WebUI 登录账户）",
+                    source: "yaml",
+                    source_scope: "catalog_bound",
+                    tools: ["lucy_query"],
+                    connections: ["mysql-aliyun"],
+                    sourceNames: ["superstore_orders"],
+                    sourceCount: 1,
+                    invalid: false,
+                    warnings: []
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderAgentDetail();
+    const warning = await screen.findByTestId("agent-lucy-admin-role-warning");
+    expect(warning).toHaveTextContent(LUCY_ADMIN_WARNING_PRIMARY);
+    expect(warning).toHaveTextContent("MCP");
+    expect(warning).toHaveTextContent("WebUI 登录无关");
+    expect(warning.textContent ?? "").not.toMatch(/启用表目录|签发|过期/);
+  });
+
+  it("shows catalog-bound context help when lucy_admin is selected", async () => {
+    stubAgentEndpoints([
+      {
+        id: "lucy_admin",
+        description: "平台运维数据面（非 WebUI 登录账户）",
+        source: "yaml",
+        source_scope: "catalog_bound",
+        tools: ["lucy_query"],
+        connections: ["mysql-aliyun"],
+        sourceNames: ["superstore_orders"],
+        sourceCount: 1,
+        invalid: false,
+        warnings: []
+      }
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/admin/agents/zhangsan" && (!init || !init.method || init.method === "GET")) {
+          return new Response(
+            JSON.stringify(
+              makeAgentDetailResponse({
+                roles: ["lucy_admin"],
+                role: undefined,
+                effectivePermissions: {
+                  roleIds: ["lucy_admin"],
+                  snapshotHash: "snap-1234",
+                  sourceMapVersion: "v1",
+                  tools: ["lucy_query"],
+                  connections: ["mysql-aliyun"],
+                  sources: [
+                    { connectionId: "mysql-aliyun", schema: "dataforai", sourceName: "superstore_orders", table: "dataforai.superstore_orders" }
+                  ],
+                  legacyAllow: false
+                }
+              })
+            )
+          );
+        }
+        if (url.startsWith("/api/admin/roles")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                roles: [
+                  {
+                    id: "analyst",
+                    description: "Analyst role",
+                    source: "yaml",
+                    tools: ["lucy_query"],
+                    connections: ["mysql-aliyun"],
+                    sourceNames: ["superstore_orders"],
+                    sourceCount: 2,
+                    invalid: false,
+                    warnings: []
+                  },
+                  {
+                    id: "lucy_admin",
+                    description: "平台运维数据面（非 WebUI 登录账户）",
+                    source: "yaml",
+                    source_scope: "catalog_bound",
+                    tools: ["lucy_query"],
+                    connections: ["mysql-aliyun"],
+                    sourceNames: ["superstore_orders"],
+                    sourceCount: 1,
+                    invalid: false,
+                    warnings: []
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderAgentDetail();
+    const editor = await screen.findByTestId("agent-constraints-editor");
+    expect(within(editor).getByRole("button", { name: "添加行限制" })).toBeEnabled();
+    fireEvent.click(within(editor).getByRole("button", { name: "添加行限制" }));
+    expect(within(editor).queryByText(PERSONAL_CONSTRAINT_DEFAULT_HELP)).not.toBeInTheDocument();
+    expect(within(editor).getByText(PERSONAL_CONSTRAINT_CATALOG_BOUND_HELP)).toBeInTheDocument();
   });
 
   it("constraints save opens confirm modal with FinalRows preview then writes with runtimeAck", async () => {

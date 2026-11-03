@@ -412,7 +412,7 @@ describe("Spec 174 R6 — primary-ready and filter completion predicates", () =>
   it("agents primary-ready requires the rows, statistics and enabled filters", () => {
     const page = (total: string, disabled = "") => dom(`
       <input placeholder="搜索显示名或用户 ID">
-      <select aria-label="当前状态" ${disabled}></select><select aria-label="角色"></select><select aria-label="近 7 天活跃"></select>
+      <select aria-label="当前状态" ${disabled}></select><select aria-label="角色"></select><select aria-label="近 30 天活跃"></select>
       <span data-testid="agent-list-result-count">2 条结果</span><strong data-testid="metric-agent-count-value">${total}</strong>
       <table><tr data-testid="agent-row-a1"><td data-testid="agent-row-index-a1"></td></tr><tr data-testid="agent-row-a2"></tr></table>`);
     expect(agentsReady(page("2"), EXPECTED)).toBe(true);

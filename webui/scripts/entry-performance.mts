@@ -42,7 +42,8 @@ export const ALL_SCENARIOS = [
   "login-required",
   "probe-load",
   "probe-load-slow",
-  "behavior"
+  "behavior",
+  "spec195-roundtrip"
 ] as const;
 export type ScenarioName = (typeof ALL_SCENARIOS)[number];
 
@@ -684,7 +685,11 @@ async function runPlaywright(
   options: CliOptions,
   commands: CommandRecord[],
   specFile = "tests/performance/entry-performance.spec.ts",
-  routes = "connections,catalog,overview,agents"
+  routes = "connections,catalog,overview,agents",
+  // The expectations come from the CLEAN fixture: the fixture server creates
+  // its own semantic assets at startup (e.g. the Spec 149 `lucy-ops` block),
+  // and those are not part of the performance fixture's declared shape.
+  expectationsFixture: FixtureManifest = fixture
 ): Promise<RawSample[]> {
   const resultsFile = path.join(runDir, "raw", `${scenario}.jsonl`);
   await mkdir(path.dirname(resultsFile), { recursive: true });
@@ -707,7 +712,7 @@ async function runPlaywright(
     PERF_CONTROL_URL: control.url,
     PERF_CONTROL_TOKEN: control.token,
     PERF_SLOW_CONNECTION: scenario === "probe-load-slow" ? fixture.connectionIds[SLOW_PROBE_INDEX]! : "",
-    PERF_EXPECTED: JSON.stringify(await readFixtureExpectations(fixture))
+    PERF_EXPECTED: JSON.stringify(await readFixtureExpectations(expectationsFixture))
   };
   const args = ["playwright", "test", "-c", "tests/performance/entry-performance.config.ts", specFile];
   const exitCode = await runCommand("npx", args, { cwd: WEBUI_DIR, env, logPath }).finally(() => control.close());
@@ -1000,7 +1005,7 @@ async function main(): Promise<number> {
   const has = (name: ScenarioName) => options.scenarios.includes(name);
 
   const warmFixture = await workingFixture(cleanDir, path.join(runDir, "fixture"));
-  const warmScenarios = ["api-warm", "browser-cold", "browser-warm-refresh", "route-warm", "route-query-cold", "probe-load", "probe-load-slow"] as const;
+  const warmScenarios = ["api-warm", "browser-cold", "browser-warm-refresh", "route-warm", "route-query-cold", "probe-load", "probe-load-slow", "spec195-roundtrip"] as const;
   if (warmScenarios.some((name) => has(name))) {
     const server = await startFixtureServer({ fixture: warmFixture, runDir, label: "warm", auth: "off", displayPrewarm: true });
     try {
@@ -1008,11 +1013,27 @@ async function main(): Promise<number> {
       for (const scenario of ["browser-cold", "browser-warm-refresh", "route-warm", "route-query-cold", "probe-load"] as const) {
         if (!has(scenario)) continue;
         await setStubConfig(warmFixture, ["* 50 ok"]);
-        samples.push(...(await runPlaywright(server, warmFixture, runDir, scenario, options, commands)).map(postProcessBrowserSample));
+        samples.push(...(await runPlaywright(server, warmFixture, runDir, scenario, options, commands, undefined, undefined, cleanManifest)).map(postProcessBrowserSample));
+      }
+      if (has("spec195-roundtrip")) {
+        // Spec 195 SI-14 — sidebar round-trips with one overlay edit in the
+        // middle of the run. The fixture is anonymous; nothing real is touched.
+        await setStubConfig(warmFixture, ["* 50 ok"]);
+        samples.push(...(await runPlaywright(
+          server,
+          warmFixture,
+          runDir,
+          "spec195-roundtrip",
+          options,
+          commands,
+          "tests/performance/spec195-display-roundtrip.spec.ts",
+          undefined,
+          cleanManifest
+        )).map(postProcessBrowserSample));
       }
       if (has("probe-load-slow")) {
         await setStubConfig(warmFixture, ["* 50 ok", `${warmFixture.connectionIds[SLOW_PROBE_INDEX]} 3000 ok test`]);
-        samples.push(...(await runPlaywright(server, warmFixture, runDir, "probe-load-slow", options, commands, undefined, "connections")).map(postProcessBrowserSample));
+        samples.push(...(await runPlaywright(server, warmFixture, runDir, "probe-load-slow", options, commands, undefined, "connections", cleanManifest)).map(postProcessBrowserSample));
         await setStubConfig(warmFixture, ["* 50 ok"]);
       }
     } finally {
@@ -1034,7 +1055,7 @@ async function main(): Promise<number> {
   if (has("login-required")) {
     const server = await startFixtureServer({ fixture: warmFixture, runDir, label: "login", auth: "required", displayPrewarm: true });
     try {
-      samples.push(...(await runPlaywright(server, warmFixture, runDir, "login-required", options, commands, undefined, "overview")).map(postProcessBrowserSample));
+      samples.push(...(await runPlaywright(server, warmFixture, runDir, "login-required", options, commands, undefined, "overview", cleanManifest)).map(postProcessBrowserSample));
     } finally {
       await server.stop();
     }
@@ -1045,7 +1066,7 @@ async function main(): Promise<number> {
     const behaviorFixture = await workingFixture(cleanDir, path.join(runDir, "fixture-behavior"));
     const server = await startFixtureServer({ fixture: behaviorFixture, runDir, label: "behavior", auth: "off", displayPrewarm: true });
     try {
-      await runPlaywright(server, behaviorFixture, runDir, "behavior", options, commands, "tests/e2e/specs/entry-performance-behavior.spec.ts");
+      await runPlaywright(server, behaviorFixture, runDir, "behavior", options, commands, "tests/e2e/specs/entry-performance-behavior.spec.ts", undefined, cleanManifest);
       const record = commands[commands.length - 1]!;
       const reportPath = path.join(runDir, "raw", "playwright-behavior.json");
       const report = existsSync(reportPath) ? JSON.parse(await readFile(reportPath, "utf8")) : null;

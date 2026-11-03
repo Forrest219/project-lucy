@@ -41,6 +41,36 @@ export class ProbeAbortedError extends Error {
   }
 }
 
+/**
+ * Spec 190 §7.1 — the queue deadline expired before the probe started.
+ * Distinct from {@link ProbeQueueFullError} so the caller can report
+ * `PROBE_QUEUE_TIMEOUT` instead of `PROBE_QUEUE_FULL`.
+ */
+export class ProbeQueueTimeoutError extends Error {
+  code = "PROBE_QUEUE_TIMEOUT";
+  statusCode = 503;
+  retryAfterSeconds = 1;
+
+  constructor() {
+    super("连通探测排队超时，请稍后重试。");
+    this.name = "ProbeQueueTimeoutError";
+  }
+}
+
+/**
+ * Spec 190 §7.1 — the connection configuration generation changed while the
+ * probe was in flight, so its result is discarded.
+ */
+export class ProbeGenerationInvalidatedError extends Error {
+  code = "GENERATION_INVALIDATED";
+  statusCode = 409;
+
+  constructor() {
+    super("连接配置已变更，本次探测结果作废。");
+    this.name = "ProbeGenerationInvalidatedError";
+  }
+}
+
 export type ProbeTiming = { queueMs: number; executionMs: number; totalMs: number; shared: boolean };
 
 type Subscriber<T> = {
@@ -78,6 +108,14 @@ export type ProbeSchedulerOptions = {
   queueTimeoutMs?: number;
   now?: () => number;
   currentGeneration?: () => number;
+  /**
+   * Error factory for a result whose generation went stale while it ran.
+   * Defaults to the queue-full error so the existing probe kinds keep their
+   * contract; Spec 190's table-list queue overrides it with a dedicated reason.
+   */
+  staleError?: () => Error;
+  /** Error factory for a queued task that hit the queue deadline. */
+  queueTimeoutError?: () => Error;
 };
 
 export class ProbeScheduler {
@@ -86,6 +124,8 @@ export class ProbeScheduler {
   private readonly queueTimeoutMs: number;
   private readonly now: () => number;
   private readonly currentGeneration: () => number;
+  private readonly staleError: () => Error;
+  private readonly queueTimeoutError: () => Error;
   private readonly queued: Task<unknown>[] = [];
   private readonly running = new Map<string, Task<unknown>>();
   private consecutiveManual = 0;
@@ -99,6 +139,8 @@ export class ProbeScheduler {
     this.queueTimeoutMs = options.queueTimeoutMs ?? PROBE_QUEUE_TIMEOUT_MS;
     this.now = options.now ?? (() => performance.now());
     this.currentGeneration = options.currentGeneration ?? (() => 0);
+    this.staleError = options.staleError ?? (() => new ProbeQueueFullError());
+    this.queueTimeoutError = options.queueTimeoutError ?? (() => new ProbeQueueFullError());
   }
 
   submit<T>(request: ProbeSubmit<T>): Promise<{ value: T; timing: ProbeTiming }> {
@@ -160,6 +202,21 @@ export class ProbeScheduler {
     for (const task of [...this.queued]) this.dropQueued(task, new ProbeQueueFullError());
   }
 
+  /**
+   * Test-only reset: drop queued work, forget running tasks and re-open the
+   * scheduler. Used by suites that fill the queue on purpose.
+   */
+  resetForTests(): void {
+    for (const task of [...this.queued]) {
+      if (task.timer) clearTimeout(task.timer);
+      task.subscribers.clear();
+    }
+    this.queued.length = 0;
+    this.running.clear();
+    this.consecutiveManual = 0;
+    this.closed = false;
+  }
+
   private pickNext(): Task<unknown> | undefined {
     const manualIndex = this.queued.findIndex((task) => task.purpose === "manual");
     const automaticIndex = this.queued.findIndex((task) => task.purpose === "automatic");
@@ -217,7 +274,7 @@ export class ProbeScheduler {
   ): void {
     if (subscriber.onAbort) subscriber.signal?.removeEventListener("abort", subscriber.onAbort);
     if (stale) {
-      subscriber.reject(new ProbeQueueFullError());
+      subscriber.reject(this.staleError());
       return;
     }
     if (!outcome.ok) {
@@ -244,7 +301,7 @@ export class ProbeScheduler {
   }
 
   private expire(task: Task<unknown>): void {
-    if (task.state === "queued") this.dropQueued(task, new ProbeQueueFullError());
+    if (task.state === "queued") this.dropQueued(task, this.queueTimeoutError());
   }
 
   private dropQueued(task: Task<unknown>, error: unknown): void {

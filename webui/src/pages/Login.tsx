@@ -1,14 +1,46 @@
-import { FormEvent, useState } from "react";
-import { Link, Navigate, useLocation } from "react-router-dom";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { ApiError } from "../lib/apiClient";
+import { consumeLoggedOut } from "../lib/logoutSignal";
+import { ApiError, apiPost } from "../lib/apiClient";
 import { BrandMark } from "../components/BrandMark";
 import { useBranding } from "../lib/useBranding";
+import {
+  OIDC_GENERIC_COPY,
+  OIDC_LOGIN_ERROR_COPY,
+  OIDC_LOGOUT_NOTICE,
+  OIDC_NOT_AVAILABLE_COPY
+} from "../components/admin/OidcMessages";
+
+/**
+ * L25-06 — only a Lucy-internal absolute path may travel to the identity
+ * source as `returnTo` (Spec §5.2). Everything else is dropped so the server
+ * falls back to `/overview`.
+ */
+function internalReturnTo(pathname: string): string | undefined {
+  if (!pathname.startsWith("/")) return undefined;
+  if (pathname.startsWith("//")) return undefined;
+  if (pathname.includes("\\")) return undefined;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(pathname)) return undefined;
+  // The login page itself is never a useful return target.
+  if (pathname === "/login") return undefined;
+  return pathname;
+}
+
+function oidcStartErrorCopy(error: unknown): string {
+  if (error instanceof ApiError && error.code === "OIDC_NOT_AVAILABLE") {
+    return OIDC_NOT_AVAILABLE_COPY;
+  }
+  // Never echo a raw server message / IdP response / stack.
+  return OIDC_GENERIC_COPY;
+}
 
 export function LoginPage() {
   const { status, loading, login, bootstrap } = useAuth();
   const { data: branding } = useBranding();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [adminId, setAdminId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -16,20 +48,76 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [oidcError, setOidcError] = useState<string | null>(null);
+  const [oidcStartError, setOidcStartError] = useState<string | null>(null);
+  const [oidcPending, setOidcPending] = useState(false);
+  const [loggedOut, setLoggedOut] = useState(false);
+  const handledOidcError = useRef<string | null>(null);
   const productTitle = branding?.productTitle ?? "Lucy WebUI";
   const tagline = branding?.tagline ?? "可信 Agent 数据层";
   const logoUrl = branding?.logoUrl ?? null;
+  const redirectedFrom = (location.state as { from?: string } | null)?.from ?? "";
+  const isBootstrap = status?.mode === "bootstrap";
+  const configUnavailable = status?.mode === "unavailable";
+  // 单点登录 is an additional entry point, never a replacement: the local
+  // 「登录账户＋密码」 form stays available in every mode (Spec §5.1).
+  const oidcAvailable =
+    status?.mode === "required" && !isBootstrap && (status.methods ?? []).includes("oidc");
+  const oidcErrorCode = searchParams.get("oidc_error");
+
+  useEffect(() => {
+    if (!oidcErrorCode || handledOidcError.current === oidcErrorCode) return;
+    handledOidcError.current = oidcErrorCode;
+    setOidcError(OIDC_LOGIN_ERROR_COPY[oidcErrorCode] ?? OIDC_GENERIC_COPY);
+    // Drop the error code from the URL so a refresh does not show it again.
+    const next = new URLSearchParams(searchParams);
+    next.delete("oidc_error");
+    const query = next.toString();
+    try {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${location.pathname}${query ? `?${query}` : ""}`
+      );
+    } catch {
+      // Environments without a writable history keep the parameter in place.
+    }
+  }, [oidcErrorCode, searchParams, location.pathname]);
+
+  // The notice belongs to an explicit logout, not to "the session is gone".
+  useEffect(() => {
+    if (consumeLoggedOut()) setLoggedOut(true);
+  }, []);
 
   if (!loading && status?.mode === "open") {
     return <Navigate to="/overview" replace />;
   }
   if (!loading && status?.mode === "required" && status.me) {
-    const redirectTo = (location.state as { from?: string } | null)?.from ?? "/overview";
+    const redirectTo = redirectedFrom || "/overview";
     return <Navigate to={redirectTo} replace />;
   }
 
-  const isBootstrap = status?.mode === "bootstrap";
-  const configUnavailable = status?.mode === "unavailable";
+  async function startOidcLogin() {
+    if (oidcPending) return;
+    setOidcStartError(null);
+    setOidcPending(true);
+    try {
+      // The protected page the user was bounced from is the useful return
+      // target; the login page itself never is.
+      const returnTo = internalReturnTo(redirectedFrom) ?? internalReturnTo(location.pathname);
+      const data = await apiPost<{ authorizationUrl: string }>(
+        "/api/auth/oidc/start",
+        returnTo ? { returnTo } : {}
+      );
+      const authorizationUrl = data?.authorizationUrl;
+      if (!authorizationUrl) throw new Error("missing authorizationUrl");
+      window.location.assign(authorizationUrl);
+    } catch (err) {
+      setOidcStartError(oidcStartErrorCopy(err));
+    } finally {
+      setOidcPending(false);
+    }
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -75,6 +163,40 @@ export function LoginPage() {
           <p className="text-sm text-danger" role="alert" data-testid="login-config-unavailable">
             管理员配置不可用，暂时无法登录。请联系部署人员修复管理员配置后重试。
           </p>
+        )}
+
+        {oidcError && (
+          <p className="text-sm text-danger" role="alert" data-testid="login-oidc-error">
+            {oidcError}
+          </p>
+        )}
+
+        {oidcStartError && (
+          <p className="text-sm text-danger" role="alert" data-testid="login-oidc-start-error">
+            {oidcStartError}
+          </p>
+        )}
+
+        {loggedOut && (
+          <p className="text-sm text-fg-muted" role="status" data-testid="login-logout-notice">
+            {OIDC_LOGOUT_NOTICE}
+          </p>
+        )}
+
+        {oidcAvailable && (
+          <div className="grid gap-2" data-testid="login-oidc">
+            <button
+              type="button"
+              className="pl-btn pl-btn--primary min-h-11"
+              disabled={oidcPending}
+              onClick={() => void startOidcLogin()}
+              data-testid="login-oidc-button"
+            >
+              {oidcPending ? "正在跳转…" : "使用单点登录"}
+            </button>
+            <p className="text-xs text-fg-muted">由贵组织的身份源完成认证</p>
+            <p className="text-xs text-fg-muted">或使用本地账户登录</p>
+          </div>
         )}
 
         <form className="grid gap-4" onSubmit={onSubmit} hidden={configUnavailable}>

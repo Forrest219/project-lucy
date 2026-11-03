@@ -1,0 +1,202 @@
+# Spec 149 §5.4 — 运维问数连接的 Manifest（只写物理列）。
+#
+# 本文件是**仓库模板**，由 `ensureOpsEvidence` 复制到解析后的内容根
+# （`<ContentPaths.semanticLayer>/lucy-ops/_schema/main.yaml`），再镜像到
+# KTX 读取的项目根同级目录。
+#
+# 两条硬约束：
+# 1. **只写物理列**。派生列（`call_day`）只能写在 overlay 的 `columns:` 块，
+#    写进 Manifest 会被静默丢弃（Spec 23 §派生列约束）。
+# 2. `table:` 使用 T0 冻结的 physicalTable。当前交付 KTX 0.16.0 的 SQLite
+#    目录返回**裸表名**（catalog/db 均为 null），所以是 `ops_calls` 而不是
+#    `main.ops_calls`。
+tables:
+  ops_calls:
+    table: ops_calls
+    descriptions:
+      db: 调用流水（每次工具调用一行）。
+      ai: >-
+        One row per tool call on the current instance, restricted to default usage
+        (protocol handshakes and default-view-excluded eval probes are removed) and
+        with this connection's own follow-up calls removed as a whole event.
+        The population of this source is **active Agents**: distinct `agent_id`
+        within the window. `token_label` is a per-Agent label, not a credential
+        identity: two Agents may share one label, and an Agent that deletes and
+        recreates the same label produces two indistinguishable labels. Never
+        answer `count(distinct token_label)` as business active Tokens or as
+        active users — use the usage overview for that population. `generated_sql`
+        is a high-cardinality attribute: take it out of details only after
+        filtering by table, Agent, outcome or `request_id`, and never use it as a
+        default grouping.
+    columns:
+      - name: event_id
+        type: number
+        pk: true
+        nullable: false
+        descriptions:
+          db: 事件 ID
+          ai: Stable identifier of the access log row behind this call.
+      - name: ts
+        type: time
+        nullable: false
+        descriptions:
+          db: 调用时间（UTC ISO-8601）
+          ai: UTC ISO-8601 timestamp of the call.
+      - name: agent_id
+        type: string
+        nullable: false
+        descriptions:
+          db: Agent ID
+          ai: The Agent that made the call. Distinct `agent_id` in the window is the active Agent population.
+      - name: token_label
+        type: string
+        descriptions:
+          db: Token 标签（同一 Agent 内有效）
+          ai: >-
+            Label attached to the Token used for this call. Unique within one Agent
+            only; it is not a credential identity and must not be counted as a
+            Token population.
+      - name: tool
+        type: string
+        nullable: false
+        descriptions:
+          db: 工具名
+          ai: Name of the MCP tool that was called.
+      - name: outcome
+        type: string
+        nullable: false
+        descriptions:
+          db: 结果（ok / denied / error）
+          ai: "Call result: ok, denied or error."
+      - name: duration_ms
+        type: number
+        nullable: false
+        descriptions:
+          db: 耗时（毫秒）
+          ai: Wall-clock duration of the call in milliseconds.
+      - name: decision_reason
+        type: string
+        descriptions:
+          db: 裁决原因
+          ai: Why the call was allowed or denied; empty when not applicable.
+      - name: error_detail
+        type: string
+        descriptions:
+          db: 错误详情
+          ai: Error text recorded for the call, when there was one.
+      - name: generated_sql
+        type: string
+        descriptions:
+          db: 生成 SQL
+          ai: >-
+            SQL generated for this call. High cardinality: read it from filtered
+            details, not as a default grouping.
+      - name: tables_json
+        type: string
+        descriptions:
+          db: 涉及数据表（JSON）
+          ai: JSON list of the tables the call touched.
+      - name: request_id
+        type: string
+        nullable: false
+        descriptions:
+          db: 请求 ID
+          ai: Request identifier of the call; the stable key for one call.
+  ops_call_tables:
+    table: ops_call_tables
+    descriptions:
+      db: 调用流水与涉及数据表（一行一个来源表）。
+      ai: >-
+        One row per (call, source table) pair, restricted to default usage and
+        with this connection's own follow-up calls removed as a whole event — the
+        same event set as `ops_calls`, so the two views never disagree. Use it to
+        answer which table was queried most, and to take out denied rows and
+        their generated SQL for one specific table. `token_label` is a per-Agent
+        label, not a credential identity.
+    columns:
+      - name: event_id
+        type: number
+        pk: true
+        nullable: false
+        descriptions:
+          db: 事件 ID
+          ai: Identifier of the access log row behind this call.
+      - name: ts
+        type: time
+        nullable: false
+        descriptions:
+          db: 调用时间（UTC ISO-8601）
+          ai: UTC ISO-8601 timestamp of the call.
+      - name: agent_id
+        type: string
+        nullable: false
+        descriptions:
+          db: Agent ID
+          ai: The Agent that made the call.
+      - name: token_label
+        type: string
+        descriptions:
+          db: Token 标签（同一 Agent 内有效）
+          ai: Label attached to the Token used for this call; not a credential identity.
+      - name: tool
+        type: string
+        nullable: false
+        descriptions:
+          db: 工具名
+          ai: Name of the MCP tool that was called.
+      - name: outcome
+        type: string
+        nullable: false
+        descriptions:
+          db: 结果（ok / denied / error）
+          ai: "Call result: ok, denied or error."
+      - name: duration_ms
+        type: number
+        nullable: false
+        descriptions:
+          db: 耗时（毫秒）
+          ai: Wall-clock duration of the call in milliseconds.
+      - name: decision_reason
+        type: string
+        descriptions:
+          db: 裁决原因
+          ai: Why the call was allowed or denied; empty when not applicable.
+      - name: error_detail
+        type: string
+        descriptions:
+          db: 错误详情
+          ai: Error text recorded for the call, when there was one.
+      - name: generated_sql
+        type: string
+        descriptions:
+          db: 生成 SQL
+          ai: >-
+            SQL generated for this call. High cardinality: read it out of details
+            only after filtering by table, Agent, outcome or `request_id`.
+      - name: request_id
+        type: string
+        nullable: false
+        descriptions:
+          db: 请求 ID
+          ai: Request identifier of the call; the stable key for one call.
+      - name: connection_id
+        type: string
+        descriptions:
+          db: 连接 ID
+          ai: Connection the touched table belongs to; empty when the attribution is unknown.
+      - name: schema_name
+        type: string
+        descriptions:
+          db: schema 名
+          ai: Schema of the touched table.
+      - name: source_name
+        type: string
+        descriptions:
+          db: 语义源名
+          ai: Semantic-layer source name of the touched table.
+      - name: physical_table
+        type: string
+        nullable: false
+        descriptions:
+          db: 物理表名
+          ai: Physical table the call touched.

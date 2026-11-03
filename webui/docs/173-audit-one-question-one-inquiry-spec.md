@@ -148,6 +148,13 @@ on evidence pack:
 
 **T00-r2 实施合同 §6.1 准入冻结伪代码** 与本 §6 同源；`effective_*` 与 `original_*` 分离由 `implementation-contract §2.1` 冻结。
 
+### 6.1 v0.25 多层标识与回传契约
+
+- `question_id` 登记问询；`client_call_id` 标识一次逻辑调用；`client_event_id` 标识一条客户端观测；`attempt_id` 标识一次实际执行尝试；`operation_id` 仅标识 Lucy 内部操作；`event_id` 标识一条账本事件；`upstream_operation_id` 只能保存上游真实回传 ID。RPC `request_id` 仅作原始字段，不作全局去重键。
+- `parent_attempt_id` 只能指向 attempt，不能填 event；内部 operation ID 不得冒充上游 ID。相同 SQL、RPC ID 或 client_call_id 均不能单独证明两次执行相同。
+- 响应中的 `x-lucy-event-id` 指向已提交 received 的 `ingress_event_id`，不指向 admitted。received 未确认提交时不回传审计关联头；旧客户端不插入未经协商的 SSE meta 扩展。
+- 重连本身不新增 attempt；重连后实际重新执行必须是新 attempt，除非既有幂等执行凭据证明只是原尝试续接。跨会话续接使用版本化 `questionContinuation=v2p5-1` 凭据，不凭同名或时间接近继承问询或重置预算。
+
 ## 7. 验收
 
 | ID | 断言 | EA 映射 |

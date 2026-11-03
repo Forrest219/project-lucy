@@ -3,10 +3,13 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable, sameRoleSet } from "../../components/AgentRoleField";
+import { AuthorizationSummarySection } from "../../components/admin/AuthorizationSummarySection";
+import { RenewTokenDialog } from "../../components/admin/RenewTokenDialog";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
 import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
+import { copyTextWithToast } from "../../lib/clipboard";
 import type {
   AccessWriteAck,
   Agent,
@@ -18,7 +21,15 @@ import type {
   TokenSummary
 } from "../../lib/types";
 import { formatFinalRowsPreviewLabel, formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
-import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
+import {
+  isLucyAdminDataPlaneRole,
+  LUCY_ADMIN_ROLE_ID,
+  PERSONAL_CONSTRAINT_CATALOG_BOUND_HELP,
+  PERSONAL_CONSTRAINT_CAVEAT,
+  PERSONAL_CONSTRAINT_DEFAULT_HELP
+} from "../../lib/lucyAdminRole";
+import { LucyAdminRoleWarning } from "../../lib/LucyAdminRoleWarning";
+import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { queryKeys } from "../../lib/queryKeys";
 
 type AgentDetailResponse = { agent: Agent; version: string };
@@ -293,6 +304,17 @@ export function groupSourcesByConnectionAndSchema(
   }));
 }
 
+function usesCatalogBoundContext(
+  selectedRoleIds: string[],
+  formalRoles: Role[]
+): boolean {
+  return selectedRoleIds.some((roleId) => {
+    if (roleId === LUCY_ADMIN_ROLE_ID) return true;
+    const match = formalRoles.find((role) => role.id === roleId);
+    return isLucyAdminDataPlaneRole(match) || match?.source_scope === "catalog_bound";
+  });
+}
+
 function buildChangeSummary(
   patch: AgentPatch,
   currentAgent: Agent
@@ -373,6 +395,7 @@ export function AgentDetail() {
   const [diffPreview, setDiffPreview] = useState<DiffPreview | null>(null);
   const [confirmSave, setConfirmSave] = useState<DiffPreview | null>(null);
   const [selectedTokenLabels, setSelectedTokenLabels] = useState<string[]>([]);
+  const [renewingTokenLabel, setRenewingTokenLabel] = useState<string | null>(null);
 
   const agent = data?.agent;
   const version = data?.version;
@@ -723,6 +746,8 @@ export function AgentDetail() {
     const match = formalRoles.find((role) => role.id === roleId);
     return isLucyAdminDataPlaneRole(match) || roleId === "lucy_admin";
   });
+  // Spec 149 §6 / SC-23 — 绑定运维问数角色时的警示。
+  const showOpsEvidenceWarning = selectedRoleIds.some((roleId) => roleId === OPS_EVIDENCE_ROLE_ID);
   const effective = editRoles !== null
     ? roleCapabilityQuery.data?.effectivePermissions
     : agent.effectivePermissions;
@@ -868,20 +893,13 @@ export function AgentDetail() {
                     旧 ACL 只读兼容；保存角色后会移除该 <span className="notranslate" translate="no">Agent</span> 的 legacy allow。
                   </span>
                 )}
-                {showLucyAdminWarning && (
+                {showLucyAdminWarning && <LucyAdminRoleWarning />}
+                {showOpsEvidenceWarning && (
                   <div
                     className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
-                    data-testid="agent-lucy-admin-role-warning"
+                    data-testid="agent-ops-evidence-role-warning"
                   >
-                    高权限运维数据面：当前 Role 在已声明连接内绑定启用表目录。这是{" "}
-                    <span className="notranslate" translate="no">
-                      MCP
-                    </span>{" "}
-                    数据面权限，不是 WebUI 登录账户；签发{" "}
-                    <span className="notranslate" translate="no">
-                      Token
-                    </span>{" "}
-                    时建议设置过期时间。
+                    {OPS_EVIDENCE_ROLE_WARNING}
                   </div>
                 )}
                 {editRoles !== null && (
@@ -897,16 +915,30 @@ export function AgentDetail() {
             <div className="pl-card grid gap-3" data-testid="agent-constraints-editor">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <div className="text-sm font-medium">
-                    个人行限制
-                    <span className="ml-2 font-mono text-xs text-fg-muted notranslate" translate="no">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">个人行限制</span>
+                    <span
+                      className="text-xs text-fg-muted font-mono notranslate"
+                      translate="no"
+                    >
                       constraints
                     </span>
+                    <span
+                      className="cursor-help text-xs text-fg-muted"
+                      data-testid="agent-constraints-caveat-tooltip"
+                      title={PERSONAL_CONSTRAINT_CAVEAT}
+                      aria-label={PERSONAL_CONSTRAINT_CAVEAT}
+                    >
+                      ⓘ
+                    </span>
                   </div>
-                  <p className="text-xs text-fg-muted mt-1 notranslate" translate="no">
-                    在这个 Agent 已绑定角色的行级策略之上，再要求同时满足这里的行条件。未配置则不追加。配置成功只表示编译通过，
-                    <strong className="font-medium"> 不表示行级取数已生效</strong>。
-                  </p>
+                  {constraintRows.length > 0 ? (
+                    <p className="text-xs text-fg-muted mt-1">
+                      {usesCatalogBoundContext(selectedRoleIds, formalRoles)
+                        ? PERSONAL_CONSTRAINT_CATALOG_BOUND_HELP
+                        : PERSONAL_CONSTRAINT_DEFAULT_HELP}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -939,7 +971,9 @@ export function AgentDetail() {
               ) : null}
 
               {constraintRows.length === 0 ? (
-                <p className="text-sm text-fg-muted">未添加个人行限制。</p>
+                <p className="text-sm text-fg-muted" data-testid="agent-constraints-empty">
+                  未设置
+                </p>
               ) : (
                 <ul className="grid gap-4">
                   {constraintRows.map((row, idx) => {
@@ -1261,7 +1295,8 @@ export function AgentDetail() {
                           <span>创建 {token.created}</span>
                           {token.expires_at ? <span> · 过期 {token.expires_at}</span> : null}
                           <span>
-                            {" · "}最近使用 {token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "尚未使用"}
+                            {" · "}最近 <span className="notranslate" translate="no">MCP</span> 访问{" "}
+                            {token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "尚未访问"}
                           </span>
                           {token.last_tool ? (
                             <span>
@@ -1300,7 +1335,7 @@ export function AgentDetail() {
                             <button
                               type="button"
                               className="pl-btn pl-btn--ghost w-fit text-xs"
-                              onClick={() => void navigator.clipboard.writeText(token.hash).then(() => toast.success("Hash 已复制"))}
+                              onClick={() => void copyTextWithToast(token.hash, { successMessage: "Hash 已复制" })}
                               aria-label={`复制 ${token.label} 的 hash`}
                             >
                               复制 hash
@@ -1308,25 +1343,54 @@ export function AgentDetail() {
                           </div>
                         </details>
                       </div>
-                      <button
-                        type="button"
-                        className="pl-btn pl-btn--danger shrink-0 text-xs notranslate"
-                        translate="no"
-                        onClick={() => handleRevokeToken(token.label)}
-                        aria-label={`撤销 ${token.label}`}
-                      >
-                        撤销 <span className="notranslate" translate="no">Token</span>
-                      </button>
+                      <div className="flex shrink-0 flex-col gap-2">
+                        <button
+                          type="button"
+                          className="pl-btn pl-btn--ghost text-xs"
+                          data-testid={`agent-token-renew-${token.label}`}
+                          onClick={() => setRenewingTokenLabel(token.label)}
+                          aria-label={`续期 ${token.label}`}
+                        >
+                          续期
+                        </button>
+                        <button
+                          type="button"
+                          className="pl-btn pl-btn--danger text-xs notranslate"
+                          translate="no"
+                          onClick={() => handleRevokeToken(token.label)}
+                          aria-label={`撤销 ${token.label}`}
+                        >
+                          撤销 <span className="notranslate" translate="no">Token</span>
+                        </button>
+                      </div>
                     </li>
                   );
                 })}
               </ul>
             )}
+            {renewingTokenLabel && userId ? (
+              <RenewTokenDialog
+                userId={userId}
+                label={renewingTokenLabel}
+                onClose={() => setRenewingTokenLabel(null)}
+                onSuccess={() => {
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
+                  void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
+                }}
+              />
+            ) : null}
           </div>
         )}
 
         {activeTab === "permissions" && (
           <div data-testid="permissions-tree" className="grid gap-4 max-w-3xl pb-32">
+            {/* Lucy v0.25 P1-2 §4.1 —「权限预览」首屏的授权摘要（只读投影）。 */}
+            <AuthorizationSummarySection
+              kind="agent"
+              id={userId ?? ""}
+              title="授权摘要"
+              testId="agent-authorization-summary"
+            />
             <div className="pl-card">
               <div className="text-sm font-medium">当前角色</div>
               <div className="text-sm text-fg-muted mt-1">

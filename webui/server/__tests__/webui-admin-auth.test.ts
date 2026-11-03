@@ -225,6 +225,81 @@ describe("webui admin auth API", () => {
     await app.close();
   });
 
+  // Regression: a non-owner asking to create an account was DENIED with 403 and the
+  // server then died. `requireOwner` fired `void reply.send(...)` and the route
+  // returned `undefined`, so Fastify sent a SECOND response after the first one:
+  // `reply.sent` is only true once the response has ENDED, so the framework's own
+  // send raced the first one and `writeHead` threw ERR_HTTP_HEADERS_SENT from the
+  // onSend hook chain — an uncaught exception that killed the whole process.
+  // One request from any authenticated operator could take the instance down.
+  it("denies a non-owner creating an account with 403 and keeps the server alive", async () => {
+    process.env.LUCY_WEBUI_AUTH = "required";
+    resetAdminsCache();
+    const { buildServer } = await import("../index.js");
+    const app = buildServer();
+    await app.ready();
+
+    const boot = await app.inject({
+      method: "POST",
+      url: "/api/auth/bootstrap",
+      payload: { adminId: "xingchen", displayName: "星尘", password: "correct-horse" }
+    });
+    expect(boot.statusCode).toBe(200);
+    const ownerCookie = String(Array.isArray(boot.headers["set-cookie"]) ? boot.headers["set-cookie"][0] : boot.headers["set-cookie"]).split(";")[0];
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/admin/admins",
+      headers: { cookie: ownerCookie },
+      payload: { adminId: "op-one", displayName: "op-one", password: "operator-password-1", role: "operator" }
+    });
+    expect(created.statusCode).toBe(200);
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { adminId: "op-one", password: "operator-password-1" }
+    });
+    expect(login.statusCode).toBe(200);
+    const operatorCookie = String(Array.isArray(login.headers["set-cookie"]) ? login.headers["set-cookie"][0] : login.headers["set-cookie"]).split(";")[0];
+
+    const denied = await app.inject({
+      method: "POST",
+      url: "/api/admin/admins",
+      headers: { cookie: operatorCookie },
+      payload: { adminId: "op-made-admin", displayName: "op-made-admin", password: "op-made-password-1", role: "owner" }
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().error.code).toBe("OWNER_REQUIRED");
+
+    // The instance must still serve requests: before the fix the double send killed it.
+    const alive = await app.inject({ method: "GET", url: "/api/auth/status" });
+    expect(alive.statusCode).toBe(200);
+    const stillOwner = await app.inject({ method: "GET", url: "/api/admin/admins", headers: { cookie: ownerCookie } });
+    expect(stillOwner.statusCode).toBe(200);
+
+    // On a real server the second send is an uncaught exception that kills the process.
+    // Under `inject` the same throw surfaces as an unhandled rejection, so it is captured
+    // explicitly here: the regression must be a HARD failure, not a warning.
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/admins",
+        headers: { cookie: operatorCookie },
+        payload: { adminId: "op-made-admin-2", displayName: "op-made-admin-2", password: "op-made-password-2", role: "owner" }
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+    expect(unhandled).toEqual([]);
+
+    await app.close();
+  });
+
   it("rejects wrong password", async () => {
     process.env.LUCY_WEBUI_AUTH = "required";
     const password_hash = await hashPassword("correct-horse");

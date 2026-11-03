@@ -19,7 +19,7 @@
 | 关联页面 | `/admin/roles` |
 | 关联台账 | `docs/ui-ux-feedback/pages/admin-agents.md`（新增 `UX-ADMIN-AGENTS-009` ~ `UX-ADMIN-AGENTS-015`） |
 | 上游 Spec | `webui/docs/59-role-admin-ops-ux-clarification-spec.md`（M57，Verified；本 Spec 对其 §7.1–7.5 做局部修订） |
-| 状态 | Draft (v1.1 review-hardened) |
+| 状态 | **已实现**（提交 `fe787380` `fix(webui): clarify Role Admin list KPIs and card readability`） |
 | 日期 | 2026-08-04 |
 | 范围 | 待修复 KPI 口径、Header/状态条降噪、Role 主语术语、卡片字段标签、badge 连读歧义、复制动作表意、配置时间元数据 |
 

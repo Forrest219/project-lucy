@@ -32,7 +32,7 @@
   },
   "values": {
     "lucy": {
-      "version": "0.20.0",
+      "version": "0.25.0",
       "bundledKtxVersion": "0.16.0"
     }
   }

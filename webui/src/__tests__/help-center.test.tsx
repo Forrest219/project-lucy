@@ -176,12 +176,14 @@ function renderHelp(path = "/help") {
               "| 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |",
               "| 访问治理 | Token 凭据 | `/admin/tokens` | 全局查看、签发与定向吊销 `Agent` 访问凭据。 |",
               "| 访问治理 | 角色权限 | `/admin/roles` | 管理角色的数据库连接、数据表与 `MCP` 工具授权范围。 |",
+              "| 访问治理 | 行权限视图 | `/admin/row-policies` | 按表反查角色的行策略与 `Agent` 的最终行约束。 |",
+              "| 访问治理 | 访问关系图 | `/admin/access-map` | 查看授权路径与实际访问路径的对应关系。 |",
               "| 访问治理 | 访问日志 | `/admin/audit` | 按问询和工具调用追溯 `Agent` 访问行为、权限裁决与执行耗时。 |",
               "| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 检查 `Agent` 能不能连上，或者能不能查某张表。 |",
               "| 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |",
               "| 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |",
-              "| 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |",
-              "| 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 `KTX` 版本；有未提交改动时显示工作区状态。 |",
+              "| 系统设置 | 登录账户 | `/admin/accounts` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |",
+              "| 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 `KTX` 版本。 |",
               "",
               "> 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。",
               "",
@@ -254,7 +256,7 @@ function renderHelp(path = "/help") {
               "",
               "#### 丢失管理员账号或密码时如何恢复（break-glass）",
               "",
-              "自托管不提供邮箱找回。优先由其他所有者在 `/admin/admins` 重置；无人可登录时清空 `admins.yaml` 后以 `LUCY_WEBUI_AUTH=required` 重新 bootstrap。",
+              "自托管不提供邮箱找回。优先由其他所有者在 `/admin/accounts` 重置；无人可登录时清空 `admins.yaml` 后以 `LUCY_WEBUI_AUTH=required` 重新 bootstrap。",
               "",
               "### 3.6 质量评测",
               "",
@@ -875,7 +877,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 24 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 26 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
@@ -893,13 +895,17 @@ describe("HelpCenter", () => {
     const headers = table.querySelectorAll("thead th");
     expect(headers.length).toBe(4);
 
-    const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(24);
-
     // Every visible column must mirror the shared navigation module so the
     // handbook cannot drift from the current menu labels, paths, or copy.
     const expectedItems = navGroups.flatMap((g) => g.items);
     const expectedGroups = navGroups.flatMap((g) => g.items.map(() => g.title));
+
+    const bodyRows = table.querySelectorAll("tbody tr");
+    // The literal count is a tripwire: changing `navigation.ts` must be a
+    // conscious act that also updates the handbook mirror table.
+    expect(bodyRows.length).toBe(26);
+    expect(bodyRows.length).toBe(expectedItems.length);
+
     bodyRows.forEach((tr, idx) => {
       const cells = tr.querySelectorAll("td");
       expect(cells[0]?.textContent).toBe(expectedGroups[idx]);
@@ -1157,8 +1163,8 @@ describe("HelpCenter · 真实手册回归", () => {
     expect(baseline, "§0.0 文档基线没有正文落点").toBeInTheDocument();
     expect(cutover, "§0.4 版本号说明没有正文落点").toBeInTheDocument();
     expect(baseline?.textContent ?? "").toContain("产品版本");
-    expect(baseline?.textContent ?? "").toContain("0.20.0");
-    expect(cutover?.textContent ?? "").toContain("0.20.0");
+    expect(baseline?.textContent ?? "").toContain("0.25.0");
+    expect(cutover?.textContent ?? "").toContain("0.25.0");
 
     // 手写「目录」标题本身不进入正文（侧栏已承担目录职责）。
     expect(within(article).queryByRole("heading", { name: "目录" })).not.toBeInTheDocument();

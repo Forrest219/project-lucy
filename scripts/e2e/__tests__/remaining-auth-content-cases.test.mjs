@@ -55,7 +55,7 @@ import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir as osTmpdir } from "node:os";
 import path from "node:path";
-import { loadCatalog, catalogDigest } from "../lib/catalog.mjs";
+import { loadCatalog, catalogDigest, readLock } from "../lib/catalog.mjs";
 import { loadHandlers, statusFromAssertions } from "../run-security.mjs";
 import { handlers as remainingAuthHandlers } from "../security/remaining-auth-cases.mjs";
 import { handlers as remainingContentHandlers } from "../security/remaining-content-cases.mjs";
@@ -540,7 +540,10 @@ describe("SEC-14-V10 narrow edit preserves the existing assert set and extends i
 
 describe("catalog digest stability", () => {
   it("the catalog digest is unchanged by the D1/D2/D3 implementation (denominator preserved)", () => {
-    assert.equal(catalogDigest(cases), "sha256:240bff0f8085058405b0f6a0ae835b9934b651a1db17526d27af3b804714a694");
+    // 2026-10-28（D2 路径 A）：冻结目录**有意**扩容过一次 —— AUD25-A01..A12 与
+    // ARV25-V01..V12 并入冻结 catalog，分母 255 → 279、digest 240bff0f → c62cf23f。
+    // 字面量钉在 case-catalog.test.mjs（单一处），这里只断言 catalog ≡ 冻结 lock。
+    assert.equal(catalogDigest(cases), readLock().catalogDigest);
   });
 });
 

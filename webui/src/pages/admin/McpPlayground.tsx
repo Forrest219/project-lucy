@@ -2,9 +2,17 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
+import { McpRuntimeStatusPanel } from "../../components/McpRuntimeStatusPanel";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent, EffectivePermissionsPreview, McpRuntimeCanaryResult, McpRuntimeStatus } from "../../lib/types";
+import type {
+  Agent,
+  EffectivePermissionsPreview,
+  McpRuntimeCanaryResult,
+  McpRuntimeReloadResult,
+  McpRuntimeStatus
+} from "../../lib/types";
 import { queryKeys } from "../../lib/queryKeys";
+import { useAuthOptional } from "../../lib/auth";
 import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[] };
@@ -61,6 +69,23 @@ function initialTask(mode: string | null): Task {
   return "";
 }
 
+/**
+ * Tools this page can preview an ACL decision for.
+ *
+ * The URL may carry `tool=` (P1-2 授权摘要 deep link). It selects WHICH tool's
+ * authorization is previewed — nothing else. It must not widen or narrow the
+ * authorization semantics, and an unknown tool is ignored rather than passed
+ * through to the API: the preview must stay a preview of a tool this page
+ * actually knows how to reason about.
+ */
+const PREVIEWABLE_TOOLS = ["lucy_query"] as const;
+
+function readToolPrefill(raw: string | null): string {
+  if (!raw) return "lucy_query";
+  const value = raw.trim();
+  return (PREVIEWABLE_TOOLS as readonly string[]).includes(value) ? value : "lucy_query";
+}
+
 function tokenProblem(value: string): string | null {
   if (value.includes("{") || value.includes("mcpServers")) return "只粘贴 Token 那一串";
   return null;
@@ -89,6 +114,9 @@ export function McpPlayground() {
   const prefill = useMemo(() => readArgsPrefill(searchParams.get("args")), [searchParams]);
   const [agentId, setAgentId] = useState(() => searchParams.get("agentId") ?? "");
   const [task, setTask] = useState<Task>(() => initialTask(searchParams.get("mode")));
+  // P1-2 F-01 — the deep link's `tool` is consumed here instead of being read
+  // and discarded. It only chooses which tool's ACL decision is previewed.
+  const [previewTool] = useState(() => readToolPrefill(searchParams.get("tool")));
   const [connectionId, setConnectionId] = useState(prefill.connectionId);
   const [sourceName, setSourceName] = useState(prefill.sourceName);
   const [bearerToken, setBearerToken] = useState("");
@@ -118,7 +146,17 @@ export function McpPlayground() {
       void runtimeQuery.refetch();
     }
   });
-
+  // Spec 191 §5 — the owner confirmed reload. It restarts ONLY the KTX daemon;
+  // the WebUI and the proxy stay alive.
+  const reloadMutation = useMutation({
+    mutationFn: () =>
+      apiPost<McpRuntimeReloadResult>("/api/admin/mcp-runtime/reload", {
+        reason: "user_confirmed"
+      }),
+    onSuccess: () => {
+      void runtimeQuery.refetch();
+    }
+  });
   const previewMutation = useMutation({
     mutationFn: (body: { agentId: string; tool: string; arguments: unknown }) =>
       apiPost<AclPreviewData>("/api/admin/mcp-playground/acl-preview", body)
@@ -174,6 +212,10 @@ export function McpPlayground() {
   const roleHref = roleId
     ? `/admin/roles/${encodeURIComponent(roleId)}?tab=permissions`
     : `/admin/agents/${encodeURIComponent(agentId)}`;
+  // Spec 191 §8 — the reload is owner-only, so the action is only offered to an
+  // owner. The API refuses it for anyone else.
+  const auth = useAuthOptional();
+  const isOwner = auth?.status?.me?.role === "owner";
   const execution = runtimeQuery.data?.execution;
   const canaryResult = runtimeCanaryMutation.data;
   const executionReady = connectReady(execution, canaryResult);
@@ -232,7 +274,7 @@ export function McpPlayground() {
     syncQuery({ agentId, mode: "dry-run" });
     await previewMutation.mutateAsync({
       agentId,
-      tool: "lucy_query",
+      tool: previewTool,
       arguments: { connectionId, sourceName }
     });
   }
@@ -253,7 +295,9 @@ export function McpPlayground() {
     ? runtimeQuery.error.message
     : runtimeCanaryMutation.error instanceof Error
       ? runtimeCanaryMutation.error.message
-      : undefined;
+      : reloadMutation.error instanceof Error
+        ? reloadMutation.error.message
+        : undefined;
   const runtimeCard = task === "connect" && execution && runtimeQuery.isSuccess
     ? runtimeVerdict({
         execution,
@@ -332,6 +376,19 @@ export function McpPlayground() {
 
             {task === "connect" ? (
               <div className="grid gap-4" data-testid="mcp-playground-connect">
+                <McpRuntimeStatusPanel
+                  status={runtimeQuery.data}
+                  connectionId={canaryConnection}
+                  canary={canaryResult}
+                  pending={runtimeCanaryMutation.isPending}
+                  onRecheck={() => {
+                    if (!canaryConnection) return;
+                    runtimeCanaryMutation.mutate(canaryConnection);
+                  }}
+                  onReload={isOwner ? () => reloadMutation.mutate() : undefined}
+                  reloadPending={reloadMutation.isPending}
+                  reloadResult={reloadMutation.data}
+                />
                 {runtimeCard ? (
                   <section className="pl-panel" data-testid="mcp-playground-execution-block" data-tone={runtimeCard.tone}>
                     <VerdictCard

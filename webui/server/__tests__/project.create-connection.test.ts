@@ -14,6 +14,7 @@ import {
   readProject
 } from "../project";
 import { invalidateContentPathsCache } from "../paths";
+import type { ConfigChangeInput } from "../admin/audit";
 import type { ConnectionTestResult } from "../ktx";
 
 let projectRoot: string;
@@ -463,7 +464,7 @@ describe("createConnection (Spec 124 Phase A)", () => {
 
   it("supports sqlite connections without host, port, username, or password", async () => {
     const testFn = vi.fn(async () => okTest("local-sqlite"));
-    const audit = vi.fn(async () => 7);
+    const audit = vi.fn(async (_entry: ConfigChangeInput) => 7);
     const sqliteInput = {
       id: "local-sqlite",
       driver: "sqlite" as const,
@@ -506,7 +507,7 @@ describe("createConnection (Spec 124 Phase A)", () => {
   it("rolls back yaml and the secret created by this call when recordConfigChange throws", async () => {
     const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
     const plaintext = "s3cret-value";
-    const audit = vi.fn(async () => {
+    const audit = vi.fn(async (_entry: ConfigChangeInput) => {
       throw new Error("audit summary failed");
     });
 
@@ -543,7 +544,7 @@ describe("createConnection (Spec 124 Phase A)", () => {
 
   it("rolls back sqlite yaml when recordConfigChange throws and no secret was created", async () => {
     const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
-    const audit = vi.fn(async () => {
+    const audit = vi.fn(async (_entry: ConfigChangeInput) => {
       throw new Error("audit summary failed");
     });
 

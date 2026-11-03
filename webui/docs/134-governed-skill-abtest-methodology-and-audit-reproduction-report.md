@@ -11,6 +11,8 @@
 | 基于材料 | `webui/docs/171-governed-skill-system-and-context-transpass-spec.md`, `webui/docs/132-governed-skill-abtest-and-evaluation-benchmark-spec.md`, `webui/server/__tests__/skill-abtest-benchmark.test.ts` |
 | 适用范围 | 供客户技术与安全团队进行 Lucy Skill 治理效果评估、合规审计、效果复现与 POC 验收交付 |
 | 输出位置 | `webui/docs/134-governed-skill-abtest-methodology-and-audit-reproduction-report.md` |
+| 状态 | **已交付**（Test Report 类交付物，非待开工 SPEC）。所依据的基准用例见 `webui/server/__tests__/skill-abtest-benchmark.test.ts`；方法论基线见 Spec 132 |
+| 关联工单 | 无独立工单文件；随 Spec 132 的基准用例一并落地 |
 
 ---
 

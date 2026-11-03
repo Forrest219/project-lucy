@@ -69,6 +69,51 @@ export async function uiLogin(page: Page, creds: Credentials): Promise<void> {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
 }
 
+/**
+ * How many times a form login is retried when the product's own rate limit refuses it.
+ *
+ * D-34 (2026-10-29): the login buckets are keyed on the SOURCE address
+ * (`webui/server/auth/rate-limit.ts`: `sourceTotal` = 30 per 5 minutes, and
+ * `loginAccountSource` = 5 per 15 minutes per account+source). The deliberate
+ * rate-limit flood of the security leg now runs from its OWN loopback source, so the
+ * legitimate traffic of this leg normally never meets the limit. This retry is the
+ * belt-and-braces half of the fix (the "A′" half): if a leg still starts while the
+ * bucket is saturated, it WAITS for the window to roll instead of failing its cases.
+ */
+const LOGIN_RETRY_ATTEMPTS = 3;
+
+/** The seconds the product asked us to wait (`Retry-After`), or null when it is not the limit. */
+async function loginRetryAfterSeconds(baseUrl: string, creds: Credentials): Promise<number | null> {
+  try {
+    const res = await fetch(new URL("/api/auth/login", baseUrl), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ adminId: creds.adminId, password: creds.password })
+    });
+    if (res.status !== 429) return null;
+    const seconds = Number(res.headers.get("retry-after"));
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : 30;
+  } catch {
+    return null;
+  }
+}
+
+/** A form login that survives the product's own rate limit by waiting it out. */
+export async function uiLoginWithRateLimitWait(page: Page, creds: Credentials): Promise<void> {
+  const baseUrl = runContext().instance.baseUrl;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await uiLogin(page, creds);
+      return;
+    } catch (error) {
+      if (attempt >= LOGIN_RETRY_ATTEMPTS) throw error;
+      const waitSeconds = await loginRetryAfterSeconds(baseUrl, creds);
+      if (waitSeconds === null) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(waitSeconds, 120) * 1000));
+    }
+  }
+}
+
 export async function mcpCall(token: string, body: unknown): Promise<{ status: number; text: string }> {
   const res = await fetch(runContext().instance.mcpUrl, {
     method: "POST",
@@ -84,13 +129,47 @@ export async function currentAuthMode(): Promise<string | undefined> {
 }
 
 /**
+ * The admin session of THIS run, reused by every spec that needs one.
+ *
+ * The product buckets logins by SOURCE (`webui/server/auth/rate-limit.ts`):
+ * `loginAccountSource` = 5 logins per account+source per 15 minutes, and
+ * `sourceTotal` = 30 logins per source per 5 minutes — the SECOND one is the one that
+ * actually bites a full leg, because it is shared by every account on that source. A full
+ * management leg opens one browser context PER SPEC, so logging in again for each spec
+ * would trip the guard halfway through the leg and the leg could never finish. So the
+ * first spec logs in for real and every later spec reuses that session's storage state.
+ */
+let cachedSessionState: Awaited<ReturnType<BrowserContext["storageState"]>> | null = null;
+
+/** Is the cached session still accepted by the instance? */
+async function sessionWorks(context: BrowserContext): Promise<boolean> {
+  try {
+    // A PROTECTED endpoint: `/api/auth/status` only reports the auth MODE, so it
+    // cannot tell a valid session from an expired one.
+    const res = await context.request.get(new URL("/api/admin/agents", runContext().instance.baseUrl).toString());
+    return res.ok();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * A fresh browser context signed in as the run's owner through the real login form.
  * When the instance is still awaiting its first owner (a spec run on its own), the owner is created through
  * the real bootstrap form first. Never reuses state written to disk.
  */
 export async function ownerContext(browser: Browser): Promise<BrowserContext> {
   const { owner } = adminCredentials();
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const viewport = { viewport: { width: 1440, height: 900 } };
+
+  if (cachedSessionState) {
+    const reused = await browser.newContext({ ...viewport, storageState: cachedSessionState });
+    if (await sessionWorks(reused)) return reused;
+    await reused.close();
+    cachedSessionState = null;
+  }
+
+  const context = await browser.newContext(viewport);
   const page = await context.newPage();
   if ((await currentAuthMode()) === "bootstrap") {
     await page.goto("/login");
@@ -100,9 +179,15 @@ export async function ownerContext(browser: Browser): Promise<BrowserContext> {
     await page.getByRole("button", { name: "创建并登录" }).click();
     await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
   } else {
-    await uiLogin(page, owner);
+    await uiLoginWithRateLimitWait(page, owner);
   }
   await page.close();
+  try {
+    cachedSessionState = await context.storageState();
+  } catch {
+    // A context whose state cannot be read simply means the next spec logs in again.
+    cachedSessionState = null;
+  }
   return context;
 }
 

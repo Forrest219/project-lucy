@@ -70,15 +70,35 @@ async function exerciseWrites(base: string, cookie: string, tag: string, headers
   const v1 = (await call("GET", `/api/wiki/${enc}`)).data.file_version as string;
   await call("PUT", `/api/wiki/${enc}`, { dryRun: false, content: "# two\n", expected_version: v1, actor: "root" });
   const v2 = (await call("GET", `/api/wiki/${enc}`)).data.file_version as string;
+  // Spec 193 §5.4 — the upload commit carries the original Markdown, an
+  // explicit authorization selection and the preview digest.
+  const uploadSelection = { mode: "preserve_current" } as const;
+  const uploadPreview = await call("POST", "/api/wiki/upload/preview", {
+    key,
+    markdown: "# three\n",
+    mode: "replace",
+    expected_version: v2,
+    access: uploadSelection
+  });
   await call("POST", "/api/wiki/upload/commit", {
     key,
     markdown: "# three\n",
-    overwrite: true,
-    expected_version: v2
+    mode: "replace",
+    expected_version: v2,
+    access: uploadSelection,
+    // The target keeps its current (empty) authorization, so the "nobody can
+    // read this yet" confirmation is required.
+    confirmed_empty: true,
+    preview_digest: uploadPreview.data.access.preview_digest,
+    actor: "root"
   });
+  const v3 = (await call("GET", `/api/wiki/${enc}`)).data.file_version as string;
   const versions = (await call("GET", `/api/wiki/${enc}/versions`)).data.versions as Array<{ versionId: string }>;
-  await call("POST", `/api/wiki/${enc}/versions/${versions.at(-1)!.versionId}/restore`);
-  await call("POST", `/api/wiki/${enc}/move`, { targetDirectory: "ops" });
+  await call("POST", `/api/wiki/${enc}/versions/${versions.at(-1)!.versionId}/restore`, {
+    expected_version: v3
+  });
+  const v4 = (await call("GET", `/api/wiki/${enc}`)).data.file_version as string;
+  await call("POST", `/api/wiki/${enc}/move`, { targetDirectory: "ops", expected_version: v4 });
 
   const src = "/api/sources/mysql-aliyun/dataforai/superstore_orders";
   await call("PUT", src, { dryRun: false, patch: { tableDescription: `Saved by ${tag}.` } });
@@ -160,7 +180,16 @@ describe("T08-1 trusted actor propagation (customer / auth required)", () => {
     });
     expect(created.status).toBe(201);
     await api(lucy.baseUrl, "PUT", "/api/wiki/global%2Ft08-del.md", cookie, { dryRun: false, content: "# del\n" });
-    const deleted = await api(lucy.baseUrl, "DELETE", "/api/wiki/global%2Ft08-del.md", cookie);
+    // Spec 193 — the structural delete carries the document version it expects
+    // to remove.
+    const delPage = await api(lucy.baseUrl, "GET", "/api/wiki/global%2Ft08-del.md", cookie);
+    const delVersion = (await delPage.json()).data.file_version as string;
+    const deleted = await api(
+      lucy.baseUrl,
+      "DELETE",
+      `/api/wiki/global%2Ft08-del.md?expected_version=${encodeURIComponent(delVersion)}`,
+      cookie
+    );
     expect(deleted.status).toBe(200);
     const rows = (await configRows()).filter((row) => ["skill_create", "wiki_delete"].includes(row.change_type));
     expect(rows.map((row) => row.change_type).sort()).toEqual(["skill_create", "wiki_delete"]);

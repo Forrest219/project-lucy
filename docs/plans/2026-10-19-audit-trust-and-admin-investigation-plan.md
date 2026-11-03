@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 分批实施与交接计划 |
 | 版本与日期 | v0.1，2026-10-19，Asia/Shanghai |
-| 状态 | Spec与Plan已形成，代码未实施，验收未运行 |
+| 状态 | 运行时合同见 L25-09 S01–S07，该合同已收口。管理员第一现场的页面接入保留为历史事实。EA 已从本条删除。不进入版本升级清单。2026-11-02：「代码未实施，验收未运行」已作废，不得当作现值 |
 | 用户决定 | 已批准Codex交叉复核结论；要求拆解Spec/Plan，计划交Claude Code落地、Codex评审验收 |
 | Spec | [审计可信度与管理员调查优化](../specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md) |
 | 验收 | [EA-01至EA-36矩阵](../qa/audit-trust-and-admin-investigation-acceptance.md) |

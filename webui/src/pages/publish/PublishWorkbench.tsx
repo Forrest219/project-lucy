@@ -1,16 +1,21 @@
 import clsx from "clsx";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
+import { PublishBatchPlanPanel } from "../../components/semantic-assets/PublishBatchPlanPanel";
+import { PublishRecentReleases } from "../../components/semantic-assets/PublishRecentReleases";
+import { PublishSyncConfirmDrawer } from "../../components/semantic-assets/PublishSyncConfirmDrawer";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { toast } from "sonner";
 import type {
   ChangedFilesResponse,
+  PublishImpact,
   SemanticAssetManualReindexResponse,
+  SemanticAssetReleasesResponse,
   SourceSummary,
   ValidateChangedResponse,
   ValidationResult
@@ -119,17 +124,33 @@ export function classifyChangedSemanticFiles(filePaths: string[]): ClassifiedSem
   return filePaths.map(classifyChangedSemanticFile);
 }
 
+export type ImpactedSemanticTable = { conn: string; table: string };
+
+/**
+ * Table-level overlays keyed by connection. Schema Manifest paths are excluded.
+ */
+export function impactedSemanticTables(filePaths: string[]): ImpactedSemanticTable[] {
+  const seen = new Set<string>();
+  const tables: ImpactedSemanticTable[] = [];
+  for (const classified of classifyChangedSemanticFiles(filePaths)) {
+    if (classified.kind !== "table-overlay") continue;
+    const id = `${classified.conn}/${classified.table}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    tables.push({ conn: classified.conn, table: classified.table });
+  }
+  return tables.sort((left, right) =>
+    left.conn === right.conn
+      ? left.table.localeCompare(right.table)
+      : left.conn.localeCompare(right.conn)
+  );
+}
+
 /**
  * Table-level overlays only. Schema Manifest paths must not appear as table names.
  */
 export function impactedTableNames(filePaths: string[]): string[] {
-  const seen = new Set<string>();
-  for (const classified of classifyChangedSemanticFiles(filePaths)) {
-    if (classified.kind === "table-overlay") {
-      seen.add(classified.table);
-    }
-  }
-  return [...seen].sort();
+  return [...new Set(impactedSemanticTables(filePaths).map((item) => item.table))].sort();
 }
 
 export function fileChangeStatusLabel(status: string): string {
@@ -143,9 +164,10 @@ export function fileChangeStatusLabel(status: string): string {
 
 function findSourceForTable(
   sources: SourceSummary[],
+  conn: string,
   tableName: string
 ): SourceSummary | null {
-  return sources.find((source) => source.table === tableName) ?? null;
+  return sources.find((source) => source.conn === conn && source.table === tableName) ?? null;
 }
 
 const boundaryChecklistRules: Array<{ pattern: RegExp; prompt: string }> = [
@@ -190,13 +212,16 @@ export function boundaryChecklistForChangedFiles(files: string[]): string[] {
 type PublishGate =
   | { state: "empty" }
   | { state: "pending" }
+  | { state: "stale" }
   | { state: "ready" };
 
 function derivePublishGate(
   pendingFiles: number,
-  validate: ValidateChangedResponse | null | undefined
+  validate: ValidateChangedResponse | null | undefined,
+  stale: boolean
 ): PublishGate {
   if (pendingFiles === 0) return { state: "empty" };
+  if (stale) return { state: "stale" };
   if (!validate) return { state: "pending" };
   if (validate.results.length === 0) return { state: "pending" };
   if (validate.results.some((row) => !row.validation.ok)) return { state: "pending" };
@@ -207,6 +232,9 @@ function gateNextStepCopy(gate: PublishGate, failedCount: number, hasValidate: b
   if (gate.state === "empty") {
     return "暂无待同步变更。可直接同步索引，或在「更多」中全量重建。";
   }
+  if (gate.state === "stale") {
+    return "待发布内容已变化，旧校验结果已失效，请重新校验。";
+  }
   if (!hasValidate) {
     return "下一步：校验变更。";
   }
@@ -216,7 +244,7 @@ function gateNextStepCopy(gate: PublishGate, failedCount: number, hasValidate: b
   if (gate.state === "pending") {
     return "当前变更无可校验对象或校验未通过，同步已阻断。";
   }
-  return "表语义校验已通过，可使用顶部「同步索引并生效」。";
+  return "表语义校验已通过，可在本栏「同步索引并生效」。";
 }
 
 export function countDiffLines(diff?: string): { added: number; deleted: number } {
@@ -233,17 +261,47 @@ export function countDiffLines(diff?: string): { added: number; deleted: number 
   return { added, deleted };
 }
 
+/** The three groups of the pending column (Spec §4.1). */
+type PendingGroupId = "semantic" | "manifest" | "wiki" | "other";
+
+const PENDING_GROUP_ORDER: Array<{ id: PendingGroupId; title: string }> = [
+  { id: "semantic", title: "语义资产" },
+  { id: "manifest", title: "Schema Manifest" },
+  { id: "wiki", title: "业务 Wiki" },
+  { id: "other", title: "其它内容" }
+];
+
+function pendingGroupOf(filePath: string): PendingGroupId {
+  if (filePath.startsWith("wiki/")) return "wiki";
+  const classified = classifyChangedSemanticFile(filePath);
+  if (classified.kind === "schema-manifest") return "manifest";
+  if (classified.kind === "table-overlay") return "semantic";
+  return "other";
+}
+
 export function PublishWorkbench() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  // ★ Lucy v0.25 / L25-11 §3.2 (D13): the workbench receives a BATCH ID.
+  // It never receives a client-provided disk path — the targets come from the
+  // server-side plan.
+  const batchValidationId = searchParams.get("validationId") ?? "";
   const [selected, setSelected] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [confirmPublishOpen, setConfirmPublishOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [showValidationDetails, setShowValidationDetails] = useState(false);
-  const autoValidatedSignature = useRef<string | null>(null);
+  const autoValidatedVersion = useRef<string | null>(null);
 
   const diffQuery = useQuery({
     queryKey: queryKeys.diff,
     queryFn: () => apiGet<ChangedFilesResponse>("/api/diff")
+  });
+  const recentReleasesQuery = useQuery({
+    queryKey: queryKeys.semanticAssetRecentReleases(true),
+    queryFn: () =>
+      apiGet<SemanticAssetReleasesResponse>(
+        "/api/semantic-assets/releases?businessChangesOnly=true&limit=5"
+      )
   });
   const validateMutation = useMutation({
     mutationFn: () => apiPost<ValidateChangedResponse>("/api/validate-changed", {}),
@@ -274,9 +332,10 @@ export function PublishWorkbench() {
     }
   });
   const reindexMutation = useMutation({
-    mutationFn: (opts?: { force?: boolean }) =>
+    mutationFn: (opts?: { force?: boolean; pendingDigest?: string }) =>
       apiPost<SemanticAssetManualReindexResponse>("/api/semantic-assets/reindex", {
-        force: opts?.force === true
+        force: opts?.force === true,
+        ...(opts?.pendingDigest ? { pendingDigest: opts.pendingDigest } : {})
       }),
     onSuccess: (data) => {
       if (data.reindex.ok) {
@@ -311,6 +370,9 @@ export function PublishWorkbench() {
   const files = diffQuery.data?.files ?? [];
   const mirrorOnlySemanticFiles = diffQuery.data?.mirrorOnlySemanticFiles ?? [];
   const mirrorDriftTruncated = diffQuery.data?.mirrorDriftTruncated === true;
+  const pendingDigest = diffQuery.data?.pendingDigest ?? null;
+  const baselineState = diffQuery.data?.baselineState ?? "ready";
+  const impact = diffQuery.data?.impact ?? null;
   const fileSignature = files.map((file) => file.filePath).join("\n");
   const hasPendingFiles = files.length > 0;
   const boundaryChecklist = boundaryChecklistForChangedFiles(files.map((file) => file.filePath));
@@ -318,7 +380,16 @@ export function PublishWorkbench() {
   const failedCount = validateMutation.data?.results.filter((item) => !item.validation.ok).length ?? 0;
   const totalValidated = validateMutation.data?.results.length ?? 0;
   const passedCount = totalValidated - failedCount;
-  const publishGate = derivePublishGate(files.length, validateMutation.data);
+
+  /**
+   * The validation result belongs to the content version it was computed on.
+   * A late response for an older version must not overwrite the newer state.
+   */
+  const validationVersion = validateMutation.data?.pendingDigest ?? null;
+  const validationIsStale =
+    pendingDigest !== null && validationVersion !== null && validationVersion !== pendingDigest;
+
+  const publishGate = derivePublishGate(files.length, validateMutation.data, validationIsStale);
   const publishCtaDisabled = publishGate.state !== "ready";
   const classified = useMemo(
     () => classifyChangedSemanticFiles(files.map((file) => file.filePath)),
@@ -329,38 +400,75 @@ export function PublishWorkbench() {
       item.kind === "schema-manifest"
   );
   const impactedTables = useMemo(
-    () => impactedTableNames(files.map((file) => file.filePath)),
+    () => impactedSemanticTables(files.map((file) => file.filePath)),
     [files]
   );
   const otherChanges = classified.filter((item) => item.kind === "other");
   const impactedTableRefs = useMemo(() => {
     const sources = sourcesQuery.data?.tables ?? [];
-    return impactedTables.map((tableName) => ({
-      tableName,
-      source: findSourceForTable(sources, tableName)
+    return impactedTables.map((item) => ({
+      conn: item.conn,
+      tableName: item.table,
+      source: findSourceForTable(sources, item.conn, item.table)
     }));
   }, [impactedTables, sourcesQuery.data]);
-  const postPublishEvalDomains = impactedTables.length > 0 ? impactedTables : ["all"];
+  const postPublishEvalDomains =
+    impactedTables.length > 0 ? [...new Set(impactedTables.map((item) => item.table))] : ["all"];
   const reindexSucceeded = reindexMutation.data?.reindex.ok === true;
   const reindexFinished = reindexSucceeded && publishGate.state !== "ready";
   const reindexFailed = reindexMutation.data ? !reindexMutation.data.reindex.ok : false;
   const showPostPublishPrompt = reindexSucceeded && files.length > 0 && !publishCtaDisabled;
+
+  /**
+   * The pending list, grouped for reading. The business name comes from the
+   * SERVER-computed impact where it is known; the file path stays as the
+   * secondary identity.
+   */
+  const pendingGroups = useMemo(() => {
+    const identityByPath = new Map<string, string>();
+    for (const table of impact?.tables ?? []) {
+      for (const reason of table.reasons) {
+        const identity = `${table.identity.connectionId}/${table.identity.schema}/${table.identity.table}`;
+        identityByPath.set(reason.filePath, identity);
+      }
+    }
+    const wikiTitleByPath = new Map<string, string>();
+    for (const wiki of impact?.wikiChanges ?? []) {
+      if (wiki.title) wikiTitleByPath.set(wiki.filePath, wiki.title);
+    }
+    return PENDING_GROUP_ORDER.map((group) => ({
+      ...group,
+      items: files
+        .filter((file) => pendingGroupOf(file.filePath) === group.id)
+        .map((file) => ({
+          file,
+          businessName:
+            identityByPath.get(file.filePath) ??
+            wikiTitleByPath.get(file.filePath) ??
+            undefined
+        }))
+    })).filter((group) => group.items.length > 0);
+  }, [files, impact]);
 
   const runValidate = validateMutation.mutate;
   const validatePending = validateMutation.isPending;
 
   useEffect(() => {
     if (!hasPendingFiles) {
-      autoValidatedSignature.current = null;
+      autoValidatedVersion.current = null;
       return;
     }
     if (diffQuery.isLoading || diffQuery.error || validatePending) return;
-    if (autoValidatedSignature.current === fileSignature) return;
-    autoValidatedSignature.current = fileSignature;
+    // The validation is bound to the CONTENT VERSION, not to a list of paths:
+    // the same path with different content is a different version.
+    const version = pendingDigest ?? fileSignature;
+    if (autoValidatedVersion.current === version) return;
+    autoValidatedVersion.current = version;
     runValidate();
   }, [
     hasPendingFiles,
     fileSignature,
+    pendingDigest,
     diffQuery.isLoading,
     diffQuery.error,
     validatePending,
@@ -368,27 +476,26 @@ export function PublishWorkbench() {
   ]);
 
   useEffect(() => {
-    if (!detailOpen && !confirmPublishOpen) return;
+    if (!detailOpen && !confirmOpen) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      if (confirmPublishOpen) setConfirmPublishOpen(false);
+      if (confirmOpen) setConfirmOpen(false);
       else if (detailOpen) setDetailOpen(false);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [detailOpen, confirmPublishOpen]);
+  }, [detailOpen, confirmOpen]);
 
   function validationForFile(filePath: string) {
     const tableName = tableNameFromPath(filePath);
     return validateMutation.data?.results.find((item) => item.table === tableName)?.validation;
   }
 
-  const publishCtaLabel =
-    reindexMutation.isPending || validateMutation.isPending
-      ? "处理中…"
-      : hasPendingFiles
-        ? "同步索引并生效"
-        : "同步索引";
+  const publishCtaLabel = reindexMutation.isPending || validateMutation.isPending
+    ? "处理中…"
+    : hasPendingFiles
+      ? "同步索引并生效"
+      : "同步索引";
 
   const nextStepCopy = gateNextStepCopy(
     publishGate,
@@ -401,16 +508,39 @@ export function PublishWorkbench() {
   const stepValidateActive = hasPendingFiles && publishGate.state === "pending";
   const stepPublishActive = publishGate.state === "ready";
 
+  const refreshAll = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.diff });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.semanticAssetReleases });
+  }, [queryClient]);
+
   function submitConfirmPublish() {
     reindexMutation.mutate(
-      { force: false },
+      { force: false, ...(pendingDigest ? { pendingDigest } : {}) },
       {
         onSuccess: (data) => {
-          if (data.reindex.ok) setConfirmPublishOpen(false);
+          if (data.reindex.ok) setConfirmOpen(false);
         }
       }
     );
   }
+
+  const pendingRequestFailed = Boolean(diffQuery.error);
+  const confirmSubmitDisabled =
+    publishCtaDisabled ||
+    pendingRequestFailed ||
+    baselineState === "needs_verification" ||
+    (impact !== null && impact.complete === false);
+
+  const confirmDisabledReason =
+    pendingRequestFailed
+      ? "待发布变更加载失败，无法提交。"
+      : baselineState === "needs_verification"
+        ? "生效基线需要核对，暂不能提交。"
+        : impact !== null && impact.complete === false
+          ? "影响范围未完整解析，暂不能提交。"
+          : publishGate.state === "stale"
+            ? "待发布内容已变化，请重新校验。"
+            : undefined;
 
   function renderMoreMenu() {
     return (
@@ -445,57 +575,46 @@ export function PublishWorkbench() {
         }
         actions={
           <>
-            {hasPendingFiles ? (
-              <>
-                <button
-                  type="button"
-                  className="pl-btn pl-btn--secondary"
-                  onClick={() => validateMutation.mutate()}
-                  disabled={validateMutation.isPending}
-                  data-testid="workbench-validate"
-                >
-                  {validateMutation.isPending ? "正在校验表语义…" : "校验变更"}
-                </button>
-                <button
-                  type="button"
-                  className={clsx(
-                    "pl-btn",
-                    publishGate.state === "ready" ? "pl-btn--primary" : "pl-btn--secondary",
-                    publishGate.state === "ready" && "pl-btn--cta"
-                  )}
-                  onClick={() => {
-                    setDetailOpen(false);
-                    setConfirmPublishOpen(true);
-                  }}
-                  disabled={publishCtaDisabled}
-                  data-testid="workbench-publish-and-reindex"
-                  data-gate={publishGate.state}
-                  aria-disabled={publishCtaDisabled}
-                >
-                  {publishCtaLabel}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="pl-btn pl-btn--secondary"
-                onClick={() => reindexMutation.mutate({ force: false })}
-                disabled={reindexMutation.isPending}
-                data-testid="workbench-sync-index"
-              >
-                {reindexMutation.isPending ? "同步中…" : "同步索引"}
-              </button>
-            )}
+            <button
+              type="button"
+              className="pl-btn pl-btn--secondary"
+              onClick={refreshAll}
+              disabled={diffQuery.isFetching}
+              data-testid="workbench-refresh"
+            >
+              {diffQuery.isFetching ? "刷新中…" : "刷新"}
+            </button>
             {renderMoreMenu()}
           </>
         }
       />
 
-      <div className="pl-review-layout" data-testid="publish-workbench-layout">
-        <aside className="pl-review-sidebar" data-testid="workbench-pending-panel">
-          <p className="pl-panel-title mb-2">本次将同步的变更</p>
+      <div className="pl-publish-workbench-layout" data-testid="publish-workbench-layout">
+        {batchValidationId ? (
+          <PublishBatchPlanPanel
+            validationId={batchValidationId}
+            onPublished={() => {
+              void queryClient.invalidateQueries({ queryKey: queryKeys.diff });
+              void queryClient.invalidateQueries({ queryKey: queryKeys.semanticAssetReleases });
+            }}
+          />
+        ) : null}
+
+        {/* ── 左栏：待发布变更 ─────────────────────────────────────────── */}
+        <aside
+          className="pl-publish-workbench-column pl-publish-workbench-column--pending"
+          data-testid="workbench-pending-panel"
+          aria-label="待发布变更"
+        >
+          <div>
+            <p className="pl-panel-title mb-1">待发布变更</p>
+            <p className="text-xs text-fg-muted" data-testid="workbench-pending-count">
+              {hasPendingFiles ? `${files.length} 个待同步文件` : "无待同步文件"}
+            </p>
+          </div>
+
           {mirrorOnlySemanticFiles.length > 0 ? (
-            <p className="pl-notice text-xs mb-2" data-testid="workbench-mirror-only-semantic">
+            <p className="pl-notice text-xs" data-testid="workbench-mirror-only-semantic">
               镜像中仍有内容根已删除的语义文件，本次索引可能继续收录。{" "}
               <span className="notranslate" translate="no">
                 {mirrorOnlySemanticFiles.slice(0, 3).join("、")}
@@ -506,14 +625,23 @@ export function PublishWorkbench() {
               {mirrorDriftTruncated ? " 还有更多未列出。" : null}
             </p>
           ) : null}
+
           {diffQuery.isLoading ? <p className="pl-notice">正在加载变更…</p> : null}
+
           {diffQuery.error ? (
-            <p className="pl-error">
+            <p className="pl-error" data-testid="workbench-pending-error">
               变更加载失败：
               {diffQuery.error instanceof Error ? diffQuery.error.message : "未知错误"}
             </p>
           ) : null}
-          {files.length === 0 && !diffQuery.isLoading ? (
+
+          {baselineState === "needs_verification" ? (
+            <p className="pl-notice text-xs" data-testid="workbench-baseline-needs-verification">
+              生效状态待核验：{diffQuery.data?.impact?.unresolved?.[0]?.reason ?? "发布基线需要核对。"}
+            </p>
+          ) : null}
+
+          {files.length === 0 && !diffQuery.isLoading && !pendingRequestFailed ? (
             <div className="pl-notice" data-testid="workbench-empty-state">
               <p className="font-medium">暂无待同步变更</p>
               <p className="mt-1">
@@ -521,51 +649,88 @@ export function PublishWorkbench() {
               </p>
             </div>
           ) : null}
-          {files.length > 0 ? (
-            <p className="pl-notice text-xs mb-2" data-testid="workbench-batch-sync-hint">
-              本批一并同步 {files.length} 项（不可分文件勾选）。点击文件查看变更详情。
+
+          {pendingGroups.length > 0 ? (
+            <p className="pl-notice text-xs" data-testid="workbench-batch-sync-hint">
+              本批一并同步 {files.length} 项（不可分文件勾选）。
             </p>
           ) : null}
-          <div className="pl-file-list">
-            {files.map((file) => {
-              const diffStats = countDiffLines(file.diff);
-              return (
-                <button
-                  className={clsx(
-                    "pl-file-button",
-                    detailOpen && active?.filePath === file.filePath && "pl-file-button--active"
-                  )}
-                  key={file.filePath}
-                  type="button"
-                  onClick={() => {
-                    setSelected(file.filePath);
-                    setDetailOpen(true);
-                  }}
+
+          {pendingGroups.length > 0 ? (
+            <div className="pl-publish-workbench-pending-list" data-testid="workbench-pending-groups">
+              {pendingGroups.map((group) => (
+                <section
+                  key={group.id}
+                  className="pl-publish-workbench-group"
+                  data-testid={`workbench-pending-group-${group.id}`}
                 >
-                  <span>{fileChangeStatusLabel(file.status)}</span>
-                  <span className="truncate notranslate font-mono text-xs" translate="no">
-                    {file.filePath}
-                  </span>
-                  <span className="flex items-center gap-1 text-xs shrink-0">
-                    {diffStats.added > 0 ? (
-                      <span className="pl-diff-stat pl-diff-stat--add">+{diffStats.added}</span>
-                    ) : null}
-                    {diffStats.deleted > 0 ? (
-                      <span className="pl-diff-stat pl-diff-stat--del">-{diffStats.deleted}</span>
-                    ) : null}
-                  </span>
-                  {validationForFile(file.filePath)?.ok === false ? (
-                    <small>校验失败</small>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+                  <p className="pl-publish-workbench-group-title">
+                    {group.id === "manifest" ? (
+                      <span className="notranslate" translate="no">
+                        {group.title}
+                      </span>
+                    ) : group.id === "wiki" ? (
+                      <span className="notranslate" translate="no">
+                        {group.title}
+                      </span>
+                    ) : (
+                      group.title
+                    )}
+                    {" · "}
+                    {group.items.length}
+                  </p>
+                  <ul className="pl-file-list list-none p-0 m-0">
+                    {group.items.map(({ file, businessName }) => {
+                      const diffStats = countDiffLines(file.diff);
+                      return (
+                        <li key={file.filePath}>
+                          <button
+                            className={clsx(
+                              "pl-file-button",
+                              detailOpen && active?.filePath === file.filePath && "pl-file-button--active"
+                            )}
+                            type="button"
+                            onClick={() => {
+                              setSelected(file.filePath);
+                              setDetailOpen(true);
+                            }}
+                          >
+                            <span>{fileChangeStatusLabel(file.status)}</span>
+                            <span className="truncate notranslate font-mono text-xs" translate="no">
+                              {file.filePath}
+                            </span>
+                            <span className="flex items-center gap-1 text-xs shrink-0">
+                              {diffStats.added > 0 ? (
+                                <span className="pl-diff-stat pl-diff-stat--add">+{diffStats.added}</span>
+                              ) : null}
+                              {diffStats.deleted > 0 ? (
+                                <span className="pl-diff-stat pl-diff-stat--del">-{diffStats.deleted}</span>
+                              ) : null}
+                            </span>
+                            {validationForFile(file.filePath)?.ok === false ? (
+                              <small>校验失败</small>
+                            ) : null}
+                            {businessName ? (
+                              <small className="col-span-3 text-xs text-fg-muted notranslate" translate="no">
+                                {businessName}
+                              </small>
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          ) : null}
         </aside>
 
+        {/* ── 中栏：生效准备 ───────────────────────────────────────────── */}
         <section
-          className="pl-review-main grid gap-4"
+          className="pl-publish-workbench-column"
           data-testid="publish-gate-panel"
+          aria-label="生效准备"
         >
           <section
             className="grid gap-3"
@@ -573,11 +738,13 @@ export function PublishWorkbench() {
             data-impact-state={
               files.length === 0
                 ? "empty"
-                : validateMutation.data && failedCount > 0
-                  ? "validation-failed"
-                  : validateMutation.data
-                    ? "validated"
-                    : "pending"
+                : validationIsStale
+                  ? "stale"
+                  : validateMutation.data && failedCount > 0
+                    ? "validation-failed"
+                    : validateMutation.data
+                      ? "validated"
+                      : "pending"
             }
           >
             <p className="pl-panel-title">生效准备</p>
@@ -622,17 +789,19 @@ export function PublishWorkbench() {
                   "pl-pipeline-step",
                   validateMutation.isPending
                     ? "pl-pipeline-step--running"
-                    : validateMutation.data
-                      ? failedCount > 0
-                        ? "pl-pipeline-step--failed"
-                        : "pl-pipeline-step--success"
-                      : stepValidateActive
-                        ? "pl-pipeline-step--ready"
-                        : "pl-pipeline-step--pending"
+                    : validationIsStale
+                      ? "pl-pipeline-step--ready"
+                      : validateMutation.data
+                        ? failedCount > 0
+                          ? "pl-pipeline-step--failed"
+                          : "pl-pipeline-step--success"
+                        : stepValidateActive
+                          ? "pl-pipeline-step--ready"
+                          : "pl-pipeline-step--pending"
                 )}
               >
                 <div className="pl-pipeline-step__icon">
-                  {validateMutation.isPending ? "⋯" : validateMutation.data ? (failedCount > 0 ? "✕" : "✓") : "2"}
+                  {validateMutation.isPending ? "⋯" : validateMutation.data && !validationIsStale ? (failedCount > 0 ? "✕" : "✓") : "2"}
                 </div>
                 <div className="pl-pipeline-step__text">
                   <span
@@ -646,13 +815,15 @@ export function PublishWorkbench() {
                   <span className="pl-pipeline-step__sub">
                     {validateMutation.isPending
                       ? "正在校验表语义…"
-                      : validateMutation.data
-                        ? failedCount > 0
-                          ? `表语义校验失败 ${failedCount} 张`
-                          : validateMutation.data.results.length === 0
-                            ? "无可校验表"
-                            : `表语义校验通过 ${passedCount}/${totalValidated}`
-                        : "待校验"}
+                      : validationIsStale
+                        ? "内容已变化，需重新校验"
+                        : validateMutation.data
+                          ? failedCount > 0
+                            ? `表语义校验失败 ${failedCount} 张`
+                            : validateMutation.data.results.length === 0
+                              ? "无可校验表"
+                              : `表语义校验通过 ${passedCount}/${totalValidated}`
+                          : "待校验"}
                   </span>
                 </div>
               </li>
@@ -709,6 +880,53 @@ export function PublishWorkbench() {
 
             {files.length === 0 ? null : (
               <div className="grid gap-2">
+                {impact && impact.counts.tables > 0 ? (
+                  <div className="grid gap-1.5">
+                    <div className="text-xs text-fg-muted">
+                      涉及的表 · 共 {impact.counts.tables} 张
+                    </div>
+                    <ul className="grid gap-1.5 text-sm" data-testid="publish-change-impact-list">
+                      {impact.tables.map((table) => {
+                        const tableName = table.identity.table;
+                        const key = `${table.identity.connectionId}/${table.identity.schema}/${tableName}`;
+                        const source = findSourceForTable(
+                          sourcesQuery.data?.tables ?? [],
+                          table.identity.connectionId,
+                          table.identity.table
+                        );
+                        return (
+                          <li key={key} className="flex items-center justify-between gap-2">
+                            {source ? (
+                              <Link
+                                to={buildObjectDetailSearch({
+                                  kind: "table",
+                                  conn: source.conn,
+                                  schema: source.schema,
+                                  table: source.table
+                                })}
+                                className="pl-inline-link notranslate"
+                                translate="no"
+                                data-testid={`publish-impact-table-${tableName}`}
+                              >
+                                {key}
+                              </Link>
+                            ) : (
+                              <span
+                                className="text-fg-default notranslate"
+                                translate="no"
+                                data-testid={`publish-impact-table-${tableName}`}
+                              >
+                                {key}
+                              </span>
+                            )}
+                            <span className="text-xs text-fg-muted">{table.reasons[0]?.summary}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
+
                 {schemaManifests.length > 0 ? (
                   <div className="grid gap-1.5">
                     <div className="text-xs text-fg-muted">
@@ -732,14 +950,14 @@ export function PublishWorkbench() {
                   </div>
                 ) : null}
 
-                {impactedTables.length > 0 ? (
+                {impactedTables.length > 0 && (!impact || impact.counts.tables === 0) ? (
                   <div className="grid gap-1.5">
                     <div className="text-xs text-fg-muted">
                       表语义变更 · 共影响 {impactedTables.length} 张表
                     </div>
                     <ul className="grid gap-1.5 text-sm" data-testid="publish-change-impact-list">
-                      {impactedTableRefs.map(({ tableName, source }) => (
-                        <li key={tableName} className="flex items-center justify-between gap-2">
+                      {impactedTableRefs.map(({ conn, tableName, source }) => (
+                        <li key={`${conn}/${tableName}`} className="flex items-center justify-between gap-2">
                           {source ? (
                             <Link
                               to={buildObjectDetailSearch({
@@ -750,7 +968,7 @@ export function PublishWorkbench() {
                               })}
                               className="pl-inline-link notranslate"
                               translate="no"
-                              data-testid={`publish-impact-table-${tableName}`}
+                              data-testid={`publish-impact-table-${conn}-${tableName}`}
                             >
                               {tableName}
                             </Link>
@@ -758,20 +976,29 @@ export function PublishWorkbench() {
                             <span
                               className="text-fg-default notranslate"
                               translate="no"
-                              data-testid={`publish-impact-table-${tableName}`}
+                              data-testid={`publish-impact-table-${conn}-${tableName}`}
                             >
                               {tableName}
                             </span>
                           )}
                           <span className="text-xs text-fg-muted">
-                            {source ? `${source.conn}/${source.schema}` : "未在 Catalog 中"}
+                            {source ? (
+                              <span className="notranslate" translate="no">
+                                {source.conn}/{source.schema}
+                              </span>
+                            ) : (
+                              <>
+                                <span className="notranslate" translate="no">
+                                  {conn}
+                                </span>
+                                {" · 未在 Catalog 中"}
+                              </>
+                            )}
                           </span>
                         </li>
                       ))}
                     </ul>
                   </div>
-                ) : schemaManifests.length === 0 && otherChanges.length === 0 ? (
-                  <p className="pl-notice text-xs">暂无表级语义变更。</p>
                 ) : null}
 
                 {otherChanges.length > 0 ? (
@@ -789,6 +1016,51 @@ export function PublishWorkbench() {
             )}
           </section>
 
+          {/* The ONE publish action of the page (Spec §4.2). */}
+          <div className="flex flex-wrap items-center gap-2" data-testid="publish-primary-actions">
+            {hasPendingFiles ? (
+              <>
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--secondary"
+                  onClick={() => validateMutation.mutate()}
+                  disabled={validateMutation.isPending}
+                  data-testid="workbench-validate"
+                >
+                  {validateMutation.isPending ? "正在校验表语义…" : "校验变更"}
+                </button>
+                <button
+                  type="button"
+                  className={clsx(
+                    "pl-btn",
+                    publishGate.state === "ready" ? "pl-btn--primary" : "pl-btn--secondary",
+                    publishGate.state === "ready" && "pl-btn--cta"
+                  )}
+                  onClick={() => {
+                    setDetailOpen(false);
+                    setConfirmOpen(true);
+                  }}
+                  disabled={publishCtaDisabled}
+                  data-testid="workbench-publish-and-reindex"
+                  data-gate={publishGate.state}
+                  aria-disabled={publishCtaDisabled}
+                >
+                  {publishCtaLabel}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="pl-btn pl-btn--secondary"
+                onClick={() => reindexMutation.mutate({ force: false })}
+                disabled={reindexMutation.isPending}
+                data-testid="workbench-sync-index"
+              >
+                {reindexMutation.isPending ? "同步中…" : "同步索引"}
+              </button>
+            )}
+          </div>
+
           <section className="grid gap-3">
             <div className="flex items-center justify-between">
               <p className="pl-panel-title mb-0">校验摘要</p>
@@ -805,6 +1077,10 @@ export function PublishWorkbench() {
             {validateMutation.isPending && !validateMutation.data ? (
               <p className="pl-notice" data-testid="workbench-validation-pending">
                 正在校验表语义…（已等待 {validateElapsedSeconds} 秒）
+              </p>
+            ) : validationIsStale ? (
+              <p className="pl-notice" data-testid="workbench-validation-stale">
+                待发布内容已变化，上一次校验结果已失效，请重新校验。
               </p>
             ) : validateMutation.data ? (
               <div className="grid gap-2">
@@ -968,6 +1244,20 @@ export function PublishWorkbench() {
             </section>
           ) : null}
         </section>
+
+        {/* ── 右栏：最近发布 ───────────────────────────────────────────── */}
+        <aside
+          className="pl-publish-workbench-column"
+          data-testid="workbench-recent-panel"
+          aria-label="最近发布"
+        >
+          <PublishRecentReleases
+            records={recentReleasesQuery.data?.records ?? []}
+            isLoading={recentReleasesQuery.isLoading}
+            error={recentReleasesQuery.error}
+            onRetry={() => void recentReleasesQuery.refetch()}
+          />
+        </aside>
       </div>
 
       {detailOpen && active ? (
@@ -1010,94 +1300,18 @@ export function PublishWorkbench() {
         </div>
       ) : null}
 
-      {confirmPublishOpen ? (
-        <div
-          className="pl-drawer-backdrop notranslate"
-          data-testid="workbench-publish-confirm-drawer"
-          role="presentation"
-          onClick={() => setConfirmPublishOpen(false)}
-        >
-          <div
-            className="pl-drawer-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="确认同步索引并生效"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="pl-drawer-header">
-              <div className="min-w-0 grid gap-1">
-                <p className="pl-panel-title mb-0">确认同步索引并生效</p>
-                <p className="pl-notice text-sm">
-                  将同步{" "}
-                  <span className="notranslate" translate="no">
-                    KTX
-                  </span>{" "}
-                  索引，使{" "}
-                  <span className="notranslate" translate="no">
-                    Agent
-                  </span>{" "}
-                  检索到磁盘上的最新语义与 Wiki。
-                </p>
-              </div>
-              <button
-                type="button"
-                className="pl-btn pl-btn--ghost pl-drawer-close pl-drawer-close--prominent"
-                onClick={() => setConfirmPublishOpen(false)}
-                aria-label="关闭确认同步"
-              >
-                关闭
-              </button>
-            </header>
-            <div className="pl-drawer-body grid gap-3">
-              <p className="text-sm" data-testid="workbench-publish-confirm-summary">
-                本批一并同步 {files.length} 项
-                {schemaManifests.length > 0
-                  ? ` · Schema Manifest ${schemaManifests.length}`
-                  : ""}
-                {impactedTables.length > 0 ? ` · 表语义变更 ${impactedTables.length} 张` : ""}
-                {otherChanges.length > 0 ? ` · 其它 ${otherChanges.length} 项` : ""}
-              </p>
-              {schemaManifests.length > 0 ? (
-                <ul className="grid gap-1 text-sm">
-                  {schemaManifests.slice(0, 8).map((item) => (
-                    <li key={item.filePath} className="notranslate" translate="no">
-                      {item.conn}/{item.schema}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {impactedTables.length > 0 ? (
-                <ul className="grid gap-1 text-sm">
-                  {impactedTables.slice(0, 8).map((tableName) => (
-                    <li key={tableName} className="notranslate" translate="no">
-                      {tableName}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-            <footer className="pl-drawer-footer">
-              <button
-                type="button"
-                className="pl-btn pl-btn--ghost"
-                onClick={() => setConfirmPublishOpen(false)}
-                disabled={reindexMutation.isPending}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="pl-btn pl-btn--primary pl-btn--cta"
-                onClick={submitConfirmPublish}
-                disabled={reindexMutation.isPending}
-                data-testid="workbench-publish-confirm-submit"
-              >
-                {reindexMutation.isPending ? "处理中…" : "同步索引并生效"}
-              </button>
-            </footer>
-          </div>
-        </div>
-      ) : null}
+      <PublishSyncConfirmDrawer
+        open={confirmOpen}
+        impact={impact}
+        pendingDigest={pendingDigest}
+        baselineState={baselineState}
+        submitDisabled={confirmSubmitDisabled}
+        {...(confirmDisabledReason ? { submitDisabledReason: confirmDisabledReason } : {})}
+        isSubmitting={reindexMutation.isPending}
+        error={reindexMutation.error instanceof Error ? reindexMutation.error.message : null}
+        onCancel={() => setConfirmOpen(false)}
+        onSubmit={submitConfirmPublish}
+      />
     </div>
   );
 }

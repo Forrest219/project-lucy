@@ -4,7 +4,7 @@
 |---|---|
 | 版本 | v1.0 |
 | 日期 | 2026-10-21 |
-| 状态 | 用户已批准；实现验证范围为 Code Review，不运行测试、构建或 Docker 重建 |
+| 状态 | **已实现**（提交 `cd438c16` `fix(webui): consolidate sidebar account utilities`）。用户已批准；实现验证范围为 Code Review，不运行测试、构建或 Docker 重建。实现落点 `webui/src/components/SidebarAccountMenu.tsx` |
 | 范围 | WebUI 全局侧栏页脚；沿用现有 `/help` 路由和 `AuthProvider.logout` |
 
 ## 需求与边界

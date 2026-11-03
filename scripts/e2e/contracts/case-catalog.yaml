@@ -553,6 +553,50 @@ scenarios:
       - {id: OPS-01-V05, t: 升级后审计保留}
       - {id: OPS-01-V06, t: 升级后管理员按迁移重新登录}
       - {id: OPS-01-V07, t: 恢复不复活已撤销会话}
+  AUD25:
+    title: v0.25 审计增量运行时验收（L25-09 A01–A12）
+    spec: "L25-09 §13.2"
+    runner: management
+    executors: [P, D, A, O, V]
+    requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client, browser]
+    assert: [audit_event, artifact_scan, consistency]
+    gold: Q-CAC-28D
+    artifacts: [security-case-result.json, management-case-result.json, leak-scan.json]
+    variants:
+      - {id: AUD25-A01, t: 入口三屏障与崩溃恢复：received/admitted/response_prepared 分段持久化，重启幂等不重执行业务}
+      - {id: AUD25-A02, t: 三屏障提交失败逐一断言，失败响应自身提交失败按 durableFailureOrBlock 阻断}
+      - {id: AUD25-A03, t: 客户端观测同 ID 同内容幂等、异内容冲突；观测已落账但 ACK 闭包失败后重投只补闭包一次}
+      - {id: AUD25-A04, t: 发送丢失与上游结果未知分开：indeterminate、凭据核验、无自动重放}
+      - {id: AUD25-A05, t: 错误七分类与四轴独立：授权先于预算的顺序子例，预算不得覆盖已发生的授权裁决}
+      - {id: AUD25-A06, t: 八桶可达互斥闭合、预算并发不穿透硬上限、预算读/写失败 503 且不伪造 budget_stopped}
+      - {id: AUD25-A07, t: RPC ID 复用不合并独立执行；调用/观测/尝试/操作/上游 ID 分离，回传指向已提交 received}
+      - {id: AUD25-A08, t: 两问询并发、重连与迟到绑定；按同一 S 重建基础事实与归属修订视图不漂移}
+      - {id: AUD25-A09, t: 原文 presence 与空值/未知区分、六值空值原因、码点与字节边界、摘要口径固定}
+      - {id: AUD25-A10, t: 固定序列上界 S 与一致快照：捕获 S 后基础事实/交付/归属有效值变化不漂移，>S 不混入}
+      - {id: AUD25-A11, t: 文件内容哈希重算与跨文件关联校验；文件 hash 与关联失败相互独立}
+      - {id: AUD25-A12, t: 历史回放与提示能力样本分离；缺独立到达证据时保持 unknown 不冒充覆盖率}
+  ARV25:
+    title: v0.25 审计只读对账展示（L25-02/03 V01–V12）
+    spec: "L25-02/03 §3–§4"
+    runner: management
+    executors: [P, B, D, V]
+    requires: [lucy-http, ktx-upstream, postgres, browser, agent-client]
+    assert: [audit_event, consistency, deny, no_leak]
+    gold: none
+    artifacts: [management-case-result.json, security-case-result.json, leak-scan.json]
+    variants:
+      - {id: ARV25-V01, t: 问询详情：问询身份与归属、主状态、预算状态、耗时与完整表清单}
+      - {id: ARV25-V02, t: 完整表身份保留 connectionId/schema/table，同名不同连接不合并}
+      - {id: ARV25-V03, t: 缺表身份进入独立未知桶，不按名称相似度合并}
+      - {id: ARV25-V04, t: Token 对账：配置数与窗口活跃数并列，四类差异集合分列}
+      - {id: ARV25-V05, t: 配置不可观测时计数为 null 并附原因，不得显示 0 或 100%}
+      - {id: ARV25-V06, t: 精确 as-of S 不可证明时正式完整读取失败关闭，诊断模式显式不完整}
+      - {id: ARV25-V07, t: 活跃数大于配置数不自动判异常：停用/删除/快照时点/身份未核验分列}
+      - {id: ARV25-V08, t: 使用概况的完整表排行保留完整身份，可展开与复制}
+      - {id: ARV25-V09, t: reconciliationContext 冻结：同筛选、同 S、同快照、同计量单位与规则版本}
+      - {id: ARV25-V10, t: CSV 与页面同源：五类内容齐全，保留 null 与空值原因，防公式注入}
+      - {id: ARV25-V11, t: API 只读、需管理员审计权限与 meta-audit；游标分页并声明是否完整}
+      - {id: ARV25-V12, t: 越权与未授权对象不泄露；越权详情不可见且不得枚举, requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, k8s-amd64]}
   GATE-01:
     title: 门禁反向测试
     spec: "§8.4"

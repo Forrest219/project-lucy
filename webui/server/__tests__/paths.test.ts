@@ -120,6 +120,33 @@ describe("resolveContentPaths — ktx.yaml paths.content_root", () => {
   });
 });
 
+describe("resolveContentPaths — legacy and custom layouts", () => {
+  it("keeps default, relative custom, and legacy layouts inside the project", async () => {
+    const root = await makeTempProject("connections: {}\n");
+    const hardcoded = "/Users/forrest/GitHub/project-lucy";
+
+    const defaults = await resolveContentPaths(root);
+    expect(defaults.configDir).toBe(path.join(root, "config"));
+    expect(defaults.semanticLayer.startsWith(root)).toBe(true);
+    expect(defaults.semanticLayer).not.toContain(hardcoded);
+
+    process.env.LUCY_CONTENT_ROOT = "content-custom";
+    invalidateContentPathsCache();
+    const custom = await resolveContentPaths(root);
+    expect(custom.source).toBe("env");
+    expect(custom.configDir).toBe(path.join(root, "content-custom"));
+    expect(custom.semanticLayer.startsWith(root)).toBe(true);
+    expect(custom.wiki).not.toContain(hardcoded);
+
+    process.env.LUCY_CONTENT_ROOT = ".";
+    invalidateContentPathsCache();
+    const legacy = await resolveContentPaths(root);
+    expect(legacy.configDir).toBe(root);
+    expect(legacy.semanticLayer).toBe(path.join(root, "semantic-layer"));
+    expect(legacy.wiki).not.toContain(hardcoded);
+  });
+});
+
 describe("ensureContentDirs", () => {
   it("mkdir -p the four content subdirs", async () => {
     const root = await makeTempProject(null);

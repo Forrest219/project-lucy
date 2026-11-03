@@ -6,6 +6,12 @@
 | 日期 | 2026-10-29（Asia/Shanghai）；同日由 Draft v0.1 修订为定稿 v1.0 |
 | 设计 | [Lucy CI 恢复与分层规范](../specs/lucy-ci-restoration-spec.md) |
 | 交付边界 | 恢复日常 CI；客户自动发布设施单列，不默认交付 |
+| 授权边界 | T00–T04 与 Release CI 文档修正。**不授权** T05（Required checks 迁移、分支保护／ruleset／secret／environment 写入）与 R01（客户发布设施），也不授权在本里程碑修复类型债务 |
+| 验收 | AC01–AC12（见 Spec §7）；各工作包的验证／退出条件与对应 AC 编号见 §2 表「验证 / 退出条件」列 |
+
+## 目标
+
+恢复日常 CI 的可信反馈：main 与 `lucy-v0.25` 都有无客户凭据、可重复、失败可定位的日常验证（Spec §3 目标 1–5），并按 §2 的工作包 T00–T04、T06 推进。交付边界是恢复日常 CI；客户自动发布设施单列，不默认交付（见本文件头部「交付边界」）。
 
 ## 1. 开工前置与变更策略
 
@@ -108,6 +114,19 @@ if new trigger/context/DAG faulty:
 
 T00–T04 与 T06 可以开工。T05 与 R01 保持未开工。
 
+## 验收
+
+出口为 Spec §7 的 AC01–AC12；每个工作包的验证与退出条件、对应 AC 编号见 §2 表「验证 / 退出条件」列。T06 的判定口径（§2 T06 行）：AC01–AC03、AC05–AC09、AC11–AC12 满足即可声明日常恢复；AC04 只要求干净基线已记录，类型诊断不为零不阻断日常门禁；AC10 未执行要写明。T05（Required checks 迁移）与 R01（客户发布设施）未授权、未开工，不作为本计划的出口。
+
+已实施部分的执行证据与 AC 状态（满足／未满足／未授权／BLOCKED）见 [交付记录](../reviews/2026-10-29-ci-restoration-execution-record.md)。
+
+## 完成定义
+
+按 §4 第 6 条的交付口径：每个变更给出 branch、commit、PR 与 run 链接，列出全部 AC 结果、剩余风险、耗时和回滚指令；客户发布设施未完成须独立标记 BLOCKED。T06 另需汇总两分支 commit、PR、run、门禁与未完成项，并更新治理事实源（§3 文件影响清单）。本 Spec / Plan 的定稿 v1.0 已写入，T06 只补执行证据和验收状态，不把定稿退回草案。
+
 ## Terminology Compliance
 
-遵循 `webui/docs/00-product-terminology-standard.md`；无新增产品术语。区分 Spec 审阅、实施批准、CI 验证与客户发布批准。
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms:
+- None. 本计划不新增产品术语；区分 Spec 审阅、实施批准、CI 验证与客户发布批准。

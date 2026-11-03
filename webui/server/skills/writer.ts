@@ -1,12 +1,19 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify } from "yaml";
-import { auditedRemoveFile, auditedWriteFile } from "../admin/config-audit-write.js";
+import {
+  auditedRemoveFile,
+  auditedWriteFile,
+  AuditedWriteIntentError,
+  AuditedWriteRolledBackError,
+  AuditedWriteRollbackError
+} from "../admin/config-audit-write.js";
 import { previewDiff } from "../diff.js";
 import { resolveRoleIds } from "../proxy/acl.js";
 import { getAccessConfig } from "../proxy/identity.js";
 import { SKILL_SEGMENT_RE } from "./identifiers.js";
 import { getSkillByUri, invalidateSkillsCache, parseSkillMarkdown } from "./loader.js";
+import { SKILL_OWNER_INVALID_CODE, validateOwnerInput } from "./owner.js";
 import { loadContentPaths } from "../paths.js";
 import { auditActorFields, type TrustedActor } from "../security/request-actor.js";
 import { validateSkill } from "./validator.js";
@@ -30,6 +37,11 @@ export type SkillWriteInput = {
   roles_allowed?: string[];
   triggers?: string[];
   description?: string;
+  /**
+   * L25-04: free-text owner label. Absent keeps the current value; an empty
+   * string clears it. Never an account, a role, or an authorization source.
+   */
+  owner?: string;
   prerequisites?: {
     sources?: string[];
     measures?: string[];
@@ -51,6 +63,8 @@ export type SkillWritePreview = {
   impact: {
     status: { from: SkillStatus | null; to: SkillStatus };
     rolesAllowed: { from: string[]; to: string[] };
+    /** L25-04: the owner label before and after this write; `from` is null on create. */
+    owner: { from: string | null; to: string };
     enteredWildcard: boolean;
     exitedWildcard: boolean;
     affectedRoleIds: string[];
@@ -97,6 +111,47 @@ function assertExpectedVersion(existing: SkillAsset, expectedVersion: string | u
   }
   if (expectedVersion !== existing.file_version) {
     throw new SkillWriteError("skill_write_conflict", 409);
+  }
+}
+
+/**
+ * L25-04: resolve the owner label for a write. An absent input keeps the current
+ * label; a present value must be a legal label, otherwise the write is rejected
+ * with the single stable code the API contract allows (Spec §6 `structured
+ * update`).
+ */
+function resolveOwnerInput(inputOwner: string | undefined, currentOwner: string): string {
+  if (inputOwner === undefined) {
+    return currentOwner;
+  }
+  const validated = validateOwnerInput(inputOwner);
+  if (!validated.ok) {
+    throw new SkillWriteError(validated.code, 400);
+  }
+  return validated.value;
+}
+
+/**
+ * L25-04 / F-03: a Skill write that could not be terminated in the audit ledger
+ * is rolled back to the previous bytes by the audit helper. When even the
+ * rollback fails, the write is reported as a repair-required failure (500) — it
+ * is never reported as a success, and the pending evidence is left in place.
+ * A write whose intent could not be persisted never touches the file at all.
+ */
+async function withRollbackAwareErrors<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof AuditedWriteRollbackError) {
+      throw new SkillWriteError("skill_write_rollback_failed", 500);
+    }
+    if (error instanceof AuditedWriteRolledBackError) {
+      throw new SkillWriteError("skill_write_rolled_back", 500);
+    }
+    if (error instanceof AuditedWriteIntentError) {
+      throw new SkillWriteError("skill_audit_unavailable", 503);
+    }
+    throw error;
   }
 }
 
@@ -161,7 +216,11 @@ function preservedRolesAllowed(raw: string): string[] | undefined {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-export function assembleSkillMarkdown(input: SkillWriteInput, preservedRolesAllowed?: string[]): string {
+export function assembleSkillMarkdown(
+  input: SkillWriteInput,
+  preservedRolesAllowed?: string[],
+  resolvedOwner?: string
+): string {
   if (typeof input.rawContent === "string") {
     return input.rawContent;
   }
@@ -183,6 +242,12 @@ export function assembleSkillMarkdown(input: SkillWriteInput, preservedRolesAllo
   frontmatter.roles_allowed = input.roles_allowed !== undefined
     ? normalizeRolesAllowed(input.roles_allowed)
     : (preservedRolesAllowed ?? []);
+  // L25-04: the owner label is written only when it is non-empty. An empty label
+  // means "unspecified", so the key is omitted rather than written as `owner: ""`;
+  // the read shape stays the same either way (Spec §3.1 / §5.4).
+  if (resolvedOwner !== undefined && resolvedOwner !== "") {
+    frontmatter.owner = resolvedOwner;
+  }
   if (input.prerequisites) frontmatter.prerequisites = input.prerequisites;
   if (Array.isArray(input.eval_cases) && input.eval_cases.length > 0) {
     frontmatter.eval_cases = input.eval_cases;
@@ -204,6 +269,11 @@ async function parseOrThrow(projectRoot: string, raw: string, filePath: string):
   assertSegment("domain", parsed.domain);
   if (parsed.roles_allowed_invalid) {
     throw new SkillWriteError("skill_roles_invalid", 400);
+  }
+  if (parsed.owner_invalid) {
+    // L25-04: a corrupt owner declaration is repaired explicitly — fill it, clear
+    // it, or fix the raw content. It is never carried into a file as-is.
+    throw new SkillWriteError(SKILL_OWNER_INVALID_CODE, 400);
   }
   return parsed;
 }
@@ -233,7 +303,8 @@ async function prepareCreateSkillFile(
     }
   } else {
     relPath = skillRelativePath(input.domain ?? "", input.name ?? "");
-    raw = assembleSkillMarkdown(input);
+    const owner = resolveOwnerInput(input.owner, "");
+    raw = assembleSkillMarkdown(input, undefined, owner);
     const skillsDir = (await loadContentPaths()).skills;
     parsed = await parseOrThrow(projectRoot, raw, path.join(skillsDir, relPath.slice("skills/".length)));
     if (
@@ -295,7 +366,18 @@ async function prepareUpdateSkillFile(
     // A corrupt ACL is repaired by choosing roles explicitly, never by silently saving "no one".
     throw new SkillWriteError("skill_roles_invalid", 400);
   }
-  const raw = assembleSkillMarkdown(merged, preservedRolesAllowed(existing.raw));
+  // L25-04: same rule for a corrupt owner. A structured save that omits `owner`
+  // would drop the damaged key and silently clear the declaration, so it is
+  // rejected until the owner is explicitly filled or cleared (Spec §3.2 / D05).
+  if (existing.owner_invalid && input.owner === undefined && typeof input.rawContent !== "string") {
+    throw new SkillWriteError(SKILL_OWNER_INVALID_CODE, 400);
+  }
+  // The raw content path owns the whole file, so the owner label is validated
+  // from that content instead of from the request body.
+  const resolvedOwner = typeof input.rawContent === "string"
+    ? existing.owner
+    : resolveOwnerInput(input.owner, existing.owner);
+  const raw = assembleSkillMarkdown(merged, preservedRolesAllowed(existing.raw), resolvedOwner);
   const skillsDir = (await loadContentPaths()).skills;
   const parsed = await parseOrThrow(projectRoot, raw, path.join(skillsDir, relPath.slice("skills/".length)));
   if (parsed.uri !== oldUri) {
@@ -312,6 +394,7 @@ function previewImpact(
   return {
     status: { from: from?.status ?? null, to: to.status },
     rolesAllowed: { from: from?.roles_allowed ?? [], to: to.roles_allowed },
+    owner: { from: from?.owner ?? null, to: to.owner },
     enteredWildcard: authSummary.entered_wildcard,
     exitedWildcard: authSummary.exited_wildcard,
     affectedRoleIds: authSummary.affected_role_ids,
@@ -364,16 +447,18 @@ export async function createSkillFile(
 ): Promise<SkillWithValidation> {
   const { relPath, raw, parsed } = await prepareCreateSkillFile(projectRoot, input);
   const authSummary = await authorizationAuditSummary([], parsed.roles_allowed);
-  await auditedWriteFile(projectRoot, relPath, raw, {
-    enabled: true,
-    changeType: "skill_create",
-    assetKind: "skill",
-    ...auditActorFields(actor),
-    source: "skills_api",
-    targetId: parsed.uri,
-    operation: "create",
-    newSummary: { ...authSummary, file_version: parsed.file_version }
-  });
+  await withRollbackAwareErrors(() =>
+    auditedWriteFile(projectRoot, relPath, raw, {
+      enabled: true,
+      changeType: "skill_create",
+      assetKind: "skill",
+      ...auditActorFields(actor),
+      source: "skills_api",
+      targetId: parsed.uri,
+      operation: "create",
+      newSummary: { ...authSummary, file_version: parsed.file_version, owner: parsed.owner }
+    }, { rollbackOnTerminalFailure: true, requireIntent: true })
+  );
   invalidateSkillsCache();
   const saved = await getSkillByUri(parsed.uri);
   if (!saved) throw new SkillWriteError("Skill was written but could not be reloaded", 500);
@@ -391,17 +476,25 @@ export async function updateSkillFile(
 
   const oldAuthSummary = await authorizationAuditSummary(existing.roles_allowed, existing.roles_allowed);
   const newAuthSummary = await authorizationAuditSummary(existing.roles_allowed, parsed.roles_allowed);
-  await auditedWriteFile(projectRoot, relPath, raw, {
-    enabled: true,
-    changeType: "skill_edit_save",
-    assetKind: "skill",
-    ...auditActorFields(actor),
-    source: "skills_api",
-    targetId: parsed.uri,
-    operation: "edit_save",
-    oldSummary: { ...oldAuthSummary, file_version: existing.file_version },
-    newSummary: { ...newAuthSummary, file_version: parsed.file_version }
-  });
+  await withRollbackAwareErrors(() =>
+    auditedWriteFile(projectRoot, relPath, raw, {
+      enabled: true,
+      changeType: "skill_edit_save",
+      assetKind: "skill",
+      ...auditActorFields(actor),
+      source: "skills_api",
+      targetId: parsed.uri,
+      operation: "edit_save",
+      oldSummary: {
+        ...oldAuthSummary,
+        file_version: existing.file_version,
+        owner: existing.owner,
+        // The corrupt declaration is recorded as a flag, never as its raw text.
+        ...(existing.owner_invalid ? { owner_invalid: true } : {})
+      },
+      newSummary: { ...newAuthSummary, file_version: parsed.file_version, owner: parsed.owner }
+    }, { rollbackOnTerminalFailure: true, requireIntent: true })
+  );
   invalidateSkillsCache();
   const saved = await getSkillByUri(parsed.uri);
   if (!saved) throw new SkillWriteError("Skill was written but could not be reloaded", 500);
@@ -420,21 +513,25 @@ export async function deleteSkillFile(
   if (!existing) throw new SkillWriteError(`Skill not found: ${uri}`, 404);
   assertExpectedVersion(existing, expectedVersion);
   const authSummary = await authorizationAuditSummary(existing.roles_allowed, []);
-  await auditedRemoveFile(projectRoot, existing.relativePath, {
-    enabled: true,
-    changeType: "skill_delete",
-    assetKind: "skill",
-    ...auditActorFields(actor),
-    source: "skills_api",
-    targetId: uri,
-    operation: "delete",
-    oldSummary: {
-      ...authSummary,
-      roles_allowed: existing.roles_allowed,
-      all_roles_visible: existing.roles_allowed.includes("*"),
-      file_version: existing.file_version
-    }
-  });
+  await withRollbackAwareErrors(() =>
+    auditedRemoveFile(projectRoot, existing.relativePath, {
+      enabled: true,
+      changeType: "skill_delete",
+      assetKind: "skill",
+      ...auditActorFields(actor),
+      source: "skills_api",
+      targetId: uri,
+      operation: "delete",
+      oldSummary: {
+        ...authSummary,
+        roles_allowed: existing.roles_allowed,
+        all_roles_visible: existing.roles_allowed.includes("*"),
+        file_version: existing.file_version,
+        owner: existing.owner,
+        ...(existing.owner_invalid ? { owner_invalid: true } : {})
+      }
+    }, { rollbackOnTerminalFailure: true, requireIntent: true })
+  );
   invalidateSkillsCache();
   return { uri, relativePath: existing.relativePath };
 }

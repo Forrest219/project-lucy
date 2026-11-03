@@ -222,6 +222,16 @@ test("buildPreserveCheckScript covers all preserve rel paths", () => {
   }
 });
 
+// L25-05 / SMTP-25: the notification outbox lives in the audit database, so an
+// upgrade that drops that file silently drops the queued notifications. The
+// preserve list is what the upgrade script actually keeps.
+test("the upgrade preserve list keeps the audit database that now carries notification_outbox", () => {
+  assert.ok(
+    PRESERVE_REL_PATHS.includes(".ktx-ui/audit.sqlite"),
+    "the audit database (which now holds notification_outbox) must survive an upgrade"
+  );
+});
+
 test("upgrade-lucy.sh avoids bash 4-only syntax (stock macOS bash 3.2 compatible)", () => {
   const src = readFileSync(path.join(repoRoot, "scripts/upgrade/upgrade-lucy.sh"), "utf8");
   assert.doesNotMatch(src, /^\s*readarray\b/m, "readarray requires bash 4; use a while-read loop");

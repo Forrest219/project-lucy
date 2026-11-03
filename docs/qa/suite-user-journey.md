@@ -88,6 +88,34 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
 
 交叉引用 `E2E-*` / eval id。**现行 UI 文案与旧 Playwright 注释冲突时，以 `webui/src` 为准。**
 
+### 2.6 剪贴板 / 复制行为的来源判定（Spec 192）
+
+浏览器只在**安全上下文**（HTTPS，或 `localhost` / `127.0.0.1` 这类回环来源）暴露
+`navigator.clipboard`。内网 HTTP 客户形态（`security.access=http`，见
+[`deploy/k8s/K8S_CONTRACT.md`](../../deploy/k8s/K8S_CONTRACT.md)）的来源**不是**安全上下文，
+`navigator.clipboard` 根本不存在。
+
+因此：
+
+1. 任何涉及「复制 / 已复制 / Toast『客户端配置已复制』」的判定，必须记录本次使用的
+   `WEBUI_BASE` **是否为回环地址**。
+2. 在回环来源（`127.0.0.1` / `localhost`）上通过，**不能**证明复制功能在客户内网 HTTP 形态下可用；
+   回环来源下 Clipboard API 恒可用，这类通过结果不具备判定力。
+3. 要判定内网 HTTP 形态，必须在**非回环 HTTP 来源**上复核：把 WebUI 绑到 `0.0.0.0` 并用本机 LAN IP
+   访问，或直接在客户内网实例上复核。
+4. 已知失败模式：控制台出现
+   `TypeError: Cannot read properties of undefined (reading 'writeText')`
+   → 复制按钮在该来源下完全无反应（不复制、不提示、不改文案）。
+   → 处理：按 Spec 192 / Plan M65 的统一降级实现修复，**不要**只在单个按钮上加保护。
+
+### 2.7 已知失败模式
+
+| 现象 | 可能原因 | 处理 |
+|---|---|---|
+| 控制台 `TypeError: Cannot read properties of undefined (reading 'writeText')`，复制按钮无任何反应 | 当前来源不是安全上下文，`navigator.clipboard` 不存在 | 见 §2.6；按 Spec 192 的 `execCommand` 回退实现修复 |
+| 复制按钮显示「已复制」但剪贴板实际没变 | 只在剪贴板不可用时仍无条件置成功态（谎报成功） | 成功态必须由真实写入结果驱动（Spec 192 AC-04 / AC-05） |
+| 页面能连上 MCP，但取数返回 400 | 客户端未在 `initialize` 之后回传 `Mcp-Session-Id` | 见 §9 与系统手册「MCP 会话与上游连接」 |
+
 ## 3. P0 矩阵
 
 | ID | 名称 | 状态 | 交叉引用 |
@@ -565,6 +593,7 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
    定位：aria-label「复制 token 明文」；`snippet-active`；「复制当前配置」。  
    必须看见：按钮短暂变为「已复制」；Toast「客户端配置已复制」；snippet 含 MCP URL，且含本次 token 或文档声明的占位规则（现行生成页嵌入本次明文，不是 `${LUCY_AGENT_TOKEN}` 安全模板）。  
    失败即停：snippet 是空的 → FAIL。证据**禁止**写入完整 token。
+   **来源判定**：本步的通过条件只在**非回环 HTTP 来源**上具备判定力；回环来源（`127.0.0.1` / `localhost`）是安全上下文，Clipboard API 恒可用，在其上通过不得用于判定客户内网 HTTP 形态。详见 §2.6。
 
 10. 操作：点「我已保存，关闭」，回到详情，确认有效 token 数。  
     定位：关闭按钮；详情页头徽章「N 有效 token」。  

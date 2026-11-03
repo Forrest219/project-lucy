@@ -9,7 +9,7 @@ import type { McpToolInfo } from "../lib/types";
 // ─── Fixture ──────────────────────────────────────────────────────────────────
 //
 // Must include sl_query (globalDenied: true) and lucy_query (globalDenied: false)
-// plus all 6 READONLY_QA_PRESET tools so "已选 6 个" is reachable after clicking
+// plus all 7 READONLY_QA_PRESET tools so "已选 7 个" is reachable after clicking
 // the preset. sl_validate is included so the assertion that it is NOT selected
 // after the preset is meaningful.
 
@@ -21,6 +21,7 @@ const FIXTURE_TOOLS: McpToolInfo[] = [
   { name: "lucy_explain_query", description: "解释查询权限判断", globalDenied: false },
   { name: "lucy_freshness", description: "查询新鲜度元数据", globalDenied: false },
   { name: "lucy_begin_question", description: "记录业务问题", globalDenied: false },
+  { name: "lucy_continue_question", description: "问询预算用尽后继续", globalDenied: false },
   { name: "sl_validate", description: "验证语义层定义", globalDenied: false },
   { name: "lucy_skill_search", description: "检索已发布的业务 Skill", globalDenied: false },
   { name: "lucy_skill_read", description: "读取业务 Skill 的操作规范", globalDenied: false },
@@ -73,7 +74,7 @@ describe("RoleToolGrants", () => {
     expect(screen.getByRole("button", { name: "全选" })).toBeDisabled();
   });
 
-  it("clicking 只读问答: sl_validate not in selected set, count 已选 6 个, no /16, bottom sentence", () => {
+  it("clicking 只读问答: sl_validate not in selected set, count 已选 7 个, no /16, bottom sentence", () => {
     // Start with sl_validate selected — verifies stampPreset replaces rather than merges
     render(<Controlled initial={["sl_validate"]} />);
 
@@ -93,7 +94,7 @@ describe("RoleToolGrants", () => {
     expect(selected).not.toContain("sl_validate");
 
     // Count: exactly 6 grantable tools selected (READONLY_QA_PRESET members)
-    expect(screen.getByText(/已选 6 个/)).toBeInTheDocument();
+    expect(screen.getByText(/已选 7 个/)).toBeInTheDocument();
 
     // Must NOT contain a denominator fraction like "/16"
     expect(document.body.textContent ?? "").not.toMatch(/\/\d+/);
@@ -112,6 +113,7 @@ describe("RoleToolGrants", () => {
           "lucy_explain_query",
           "lucy_freshness",
           "lucy_begin_question",
+          "lucy_continue_question",
         ]}
       />
     );
@@ -128,6 +130,7 @@ describe("RoleToolGrants", () => {
           "lucy_explain_query",
           "lucy_freshness",
           "lucy_begin_question",
+          "lucy_continue_question",
           "wiki_search",
           "lucy_skill_read",
         ]}

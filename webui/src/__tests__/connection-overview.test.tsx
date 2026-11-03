@@ -98,7 +98,11 @@ function stubOverviewFetch({
 	  mcpEndpoint,
 	  connectionTestById,
 	  mcpExecutionStatus = "unknown",
-	  mcpRuntimeRequestFails = false
+	  mcpRuntimeRequestFails = false,
+	  /** Spec 190: optional overrides for the continuous discovery endpoints. */
+	  discoveryResponse,
+	  tableDiffResponse,
+	  liveTablesResponse
 	}: {
 	  connections?: ConnectionInfo[];
 	  ktxAvailable?: boolean;
@@ -129,6 +133,9 @@ function stubOverviewFetch({
   >;
   mcpExecutionStatus?: "unknown" | "ok" | "stale" | "unavailable" | "error";
   mcpRuntimeRequestFails?: boolean;
+  discoveryResponse?: unknown;
+  tableDiffResponse?: unknown;
+  liveTablesResponse?: unknown;
 } = {}) {
   const resolvedMcpEndpoint = mcpEndpoint ?? {
     url: "https://lucy.example.com/mcp",
@@ -298,6 +305,88 @@ function stubOverviewFetch({
           })
         );
       }
+      // Spec 190: continuous discovery status and the reconciliation state.
+      if (!handler && /^GET \/api\/connections\/[^/?]+\/discovery$/.test(key)) {
+        const connId = (key.match(/\/connections\/([^/?]+)\/discovery/) ?? [])[1] ?? "mysql-aliyun";
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data:
+              discoveryResponse ?? {
+                connectionId: connId,
+                enabled: true,
+                intervalMs: 3_600_000,
+                generation: 0,
+                status: "ok",
+                lastAttemptAt: "2026-08-06T00:00:00.000Z",
+                lastCompletedAt: "2026-08-06T00:00:00.000Z",
+                lastReason: null,
+                schemas: [
+                  {
+                    schema: "dataforai",
+                    status: "ok",
+                    lastAttemptAt: "2026-08-06T00:00:00.000Z",
+                    lastCompletedAt: "2026-08-06T00:00:00.000Z",
+                    lastReason: null,
+                    consecutiveFailures: 0,
+                    nextAttemptAt: null
+                  }
+                ],
+                diffCount: { added: 0, missing: 0, columnCountChanged: 0 }
+              }
+          })
+        );
+      }
+      if (!handler && /^GET \/api\/connections\/[^/?]+\/table-diff$/.test(key)) {
+        const connId = (key.match(/\/connections\/([^/?]+)\/table-diff/) ?? [])[1] ?? "mysql-aliyun";
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data:
+              tableDiffResponse ?? {
+                connectionId: connId,
+                generation: 0,
+                computedAt: "2026-08-06T00:00:00.000Z",
+                schemas: [
+                  {
+                    schema: "dataforai",
+                    reconciliation: {
+                      discoveredInLibrary: ["dataforai.superstore_orders"],
+                      missingInManifest: [],
+                      missingInEnabled: [],
+                      notInLibrary: []
+                    },
+                    listDiff: { added: [], missing: [], columnCountChanged: [] },
+                    snapshotAt: "2026-08-06T00:00:00.000Z"
+                  }
+                ],
+                eventCount: 0
+              }
+          })
+        );
+      }
+      if (!handler && /^GET \/api\/connections\/[^/?]+\/live-tables/.test(key.split("?")[0] ?? key)) {
+        const connId = (key.match(/\/connections\/([^/?]+)\/live-tables/) ?? [])[1] ?? "mysql-aliyun";
+        const schema = new URL(url, "http://localhost").searchParams.get("schema") ?? "dataforai";
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data:
+              liveTablesResponse ?? {
+                status: "ok",
+                connectionId: connId,
+                schema,
+                tables: [
+                  { table: "superstore_orders", tableType: "BASE TABLE", columnCount: 12 },
+                  { table: "customers", tableType: "BASE TABLE", columnCount: 8 }
+                ],
+                fetchedAt: "2026-08-06T00:00:00.000Z",
+                cached: false,
+                wireProtocol: "mysql"
+              }
+          })
+        );
+      }
       // Spec 108: default connectivity probe for any connection.
       if (!handler && /^POST \/api\/connections\/[^/?]+\/test$/.test(key)) {
         const connId = (key.match(/\/connections\/([^/?]+)\/test/) ?? [])[1] ?? "mysql-aliyun";
@@ -412,7 +501,7 @@ describe("ConnectionOverview", () => {
     expect(screen.getAllByTestId("connection-metric")[0]).toHaveClass("pl-metric-card--with-help");
     expect(screen.getByText("数据连接")).toBeInTheDocument();
     expect(screen.getByText("缺 Manifest 的 Schema")).toBeInTheDocument();
-    expect(screen.getByText("服务器目录已发现表")).toBeInTheDocument();
+    expect(screen.getByText("已发现的表")).toBeInTheDocument();
     expect(screen.getByText("未启用表")).toBeInTheDocument();
     expect(screen.queryByText("启用的表")).not.toBeInTheDocument();
     expect(screen.queryByText("语义层对象")).not.toBeInTheDocument();
@@ -443,7 +532,7 @@ describe("ConnectionOverview", () => {
     stubOverviewFetch();
     renderOverview();
 
-    for (const label of ["数据连接", "缺 Manifest 的 Schema", "服务器目录已发现表", "未启用表"]) {
+    for (const label of ["数据连接", "缺 Manifest 的 Schema", "已发现的表", "未启用表"]) {
       expect(
         await screen.findByRole("button", { name: `${label} 说明` })
       ).toBeInTheDocument();
@@ -467,7 +556,7 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    await screen.findByText("来自 1 个 Schema Manifest");
+    await screen.findByText("来自 1 个 Schema");
     const metrics = await screen.findAllByTestId("connection-metric");
     const metricByType = (type: string) => {
       const metric = metrics.find((node) => node.getAttribute("data-metric") === type);
@@ -482,12 +571,12 @@ describe("ConnectionOverview", () => {
     expect(metricByType("missingManifestSchemas")).toHaveTextContent("1");
     expect(metricByType("missingManifestSchemas")).toHaveTextContent("2 个 Schema 中 1 个已有 Manifest");
     expect(metricByType("missingManifestSchemas")).toHaveClass("pl-metric-card--warning");
-    expect(metricByType("localCatalogTables")).toHaveTextContent("服务器目录已发现表");
+    expect(metricByType("localCatalogTables")).toHaveTextContent("已发现的表");
     expect(metricByType("localCatalogTables")).toHaveTextContent("2");
-    expect(metricByType("localCatalogTables")).toHaveTextContent("来自 1 个 Schema Manifest");
+    expect(metricByType("localCatalogTables")).toHaveTextContent("来自 1 个 Schema");
     expect(metricByType("unenabledTables")).toHaveTextContent("未启用表");
     expect(metricByType("unenabledTables")).toHaveTextContent("1");
-    expect(metricByType("unenabledTables")).toHaveTextContent("已启用 1 / 本地 2 张表");
+    expect(metricByType("unenabledTables")).toHaveTextContent("可查询 1 / 已发现 2 张表");
   });
 
   it("uses physical qualifiedName when matching local Manifest tables against enabled_tables", async () => {
@@ -511,13 +600,13 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    await screen.findByText("已启用 1 / 本地 1 张表");
+    await screen.findByText("可查询 1 / 已发现 1 张表");
     const metrics = await screen.findAllByTestId("connection-metric");
     const unenabledMetric = metrics.find((node) => node.getAttribute("data-metric") === "unenabledTables");
     expect(unenabledMetric).toBeDefined();
     expect(unenabledMetric).toHaveTextContent("未启用表");
     expect(unenabledMetric).toHaveTextContent("0");
-    expect(unenabledMetric).toHaveTextContent("已启用 1 / 本地 1 张表");
+    expect(unenabledMetric).toHaveTextContent("可查询 1 / 已发现 1 张表");
   });
 
   it("shows per-schema manifest status and the correct next action", async () => {
@@ -578,6 +667,10 @@ describe("ConnectionOverview", () => {
     expect(screen.getByTestId("view-manifest-mysql-aliyun-dataforai")).toHaveTextContent("查看 Manifest");
     expect(screen.getByTestId("download-manifest-mysql-aliyun-dataforai")).toHaveTextContent("下载");
     expect(screen.getByTestId("reupload-manifest-mysql-aliyun-dataforai")).toHaveTextContent("重新上传");
+    expect(screen.getByTestId("refresh-structure-mysql-aliyun-dataforai")).toHaveTextContent(
+      "从数据库读取表结构"
+    );
+    expect(screen.getByTestId("refresh-structure-mysql-aliyun-dataforai").closest(".pl-row-action-more-menu")).not.toBeNull();
     expect(screen.getByTestId("schema-whitelist-mysql-aliyun-dataforai")).toHaveAttribute(
       "href",
       "/connections/enabled-tables?connection=mysql-aliyun&schema=dataforai"
@@ -689,7 +782,7 @@ describe("ConnectionOverview", () => {
     // Radix Tooltip 1.x renders a visual popper plus a visually-hidden a11y
     // mirror, so the hint shows up twice. Assert on the first occurrence.
     const hints = await screen.findAllByTestId("metric-tooltip-hint");
-    expect(hints[0]).toHaveTextContent("分子：ktx.yaml connections[] 声明数；分母：无（绝对计数）。可在下方连接卡片逐一核对。");
+    expect(hints[0]).toHaveTextContent("已接入的数据库连接数量。可在下方卡片逐一查看。");
     expect(screen.queryByText("关注问题：")).not.toBeInTheDocument();
     expect(screen.queryByText("定义：")).not.toBeInTheDocument();
     expect(screen.queryByText("健康标准：")).not.toBeInTheDocument();
@@ -821,12 +914,12 @@ describe("ConnectionOverview", () => {
     stubOverviewFetch({ connections: [], tables: [] });
     renderOverview();
 
-    expect(await screen.findByTestId("connections-empty-state")).toHaveTextContent("暂无连接配置。");
+    expect(await screen.findByTestId("connections-empty-state")).toHaveTextContent("还没有接入数据库。");
     expect(screen.getByTestId("create-connection-empty-btn")).toHaveTextContent("新建连接");
     expect(screen.getByTestId("create-connection-btn")).toHaveTextContent("新建连接");
-    expect(screen.getByText(/也可在/)).toBeInTheDocument();
+    expect(screen.getByTestId("create-connection-empty-btn")).toHaveClass("pl-btn--primary");
     expect(screen.getByText("数据连接")).toBeInTheDocument();
-    expect(screen.getByText("服务器目录已发现表")).toBeInTheDocument();
+    expect(screen.getByText("已发现的表")).toBeInTheDocument();
   });
 
   it("opens Create Connection drawer from the header CTA", async () => {
@@ -836,6 +929,22 @@ describe("ConnectionOverview", () => {
     fireEvent.click(await screen.findByTestId("create-connection-btn"));
     expect(await screen.findByTestId("create-connection-drawer")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "新建连接" })).toBeInTheDocument();
+  });
+
+  it("SC-13 PageHeader 唯一实心 primary 仍为新建连接；编辑连接不是 primary", async () => {
+    stubOverviewFetch();
+    renderOverview();
+
+    const createBtn = await screen.findByTestId("create-connection-btn");
+    expect(createBtn).toHaveClass("pl-btn--primary");
+    expect(createBtn).toHaveTextContent("新建连接");
+    expect(screen.getByTestId("start-onboarding-assistant-btn")).not.toHaveClass("pl-btn--primary");
+
+    fireEvent.click(await screen.findByTestId("connection-more-mysql-aliyun"));
+    const editBtn = await screen.findByTestId("edit-connection-mysql-aliyun");
+    expect(editBtn).toHaveTextContent("编辑连接");
+    expect(editBtn).not.toHaveClass("pl-btn--primary");
+    expect(editBtn).toHaveClass("pl-row-action-link");
   });
 
   it("shows project API errors", async () => {
@@ -854,9 +963,7 @@ describe("ConnectionOverview", () => {
 
     const header = await screen.findByTestId("page-header");
     expect(header.querySelector(".pl-page-header-badges")).toBeNull();
-    expect(header).toHaveTextContent(
-      "管理数据库连接、Schema 与 Schema Manifest，并查看连通性和本地目录同步状态。"
-    );
+    expect(header).toHaveTextContent("查看已接入的数据库，确认能否连上，并选择可以查询的表。");
     expect(within(header).queryByText("工作目录：")).not.toBeInTheDocument();
     expect(within(header).queryByText("/tmp/project-lucy")).not.toBeInTheDocument();
     expect(within(header).queryByText("KTX 不可用")).not.toBeInTheDocument();
@@ -878,8 +985,8 @@ describe("ConnectionOverview", () => {
     ).not.toBeInTheDocument();
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
     const kv = within(card).getByTestId("connection-kv-mysql-aliyun");
-    expect(within(kv).getByText("Host：")).toBeInTheDocument();
-    expect(within(kv).getByText("Database：")).toBeInTheDocument();
+    expect(within(kv).getByText("地址：")).toBeInTheDocument();
+    expect(within(kv).getByText("数据库：")).toBeInTheDocument();
     // M44: ktx.yaml and credential source no longer surface per card.
     expect(within(card).queryByText("配置文件")).not.toBeInTheDocument();
     expect(within(card).queryByText("凭据来源")).not.toBeInTheDocument();
@@ -960,7 +1067,7 @@ describe("ConnectionOverview", () => {
     expect(crmSummary).not.toBeNull();
     expect(dataforaiMenu).not.toHaveAttribute("open");
 
-    fireEvent.click(dataforaiSummary);
+    fireEvent.click(dataforaiSummary!);
     expect(dataforaiMenu).toHaveAttribute("open");
 
     fireEvent.mouseLeave(dataforaiMenu!);
@@ -975,21 +1082,21 @@ describe("ConnectionOverview", () => {
       expect(dataforaiMenu).not.toHaveAttribute("open");
     });
 
-    fireEvent.click(dataforaiSummary);
+    fireEvent.click(dataforaiSummary!);
     expect(dataforaiMenu).toHaveAttribute("open");
-    fireEvent.click(crmSummary);
+    fireEvent.click(crmSummary!);
     expect(crmMenu).toHaveAttribute("open");
     expect(dataforaiMenu).not.toHaveAttribute("open");
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(crmMenu).not.toHaveAttribute("open");
 
-    fireEvent.click(crmSummary);
+    fireEvent.click(crmSummary!);
     expect(crmMenu).toHaveAttribute("open");
     fireEvent.pointerDown(document.body);
     expect(crmMenu).not.toHaveAttribute("open");
 
-    fireEvent.click(dataforaiSummary);
+    fireEvent.click(dataforaiSummary!);
     expect(dataforaiMenu).toHaveAttribute("open");
     fireEvent.click(screen.getByTestId("download-manifest-mysql-aliyun-dataforai"));
     expect(dataforaiMenu).not.toHaveAttribute("open");
@@ -1042,7 +1149,9 @@ describe("ConnectionOverview", () => {
     expect(aliyun).toHaveAttribute("open");
     expect(demo).not.toHaveAttribute("open");
     const schemaMenu = screen.getByTestId("schema-more-mysql-aliyun-dataforai");
-    fireEvent.click(schemaMenu.querySelector("summary"));
+    const schemaSummary = schemaMenu.querySelector("summary");
+    expect(schemaSummary).not.toBeNull();
+    fireEvent.click(schemaSummary!);
     expect(schemaMenu).toHaveAttribute("open");
     expect(aliyun).not.toHaveAttribute("open");
 
@@ -1055,7 +1164,7 @@ describe("ConnectionOverview", () => {
     });
     expect(aliyun).toHaveAttribute("open");
 
-    fireEvent.pointerDown(within(aliyun).getByText(/向数据库查询当前可见的/));
+    fireEvent.pointerDown(within(aliyun).getByText(/向数据库查看现在有哪些/));
     expect(aliyun).toHaveAttribute("open");
 
     fireEvent.click(within(aliyun).getByTestId("delete-connection-mysql-aliyun"));
@@ -1161,7 +1270,7 @@ describe("ConnectionOverview", () => {
     // M44: success state lives in the header-right refresh timestamp only;
     // the body no longer renders `本地目录已刷新 ... 已完成 ... 4 张表`.
     const headerTimestamp = within(card).getByTestId("connection-last-reload-mysql-aliyun");
-    expect(headerTimestamp).toHaveTextContent("配置同步：");
+    expect(headerTimestamp).toHaveTextContent("上次刷新：");
     expect(headerTimestamp).toHaveTextContent("2026-07-29 10:30");
     expect(headerTimestamp).toHaveAttribute(
       "title",
@@ -1255,8 +1364,8 @@ describe("ConnectionOverview", () => {
 
     const card = await screen.findByTestId("connection-card-demo-mysql");
     const kv = within(card).getByTestId("connection-kv-demo-mysql");
-    expect(within(kv).getByText("Host：")).toBeInTheDocument();
-    expect(within(kv).getByText("Database：")).toBeInTheDocument();
+    expect(within(kv).getByText("地址：")).toBeInTheDocument();
+    expect(within(kv).getByText("数据库：")).toBeInTheDocument();
     expect(within(card).queryByText("配置文件")).not.toBeInTheDocument();
     expect(within(card).queryByText("凭据来源")).not.toBeInTheDocument();
     expect(card).not.toHaveTextContent("配置：ktx.yaml");
@@ -1265,7 +1374,7 @@ describe("ConnectionOverview", () => {
     // the body no longer renders `pl-catalog-reload-status` while a Banner
     // would otherwise be hidden. Healthy status surfaces as `配置同步：<ts>`.
     const headerTimestamp = within(card).getByTestId("connection-last-reload-demo-mysql");
-    expect(headerTimestamp).toHaveTextContent("配置同步：");
+    expect(headerTimestamp).toHaveTextContent("上次刷新：");
     expect(within(card).queryByTestId("catalog-reload-status-demo-mysql")).not.toBeInTheDocument();
     expect(within(card).getByTestId("catalog-reload-demo-mysql")).toHaveTextContent("刷新本地目录");
 
@@ -1317,7 +1426,7 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     const banner = await screen.findByTestId("connection-refresh-warning-mysql-aliyun");
-    expect(banner).toHaveTextContent("本地目录未刷新：首次接入或修改本地 YAML 后，可刷新以读取最新资产。");
+    expect(banner).toHaveTextContent("尚未刷新本地目录：添加或更新表结构后，点刷新即可看到最新内容。");
     // M44: when a Banner is shown, the body no longer renders the legacy
     // `本地目录未刷新 · 尚未读取本地 YAML` muted status row.
     expect(within(banner).getByTestId("connection-refresh-warning-action-mysql-aliyun")).toHaveTextContent(
@@ -1345,7 +1454,7 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     const banner = await screen.findByTestId("connection-refresh-warning-mysql-aliyun");
-    expect(banner).toHaveTextContent("本地目录未刷新：首次接入或修改本地 YAML 后，可刷新以读取最新资产。");
+    expect(banner).toHaveTextContent("尚未刷新本地目录：添加或更新表结构后，点刷新即可看到最新内容。");
     expect(banner).toHaveClass("pl-connection-refresh-warning");
     const refreshAction = within(banner).getByTestId("connection-refresh-warning-action-mysql-aliyun");
     expect(refreshAction).toHaveTextContent("刷新本地目录");
@@ -1374,7 +1483,7 @@ describe("ConnectionOverview", () => {
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
     expect(within(card).queryByTestId("connection-refresh-warning-mysql-aliyun")).not.toBeInTheDocument();
     expect(within(card).getByTestId("catalog-reload-status-mysql-aliyun")).toHaveTextContent(
-      "正在读取配置同步状态..."
+      "正在读取刷新状态..."
     );
     expect(screen.queryByText("Catalog 状态")).not.toBeInTheDocument();
   });
@@ -1397,7 +1506,7 @@ describe("ConnectionOverview", () => {
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
     expect(within(card).queryByTestId("connection-refresh-warning-mysql-aliyun")).not.toBeInTheDocument();
     expect(within(card).getByTestId("catalog-reload-status-mysql-aliyun")).toHaveTextContent(
-      "配置同步状态加载失败"
+      "刷新状态加载失败"
     );
     expect(screen.queryByText("Catalog 状态")).not.toBeInTheDocument();
   });
@@ -1507,7 +1616,7 @@ describe("ConnectionOverview", () => {
 
 	    const status = await within(card).findByTestId("catalog-reload-status-mysql-aliyun");
 	    expect(status).toHaveAttribute("role", "alert");
-	    expect(status).toHaveTextContent("配置同步失败");
+	    expect(status).toHaveTextContent("刷新失败");
 	    expect(status).toHaveTextContent("local YAML scan failed");
 	  });
 
@@ -1539,15 +1648,15 @@ describe("ConnectionOverview", () => {
     expect(hostNode).toHaveAttribute("title", `${longHost}:3306`);
     expect(hostNode).toHaveAttribute("dir", "ltr");
     expect(hostNode).toHaveClass("notranslate");
-    expect(hostNode.closest("[translate='no']")).not.toBeNull();
-    const kvHost = hostNode.closest(".pl-connection-kv");
+    expect(hostNode!.closest("[translate='no']")).not.toBeNull();
+    const kvHost = hostNode!.closest(".pl-connection-kv");
     expect(kvHost).not.toBeNull();
     const dbNodes = Array.from(card.querySelectorAll("dd code"));
     const dbNode = dbNodes.find((node) => node.textContent === "data_agent_poc");
     expect(dbNode).toBeDefined();
     expect(dbNode).toHaveAttribute("dir", "ltr");
     expect(dbNode).toHaveClass("notranslate");
-    expect(dbNode.closest("[translate='no']")).not.toBeNull();
+    expect(dbNode!.closest("[translate='no']")).not.toBeNull();
   });
 
   it("SC-2/SC-3/SC-4/SC-5/SC-7: card actions are 添加 Schema and 更多", async () => {
@@ -1556,7 +1665,7 @@ describe("ConnectionOverview", () => {
 
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
     expect(card.querySelector(".pl-connection-card-footer")).toBeNull();
-    expect(within(card).queryByTestId("connection-card-schema-actions-mysql-aliyun")).not.toBeInTheDocument();
+    expect(within(card).getByTestId("connection-schema-toolbar-mysql-aliyun")).toBeInTheDocument();
     const addSchema = within(card).getByTestId("add-schema-mysql-aliyun");
     expect(addSchema).toHaveTextContent("添加 Schema");
     expect(addSchema).toHaveClass("pl-btn--secondary");
@@ -1579,8 +1688,8 @@ describe("ConnectionOverview", () => {
     expect(deleteAt).toBeGreaterThan(localAt);
     expect(more.querySelector("[role='separator']")).not.toBeNull();
     const normalized = (more.textContent ?? "").replace(/\s+/g, "");
-    expect(normalized).toContain("向数据库查询当前可见的Schema和表数量。");
-    expect(normalized).toContain("重新读取本机YAML，不连接数据库。");
+    expect(normalized).toContain("向数据库查看现在有哪些Schema和多少张表。");
+    expect(normalized).toContain("重新读取本机已保存的表结构说明，不会连接数据库。");
     const deleteButton = within(more).getByTestId("delete-connection-mysql-aliyun");
     expect(deleteButton).toHaveClass("pl-row-action-link--danger");
     expect(deleteButton).not.toHaveClass("pl-btn--secondary");
@@ -1924,13 +2033,33 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     expect(numRule![0]).toMatch(/font-normal/);
     expect(numRule![0]).toMatch(/text-fg-body/);
 
-    const liveColRule = css.match(/\.pl-schema-asset-col-live-count\s*\{[^}]*\}/);
-    expect(liveColRule).not.toBeNull();
-    expect(liveColRule![0]).toMatch(/width:\s*10%/);
-
-    const actionColRule = css.match(/\.pl-schema-asset-col-action\s*\{[^}]*\}/);
-    expect(actionColRule).not.toBeNull();
-    expect(actionColRule![0]).toMatch(/width:\s*42%/);
+    // Spec 190 adds 库内表清单 and 持续感知 as their own columns; the four
+    // count facts stay separated and the action column keeps the residual.
+    const widthOf = (className: string): number => {
+      const rule = css.match(new RegExp(`\\.${className}\\s*\\{[^}]*\\}`));
+      expect(rule).not.toBeNull();
+      const width = rule![0].match(/width:\s*(\d+)%/);
+      expect(width).not.toBeNull();
+      return Number(width![1]);
+    };
+    const countColumns = [
+      "pl-schema-asset-col-live-count",
+      "pl-schema-asset-col-live-tables",
+      "pl-schema-asset-col-local-count",
+      "pl-schema-asset-col-enabled-count"
+    ];
+    const actionWidth = widthOf("pl-schema-asset-col-action");
+    for (const className of countColumns) {
+      expect(widthOf(className)).toBeGreaterThan(0);
+      expect(actionWidth).toBeGreaterThanOrEqual(widthOf(className));
+    }
+    const totalWidth =
+      widthOf("pl-schema-asset-col-schema") +
+      widthOf("pl-schema-asset-col-status") +
+      countColumns.reduce((sum, className) => sum + widthOf(className), 0) +
+      widthOf("pl-schema-asset-col-discovery") +
+      actionWidth;
+    expect(totalWidth).toBe(100);
 
     // Design System 02 / page-layout: do not hide core row actions via overflow clipping.
     const actionsRule = css.match(/\.pl-schema-asset-actions\s*\{[^}]*\}/)?.[0] ?? "";
@@ -1998,13 +2127,11 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
 
     expect(await screen.findByTestId("connection-health-starrocks-r1")).toHaveTextContent("通");
 
-    const postTests = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
-      ([input, init]: [RequestInfo | URL, RequestInit?]) => {
-        const url = String(input);
-        const method = init?.method ?? "GET";
-        return method === "POST" && /\/api\/connections\/[^/]+\/test$/.test(url.replace(/^http:\/\/[^/]+/, ""));
-      }
-    );
+    const postTests = fetchMock.mock.calls.filter(([input, init]) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      return method === "POST" && /\/api\/connections\/[^/]+\/test$/.test(url.replace(/^http:\/\/[^/]+/, ""));
+    });
     expect(postTests.length).toBeGreaterThanOrEqual(2);
     // Footer must not regain a large 「测试连接」 button (Spec 44 / 108).
     expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
@@ -2162,5 +2289,157 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     expect(await screen.findByTestId("connection-test-drawer")).toBeInTheDocument();
     expect(screen.getByTestId("connection-test-banner")).not.toHaveTextContent("尚未测试");
     expect(screen.queryByText("尚未测试")).not.toBeInTheDocument();
+  });
+
+  /**
+   * Spec 190 §7.9 / SC-34 — the Schema row carries the live table list entry,
+   * the continuous discovery state and the table-list difference counters; the
+   * connection card carries the paused notice with its reason.
+   */
+  it("SC-34: shows the live table list entry, the discovery state and the difference counters", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          host: "127.0.0.1",
+          port: "3306",
+          database: "dataforai",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tableDiffResponse: {
+        connectionId: "mysql-aliyun",
+        generation: 0,
+        computedAt: "2026-08-06T00:00:00.000Z",
+        schemas: [
+          {
+            schema: "dataforai",
+            reconciliation: {
+              discoveredInLibrary: ["dataforai.superstore_orders", "dataforai.orders"],
+              missingInManifest: [],
+              missingInEnabled: [],
+              notInLibrary: []
+            },
+            listDiff: {
+              added: ["dataforai.orders"],
+              missing: [],
+              columnCountChanged: [{ table: "dataforai.superstore_orders", before: 11, after: 12 }]
+            },
+            snapshotAt: "2026-08-06T00:00:00.000Z"
+          }
+        ],
+        eventCount: 1
+      }
+    });
+    renderOverview();
+
+    const row = await screen.findByTestId("schema-row-mysql-aliyun-dataforai");
+    // The entry shows the table count of the persisted snapshot.
+    const toggle = within(row).getByTestId("live-table-list-toggle-mysql-aliyun-dataforai");
+    await waitFor(() => expect(toggle).toHaveTextContent("2 张表"));
+
+    // Expanding reads the library and lists table name + column count.
+    fireEvent.click(toggle);
+    const list = await screen.findByTestId("live-table-list-mysql-aliyun-dataforai");
+    expect(await within(list).findByText("superstore_orders")).toBeInTheDocument();
+    expect(within(list).getByText("12 列")).toBeInTheDocument();
+
+    // The difference counters are shown when they are not all zero.
+    const diff = within(row).getByTestId("table-diff-count-mysql-aliyun-dataforai");
+    expect(diff).toHaveTextContent("新增 1");
+    expect(diff).toHaveTextContent("已消失 0");
+    expect(diff).toHaveTextContent("列数变化 1");
+
+    // The discovery state names the switch and the last sensing time.
+    const state = within(row).getByTestId("discovery-state-mysql-aliyun-dataforai");
+    expect(state).toHaveTextContent("已开启");
+  });
+
+  it("SC-34: a paused Schema shows the reason and the card shows the paused notice", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: []
+        }
+      ],
+      discoveryResponse: {
+        connectionId: "mysql-aliyun",
+        enabled: true,
+        intervalMs: 3_600_000,
+        generation: 0,
+        status: "paused",
+        lastAttemptAt: "2026-08-06T00:00:00.000Z",
+        lastCompletedAt: null,
+        lastReason: "AUTH_FAILED",
+        schemas: [
+          {
+            schema: "dataforai",
+            status: "paused",
+            lastAttemptAt: "2026-08-06T00:00:00.000Z",
+            lastCompletedAt: null,
+            lastReason: "AUTH_FAILED",
+            consecutiveFailures: 10,
+            nextAttemptAt: null
+          }
+        ],
+        diffCount: { added: 0, missing: 0, columnCountChanged: 0 }
+      }
+    });
+    renderOverview();
+
+    const notice = await screen.findByTestId("connection-discovery-notice-mysql-aliyun");
+    expect(notice).toHaveTextContent("持续感知已暂停");
+    expect(notice).toHaveTextContent("凭据无效或被拒绝");
+
+    const row = await screen.findByTestId("schema-row-mysql-aliyun-dataforai");
+    const state = within(row).getByTestId("discovery-state-mysql-aliyun-dataforai");
+    expect(state).toHaveTextContent("已暂停");
+    const reason = within(row).getByTestId("discovery-paused-reason-mysql-aliyun-dataforai");
+    expect(reason).toHaveTextContent("凭据无效或被拒绝");
+  });
+});
+
+describe("Spec 149 — 运维问数连接卡片", () => {
+  it("主称是「运维问数连接」，连接 ID 用 translate=no，删除入口不可用", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "lucy-ops",
+          driver: "sqlite",
+          schemas: ["main"],
+          enabledTables: ["ops_calls", "ops_call_tables"]
+        },
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")]
+    });
+    renderOverview();
+
+    const card = await screen.findByTestId("connection-card-lucy-ops");
+    const title = within(card).getByTestId("connection-title-lucy-ops");
+    expect(title).toHaveTextContent("运维问数连接");
+    expect(within(card).getByTestId("engine-badge-lucy-ops")).toHaveTextContent("SQLite");
+
+    const idNode = within(card).getByTestId("connection-id-lucy-ops");
+    expect(idNode).toHaveTextContent("lucy-ops");
+    expect(idNode).toHaveClass("notranslate");
+    expect(idNode).toHaveAttribute("translate", "no");
+
+    const deleteButton = within(card).getByTestId("delete-connection-lucy-ops");
+    expect(deleteButton).toBeDisabled();
+
+    // 普通连接的删除入口仍然可用。
+    const normalDelete = await screen.findByTestId("delete-connection-mysql-aliyun");
+    expect(normalDelete).not.toBeDisabled();
   });
 });

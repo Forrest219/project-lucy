@@ -78,3 +78,5 @@ inbox/20260809-gate-c-uat/.tokens.local
 
 # Cursor 本地 MCP 覆盖配置（含 Bearer token，禁止入库）
 .cursor/mcp.json
+# 本机 WebUI UAT 登录凭据路径（指向桌面文件，禁止入库）
+.cursor/rules/lucy-webui-uat-login.mdc

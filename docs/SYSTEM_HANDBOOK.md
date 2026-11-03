@@ -14,40 +14,43 @@
 
 | 字段 | 当前值 | 来源 |
 | --- | --- | --- |
-| 产品版本（`VERSION`） | 0.20.0 | `VERSION` |
-| 产品版本标签 | v0.20.0 | `webui/src/lib/lucyVersion.ts` FALLBACK |
-| Helm `appVersion` | 0.20.0 | `deploy/k8s/helm/lucy/Chart.yaml` `appVersion` |
+| 产品版本（`VERSION`） | 0.25.0 | `VERSION` |
+| 产品版本标签 | 0.25.0 | `webui/src/lib/lucyVersion.ts` FALLBACK |
+| Helm `appVersion` | 0.25.0 | `deploy/k8s/helm/lucy/Chart.yaml` `appVersion` |
 | 捆绑 KTX 版本 | 0.16.0 | `Dockerfile` `LUCY_BUNDLED_KTX_VERSION` |
 | 上次手册审计 | 2026-10-24 | 人工维护；下次审计由治理 PR 触发 |
-| 版本号规则 | `0.20.x`（同一版本线按数值递增，见 `docs/governance/version-matrix.md` §1.1） | `docs/governance/version-matrix.md` |
+| 版本号规则 | `0.25.x`（同一版本线按数值递增，见 `docs/governance/version-matrix.md` §1.1） | `docs/governance/version-matrix.md` |
 
 > **不要**手改本表。改完事实源后跑 `npm run lint:handbook-baseline`；脚本会因更新而失败时，按报错提示同步本表，再跑一次。
 
 ### 0.4 版本号说明
 
-2026-10-24 产品版本先从 `2.0.0` 更正为 `0.2.0`，随后因 `0.2.0 < 0.17.0` 再次更正为 **`0.20.0`**。当前客户标签为 `v0.20.0`，捆绑 KTX 仍为 `0.16.0`，Helm Chart 包版本为 `0.2.7`。
+2026-10-24 产品版本先从 `2.0.0` 更正为 `0.2.0`，随后因 `0.2.0 < 0.17.0` 再次更正为 `0.20.0`。该次更正后的客户标签是 `v0.20.0`，捆绑 KTX 为 `0.16.0`，当时 Helm Chart 包版本为 `0.2.7`。
+
+2026-11-01 起，本开发线产品版本为 **`0.25.0`**，与分支 `lucy-v0.25` 对齐。界面标签为 `0.25.0`（不带 `v` 前缀）。捆绑 KTX 仍为 `0.16.0`。Helm Chart 包版本仍为 `0.2.8`（`appVersion` 为 `0.25.0`）。已发布的 `v0.20.0` 仍是上一已发布版本；`v0.25.0` 尚未打 tag。
 
 **更正原因**：`2.0.0` 是与 Helm Chart 版本线容易混淆的错误切线；`0.2.0` 又错误地低于历史 `0.17.0`。`0.20.0` 恢复当前 `0.x` 版本线的数值顺序：`0.20.0 > 0.17.0 > 0.2.0`。`v2.0.0` 是已废止的历史切线，不作为当前版本线的承接基准。
 
-**版本号规则**（详见 `docs/governance/version-matrix.md`）：
+**版本号规则**（详见 `docs/governance/version-matrix.md`）：产品版本按产品线确定，部署制品各自编号，互不推导。
 
-| 触发 | 递增 | 例 |
+| 身份 | 何时改变 | 当前 |
 | --- | --- | --- |
-| 下一次客户交付包 | 第二段 +1 | `0.20.0 → 0.21.0` |
-| 大能力、破坏性配置或捆绑 KTX 主版本变化 | 第二段 +10 | `0.20.0 → 0.30.0` |
-| 补丁段 | 保持 `0`，直到矩阵另定 hotfix 规则 | `0.20.0 → 0.20.1` 暂不启用 |
-| 再进主版本 | 需新的明示批准 | `1.0.0` |
+| 产品版本（`VERSION`） | 产品线换代 | `0.25.0`（分支 `lucy-v0.25`） |
+| Helm Chart 包版本 | 安装行为变化 | `0.2.8`。这次产品版本对齐没有升包版本 |
+| 捆绑 KTX | 运行时升级 | `0.16.0` |
+| 客户镜像 tag / 交付包修订号 | 真正构建或交付时才有 | `0.25.0` 还没有。形式是 `customer-amd64-<产品版本>-<日期>-<提交>` |
+| 补丁段 | 矩阵另定 hotfix 规则之前保持 `0` | `0.25.1` 暂不启用 |
 
 > **同一产品版本线必须按数值递增。** 不得通过降低版本号表示最新发布。构建提交用于识别具体构建及其与 `main` 的关系，是对产品版本的补充，不能用来允许版本号倒退。
 
-**客户镜像 tag 形式**：`customer-amd64-0.20.0-YYYYMMDD-<gitSha>`。
+**客户镜像 tag 形式**：`customer-amd64-0.25.0-YYYYMMDD-<gitSha>`。
 
-登录后，侧栏左下角只保留一个账户入口；点击可查看完整账户信息、打开「系统手册」或「退出登录」。开放模式或未登录时仍可直接打开系统手册。产品版本、构建提交和随包 KTX 版本常驻在「系统设置 / 版本信息」（`/admin/version`）。构建提交是完整 40 位；`/api/health` 的 `gitSha` 与这一页相同。这不是产品版本，也不能在 Helm 或 `LUCY_VERSION` 里手改；构建时没有写入则显示 `unknown`。构建混入未提交改动时页面另显示一行工作区状态，文案是「构建时工作区有未提交改动」，不写 `dirty`；干净构建（含全部客户 CI 构建）不显示该行。对照客户正在跑的 `main` 提交时看这一页的构建提交，而不是只看产品版本号。
+登录后，侧栏左下角只保留一个账户入口；点击可查看完整账户信息、打开「系统手册」或「退出登录」。开放模式或未登录时仍可直接打开系统手册。产品版本、构建提交和随包 KTX 版本常驻在「系统设置 / 版本信息」（`/admin/version`）。产品版本显示为纯数字 `X.Y.Z`，不带 `v` 前缀。构建提交的可见文本是前 12 位；复制内容或 `/api/health` 的 `gitSha` 才是完整 40 位。这不是产品版本，也不能在 Helm 或 `LUCY_VERSION` 里手改；构建时没有写入则显示 `unknown`。工作区脏状态不在客户可见页面展示。对照客户正在跑的 `main` 提交时看这一页的构建提交，而不是只看产品版本号。
 
 本次版本更正**不**涉及的事项：
 
 - `webui/package.json` 的 `version`（npm 包版本）保持 `1.0.0`，与包无关。
-- Helm Chart `version` 当前是 `0.2.7`；图表包版本与 `appVersion` 分开。
+- Helm Chart `version` 在那次更正时是 `0.2.7`；图表包版本与 `appVersion` 分开。当前 Chart 包版本是 `0.2.8`。
 - `@kaelio/ktx` 仍为 `0.16.0`；本次未升级运行时。
 - 已发布的 `v2.0.0`、`v0.2.0` 标签与 GitHub Release 均作为历史事实保留，不删除、不移动。
 
@@ -83,6 +86,7 @@
 | --- | --- | --- |
 | 什么时候该建角色，什么时候该建 `Agent` / `Token`？ | 角色 = 可复用的权限边界；`Agent` = 要对审计负责的人/机器人；`Token` = 某台设备或某个客户端的接入凭证。先角色、再 `Agent`、最后签发 `Token`。 | [什么时候配置角色、Agent 和 Token](#admin-role-agent-token-guide) |
 | 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#admin-role-agent-token-guide) |
+| 想用脚本 / 运维 Agent 开通 `Agent`、签发 `Token`，不要反解前端？ | 先拉公开 `GET /api/openapi.json`；再用管理员 Cookie 会话调 Admin API。没有 scoped Admin Bearer。 | [用 Admin API 脚本开通（Agent／Token）](#admin-api-script-provisioning) |
 | `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC `Access denied` / `decision_reason` 怎么查？](#json-rpc-access-denied-decision-reason)、[3.5 访问治理 · 角色 / Agent / Token](#access-governance) |
 | `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 · 角色 / Agent / Token](#access-governance)、[6.5 MCP 返回 401](#mcp-401) |
 | 问询记录和调用流水都能导出吗？ | 可以。`/admin/audit` 的「导出问询记录」是一问一行，「导出调用流水」是一调用一行；两者通过「问询 ID」关联。 | [问询记录与调用流水怎么选、怎么导出](#admin-audit-turns-vs-calls) |
@@ -211,12 +215,14 @@ KTX CLI / MCP daemon
 | 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |
 | 访问治理 | Token 凭据 | `/admin/tokens` | 全局查看、签发与定向吊销 `Agent` 访问凭据。 |
 | 访问治理 | 角色权限 | `/admin/roles` | 管理角色的数据库连接、数据表与 `MCP` 工具授权范围。 |
+| 访问治理 | 行权限视图 | `/admin/row-policies` | 按表反查角色的行策略与 `Agent` 的最终行约束。 |
+| 访问治理 | 访问关系图 | `/admin/access-map` | 查看授权路径与实际访问路径的对应关系。 |
 | 访问治理 | 访问日志 | `/admin/audit` | 按问询和工具调用追溯 `Agent` 访问行为、权限裁决与执行耗时。 |
 | 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 检查 `Agent` 能不能连上，或者能不能查某张表。 |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |
 | 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |
-| 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |
-| 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 `KTX` 版本；有未提交改动时显示工作区状态。 |
+| 系统设置 | 登录账户 | `/admin/accounts` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |
+| 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 `KTX` 版本。 |
 
 > 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。
 
@@ -434,20 +440,21 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 | 启用表范围 | `/connections/enabled-tables` | 维护 `ktx.yaml` 的 `enabled_tables` |
 | 连通测试 | `/connections/test` | 调用 `ktx connection test <connId>` |
 
-> WebUI 不负责新建物理数据库连接。新增连接的 host、port、database、username、password、driver 等字段由运维在 `ktx.yaml` 和 secret 文件中配置。
-> WebUI 管理的是已声明连接：查看连接状态、测试连接、添加 Schema、维护启用表范围、上传 YAML 资产、刷新本地目录。
+> WebUI 可**新建连接**（`/connections` → 新建连接）与**编辑服务器地址**（连接卡片 → 编辑连接）。密码持久态仍为 `file:` 引用；WebUI 不回读密码明文。手工编辑 `ktx.yaml` + secrets 仍可用作高级 / 灾备路径。
+> WebUI 还管理已声明连接：连通测试、添加 Schema、维护启用表范围、上传 YAML 资产、刷新本地目录。
 
 | 问题 | 结论 |
 | --- | --- |
-| 我在哪里新建连接？ | 编辑 `ktx.yaml`，不是 WebUI |
+| 我在哪里新建连接？ | WebUI `/connections` 新建连接；或手工编辑 `ktx.yaml` |
+| 如何改 IP / 端口？ | WebUI 连接卡片「编辑连接」（保留连接 ID）；或手工改 `ktx.yaml` |
 | 密码放哪里？ | `file:` / `env:` / Docker secrets，不写 inline 明文 |
-| WebUI 能做什么？ | 管理已声明连接 |
+| WebUI 能做什么？ | 新建 / 编辑服务器地址、管理已声明连接 |
 | 新连接什么时候对 Agent 可见？ | `ktx.yaml`、manifest / overlay、`enabled_tables`、`access.yaml` 均就绪后 |
 
 | 工作 | 操作入口 |
 | --- | --- |
-| 新增物理数据库连接 | `ktx.yaml` + secret 文件 |
-| 修改连接 host / port / username / password | `ktx.yaml` + secret 文件 |
+| 新增物理数据库连接 | WebUI 新建连接；或 `ktx.yaml` + secret 文件 |
+| 修改连接 host / port / username / password | WebUI「编辑连接」（约定 `file:` 密码可覆盖）；或 `ktx.yaml` + secret 文件 |
 | 给已有连接添加 Schema | WebUI `/connections` 或受控 API |
 | 测试连接 | WebUI 或 `ktx connection test` |
 | 维护启用表范围 | WebUI `/connections/enabled-tables` |
@@ -554,7 +561,7 @@ PUT /api/connections/:connId/enabled-tables
 
 | 角色 | 负责的事 | 不负责的事 |
 | --- | --- | --- |
-| WebUI | 查看 connection、连通测试、添加 Schema、维护 `enabled_tables`、上传 YAML 资产、刷新本地目录、显示 secret 路径来源 | 写入 host / port / user / password；读取 `password: file:` 指向的密码文件内容；直接连接物理数据库做扫描 |
+| WebUI | 新建连接、编辑服务器地址、连通测试、添加 Schema、维护 `enabled_tables`、上传 YAML 资产、刷新本地目录、显示 secret 路径来源 | 回读密码明文；直接连接物理数据库做扫描 |
 | `ktx.yaml` + secret | 声明物理连接的 driver、host、port、username、password、schemas、`enabled_tables` | Agent 鉴权；role / ACL 治理 |
 | `webui/config/access.yaml` | 定义 role、Agent、token hash、ACL（连接、表范围、工具） | 物理连接配置；MCP upstream 行为 |
 
@@ -1137,7 +1144,7 @@ PUT /api/wiki/:key
 | MCP 调试台 | `/admin/mcp-playground` | 检查 `Agent` 能不能连上，或者能不能查某张表 |
 | 数据源热力 | `/admin/audit-sources` | 查看 source/table 调用和拒绝分布 |
 | 配置变更 | `/admin/config-audit` | 查看 `access.yaml`、`ktx.yaml`、`admins.yaml` 等配置变更 |
-| 管理员 | `/admin/admins` | WebUI 登录账户（所有者 / 运维）；仅所有者可增删账户 |
+| 管理员 | `/admin/accounts` | WebUI 登录账户（所有者 / 运维）；仅所有者可增删账户 |
 
 权威配置：
 
@@ -1206,7 +1213,8 @@ PUT /api/wiki/:key
 
 - 新设备或新客户端首次接入
 - 怀疑泄露、长期未用、人员交接 → 新建并撤销旧 `Token`（轮换）
-- 新建客户端凭据 → 必须设置 `expires_at`；管理页默认 90 天，最长 365 天
+- 新建客户端凭据 → 必须设置 `expires_at`；管理页默认 365 天，最长 365 天
+- 快到期或已过期（未吊销）→ 管理员可**续期**（只改 `expires_at`，客户端无需换明文）；怀疑泄露 → **换签**（新建）并吊销旧 Token
 
 **不适合：**
 
@@ -1251,7 +1259,7 @@ PUT /api/wiki/:key
 4. 改完角色后旧客户端仍拒访 → 扩权后需新开 session。
 5. 把 `WebUI` 登录与 `MCP` `Bearer` 混用 → 两套凭证，互不登录对方系统。
 
-YAML 结构、签发规则与裁决链路见本节后续三节：[Role-first 模型](#role-first-model)、[Token 发行规则](#token-issuance-policy)、[权限裁决机制](#permission-decision-flow)；调用与审计留痕见 [问题簇审计](#question-cluster-audit)。客户端粘贴配置见 [4. Agent / 客户端接入指南](#mcp-integration)。
+YAML 结构、签发规则与裁决链路见本节后续三节：[Role-first 模型](#role-first-model)、[Token 发行规则](#token-issuance-policy)、[权限裁决机制](#permission-decision-flow)；调用与审计留痕见 [问题簇审计](#question-cluster-audit)。客户端粘贴配置见 [4. Agent / 客户端接入指南](#mcp-integration)。脚本开通（不点 WebUI）见 [用 Admin API 脚本开通（Agent／Token）](#admin-api-script-provisioning)。
 
 #### 问询记录与调用流水怎么选、怎么导出
 
@@ -1310,7 +1318,7 @@ Lucy 是自托管控制面：管理面登录与 SaaS「邮箱注册 / 邮箱找�
 | 评测用例 / 运行 / 趋势监控 | ✓ | ✓ |
 | Agent、Role（`access.yaml`）、Token 发行与撤销 | ✓ | ✓ |
 | 访问日志 / 配置审计 / MCP 调试台 | ✓ | ✓ |
-| `/admin/admins` 登录账户增删改 | ✓ | ✗ |
+| `/admin/accounts` 登录账户增删改 | ✓ | ✗ |
 
 说明：运维即可完成「连接、配置语义、质量评测、添加和管理 Agent Role」等日常工作；所有者额外负责控制面账户与 break-glass 相关治理。旧配置里的 `role: admin` 读入时等价于 `operator`。
 
@@ -1335,7 +1343,7 @@ Lucy 是自托管控制面：管理面登录与 SaaS「邮箱注册 / 邮箱找�
 **优先路径 A — 仍有可登录的所有者**
 
 1. 用其他所有者登录 WebUI。
-2. 打开 `/admin/admins`，为遗忘账户重置密码，或禁用后新建。
+2. 打开 `/admin/accounts`，为遗忘账户重置密码，或禁用后新建。
 3. 确认配置审计里出现 `admin_patch` / `admin_create` 记录。
 
 **路径 B — 无人可登录（配置卷恢复）**
@@ -1411,12 +1419,13 @@ defaults:
 
 | 操作 | 行为 |
 | --- | --- |
-| 新建 token | 生成 32 字节随机明文；必须设置 `expires_at`（默认 90 天、最长 365 天）；HTTP 响应只显示一次且禁止缓存 |
-| 落盘 | `access.yaml` 只保存 `sha256:<hex>` |
+| 新建 token | 生成 32 字节随机明文；必须设置 `expires_at`（默认 365 天、最长 365 天）；HTTP 响应只显示一次且禁止缓存；同步写入固定截断 `token_hint`（前 6 + `…` + 后 4） |
+| 续期 token | 只更新 `expires_at`；不返回明文、不改 hash／`token_hint`；已过期可续，已撤销不可续；写审计 `token_renew` |
+| 落盘 | `access.yaml` 保存 `sha256:<hex>` 与可选 `token_hint`；**禁止**完整明文落盘 |
 | 撤销 token | 先写 `.ktx-ui/audit.sqlite.revoked_tokens`，再从 YAML 删除 |
 | 删除 Agent | 先撤销该 Agent 所有 token，再删除 YAML user |
 | 复制 MCP 配置 | 只复制 `${LUCY_AGENT_TOKEN}` 占位符，不复制明文 |
-| 过期 | `expires_at` 到期或不可解析时，`MCP` Proxy 鉴权失败（401）；也可在 Admin 提前撤销 |
+| 过期 | `expires_at` 到期或不可解析时，`MCP` Proxy 鉴权失败（401）；也可在 Admin 提前撤销；未吊销时可续期 |
 
 注意：`expires_at` 由 Proxy 身份校验强制拒绝已过期 token。到期后仍建议在 Admin 执行撤销，或调用 `DELETE /api/admin/agents/:userId/tokens/:label`，避免配置残留。
 
@@ -1513,9 +1522,10 @@ Token 是 **Agent 的接入凭证**，不是权限边界；同 Agent 下多个 T
 #### 签发
 
 - 入口路径：从 `/admin/agents` 选中 Agent → Token 区；或从 `/admin/tokens` 选择 Agent 后一键签发。
-- 必填项：`expires_at`（管理页默认 90 天，最长 365 天；空值表示长期有效，**不推荐**，会失去下文 `expires_at` 强制校验的硬拒绝兜底）。
+- 到期：管理页默认 365 天，最长 365 天。API 须提供 `expires_at` **或** `expires_in`（`"30d"`｜`"90d"`｜`"180d"`｜`"365d"`）；二者皆缺会拒绝。空／永久别名**不再**用于新建签发。
 - 可选项：标签 / 设备名（便于人工分辨；写明如 `forrest-mbp-cursor`、`eval-runner-2` 之类，**不要含明文 secret**）。
 - 明文 Token **只出现一次**：签发后立刻复制到客户端凭据库 / secret store；不要进仓库、聊天记录、截图或 Wiki。
+- 脚本签发可加 `includeClientConfigs: true`，在**同一次**创建响应里带回 Hermes／Claude Code／Codex／generic 配置片段（须已配置可用的公开 MCP endpoint）；详情见 [用 Admin API 脚本开通（Agent／Token）](#admin-api-script-provisioning)。
 
 #### 吊销
 
@@ -1571,7 +1581,7 @@ Proxy 鉴权链路在 access 决策中**实际比对** `expires_at`，不再只�
 | 用不同 Token 表达不同权限 | 当前模型下同 Agent 同权；Token 无法驱动可见 scope | 需要隔离就拆 Agent + 绑不同 Role |
 | 把 Token 当 WebUI 登录密码 | 两套体系，互不登录对方系统 | 控制面看 [「WebUI 管理员登录」](#admin-webui-login) |
 | 把 `KTX_INTERNAL_TOKEN` 发给外部 Agent | 上游信任链外泄 | 只用于 Lucy Proxy 调用 KTX upstream |
-| 长期不设 `expires_at` | 失去强制轮换与硬拒绝兜底 | 至少 90 天默认；高敏感 30 天并配轮换脚本 |
+| 长期不设 `expires_at` | 失去强制轮换与硬拒绝兜底 | 管理页默认 365 天；高敏感可选 30 天并配换签／续期节奏 |
 
 **关联**
 
@@ -1580,6 +1590,79 @@ Proxy 鉴权链路在 access 决策中**实际比对** `expires_at`，不再只�
 - §3.5 [MCP 调试台（/admin/mcp-playground）](#mcp-playground) — 受控试调验证 Token / Role 链路；区分 `callSource=playground`
 - §3.11 [MCP 会话与上游连接](#mcp-session-upstream) — Token + `Mcp-Session-Id` 在 MCP 握手层的关系
 - §4 [Agent / 客户端接入指南](#mcp-integration) — 各客户端配置模板与 `LUCY_PUBLIC_MCP_URL` 取值
+- [用 Admin API 脚本开通（Agent／Token）](#admin-api-script-provisioning) — OpenAPI、Cookie 会话、`dryRun` 差异、`expires_in`／`clientConfigs`
+
+#### 用 Admin API 脚本开通（Agent／Token）
+
+深链：`/help?section=admin-api-script-provisioning`。
+
+面向要用 **curl／运维 Agent／自建脚本** 完成「建 Agent、改角色、签发／撤销 Token」的管理员。日常点选仍走 WebUI；本节只补**可编程入口的发现方式与易踩坑**，不复述完整请求体——机器可读契约以运行中实例为准。
+
+**先拉契约（无需登录）**
+
+```bash
+curl -fsS "${LUCY_WEBUI_BASE}/api/openapi.json" -o lucy-admin.openapi.json
+```
+
+`GET /api/openapi.json` 公开可读，覆盖登录、Agent、Token、角色等开通相关 operation（含必填字段与各接口的 `dryRun` 默认说明）。手册不维护第二份路径表，避免与实现漂移。
+
+**身份：管理员 Cookie，没有 Admin Bearer**
+
+Admin API 只认 WebUI 会话 Cookie `lucy_admin_session`。**不存在**可长期持有的 scoped「管理员 API Token」。数据面 MCP 的 Bearer Token 不能用来调 `/api/admin/*`。
+
+```bash
+# 登录拿会话（字段名是 adminId，不是 username）
+curl -fsS -c lucy-admin.cookie -X POST "${LUCY_WEBUI_BASE}/api/auth/login" \
+  -H 'content-type: application/json' \
+  -d '{"adminId":"<管理员账户>","password":"<密码>"}'
+
+# 之后带上 Cookie
+curl -fsS -b lucy-admin.cookie "${LUCY_WEBUI_BASE}/api/admin/agents"
+```
+
+**三条易踩坑（比猜字段更耗时）**
+
+| 点 | 合同 |
+| --- | --- |
+| Agent／Role 写接口 | **省略 `dryRun` = 预览**（不落盘）。确认写入必须显式 `"dryRun": false`。 |
+| Token 签发／续期 | **省略 `dryRun` = 真实写入**。仅 `"dryRun": true` 才是预览；预览不返回明文、不写库存。 |
+| 确认写入后的版本 | Agent `POST`／`PATCH` 成功响应含 `after.agent` 与 `after.version`。下一次 PATCH 的并发版本用 **`after.version`**，不要拿 `policyVersion` 冒充。 |
+
+**签发捷径**
+
+- 到期：`"expires_in": "365d"`（或 `30d`／`90d`／`180d`），也可只传 `expires_at`；两者同传且规范化后不等 → `EXPIRES_CONFLICT`。
+- 需要客户端片段：`"includeClientConfigs": true`。仅当实例已配置可用的公开 MCP endpoint（`resolveMcpEndpoint` 为 `configured`）才会签发并返回 `clientConfigs`；否则在落盘前 `503 MCP_ENDPOINT_UNAVAILABLE`。
+- 标签冲突：`409 TOKEN_LABEL_TAKEN` 的 `error.detail.existingToken` 带非敏感元数据（无明文），便于决定撤销重签还是换 label。
+
+**最小 happy path（示意）**
+
+```bash
+BASE="${LUCY_WEBUI_BASE}"   # 例：http://127.0.0.1:55176
+CK=lucy-admin.cookie
+
+curl -fsS -c "$CK" -X POST "$BASE/api/auth/login" \
+  -H 'content-type: application/json' \
+  -d '{"adminId":"...","password":"..."}'
+
+# 改角色：先预览，再确认（注意 dryRun:false）
+curl -fsS -b "$CK" -X PATCH "$BASE/api/admin/agents/<agentId>" \
+  -H 'content-type: application/json' \
+  -d '{"dryRun":false,"version":"<上次 after.version 或 GET 的 version>","patch":{"roles":["<roleId>"]}}'
+
+# 签发 Token（省略 dryRun = 真签发）；需要粘贴配置时打开 includeClientConfigs
+curl -fsS -b "$CK" -X POST "$BASE/api/admin/agents/<agentId>/tokens" \
+  -H 'content-type: application/json' \
+  -d '{"label":"cursor-laptop","expires_in":"365d","includeClientConfigs":true}'
+```
+
+委托给 owner 的 Agent 签发 Token、或改动触及控制面可达范围的角色，仍须 **owner** 会话（与 WebUI 门禁一致）；OpenAPI 与错误码会标明。完整参数、错误码与撤销／续期路径以 `openapi.json` 为准。
+
+**关联**
+
+- [什么时候配置角色、Agent 和 Token](#admin-role-agent-token-guide) — 先角色、再 Agent、再 Token
+- [Token 凭据（/admin/tokens）](#agent-tokens) — 页面签发、吊销、续期
+- [WebUI 管理员登录](#admin-webui-login) — 会话与 break-glass
+- §4 [Agent / 客户端接入指南](#mcp-integration) — 数据面 MCP Bearer（与 Admin Cookie 不是同一套）
 
 #### MCP 调试台（/admin/mcp-playground）
 
@@ -2600,9 +2683,13 @@ Proxy 在终结身份、ACL 与工具改写的同时，**持有到 KTX 上游的
 
 编辑态是页面本地状态，**不写入 URL**：取消编辑后回到同一 Skill 的阅读态，从详情返回时进入所属领域的总览。
 
-治理总览列展示名称、域、状态、版本、角色授权与校验结果；摘要列表不携带正文，详情在前端选中后懒加载。无效 `domain` 显示空领域总览；无效 `skill` 显示详情加载失败并保留左侧浏览器，便于改选其他条目。
+治理总览列展示名称、域、状态、版本、**负责人**与校验结果；摘要列表不携带正文，详情在前端选中后懒加载。无效 `domain` 显示空领域总览；无效 `skill` 显示详情加载失败并保留左侧浏览器，便于改选其他条目。
 
 阅读态展示 frontmatter 元数据、触发词与渲染后的正文；正文存在多个二、三级标题时显示页内目录。
+
+**负责人**（治理标签，不是账户）：`owner` 写在 frontmatter 里，用于标记这条 Skill 由谁负责维护，可填人员或团队名称。缺省显示「未指定」，既有 Skill 不迁移、不批量回填。编辑态在「元数据」区填写，辅助说明为「可填写人员或团队；不影响访问权限」。
+
+负责人**不参与授权**——不改变 `roles_allowed`、可访问角色、发布状态与 MCP 读取结果；它也不是登录账户、邮箱或通知订阅。声明损坏时总览显示「声明无效」、阅读态显示「负责人声明无效，请编辑修复」，此时必须显式填写合法值或清空后才能保存，不会被另一次保存静默抹掉；损坏声明不阻断 Agent 读取既有 Skill。
 
 **授权口径**（`roles_allowed` 是授权事实源）：
 
@@ -2614,7 +2701,7 @@ Proxy 在终结身份、ACL 与工具改写的同时，**持有到 KTX 上游的
 
 **从非通配进入 `["*"]` 必须二次确认**：预检会显示预计影响的角色数与 `Agent` 数，确认后才写入。
 
-**保存预检**：编辑态下 `Cmd/Ctrl+S` 只打开预检抽屉，不直接写文件。预检披露内容校验问题、状态迁移（如草稿 → 已发布）、角色集合变化、预计影响范围与 diff。已发布 Skill 的内容校验问题**不阻止保存**，但必须在预检中醒目披露。
+**保存预检**：编辑态下 `Cmd/Ctrl+S` 只打开预检抽屉，不直接写文件。预检披露内容校验问题、状态迁移（如草稿 → 已发布）、角色集合变化、**负责人前后值**、预计影响范围与 diff。已发布 Skill 的内容校验问题**不阻止保存**，但必须在预检中醒目披露。
 
 写入约束：更新与删除都带 `expected_version`，版本不匹配即拒绝；编辑时 `domain` 与 `name` 不可变，需要改名只能新建。
 
@@ -2894,6 +2981,9 @@ setup:
 | `LUCY_QUERY_MAX_INFLIGHT` | `4` | 单 token 并发 `lucy_query` 上限 |
 | `LUCY_R1_SLOW_QUERY_MS` | `30000` | R1 observability 慢查询阈值 |
 | `LUCY_R1_HERMES_ACCURACY_REPORT` | 未设置 | R1 observability 读取外部 Hermes 准确率报告 |
+| `LUCY_SMTP_PROFILE_FILE` | 无 | 邮件通知的 profile 文件路径（只读）。未设置即邮件通知关闭，不产生任何出网连接 |
+| `LUCY_SMTP_PASSWORD_FILE` | 无 | 邮件通知的 SMTP 密码文件路径（只读）。只有配置了用户名时才需要；未设置时该文件不会被读取 |
+| `LUCY_SMTP_CA_FILE` | 无 | 邮件通知的可选私有 CA 文件路径（只读）。只追加信任，不关闭证书校验 |
 
 Docker 常用宿主映射变量：
 
@@ -2903,6 +2993,93 @@ Docker 常用宿主映射变量：
 | `LUCY_PROXY_HOST_PORT` | 宿主机映射到容器 `7879` |
 | `KTX_VERSION` | 构建镜像时安装的 KTX 版本 |
 | `LUCY_EXPECTED_KTX_VERSION` | smoke/health 期望版本 |
+
+### 5.4 邮件通知（可选 SMTP 通知）
+
+邮件通知是**可选能力，默认关闭**。它只承载部署方选定的通知，不改变登录账户、认证、恢复流程或审计事实源。当前批次只有两类邮件：**审计健康提醒**（审计账本不可用／恢复）和**测试邮件**。没有忘记密码、验证码、部署许可或业务数据通知。
+
+**术语边界**：`queued` 表示已加入**通知队列**，不表示 SMTP 已接受、也不表示收件箱已送达；`sending`／`sent`／`dead` 同理。HTTP 202 的文案是「测试邮件已加入发送队列」，**不得**写成「发送成功」。
+
+#### 5.4.1 配置文件
+
+profile 只从 `LUCY_SMTP_PROFILE_FILE` 指向的文件读取；密码只从 `LUCY_SMTP_PASSWORD_FILE` 指向的独立 Secret 文件读取；可选私有 CA 从 `LUCY_SMTP_CA_FILE` 读取。**profile 内不允许出现 `password`／`pass`／`secret` 字段**，出现即整份配置被判为不可用。
+
+```yaml
+# profile.yaml —— 非敏感，可放 ConfigMap
+enabled: true
+host: smtp.customer.internal
+port: 587
+security: starttls        # 只允许 tls（直连 TLS）或 starttls（原地升级）
+from: lucy@customer.internal
+username: lucy-notifier   # 可选；设置时必须同时提供密码文件
+recipients:               # 1-20 个；只出现在 Bcc，收件人互相看不到
+  - data-ops@customer.internal
+notifications:
+  auditHealth: true
+```
+
+| 字段 | 规则 |
+| --- | --- |
+| `host` | 主机名或 IP；不含 scheme、路径、端口、用户信息；最长 253 |
+| `port` | 1–65535，必须显式配置，不从安全模式推断 |
+| `security` | 仅 `tls` 或 `starttls`；**不支持明文 SMTP**，升级失败即终止，不降级 |
+| `from` | 单一邮箱地址，不带显示名，不含换行；最长 254 |
+| `username` | 可选，最长 256；设置时必须有非空密码文件；未设置时密码文件不会被读取 |
+| `recipients` | 1–20 个去重地址；启用时必填 |
+| `notifications.auditHealth` | 布尔，缺省 false；只控制审计账本事故／恢复提醒，不控制测试邮件 |
+
+配置在**启动时读取一次并缓存**，文件变更不热加载，**需要重启才生效**。
+
+#### 5.4.2 Helm 接线
+
+```yaml
+# values.yaml
+smtp:
+  enabled: true
+  host: smtp.customer.internal
+  port: 587
+  security: starttls
+  from: lucy@customer.internal
+  username: lucy-notifier
+  recipients:
+    - data-ops@customer.internal
+  auditHealth: true
+  existingSecret: customer-smtp-secret   # 客户自有的 Kubernetes Secret，只按名字引用
+  passwordKey: password
+```
+
+密码与可选 CA **只能**来自客户自有的 Kubernetes Secret，Chart 只读挂载、只传文件路径，**不会**渲染任何 SMTP Secret。`smtp.enabled=false`（默认）时，渲染产物里**没有** SMTP ConfigMap、没有挂载、没有环境变量，也没有任何网络行为。
+
+以下情况 **render 直接失败**（不会产出装不起来的 Deployment）：`smtp.password` 等内联密码字段；设置了 `username` 却缺 `existingSecret`／`passwordKey`；`security` 不是 `tls`／`starttls`；`port` 越界；`host` 含 scheme／端口／路径；`from` 或 `recipients` 不是合法地址或含控制字符；`recipients` 为空或超过 20 个；`extraEnvFrom` 试图用 `LUCY_SMTP` 前缀覆盖，或把 SMTP 密码 Secret 投影成环境变量。
+
+#### 5.4.3 运维操作
+
+```bash
+# 查通知状态（仅所有者；不返回 host、用户名、发件地址、收件人与任何秘密）
+curl -H "Authorization: Bearer $TOKEN" https://lucy.example.com/api/admin/notifications/status
+
+# 提交一封测试邮件：202 表示已加入发送队列，不表示已发送
+curl -X POST -H "Authorization: Bearer $TOKEN" https://lucy.example.com/api/admin/notifications/test
+
+# 查看单条通知的状态（不返回 payload 与收件人）
+curl -H "Authorization: Bearer $TOKEN" https://lucy.example.com/api/admin/notifications/12
+```
+
+#### 5.4.4 排障
+
+| 现象 | 排查 |
+| --- | --- |
+| 状态为 `disabled` | 未设置 `LUCY_SMTP_PROFILE_FILE`，或 profile 里 `enabled: false` |
+| 状态为 `unavailable` | 看 `errorCode`：`smtp_profile_invalid` 查 profile 形状；`smtp_secret_unavailable` 查密码文件是否存在且非空；`smtp_ca_unavailable` 查 CA 文件是否为 PEM；`smtp_auth_incomplete` 查是否配了用户名却没给密码文件 |
+| 通知一直 `queued` | worker 未运行（配置不可用时 worker 不启动）；或 SMTP 服务器不可达，错误码见 `lastErrorCode` |
+| 通知 `dead` | `last_error_code` 为 `smtp_rejected` 表示服务端永久拒绝（5xx）；`expired` 表示超过 7 天有效期不再投递 |
+| 客户 SMTP 需要自签 CA | 把 CA 放进客户自有 Secret，配置 `smtp.ca.enabled=true` 与 `smtp.ca.existingSecret`；CA **只追加信任**，证书校验不会被关闭 |
+
+SMTP 服务器接受信件**不等于**最终投递到收件箱；Lucy 只记录 SMTP 提交结果，不追踪退信、阅读或外部投递回执。
+
+#### 5.4.5 禁用与回滚
+
+把 `smtp.enabled` 改回 `false` 并重启即停止新投递，已排队的行保留但不投递。回滚到不识别 `notification_outbox` 表的旧版本前，按 Chart 的 `UPGRADE.md`／`ROLLBACK.md`「Optional SMTP notifications (chart 0.2.8+)」段处理该表——**默认保留**（旧版本不读写它），清理是可选项。禁用与回滚都不影响登录账户、审计账本、权限与恢复密钥；密码不会进入备份明文附件。
 
 ## 6. FAQ 与排障指南
 
@@ -2979,7 +3156,7 @@ ktx sl read <source-name> --connection-id <connection-id>
 | `semantic-layer/**/*.yaml` | WebUI 下次 API 读取文件即可看到；KTX/MCP 检索需要 `ktx admin reindex` |
 | `wiki/**/*.md` | WebUI 下次读取文件即可看到；KTX/MCP 检索需要 `ktx admin reindex` |
 | `ktx.yaml enabled_tables` | WebUI 保存后立即写文件；运行静态 `POST /api/catalog/reload` 检查 manifest 对齐 |
-| `ktx.yaml` 新连接或凭据 | 可能需要重启 KTX MCP daemon；至少运行 `ktx connection test <connId>` |
+| `ktx.yaml` 新连接或凭据 | WebUI 保存后执行层尚未加载；在 MCP 调试台点「重载执行层」使其生效（只重启 KTX 执行进程，不重启 Pod）；至少运行 `ktx connection test <connId>` |
 | `webui/config/data-qa-instructions.md` | Proxy 当前实现一次性加载；修改后重启 WebUI/Proxy 才稳妥 |
 
 > **关联：YAML 交付与验收**

@@ -6,8 +6,32 @@ import { resolveProjectRoot } from "../project.js";
 import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
-import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
+import {
+  classifyAuditEvent,
+  CLASSIFICATION_VERSION_V2P5,
+  DIGEST_VERSION_V2P5,
+  type DigestKind,
+  type ExecutionEvidence
+} from "./audit-classification.js";
+import { DERIVATION_VERSION } from "./audit-derivation.js";
+import { resolveLedgerSeq } from "./audit-reconcile.js";
+import {
+  MCP_HANDSHAKE_METHODS,
+  MCP_PROBE_METHODS,
+  MCP_SERVER_METHODS,
+  classifyUsage,
+  defaultUsageConditionSql,
+  isMcpProtocolMethod,
+  protocolMethodSqlList
+} from "./usage-classification.js";
 import { resolveClientIdentity } from "./request-client-meta.js";
+import {
+  allocateInquiryNo,
+  ensureBackfillBeforeAllocate,
+  ensureInquirySerialSchema,
+  lookupInquiryNo,
+  withAllocatedInquiryNo
+} from "../admin/audit-inquiry-serial.js";
 import {
   CALL_MONITOR_P95_MIN_SAMPLES,
   callMonitorBucketIndex,
@@ -39,7 +63,7 @@ export interface AccessLogEntry {
   lucyTurnId?: string;
   turnAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
   turnAttributionConfidence?: "high" | "low" | "none";
-  turnAttributionReason?: "turn_attribution_rejected";
+  turnAttributionReason?: "turn_attribution_rejected" | "attribution_evidence_conflict";
   /**
    * Spec 173 v0.3 / 2026-10-19 audit-trust:正交于 turn_attribution_mode 的关联质量判定。
    * 由准入路径冻结；不允许在 prepared / delivered 阶段改写。
@@ -141,6 +165,41 @@ export interface AccessLogEntry {
     capabilityDigest?: string;
     toolClassificationVersion?: string;
   };
+  // ─── Lucy v0.25 / L25-09 增量字段（全部 additive；历史行 NULL）────────────
+  /**
+   * 写路径提供的**可核验执行凭据**。缺省即该事实不成立 → 主状态落 `unknown`。
+   * 旧 `outcome=ok` **不**构成执行成功凭据（Spec §4.3(a) 第 9 行）。
+   */
+  executionEvidence?: ExecutionEvidence;
+  /** 入口事件 ID（= 已提交 received 事件的 event_id）。 */
+  ingressEventId?: string;
+  /** 逻辑入口标识（mcp-http / admin-http / agent-audit-ingest）。 */
+  endpointId?: string;
+  /** 账本提交序号（as-of S 视图用）。 */
+  ledgerSeq?: number;
+  /** S03 标识字典。 */
+  clientCallId?: string;
+  clientEventId?: string;
+  upstreamOperationId?: string;
+  rpcRequestId?: string;
+  /** 业务重试指向原入口事件 ID。 */
+  retryOf?: string;
+  /** S01(e) 三族分离。 */
+  reportedRole?: string;
+  observedProtocol?: string;
+  observedRoleIds?: string[];
+  inferredClient?: string;
+  inferenceMethod?: string;
+  inferenceConfidence?: "high" | "low" | "none";
+  inferenceRuleVersion?: string;
+  /** U11 摘要类型与预览版本。 */
+  digestKind?: DigestKind;
+  digestVersion?: string;
+  previewVersion?: string;
+  /** 原始输入 UTF-8 字节长度（预览截断披露）。 */
+  previewOriginalBytes?: number;
+  /** 预览是否被截断。 */
+  previewTruncated?: boolean;
 }
 
 export type AuthFailureReason =
@@ -149,9 +208,24 @@ export type AuthFailureReason =
   | "token_revoked"
   | "token_expired";
 
+/**
+ * Lucy v0.25 / L25-09 B22（D2）—— **身份建立之前**就被入口拒绝的请求。
+ *
+ * 路径未知 / 方法不允许 / Origin 不放行这三种拒绝拿不到 Token，因此不进
+ * canonical ledger，改写同一张 `auth_failure_log`（`reason` 列是 TEXT，
+ * 无 CHECK 约束），作为独立的入口证据参与覆盖分母。
+ */
+export type IngressRefusalReason =
+  | "route_not_found"
+  | "method_not_allowed"
+  | "origin_not_allowed";
+
+/** `auth_failure_log.reason` 的完整取值域：认证失败 + 入口拒绝。 */
+export type AuthFailureLogReason = AuthFailureReason | IngressRefusalReason;
+
 export interface AuthFailureLogEntry {
   ts: string;
-  reason: AuthFailureReason;
+  reason: AuthFailureLogReason;
   clientIp?: string;
   userAgent?: string;
   tokenHashPrefix?: string;
@@ -176,8 +250,18 @@ let db: Database.Database | null = null;
  * of SQLite's internal `PRAGMA schema_version`, which we never read).
  * Bump together with new audit_meta entries.
  */
-export const AUDIT_DB_SCHEMA_VERSION = 2;
-const ACCESS_LOG_COLUMNS = [
+export const AUDIT_DB_SCHEMA_VERSION = 4;
+/**
+ * Lucy v0.25 / L25-09 B26 — the **single** access_log column contract.
+ *
+ * E-10 之前 `ACCESS_LOG_COLUMNS` 有两份重复常量（`proxy/audit.ts` 与
+ * `admin/audit.ts`），新增列须两处同步，否则导出元数据与写入漂移。
+ * 现在只有这一份；`admin/audit.ts` 直接 import，不再自带副本。
+ *
+ * 全部为 additive 列（`ensureColumn` 迁移），历史行保持 NULL；
+ * 历史行**不重解释**（Spec §4.6）。
+ */
+export const ACCESS_LOG_COLUMNS = [
   ["role_ids", "TEXT"],
   ["permission_snapshot_hash", "TEXT"],
   ["effective_tables_count", "INTEGER"],
@@ -253,8 +337,50 @@ const ACCESS_LOG_COLUMNS = [
   ["credential_principal_id", "TEXT"],
   // T03a: tracks whether the legacy explicit-turn validation passed (1=confirmed, 0=conflict).
   // Pre-existing rows stay NULL; backfillAssociationStatus() handles the missing-column fallback.
-  ["explicit_turn_validated", "INTEGER"]
+  ["explicit_turn_validated", "INTEGER"],
+  // ─── Lucy v0.25 / L25-09 (audit increment) additive columns ────────────────
+  // 四轴分类结果（写路径与读路径共用同一分类函数；历史行 NULL）。
+  ["transport_sub_type", "TEXT"],
+  ["transport_status", "TEXT"],
+  ["authorization_status", "TEXT"],
+  ["execution_status", "TEXT"],
+  ["usability_status", "TEXT"],
+  // 汇总主状态八桶（派生视图；derivationVersion=v2p5-1）。
+  ["primary_status", "TEXT"],
+  ["derivation_version", "TEXT"],
+  // 送达状态（prepared / sent / acknowledged / unknown）。
+  ["delivery_status", "TEXT"],
+  // 空值原因（六值枚举）。
+  ["null_reason", "TEXT"],
+  // 旧 outcome 原样保留为 legacy_outcome；不作为新执行状态的证据。
+  ["legacy_outcome", "TEXT"],
+  // 摘要类型与版本（search_text / sql / result；v2p5-1）。
+  ["digest_kind", "TEXT"],
+  ["digest_version", "TEXT"],
+  ["preview_version", "TEXT"],
+  // 入口事件 ID（= 已提交 received 事件的 event_id）。
+  ["ingress_event_id", "TEXT"],
+  ["endpoint_id", "TEXT"],
+  // 账本提交序号（as-of S 视图用）。
+  ["ledger_seq", "INTEGER"],
+  // S03 标识字典补充列。
+  ["client_call_id", "TEXT"],
+  ["client_event_id", "TEXT"],
+  ["upstream_operation_id", "TEXT"],
+  ["rpc_request_id", "TEXT"],
+  ["retry_of", "TEXT"],
+  // S01(e) reported / observed / inferred 三族分离。
+  ["reported_role", "TEXT"],
+  ["observed_role_ids", "TEXT"],
+  ["observed_protocol", "TEXT"],
+  ["inferred_client", "TEXT"],
+  ["inference_method", "TEXT"],
+  ["inference_confidence", "TEXT"],
+  ["inference_rule_version", "TEXT"],
+  // S07 七分类（与 162 四维并行披露）。
+  ["error_category", "TEXT"]
 ] as const;
+export type AccessLogColumnName = (typeof ACCESS_LOG_COLUMNS)[number][0];
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
   ["tool_classification_version", "TEXT"]
@@ -276,6 +402,120 @@ export function closeAuditDb(): void {
     sourceInsertStmt = null;
     snapshotStmt = null;
     conversationTurnInsertStmt = null;
+  }
+  // F-02：重开数据库后基线需重新核对（换一个库文件时基线不在旧库里）。
+  asofBaselineResolved = false;
+  budgetTableReady = false;
+}
+
+// ─── F-02：as-of S 证明的存储侧支撑 ─────────────────────────────────────────
+//
+// 1) 归属就地改写日志（`access_log_attribution_mutations`）：登记每次归属列
+//    就地改写的前像 / 后像与账本序号。没有它，as-of S 视图无法判定「归属有效值」
+//    是否可按 S 精确重建（Spec §18.10 F-02）。
+// 2) 基线（`access_log_asof_meta`）：归属改写日志生效时的账本序号。`S < 基线`
+//    时无法排除「基线之前存在未登记的就地改写」→ 归属维度不可证明。
+// 3) 来源行账本序号（`access_log_sources.ledger_seq`）：没有它，晚于 S 写入的
+//    来源行会被当前视图读到，成为混入的 >S 事实。
+
+const ASOF_BASELINE_KEY = "attribution_journal_baseline_seq";
+let asofBaselineResolved = false;
+
+/**
+ * 登记归属改写日志基线（账本序号）。
+ *
+ * 基线取「归属改写日志开始生效时」的账本已提交上界。账本不可得时**不登记**：
+ * 证明会因此判为「归属维度不可证明」→ 正式导出与正式对账读取失败关闭。
+ * 宁可失败关闭，也不猜一个基线。
+ */
+async function ensureAsOfBaseline(database: Database.Database): Promise<void> {
+  if (asofBaselineResolved) return;
+  try {
+    const existing = database
+      .prepare(`SELECT value FROM access_log_asof_meta WHERE key = ?`)
+      .get(ASOF_BASELINE_KEY) as { value?: string } | undefined;
+    if (existing) {
+      asofBaselineResolved = true;
+      return;
+    }
+    const seq = await resolveLedgerSeq();
+    if (seq === null) return;
+    database
+      .prepare(`INSERT OR REPLACE INTO access_log_asof_meta (key, value) VALUES (?, ?)`)
+      .run(ASOF_BASELINE_KEY, String(seq));
+    asofBaselineResolved = true;
+  } catch {
+    // 基线不可得：as-of 证明保持「不可证明」（失败关闭），不静默放行。
+  }
+}
+
+type AttributionMutationSnapshot = {
+  turnId: string | null;
+  mode: string | null;
+  confidence: string | null;
+  associationStatus: string | null;
+};
+
+/**
+ * 登记一次归属就地改写。
+ *
+ * **必须**与改写本身处在同一事务内：登记失败则改写一并回滚，避免出现「改写
+ * 了却没有历史」的不可证明状态。日志表不存在（历史库 / 精简测试 schema）时
+ * **跳过登记**，改写照常进行 —— 此时 `proveExactAsOfS` 会以「归属改写日志缺失」
+ * 判为不可证明（失败关闭），不会静默放行。
+ */
+function recordAttributionMutation(
+  database: Database.Database,
+  input: {
+    accessLogId: number;
+    kind: "handshake_attachment" | "association_status_backfill";
+    ledgerSeq: number | null;
+    before: AttributionMutationSnapshot;
+    after: AttributionMutationSnapshot;
+  }
+): void {
+  database
+    .prepare(
+      `INSERT INTO access_log_attribution_mutations
+         (access_log_id, ledger_seq, kind,
+          before_turn_id, after_turn_id,
+          before_mode, after_mode,
+          before_confidence, after_confidence,
+          before_association_status, after_association_status,
+          ts)
+       VALUES
+         (@accessLogId, @ledgerSeq, @kind,
+          @beforeTurnId, @afterTurnId,
+          @beforeMode, @afterMode,
+          @beforeConfidence, @afterConfidence,
+          @beforeAssociationStatus, @afterAssociationStatus,
+          @ts)`
+    )
+    .run({
+      accessLogId: input.accessLogId,
+      ledgerSeq: input.ledgerSeq,
+      kind: input.kind,
+      beforeTurnId: input.before.turnId,
+      afterTurnId: input.after.turnId,
+      beforeMode: input.before.mode,
+      afterMode: input.after.mode,
+      beforeConfidence: input.before.confidence,
+      afterConfidence: input.after.confidence,
+      beforeAssociationStatus: input.before.associationStatus,
+      afterAssociationStatus: input.after.associationStatus,
+      ts: new Date().toISOString()
+    });
+}
+
+/** 归属改写日志表是否可用（历史库 / 精简测试 schema 可能没有）。 */
+function hasAttributionMutationTable(database: Database.Database): boolean {
+  try {
+    const row = database
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'access_log_attribution_mutations'`)
+      .get();
+    return row !== undefined;
+  } catch {
+    return false;
   }
 }
 
@@ -360,6 +600,36 @@ async function getDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_als_user_ts ON access_log_sources(user_id, ts);
     CREATE INDEX IF NOT EXISTS idx_als_source ON access_log_sources(connection_id, schema_name, source_name);
     CREATE INDEX IF NOT EXISTS idx_als_table ON access_log_sources(physical_table);
+    -- F-02：归属就地改写日志（append-only）。
+    --
+    -- access_log 的归属列（lucy_turn_id / turn_attribution_mode /
+    -- turn_attribution_confidence / association_status）在两处**就地**改写：
+    -- 握手 attachment 与一次性历史归一化。就地改写会让「行内容 = 写入时刻的
+    -- 事实」这一前提失效，as-of S 视图因此无法只用 ledger_seq <= S 过滤
+    -- 还原。本表登记每次就地改写的**前像 / 后像与账本序号**，使归属维度
+    -- 可被 proveExactAsOfS 判定为可证明或不可证明。
+    CREATE TABLE IF NOT EXISTS access_log_attribution_mutations (
+      id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+      access_log_id             INTEGER NOT NULL,
+      ledger_seq                INTEGER,
+      kind                      TEXT NOT NULL,
+      before_turn_id            TEXT,
+      after_turn_id             TEXT,
+      before_mode               TEXT,
+      after_mode                TEXT,
+      before_confidence         TEXT,
+      after_confidence          TEXT,
+      before_association_status TEXT,
+      after_association_status  TEXT,
+      ts                        TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_almut_row ON access_log_attribution_mutations(access_log_id);
+    CREATE INDEX IF NOT EXISTS idx_almut_seq ON access_log_attribution_mutations(ledger_seq);
+    -- F-02：as-of 证明的元数据（当前只存归属改写日志基线）。
+    CREATE TABLE IF NOT EXISTS access_log_asof_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS conversation_turns (
       turn_id               TEXT PRIMARY KEY,
       session_id            TEXT,
@@ -457,22 +727,32 @@ async function getDb(): Promise<Database.Database> {
       ts                              TEXT NOT NULL,
       classification_version          TEXT NOT NULL,
       expected_revision               TEXT,
+      -- B25：as-of S 视图用 —— 该修订在 canonical ledger 的提交序号。
+      ledger_seq                      INTEGER,
       UNIQUE(original_turn_id, attribution_rule_version)
     );
     CREATE INDEX IF NOT EXISTS idx_ar_original_turn ON association_revisions(original_turn_id);
     CREATE INDEX IF NOT EXISTS idx_ar_ts ON association_revisions(ts);
   `);
+  ensureColumn(db, "association_revisions", "ledger_seq", "INTEGER");
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
   }
   for (const [column, definition] of PERMISSION_SNAPSHOT_COLUMNS) {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
+  // F-02：来源行也要有账本序号，否则「关联事实 as-of S」不可证明 ——
+  // 晚于 S 写入的来源行会被当前视图读到，成为混入的 >S 事实。
+  ensureColumn(db, "access_log_sources", "ledger_seq", "INTEGER");
   ensureColumn(db, "conversation_turns", "session_id", "TEXT");
   ensureColumn(db, "conversation_turns", "association_status", "TEXT");
   ensureColumn(db, "inferred_turns", "client", "TEXT");
   ensureColumn(db, "inferred_turns", "session_id", "TEXT");
+  ensureInquirySerialSchema(db);
+  conversationTurnInsertStmt = null;
   db.exec(`
+    -- 存量库可能没有 session_id 列 —— 索引必须在 ensureColumn 之后建。
+    CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
@@ -482,11 +762,211 @@ async function getDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_event_type ON access_log(event_type);
     CREATE INDEX IF NOT EXISTS idx_al_instance_id ON access_log(instance_id);
   `);
+  // F-02：归属改写日志基线必须在表建好之后登记（表不存在时无法登记）。
+  await ensureAsOfBaseline(db);
   return db;
+}
+
+// ─── Spec 149 §8：运维问数连接的两张只读视图 ─────────────────────────────────
+//
+// 视图建在**审计热库**上，只读暴露调用流水。三条硬约束：
+// 1. SELECT 列表**不得**含 Token 哈希、client_ip、user_agent、device_name、
+//    权限快照、args_summary、eval_mark、问询原文（SC-06）；WHERE 可以引用后两列。
+// 2. 默认用量口径复用 `defaultUsageConditionSql(alias).sql`（Spec 189 唯一事实源），
+//    不维护第二份协议名单。
+// 3. **按事件排除**自身追问：一次调用只要有一行来源属于自身追问，整次事件从
+//    两张视图**同时**消失，不留下另一张表的残余行（R09）。
+//
+// 每次确保都 DROP VIEW 后重建；**不得** DROP 基表。
+
+/**
+ * 自身追问的物理表名回退集合。
+ *
+ * 只在**连接归属缺失**（`connection_id` 为空）时生效：其他连接上真实存在的
+ * 同名业务表不会被误删（R09 / SC-22）。
+ */
+const OPS_EVIDENCE_SELF_PHYSICAL_TABLES = [
+  "main.ops_calls",
+  "main.ops_call_tables",
+  "ops_calls",
+  "ops_call_tables",
+  "ops_agents",
+  "ops_tokens",
+  "ops_agent_activity",
+  "ops_question_kpi_agents",
+  "ops_grant_paths",
+  "ops_access_paths",
+  "ops_edge_signals",
+  "ops_map_nodes",
+  "ops_map_meta",
+  "ops_table_adoption",
+  "main.ops_agents",
+  "main.ops_tokens",
+  "main.ops_agent_activity",
+  "main.ops_question_kpi_agents",
+  "main.ops_grant_paths",
+  "main.ops_access_paths",
+  "main.ops_edge_signals",
+  "main.ops_map_nodes",
+  "main.ops_map_meta",
+  "main.ops_table_adoption"
+] as const;
+
+/** 视图 SELECT 列表里**不允许**出现的列（SC-06）。 */
+export const OPS_EVIDENCE_FORBIDDEN_SELECT_COLUMNS = [
+  "token_hash",
+  "token_hash_prefix",
+  "client_ip",
+  "user_agent",
+  "device_name",
+  "permission_snapshot_hash",
+  "args_summary",
+  "eval_mark",
+  "query_preview",
+  "question_preview"
+] as const;
+
+/** 自身追问谓词（两张视图共用同一段 SQL）。 */
+function opsEvidenceSelfExclusionSql(alias: string): string {
+  const physicalList = OPS_EVIDENCE_SELF_PHYSICAL_TABLES.map((name) => `'${name}'`).join(", ");
+  return `NOT EXISTS (
+    SELECT 1 FROM access_log_sources AS self
+    WHERE self.access_log_id = ${alias}.id
+      AND (
+        self.connection_id = 'lucy-ops'
+        OR (
+          COALESCE(self.connection_id, '') = ''
+          AND self.physical_table IN (${physicalList})
+        )
+      )
+  )`;
+}
+
+/**
+ * 重建 W0 两张只读视图，并确保 W1 治理物化表 schema 存在。
+ * 幂等：先 DROP VIEW 再 CREATE；W1 表用 CREATE TABLE IF NOT EXISTS（不 DROP 数据）。
+ *
+ * 调用方负责打开**审计热库**（本进程的单例连接与 KTX 读的是同一个文件）。
+ * 基表 `access_log` / `access_log_sources` 不会被触碰。
+ */
+export async function recreateOpsEvidenceViews(): Promise<void> {
+  const database = await getDb();
+  const defaultUsage = defaultUsageConditionSql("access_log").sql;
+  const selfExclusion = opsEvidenceSelfExclusionSql("access_log");
+
+  database.exec("DROP VIEW IF EXISTS ops_call_tables; DROP VIEW IF EXISTS ops_calls;");
+
+  database.exec(`
+CREATE VIEW ops_calls AS
+SELECT
+  id AS event_id,
+  ts,
+  user_id AS agent_id,
+  token_label,
+  tool,
+  outcome,
+  duration_ms,
+  decision_reason,
+  error_detail,
+  generated_sql,
+  tables AS tables_json,
+  request_id
+FROM access_log
+WHERE ${defaultUsage}
+  AND ${selfExclusion};
+`);
+
+  database.exec(`
+CREATE VIEW ops_call_tables AS
+SELECT
+  access_log.id AS event_id,
+  access_log.ts,
+  access_log.user_id AS agent_id,
+  access_log.token_label,
+  access_log.tool,
+  access_log.outcome,
+  access_log.duration_ms,
+  access_log.decision_reason,
+  access_log.error_detail,
+  access_log.generated_sql,
+  access_log.request_id,
+  s.connection_id,
+  s.schema_name,
+  s.source_name,
+  s.physical_table
+FROM access_log
+JOIN access_log_sources AS s ON s.access_log_id = access_log.id
+WHERE ${defaultUsage}
+  AND ${selfExclusion};
+`);
+
+  // W1 治理物化表（含 snapshot_id）；行由 governance-snapshot 写入。
+  const { ensureGovernanceSnapshotTables } = await import("../ops-evidence/governance-snapshot.js");
+  ensureGovernanceSnapshotTables(database);
+}
+
+/**
+ * 断言运维问数源的 SELECT／表列不含禁止列，且基表仍在（SC-06 / SC-16 / §8）。
+ *
+ * 视图是 SQLite 对象，`PRAGMA table_info(view)` 给出的就是 SELECT 列表。
+ */
+export function assertOpsEvidenceViewsSafe(database: Database.Database): void {
+  const sources = [
+    "ops_calls",
+    "ops_call_tables",
+    "ops_agents",
+    "ops_tokens",
+    "ops_agent_activity",
+    "ops_question_kpi_agents",
+    "ops_grant_paths",
+    "ops_access_paths",
+    "ops_edge_signals",
+    "ops_map_nodes",
+    "ops_map_meta",
+    "ops_table_adoption"
+  ];
+  for (const viewName of sources) {
+    const columns = database
+      .prepare(`PRAGMA table_info(${viewName})`)
+      .all() as Array<{ name: string }>;
+    if (columns.length === 0) {
+      throw new Error(`ops evidence view ${viewName} does not exist`);
+    }
+    const present = new Set(columns.map((column) => column.name.toLowerCase()));
+    for (const forbidden of OPS_EVIDENCE_FORBIDDEN_SELECT_COLUMNS) {
+      if (present.has(forbidden.toLowerCase())) {
+        throw new Error(
+          `ops evidence view ${viewName} exposes a forbidden column: ${forbidden}`
+        );
+      }
+    }
+  }
+  for (const baseTable of ["access_log", "access_log_sources"]) {
+    const row = database
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
+      .get(baseTable);
+    if (row === undefined) {
+      throw new Error(`ops evidence base table ${baseTable} is missing`);
+    }
+  }
 }
 
 let insertStmt: Database.Statement | null = null;
 let snapshotStmt: Database.Statement | null = null;
+
+// ─── B25：账本提交序号（as-of S 视图）───────────────────────────────────────
+//
+// `access_log.ledger_seq` / `association_revisions.ledger_seq` 记录该行写入时
+// canonical ledger 的**已提交上界**（`MAX(seq)`）。
+//
+// 口径说明（写入报告的「需要回写 Spec 的偏差清单」）：
+//   - 该口径是**保守上界**：行只在其 ledger_seq 之后才可能被后续账本事件改变，
+//     因此 as-of S 视图纳入 `ledger_seq <= S` 的行是安全的。
+//   - 它**不是**「该行所依赖的全部账本事件序号」：access_log 行在
+//     `response_prepared` 提交**之前**写入，因此行的 `delivery_status` 反映
+//     写入时刻的观测。精确的 as-of 视图仍需账本历史（Spec N18）。
+
+
 
 export function isTokenRevoked(tokenHash: string): Promise<boolean> {
   return getDb().then((database) => {
@@ -536,13 +1016,30 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     });
   }
   if (!insertStmt) {
+    // B8: 补写此前「声明了但没写」的列 —— attempt_id / parent_attempt_id /
+    // event_type / instance_id / credential_principal_id / classification_version /
+    // attribution_rule_version。生产真实行此前这些列全为 NULL。
+    // B18: 四轴分类结果与主状态由**同一个**分类函数产出（写路径与读路径共用）。
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, association_status, original_turn_id, original_attribution_mode, original_association_status, original_attribution_confidence, original_reason, effective_turn_id, effective_attribution_mode, effective_association_status, effective_attribution_confidence, effective_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, association_status, original_turn_id, original_attribution_mode, original_association_status, original_attribution_confidence, original_reason, effective_turn_id, effective_attribution_mode, effective_association_status, effective_attribution_confidence, effective_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version, attempt_id, parent_attempt_id, event_type, instance_id, credential_principal_id, classification_version, attribution_rule_version, transport_sub_type, transport_status, authorization_status, execution_status, usability_status, primary_status, derivation_version, delivery_status, null_reason, legacy_outcome, digest_kind, digest_version, preview_version, ingress_event_id, endpoint_id, ledger_seq, client_call_id, client_event_id, upstream_operation_id, rpc_request_id, retry_of, reported_role, observed_role_ids, observed_protocol, inferred_client, inference_method, inference_confidence, inference_rule_version, error_category)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @associationStatus, @originalTurnId, @originalAttributionMode, @originalAssociationStatus, @originalAttributionConfidence, @originalReason, @effectiveTurnId, @effectiveAttributionMode, @effectiveAssociationStatus, @effectiveAttributionConfidence, @effectiveReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @associationStatus, @originalTurnId, @originalAttributionMode, @originalAssociationStatus, @originalAttributionConfidence, @originalReason, @effectiveTurnId, @effectiveAttributionMode, @effectiveAssociationStatus, @effectiveAttributionConfidence, @effectiveReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion, @attemptId, @parentAttemptId, @eventType, @instanceId, @credentialPrincipalId, @classificationVersion, @attributionRuleVersion, @transportSubType, @transportStatus, @authorizationStatus, @executionStatus, @usabilityStatus, @primaryStatus, @derivationVersion, @deliveryStatus, @nullReason, @legacyOutcome, @digestKind, @digestVersion, @previewVersion, @ingressEventId, @endpointId, @ledgerSeq, @clientCallId, @clientEventId, @upstreamOperationId, @rpcRequestId, @retryOf, @reportedRole, @observedRoleIds, @observedProtocol, @inferredClient, @inferenceMethod, @inferenceConfidence, @inferenceRuleVersion, @errorCategory)
     `);
   }
+  // B18: 生产写路径接入 v2p5-1 分类（读路径共用同一函数）。
+  const classified = classifyAuditEvent({
+    tool: entry.tool,
+    outcome: entry.outcome,
+    decisionReason: entry.decisionReason,
+    failureDimension: entry.failureDimension,
+    responseRowCount: entry.responseRowCount,
+    responseBytes: entry.responseBytes,
+    errorDetail: entry.errorDetail,
+    eventTypeHint: entry.eventType,
+    authorizationStatusHint: entry.associationStatus === "conflict" ? "unknown" : undefined,
+    evidence: entry.executionEvidence
+  });
   const result = insertStmt.run({
     ts: entry.ts,
     userId: entry.userId,
@@ -618,7 +1115,48 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     isSlowCall: entry.isSlowCall === true ? 1 : 0,
     slowBasis: entry.slowBasis ?? null,
     resultEmpty: entry.resultEmpty === true ? 1 : 0,
-    turnWallClockMs: entry.turnWallClockMs ?? null
+    turnWallClockMs: entry.turnWallClockMs ?? null,
+    // ─── B8：此前声明但未写的列 ───────────────────────────────────────────
+    attemptId: entry.attemptId ?? null,
+    parentAttemptId: entry.parentAttemptId ?? null,
+    eventType: entry.eventType ?? classified.eventType,
+    instanceId: entry.instanceId ?? null,
+    credentialPrincipalId: entry.credentialPrincipalId ?? null,
+    classificationVersion: entry.classificationVersion ?? CLASSIFICATION_VERSION_V2P5,
+    attributionRuleVersion: entry.attributionRuleVersion ?? null,
+    // ─── B18：分类与派生结果（写 / 读路径同源）────────────────────────────
+    transportSubType: classified.transportSubType,
+    transportStatus: classified.transportStatus,
+    authorizationStatus: classified.authorizationStatus,
+    executionStatus: classified.executionStatus,
+    usabilityStatus: classified.usabilityStatus,
+    primaryStatus: classified.primaryStatus,
+    derivationVersion: classified.derivationVersion,
+    deliveryStatus: classified.deliveryStatus,
+    nullReason: classified.nullReason,
+    legacyOutcome: entry.outcome,
+    errorCategory: classified.errorCategory ?? null,
+    // ─── U11：摘要 / 预览版本 ────────────────────────────────────────────
+    digestKind: entry.digestKind ?? null,
+    digestVersion: entry.digestVersion ?? (entry.digestKind ? DIGEST_VERSION_V2P5 : null),
+    previewVersion: entry.previewVersion ?? null,
+    // ─── S02 / S03：入口与标识 ───────────────────────────────────────────
+    ingressEventId: entry.ingressEventId ?? null,
+    endpointId: entry.endpointId ?? null,
+    ledgerSeq: entry.ledgerSeq ?? (await resolveLedgerSeq()),
+    clientCallId: entry.clientCallId ?? null,
+    clientEventId: entry.clientEventId ?? null,
+    upstreamOperationId: entry.upstreamOperationId ?? null,
+    rpcRequestId: entry.rpcRequestId ?? null,
+    retryOf: entry.retryOf ?? null,
+    // ─── S01(e)：三族分离 ────────────────────────────────────────────────
+    reportedRole: entry.reportedRole ?? null,
+    observedRoleIds: entry.observedRoleIds ? JSON.stringify(entry.observedRoleIds) : null,
+    observedProtocol: entry.observedProtocol ?? null,
+    inferredClient: entry.inferredClient ?? null,
+    inferenceMethod: entry.inferenceMethod ?? null,
+    inferenceConfidence: entry.inferenceConfidence ?? null,
+    inferenceRuleVersion: entry.inferenceRuleVersion ?? null
   });
   return Number(result.lastInsertRowid);
 }
@@ -626,6 +1164,227 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
 /** Ensures the idempotent access-log migration completed before returning Skill bodies. */
 export async function ensureSkillAuditReady(): Promise<void> {
   await getDb();
+}
+
+// ─── B16 / B24：预算四维的持久化存储 ────────────────────────────────────────
+//
+// 预算计数器此前**纯内存**，进程重启即清零（E-8）→ 重启即可绕过预算。
+// 现在落库；`question-experience.ts` 的 `BudgetPersistence` 接口消费它。
+//
+// 四维：业务调用数 / 尝试次数 / 墙钟起点 / 并发占用峰值 + 当前值。
+// 重连与省略 `begin_question` **不重置**任何一档（作用域键由调用方决定）。
+
+const BUDGET_STATE_TABLE = `
+CREATE TABLE IF NOT EXISTS question_budget_state (
+  scope_key         TEXT PRIMARY KEY,
+  started_at        INTEGER NOT NULL,
+  origin_started_at INTEGER NOT NULL,
+  calls             INTEGER NOT NULL DEFAULT 0,
+  continuations     INTEGER NOT NULL DEFAULT 0,
+  attempts          INTEGER NOT NULL DEFAULT 0,
+  peak_concurrency  INTEGER NOT NULL DEFAULT 0,
+  current_concurrency INTEGER NOT NULL DEFAULT 0,
+  updated_at        INTEGER NOT NULL
+);
+`;
+
+const BUDGET_STATE_COLUMNS = [
+  ["busy_ms", "INTEGER NOT NULL DEFAULT 0"],
+  ["round", "INTEGER NOT NULL DEFAULT 0"],
+  ["turn_id", "TEXT"],
+  ["window_id", "INTEGER NOT NULL DEFAULT 0"],
+  ["pending_token", "TEXT"],
+  ["presented_token", "TEXT"],
+  ["archived_busy_json", "TEXT"]
+] as const;
+
+const BUDGET_IDEMPOTENCY_TABLE = `
+CREATE TABLE IF NOT EXISTS question_budget_idempotency (
+  scope_key TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  PRIMARY KEY (scope_key, idempotency_key)
+);
+`;
+
+export type PersistedBudgetState = {
+  startedAt: number;
+  originStartedAt: number;
+  calls: number;
+  continuations: number;
+  attempts: number;
+  peakConcurrency: number;
+  currentConcurrency: number;
+  busyMs?: number;
+  round?: number;
+  turnId?: string | null;
+  windowId?: number;
+  pendingToken?: string | null;
+  presentedToken?: string | null;
+  archivedBusyMsByWindow?: Record<string, number>;
+  scopeKey?: string | null;
+};
+
+let budgetTableReady = false;
+
+async function ensureBudgetStateTable(database: Database.Database): Promise<void> {
+  if (budgetTableReady) return;
+  database.exec(BUDGET_STATE_TABLE);
+  database.exec(BUDGET_IDEMPOTENCY_TABLE);
+  for (const [column, definition] of BUDGET_STATE_COLUMNS) {
+    ensureColumn(database, "question_budget_state", column, definition);
+  }
+  budgetTableReady = true;
+}
+
+/** 读取某个作用域的预算状态；不存在返回 null。 */
+export async function loadBudgetState(
+  scopeKey: string
+): Promise<{ row: PersistedBudgetState; appliedKeys: string[] } | null> {
+  const database = await getDb();
+  await ensureBudgetStateTable(database);
+  const row = database
+    .prepare(
+      `SELECT started_at, origin_started_at, calls, continuations, attempts,
+              peak_concurrency, current_concurrency, busy_ms, round, turn_id,
+              window_id, pending_token, presented_token, archived_busy_json
+         FROM question_budget_state WHERE scope_key = ?`
+    )
+    .get(scopeKey) as
+    | {
+        started_at: number;
+        origin_started_at: number;
+        calls: number;
+        continuations: number;
+        attempts: number;
+        peak_concurrency: number;
+        current_concurrency: number;
+        busy_ms: number | null;
+        round: number | null;
+        turn_id: string | null;
+        window_id: number | null;
+        pending_token: string | null;
+        presented_token: string | null;
+        archived_busy_json: string | null;
+      }
+    | undefined;
+  if (!row) return null;
+  let archived: Record<string, number> = {};
+  if (row.archived_busy_json) {
+    try {
+      const parsed = JSON.parse(row.archived_busy_json) as Record<string, number>;
+      if (parsed && typeof parsed === "object") archived = parsed;
+    } catch {
+      archived = {};
+    }
+  }
+  const keys = database
+    .prepare(`SELECT idempotency_key FROM question_budget_idempotency WHERE scope_key = ?`)
+    .all(scopeKey) as Array<{ idempotency_key: string }>;
+  return {
+    row: {
+      startedAt: row.started_at,
+      originStartedAt: row.origin_started_at,
+      calls: row.calls,
+      continuations: row.continuations,
+      attempts: row.attempts,
+      peakConcurrency: row.peak_concurrency,
+      currentConcurrency: row.current_concurrency,
+      busyMs: row.busy_ms ?? 0,
+      round: row.round ?? 0,
+      turnId: row.turn_id,
+      windowId: row.window_id ?? 0,
+      pendingToken: row.pending_token,
+      presentedToken: row.presented_token,
+      archivedBusyMsByWindow: archived,
+      scopeKey
+    },
+    appliedKeys: keys.map((entry) => entry.idempotency_key)
+  };
+}
+
+/** 持久化预算状态。重复幂等键返回已提交行，不覆盖磁盘。 */
+export async function saveBudgetState(
+  scopeKey: string,
+  state: PersistedBudgetState,
+  idempotencyKey?: string
+): Promise<{ row: PersistedBudgetState; appliedKeys: string[] }> {
+  const database = await getDb();
+  await ensureBudgetStateTable(database);
+  const write = database.transaction(() => {
+    if (idempotencyKey) {
+      const existing = database
+        .prepare(
+          `SELECT 1 AS hit FROM question_budget_idempotency WHERE scope_key = ? AND idempotency_key = ?`
+        )
+        .get(scopeKey, idempotencyKey) as { hit: number } | undefined;
+      if (existing) return;
+    }
+    database
+      .prepare(
+        `INSERT INTO question_budget_state
+           (scope_key, started_at, origin_started_at, calls, continuations, attempts,
+            peak_concurrency, current_concurrency, updated_at, busy_ms, round, turn_id,
+            window_id, pending_token, presented_token, archived_busy_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(scope_key) DO UPDATE SET
+           started_at = excluded.started_at,
+           origin_started_at = excluded.origin_started_at,
+           calls = excluded.calls,
+           continuations = excluded.continuations,
+           attempts = excluded.attempts,
+           peak_concurrency = excluded.peak_concurrency,
+           current_concurrency = excluded.current_concurrency,
+           updated_at = excluded.updated_at,
+           busy_ms = excluded.busy_ms,
+           round = excluded.round,
+           turn_id = excluded.turn_id,
+           window_id = excluded.window_id,
+           pending_token = excluded.pending_token,
+           presented_token = excluded.presented_token,
+           archived_busy_json = excluded.archived_busy_json`
+      )
+      .run(
+        scopeKey,
+        state.startedAt,
+        state.originStartedAt,
+        state.calls,
+        state.continuations,
+        state.attempts,
+        state.peakConcurrency,
+        state.currentConcurrency,
+        Date.now(),
+        state.busyMs ?? 0,
+        state.round ?? 0,
+        state.turnId ?? null,
+        state.windowId ?? 0,
+        state.pendingToken ?? null,
+        state.presentedToken ?? null,
+        JSON.stringify(state.archivedBusyMsByWindow ?? {})
+      );
+    if (idempotencyKey) {
+      database
+        .prepare(
+          `INSERT INTO question_budget_idempotency (scope_key, idempotency_key) VALUES (?, ?)`
+        )
+        .run(scopeKey, idempotencyKey);
+    }
+  });
+  write();
+  const loaded = await loadBudgetState(scopeKey);
+  if (!loaded || !("row" in loaded)) {
+    throw new Error("question_budget_state_missing_after_save");
+  }
+  return loaded;
+}
+
+/** 列出所有已知预算作用域键（恢复 / 重建用）。 */
+export async function listBudgetScopes(): Promise<string[]> {
+  const database = await getDb();
+  await ensureBudgetStateTable(database);
+  const rows = database
+    .prepare(`SELECT scope_key FROM question_budget_state ORDER BY scope_key ASC`)
+    .all() as Array<{ scope_key: string }>;
+  return rows.map((row) => row.scope_key);
 }
 
 export async function writeAuthFailureLog(entry: AuthFailureLogEntry): Promise<number> {
@@ -664,11 +1423,14 @@ export async function writeAccessLogSources(
   if (!sourceInsertStmt) {
     sourceInsertStmt = database.prepare(`
       INSERT INTO access_log_sources
-        (access_log_id, ts, user_id, tool, connection_id, schema_name, source_name, physical_table, extraction_method, confidence, created_at)
+        (access_log_id, ts, user_id, tool, connection_id, schema_name, source_name, physical_table, extraction_method, confidence, created_at, ledger_seq)
       VALUES
-        (@accessLogId, @ts, @userId, @tool, @connectionId, @schemaName, @sourceName, @physicalTable, @extractionMethod, @confidence, @createdAt)
+        (@accessLogId, @ts, @userId, @tool, @connectionId, @schemaName, @sourceName, @physicalTable, @extractionMethod, @confidence, @createdAt, @ledgerSeq)
     `);
   }
+  // F-02：来源行同样带账本序号 —— 没有它，晚于 S 写入的来源行会被当前视图
+  // 读到，成为混入的 >S 事实，关联维度就不可证明。
+  const ledgerSeq = await resolveLedgerSeq();
   const createdAt = new Date().toISOString();
   for (const source of sources) {
     sourceInsertStmt.run({
@@ -682,7 +1444,8 @@ export async function writeAccessLogSources(
       physicalTable: source.physicalTable,
       extractionMethod: source.extractionMethod,
       confidence: source.confidence,
-      createdAt
+      createdAt,
+      ledgerSeq
     });
   }
 }
@@ -871,21 +1634,24 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     response_row_count: number | null;
   }>;
 
-  const protocolTools = new Set<string>(PROTOCOL_TOOLS);
-  const businessRows = rows.filter((row) => !protocolTools.has(row.tool));
+  const businessRows = rows.filter((row) => !isMcpProtocolMethod(row.tool));
   // Spec 162 §7.6 / SC-16 — the default view drops protocol traffic and probe
   // calls that are BOTH name-matched and explicitly eval-marked. Raw rows stay
   // in access_log; only this default view is split.
-  const defaultRows = businessRows.filter((row) => !defaultUsageExcluded({
-    tool: row.tool,
-    evalMark: row.eval_mark === 1,
-    args: parseJsonObject(row.args_summary)
-  }));
-  const evalProbeRows = businessRows.filter((row) => defaultUsageExcluded({
-    tool: row.tool,
-    evalMark: row.eval_mark === 1,
-    args: parseJsonObject(row.args_summary)
-  }) && !protocolTools.has(row.tool));
+  //
+  // Spec 189 §4 — classify first, then split. The previous expression
+  // (`defaultUsageExcluded(...) && !protocolTools.has(row.tool)`) re-derived
+  // the probe set by subtracting a 3-method protocol list from an 8-method
+  // one, so every protocol event outside that 3-method list was counted as
+  // an eval probe.
+  const usageClass = (row: { tool: string; eval_mark: number | null; args_summary: string | null }) =>
+    classifyUsage({
+      tool: row.tool,
+      evalMark: row.eval_mark === 1,
+      args: parseJsonObject(row.args_summary)
+    });
+  const defaultRows = businessRows.filter((row) => usageClass(row) === "default_usage");
+  const evalProbeRows = businessRows.filter((row) => usageClass(row) === "eval_probe");
   const okCalls = defaultRows.filter((row) => row.outcome === "ok").length;
   const errorCalls = defaultRows.filter((row) => row.outcome === "error").length;
   const deniedCalls = defaultRows.filter((row) => row.outcome === "denied").length;
@@ -1122,7 +1888,8 @@ export async function readCallMonitorSnapshot(options: {
   const database = await getDb();
 
   const rows = database.prepare(`
-    SELECT id, ts, user_id, tool, outcome, duration_ms, request_id, trace_id, decision_reason
+    SELECT id, ts, user_id, tool, outcome, duration_ms, request_id, trace_id, decision_reason,
+           eval_mark, args_summary
     FROM access_log
     WHERE ts >= ? AND ts <= ?
     ORDER BY ts DESC, id DESC
@@ -1136,11 +1903,20 @@ export async function readCallMonitorSnapshot(options: {
     request_id: string;
     trace_id: string | null;
     decision_reason: string | null;
+    eval_mark: number | null;
+    args_summary: string | null;
   }>;
 
-  const protocolTools = new Set<string>(PROTOCOL_TOOLS);
+  // Spec 189 §5.3 — every KPI, bucket, tool ranking, recent failure and
+  // recent denial on this page is computed from the SAME Default Usage set.
+  // Protocol events and default-view-excluded eval probes are excluded.
   const businessRows = rows.filter((row) =>
-    !protocolTools.has(row.tool) && callMonitorBucketIndex(row.ts, plan) >= 0
+    classifyUsage({
+      tool: row.tool,
+      evalMark: row.eval_mark === 1,
+      args: parseJsonObject(row.args_summary)
+    }) === "default_usage"
+    && callMonitorBucketIndex(row.ts, plan) >= 0
   );
 
   const bucketTotals = plan.buckets.map(() => ({
@@ -1393,25 +2169,29 @@ export async function writeConversationTurn(record: ConversationTurnRecord): Pro
   if (!conversationTurnInsertStmt) {
     conversationTurnInsertStmt = database.prepare(`
       INSERT INTO conversation_turns
-        (turn_id, session_id, user_id, token_hash_prefix, platform, client, question_hash, question_preview, question_summary, question_source, redaction_version, created_at)
+        (turn_id, session_id, user_id, token_hash_prefix, platform, client, question_hash, question_preview, question_summary, question_source, redaction_version, created_at, inquiry_no)
       VALUES
-        (@turnId, @sessionId, @userId, @tokenHashPrefix, @platform, @client, @questionHash, @questionPreview, @questionSummary, @questionSource, @redactionVersion, @createdAt)
+        (@turnId, @sessionId, @userId, @tokenHashPrefix, @platform, @client, @questionHash, @questionPreview, @questionSummary, @questionSource, @redactionVersion, @createdAt, @inquiryNo)
     `);
   }
-  conversationTurnInsertStmt.run({
-    turnId: record.turnId,
-    sessionId: record.sessionId ?? null,
-    userId: record.userId,
-    tokenHashPrefix: record.tokenHashPrefix ?? null,
-    platform: record.platform ?? null,
-    client: record.client ?? null,
-    questionHash: record.questionHash ?? null,
-    questionPreview: record.questionPreview ?? null,
-    questionSummary: record.questionSummary ?? null,
-    questionSource: record.questionSource,
-    redactionVersion: record.redactionVersion ?? null,
-    createdAt: new Date().toISOString()
+  const persist = database.transaction(() => {
+    const row = withAllocatedInquiryNo(database, record.turnId, {
+      turnId: record.turnId,
+      sessionId: record.sessionId ?? null,
+      userId: record.userId,
+      tokenHashPrefix: record.tokenHashPrefix ?? null,
+      platform: record.platform ?? null,
+      client: record.client ?? null,
+      questionHash: record.questionHash ?? null,
+      questionPreview: record.questionPreview ?? null,
+      questionSummary: record.questionSummary ?? null,
+      questionSource: record.questionSource,
+      redactionVersion: record.redactionVersion ?? null,
+      createdAt: new Date().toISOString()
+    });
+    conversationTurnInsertStmt!.run(row);
   });
+  persist();
 }
 
 export async function purgeExpiredConversationTurns(
@@ -1536,16 +2316,19 @@ export const INFERRED_TURN_REBUILD_LOOKBACK_HOURS = 24 * 30;
 export const PRIOR_CALL_BIND_MS = 120_000;
 export const SESSION_VISIT_SUMMARY_PREFIX = "会话建立：";
 
-/** Spec 173 / WO-202610-24: these calls stay in the call log and do not form an inquiry by themselves. */
-const PROBE_TOOLS = new Set([
-  "server/discover",
-  "ping",
-  "resources/list",
-  "resources/templates/list",
-  "notifications/cancelled"
-]);
-
-const HANDSHAKE_TOOLS = ["initialize", "notifications/initialized", "tools/list"] as const;
+/**
+ * Spec 173 / WO-202610-24 + Spec 189: these calls stay in the call log and do
+ * not form an inquiry by themselves. The lists are **derived** from the shared
+ * usage classification module — a local copy would be a second, drift-prone
+ * protocol list.
+ *
+ * The inquiry-probe set is the transport probe set plus the named service
+ * protocol methods, so `server/discover` keeps its Spec 172/173 meaning and
+ * `prompts/list` joins it (listing prompts must not form an inquiry).
+ */
+const PROBE_TOOLS = new Set<string>([...MCP_PROBE_METHODS, ...MCP_SERVER_METHODS]);
+const HANDSHAKE_TOOLS = MCP_HANDSHAKE_METHODS;
+const SERVER_METHODS = new Set<string>(MCP_SERVER_METHODS);
 
 export function sessionVisitSummary(client: string | null | undefined): string {
   const name = client?.trim() || "未知客户端";
@@ -1660,7 +2443,7 @@ export async function rebuildInferredTurns(
   `).all(userId, cutoff) as ClusterLogRow[];
 
   const business = loaded.filter((row) =>
-    !PROTOCOL_TOOLS.includes(row.tool as (typeof PROTOCOL_TOOLS)[number])
+    !isMcpProtocolMethod(row.tool)
     && !row.lucy_turn_id?.trim()
   );
   const handshake = firstHandshakeBySession(loaded);
@@ -1718,9 +2501,9 @@ export async function rebuildInferredTurns(
   const deleteTurnsStmt = database.prepare(`DELETE FROM inferred_turns WHERE user_id = ? AND started_at >= ?`);
   const insertTurnStmt = database.prepare(`
     INSERT INTO inferred_turns
-      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, client, session_id, created_at, updated_at)
+      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, client, session_id, created_at, updated_at, inquiry_no)
     VALUES
-      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @client, @sessionId, @createdAt, @updatedAt)
+      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @client, @sessionId, @createdAt, @updatedAt, @inquiryNo)
   `);
   const insertLinkStmt = database.prepare(`INSERT INTO inferred_turn_access_logs (inferred_turn_id, access_log_id) VALUES (?, ?)`);
   const sourceQueryCache = new Map<string, Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>>();
@@ -1740,6 +2523,7 @@ export async function rebuildInferredTurns(
   }
 
   const rebuild = database.transaction((): number => {
+    ensureBackfillBeforeAllocate(database);
     deleteAccessLogsStmt.run(userId, cutoff);
     deleteTurnsStmt.run(userId, cutoff);
 
@@ -1766,9 +2550,11 @@ export async function rebuildInferredTurns(
       const endedAt = members[members.length - 1].ts;
       const inferredId = inferredTurnId(userId, anchor.id);
       const client = clientFromRows(members);
+      const inquiryNo = lookupInquiryNo(database, inferredId) ?? allocateInquiryNo(database, inferredId);
 
       insertTurnStmt.run({
         id: inferredId,
+        inquiryNo,
         userId,
         startedAt,
         endedAt,
@@ -1824,36 +2610,86 @@ export async function bindPriorSessionCalls(input: {
   if (!input.sessionId) return 0;
   const database = await getDb();
   const tokenHash = input.tokenHashPrefix ?? "";
-  const protocolList = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+  const protocolList = protocolMethodSqlList();
 
-  // v0.3: 不再按 PRIOR_CALL_BIND_MS 窗口回填非协议调用；保留 handshake attachment 但 candidate/low。
-  const handshakeRows = database.prepare(`
-    SELECT id, tool FROM access_log
-    WHERE user_id = ?
-      AND lucy_session_id = ?
-      AND IFNULL(token_hash_prefix, '') = ?
-      AND tool IN (${protocolList})
-      AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
-    ORDER BY ts ASC, id ASC
-  `).all(input.userId, input.sessionId, tokenHash) as Array<{ id: number; tool: string }>;
-  const seen = new Set<string>();
-  const handshakeIds: number[] = [];
-  for (const row of handshakeRows) {
-    if (seen.has(row.tool)) continue;
-    seen.add(row.tool);
-    handshakeIds.push(row.id);
-  }
-  if (handshakeIds.length > 0) {
+  // F-02：归属就地改写必须留下**前像**与账本序号，否则「归属有效值是否可按
+  // S 精确重建」不可证明（Spec §18.10 F-02）。改写与登记在同一事务内：
+  // 登记失败则改写一并回滚，不留「改写了却没有历史」的状态。
+  const ledgerSeq = await resolveLedgerSeq();
+  const journaled = hasAttributionMutationTable(database);
+
+  // Spec 162 §6.5 / SC-33：握手回填在**事务内**重新检查「仍未归属」，
+  // 只为**实际被更新**的行记录前像。SELECT 与 UPDATE 带同一谓词且同事务，
+  // 因此不会出现「查到的行已被别的轮次绑定，还要再绑一次」。
+  const apply = database.transaction(() => {
+    // v0.3: 不再按 PRIOR_CALL_BIND_MS 窗口回填非协议调用；保留 handshake attachment 但 candidate/low。
+    const handshakeRows = database.prepare(`
+      SELECT id, tool FROM access_log
+      WHERE user_id = ?
+        AND lucy_session_id = ?
+        AND IFNULL(token_hash_prefix, '') = ?
+        AND tool IN (${protocolList})
+        AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
+      ORDER BY ts ASC, id ASC
+    `).all(input.userId, input.sessionId, tokenHash) as Array<{ id: number; tool: string }>;
+    const seen = new Set<string>();
+    const handshakeIds: number[] = [];
+    for (const row of handshakeRows) {
+      if (seen.has(row.tool)) continue;
+      seen.add(row.tool);
+      handshakeIds.push(row.id);
+    }
+    if (handshakeIds.length === 0) return 0;
     const placeholders = handshakeIds.map(() => "?").join(",");
-    database.prepare(`
-      UPDATE access_log
-      SET lucy_turn_id = ?,
-          turn_attribution_mode = 'session_bound',
-          turn_attribution_confidence = 'low'
-      WHERE id IN (${placeholders})
-    `).run(input.turnId, ...handshakeIds);
-  }
-  return handshakeIds.length;
+    const beforeRows = (
+      database
+        .prepare(
+          `SELECT id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, association_status
+             FROM access_log WHERE id IN (${placeholders})
+               AND (lucy_turn_id IS NULL OR lucy_turn_id = '')`
+        )
+        .all(...handshakeIds) as Array<{
+        id: number;
+        lucy_turn_id: string | null;
+        turn_attribution_mode: string | null;
+        turn_attribution_confidence: string | null;
+        association_status: string | null;
+      }>
+    );
+    database
+      .prepare(`
+        UPDATE access_log
+        SET lucy_turn_id = ?,
+            turn_attribution_mode = 'session_bound',
+            turn_attribution_confidence = 'low'
+        WHERE id IN (${placeholders})
+          AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
+      `)
+      .run(input.turnId, ...handshakeIds);
+    if (journaled) {
+      for (const row of beforeRows) {
+        recordAttributionMutation(database, {
+          accessLogId: row.id,
+          kind: "handshake_attachment",
+          ledgerSeq,
+          before: {
+            turnId: row.lucy_turn_id,
+            mode: row.turn_attribution_mode,
+            confidence: row.turn_attribution_confidence,
+            associationStatus: row.association_status
+          },
+          after: {
+            turnId: input.turnId,
+            mode: "session_bound",
+            confidence: "low",
+            associationStatus: row.association_status
+          }
+        });
+      }
+    }
+    return beforeRows.length;
+  });
+  return apply();
 }
 
 // ─── T03a: association_status backfill (audit-trust-2026-10-19-r1) ─────────
@@ -1906,15 +2742,29 @@ export async function backfillAssociationStatus(
   let updated = 0;
   let unchanged = 0;
 
+  // F-02：归属就地改写必须留下前像与账本序号（与改写同事务）。
+  const ledgerSeq = await resolveLedgerSeq();
+  const journaled = hasAttributionMutationTable(database);
+
   const txn = database.transaction(() => {
+    // 历史库 / 精简测试 schema 可能缺归属列：按实际可用列取，缺列取 NULL。
+    const availableColumns = new Set(
+      (
+        database.prepare(`PRAGMA table_info(access_log)`).all() as Array<{ name: string }>
+      ).map((column) => column.name)
+    );
+    const pick = (name: string): string => (availableColumns.has(name) ? name : `NULL AS ${name}`);
     const rows = database
       .prepare(
-        `SELECT id, turn_attribution_mode, association_status
+        `SELECT id, ${pick("lucy_turn_id")}, ${pick("turn_attribution_mode")},
+                ${pick("turn_attribution_confidence")}, ${pick("association_status")}
            FROM access_log`
       )
       .all() as Array<{
       id: number;
+      lucy_turn_id: string | null;
       turn_attribution_mode: string | null;
+      turn_attribution_confidence: string | null;
       association_status: string | null;
     }>;
 
@@ -1962,6 +2812,26 @@ export async function backfillAssociationStatus(
           `UPDATE access_log SET association_status = ? WHERE id = ?`
         )
         .run(target, row.id);
+      if (journaled) {
+        recordAttributionMutation(database, {
+          accessLogId: row.id,
+          kind: "association_status_backfill",
+          ledgerSeq,
+          // 本次归一化只改 association_status；其余归属列原样登记（前像 = 后像）。
+          before: {
+            turnId: row.lucy_turn_id ?? null,
+            mode: row.turn_attribution_mode ?? null,
+            confidence: row.turn_attribution_confidence ?? null,
+            associationStatus: row.association_status ?? null
+          },
+          after: {
+            turnId: row.lucy_turn_id ?? null,
+            mode: row.turn_attribution_mode ?? null,
+            confidence: row.turn_attribution_confidence ?? null,
+            associationStatus: target
+          }
+        });
+      }
       updated += 1;
     }
 

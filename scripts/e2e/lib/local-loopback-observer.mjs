@@ -56,6 +56,53 @@ function hashBody(body) {
   return null;
 }
 
+/**
+ * The upstream tool names that constitute a DATA-PLANE upstream call: a call that
+ * actually reaches the upstream's data layer. Everything else on the MCP wire
+ * (`initialize`, `tools/list`, notifications) is protocol chatter: counting it as an
+ * "execution" would let a session setup masquerade as an unauthorized upstream
+ * execution, and would make every zero-assertion fail for the wrong reason.
+ *
+ * Both name families are recognised because the observer can sit on either side of
+ * the Lucy wrapper: `lucy_*` is what a client asks Lucy for, `sl_*` is what Lucy
+ * asks the KTX upstream for (see `webui/server/proxy/mcp-proxy.ts` → `upstreamTool`).
+ */
+export const DATA_PLANE_QUERY_TOOLS = new Set(["sl_query", "lucy_query"]);
+export const DATA_PLANE_SOURCE_TOOLS = new Set(["sl_read_source", "lucy_read_source"]);
+
+/**
+ * Classify one forwarded upstream request by what it actually asked for.
+ *
+ * The classification looks ONLY at the JSON-RPC envelope (method + tool name). It
+ * never inspects the tool arguments and never records them, so it cannot leak query
+ * content into the record set.
+ *
+ * @param {Buffer|undefined|null} bodyBytes the raw forwarded body.
+ * @returns {{kind: "query"|"source_read"|"other_tool"|"control"|"unknown", toolName: string|null, method: string|null}}
+ */
+export function classifyUpstreamCall(bodyBytes) {
+  if (!bodyBytes || bodyBytes.length === 0) return { kind: "control", toolName: null, method: null };
+  let parsed;
+  try {
+    parsed = JSON.parse(bodyBytes.toString("utf8"));
+  } catch {
+    return { kind: "unknown", toolName: null, method: null };
+  }
+  const messages = Array.isArray(parsed) ? parsed : [parsed];
+  let firstMethod = null;
+  for (const message of messages) {
+    if (!message || typeof message !== "object") continue;
+    const method = typeof message.method === "string" ? message.method : null;
+    if (method && !firstMethod) firstMethod = method;
+    if (method !== "tools/call") continue;
+    const name = typeof message.params?.name === "string" ? message.params.name : null;
+    if (name && DATA_PLANE_QUERY_TOOLS.has(name)) return { kind: "query", toolName: name, method };
+    if (name && DATA_PLANE_SOURCE_TOOLS.has(name)) return { kind: "source_read", toolName: name, method };
+    return { kind: "other_tool", toolName: name, method };
+  }
+  return { kind: "control", toolName: null, method: firstMethod };
+}
+
 /** Parse a Content-Length header. Returns 0 when absent or unparseable. */
 function parseContentLength(headers) {
   const raw = headers?.["content-length"];
@@ -189,38 +236,78 @@ export class LocalLoopbackObserver {
     }
     if (!agentId) problems.push("agentId is required");
     if (!tokenFingerprint) problems.push("tokenFingerprint is required");
-    const records = this._records.filter((r) => {
-      if (problems.length > 0) return false;
+    // A missing identity input is a REFUSED measurement, not a measured zero: an
+    // empty record set here would be indistinguishable from "the upstream really
+    // executed nothing".
+    if (problems.length > 0) {
+      return { count: "unknown", source: "loopback-observer", recordSet: [], problems };
+    }
+    const inWindow = this._records.filter((r) => {
       const at = Date.parse(r.completedAt);
       if (!Number.isFinite(at) || at < start || at > end) return false;
-      // A missing agent / token header on the recorded forward is NEVER a match
-      // when the caller asked for a specific identity. This is what stops a
-      // `tools/list` self-probe from inflating the count for a real agent.
-      if (agentId) {
-        if (!r.identity?.agentId) return false;
-        if (r.identity.agentId !== agentId) return false;
-      }
-      if (tokenFingerprint) {
-        if (!r.identity?.tokenFingerprint) return false;
-        if (r.identity.tokenFingerprint !== tokenFingerprint) return false;
-      }
       return true;
     });
-    const count = records.length;
+    // The identity filter is only MEANINGFUL when the upstream actually carries an
+    // identity. The product deliberately strips the client credential before the
+    // upstream boundary, so a real Lucy → KTX path records NO agent identity at all.
+    // Filtering by an identity that no record carries would silently produce a
+    // vacuous zero — the exact "friendly default" this harness must never emit. So:
+    //   - when some records DO carry an identity → filter by it (cross-identity
+    //     traffic is excluded, as before);
+    //   - when NO record carries one → count instance-wide and say so, via
+    //     `attribution: "instance-wide"`. The caller decides whether an
+    //     instance-wide measurement is acceptable for its claim.
+    const identityBearing = inWindow.filter((r) => r.identity?.agentId || r.identity?.tokenFingerprint);
+    const identityFilterApplied = identityBearing.length > 0;
+    const records = identityFilterApplied
+      ? inWindow.filter((r) => {
+          // A missing agent / token header on the recorded forward is NEVER a match
+          // when the caller asked for a specific identity. This is what stops a
+          // `tools/list` self-probe from inflating the count for a real agent.
+          if (agentId) {
+            if (!r.identity?.agentId) return false;
+            if (r.identity.agentId !== agentId) return false;
+          }
+          if (tokenFingerprint) {
+            if (!r.identity?.tokenFingerprint) return false;
+            if (r.identity.tokenFingerprint !== tokenFingerprint) return false;
+          }
+          return true;
+        })
+      : inWindow;
+    // An "upstream execution" is a TOOL CALL that reached the upstream. `initialize`
+    // / `tools/list` / notifications are protocol chatter and are excluded — counting
+    // them would let a session setup masquerade as an unauthorized upstream execution.
+    // Every forwarded `tools/call` counts, whatever tool it is: the claim the security
+    // leg makes is about upstream CALLS, not about a specific tool.
+    const dataPlane = records.filter((r) => r.kind === "query" || r.kind === "source_read" || r.kind === "other_tool");
+    const count = dataPlane.length;
     return {
       count,
       source: "loopback-observer",
-      recordSet: records.map((r) => ({
+      attribution: identityFilterApplied ? "identity-filtered" : "instance-wide",
+      identityFilterApplied,
+      upstreamCallCount: records.length,
+      controlCallCount: records.filter((r) => r.kind === "control").length,
+      queryCount: records.filter((r) => r.kind === "query").length,
+      sourceReadCount: records.filter((r) => r.kind === "source_read").length,
+      // What the upstream actually received, in order. This is what makes the measured
+      // baseline auditable: the evidence shows the real tool calls, not just a number.
+      recordToolNames: dataPlane.map((r) => ({ kind: r.kind, toolName: r.toolName, status: r.response.status })),
+      recordSet: dataPlane.map((r) => ({
         recordId: r.recordId,
         completedAt: r.completedAt,
         request: { method: r.request.method, path: r.request.path, headers: r.request.headers, bodyHash: r.request.bodyHash, bodyBytes: r.request.bodyBytes },
         response: { status: r.response.status, headers: r.response.headers, bodyHash: r.response.bodyHash, bodyBytes: r.response.bodyBytes },
         identity: r.identity,
+        kind: r.kind,
+        toolName: r.toolName,
+        upstreamSessionId: r.upstreamSessionId,
         identityFilter: { agentId, tokenFingerprint }
       })),
       hashes: {
         queryHash: hashHex(JSON.stringify({ agentId, tokenFingerprint, since, until, identity })),
-        resultSetHash: hashHex(JSON.stringify(records.map((r) => r.recordId).sort())),
+        resultSetHash: hashHex(JSON.stringify(dataPlane.map((r) => r.recordId).sort())),
         sourceHash: hashHex(`loopback-observer|${this._runId}|${this._instanceId ?? ""}|${identity}`),
         filterHash: hashHex(`${agentId}|${tokenFingerprint}|${since}|${until}`)
       },
@@ -274,6 +361,14 @@ export class LocalLoopbackObserver {
       return;
     }
     const forwardedHeaders = { ...inboundHeaders, ...this._upstreamHeaders, "x-lucy-observer-correlation-id": correlationId };
+    // What the forwarded call actually asked for: the tool name only, never the
+    // arguments, so the record set cannot carry query content.
+    const classification = classifyUpstreamCall(requestBodyBytes);
+    // The upstream MCP session the call rode on. The product assigns one upstream
+    // session per (Agent, Token) identity and strips the client credential before
+    // forwarding, so this is the only per-caller signal that survives the upstream
+    // boundary.
+    const upstreamSessionId = sanitizeHeader(req.headers["mcp-session-id"]);
     const upstreamReqHeaders = { ...forwardedHeaders, host: this._upstreamUrl.host };
     let upstreamRes;
     try {
@@ -339,7 +434,10 @@ export class LocalLoopbackObserver {
       startedAt: startedAt.toISOString(),
       request: { method: upstreamMethod, path: upstreamPath, headers: inboundHeaders, bodyHash: hashBody(requestBodyBytes), bodyBytes: requestBodyBytes?.length ?? 0 },
       response: { status: upstreamRes.statusCode ?? 0, headers: responseHeaders, bodyHash: hashBody(responseBodyBytes), bodyBytes: responseBodyBytes?.length ?? 0 },
-      identity
+      identity,
+      kind: classification.kind,
+      toolName: classification.toolName,
+      upstreamSessionId
     };
     this._records.push(record);
   }
@@ -379,42 +477,82 @@ export class LocalLoopbackObserver {
  * Tests may inject their own factory; this is the production default.
  */
 export function createDefaultObserverFactory({ run }) {
-  if (!run) return () => () => ({ ensureStarted: async () => null, stop: async () => {}, observeUpstream: async () => ({ count: "unknown", source: "no-run", recordSet: [], problems: ["no run context provided to the default observer factory"] }) });
+  if (!run) return () => makeObserver({ kind: "no-run", count: "unknown", source: "no-run", problems: ["no run context provided to the default observer factory"] });
   if (run.instance?.startedBy === "external") {
     return function createObserverForExternal() {
-      return {
+      return makeObserver({
         kind: "external-no-observer",
-        ensureStarted: async () => null,
-        stop: async () => {},
-        observeUpstream: async () => ({ count: "unknown", source: "external-no-in-process-recording", recordSet: [], problems: ["external run: there is no in-process transparent recording; an independent source (e.g. kubectl exec against the registered POD) must be wired through the observerFactory parameter"] })
-      };
+        count: "unknown",
+        source: "external-no-in-process-recording",
+        problems: ["external run: there is no in-process transparent recording; an independent source (e.g. kubectl exec against the registered POD) must be wired through the observerFactory parameter"]
+      });
     };
   }
   // The local LucyProcess case: the upstream the runner will point the LucyProcess at
   // is the LOCAL loopback observer's listener. The factory returns a closure that
   // creates a per-run LocalLoopbackObserver lazily (the runner owns its lifecycle
   // explicitly via start/stop on the result).
+  //
+  // The started instance is SHARED by every closure this factory hands out. It used
+  // to live inside the returned closure, so each call produced a fresh, never-started
+  // observer: the runner started one instance, the SecurityContext asked the factory
+  // for another, and every observation came back "loopback-observer-not-started".
+  // Sharing the instance is what makes "the runner started it" mean "the observer
+  // everybody sees is running".
+  const shared = { instance: null, starting: null };
   return function createObserver({ agentId, identity, runId, instanceId } = {}) {
-    const started = { instance: null };
-    return {
-      kind: "loopback-observer",
-      ensureStarted: async (upstreamUrl) => {
-        if (started.instance) return started.instance;
-        const obs = new LocalLoopbackObserver({ runId: runId ?? run.runId, instanceId: instanceId ?? run.instanceId ?? null, upstreamUrl });
-        await obs.start();
-        started.instance = obs;
-        return obs;
-      },
-      stop: async () => {
-        if (started.instance) await started.instance.stop();
-        started.instance = null;
-      },
-      observeUpstream: async ({ since, until, agentId: aid, tokenFingerprint, identity: idn = identity ?? "lucy-e2e-observer" }) => {
-        if (!started.instance) {
-          return { count: "unknown", source: "loopback-observer-not-started", recordSet: [], problems: ["loopback observer was not started before the runner invoked observeUpstream; the runner must call ensureStarted() with the upstream URL before the first case"] };
-        }
-        return started.instance.observeUpstream({ since, until, agentId: aid, tokenFingerprint, identity: idn });
+    // The observer MUST be callable: `observeExecutions` invokes the provider as a
+    // function (`observe({ runId, instanceId, agentId, tokenFingerprint, since, until })`).
+    // The previous implementation returned a plain object, so the SecurityContext's
+    // provider was "not a function" and every observation degraded to
+    // `source: "no-observer"` — a silent "no measurement" that looked like a wiring
+    // detail but was the reason the whole channel never worked.
+    const observe = async ({ since: from, until: to, agentId: aid, tokenFingerprint } = {}) => {
+      if (!shared.instance) {
+        return { count: "unknown", source: "loopback-observer-not-started", recordSet: [], problems: ["loopback observer was not started before the runner invoked observeUpstream; the runner must call ensureStarted() with the upstream URL before the first case"] };
       }
+      return shared.instance.observeUpstream({ since: from, until: to, agentId: aid, tokenFingerprint, identity: identity ?? "lucy-e2e-observer" });
     };
+    const observer = observe;
+    observer.kind = "loopback-observer";
+    observer.ensureStarted = async (upstreamUrl) => {
+        if (shared.instance) return shared.instance;
+        if (!shared.starting) {
+          shared.starting = (async () => {
+            const obs = new LocalLoopbackObserver({ runId: runId ?? run.runId, instanceId: instanceId ?? run.instanceId ?? null, upstreamUrl });
+            await obs.start();
+            shared.instance = obs;
+            return obs;
+          })();
+        }
+        return shared.starting;
+      };
+    observer.stop = async () => {
+      const instance = shared.instance;
+      shared.instance = null;
+      shared.starting = null;
+      if (instance) await instance.stop();
+    };
+    observer.observeUpstream = async ({ since, until, agentId: aid, tokenFingerprint, identity: idn = identity ?? "lucy-e2e-observer" }) => {
+      if (!shared.instance) {
+        return { count: "unknown", source: "loopback-observer-not-started", recordSet: [], problems: ["loopback observer was not started before the runner invoked observeUpstream; the runner must call ensureStarted() with the upstream URL before the first case"] };
+      }
+      return shared.instance.observeUpstream({ since, until, agentId: aid, tokenFingerprint, identity: idn });
+    };
+    return observer;
   };
+}
+
+/**
+ * A passive observer provider: a CALLABLE that answers an observation request with
+ * `{ count, source, recordSet, ... }` — the shape `observeExecutions` consumes — and
+ * that also carries the lifecycle hooks the runner drives.
+ */
+function makeObserver({ kind, count, source, problems }) {
+  const observe = async () => ({ count, source, recordSet: [], problems });
+  observe.kind = kind;
+  observe.ensureStarted = async () => null;
+  observe.stop = async () => {};
+  observe.observeUpstream = async () => ({ count, source, recordSet: [], problems });
+  return observe;
 }

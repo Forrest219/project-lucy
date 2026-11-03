@@ -66,10 +66,16 @@ describe("validate-changed column type contract", () => {
       "semantic-layer/demo/_schema/dataforai.yaml"
     ]);
 
-    const validation = applyColumnTypeContractToValidation(
-      { ok: true, exitCode: 0, stdout: "", stderr: "", issues: [] },
-      contracts
-    );
+    // The fixture pins `issues` to the element type the gate appends to; an
+    // empty literal would otherwise infer `never[]` and erase `issue.message`.
+    const baseValidation: {
+      ok: boolean;
+      exitCode: number;
+      stdout: string;
+      stderr: string;
+      issues: Array<{ message: string }>;
+    } = { ok: true, exitCode: 0, stdout: "", stderr: "", issues: [] };
+    const validation = applyColumnTypeContractToValidation(baseValidation, contracts);
     expect(validation.ok).toBe(false);
     expect(validation.exitCode).not.toBe(0);
     const messages = (validation.issues ?? []).map((issue) => issue.message);

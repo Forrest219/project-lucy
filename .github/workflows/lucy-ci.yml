@@ -181,6 +181,12 @@ jobs:
       # the suite has already run and passed here. Running it a second time
       # only doubles the chance of a load-sensitive flake reddening the train.
       - run: npm run smoke:p0:docker -- --skip-webui-suite
+      # Proves the customer image build context is really trimmed: a real
+      # `docker build` over a synthetic context, asserting that private
+      # runtime state at any depth stays out while the customer templates and
+      # the runtime entrypoint stay in. Needs a Docker daemon, so it lives in
+      # this job rather than in the daily contract layer.
+      - run: npm run smoke:p0:delivery-isolation:build-context
 
   k8s-upgrade-gate:
     runs-on: ubuntu-24.04

@@ -10,7 +10,11 @@ if (!BASE_URL || !/^http:\/\/127\.0\.0\.1:\d+$/.test(BASE_URL) || process.env.PE
 
 export default defineConfig({
   testDir: "..",
-  testMatch: ["performance/entry-performance.spec.ts", "e2e/specs/entry-performance-behavior.spec.ts"],
+  testMatch: [
+    "performance/entry-performance.spec.ts",
+    "performance/spec195-display-roundtrip.spec.ts",
+    "e2e/specs/entry-performance-behavior.spec.ts"
+  ],
   fullyParallel: false,
   workers: 1,
   retries: 0,

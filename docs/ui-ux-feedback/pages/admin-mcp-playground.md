@@ -114,3 +114,11 @@ Reported: 2026-10-19
 ### Notes
 - Spec 99 v1.5 §6.6。
 - 验证：`mcp-playground.test.tsx`。本轮不做 Docker 重建。
+
+## UX-ADMIN-MCP-PLAYGROUND-006: 未选 Agent 时页面是空的，选中后状态用英文芯片
+
+Status: Open
+Route: /admin/mcp-playground
+Feedback: 2026-10-30 走查。未选择 Agent 时主工作区是空的。选择后，状态芯片是 Config、Catalog、Policy Runtime、MCP Execution。主按钮是「重载执行层」。
+Expected: 未选择时，空态在面板内并指出要先选择 Agent。状态芯片使用中文产品文案。
+Browser Check: 发版走查打开调试台并选择已有 Agent。不粘贴 Token，不执行检查。

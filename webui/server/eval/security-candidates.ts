@@ -363,7 +363,7 @@ async function buildPromotionPreview(row: SecurityEvalCandidateRow) {
     candidateId: row.id,
     formalCase,
     relPath: CANDIDATE_REL_PATH,
-    diff: previewDiff(existing, proposedYaml),
+    diff: previewDiff(existing, proposedYaml, CANDIDATE_REL_PATH),
     proposedYaml
   };
 }

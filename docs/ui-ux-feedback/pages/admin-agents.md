@@ -1121,3 +1121,77 @@ Reported: 2026-08-05
 
 ### Notes
 Spec 103 / `wo-202608-36` 已落地（本轮不做浏览器验证，结束后只做 code review）。
+
+## UX-ADMIN-AGENTS-042: 「复制当前配置」在非安全上下文下完全无反应
+
+Status: Fixed
+Route: `/admin/agents/:userId/tokens/new`
+Area: Token 首秀页客户端配置复制按钮
+Severity: P1
+Reported: 2026-10-26
+
+### Feedback
+生产环境（`http://10.69.95.109:8276`）点「复制当前配置」没有任何反应：按钮文案不变、没有 Toast、剪贴板未写入。同页「复制 Token」与 Agent 详情页「复制 hash」同样失效。
+
+### Evidence
+- 浏览器控制台未捕获异常：`TypeError: Cannot read properties of undefined (reading 'writeText')`，堆栈落在 `assets/NewToken-*.js`（即 `NewToken.tsx` 的复制处理器）。
+- 即 `navigator.clipboard` 本身为 `undefined`，属性访问阶段就抛错。
+- 根因：Clipboard API 是 `[SecureContext]` 门控的，只在 HTTPS 或回环来源暴露；生产以纯 HTTP + 非回环 IP 提供 WebUI，来源不是安全上下文，浏览器根本不暴露该 API。
+- 这不是部署配错：`security.access=http`（内网 HTTP 客户访问方式）是受支持的交付形态（`deploy/k8s/K8S_CONTRACT.md`）。
+- 旁证：用同一枚 Token 直连 `http://10.69.95.109:8277/mcp`，握手、`tools/list`、`lucy_catalog`、`lucy_read_source`、`lucy_query` 真实取数、绝对拒绝工具拦截全部正常——按钮要复制的 payload 本身正确，坏的只是「复制」这个动作。
+
+### Expected
+- 任何来源（含内网 HTTP）下，复制要么真正写入剪贴板，要么给出明确的失败提示。
+- 不得静默失败；不得在未写入时置成功态（谎报成功）。
+
+### Browser Check
+1. 在**非回环 HTTP 来源**打开 `/admin/agents/<AGENT_ID>/tokens/new`（把 WebUI 绑 `0.0.0.0` 后用本机 LAN IP 访问，或直接用客户内网实例）。**不得**用 `127.0.0.1` / `localhost` 复核——回环来源是安全上下文，Clipboard API 恒可用，复核结果没有意义。
+2. 生成 Token，点「复制当前配置」。
+3. 必须看见按钮短暂变为「已复制」，且 Toast「客户端配置已复制」。
+4. 粘贴到任意文本框，必须拿到含 MCP URL 与 `Bearer` 的 JSON 配置。
+5. 断开剪贴板能力后再点一次（如 DevTools 阻断 Clipboard API），必须出现失败提示，且按钮**不得**变为「已复制」。
+
+### Notes
+2026-10-26 已落地 Spec 192 / Plan M65：新增 `webui/src/lib/clipboard.ts` 统一复制实现（原生 Clipboard API → `execCommand` 回退 → 明确失败），并迁移 `webui/src` 内全部 12 处复制调用点；新增单测 `webui/src/__tests__/clipboard.test.tsx`、`new-token.test.tsx` 的非安全上下文分支，以及 Playwright 回归 `tests/e2e/specs/clipboard-fallback.spec.ts`（浏览器内删除 `navigator.clipboard` 模拟非安全上下文）。同时修正「复制当前配置」按钮 `aria-label` 与可见文案不一致（WCAG 2.5.3）。Spec 编号于 2026-10-27 同步上游时由 189 重排为 192（上游已占用 189）。
+
+**本轮未重建 Docker、未出客户包**：生产实例上的该按钮在下次出包部署前仍不可用，不得据此宣称生产已修复；第 1–5 步的现场复核留待出包后执行。
+
+## UX-ADMIN-AGENTS-043: Agent Token 页露出原始到期时间
+
+Status: Open
+Route: /admin/agents/:userId?tab=tokens
+Feedback: 2026-10-30 走查。Token 页把到期时间写成 `2027-01-16T23:59:59.999Z` 这类原始 ISO，并露出 tools/list。
+Expected: 到期时间按业务时区显示。工具名留在 `translate="no"` 节点里，不作为整句主文案。
+Browser Check: 发版走查打开一个已有 Agent 的 Token 页。不签发、不吊销。
+
+## UX-ADMIN-AGENTS-044: 权限预览把每条工具的行边界刷满整页
+
+Status: Open
+Route: /admin/agents/:userId?tab=permissions
+Feedback: 2026-10-30 走查。权限预览把每个 MCP 工具都展开成「行边界：全部行」，页面超过一屏的重复。
+Expected: 相同行边界合并或收起。主术语用「数据能力」，不用 Data Capability Preview。
+Browser Check: 发版走查打开一个已有 Agent 的权限预览。不改权限。
+
+## UX-ADMIN-AGENTS-045: 变更预览只有一句说明
+
+Status: Open
+Route: /admin/agents/:userId?tab=diff
+Feedback: 2026-10-30 走查。变更预览只有一句话和一块空白。说明里提到 git 和 Cmd+S。
+Expected: 没有变更时，空态在面板内并写出下一步。不把快捷键和 git 当主说明。
+Browser Check: 发版走查打开一个已有 Agent 的变更预览。不保存。
+
+## UX-ADMIN-AGENTS-046: 角色概览重复展开工具行边界
+
+Status: Open
+Route: /admin/roles/:roleId
+Feedback: 2026-10-30 走查。角色概览把每个 MCP 工具的行边界重复展开。删除被挡住时页头变成多行。
+Expected: 相同行边界合并。页头动作仍能读完，不把删除原因撑成整段。
+Browser Check: 发版走查打开一个已有角色的概览。不改角色。
+
+## UX-ADMIN-AGENTS-047: 行级策略页没有条件编辑器，却写着直接写条件
+
+Status: Open
+Route: /admin/roles/:roleId?tab=rowPolicy
+Feedback: 2026-10-30 走查。行级策略页写「直接写条件」，但没有条件编辑器，并重复「没有模板」。
+Expected: 不能写条件时，不要把「直接写条件」当主操作。空态说明下一步。
+Browser Check: 发版走查打开一个已有角色的行级策略。不保存。

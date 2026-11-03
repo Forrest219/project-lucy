@@ -149,6 +149,11 @@ describe("semantic publish gate (SC-24)", () => {
       NOW
     );
     expect(decision.waived).toBe(false);
+    // `ExemptionDecision` is a discriminated union: `rejectedReason` only
+    // exists on the `waived: false` branch. Narrow it explicitly.
+    if (decision.waived) {
+      throw new Error("expected the exemption not to apply");
+    }
     expect(decision.rejectedReason).toBe("exemption_does_not_apply");
   });
 

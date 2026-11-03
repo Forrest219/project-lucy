@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Audit } from "../pages/admin/Audit";
@@ -95,7 +95,10 @@ describe("Audit", () => {
     expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("203.0.113.10");
     expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("Hermes/1.2.3 (test-agent)");
 
-    fireEvent.click(await screen.findByText("zhangsan"));
+    // 20261019 §5：Agent 列现在并列展示「凭证主体」，同一行会出现两个
+    // "zhangsan"（Agent 主体 + 凭证主体），因此按单元格 testid 定位，
+    // 不用裸文本匹配。
+    fireEvent.click(await screen.findByTestId("audit-call-agent-1"));
     expect(await screen.findByTestId("audit-detail-panels-1")).toBeInTheDocument();
     expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("调用方");
     expect(screen.getByTestId("audit-detail-decision-1")).toHaveTextContent("裁决与权限");
@@ -238,5 +241,121 @@ describe("Audit", () => {
     expect(await screen.findByTestId("audit-token-filter")).toHaveTextContent("sha256:aaaa0000");
     fireEvent.click(screen.getByRole("button", { name: "清除 Token 筛选" }));
     await waitFor(() => expect(screen.queryByTestId("audit-token-filter")).not.toBeInTheDocument());
+  });
+
+  it("keeps access grade on the first filter bar and hides connect rows until all grades are selected", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/admin/agents")) {
+        return new Response(JSON.stringify({ ok: true, data: { agents: [] } }));
+      }
+      if (url.includes("/api/admin/audit/turns")) {
+        const showVisits = url.includes("inquiryKind=all");
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            total: showVisits ? 1 : 0,
+            entries: showVisits
+              ? [{
+                  id: "inf_visit",
+                  inquiryNo: 3,
+                  inquiryKind: "session_visit",
+                  source: "inferred",
+                  userId: "zhangsan",
+                  startedAt: "2026-08-04T08:00:00.000Z",
+                  endedAt: "2026-08-04T08:00:01.000Z",
+                  businessCallCount: 0,
+                  linkedCallCount: 1,
+                  questionSummary: "会话建立：cursor",
+                  confidence: "low",
+                  tools: ["initialize"],
+                  sources: []
+                }]
+              : [],
+            summary: { reportedCount: 0, inferredCount: showVisits ? 1 : 0, reportedShare: 0 },
+            kindCounts: { real: 1, unreportedQuery: 1, sessionVisit: 2 },
+            referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+          }
+        }));
+      }
+      if (url.startsWith("/api/admin/audit")) {
+        const showConnect = url.includes("accessGrade=all") || url.includes("accessGrade=connect");
+        const entries = [
+          {
+            id: 21,
+            ts: "2026-06-20T00:00:00.000Z",
+            userId: "zhangsan",
+            tool: "lucy_query",
+            accessGrade: "query",
+            inquiryNo: 9,
+            lucyTurnId: "lucy_q",
+            outcome: "ok",
+            durationMs: 4,
+            requestId: "q"
+          },
+          ...(showConnect
+            ? [{
+                id: 22,
+                ts: "2026-06-20T00:00:01.000Z",
+                userId: "zhangsan",
+                tool: "initialize",
+                accessGrade: "connect",
+                outcome: "ok",
+                durationMs: 1,
+                requestId: "init"
+              }]
+            : [])
+        ];
+        return new Response(JSON.stringify({
+          ok: true,
+          data: { total: entries.length, entries, summary: { businessCalls: 1, protocolCalls: 1, deniedCalls: 0, dataBearingCalls: 1 } }
+        }));
+      }
+      return new Response(JSON.stringify({ ok: false }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAudit("/admin/audit?view=calls&range=7d");
+    const gradeSelect = await screen.findByLabelText("访问等级");
+    expect(screen.getByTestId("audit-shared-filters")).toContainElement(gradeSelect);
+    expect(screen.queryByTestId("audit-advanced-filters")).not.toBeInTheDocument();
+    expect(gradeSelect).toHaveValue("");
+    const table = await screen.findByTestId("audit-calls-table");
+    expect(table).not.toHaveTextContent("连接");
+    expect(table).toHaveTextContent("查数");
+    expect(screen.getByTestId("audit-call-turn-id-21")).toHaveTextContent("9");
+    expect(fetchMock.mock.calls.map((call) => String(call[0])).find((url) => url.startsWith("/api/admin/audit?"))).not.toContain("accessGrade=");
+
+    fireEvent.click(screen.getByTestId("audit-advanced-filters-toggle"));
+    const advanced = screen.getByTestId("audit-advanced-filters");
+    expect(advanced).not.toContainElement(gradeSelect);
+    expect(within(advanced).getByLabelText("调用来源")).toBeInTheDocument();
+    expect(advanced).toContainElement(screen.getByLabelText("事件 ID"));
+
+    fireEvent.change(gradeSelect, { target: { value: "all" } });
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.map((entry) => String(entry[0])).find((url) => url.includes("accessGrade=all"));
+      expect(call).toBeTruthy();
+    });
+    expect(await screen.findByTestId("audit-call-grade-22")).toHaveTextContent("连接");
+
+    fireEvent.click(screen.getByTestId("audit-clear-filters"));
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((entry) => String(entry[0]));
+      const latest = [...urls].reverse().find((url) => url.startsWith("/api/admin/audit?"));
+      expect(latest ?? "").not.toContain("accessGrade=");
+    });
+
+    fireEvent.click(screen.getByTestId("audit-tab-turns"));
+    const turnsTable = await screen.findByTestId("audit-turns-table");
+    expect(turnsTable).not.toHaveTextContent("会话建立");
+    const kindSelect = screen.getByLabelText("问询种类");
+    expect(screen.getByTestId("audit-shared-filters")).toContainElement(kindSelect);
+    fireEvent.click(screen.getByTestId("audit-advanced-filters-toggle"));
+    const source = screen.getByLabelText("来源类型");
+    expect(screen.getByTestId("audit-advanced-filters")).toContainElement(source);
+    expect(within(source).getByRole("option", { name: "用户原始问询" })).toBeInTheDocument();
+    expect(within(source).getByRole("option", { name: "系统推断问询" })).toBeInTheDocument();
+    expect(screen.getByTestId("audit-advanced-filters")).not.toContainElement(kindSelect);
   });
 });

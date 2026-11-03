@@ -342,6 +342,26 @@ describe("CommandPalette", () => {
     await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding"));
   });
 
+  it("ignores Enter when the native IME composition flag is set", async () => {
+    renderAt("/overview");
+    fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "分析指引" }
+    });
+    const input = screen.getByTestId("command-palette-input");
+    // 唯一匹配——Enter 本会直接跳转到「业务 Wiki」，所以这条断言真的在测 IME 守卫。
+    const options = within(screen.getByTestId("command-palette-list")).getAllByRole("option");
+    expect(options).toHaveLength(1);
+    // React 的合成键盘事件不带 isComposing，处理函数从原生 DOM 事件读该标志，
+    // 所以标志必须落在原生事件 init 上守卫才会生效。
+    fireEvent.keyDown(input, {
+      key: "Enter",
+      isComposing: true
+    });
+    expect(screen.getByTestId("command-palette")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding"));
+  });
+
   it("wraps ArrowDown at the end of the list", () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));

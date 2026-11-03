@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { ReadonlySqlRowset } from "../../components/audit-trust/ReadonlySqlRowset";
+import { NULL_REASON_VALUES } from "../../../server/proxy/audit-null-reasons";
 
 describe("T05d ReadonlySqlRowset", () => {
   it("renders rows/cols/bytes + status label with data-status", () => {
@@ -36,13 +37,14 @@ describe("T05d ReadonlySqlRowset", () => {
     expect(c3.textContent).toMatch(/2\.00 MB/);
   });
 
-  it("renders all 5 status labels + palette classes", () => {
+  it("renders all 6 status labels + palette classes (the frozen U2 six-value enum)", () => {
     const cases = [
       { status: "not_applicable" as const, label: "不适用", palette: "pl-status-neutral" },
       { status: "not_collected" as const, label: "未采集", palette: "pl-status-warning" },
       { status: "redacted" as const, label: "已脱敏", palette: "pl-status-warning" },
       { status: "parse_failed" as const, label: "解析失败", palette: "pl-status-error" },
-      { status: "unknown" as const, label: "未知", palette: "pl-status-neutral" }
+      { status: "unknown" as const, label: "未知", palette: "pl-status-neutral" },
+      { status: "not_supported" as const, label: "不支持", palette: "pl-status-neutral" }
     ];
     for (const c of cases) {
       const { container } = render(
@@ -52,6 +54,19 @@ describe("T05d ReadonlySqlRowset", () => {
       expect(status?.textContent).toBe(c.label);
       expect(status?.className).toContain(c.palette);
     }
+  });
+
+  it("the status enum comes from the backend six-value source of truth (no frontend drift)", () => {
+    // 后端 `audit-null-reasons.ts` 是唯一真源；前端组件直接消费它，
+    // 因此两端不可能漂移（此前前端少一个 `not_supported`）。
+    expect(NULL_REASON_VALUES).toEqual([
+      "not_applicable",
+      "not_collected",
+      "redacted",
+      "parse_failed",
+      "unknown",
+      "not_supported"
+    ]);
   });
 
   it("renders alongside the existing generated SQL cell (does not replace it)", () => {

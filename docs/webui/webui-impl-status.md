@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | WebUI 功能实现状态 |
 | 文档类型 | Other |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-06-20；v1.2 更新 2026-06-21；v1.3 更新 2026-07-24（新增 M6 「添加 schema」行） |
+| 版本 | v1.4 |
+| 撰写日期 | 2026-06-20；v1.2 更新 2026-06-21；v1.3 更新 2026-07-24（新增 M6 「添加 schema」行）；v1.4 更新 2026-10-27（Spec 193 业务 Wiki 访问权限管理落地） |
 | 撰写人 | Claude Architect / Codex |
 
 ---
@@ -22,7 +22,7 @@
 | **语义层维护** | 表目录 | ✅ 已实现 | `src/pages/Catalog.tsx` | `GET /api/sources` | `src/__tests__/app-shell.test.tsx` · server semantic-layer tests | 2026-06-21 |
 | | 表语义编辑 | ✅ 已实现 | `src/pages/TableEditor.tsx` | `GET /api/sources/:conn/:schema/:table` · `PUT /api/sources/:conn/:schema/:table` · `POST /api/sources/:conn/:schema/:table/validate` | `src/__tests__/table-editor.test.tsx` · `server/__tests__/semantic-layer.*.test.ts` · `server/__tests__/api.save.test.ts` | 2026-06-21 |
 | | 关联关系管理 | ✅ 已实现 | `src/pages/JoinEditor.tsx` | `GET /api/joins/candidates` · `PUT /api/joins/candidates` | `server/__tests__/joins-sidecar.test.ts` | 2026-06-21 |
-| **业务文档** | Wiki 文档 | ✅ 已实现 | `src/pages/WikiEditor.tsx` | `GET /api/wiki` · `GET /api/wiki/:key` · `PUT /api/wiki/:key` | `server/__tests__/wiki.test.ts` | 2026-06-21 |
+| **业务文档** | Wiki 文档 | ✅ 已实现 | `src/pages/WikiEditor.tsx` · `src/components/WikiAccess*.tsx` · `src/components/WikiBatchAccess*.tsx` | `GET /api/wiki` · `GET /api/wiki/:key` · `PUT /api/wiki/:key` · `GET/POST/PUT /api/wiki/:key/access` · `POST /api/wiki/access/batch/preview` · `POST /api/wiki/access/batch/commit` · `GET /api/wiki/access/batches/:operationId` | `server/__tests__/wiki.test.ts` · `server/__tests__/wiki-access-*.test.ts` · `server/__tests__/wiki-write-queue.test.ts` · `server/__tests__/wiki-upload-access.test.ts` · `src/__tests__/wiki-access-components.test.tsx` · `src/__tests__/wiki-batch-access.test.tsx` | 2026-10-27 |
 | **审阅与校验** | 变更审阅 | ✅ 已实现 | `src/pages/Review.tsx` | `GET /api/diff` · `POST /api/validate-changed` | `src/__tests__/review.test.tsx` | 2026-06-21 |
 | **质量评测** | Case 管理 | ✅ 已实现 | `src/pages/eval/CaseList.tsx` · `CaseEditor.tsx` | `GET /api/eval/domains` · `GET /api/eval/domains/:domain` · `GET/POST/PUT/DELETE /api/eval/cases/:domain[/:caseId]` | `server/__tests__/eval-cases.test.ts` · `server/__tests__/eval-api-contract.test.ts` | 2026-06-21 |
 | | 运行历史 | ✅ 已实现 | `src/pages/eval/RunList.tsx` · `RunDetail.tsx` | `POST /api/eval/runs` · `GET /api/eval/runs` · `GET /api/eval/runs/:runId` · `GET /api/eval/runs/:runId/results` · `GET /api/eval/runs/:runId/stream` · `POST /api/eval/runs/:runId/cancel` | `server/__tests__/eval-runs.test.ts` · `server/__tests__/eval-runner-contract.test.ts` | 2026-06-21 |

@@ -2,6 +2,8 @@
 
 Source: `[https://platform.minimaxi.com/console/usage](https://platform.minimaxi.com/console/usage)`
 
+> **状态**：**已实现**。本文是设计 token 提取稿，无独立工单；token 已进入 `webui/src/app/app.css`（`--token-color-*` / `--token-radius-*` / `--token-shadow-card`）。相关视觉规范见 Spec 20、Spec 18 之外的 `webui/docs/00-product-terminology-standard.md` 与 `webui/docs/design-system/`。
+
 ## 1. Core Tokens
 
 ```css

@@ -6,6 +6,7 @@
  * is refused until a before/after comparison is recorded, and the repository
  * ships no customer measure YAML.
  */
+import { execFileSync } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -92,12 +93,29 @@ describe("single report template pilot (SC-19)", () => {
   });
 
   it("ships no customer measure YAML in the repository", async () => {
-    const semanticRoot = path.join(process.cwd(), "..", "semantic-layer");
-    const entries = await readdir(semanticRoot, { withFileTypes: true }).catch(() => []);
-    // Only the tracked demo stub is allowed; no per-customer connection dir.
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      expect(entry.name).toBe("demo-mysql");
+    const repoRoot = path.resolve(process.cwd(), "..");
+    const semanticRoot = path.join(repoRoot, "semantic-layer");
+    // "In the repository" means the committed tree: a local gitignored connection directory
+    // (semantic-layer/mysql-aliyun/, semantic-layer/poc-mysql-aliyun/) is a developer's own
+    // working copy, not something the repository ships.
+    const shippedConnectionDirs = new Set(
+      execFileSync("git", ["ls-files", "--", "semantic-layer"], { cwd: repoRoot, encoding: "utf8" })
+        .split("\n")
+        .filter(Boolean)
+        .map((file) => file.split("/"))
+        // semantic-layer/<dir>/<file> — a two-segment path is a file at the root
+        // (semantic-layer/.gitkeep), not a connection directory.
+        .filter((parts) => parts.length >= 3)
+        .map((parts) => parts[1])
+        .filter(Boolean)
+    );
+    // The pilot template binds the demo connection by id — never by list position.
+    expect([...shippedConnectionDirs]).toContain("demo-mysql");
+    // Only the product's own connection semantic sources may be committed: the demo stub the
+    // pilot binds to, and the lucy-ops ops-evidence source (Spec 149, b7a29f12). Any other
+    // directory would be a per-customer connection dir, which SC-19 forbids.
+    for (const dir of shippedConnectionDirs) {
+      expect(["demo-mysql", "lucy-ops"], `${dir}: the repository ships no per-customer connection directory`).toContain(dir);
     }
     // No pilot measure definition is committed alongside the template id.
     const serverDir = path.join(process.cwd(), "server", "proxy");

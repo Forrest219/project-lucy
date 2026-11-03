@@ -27,7 +27,9 @@ const OPERATION_LABELS: Record<WikiVersionSummary["operation"], string> = {
   restore: "恢复历史版本",
   move: "移动到目录",
   rename: "重命名",
-  delete: "删除"
+  delete: "删除",
+  // Spec 193 §6.2 — an authorization-only change.
+  access_update: "管理访问权限"
 };
 
 function formatVersionTime(value: string): string {

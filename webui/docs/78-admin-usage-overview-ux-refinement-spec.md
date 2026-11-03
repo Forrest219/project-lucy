@@ -19,7 +19,7 @@
 | 关联页面 | `/admin/governance`（路由保持；用户可见名称改为「使用概况」） |
 | 关联台账 | `docs/ui-ux-feedback/pages/admin-governance.md`（`UX-ADMIN-GOV-001` ~ `UX-ADMIN-GOV-008`） |
 | 上游 Spec | `webui/docs/75-admin-governance-usage-overview-spec.md`（usage-first 一期；本 Spec 对其 KPI/窗口/命名做局部修订）；`webui/docs/69-admin-governance-observability-spec.md`（风险深挖能力仍不进主屏） |
-| 状态 | Draft (v1.1 review-hardened) |
+| 状态 | **已实现**（提交 `2ddcf033` `feat(webui): refine admin usage overview KPIs and window binding`） |
 | 日期 | 2026-08-05 |
 | 范围 | 命名与导航文案、顶栏去冗余、窗口全局联动、KPI 合并与第二排表指标、P95 替换均值、用户友好 hint、列表区口径对齐 |
 

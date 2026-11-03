@@ -15,7 +15,7 @@
 | 字段 | 内容 |
 |---|---|
 | Spec 编号 | 116 |
-| 关联工单 | Enabled Tables Orphan Fix plan |
+| 关联工单 | 已实现（提交 `5283facd` `fix(webui): allow enabled-tables save with invalid-enabled drift (Spec 116)`）；无独立工单文件 |
 | 关联页面 | `/connections/enabled-tables` |
 | 关联台账 | `docs/ui-ux-feedback/pages/connections.md`（`UX-CONNECTIONS-031`）；交叉 `UX-CONNECTIONS-005` |
 | 上游 Spec | Spec 47（启用表范围）；Spec 104（drift 暴露）；`03-api-spec.md` enabled-tables |

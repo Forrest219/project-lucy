@@ -346,6 +346,58 @@ describe("SemanticAssetPublishButton + SemanticAssetPublishDrawer", () => {
     expect(statusCalls).toBeGreaterThanOrEqual(2);
   });
 
+  it("PWB-17: the status polling stops at the terminal state — it is not a permanent background poll", async () => {
+    let statusCalls = 0;
+    const publishResponse: SemanticAssetPublishResponse = {
+      accepted: true,
+      release: makeReleaseRecord({ status: "reindexing" })
+    };
+    const handlers: HandlerMap = {
+      "POST /api/semantic-assets/validate": () =>
+        new Response(JSON.stringify({ ok: true, data: makeValidateResponse() })),
+      "POST /api/semantic-assets/publish": () =>
+        new Response(JSON.stringify({ ok: true, data: publishResponse })),
+      "GET /api/semantic-assets/releases/rel_20260730_163000_001/status": () => {
+        statusCalls += 1;
+        const release = makeReleaseRecord({
+          status: statusCalls < 2 ? "reindexing" : "published",
+          reindex: { ok: true, exitCode: 0, stdout: "ok", stderr: "" }
+        });
+        const payload: SemanticAssetReleaseStatusResponse = { release };
+        return new Response(JSON.stringify({ ok: true, data: payload }));
+      }
+    };
+    stubFetch(handlers);
+    const { Wrapper } = makeWrapper();
+    render(
+      <Wrapper>
+        <SemanticAssetPublishDrawer open onClose={() => undefined} />
+      </Wrapper>
+    );
+    const textarea = await screen.findByTestId("semantic-asset-publish-paste");
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        getData: () => "name: international_country_metrics\ntable: chatbi.ai_metric_international_country_daily\n"
+      }
+    });
+    await waitFor(() => screen.getByTestId("semantic-asset-target-paths"));
+
+    fireEvent.click(await screen.findByTestId("semantic-asset-publish-submit"));
+
+    // 终态到达。
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("semantic-asset-publish-success")).toBeInTheDocument();
+      },
+      { timeout: 4000 }
+    );
+    const callsAtTerminal = statusCalls;
+
+    // 再等两个轮询周期（轮询间隔 1500ms）——调用数不得再增长。
+    await new Promise((resolve) => setTimeout(resolve, 3500));
+    expect(statusCalls).toBe(callsAtTerminal);
+  }, 20000);
+
   it("shows the blocked banner when the publish returns 422 VALIDATION_GATE_FAILED", async () => {
     const handlers: HandlerMap = {
       "POST /api/semantic-assets/validate": () =>

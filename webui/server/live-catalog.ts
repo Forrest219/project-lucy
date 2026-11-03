@@ -1,3 +1,4 @@
+import { showDatabasesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo, LiveSchemaSummary, LiveSchemasResponse } from "./model";
@@ -48,7 +49,7 @@ GROUP BY owner
 ORDER BY owner
 `.trim().replace(/\s+/g, " ");
 
-type CatalogProtocol = "mysql" | "postgres" | "sqlserver" | "oracle";
+export type CatalogProtocol = "mysql" | "postgres" | "sqlserver" | "oracle";
 
 type CacheEntry = {
   expiresAt: number;
@@ -89,7 +90,12 @@ export function peekLiveSchemasCache(
   return { ...hit.payload, cached: true };
 }
 
-function resolveWireProtocol(conn: ConnectionInfo): CatalogProtocol | "unknown" {
+/**
+ * Spec 107 — protocol judgement for a connection. Spec 190 reuses it so the
+ * table-level list and the Schema-level catalog never disagree on the wire
+ * protocol of the same connection.
+ */
+export function resolveWireProtocol(conn: ConnectionInfo): CatalogProtocol | "unknown" {
   if (
     conn.wireProtocol === "mysql" ||
     conn.wireProtocol === "postgres" ||
@@ -118,15 +124,23 @@ function sqlForProtocol(protocol: CatalogProtocol): string {
   return MYSQL_LIVE_SQL;
 }
 
+function sqlForConnection(conn: ConnectionInfo, protocol: CatalogProtocol): string {
+  if (protocol === "mysql") {
+    const catalog = splitCatalogDatabase(conn.database);
+    if (catalog) return showDatabasesFromCatalogSql(catalog.catalog);
+  }
+  return sqlForProtocol(protocol);
+}
+
 function parseRows(json: unknown): LiveSchemaSummary[] {
   if (!json || typeof json !== "object") return [];
   const rows = (json as { rows?: unknown }).rows;
   if (!Array.isArray(rows)) return [];
   const out: LiveSchemaSummary[] = [];
   for (const row of rows) {
-    if (!Array.isArray(row) || row.length < 2) continue;
+    if (!Array.isArray(row) || row.length < 1) continue;
     const schema = String(row[0] ?? "").trim();
-    const tableCount = Number(row[1]);
+    const tableCount = row.length < 2 ? 0 : Number(row[1]);
     if (!schema || !Number.isFinite(tableCount)) continue;
     out.push({ schema, tableCount: Math.max(0, Math.floor(tableCount)) });
   }
@@ -222,7 +236,7 @@ export async function listLiveSchemas(
 
   let sqlResult: SqlResult;
   try {
-    sqlResult = await runSqlImpl(projectRoot, connId, sqlForProtocol(wireProtocol), {
+    sqlResult = await runSqlImpl(projectRoot, connId, sqlForConnection(conn, wireProtocol), {
       maxRows: 2000,
       timeoutMs: 30_000
     });

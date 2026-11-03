@@ -11,6 +11,16 @@
 | 基于材料 | 客户部署风险复核；`inbox/customer-amd64-offline-package` 坏镜像取证；`Dockerfile`；`.github/workflows/lucy-release.yml`；`docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md` |
 | 适用范围 | Docker 镜像构建契约、客户 amd64 离线交付门禁、Release CI KTX 版本基线 |
 | 输出位置 | `docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md` |
+| 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条是发布取证层，尚未执行**——本批只做形态修复，不跑构建。门禁与 CI 在库（ELF 门禁 `scripts/release/assert-image-elf-arch.sh`、`scripts/gates/build-k8s-delivery-package.sh`、`.github/workflows/lucy-release.yml`）。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
+
+## 闭口层级
+
+- 层级：发布取证
+- 本条承诺：Docker 镜像构建产物与目标架构一致（不得以元数据代替 ELF 二进制核对），且 Release CI 使用的 KTX 版本基线与仓库声明一致。
+- 本条出口：客户 amd64 交付门禁（§4.4：ELF 二进制门禁 ＋ 元数据架构断言）＋ Release CI 的 KTX 版本基线核对 ＋ 本 Spec §5 的无浏览器验收。
+- 不在本条出口：各模块自己的功能合同；本条没跑到的分支、失败关闭、并发与权限边角；客户端旅程。
+- 上线关系：本条通过不表示各模块无问题
+
 
 ## Terminology Compliance
 

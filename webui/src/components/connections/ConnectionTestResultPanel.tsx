@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { latencyTone } from "../../lib/connectionHealth";
 import { classifyConnectionError } from "../../lib/connectionErrors";
+import { copyTextToClipboard } from "../../lib/clipboard";
 import type { ConnectionInfo, ConnectionTestResult } from "../../lib/types";
 
 function protocolLabel(protocol: ConnectionInfo["wireProtocol"]): string {
@@ -80,12 +81,8 @@ export function ConnectionTestResultPanel({
       : null;
 
   async function copyText(text: string, message: string) {
-    try {
-      await navigator.clipboard?.writeText(text);
-      setCopyStatus(message);
-    } catch {
-      setCopyStatus("复制失败，请手动选择文本");
-    }
+    const result = await copyTextToClipboard(text);
+    setCopyStatus(result.ok ? message : "复制失败，请手动选择文本");
   }
 
   let bannerText: string;

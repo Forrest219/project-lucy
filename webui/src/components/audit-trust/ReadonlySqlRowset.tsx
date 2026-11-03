@@ -11,14 +11,16 @@
  *   - redacted:          row count suppressed by redaction
  *   - parse_failed:      SQL was generated but failed to parse / run
  *   - unknown:           unknown collection state — do NOT default to 0
+ *   - not_supported:     this shape is confirmed not to support the dimension
+ *
+ * 20261019 §4.4 / U2：六值空值原因的**唯一真源在后端**
+ * （`webui/server/proxy/audit-null-reasons.ts`）。本组件直接消费该枚举，
+ * 不再维护一份前端局部枚举 —— 否则两边会漂移（前一轮就少了 `not_supported`）。
  */
 
-export type ReadonlySqlRowsetStatus =
-  | "not_applicable"
-  | "not_collected"
-  | "redacted"
-  | "parse_failed"
-  | "unknown";
+import { NULL_REASON_LABELS, NULL_REASON_VALUES } from "../../../server/proxy/audit-null-reasons";
+
+export type ReadonlySqlRowsetStatus = (typeof NULL_REASON_VALUES)[number];
 
 export type ReadonlySqlRowsetProps = {
   rows?: number | null;
@@ -33,20 +35,13 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-const STATUS_LABEL: Record<ReadonlySqlRowsetStatus, string> = {
-  not_applicable: "不适用",
-  not_collected: "未采集",
-  redacted: "已脱敏",
-  parse_failed: "解析失败",
-  unknown: "未知"
-};
-
 const STATUS_PALETTE: Record<ReadonlySqlRowsetStatus, string> = {
   not_applicable: "pl-status-neutral",
   not_collected: "pl-status-warning",
   redacted: "pl-status-warning",
   parse_failed: "pl-status-error",
-  unknown: "pl-status-neutral"
+  unknown: "pl-status-neutral",
+  not_supported: "pl-status-neutral"
 };
 
 export function ReadonlySqlRowset({ rows, cols, bytes, status }: ReadonlySqlRowsetProps) {
@@ -78,7 +73,7 @@ export function ReadonlySqlRowset({ rows, cols, bytes, status }: ReadonlySqlRows
         className={`pl-readonly-sql-rowset-status ${STATUS_PALETTE[status]}`}
         data-testid="readonly-sql-status"
       >
-        {STATUS_LABEL[status]}
+        {NULL_REASON_LABELS[status]}
       </span>
     </div>
   );

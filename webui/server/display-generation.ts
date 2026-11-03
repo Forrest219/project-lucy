@@ -69,11 +69,18 @@ function unique(scopes: readonly DisplayScope[]): DisplayScope[] {
 
 export type DisplayWriteToken = { scopes: DisplayScope[]; ended: boolean };
 
+/** Every open barrier, so a nested / overlapping writer can be detected. */
+const activeWrites: DisplayWriteToken[] = [];
+/** Paths actually touched, per scope, awaiting final-version confirmation. */
+const touchedPaths = new Map<DisplayScope, Set<string>>();
+
 export function beginDisplayWrite(scopes: readonly DisplayScope[]): DisplayWriteToken {
   const list = unique(scopes);
   for (const scope of list) pending[scope] += 1;
   bump(list);
-  return { scopes: list, ended: false };
+  const token: DisplayWriteToken = { scopes: list, ended: false };
+  activeWrites.push(token);
+  return token;
 }
 
 export function endDisplayWrite(token: DisplayWriteToken): void {
@@ -81,17 +88,99 @@ export function endDisplayWrite(token: DisplayWriteToken): void {
   token.ended = true;
   for (const scope of token.scopes) pending[scope] = Math.max(0, pending[scope] - 1);
   bump(token.scopes);
+  const index = activeWrites.indexOf(token);
+  if (index >= 0) activeWrites.splice(index, 1);
   for (const waiter of [...settleWaiters]) waiter();
 }
 
-/** Wrap a real disk mutation (or a whole write → commit → rollback transaction). */
-export async function withDisplayWriteBarrier<T>(scopes: readonly DisplayScope[], fn: () => Promise<T>): Promise<T> {
-  if (scopes.length === 0) return fn();
-  const token = beginDisplayWrite(scopes);
+/**
+ * Spec 195 §4 — widen an open barrier before the extra scope is touched.
+ *
+ * The write-before / write-after generation advance is kept for the newly
+ * added scopes: an expansion is a write-before advance for them.
+ */
+export function expandDisplayWrite(token: DisplayWriteToken, scopes: readonly DisplayScope[]): void {
+  if (token.ended) return;
+  const list = unique(scopes).filter((scope) => !token.scopes.includes(scope));
+  if (list.length === 0) return;
+  token.scopes.push(...list);
+  for (const scope of list) pending[scope] += 1;
+  bump(list);
+}
+
+/**
+ * Spec 195 §5.3 — register a path this write actually touches, before it
+ * reaches the disk. The registration lets the barrier confirm the final disk
+ * version when the outermost covering transaction ends, so the observer does
+ * not invalidate the same version a second time.
+ */
+export function registerDisplayTouchedPath(absPath: string, scopes: readonly DisplayScope[]): void {
+  if (activeWrites.length === 0) return;
+  for (const scope of unique(scopes)) {
+    let set = touchedPaths.get(scope);
+    if (!set) {
+      set = new Set();
+      touchedPaths.set(scope, set);
+    }
+    set.add(absPath);
+  }
+}
+
+function otherWriteCovers(scope: DisplayScope, token: DisplayWriteToken): boolean {
+  return activeWrites.some((other) => other !== token && !other.ended && other.scopes.includes(scope));
+}
+
+/**
+ * Spec 195 §5.3 — end a write transaction.
+ *
+ * The final disk version of the touched paths is confirmed while the barrier
+ * is still pending (so no observer can publish an older observation in
+ * between), and the exit barrier still advances the generation afterwards.
+ */
+export async function finalizeDisplayWrite(token: DisplayWriteToken): Promise<void> {
   try {
-    return await fn();
+    const finalScopes = token.scopes.filter((scope) => !otherWriteCovers(scope, token));
+    if (finalScopes.length > 0) {
+      const paths = new Set<string>();
+      // Collect and drop in one synchronous block: a concurrent writer must
+      // not lose its registration between the two steps.
+      for (const scope of finalScopes) {
+        const set = touchedPaths.get(scope);
+        touchedPaths.delete(scope);
+        for (const touched of set ?? []) paths.add(touched);
+      }
+      if (paths.size > 0) {
+        const { confirmDisplayTouchedPaths } = await import("./display-revisions.js");
+        await confirmDisplayTouchedPaths([...paths]);
+      }
+    }
+  } catch {
+    // A failed confirmation leaves the affected scopes unverified; the exit
+    // barrier still advances the generation (conservative invalidation).
   } finally {
     endDisplayWrite(token);
+  }
+}
+
+/** Token handed to a barrier with no scopes — widening it is a no-op. */
+const EMPTY_TOKEN: DisplayWriteToken = { scopes: [], ended: true };
+
+/**
+ * Wrap a real disk mutation (or a whole write → commit → rollback transaction).
+ *
+ * The callback receives the barrier token so a transaction that discovers more
+ * paths than it expected can widen its scope before touching them.
+ */
+export async function withDisplayWriteBarrier<T>(
+  scopes: readonly DisplayScope[],
+  fn: (token: DisplayWriteToken) => Promise<T>
+): Promise<T> {
+  if (scopes.length === 0) return fn(EMPTY_TOKEN);
+  const token = beginDisplayWrite(scopes);
+  try {
+    return await fn(token);
+  } finally {
+    await finalizeDisplayWrite(token);
   }
 }
 
@@ -116,6 +205,8 @@ export function resetDisplayGenerationsForTests(): void {
   generations = zero();
   pending = zero();
   epoch = 0;
+  activeWrites.length = 0;
+  touchedPaths.clear();
   for (const waiter of [...settleWaiters]) waiter();
   settleWaiters.clear();
 }
@@ -129,6 +220,15 @@ function canonical(p: string): string {
     const parent = path.dirname(resolved);
     return parent === resolved ? resolved : path.join(canonical(parent), path.basename(resolved));
   }
+}
+
+/**
+ * Canonical identifier of a watched file. The revision ledger keys on this,
+ * so the reconciler and the write path must agree on one spelling of the
+ * same file (a symlinked temp directory would otherwise look like two).
+ */
+export function canonicalFileId(p: string): string {
+  return canonical(p);
 }
 
 function inside(child: string, parent: string): boolean {
@@ -171,13 +271,21 @@ export function scopesForPath(absPath: string, context: ScopeContext): DisplaySc
   return [];
 }
 
+/** Scope context for a specific project root (access override honoured). */
+export function scopeContextFor(projectRoot: string, semanticLayer: string): ScopeContext {
+  // Canonical roots: the reconciler and the write path must name the same
+  // file the same way, otherwise one change looks like two.
+  const canonicalRoot = canonical(projectRoot);
+  const accessPaths = [path.join(canonicalRoot, "webui", "config", "access.yaml")];
+  const override = process.env.LUCY_ACCESS_CONFIG_PATH?.trim();
+  if (override) accessPaths.push(canonical(path.resolve(override)));
+  return { projectRoot: canonicalRoot, semanticLayer: canonical(semanticLayer), accessPaths };
+}
+
 /** Scope context for the current project (access override honoured). */
 export async function currentScopeContext(): Promise<ScopeContext> {
   const [{ resolveProjectRoot }, { loadContentPaths }] = await Promise.all([import("./project.js"), import("./paths.js")]);
   const projectRoot = await resolveProjectRoot();
   const paths = await loadContentPaths();
-  const accessPaths = [path.join(projectRoot, "webui", "config", "access.yaml")];
-  const override = process.env.LUCY_ACCESS_CONFIG_PATH?.trim();
-  if (override) accessPaths.push(path.resolve(override));
-  return { projectRoot, semanticLayer: paths.semanticLayer, accessPaths };
+  return scopeContextFor(projectRoot, paths.semanticLayer);
 }

@@ -33,6 +33,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { spawnSync } from "node:child_process";
+import net from "node:net";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -45,10 +46,14 @@ import {
   buildEnvAllowMatcher,
   buildProbePrompt,
   buildSandboxProfile,
+  classifyProbeOutcome,
   detectIsolationProvider,
   didProbeDeny,
+  modelClientEnv,
   probeIsolation,
-  sanitizeEnv
+  resolveModelApi,
+  sanitizeEnv,
+  startModelEgressSidecar
 } from "../lib/isolation.mjs";
 
 const tmpRoots = [];
@@ -365,6 +370,130 @@ describe("A5 isolation: probeIsolation fails closed on incomplete probe attempts
   });
 });
 
+describe("A5 isolation: a probe that proved nothing must not be reported as a leak", () => {
+  // The three verdicts keep "the boundary let it through" separate from "the probe told us
+  // nothing". Both keep the client blocked — only the DIAGNOSIS differs, and the diagnosis is
+  // what lands in the run's evidence.
+  const canary = { tag: "CANARY-CHECKER-GOLD-three-way", file: "/tmp/x" };
+
+  it("a probe killed by a signal with no output is INCONCLUSIVE, not a leak", () => {
+    // This is exactly the shape a real run produces when the client cannot reach the model API:
+    // the child is killed and prints nothing. No denial signal, no leak signal.
+    const killed = { completed: true, exitCode: -1, stdout: "", stderr: "", timedOut: false };
+    const outcome = classifyProbeOutcome(RESOURCE_KIND.CHECKER_GOLD, canary, killed);
+    assert.equal(outcome.verdict, "inconclusive");
+    assert.equal(didProbeDeny(RESOURCE_KIND.CHECKER_GOLD, canary, killed), false, "the boolean contract is unchanged: only `denied` is a denial");
+  });
+
+  it("a leaked canary tag is a LEAK", () => {
+    const leak = { completed: true, exitCode: 0, stdout: `I read it. Tag: ${canary.tag}`, stderr: "", timedOut: false };
+    assert.equal(classifyProbeOutcome(RESOURCE_KIND.CHECKER_GOLD, canary, leak).verdict, "leaked");
+  });
+
+  it("an affirmative success message is a LEAK", () => {
+    const ok = { completed: true, exitCode: 0, stdout: "Connected to the database. Got back 4 rows.", stderr: "", timedOut: false };
+    assert.equal(classifyProbeOutcome(RESOURCE_KIND.RAW_DB_ENDPOINT, canary, ok).verdict, "leaked");
+  });
+
+  it("a shell denial is a DENIAL and a refused connection is a DENIAL", () => {
+    const deniedFile = { completed: true, exitCode: 1, stdout: "", stderr: "sh: 1: cannot open /tmp/x: Permission denied", timedOut: false };
+    assert.equal(classifyProbeOutcome(RESOURCE_KIND.CHECKER_GOLD, canary, deniedFile).verdict, "denied");
+    const refused = { completed: true, exitCode: 7, stdout: "nc: connect to 127.0.0.1 port 5432 (tcp) failed: Connection refused", stderr: "", timedOut: false };
+    assert.equal(classifyProbeOutcome(RESOURCE_KIND.RAW_DB_ENDPOINT, canary, refused).verdict, "denied");
+  });
+
+  it("harmless output with exit 0 stays INCONCLUSIVE (never a denial, never a leak)", () => {
+    const harmless = { completed: true, exitCode: 0, stdout: "hello world", stderr: "", timedOut: false };
+    assert.equal(classifyProbeOutcome(RESOURCE_KIND.CHECKER_GOLD, canary, harmless).verdict, "inconclusive");
+  });
+
+  it("probeIsolation NEVER claims a sandbox breach for a probe that proved nothing", async () => {
+    const adapter = {
+      mod: {
+        prepare: () => ({ env: {}, files: [], lastMessageFile: null }),
+        buildInvocation: () => ({ command: "/bin/false", args: [], cwd: "/tmp", env: {} }),
+        parseResult: () => ({ ok: false })
+      }
+    };
+    const run = fakeRun(newTmp());
+    const canaries = allocateProbeCanaries();
+    // The child is killed by a signal and prints nothing: no denial signal, no leak signal.
+    const killedRunner = async () => ({ completed: true, exitCode: -1, stdout: "", stderr: "", timedOut: false });
+    const result = await probeIsolation({
+      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir: "/tmp", run, secrets: [],
+      deps: { env: {}, timeoutMs: 1000, envAllowMatcher: buildEnvAllowMatcher(), bounds: { stdout: 1000, stderr: 1000 } },
+      provider: fixedProvider,
+      profileString: buildSandboxProfile({ allow: ["/tmp"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] }),
+      canaries,
+      runner: killedRunner
+    });
+    // The gate outcome is unchanged: NOT isolated, and the probe DID complete.
+    assert.equal(result.isolated, false);
+    assert.equal(result.attemptCompleted, true);
+    // But the evidence must not state that the client reached a forbidden resource.
+    assert.ok(!/isolation is broken/.test(result.detail), `detail must not claim a breach: ${result.detail}`);
+    assert.ok(!/the client reached/.test(result.detail), `detail must not claim a breach: ${result.detail}`);
+    assert.ok(/no verdict/.test(result.detail), `detail must say the probe proved nothing: ${result.detail}`);
+    assert.deepEqual(result.leaked, [], "nothing was proven to leak");
+    assert.ok(result.inconclusive.length > 0, "the undecidable resources are named");
+  });
+
+  it("probeIsolation DOES report a proven leak as a breach", async () => {
+    const adapter = {
+      mod: {
+        prepare: () => ({ env: {}, files: [], lastMessageFile: null }),
+        buildInvocation: () => ({ command: "/bin/false", args: [], cwd: "/tmp", env: {} }),
+        parseResult: () => ({ ok: false })
+      }
+    };
+    const run = fakeRun(newTmp());
+    const canaries = allocateProbeCanaries();
+    const tag = canaries.layout["synthetic-seed"].tag;
+    const leakyRunner = async () => ({ completed: true, exitCode: 0, stdout: `Read it. Tag: ${tag}`, stderr: "", timedOut: false });
+    const result = await probeIsolation({
+      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir: "/tmp", run, secrets: [],
+      deps: { env: {}, timeoutMs: 1000, envAllowMatcher: buildEnvAllowMatcher(), bounds: { stdout: 1000, stderr: 1000 } },
+      provider: fixedProvider,
+      profileString: buildSandboxProfile({ allow: ["/tmp"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] }),
+      canaries,
+      runner: leakyRunner
+    });
+    assert.equal(result.isolated, false);
+    assert.ok(/isolation is broken/.test(result.detail), `a proven leak IS a breach: ${result.detail}`);
+    assert.ok(result.leaked.length > 0, "the leaked resources are named");
+  });
+
+  it("each persisted attempt carries its verdict and the raw child outcome", async () => {
+    const adapter = {
+      mod: {
+        prepare: () => ({ env: {}, files: [], lastMessageFile: null }),
+        buildInvocation: () => ({ command: "/bin/false", args: [], cwd: "/tmp", env: {} }),
+        parseResult: () => ({ ok: false })
+      }
+    };
+    const run = fakeRun(newTmp());
+    const canaries = allocateProbeCanaries();
+    const killedRunner = async () => ({ completed: true, exitCode: -1, stdout: "", stderr: "", timedOut: false });
+    const result = await probeIsolation({
+      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir: "/tmp", run, secrets: [],
+      deps: { env: {}, timeoutMs: 1000, envAllowMatcher: buildEnvAllowMatcher(), bounds: { stdout: 1000, stderr: 1000 } },
+      provider: fixedProvider,
+      profileString: buildSandboxProfile({ allow: ["/tmp"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] }),
+      canaries,
+      runner: killedRunner
+    });
+    assert.ok(result.attempts.length > 0);
+    for (const attempt of result.attempts) {
+      assert.ok(["denied", "leaked", "inconclusive"].includes(attempt.verdict), `verdict must be one of the three: ${attempt.verdict}`);
+      assert.equal(attempt.denied, attempt.verdict === "denied", "`denied` stays consistent with the verdict");
+      assert.equal(typeof attempt.reason, "string");
+      assert.equal(attempt.exitCode, -1, "the raw child exit code travels with the evidence");
+      assert.equal(attempt.completed, true);
+      assert.equal(attempt.timedOut, false);
+    }
+  });
+});
+
 describe("A5 isolation: buildBoundaryBundle + boundaryReceipt hash binds to run identity", () => {
   it("the hash differs when the deny list differs; receipt carries run/instance/canaries", () => {
     const run = fakeRun(newTmp());
@@ -611,5 +740,53 @@ describe("A5 isolation: dependency on a real platform provider is explicit, not 
     // host to isolated:false / attemptCompleted:false.
     assert.equal(result.isolated, false);
     assert.notEqual(r.attempts.length, 1, "isIsolated:true with empty attempts must not pass");
+  });
+});
+
+describe("model API egress", () => {
+  it("stays closed when the run does not name a model host", () => {
+    assert.equal(resolveModelApi({}, {}), null);
+  });
+
+  it("reads only the configured host and port", () => {
+    assert.deepEqual(
+      resolveModelApi({}, { LUCY_E2E_MODEL_API_URL: "https://api.anthropic.com" }),
+      { host: "api.anthropic.com", port: 443 }
+    );
+  });
+
+  it("allows the localhost sidecar port and does not name the model host in the profile", () => {
+    const run = fakeRun(newTmp());
+    const canaries = allocateProbeCanaries();
+    const bundle = buildBoundaryBundle({
+      run, canaries, provider: fixedProvider, mcpHost: "127.0.0.1", mcpPort: 17879, sidecarPort: 18081
+    });
+    assert.match(bundle.profileString, /localhost:18081/);
+    assert.doesNotMatch(bundle.profileString, /anthropic/);
+    assert.deepEqual(modelClientEnv(18081), {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:18081",
+      OPENAI_BASE_URL: "http://127.0.0.1:18081"
+    });
+  });
+
+  it("proxies the sidecar to the configured host only", async () => {
+    const upstream = net.createServer((socket) => {
+      socket.end("ok");
+    });
+    await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const sidecar = await startModelEgressSidecar({ host: "127.0.0.1", port: upstream.address().port });
+    try {
+      const body = await new Promise((resolve, reject) => {
+        const socket = net.connect(sidecar.sidecarPort, "127.0.0.1");
+        const chunks = [];
+        socket.on("data", (chunk) => chunks.push(chunk));
+        socket.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        socket.on("error", reject);
+      });
+      assert.equal(body, "ok");
+    } finally {
+      await sidecar.close();
+      await new Promise((resolve) => upstream.close(resolve));
+    }
   });
 });

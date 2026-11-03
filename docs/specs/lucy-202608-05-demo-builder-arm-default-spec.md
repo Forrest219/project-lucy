@@ -8,6 +8,16 @@
 | 撰写日期 | 2026-08-05 |
 | 适用范围 | 项目本机（Apple Silicon arm64）与同等开发者主机的 demo Lucy 重建/重启流程 |
 | 对应问题 | demo 重建误用客户打包 builder（`lucy-amd64`）导致 QEMU 慢路径（常 >10 分钟像卡住）；以及平台 build-arg 为空时 `failed to parse platform : ""` |
+| 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复，不改实现、不补验收证据。实现现状：demo 重建脚本在库（`scripts/demo/rebuild-demo-lucy.sh`），但本条**没有逐条功能合同收口记录**。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：项目本机（Apple Silicon arm64）与同等开发者主机重建／重启 demo Lucy 时走本机 builder，不误用客户打包 builder；平台 build-arg 为空时也不失败。
+- 本条出口：本 Spec §4「验收定义（DoD）」——demo 重建脚本选对 builder、平台参数为空时的行为，以及本机重建不再落进 QEMU 慢路径。
+- 不在本条出口：客户 amd64 出包路径（归客户交付 Spec）；Dockerfile 架构一致性契约（归镜像架构修复 Spec）；整库旅程、跨模块故障演练、证据等级。
+- 上线关系：本条收口不表示可上线
+
 
 > **Dockerfile 契约更新（2026-08-05）**：本规格 v0.2 曾写「不修改 `FROM --platform=$BUILDPLATFORM`」。该限制已被 [`docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`](./lucy-202608-08-image-arch-and-ktx-baseline-fix.md) **废止并替换**——`Dockerfile` 现绑定 `TARGETPLATFORM`。本规格其余条款（`BUILDX_BUILDER=default`、禁止客户 `create --use`）仍然有效；平台变量名以 202608-08 为准（`TARGETPLATFORM` / `TARGETARCH`）。
 

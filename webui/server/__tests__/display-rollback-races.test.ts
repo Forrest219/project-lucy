@@ -194,7 +194,15 @@ beforeEach(async () => {
   resetDisplayGenerationsForTests();
   resetDisplaySnapshotsForTests();
   await commitEffectivePolicy();
-  await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
+  // The reconciler must stay verified for the whole test: display snapshots are
+  // served only while their metadata digest is fresh (METADATA_FRESH_MS = 3 s),
+  // and an unverified snapshot answers immediately with DISPLAY_SNAPSHOT_BUSY.
+  // A 60 s metadata interval therefore made this file depend on the machine
+  // being fast enough to finish the fault-injected writes inside that window —
+  // it failed on HEAD as well (1 of 10 runs). A short interval keeps the
+  // snapshots verified without weakening any assertion: the reads still must
+  // not settle while the display barrier is open.
+  await startDisplayReconciler({ metadataIntervalMs: 500, fullDigestIntervalMs: 60_000 });
   app = buildServer();
   await app.ready();
   // Warm both display snapshots so a stale hit would be observable.
@@ -266,12 +274,20 @@ describe("Spec 174 R7 — HTTP races on rollback and failed-write paths (SC-04/0
     {
       name: "Agent writeAccessYaml (admin/agents.ts)",
       send: () => request(app.server).patch("/api/admin/agents/lisi").send({ dryRun: false, patch: { name: "Li Si Unacked" } }),
-      leaked: "Li Si Unacked"
+      leaked: "Li Si Unacked",
+      /**
+       * Spec §14.3.2 — Agent／Role 回滚统一走 `accessWriteResponseBody`：
+       * HTTP 500 + `ROW_POLICY_SAVE_ROLLED_BACK`；新变更未保存，旧配置已核验恢复。
+       */
+      expectStatus: (status: number) => expect(status).toBe(500),
+      expectErrorCode: "ROW_POLICY_SAVE_ROLLED_BACK"
     },
     {
       name: "access-config writeAccessYaml (roles PATCH)",
       send: () => request(app.server).patch("/api/admin/roles/ledger_all").send({ dryRun: false, patch: { description: "Unacked role text" } }),
-      leaked: "Unacked role text"
+      leaked: "Unacked role text",
+      expectStatus: (status: number) => expect(status).toBe(500),
+      expectErrorCode: "ROW_POLICY_SAVE_ROLLED_BACK"
     }
   ];
   for (const scenario of accessRollbacks) {
@@ -295,7 +311,15 @@ describe("Spec 174 R7 — HTTP races on rollback and failed-write paths (SC-04/0
       const res = await scenario.send();
       hooks.afterWrite = null;
       hooks.beforeCommit = null;
-      expect(res.status).toBeLessThan(500);
+      scenario.expectStatus(res.status);
+      if (scenario.expectErrorCode) {
+        expect(res.body.ok).toBe(false);
+        expect(res.body.error.code).toBe(scenario.expectErrorCode);
+        // A rollback is NOT a success: the new change was not saved.
+        expect(res.body.written).toBe(false);
+        expect(res.body.runtimeAck).toBe(false);
+        expect(res.body.recoveryRequired).toBe(false);
+      }
       expect(hooks.commitCalls).toBe(2);
       expect(stages).toHaveLength(3);
       for (const stage of stages) {

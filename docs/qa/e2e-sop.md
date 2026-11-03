@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy E2E SOP 指引 |
 | 文档类型 | Checklist / Runbook |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-08-08；v1.3 2026-10-18 |
+| 版本 | v1.4 |
+| 撰写日期 | 2026-08-08；v1.4 2026-11-02 |
 | 撰写人 | Cursor Agent |
 | 委托人 | zhangxingchen |
 | 基于材料 | `docs/governance/test-layers-and-release-gates.md`；`docs/qa/lucy-webui-e2e-test-suite.md`；KSC Financial 主题接入实跑；Spider2-lite Pilot（`evals/spider2_lite_sqlite/`）；`docs/governance/DEVELOPMENT.md` |
@@ -24,6 +24,21 @@ New terms:
 | 测试集分表 | 分表 / 测试集 | suite sheet | 把 WebUI E2E 与主题接入混成同一套用例 |
 
 ---
+
+## 0. 定义（2026-11-02）
+
+E2E 做功能检测。它包含一条可单独开跑的真实主干，和一组可单独开跑的分支。主干证明一条连续用户旅程走得通。分支证明各自那一类深度行为。两者互不作为对方的前置，以便解耦、按需要快跑。
+
+| 说法 | 对应 | 一次运行包含什么 |
+|---|---|---|
+| 主干 | 主线 `J25-01` | 八个阶段在同一次运行里串起来。单独跑主干时，不调度任何分支 |
+| 分支 | `CONN`、`SEM`、`ACCESS`、`OBSERVE`、`AGENT`、`LIFECYCLE` | 只调度这一类，或这一类里的一个执行项。不调度主干，也不调度其他分支 |
+
+主干内部仍是一条链。八个阶段共用 `J25-01` 和同一份阶段状态。某阶段失败，该阶段和整条主干记失败，后面的阶段记未跑。单独跑中间某一阶段，不能记成主干通过。
+
+镜像、Kubernetes 和客户发布门禁留在这条功能 E2E 外面。可独立启动的入口是 `npm run e2e:product`。合同见 [试跑架子 Spec](../specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md)。
+
+试跑顺序：`npm run e2e:real:prepare` → `npm run e2e:product -- --target <id> --list` → 去掉 `--list`。`--list` 只打印目标、文件和证据层级。去掉 `--list` 的那一次不在本入口合同的完成定义里。该命令不是 PR 阻塞项，也不替代 `e2e:real:*` 或 `gate:customer-release`。
 
 ## 1. 怎么用本文档
 
@@ -118,7 +133,20 @@ flowchart TB
 - 测试分层与 npm 门禁：[`../governance/test-layers-and-release-gates.md`](../governance/test-layers-and-release-gates.md)  
 - 旧主题接入路径桩：[`../runbooks/sop-semantic-upload-mcp-eval-e2e.md`](../runbooks/sop-semantic-upload-mcp-eval-e2e.md) → 现分表 `suite-semantic-onboard-mcp-eval.md`
 
-## 7. 真实用户 E2E 与客户上线门禁（Spec 20261018）
+## 7. 产品轨与镜像轨（2026-11-01）
+
+产品 E2E 只有一条用户主线 `J25-01`，深度场景归入六类旁线：`CONN`、`SEM`、`ACCESS`、`OBSERVE`、`AGENT`、`LIFECYCLE`。主干与任一旁线都可以单独开跑，定义见 §0。Docker 或 ARM 上跑通即可作为产品证据。
+
+| 既有测试集 | 产品轨归属 |
+|---|---|
+| `E2E-WEBUI` | `SEM` 的浏览器深度，以及页面、selector、术语 |
+| `E2E-ONBOARD-EVAL` | `CONN` 加 `SEM` 的主题接入；最终答案引用 `AGENT` |
+| `E2E-AGENT` | `AGENT`，承接 `UX-02`–`UX-06` |
+| `E2E-USER-JOURNEY` | `J25-01` 的补充客户端证据 |
+
+linux/amd64 镜像、Kubernetes、受保护 runner 和发布 readiness 是镜像轨。它们不阻塞产品用例是否完成，也不把缺镜像环境记成产品失败。客户发布门禁仍走 §8。
+
+## 8. 真实用户 E2E 与客户上线门禁（Spec 20261018）
 
 浏览器 contract 回归（`e2e:contract:release`，旧名 `e2e:release`）使用夹具实例，**不含**真实 Agent，不能签发客户发布。客户候选版本上线前必须由受保护 runner 执行 `npm run e2e:real:*` 三层证据并通过 `npm run gate:customer-release`；运行方式见 [`../runbooks/real-user-e2e.md`](../runbooks/real-user-e2e.md)，case 目录与分母见 `scripts/e2e/contracts/case-catalog.yaml`（冻结，`case-catalog.lock.json`）。缺能力一律 BLOCKED，不得改为 skip 或 pass。
 

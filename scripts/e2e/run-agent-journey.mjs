@@ -37,6 +37,8 @@ import { expectedAskPlan } from "./lib/ask-plan.mjs";
 import { loadCatalog } from "./lib/catalog.mjs";
 import { automatedRequiredClients, countDistinctAutomatedProducts } from "./lib/clients.mjs";
 import { EXIT_CODES, REPO_ROOT, fail, loadRun, parseArgv } from "./lib/common.mjs";
+import { appliedDatabaseCapability } from "./lib/db-capability.mjs";
+import { startKtxUpstream } from "./lib/ktx-upstream.mjs";
 import {
   RESOURCE_KIND,
   allocateProbeCanaries,
@@ -46,12 +48,17 @@ import {
   cleanupBoundary,
   detectIsolationProvider,
   didProbeDeny,
+  modelClientEnv,
   probeIsolation,
-  sanitizeEnv
+  resolveModelApi,
+  sanitizeEnv,
+  startModelEgressSidecar
 } from "./lib/isolation.mjs";
+import { writeMainlineAgentEvidence } from "./lib/j01-agent-record.mjs";
 import { ExternalInstance, LucyProcess } from "./lib/instance.mjs";
 import { scanText } from "./lib/leak-scan.mjs";
 import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identity.mjs";
+import { withProvenUpstream, UPSTREAM_CAPABILITY } from "./lib/upstream-capability.mjs";
 import { statusFromAssertions } from "./run-security.mjs";
 
 function progressLog(run, message) {
@@ -184,6 +191,10 @@ function blockedEntry(testCase, client, runNo, startedAt, reasons, extra = {}) {
 async function askOnce({ ask, goldDoc, testCase, tokens, secrets, adapter, probeInfo, workDir, deps, run, now, ledger }) {
   const gold = ask.goldKey ? goldDoc.questions[ask.goldKey] : { question: ask.question, forbiddenCanaries: [], expected: null };
   const canaries = goldDoc.canaries;
+  // The string that is ACTUALLY sent to the client. It travels with the ask
+  // outcome so the J01-07 evidence can compare the executed prompt with
+  // gold.question (防静默换题). It is never re-derived from gold afterwards:
+  // re-deriving it would make the comparison compare gold with gold.
   const question = `${ask.question ?? gold.question}${ask.suffix ? ` ${ANSWER_SUFFIX}` : ""}`;
   const token = tokens[ask.agentId];
   const fingerprint = tokenFingerprintOf(token);
@@ -229,7 +240,8 @@ async function askOnce({ ask, goldDoc, testCase, tokens, secrets, adapter, probe
       parsed: { ok: false, sessionId: parsed.sessionId, model: parsed.model, finalAnswer: "" },
       evidence,
       assertions: [{ token: "typed_gold", passed: false, detail: `boundary wrap did not complete: ${result.reason ?? "unknown"}` }],
-      fingerprint, since, until, timedOut: Boolean(result.timedOut), exitCode: result.exitCode ?? -1, boundaryIncomplete: true
+      fingerprint, since, until, timedOut: Boolean(result.timedOut), exitCode: result.exitCode ?? -1, boundaryIncomplete: true,
+      executedPrompt: question
     };
   }
   if (parsed.ok) {
@@ -242,9 +254,9 @@ async function askOnce({ ask, goldDoc, testCase, tokens, secrets, adapter, probe
       extraForbidden: (ask.injectionForbidden ?? []).map((name) => canaries[name]),
       expectation: ask.expectation
     });
-    return { parsed, evidence, assertions, fingerprint, since, until, timedOut: result.timedOut, exitCode: result.exitCode };
+    return { parsed, evidence, assertions, fingerprint, since, until, timedOut: result.timedOut, exitCode: result.exitCode, executedPrompt: question };
   }
-  return { parsed, evidence, assertions: [{ token: "typed_gold", passed: false, detail: result.timedOut ? "client timed out" : `client run failed (exit ${result.exitCode})` }], fingerprint, since, until, timedOut: result.timedOut, exitCode: result.exitCode };
+  return { parsed, evidence, assertions: [{ token: "typed_gold", passed: false, detail: result.timedOut ? "client timed out" : `client run failed (exit ${result.exitCode})` }], fingerprint, since, until, timedOut: result.timedOut, exitCode: result.exitCode, executedPrompt: question };
 }
 
 /** Pure-ish orchestration (all I/O injected) so the anti-cheating rules are unit-testable. */
@@ -277,6 +289,16 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
 
     // Isolation proof with the real client before any official question (Spec §6.2).
     const isolation = await deps.isolationProbe({ adapter, probeInfo, workDir, run, secrets });
+    // The per-resource probe outcomes travel with the evidence: an auditor must be able to
+    // re-derive WHY the boundary was (or was not) established, and the three verdicts
+    // (denied / leaked / inconclusive) must not be collapsed into one boolean.
+    const isolationSummary = {
+      isolated: isolation.isolated ?? false,
+      attemptCompleted: isolation.attemptCompleted ?? false,
+      attempts: isolation.attempts ?? [],
+      leaked: isolation.leaked ?? [],
+      inconclusive: isolation.inconclusive ?? []
+    };
     if (!isolation.attemptCompleted) {
       progressLog(run, `isolation ${client.product} did not complete: ${isolation.detail}`);
       blockAll([`isolation_not_completed: ${isolation.detail}`]);
@@ -284,7 +306,7 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
       // attemptCompleted is false AND because the profile hash isn't in the evidence set.
       const lastReceipt = clientInfo[clientInfo.length - 1];
       if (lastReceipt) lastReceipt.isolationReceipt = isolation.receipt ?? null;
-      lastReceipt.isolationSummary = { isolated: isolation.isolated ?? false, attemptCompleted: false, attempts: isolation.attempts ?? [] };
+      lastReceipt.isolationSummary = isolationSummary;
       continue;
     }
     if (!isolation.isolated) {
@@ -292,13 +314,13 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
       blockAll([`isolation_not_established: ${isolation.detail}`]);
       const lastReceipt = clientInfo[clientInfo.length - 1];
       if (lastReceipt) lastReceipt.isolationReceipt = isolation.receipt ?? null;
-      lastReceipt.isolationSummary = { isolated: false, attemptCompleted: true, attempts: isolation.attempts ?? [] };
+      lastReceipt.isolationSummary = isolationSummary;
       continue;
     }
     progressLog(run, `isolation ${client.product} ok (${isolation.detail})`);
     const lastReceipt = clientInfo[clientInfo.length - 1];
     if (lastReceipt) lastReceipt.isolationReceipt = isolation.receipt ?? null;
-    lastReceipt.isolationSummary = { isolated: true, attemptCompleted: true, attempts: isolation.attempts ?? [] };
+    lastReceipt.isolationSummary = isolationSummary;
 
     for (const testCase of agentCases) {
       const plan = askPlan(testCase);
@@ -348,6 +370,11 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
             askIndex,
             agentId: ask.agentId,
             goldKey: ask.goldKey ?? null,
+            // The question this ask answered, in the J01 vocabulary (the same
+            // key the journey state hands over as `questionId`). The J01-07
+            // projection reads it to find the two mainline questions; the
+            // verifier reads `goldKey` to bind the ask to its frozen plan.
+            questionId: ask.goldKey ?? null,
             expectation: ask.expectation ?? "answer",
             since: outcome.since,
             until: outcome.until,
@@ -362,6 +389,14 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
             goldDigest,
             sessionId: outcome.parsed.sessionId,
             model: outcome.parsed.model,
+            // The prompt the client ACTUALLY received (never a gold question
+            // re-derived here) and the client's own transcript, when the adapter
+            // surfaces it. Both are inputs to the J01-07 evidence; neither is
+            // synthesized by the runner.
+            executedPrompt: outcome.executedPrompt ?? null,
+            transcript: Array.isArray(outcome.parsed?.transcript) ? [...outcome.parsed.transcript] : [],
+            transcriptText: typeof outcome.parsed?.transcriptText === "string" ? outcome.parsed.transcriptText : "",
+            serverTrace: Array.isArray(outcome.evidence?.serverTrace) ? [...outcome.evidence.serverTrace] : [],
             answer: redactAll(outcome.parsed.finalAnswer, secrets)
           };
           asks.push(askRecord);
@@ -511,7 +546,23 @@ export async function realIsolationProbe({ adapter, probeInfo, workDir, run, sec
   // hardcoded 127.0.0.1 — an external registered target must keep its identity intact so the
   // B1 external target path can still hit the MCP.
   const mcpHost = run.instance.host ?? "127.0.0.1";
-  const bundle = buildBoundaryBundle({ run, canaries, provider: deps.provider, mcpHost, mcpPort: run.instance.proxyPort });
+  // The client binary must be executable INSIDE the boundary. `denyHome` locks $HOME (to keep
+  // OS private credentials out of reach), which also covers the usual install locations of the
+  // clients this runner drives. Without re-allowing the RESOLVED binary, sandbox-exec refuses
+  // to exec it ("execvp() ... Operation not permitted"), the client never starts, and the probe
+  // mis-reads its own exec failure as "the client reached the resource" — a false isolation
+  // breach that also blocks every official question (0 model calls).
+  const clientBinary = probeInfo?.binaryPath ?? null;
+  deps.clientBinaries = [...new Set([...(deps.clientBinaries ?? []), clientBinary].filter(Boolean))];
+  const bundle = buildBoundaryBundle({
+    run,
+    canaries,
+    provider: deps.provider,
+    mcpHost,
+    mcpPort: run.instance.proxyPort,
+    sidecarPort: deps.modelSidecarPort ?? null,
+    clientBinaries: deps.clientBinaries
+  });
   if (!bundle.provider) {
     return {
       isolated: false,
@@ -573,24 +624,39 @@ export async function realIsolationProbe({ adapter, probeInfo, workDir, run, sec
 async function main() {
   const args = parseArgv(process.argv.slice(2), {
     run: "value",
+    ids: "value",
     clients: "value",
     "allow-unisolated-local": "boolean",
-    external: "boolean"
+    external: "boolean",
+    "ktx-bin": "value"
   });
   if (!args.run) fail("run-agent-journey: --run <run.json> is required", 1);
   const run = loadRun(args.run);
   const clientsDoc = parse(readFileSync(path.resolve(REPO_ROOT, args.clients ?? "docs/qa/real-e2e-clients.yaml"), "utf8"));
   if (countDistinctAutomatedProducts(clientsDoc.clients) < 2) fail("run-agent-journey: at least two distinct automated required products are needed (Hermes profiles count once)", 1);
   if (args["allow-unisolated-local"] && run.executionMode === "release") fail("run-agent-journey: the isolation override is not allowed for release runs", 1);
-  const { cases } = loadCatalog();
+  const loaded = loadCatalog();
+  let cases = loaded.cases;
+  if (args.ids) {
+    const allow = new Set(String(args.ids).split(",").map((id) => id.trim()).filter(Boolean));
+    cases = cases.filter((entry) => allow.has(entry.id));
+  }
   const goldDoc = JSON.parse(readFileSync(path.join(run.paths.checker, "gold.json"), "utf8"));
   const tokens = JSON.parse(readFileSync(path.join(run.secretsDir, "tokens.json"), "utf8"));
   const admins = JSON.parse(readFileSync(path.join(run.secretsDir, "admins.json"), "utf8"));
   const secrets = [...Object.values(tokens), admins.owner.password, admins.operator.password, readFileSync(path.join(run.secretsDir, "bootstrap-token"), "utf8").trim()];
   const adapters = await loadAdapters(clientsDoc);
-  const capabilities = new Set(["lucy-http"]);
-  if (run.db?.applied) capabilities.add("postgres");
-  for (const extra of (process.env.LUCY_REAL_E2E_CAPABILITIES ?? "").split(",")) if (extra.trim()) capabilities.add(extra.trim());
+  // The BASE capability set. `ktx-upstream` is deliberately NOT trusted here: it
+  // is granted by proof further down (see `withProvenUpstream`), because the
+  // data plane answers every query with an empty result when the upstream is
+  // missing — which reads like a product defect and is not one.
+  const baseCapabilities = new Set(["lucy-http"]);
+  const database = appliedDatabaseCapability(run.db);
+  if (database) baseCapabilities.add(database);
+  for (const extra of (process.env.LUCY_REAL_E2E_CAPABILITIES ?? "").split(",")) if (extra.trim()) baseCapabilities.add(extra.trim());
+  // The conservative set: the data-plane capability is NOT in it. It is added
+  // only once this run has PROVEN its own upstream answers.
+  let provenCapabilities = new Set([...baseCapabilities].filter((cap) => cap !== UPSTREAM_CAPABILITY));
   const profile = parse(readFileSync(path.join(REPO_ROOT, "scripts/e2e/profiles/customer-release.yaml"), "utf8"));
   const timeoutMs = profile.limits.maxAgentCaseWallClockSeconds * 1000;
 
@@ -605,7 +671,11 @@ async function main() {
   const canaries = allocateProbeCanaries();
 
   const deps = {
-    env: { ...process.env }, now: () => Date.now(), capabilities, timeoutMs, maxModelCalls: profile.limits.maxModelCallsPerCandidateRun,
+    env: { ...process.env }, now: () => Date.now(), timeoutMs, maxModelCalls: profile.limits.maxModelCallsPerCandidateRun,
+    // A getter, not a snapshot: the capability set is settled once the upstream
+    // state is known, and a snapshot taken earlier could carry a declared-but-
+    // unproven `ktx-upstream` into the cases.
+    get capabilities() { return provenCapabilities; },
     runProcess, spawnSync, locate: locateBinary, allowUnisolated: args["allow-unisolated-local"] === true,
     collect: collectServerEvidence, ledger: undefined,
     bounds: { stdout: 1_000_000, stderr: 256_000 },
@@ -614,10 +684,21 @@ async function main() {
     boundaryRun: (input) => {
       if (!provider.provider) return { completed: false, reason: "unsupported_provider", exitCode: null, stdout: "", stderr: "", timedOut: false };
       const mcpHost = run.instance.host ?? "127.0.0.1";
-      const bundle = buildBoundaryBundle({ run, canaries, provider, mcpHost, mcpPort: run.instance.proxyPort });
+      const bundle = buildBoundaryBundle({
+        run,
+        canaries,
+        provider,
+        mcpHost,
+        mcpPort: run.instance.proxyPort,
+        sidecarPort: deps.modelSidecarPort ?? null,
+        // Same client binaries the isolation probe registered — the official asks must run
+        // under the SAME boundary the probe proved.
+        clientBinaries: deps.clientBinaries ?? []
+      });
       // The boundary runner is the only native runner the agent journey uses in production.
       const sanitized = sanitizeEnv(input.env, deps.envAllowMatcher, { token: input.env?.[TOKEN_ENV], clientHome: input.cwd, clientWork: input.cwd });
-      return runUnderBoundaryLocal({ provider, profileString: bundle.profileString, command: input.command, args: input.args, cwd: input.cwd, env: sanitized, timeoutMs: input.timeoutMs, bounds: input.bounds });
+      const env = deps.modelSidecarPort ? { ...sanitized, ...modelClientEnv(deps.modelSidecarPort) } : sanitized;
+      return runUnderBoundaryLocal({ provider, profileString: bundle.profileString, command: input.command, args: input.args, cwd: input.cwd, env, timeoutMs: input.timeoutMs, bounds: input.bounds });
     }
   };
   deps.isolationProbe = (input) => realIsolationProbe({ ...input, deps });
@@ -636,7 +717,14 @@ async function main() {
   // the run-scoped marker. A failed preflight, a missing deployment.json, or a needs-bootstrap
   // postflight blocks the run — the agent journey never sees a wrong/missing target.
   let lucy = null;
+  let upstream = null;
+  let modelSidecar = null;
   let exitCode = 1;
+  const modelApi = resolveModelApi(run);
+  if (modelApi) {
+    modelSidecar = await startModelEgressSidecar(modelApi);
+    deps.modelSidecarPort = modelSidecar.sidecarPort;
+  }
   try {
     mkdirSync(run.paths.logs, { recursive: true });
     if (args.external) {
@@ -654,12 +742,35 @@ async function main() {
       }
       progressLog(run, "external target verified (preflight + postflight)");
     } else {
-      lucy = new LucyProcess(run);
+      // The data plane needs a KTX upstream. The run starts its OWN upstream for
+      // its OWN project instead of trusting a host service that may not exist:
+      // without it every query answers empty and the run would record a product
+      // defect that is really a missing environment. Same recipe as the
+      // management leg (scripts/e2e/lib/ktx-upstream.mjs).
+      upstream = await startKtxUpstream(run, { ktxBin: args["ktx-bin"] ?? "ktx" });
+      if (upstream.ok) {
+        progressLog(run, `KTX upstream started for this run on ${upstream.host}:${upstream.port} (log: ${upstream.logPath})`);
+      } else {
+        progressLog(run, `KTX upstream NOT available: ${upstream.reason}; every case that needs the data plane stays BLOCKED`);
+      }
+      lucy = new LucyProcess(run, upstream.ok
+        ? { extraEnv: { LUCY_PROXY_UPSTREAM_HOST: upstream.host, LUCY_PROXY_UPSTREAM_PORT: String(upstream.port) } }
+        : {});
       await lucy.start();
       progressLog(run, "lucy started; ensuring owner bootstrap");
       await ensureOwnerBootstrapped(run);
       progressLog(run, "owner bootstrap ready");
     }
+    // The capability set is settled from PROOF: a local run owns the upstream it
+    // just started and saw answer; an external run cannot probe the in-cluster
+    // upstream, so the operator's attestation is the only signal there. A
+    // declaration in the environment never grants it on its own.
+    provenCapabilities = withProvenUpstream(baseCapabilities, {
+      external: args.external === true,
+      upstreamOk: upstream?.ok === true,
+      env: process.env
+    });
+    progressLog(run, `capabilities: ${[...provenCapabilities].sort().join(",")} (ktx-upstream proven=${upstream?.ok === true || (args.external === true && baseCapabilities.has(UPSTREAM_CAPABILITY))})`);
     const result = await runAgentJourney({ run, cases, goldDoc, clientsDoc, adapters, tokens, secrets, deps });
 
     const dir = path.join(run.paths.runDir, "results", "agent");
@@ -679,14 +790,30 @@ async function main() {
       isolation: deps.allowUnisolated ? "not_enforced_local_override" : "probed",
       isolationProvider: deps.provider?.provider ?? null,
       isolationProviderReason: deps.provider?.reason ?? null,
+      // The data plane this run really had: a local run owns the upstream it
+      // started; an external run's upstream lives in the cluster and is only
+      // attested, never probed from here.
+      upstream: upstream?.ok === true
+        ? { status: "proven", host: upstream.host, port: upstream.port, ownedByRun: true }
+        : { status: args.external === true ? "attested_external" : "unavailable", ownedByRun: false, reason: upstream?.reason ?? null },
+      capabilities: [...provenCapabilities].sort(),
       serverEvidence, modelCalls: result.modelCalls, summary: result.summary, status: result.status, cases: result.entries
     };
     const out = path.join(run.paths.runDir, "results", "agent.json");
     writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);
+    // The J01-07 evidence file. It is written ONLY when this run's ask records
+    // carry the two mainline questions, each with its own executed prompt,
+    // answer, client session and transcript. When they do not, NO file is
+    // created: a missing evidence file is the stage's `blocked` verdict, and a
+    // half-filled one would read as evidence that was never collected.
+    const j01Evidence = writeMainlineAgentEvidence(run.paths.runDir, result.entries.flatMap((entry) => entry.asks ?? []), { secrets });
+    if (j01Evidence.written) progressLog(run, `j01-agent.json written: ${j01Evidence.path}`);
     exitCode = EXIT_CODES[result.status];
     process.stdout.write(`${JSON.stringify({ status: result.status, exitCode, out, summary: result.summary, clients: result.clientInfo.map((c) => ({ product: c.product, probe: c.probe, reasons: c.reasons })) })}\n`);
   } finally {
     if (lucy) await lucy.stop("SIGTERM");
+    if (upstream?.ok) await upstream.stop();
+    if (modelSidecar) await modelSidecar.close();
   }
   process.exit(exitCode);
 }

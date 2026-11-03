@@ -1,0 +1,30 @@
+# 可问治理面 W2 — 图快照汇总（对 builder meta，不对图页 KPI）。
+name: ops_map_meta
+
+grain:
+  - snapshot_id
+
+measures:
+  - name: grant_paths
+    expr: sum(grant_paths)
+    description: 授权路径总数（builder meta.counts.grantPaths）。
+
+  - name: access_paths
+    expr: sum(access_paths)
+    description: 访问路径总数（builder meta.counts.accessPaths）。
+
+  - name: raw_calls
+    expr: sum(raw_calls)
+    description: 原始调用数（builder meta.access.rawCalls）。
+
+  - name: denied_calls
+    expr: sum(denied_calls)
+    description: 拒绝调用数（builder meta.access.deniedCalls）。
+
+  - name: orphan_grants
+    expr: sum(orphan_grants)
+    description: 孤儿授权数。
+
+  - name: coverage_ratio
+    expr: avg(coverage_ratio)
+    description: 快照覆盖率（pathKey 去重，D28）。

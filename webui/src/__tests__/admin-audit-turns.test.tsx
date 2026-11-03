@@ -130,6 +130,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
               data: {
                 total: 1,
                 summary: { reportedCount: 0, inferredCount: 1, reportedShare: 0 },
+                kindCounts: { real: 0, unreportedQuery: 1, sessionVisit: 0 },
                 referenceLatency: { windowHours: 168, p95Ms: 120, totalCallsInWindow: 10, slowCallsInFilter: 1 },
                 entries: [
                   {
@@ -178,6 +179,21 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(turnsRegion).toHaveClass("pl-data-grid-scroll", "pl-audit-grid-scroll");
     expect(turnsRegion).toHaveAttribute("tabindex", "0");
     expect(turnsTable.querySelector("td.pl-audit-table-muted")).not.toBeNull();
+    expect(turnsTable).toHaveClass("pl-audit-turns-table");
+    expect(turnsTable.querySelector("th.pl-audit-turns-col-kind")).not.toBeNull();
+    expect(turnsTable.querySelector("th.pl-audit-turns-col-budget")).not.toBeNull();
+    expect(turnsTable.querySelector("th.pl-audit-turns-col-calls.whitespace-nowrap")).toBeNull();
+    expect(turnsTable.querySelector("th.pl-audit-turns-col-budget.whitespace-nowrap")).toBeNull();
+    const startedCell = turnsTable.querySelector("td.pl-audit-turns-col-time .pl-audit-date-time");
+    expect(startedCell).not.toBeNull();
+    expect(startedCell?.querySelector('[data-part="date"]')).not.toBeNull();
+    expect(startedCell?.querySelector('[data-part="time"]')).not.toBeNull();
+    const durationStack = turnsTable.querySelector("td.pl-audit-turns-col-duration .pl-audit-duration-stack");
+    expect(durationStack).not.toBeNull();
+    expect(durationStack?.querySelector('[data-part="span"]')).not.toBeNull();
+    expect(durationStack?.querySelector('[data-part="exec"]')).not.toBeNull();
+    expect(turnsTable.querySelector("th.pl-audit-turns-col-client.whitespace-nowrap")).toBeNull();
+    expect(turnsTable.querySelector("th.pl-audit-turns-col-session.whitespace-nowrap")).toBeNull();
     expect(screen.getByText("开始时间")).toBeInTheDocument();
     expect(screen.queryByText("结束时间")).not.toBeInTheDocument();
     expect(screen.getByText("关联调用数")).toBeInTheDocument();
@@ -193,8 +209,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByText("Demo Agent (demo_agent)")).toBeInTheDocument();
     expect(screen.getByText("含 1 慢")).toBeInTheDocument();
     expect(screen.queryByText("业务调用")).not.toBeInTheDocument();
-    expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("已上报问询 0");
-    expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("推断问询 1");
+    expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("真实问询 0 · 未上报问询 1 · 会话访问 0");
+    expect(screen.getByTestId("audit-turns-coverage-summary")).not.toHaveTextContent("已隐藏会话访问");
     expect(screen.getByTestId("audit-turns-coverage-hint")).toHaveTextContent("未上报原文时按会话保留问询");
     expect(screen.getByRole("columnheader", { name: "客户端" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "会话 ID" })).toBeInTheDocument();
@@ -357,6 +373,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
                 entries: [
                   {
                     id: "inf_test_1",
+                    inquiryNo: 41,
+                    inquiryKind: "unreported_query",
                     source: "inferred",
                     userId: "demo_agent",
                     startedAt: "2026-08-04T08:00:00.000Z",
@@ -413,7 +431,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByRole("columnheader", { name: "问询 ID" })).toBeInTheDocument();
     expect(turnsTable.querySelector("th.pl-audit-turns-col-index.whitespace-nowrap")).not.toBeNull();
     expect(turnsTable).toHaveClass("pl-audit-turns-table");
-    expect(screen.getByTestId("audit-turn-id-inf_test_1")).toHaveTextContent("inf_test_1");
+    expect(screen.getByTestId("audit-turn-id-inf_test_1")).toHaveTextContent("41");
     expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
     expect(screen.getByTestId("audit-export-current")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
     expect(screen.queryByTestId("audit-export-related")).not.toBeInTheDocument();
@@ -725,6 +743,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
                 entries: [
                   {
                     id: "inf_test_1",
+                    inquiryNo: 8,
+                    inquiryKind: "real",
                     source: "reported",
                     userId: "demo_agent",
                     startedAt: "2026-08-04T08:00:00.000Z",
@@ -764,13 +784,15 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(idCell).toHaveClass("pl-audit-turn-id-cell");
     expect(within(screen.getByTestId("audit-turns-table")).getByText(/2026\/8\/4/)).toBeInTheDocument();
 
+    const writeText = vi.fn(async () => undefined);
     vi.stubGlobal("navigator", {
       ...navigator,
-      clipboard: { writeText: vi.fn(async () => undefined) }
+      clipboard: { writeText }
     });
     fireEvent.click(screen.getByTestId("audit-turn-id-inf_test_1"));
     await waitFor(() => {
       expect(toastMock.success).toHaveBeenCalledWith("已复制问询 ID");
+      expect(writeText).toHaveBeenCalledWith("8");
     });
   });
 
@@ -946,5 +968,185 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(within(table).queryByTestId("audit-usage-slow-3")).toBeNull();
     expect(within(table).getByTestId("audit-usage-slow-4")).toHaveTextContent("问询慢标记");
     expect(table).not.toHaveTextContent("慢于多数请求");
+  });
+
+  it("shows inquiry kind and access grade in the first filter bar and hides session visits by default", async () => {
+    const turns = [
+      {
+        id: "lucy_real",
+        inquiryNo: 1,
+        correlationKey: "lucy_real",
+        inquiryKind: "real",
+        source: "reported",
+        userId: "demo_agent",
+        startedAt: "2026-08-04T08:00:00.000Z",
+        endedAt: "2026-08-04T08:00:01.000Z",
+        businessCallCount: 1,
+        linkedCallCount: 1,
+        questionSummary: "今年销售额",
+        confidence: "high",
+        tools: ["lucy_query"],
+        sources: [],
+        outcomeSummary: { ok: 1, denied: 0, error: 0 }
+      },
+      {
+        id: "inf_unreported",
+        inquiryNo: 2,
+        correlationKey: "inf_unreported",
+        inquiryKind: "unreported_query",
+        source: "inferred",
+        userId: "demo_agent",
+        startedAt: "2026-08-04T08:01:00.000Z",
+        endedAt: "2026-08-04T08:01:01.000Z",
+        businessCallCount: 1,
+        linkedCallCount: 1,
+        questionSummary: "未上报问询原文",
+        confidence: "medium",
+        tools: ["lucy_query"],
+        sources: [],
+        outcomeSummary: { ok: 1, denied: 0, error: 0 }
+      },
+      {
+        id: "inf_visit",
+        inquiryNo: 3,
+        correlationKey: "inf_visit",
+        inquiryKind: "session_visit",
+        source: "inferred",
+        userId: "demo_agent",
+        startedAt: "2026-08-04T08:02:00.000Z",
+        endedAt: "2026-08-04T08:02:01.000Z",
+        businessCallCount: 0,
+        linkedCallCount: 1,
+        questionSummary: "会话建立：cursor",
+        confidence: "low",
+        tools: ["initialize"],
+        sources: [],
+        outcomeSummary: { ok: 1, denied: 0, error: 0 }
+      }
+    ];
+    const calls = [
+      {
+        id: 11,
+        ts: "2026-08-04T08:01:00.000Z",
+        userId: "demo_agent",
+        tool: "lucy_query",
+        accessGrade: "query",
+        inquiryNo: 2,
+        lucyTurnId: "inf_unreported",
+        outcome: "ok",
+        durationMs: 8,
+        requestId: "q-1"
+      },
+      {
+        id: 12,
+        ts: "2026-08-04T08:02:00.000Z",
+        userId: "demo_agent",
+        tool: "initialize",
+        accessGrade: "connect",
+        inquiryNo: 3,
+        inferredTurnId: "inf_visit",
+        outcome: "ok",
+        durationMs: 1,
+        requestId: "init-1"
+      }
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/admin/agents")) {
+          return new Response(JSON.stringify({ ok: true, data: { agents: [], version: 1, summary: {} } }));
+        }
+        if (url.includes("/api/admin/audit/turns/inf_visit")) {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              id: "inf_visit",
+              inquiryNo: 3,
+              correlationKey: "inf_visit",
+              inquiryKind: "session_visit",
+              source: "inferred",
+              userId: "demo_agent",
+              questionSummary: "会话建立：cursor",
+              accessLogs: [],
+              referenceLatency: { windowHours: 168, p95Ms: 0 }
+            }
+          }));
+        }
+        if (url.includes("/api/admin/audit/turns")) {
+          const showVisits = url.includes("inquiryKind=all") || url.includes("inquiryKind=session_visit");
+          const entries = showVisits ? turns : turns.filter((entry) => entry.inquiryKind !== "session_visit");
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              total: entries.length,
+              entries,
+              summary: { reportedCount: 1, inferredCount: entries.length - 1, reportedShare: 0.5 },
+              kindCounts: { real: 1, unreportedQuery: 1, sessionVisit: 1 },
+              referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+            }
+          }));
+        }
+        if (url.startsWith("/api/admin/audit")) {
+          const showConnect = url.includes("accessGrade=all") || url.includes("accessGrade=connect");
+          const entries = showConnect ? calls : calls.filter((entry) => entry.accessGrade !== "connect");
+          return new Response(JSON.stringify({ ok: true, data: { total: entries.length, entries } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderAuditWithProbe("/admin/audit?range=7d");
+    const kindSelect = await screen.findByLabelText("问询种类");
+    const shared = screen.getByTestId("audit-shared-filters");
+    expect(shared).toContainElement(kindSelect);
+    expect(screen.queryByTestId("audit-advanced-filters")).not.toBeInTheDocument();
+    expect(kindSelect).toHaveValue("");
+    expect(await screen.findByTestId("audit-turns-table")).not.toHaveTextContent("会话建立");
+    expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("真实问询 1 · 未上报问询 1 · 会话访问 1 · 已隐藏会话访问 1");
+    expect(screen.getByTestId("audit-turn-id-lucy_real")).toHaveTextContent("1");
+
+    fireEvent.click(screen.getByTestId("audit-advanced-filters-toggle"));
+    const source = screen.getByLabelText("来源类型");
+    expect(screen.getByTestId("audit-advanced-filters")).toContainElement(source);
+    expect(within(source).getByRole("option", { name: "用户原始问询" })).toBeInTheDocument();
+    expect(within(source).getByRole("option", { name: "系统推断问询" })).toBeInTheDocument();
+    expect(screen.getByTestId("audit-shared-filters")).toContainElement(kindSelect);
+
+    fireEvent.change(kindSelect, { target: { value: "all" } });
+    await waitFor(() => {
+      expect(screen.getByTestId("probe-location")).toHaveAttribute("data-search", expect.stringContaining("inquiryKind=all"));
+    });
+    const visitRow = await screen.findByTestId("audit-turn-row-inf_visit");
+    expect(within(visitRow).getByTestId("audit-turn-kind-inf_visit")).toHaveTextContent("会话访问");
+    expect(visitRow.querySelector(".pl-audit-turn-summary-cell")).toHaveTextContent("—");
+    expect(visitRow).not.toHaveTextContent("会话建立");
+
+    fireEvent.click(visitRow);
+    const drawer = await screen.findByTestId("audit-turn-drawer");
+    expect(await within(drawer).findByTestId("audit-turn-kind")).toHaveTextContent("问询种类 会话访问");
+    expect(within(drawer).getByTestId("audit-turn-summary-card")).toHaveTextContent("这次只有会话访问，没有问句。");
+    expect(within(drawer).getByTestId("audit-turn-summary-card")).not.toHaveTextContent("会话建立");
+    expect(within(drawer).getByTestId("audit-turn-correlation-key")).toHaveTextContent("inf_visit");
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    fireEvent.click(within(drawer).getByTestId("audit-turn-drawer-inquiry-no"));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("3"));
+
+    fireEvent.click(screen.getByTestId("audit-clear-filters"));
+    await waitFor(() => {
+      expect(screen.getByTestId("probe-location").getAttribute("data-search") ?? "").not.toContain("inquiryKind");
+    });
+
+    cleanup();
+    renderAudit("/admin/audit?view=calls&range=7d");
+    const gradeSelect = await screen.findByLabelText("访问等级");
+    expect(screen.getByTestId("audit-shared-filters")).toContainElement(gradeSelect);
+    expect(gradeSelect).toHaveValue("");
+    const callsTable = await screen.findByTestId("audit-calls-table");
+    expect(callsTable).not.toHaveTextContent("连接");
+    expect(callsTable).toHaveTextContent("查数");
+    expect(screen.getByTestId("audit-call-turn-id-11")).toHaveTextContent("2");
+    expect(screen.queryByTestId("audit-advanced-filters")).not.toBeInTheDocument();
   });
 });

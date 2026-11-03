@@ -169,6 +169,29 @@ function readZipEntry(buffer: Buffer, name: string): Buffer | null {
 }
 
 describe("POST /api/semantic-assets/export", () => {
+  it("exports an 8 MiB YAML intact and refuses an extra byte", async () => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    const app = await buildFreshServer();
+    await app.ready();
+    try {
+      const target = path.join(projectRoot, "semantic-layer/customer-db/_schema/chatbi.yaml");
+      const content = MANIFEST + "#" + "x".repeat(8 * 1024 * 1024 - Buffer.byteLength(MANIFEST) - 1);
+      await writeFile(target, content);
+      const exported = await app.inject({ method: "POST", url: "/api/semantic-assets/export", payload: {} });
+      expect(exported.statusCode).toBe(200);
+      const zip = await readFile(path.join(projectRoot, ".ktx-ui/exports", `${exported.json().data.exportId}.zip`));
+      expect(readZipEntry(zip, "semantic-layer/customer-db/_schema/chatbi.yaml")?.toString("utf8")).toBe(content);
+      await writeFile(target, content + "x");
+      const refused = await app.inject({ method: "POST", url: "/api/semantic-assets/export", payload: {} });
+      expect(refused.statusCode).toBe(413);
+      expect(refused.json().error).toMatchObject({ code: "YAML_SIZE_LIMIT", message: expect.stringContaining("单文件上限") });
+    } finally {
+      await app.close();
+    }
+  }, 30_000);
+
   it("builds a sanitized zip without secrets or ktx.yaml plaintext credentials", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;

@@ -293,6 +293,132 @@ async function pruneVersions(
   table.versions = table.versions.slice(-TABLE_YAML_VERSION_RETENTION_LIMIT);
 }
 
+/**
+ * L25-16 F5-05 / G27 — **可延后裁剪**的版本快照入口。
+ *
+ * 既有 `createTableYamlVersionSnapshot` 在写完新快照后**立即**裁剪超限旧版本，
+ * 且裁剪先于索引写盘。若组内后续成员失败而组级回滚只恢复索引条目，被裁剪的
+ * 快照内容**已不可恢复**。因此组事务必须把裁剪延后到组终结之后。
+ *
+ * 返回的 `deferredPrune` 是「本次若立即裁剪会被删掉的版本 id」——组终结后调用
+ * {@link pruneTableYamlVersions} 执行，组失败时这些快照原封不动。
+ */
+export async function createTableYamlVersionSnapshotDeferred(
+  projectRoot: string,
+  conn: string,
+  schema: string,
+  table: string,
+  rawYaml: string,
+  metadata: {
+    operation: TableYamlVersionOperation;
+    affectedFiles?: string[];
+    sourceFileName?: string;
+    restoredFromVersionId?: string;
+  }
+): Promise<{ version: TableYamlVersionSummary | null; deferredPrune: string[] }> {
+  const key = tableKey(conn, schema, table);
+  const index = await readIndex(projectRoot);
+  const existing = index.tables[key];
+  const hash = contentHash(rawYaml);
+  const latest = existing?.versions.at(-1);
+  if (latest?.contentHash === hash) {
+    return { version: null, deferredPrune: [] };
+  }
+  const createdAt = new Date().toISOString();
+  const versionId = createVersionId(rawYaml, metadata.operation, createdAt);
+  const version: TableYamlVersionMetadataEntry = {
+    versionId,
+    key,
+    createdAt,
+    operation: metadata.operation,
+    contentHash: hash,
+    sourceFileName: metadata.sourceFileName,
+    restoredFromVersionId: metadata.restoredFromVersionId ? safeVersionId(metadata.restoredFromVersionId) : undefined,
+    affectedFiles: metadata.affectedFiles ?? [],
+    snapshotPath: snapshotPath(key, versionId)
+  };
+  await safeWrite((await loadContentPaths()), projectRoot, version.snapshotPath, rawYaml);
+  const versions = [...(existing?.versions ?? []), version];
+  index.tables[key] = {
+    key,
+    createdAt: existing?.createdAt ?? createdAt,
+    updatedAt: createdAt,
+    currentVersionId: versionId,
+    versions
+  };
+  // 裁剪**延后**：这里只记录「将来该裁掉谁」，不删任何文件。
+  const overflow = versions.slice(0, Math.max(0, versions.length - TABLE_YAML_VERSION_RETENTION_LIMIT));
+  await writeIndex(projectRoot, index);
+  return {
+    version: publicSummary(version),
+    deferredPrune: overflow.map((entry) => entry.versionId)
+  };
+}
+
+/**
+ * 组终结后执行被延后的裁剪（只裁剪该表的超限版本）。
+ */
+export async function pruneTableYamlVersions(
+  projectRoot: string,
+  conn: string,
+  schema: string,
+  table: string
+): Promise<string[]> {
+  const key = tableKey(conn, schema, table);
+  const index = await readIndex(projectRoot);
+  const entry = index.tables[key];
+  if (!entry) return [];
+  const toRemove = entry.versions.slice(0, Math.max(0, entry.versions.length - TABLE_YAML_VERSION_RETENTION_LIMIT));
+  if (toRemove.length === 0) return [];
+  const paths = await loadContentPaths();
+  for (const version of toRemove) {
+    await safeRemove(paths, projectRoot, version.snapshotPath);
+  }
+  entry.versions = entry.versions.slice(-TABLE_YAML_VERSION_RETENTION_LIMIT);
+  await writeIndex(projectRoot, index);
+  return toRemove.map((version) => version.versionId);
+}
+
+/**
+ * 组级回滚：**只回滚本组条目**（N04 / G16）。
+ *
+ * 全局历史索引是共享元数据——撤销必须按条目隔离，不得整份回滚（否则会抹掉
+ * 其他组的成功记录）。
+ */
+export async function removeTableYamlVersionEntries(
+  projectRoot: string,
+  entries: Array<{ conn: string; schema: string; table: string; versionId: string }>
+): Promise<void> {
+  if (entries.length === 0) return;
+  const index = await readIndex(projectRoot);
+  const paths = await loadContentPaths();
+  const byKey = new Map<string, typeof entries>();
+  for (const entry of entries) {
+    const key = tableKey(entry.conn, entry.schema, entry.table);
+    const list = byKey.get(key) ?? [];
+    list.push(entry);
+    byKey.set(key, list);
+  }
+  for (const [key, list] of byKey) {
+    const table = index.tables[key];
+    if (!table) continue;
+    const removing = new Set(list.map((entry) => entry.versionId));
+    for (const version of table.versions) {
+      if (!removing.has(version.versionId)) continue;
+      await safeRemove(paths, projectRoot, version.snapshotPath);
+    }
+    table.versions = table.versions.filter((version) => !removing.has(version.versionId));
+    if (table.versions.length === 0) {
+      delete index.tables[key];
+      continue;
+    }
+    if (table.currentVersionId && removing.has(table.currentVersionId)) {
+      table.currentVersionId = table.versions.at(-1)?.versionId;
+    }
+  }
+  await writeIndex(projectRoot, index);
+}
+
 export async function createTableYamlVersionSnapshot(
   projectRoot: string,
   conn: string,

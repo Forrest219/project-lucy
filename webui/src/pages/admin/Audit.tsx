@@ -3,13 +3,15 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { toast } from "sonner";
 import { apiGet } from "../../lib/apiClient";
+import { copyTextWithToast } from "../../lib/clipboard";
 import { formatConfigAuditTs } from "../../lib/configAuditLabels";
 import { mergeObjectDetailSearch } from "../../lib/objectDetail";
+import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import type {
   Agent,
   AuditLogEntry,
+  AuditPrimaryStatus,
   AuditResponse,
   AuditTurnDetailResponse,
   AuditTurnEntry,
@@ -18,6 +20,24 @@ import type {
 import { callMonitorWindow } from "../../lib/callMonitorWindow";
 import { PageHeader } from "../../components/PageHeader";
 import { DecisionReasonCell } from "../../components/DecisionReasonCell";
+import {
+  AssociationRevisionTimeline,
+  AuditStatusTriad,
+  ClientCoveragePill,
+  CredentialPrincipalCell,
+  ReadonlySqlRowset,
+  type AssociationRevisionTimelineItem
+} from "../../components/audit-trust";
+import {
+  associationAxisFrom,
+  coverageAxisFrom,
+  executionAxisFrom,
+  LEGACY_OUTCOME_LABELS,
+  PRIMARY_STATUS_ORDER,
+  primaryStatusLabel,
+  primaryStatusPalette,
+  sqlRowsetStatusFrom
+} from "../../lib/auditTrust";
 
 // 202608-01 — Trace / Evidence Kernel read model
 type LucySpanTypeView =
@@ -495,7 +515,12 @@ export function TraceLink({ traceId }: { traceId: string }) {
   );
 }
 
-const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
+/**
+ * 旧三桶 outcome。**只作 legacy 直方图**，不作为执行状态展示
+ * （B27 / Spec §4.3(a) 规则 9：旧 `outcome=ok` 不推定成功）。
+ * 执行状态一律用八桶 `primaryStatus` + 三条独立判断轴。
+ */
+const OUTCOME_LABELS = LEGACY_OUTCOME_LABELS;
 const PAGE_SIZE = 50;
 
 function playgroundReplayHref(entry: Pick<AuditLogEntry, "userId" | "tool" | "argsSummary">): string {
@@ -533,16 +558,6 @@ function formatDurationMs(ms: number): string {
   const minutes = Math.floor(ms / 60_000);
   const seconds = Math.round((ms % 60_000) / 1000);
   return `${minutes} m ${seconds} s`;
-}
-
-function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
-  if (!statsAt) return "未知";
-  const diffMs = now.getTime() - statsAt.getTime();
-  if (diffMs < 5_000) return "刚刚";
-  if (diffMs < 60_000) return `${Math.floor(diffMs / 1000)} 秒前`;
-  if (diffMs < 15 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
 }
 
 /** Spec 106 + Spec 165: prefer `range=1h|24h|7d|30d`; accept legacy `hours=1|24|168|720`. */
@@ -646,10 +661,10 @@ function CopyableId({ value, testId, label, shortDisplay = false }: { value: str
       data-testid={testId}
       onClick={(event) => {
         event.stopPropagation();
-        void navigator.clipboard
-          ?.writeText(value)
-          .then(() => toast.success(`已复制${label}`))
-          .catch(() => toast.error("复制失败，请重试"));
+        void copyTextWithToast(value, {
+          successMessage: `已复制${label}`,
+          failureMessage: "复制失败，请重试"
+        });
       }}
     >
       {displayValue}
@@ -657,11 +672,30 @@ function CopyableId({ value, testId, label, shortDisplay = false }: { value: str
   );
 }
 
+/**
+ * 涉及数据表清单。
+ *
+ * E7：**不截断**、不写「等 N 个」——完整清单必须可见（可复制）。
+ * 单表直接显示；多表用换行 + 分隔符逐个列出。
+ */
 function formatTablesCell(sources: AuditTurnEntry["sources"]): string {
   const tables = sources.map((s) => s.physicalTable).filter(Boolean);
   if (tables.length === 0) return "—";
-  if (tables.length === 1) return tables[0]!;
-  return `${tables[0]} 等 ${tables.length} 个`;
+  return tables.join("、");
+}
+
+/**
+ * 问询行的八桶主状态（非零桶，按八桶固定顺序）。
+ *
+ * 一次问询聚合多次调用，因此**不合成单一结论** —— 逐桶列出真实计数。
+ * 历史行没有 primary_status 时，八桶全部落在 `unknown`。
+ */
+function turnStatusBuckets(entry: AuditTurnEntry): Array<{ bucket: AuditPrimaryStatus; count: number }> {
+  const counts = entry.primaryStatusSummary;
+  if (!counts) return [];
+  return PRIMARY_STATUS_ORDER.map((bucket) => ({ bucket, count: counts[bucket] ?? 0 })).filter(
+    (item) => item.count > 0
+  );
 }
 
 const TURN_SOURCE_FILTER_TITLE =
@@ -678,6 +712,34 @@ function looksLikeIdQuery(raw: string): boolean {
     return true;
   }
   return false;
+}
+
+function inquiryKindLabel(kind: AuditTurnEntry["inquiryKind"]): string {
+  if (kind === "real") return "真实问询";
+  if (kind === "unreported_query") return "未上报问询";
+  if (kind === "session_visit") return "会话访问";
+  return "—";
+}
+
+function accessGradeLabel(grade: AuditLogEntry["accessGrade"]): string {
+  switch (grade) {
+    case "connect":
+      return "连接";
+    case "browse":
+      return "浏览";
+    case "prepare":
+      return "准备";
+    case "ask":
+      return "问询动作";
+    case "query":
+      return "查数";
+    case "control":
+      return "运维操作";
+    case "unclassified":
+      return "未分级";
+    default:
+      return "—";
+  }
 }
 
 function TurnSourceBadge({ source }: { source: AuditTurnEntry["source"] }) {
@@ -704,20 +766,28 @@ function TurnDetailDrawer({
   onOpenChange: (open: boolean) => void;
   agentNameById: Map<string, string>;
 }) {
-  const [tablesExpanded, setTablesExpanded] = useState(false);
   const query = useQuery({
     queryKey: ["admin", "audit", "turn", turnId, hours],
     queryFn: () => apiGet<AuditTurnDetailResponse>(`/api/admin/audit/turns/${encodeURIComponent(turnId ?? "")}?hours=${hours}`),
     enabled: open && Boolean(turnId)
   });
   const detail = query.data;
-  useEffect(() => {
-    setTablesExpanded(false);
-  }, [turnId]);
   const drawerSources = Array.isArray(detail?.sources)
     ? (detail.sources as Array<{ connectionId?: string; physical_table?: string; physicalTable?: string }>)
     : [];
-  const visibleSources = tablesExpanded ? drawerSources : drawerSources.slice(0, 4);
+  // 关联修订（只读）。历史更正**不改写原始账本**，因此这里展示时间线，
+  // 最新一条是生效视图，更早的是历史。
+  const revisionsQuery = useQuery({
+    queryKey: ["admin", "audit", "association-revisions", turnId],
+    queryFn: () =>
+      apiGet<{ data: AssociationRevisionTimelineItem[] }>(
+        `/api/admin/audit/association-revisions?originalTurnId=${encodeURIComponent(turnId ?? "")}&limit=50`
+      ),
+    enabled: open && Boolean(turnId)
+  });
+  const revisions = revisionsQuery.data?.data ?? [];
+  // 最早一条修订的 pre-image = 准入时记录的原始关联状态（不可变）。
+  const originalAssociation = revisions.length > 0 ? revisions[revisions.length - 1]?.originalAssociationStatus ?? null : null;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -758,6 +828,25 @@ function TurnDetailDrawer({
 
               <section className="pl-card grid gap-2 text-xs" data-testid="audit-turn-meta-card">
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-fg-muted">
+                  <span data-testid="audit-turn-kind">问询种类 {inquiryKindLabel(detail.inquiryKind)}</span>
+                  <span className="inline-flex items-center gap-1">
+                    问询 ID
+                    {detail.inquiryNo != null ? (
+                      <CopyableId
+                        value={String(detail.inquiryNo)}
+                        testId="audit-turn-drawer-inquiry-no"
+                        label="问询 ID"
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </span>
+                  <span>
+                    关联键{" "}
+                    <span className="notranslate" translate="no" data-testid="audit-turn-correlation-key">
+                      {detail.correlationKey ?? detail.id}
+                    </span>
+                  </span>
                   {detail.startedAt || detail.createdAt ? (
                     <span>开始 {formatConfigAuditTs(detail.startedAt ?? detail.createdAt ?? "")}</span>
                   ) : null}
@@ -777,17 +866,33 @@ function TurnDetailDrawer({
                 </div>
               </section>
 
-              {(detail.questionSummary || detail.questionPreview) ? (
+              {(detail.inquiryKind === "session_visit" || detail.questionSummary || detail.questionPreview) ? (
                 <section className="pl-card grid gap-2" data-testid="audit-turn-summary-card">
                   <h3 className="text-sm font-semibold text-fg-default">问询摘要</h3>
-                  <p className="text-sm text-fg-muted">{detail.questionPreview ?? detail.questionSummary}</p>
+                  <p className="text-sm text-fg-muted">
+                    {detail.inquiryKind === "session_visit"
+                      ? "这次只有会话访问，没有问句。"
+                      : (detail.questionPreview ?? detail.questionSummary)}
+                  </p>
                 </section>
               ) : null}
+
+              {/* 关联修订时间线（只读）。历史更正**不改写原始账本**：
+                  生效视图与历史修订分开展示，准入时的原始状态单列。 */}
+              <section className="pl-card grid gap-2" data-testid="audit-turn-association-revisions">
+                <h3 className="text-sm font-semibold text-fg-default">关联修订</h3>
+                <AssociationRevisionTimeline
+                  revisions={revisions}
+                  originalFromAccessLog={originalAssociation}
+                />
+              </section>
 
               {drawerSources.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="audit-turn-tables-inline">
                   <span className="text-fg-muted whitespace-nowrap">触达表：</span>
-                  {visibleSources.map((source, idx) => (
+                  {/* E7：默认**全部展开**，不再截断为前 4 个、不写「+N 更多」。
+                      完整清单必须可见（管理员要据此判断范围）。 */}
+                  {drawerSources.map((source, idx) => (
                     <span
                       key={idx}
                       className="inline-flex items-center gap-1 rounded bg-bg-muted px-2 py-0.5 font-mono text-fg-default notranslate"
@@ -797,16 +902,21 @@ function TurnDetailDrawer({
                       <span>{source.physicalTable ?? source.physical_table ?? "—"}</span>
                     </span>
                   ))}
-                  {drawerSources.length > 4 ? (
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--ghost text-xs h-6 px-1.5"
-                      data-testid="audit-turn-tables-expand"
-                      onClick={() => setTablesExpanded((v) => !v)}
-                    >
-                      {tablesExpanded ? "收起" : `+${drawerSources.length - 4} 更多`}
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--ghost text-xs h-6 px-1.5"
+                    data-testid="audit-turn-tables-copy"
+                    onClick={() => {
+                      void copyTextWithToast(
+                        drawerSources
+                          .map((source) => `${source.connectionId ? `${source.connectionId} · ` : ""}${source.physicalTable ?? source.physical_table ?? ""}`)
+                          .join("、"),
+                        { successMessage: "已复制触达表清单", failureMessage: "复制失败，请重试" }
+                      );
+                    }}
+                  >
+                    复制清单
+                  </button>
                 </div>
               ) : null}
 
@@ -924,6 +1034,19 @@ function writeFilterSnapshot(snapshot: FilterSnapshot) {
     // localStorage may be disabled (e.g. private mode); fall back to URL-only.
   }
 }
+
+/**
+ * Persist one filter field into the last-used snapshot. The stored value is
+ * the **raw** text the user typed — the URL keeps the raw text too, so the
+ * snapshot and the URL stay in sync (Spec §7.1).
+ */
+function persistFilterSnapshot(key: string, value: string) {
+  if (!(FILTER_PERSIST_FIELDS as readonly string[]).includes(key)) return;
+  const snapshot = readFilterSnapshot();
+  if (value) snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]] = value;
+  else delete snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]];
+  writeFilterSnapshot(snapshot);
+}
 const SENSITIVE_KEY = /(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)/i;
 const SENSITIVE_PAIR = /\b(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)\b\s*[:=]\s*([^,\s;]+)/gi;
 
@@ -1035,8 +1158,8 @@ function EntryRow({
 }) {
   const [searchParams] = useSearchParams();
   const [expanded, setExpanded] = useState(false);
-  const outcomeClass =
-    entry.outcome === "ok" ? "pl-status-done" : entry.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed";
+  // 八桶主状态（不是旧三桶 outcome）。历史行 → unknown。
+  const primaryStatus = entry.primaryStatus ?? "unknown";
   const redactedArgs = entry.argsSummary ? redactValue(entry.argsSummary) : null;
   const callOrigin = formatCallOriginLabel(entry.lucyPlatform);
   const auditEventHref = {
@@ -1079,7 +1202,20 @@ function EntryRow({
           </div>
         </td>
         <td className="pl-audit-table-mono whitespace-nowrap">
-          {entry.lucyTurnId ? (
+          {entry.inquiryNo != null && (entry.lucyTurnId || entry.inferredTurnId) ? (
+            <button
+              type="button"
+              className="pl-inline-link notranslate font-mono text-xs"
+              translate="no"
+              data-testid={`audit-call-turn-id-${entry.id}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenTurn(entry.lucyTurnId ?? entry.inferredTurnId!);
+              }}
+            >
+              {entry.inquiryNo}
+            </button>
+          ) : entry.lucyTurnId ? (
             <button
               type="button"
               className="pl-inline-link notranslate font-mono text-xs"
@@ -1110,16 +1246,50 @@ function EntryRow({
             <span className="text-fg-muted">—</span>
           )}
         </td>
-        <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
+        <td className="notranslate" translate="no" data-testid={`audit-call-agent-${entry.id}`}>
+          {/* 原 Agent 列保留**产品 Agent 含义**；「凭证主体」并列说明，
+              不用 token 备注替换 Agent（20261019 §5）。 */}
+          <div className="flex flex-col items-start gap-1">
+            <span>{formatAgentLabel(entry.userId, agentNameById)}</span>
+            <CredentialPrincipalCell
+              userId={entry.credentialPrincipalId ?? entry.userId}
+              hint={
+                entry.credentialPrincipalId && entry.credentialPrincipalId !== entry.userId
+                  ? "凭证主体"
+                  : "凭证主体（未单独登记，等同 Agent 主体）"
+              }
+            />
+          </div>
+        </td>
         <td>
           <AccessContextCell
             clientIp={entry.clientIp}
             userAgent={entry.userAgent}
             testId={`audit-access-context-${entry.id}`}
           />
+          <ClientCoveragePill
+            observed={coverageAxisFrom(entry) === "observed"}
+            reason={coverageAxisFrom(entry) === "observed" ? undefined : "no_client_observation"}
+          />
         </td>
         <td>
-          <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
+          <div className="flex flex-col items-start gap-1" data-testid={`audit-status-cell-${entry.id}`}>
+            {/* 八桶主状态（B27）。旧 outcome 只作 legacy 说明，不是执行状态。 */}
+            <span
+              className={`pl-status-badge ${primaryStatusPalette(primaryStatus)}`}
+              data-testid={`audit-primary-status-${entry.id}`}
+              data-primary-status={primaryStatus}
+            >
+              {primaryStatusLabel(primaryStatus)}
+            </span>
+            {/* 三条独立判断轴：执行 / 关联 / 覆盖互不推导。
+                执行成功**不会**让关联或覆盖变成绿色已完成。 */}
+            <AuditStatusTriad
+              execution={executionAxisFrom(entry)}
+              association={associationAxisFrom(entry.associationStatus)}
+              coverage={coverageAxisFrom(entry)}
+            />
+          </div>
         </td>
         <td className="pl-audit-table-muted">
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
@@ -1134,6 +1304,7 @@ function EntryRow({
             ) : null}
           </span>
         </td>
+        <td data-testid={`audit-call-grade-${entry.id}`}>{accessGradeLabel(entry.accessGrade)}</td>
         <td className="pl-audit-table-mono">{entry.tool}</td>
         <td className="pl-audit-table-muted">{entry.tables?.join(", ")}</td>
         <td className="pl-audit-table-muted">
@@ -1173,11 +1344,23 @@ function EntryRow({
           ) : (
             <span className="text-fg-muted">—</span>
           )}
+          {/* 返回规模：行 / 列 / 字节。缺值按**六值空值原因**展示，
+              未知不得写成 0（20261019 §4.4 / U2）。
+              组件与既有「生成 SQL」入口**并存**，不替换其可发现性。 */}
+          <ReadonlySqlRowset
+            rows={entry.responseRowCount ?? null}
+            cols={entry.responseColumnCount ?? null}
+            bytes={entry.responseBytes ?? null}
+            status={sqlRowsetStatusFrom(
+              entry.responseRowCount !== undefined && entry.responseRowCount !== null,
+              entry.nullReason
+            )}
+          />
         </td>
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
-          <td colSpan={13} className="px-3 py-3 text-xs">
+          <td colSpan={14} className="px-3 py-3 text-xs">
             <div className="pl-audit-detail-panels" data-testid={`audit-detail-panels-${entry.id}`}>
               <AuditDetailSection title="调用方" testId={`audit-detail-caller-${entry.id}`}>
                 <AuditDetailField
@@ -1353,6 +1536,11 @@ export function Audit() {
   const [turnDrawerOpen, setTurnDrawerOpen] = useState(Boolean(searchParams.get("turnId")));
   const [now, setNow] = useState(() => new Date());
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  /**
+   * 刷新状态。暂停时**冻结**筛选与序列上界：后台不得换范围、不得把更新的
+   * 数据悄悄塞进来（20261019 §5「暂停固定筛选和序列上界，不能后台换范围」）。
+   */
+  const [refreshPaused, setRefreshPaused] = useState(false);
   const [timePreset, setTimePreset] = useState<TimePreset>(() => parseRangePreset(searchParams));
 
   const user = searchParams.get("user") ?? "";
@@ -1368,11 +1556,109 @@ export function Audit() {
   const callSource = searchParams.get("callSource") ?? "";
   const turnSource = searchParams.get("turnSource") ?? "";
   const turnSearch = searchParams.get("turnSearch") ?? "";
+  const inquiryKind = searchParams.get("inquiryKind") ?? "";
+  const accessGrade = searchParams.get("accessGrade") ?? "";
+  const eventId = searchParams.get("eventId") ?? "";
   const includeProtocol = searchParams.get("includeProtocol") === "true" || callSource === "playground";
   const slowOnly = searchParams.get("slowOnly") === "1";
   const tab = parseAuditView(searchParams);
   const range = parseRangePreset(searchParams);
   const hours = rangeToHours(range);
+
+  // ── 局部状态镜像（Spec §5.2／§5.3）──────────────────────────────────────
+  //
+  // 这 7 个筛选栏文本输入框的 `value` 一律由**本地 state** 驱动，URL 作为下游
+  // 事实源跟随。直接把 `value={searchParams.get(...)}` 绑上去会让 React 在旧 URL 值
+  // 渲染的那一帧写 `node.value`，Chrome 随即取消进行中的 IME 组合
+  // （Spec §1.3）。反向同步走回声协议：只有 POP 与真正的外部 PUSH／REPLACE
+  // 才写草稿，自身回声与晚到的旧值都不写（Spec §5.3）。
+  const userMirror = useUrlMirroredField({
+    read: (sp) => sp.get("user") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("user", raw);
+      else next.delete("user");
+      return next;
+    },
+    history: "push"
+  });
+  const toolMirror = useUrlMirroredField({
+    read: (sp) => sp.get("tool") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("tool", raw);
+      else next.delete("tool");
+      return next;
+    },
+    history: "push"
+  });
+  const sessionIdMirror = useUrlMirroredField({
+    read: (sp) => sp.get("sessionId") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("sessionId", raw);
+      else next.delete("sessionId");
+      return next;
+    },
+    history: "push"
+  });
+  const clientIpMirror = useUrlMirroredField({
+    read: (sp) => sp.get("clientIp") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("clientIp", raw);
+      else next.delete("clientIp");
+      return next;
+    },
+    history: "push"
+  });
+  const deviceNameMirror = useUrlMirroredField({
+    read: (sp) => sp.get("deviceName") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("deviceName", raw);
+      else next.delete("deviceName");
+      return next;
+    },
+    history: "push"
+  });
+  const tableSearchMirror = useUrlMirroredField({
+    read: (sp) => sp.get("tableSearch") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("tableSearch", raw);
+      else next.delete("tableSearch");
+      return next;
+    },
+    history: "push"
+  });
+  /**
+   * 统一搜索：一个输入框聚合 `key`（含遗留 `turnIdFilter`）／`turnSearch`／
+   * `tableSearch`。`read` 保持既有聚合口径；`write` 仍按 `looksLikeIdQuery`
+   * 与当前 tab 分派，但写入**原文**（不再 trim）。
+   */
+  const unifiedSearchMirror = useUrlMirroredField({
+    read: (sp) => {
+      const key = sp.get("key") ?? sp.get("turnIdFilter") ?? "";
+      const turnSearch = sp.get("turnSearch") ?? "";
+      const tableSearchValue = sp.get("tableSearch") ?? "";
+      return key || (tab === "turns" ? turnSearch : tableSearchValue);
+    },
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      next.delete("key");
+      next.delete("turnIdFilter");
+      next.delete("turnSearch");
+      if (tab === "calls") next.delete("tableSearch");
+      if (raw) {
+        if (looksLikeIdQuery(raw)) next.set("key", raw);
+        else if (tab === "turns") next.set("turnSearch", raw);
+        else next.set("tableSearch", raw);
+      }
+      return next;
+    },
+    history: "push"
+  });
 
   useEffect(() => {
     if (hasHydratedFromStorage) return;
@@ -1416,57 +1702,59 @@ export function Audit() {
   }, []);
 
   function updateParam(key: string, value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    // Drop legacy aliases when writing canonical keys
-    if (key === "view") next.delete("tab");
-    if (key === "range") next.delete("hours");
-    if (key === "key") next.delete("turnIdFilter");
-    setSearchParams(next);
+    // 函数式更新：从 prev 拷贝后再改本字段，禁止闭包快照（Spec §5.2 写入契约）。
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      // Drop legacy aliases when writing canonical keys
+      if (key === "view") next.delete("tab");
+      if (key === "range") next.delete("hours");
+      if (key === "key") next.delete("turnIdFilter");
+      return next;
+    });
     setPage(0);
-    if ((FILTER_PERSIST_FIELDS as readonly string[]).includes(key)) {
-      const snapshot = readFilterSnapshot();
-      if (value) snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]] = value;
-      else delete snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]];
-      writeFilterSnapshot(snapshot);
-    }
+    persistFilterSnapshot(key, value);
   }
 
-  /** Spec 135: single search box — ID-like → key; else turnSearch (turns) / tableSearch (calls). */
-  function applyUnifiedSearch(raw: string) {
-    const next = new URLSearchParams(searchParams);
-    next.delete("key");
-    next.delete("turnIdFilter");
-    next.delete("turnSearch");
-    if (tab === "calls") next.delete("tableSearch");
-
-    const value = raw.trim();
-    if (value) {
-      if (looksLikeIdQuery(value)) {
-        next.set("key", value);
-      } else if (tab === "turns") {
-        next.set("turnSearch", value);
-      } else {
-        next.set("tableSearch", value);
-      }
-    }
-
-    setSearchParams(next);
+  /**
+   * Mirror-backed text change. The raw text goes into the local draft and into
+   * the URL (no trim / case / split / filter — INV-2); the snapshot stores the
+   * same raw text so URL and snapshot agree (Spec §7.1).
+   */
+  function applyMirroredText(
+    mirror: { onChange: (raw: string) => void },
+    raw: string,
+    snapshotKey?: string
+  ) {
+    mirror.onChange(raw);
     setPage(0);
+    if (snapshotKey) persistFilterSnapshot(snapshotKey, raw);
+  }
+
+  /**
+   * Unified search snapshot. The dispatch mirrors the URL write: ID-like →
+   * `key`, otherwise `turnSearch` (turns) / `tableSearch` (calls).
+   */
+  function persistUnifiedSearchSnapshot(raw: string) {
     const snapshot = readFilterSnapshot();
     delete snapshot.key;
     delete snapshot.turnSearch;
     if (tab === "calls") delete snapshot.tableSearch;
-    if (value) {
-      if (looksLikeIdQuery(value)) snapshot.key = value;
-      else if (tab === "turns") snapshot.turnSearch = value;
-      else snapshot.tableSearch = value;
+    if (raw) {
+      if (looksLikeIdQuery(raw)) snapshot.key = raw;
+      else if (tab === "turns") snapshot.turnSearch = raw;
+      else snapshot.tableSearch = raw;
     }
     writeFilterSnapshot(snapshot);
   }
 
-  const unifiedSearchValue = keySearch || (tab === "turns" ? turnSearch : tableSearch);
+  /** Spec 135: single search box — ID-like → key; else turnSearch (turns) / tableSearch (calls). */
+  function applyUnifiedSearch(raw: string) {
+    unifiedSearchMirror.onChange(raw);
+    setPage(0);
+    persistUnifiedSearchSnapshot(raw);
+  }
 
   function setCallSource(nextSource: string) {
     const next = new URLSearchParams(searchParams);
@@ -1564,6 +1852,8 @@ export function Audit() {
       || callSource
       || turnSource
       || turnSearch
+      || (inquiryKind && inquiryKind !== "management")
+      || (accessGrade && accessGrade !== "exclude_connect")
       || until
       || (since && since !== rangeDefaultSince)
       || slowOnly
@@ -1585,6 +1875,15 @@ export function Audit() {
     if (keepObject) next.set("object", keepObject);
     if (keepEventId) next.set("eventId", keepEventId);
     setSearchParams(next);
+    // ★ INV-3：只重建 URL 不够。若某个参数本来就是空的，urlValue 不变，反向同步
+    // 的 effect 不会跑，输入框会留下旧文本。必须逐个把镜像草稿归零。
+    userMirror.reset("");
+    toolMirror.reset("");
+    sessionIdMirror.reset("");
+    clientIpMirror.reset("");
+    deviceNameMirror.reset("");
+    tableSearchMirror.reset("");
+    unifiedSearchMirror.reset("");
     const snapshot = readFilterSnapshot();
     for (const field of FILTER_PERSIST_FIELDS) {
       if (field === "view" || field === "range" || field === "turnId") continue;
@@ -1618,10 +1917,12 @@ export function Audit() {
     hours,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
-    tableSearch: tableSearch || undefined,
-    turnId: keySearch || undefined,
+    // 消费点规范化：URL 与输入框保留原文，发请求前再 trim（SC-23）。
+    tableSearch: tableSearch.trim() || undefined,
+    turnId: keySearch.trim() || undefined,
     outcome: outcome || undefined,
-    q: turnSearch || undefined,
+    q: turnSearch.trim() || undefined,
+    inquiryKind: inquiryKind && inquiryKind !== "management" ? inquiryKind : undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
   });
@@ -1629,7 +1930,8 @@ export function Audit() {
   const turnsQuery = useQuery({
     queryKey: ["admin", "audit", "turns", turnsQueryStr],
     queryFn: () => apiGet<AuditTurnsResponse>(`/api/admin/audit/turns${turnsQueryStr}`),
-    enabled: tab === "turns"
+    enabled: tab === "turns",
+    refetchInterval: refreshPaused ? false : 30_000
   });
 
   const callsQueryStr = buildQuery({
@@ -1639,13 +1941,15 @@ export function Audit() {
     outcome: outcome || undefined,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
-    tableSearch: tableSearch || undefined,
+    tableSearch: tableSearch.trim() || undefined,
     sessionId: sessionId || undefined,
     clientIp: clientIp || undefined,
     deviceName: deviceNameFilter || undefined,
-    key: keySearch || undefined,
+    key: keySearch.trim() || undefined,
+    eventId: eventId.trim() || undefined,
     platform: platform || undefined,
     callSource: callSource || undefined,
+    accessGrade: accessGrade && accessGrade !== "exclude_connect" ? accessGrade : undefined,
     includeProtocol,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
@@ -1654,12 +1958,19 @@ export function Audit() {
   const callsQuery = useQuery({
     queryKey: ["admin", "audit", "calls", callsQueryStr, slowOnly],
     queryFn: () => apiGet<AuditResponse>(`/api/admin/audit${callsQueryStr}`),
-    enabled: tab === "calls"
+    enabled: tab === "calls",
+    refetchInterval: refreshPaused ? false : 30_000
   });
 
   const turnEntries = turnsQuery.data?.entries ?? [];
   const turnTotal = turnsQuery.data?.total ?? 0;
   const turnSummary = turnsQuery.data?.summary;
+  const kindCounts = turnsQuery.data?.kindCounts ?? { real: 0, unreportedQuery: 0, sessionVisit: 0 };
+  const showsSessionVisits = inquiryKind === "all" || inquiryKind === "session_visit";
+  const hiddenSessionVisits = !showsSessionVisits && kindCounts.sessionVisit > 0
+    ? ` · 已隐藏会话访问 ${kindCounts.sessionVisit}`
+    : "";
+  const turnCoverageSummary = `真实问询 ${kindCounts.real} · 未上报问询 ${kindCounts.unreportedQuery} · 会话访问 ${kindCounts.sessionVisit}${hiddenSessionVisits}`;
   const referenceLatency = turnsQuery.data?.referenceLatency;
   const p95Ms = referenceLatency?.p95Ms ?? 0;
 
@@ -1686,8 +1997,13 @@ export function Audit() {
   const isCallsSlowFiltered = tab === "calls" && slowOnly;
   const totalPages = Math.ceil((tab === "turns" ? turnTotal : (isCallsSlowFiltered ? callEntries.length : callTotal)) / PAGE_SIZE) || 1;
 
-  const statsUpdatedAtMs = tab === "turns" ? turnsQuery.dataUpdatedAt : callsQuery.dataUpdatedAt;
-  const statsTimeLabel = formatStatsTimeLabel(statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs) : null, now);
+  // 投影未追平时保留告警；暂停仍冻结筛选与序列上界（audit-trust §5 行为）。
+  // 窗口/时区/统计时间/同步延迟/刷新状态不再常驻展示（2026-11-01 批准）。
+  const projection = tab === "turns" ? turnsQuery.data?.projection : callsQuery.data?.projection;
+  const projectionComplete = projection?.complete ?? false;
+
+  // ── 八桶主状态汇总（B27；与列表 / CSV / v2 导出同源同函数）──────────────
+  const primaryStatusCounts = callsQuery.data?.summary?.primaryStatus;
 
   const turnExportFilterQuery = buildQuery({
     user: resolvedUserFilter || undefined,
@@ -1695,10 +2011,11 @@ export function Audit() {
     hours,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
-    tableSearch: tableSearch || undefined,
-    turnId: keySearch || undefined,
+    tableSearch: tableSearch.trim() || undefined,
+    turnId: keySearch.trim() || undefined,
     outcome: outcome || undefined,
-    q: turnSearch || undefined
+    q: turnSearch.trim() || undefined,
+    inquiryKind: inquiryKind && inquiryKind !== "management" ? inquiryKind : undefined
   });
   const callExportFilterQuery = buildQuery({
     user: resolvedUserFilter || user || undefined,
@@ -1707,13 +2024,15 @@ export function Audit() {
     outcome: outcome || undefined,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
-    tableSearch: tableSearch || undefined,
+    tableSearch: tableSearch.trim() || undefined,
     sessionId: sessionId || undefined,
     clientIp: clientIp || undefined,
     deviceName: deviceNameFilter || undefined,
-    key: keySearch || undefined,
+    key: keySearch.trim() || undefined,
+    eventId: eventId.trim() || undefined,
     platform: platform || undefined,
     callSource: callSource || undefined,
+    accessGrade: accessGrade && accessGrade !== "exclude_connect" ? accessGrade : undefined,
     includeProtocol
   });
   const turnExportUrl = `/api/admin/audit/turns/export${turnExportFilterQuery}`;
@@ -1751,6 +2070,25 @@ export function Audit() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-3">
+            {!projectionComplete ? (
+              <span
+                className="pl-status-badge pl-status-warning"
+                data-testid="audit-projection-lagging"
+                title={projection?.reason ?? "审计投影尚未追平账本上界"}
+              >
+                审计投影未追平
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className="pl-btn pl-btn--secondary pl-btn--sm"
+              data-testid="audit-refresh-toggle"
+              aria-pressed={refreshPaused}
+              title={refreshPaused ? "恢复自动刷新" : "暂停自动刷新；筛选与序列上界已冻结"}
+              onClick={() => setRefreshPaused((v) => !v)}
+            >
+              {refreshPaused ? "恢复刷新" : "暂停刷新"}
+            </button>
             <a
               href={currentExport.href}
               download
@@ -1807,7 +2145,7 @@ export function Audit() {
         </Link>
       </div>
 
-      <div className="pl-notice flex flex-wrap items-center justify-between gap-3" data-testid="audit-granularity-help">
+      <div className="pl-notice flex flex-wrap items-baseline gap-x-3 gap-y-1" data-testid="audit-granularity-help">
         <span>
           {tab === "turns" ? (
             <>问询记录按一次用户问询聚合，适合查看整体结果、涉及数据表和慢调用概况。</>
@@ -1834,30 +2172,24 @@ export function Audit() {
         </div>
       </div>
 
-      {/* Time range segmented control + stats meta */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div
-          className="pl-segmented-control pl-segmented-control--auto"
-          data-testid="audit-time-presets"
-          role="group"
-          aria-label="时间范围"
-        >
-          {(["1h", "24h", "7d", "30d", "today", "custom"] as TimePreset[]).map((preset) => (
-            <button
-              key={preset}
-              type="button"
-              className={`pl-segmented-control-item${timePreset === preset ? " pl-segmented-control-item--active" : ""}`}
-              data-testid={`audit-time-preset-${preset}`}
-              aria-pressed={timePreset === preset}
-              onClick={() => applyTimePreset(preset)}
-            >
-              {TIME_PRESET_LABELS[preset]}
-            </button>
-          ))}
-        </div>
-        <span className="text-xs text-fg-muted whitespace-nowrap" data-testid="audit-stats-time">
-          统计时间：{statsTimeLabel}
-        </span>
+      <div
+        className="pl-segmented-control pl-segmented-control--auto"
+        data-testid="audit-time-presets"
+        role="group"
+        aria-label="时间范围"
+      >
+        {(["1h", "24h", "7d", "30d", "today", "custom"] as TimePreset[]).map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            className={`pl-segmented-control-item${timePreset === preset ? " pl-segmented-control-item--active" : ""}`}
+            data-testid={`audit-time-preset-${preset}`}
+            aria-pressed={timePreset === preset}
+            onClick={() => applyTimePreset(preset)}
+          >
+            {TIME_PRESET_LABELS[preset]}
+          </button>
+        ))}
       </div>
 
       <div className="pl-admin-filterbar" data-testid="audit-shared-filters">
@@ -1881,8 +2213,8 @@ export function Audit() {
           translate="no"
           placeholder="Agent 名称或 ID"
           aria-label="按 Agent 名称或 ID 筛选"
-          value={user}
-          onChange={(e) => updateParam("user", e.target.value)}
+          value={userMirror.value}
+          onChange={(e) => applyMirroredText(userMirror, e.target.value, "user")}
         />
         <select
           className="pl-input w-28"
@@ -1895,13 +2227,46 @@ export function Audit() {
           <option value="error">错误</option>
           <option value="denied">拒绝</option>
         </select>
+        {tab === "turns" ? (
+          <select
+            className="pl-input w-36"
+            aria-label="问询种类"
+            data-testid="audit-inquiry-kind-filter"
+            value={inquiryKind === "management" ? "" : inquiryKind}
+            onChange={(e) => updateParam("inquiryKind", e.target.value)}
+          >
+            <option value="">管理相关</option>
+            <option value="real">真实问询</option>
+            <option value="unreported_query">未上报问询</option>
+            <option value="session_visit">会话访问</option>
+            <option value="all">全部种类</option>
+          </select>
+        ) : (
+          <select
+            className="pl-input w-36"
+            aria-label="访问等级"
+            data-testid="audit-access-grade-filter"
+            value={accessGrade === "exclude_connect" ? "" : accessGrade}
+            onChange={(e) => updateParam("accessGrade", e.target.value)}
+          >
+            <option value="all">全部</option>
+            <option value="">排除连接</option>
+            <option value="connect">连接</option>
+            <option value="browse">浏览</option>
+            <option value="prepare">准备</option>
+            <option value="ask">问询动作</option>
+            <option value="query">查数</option>
+            <option value="control">运维操作</option>
+            <option value="unclassified">未分级</option>
+          </select>
+        )}
         <input
           className="pl-input flex-1 min-w-[10rem] notranslate"
           translate="no"
           placeholder={tab === "turns" ? "搜索问询 ID / 摘要 / 表名" : "事件 ID / 问询 ID / 表名"}
           aria-label="统一搜索"
           data-testid="audit-key-search"
-          value={unifiedSearchValue}
+          value={unifiedSearchMirror.value}
           onChange={(e) => applyUnifiedSearch(e.target.value)}
         />
         {/* Hidden time inputs kept for test compatibility and custom mode */}
@@ -1994,36 +2359,45 @@ export function Audit() {
                 </option>
               </select>
               <input
+                className="pl-input w-32 notranslate"
+                translate="no"
+                placeholder="事件 ID"
+                aria-label="事件 ID"
+                data-testid="audit-event-id-filter"
+                value={eventId}
+                onChange={(e) => updateParam("eventId", e.target.value)}
+              />
+              <input
                 className="pl-input w-36 notranslate"
                 translate="no"
                 placeholder="工具名"
                 aria-label="按工具名筛选"
-                value={tool}
-                onChange={(e) => updateParam("tool", e.target.value)}
+                value={toolMirror.value}
+                onChange={(e) => applyMirroredText(toolMirror, e.target.value, "tool")}
               />
               <input
                 className="pl-input w-40 notranslate"
                 translate="no"
                 placeholder="Session ID"
                 aria-label="按 Session ID 筛选"
-                value={sessionId}
-                onChange={(e) => updateParam("sessionId", e.target.value)}
+                value={sessionIdMirror.value}
+                onChange={(e) => applyMirroredText(sessionIdMirror, e.target.value, "sessionId")}
               />
               <input
                 className="pl-input w-36 notranslate"
                 translate="no"
                 placeholder="访问 IP"
-                value={clientIp}
+                value={clientIpMirror.value}
                 aria-label="访问 IP"
-                onChange={(e) => updateParam("clientIp", e.target.value)}
+                onChange={(e) => applyMirroredText(clientIpMirror, e.target.value, "clientIp")}
               />
               <input
                 className="pl-input w-36 notranslate"
                 translate="no"
                 placeholder="最近设备名"
-                value={deviceNameFilter}
+                value={deviceNameMirror.value}
                 aria-label="最近设备名"
-                onChange={(e) => updateParam("deviceName", e.target.value)}
+                onChange={(e) => applyMirroredText(deviceNameMirror, e.target.value, "deviceName")}
               />
               <label className="flex items-center gap-2 text-sm text-fg-muted">
                 <input type="checkbox" checked={includeProtocol} onChange={(e) => updateParam("includeProtocol", e.target.checked ? "true" : "")} />
@@ -2037,8 +2411,8 @@ export function Audit() {
               translate="no"
               placeholder="表名"
               aria-label="按表名筛选"
-              value={tableSearch}
-              onChange={(e) => updateParam("tableSearch", e.target.value)}
+              value={tableSearchMirror.value}
+              onChange={(e) => applyMirroredText(tableSearchMirror, e.target.value, "tableSearch")}
             />
           ) : null}
           <label className="flex items-center gap-2 text-sm text-fg-muted">
@@ -2060,10 +2434,7 @@ export function Audit() {
             </div>
             {turnSummary ? (
               <div className="text-sm text-fg-muted" data-testid="audit-turns-coverage-summary">
-                当前筛选：已上报问询 {turnSummary.reportedCount} · 推断问询 {turnSummary.inferredCount}
-                {turnTotal > 0
-                  ? ` · 上报占比 ${Math.round(turnSummary.reportedShare * 100)}%`
-                  : null}
+                {turnCoverageSummary}
               </div>
             ) : null}
             {turnTotal === 0 || (turnSummary && turnSummary.reportedCount === 0) ? (
@@ -2086,12 +2457,14 @@ export function Audit() {
                   <th className="pl-audit-turns-col-index whitespace-nowrap">序号</th>
                   <th className="pl-audit-turns-col-id whitespace-nowrap">问询 ID</th>
                   <th className="pl-audit-turns-col-time whitespace-nowrap">开始时间</th>
-                  <th className="pl-audit-turns-col-duration whitespace-nowrap">问询时长</th>
+                  <th className="pl-audit-turns-col-duration">问询时长</th>
                   <th className="pl-audit-turns-col-agent whitespace-nowrap"><span className="notranslate" translate="no">Agent</span></th>
-                  <th className="whitespace-nowrap">客户端</th>
-                  <th className="whitespace-nowrap">会话 ID</th>
+                  <th className="pl-audit-turns-col-client">客户端</th>
+                  <th className="pl-audit-turns-col-session">会话 ID</th>
+                  <th className="pl-audit-turns-col-kind whitespace-nowrap">问询种类</th>
                   <th className="pl-audit-turns-col-summary whitespace-nowrap">问询摘要</th>
-                  <th className="pl-audit-turns-col-calls whitespace-nowrap">关联调用数</th>
+                  <th className="pl-audit-turns-col-calls">关联调用数</th>
+                  <th className="pl-audit-turns-col-budget">预算终止次数</th>
                   <th className="pl-audit-turns-col-tables whitespace-nowrap">涉及数据表</th>
                   <th className="pl-audit-turns-col-result whitespace-nowrap">结果</th>
                   <th className="pl-audit-turns-col-source pl-audit-turn-source-cell whitespace-nowrap">来源</th>
@@ -2099,11 +2472,13 @@ export function Audit() {
               </thead>
               <tbody>
                 {filteredTurnEntries.length === 0 ? (
-                  <tr><td colSpan={12} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                  <tr><td colSpan={14} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
                   filteredTurnEntries.map((entry, index) => {
+                    // 「未下发」提示用 legacy outcome 的 denied 计数：它回答的是
+                    // 「这次问询有没有被下发过表」，与「执行结果」不是同一维度。
+                    // 执行结果一律看八桶（见下方 turnStatusBuckets）。
                     const denied = entry.outcomeSummary?.denied ?? 0;
-                    const errors = entry.outcomeSummary?.error ?? 0;
                     return (
                       <tr
                         key={entry.id}
@@ -2113,42 +2488,56 @@ export function Audit() {
                       >
                         <td className="pl-audit-table-num">{page * PAGE_SIZE + index + 1}</td>
                         <td className="pl-audit-table-mono pl-audit-turn-id-cell" onClick={(e) => e.stopPropagation()}>
-                          <CopyableId value={entry.id} testId={`audit-turn-id-${entry.id}`} label="问询 ID" />
+                          {entry.inquiryNo != null ? (
+                            <CopyableId value={String(entry.inquiryNo)} testId={`audit-turn-id-${entry.id}`} label="问询 ID" />
+                          ) : (
+                            <span className="text-fg-muted">—</span>
+                          )}
                         </td>
-                        <td className="pl-audit-table-muted whitespace-nowrap tabular-nums">
-                          {formatConfigAuditTs(entry.startedAt)}
+                        <td className="pl-audit-table-muted pl-audit-turns-col-time">
+                          <AuditDateTime value={entry.startedAt} />
                         </td>
-                        <td className="pl-audit-turn-duration-cell">
-                          {formatDurationMs(entry.turnSpanMs ?? 0)}
-                          {(entry.totalCallDurationMs ?? 0) > 0 ? (
-                            <span className="text-fg-muted"> · 执 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</span>
-                          ) : null}
+                        <td className="pl-audit-turn-duration-cell pl-audit-turns-col-duration">
+                          <span className="pl-audit-duration-stack">
+                            <span data-part="span">{formatDurationMs(entry.turnSpanMs ?? 0)}</span>
+                            {(entry.totalCallDurationMs ?? 0) > 0 ? (
+                              <span data-part="exec">执 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</span>
+                            ) : null}
+                          </span>
                         </td>
                         <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
-                        <td className="notranslate" translate="no">{entry.client || "—"}</td>
-                        <td className="pl-audit-table-mono notranslate" translate="no">{entry.sessionId || "—"}</td>
-                        <td className="pl-audit-turn-summary-cell">{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
-                        <td className="pl-audit-table-num">{entry.linkedCallCount}</td>
+                        <td className="pl-audit-turns-col-client notranslate" translate="no" title={entry.client || undefined}>{entry.client || "—"}</td>
+                        <td className="pl-audit-table-mono pl-audit-turns-col-session notranslate" translate="no" title={entry.sessionId || undefined}>{entry.sessionId || "—"}</td>
+                        <td className="pl-audit-turns-col-kind" data-testid={`audit-turn-kind-${entry.id}`}>{inquiryKindLabel(entry.inquiryKind)}</td>
+                        <td className="pl-audit-turn-summary-cell">
+                          {entry.inquiryKind === "session_visit" ? "—" : (entry.questionPreview ?? entry.questionSummary ?? "—")}
+                        </td>
+                        <td className="pl-audit-table-num pl-audit-turns-col-calls">{entry.linkedCallCount}</td>
+                        <td className="pl-audit-table-num pl-audit-turns-col-budget">{entry.outcomeSummary?.budgetStop ?? 0}</td>
                         <td className="pl-audit-table-muted pl-audit-turn-tables-cell notranslate" translate="no" title={entry.sources.map((s) => s.physicalTable).filter(Boolean).join(", ") || undefined}>
                           {entry.sources.length === 0 && denied > 0
                             ? <span className="text-fg-muted">未下发</span>
                             : formatTablesCell(entry.sources)}
                         </td>
-                        <td>
+                        <td className="pl-audit-turns-col-result">
+                          {/* 八桶主状态（B27）。「成功」只在**全部**关联调用都落在
+                              succeeded 桶时才成立；旧三桶（denied/error）不再
+                              充当执行结论 —— 预算终止 / 未执行 / 未知都不是
+                              「成功」，也不是「异常」。 */}
                           <span className="inline-flex flex-wrap items-center gap-1">
-                            {denied > 0 ? (
-                              <>
-                                <span className="pl-status-badge pl-status-partial">已拦截</span>
-                                <span className="text-xs text-fg-muted tabular-nums">({denied})</span>
-                              </>
+                            {turnStatusBuckets(entry).map(({ bucket, count }) => (
+                              <span
+                                key={bucket}
+                                className={`pl-status-badge ${primaryStatusPalette(bucket)}`}
+                                data-testid={`audit-turn-status-${entry.id}-${bucket}`}
+                                data-bucket={bucket}
+                              >
+                                {primaryStatusLabel(bucket)} <span className="tabular-nums">{count}</span>
+                              </span>
+                            ))}
+                            {turnStatusBuckets(entry).length === 0 ? (
+                              <span className="text-fg-muted">无关联调用</span>
                             ) : null}
-                            {errors > 0 ? (
-                              <>
-                                <span className="pl-status-badge pl-status-validation_failed">异常</span>
-                                <span className="text-xs text-fg-muted tabular-nums">({errors})</span>
-                              </>
-                            ) : null}
-                            {denied === 0 && errors === 0 ? <span className="pl-status-badge pl-status-done">成功</span> : null}
                             {(entry.slowCallCount ?? 0) > 0 ? (
                               <span className="pl-status-badge pl-status-partial">含 {entry.slowCallCount} 慢</span>
                             ) : null}
@@ -2177,6 +2566,39 @@ export function Audit() {
               ? `本页慢调用 ${callEntries.length} 条（筛选前共 ${callTotal} 条）`
               : (callTotal === 0 ? "共 0 条" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, callTotal)} / 共 ${callTotal} 条`)}
           </div>
+          {/* 八桶主状态汇总（B27）。旧三桶 outcome 只作 legacy 直方图单列，
+              不作为执行状态 —— 两者不混在同一处。 */}
+          {primaryStatusCounts ? (
+            <div
+              className="flex flex-wrap items-center gap-2 text-xs"
+              data-testid="audit-primary-status-summary"
+              data-closed={callsQuery.data?.summary?.primaryStatusClosed ? "true" : "false"}
+            >
+              <span className="text-fg-muted whitespace-nowrap">主状态：</span>
+              {PRIMARY_STATUS_ORDER.map((bucket) => (
+                <span
+                  key={bucket}
+                  className={`pl-status-badge ${primaryStatusPalette(bucket)}`}
+                  data-testid={`audit-primary-status-count-${bucket}`}
+                  data-bucket={bucket}
+                >
+                  {primaryStatusLabel(bucket)} {primaryStatusCounts[bucket] ?? 0}
+                </span>
+              ))}
+              {callsQuery.data?.summary?.legacyOutcome ? (
+                <span
+                  className="pl-status-badge pl-status-neutral"
+                  data-testid="audit-legacy-outcome-histogram"
+                  title="旧 outcome 直方图（legacy），不作为执行状态"
+                >
+                  旧 outcome（legacy）：{Object.entries(callsQuery.data.summary.legacyOutcome)
+                    .filter(([key]) => key !== "null")
+                    .map(([key, count]) => `${LEGACY_OUTCOME_LABELS[key] ?? key} ${count}`)
+                    .join(" · ") || "无"}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <section className="pl-data-grid-frame" data-testid="audit-calls-grid-frame">
             <div
               className="pl-data-grid-scroll pl-audit-grid-scroll"
@@ -2196,6 +2618,7 @@ export function Audit() {
                   <th className="whitespace-nowrap">访问上下文</th>
                   <th>状态</th>
                   <th>耗时</th>
+                  <th className="whitespace-nowrap">访问等级</th>
                   <th>工具</th>
                   <th>涉及数据表</th>
                   <th>裁决原因</th>
@@ -2205,7 +2628,7 @@ export function Audit() {
               </thead>
               <tbody>
                 {callEntries.length === 0 ? (
-                  <tr><td colSpan={13} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
+                  <tr><td colSpan={14} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
                 ) : (
                   callEntries.map((entry, index) => (
                     <EntryRow

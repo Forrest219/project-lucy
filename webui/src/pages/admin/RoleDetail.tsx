@@ -8,40 +8,87 @@ import type {
   ConnectionTablesResponse,
   ConnectionsResponse,
   McpToolInfo,
-  RoleAllowConfig,
   RoleDetail as RoleDetailType,
   RoleRowPolicyPredicate,
   RoleSelector,
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { AuthorizationSummarySection } from "../../components/admin/AuthorizationSummarySection";
 import { RoleDeleteBlockedNotice } from "../../components/RoleDeleteBlockedNotice";
 import { PolicyDegradeRepairText } from "../../components/PolicyDegradeBanner";
 import { TagInput } from "../../components/TagInput";
 import { RoleTableGrants } from "../../components/RoleTableGrants";
 import { RoleToolGrants } from "../../components/RoleToolGrants";
 import { RoleRowPolicyPanel } from "../../components/RoleRowPolicyPanel";
+import {
+  useRowPolicyPreview,
+  type RowPolicyPreviewConfirmation,
+  type RowPolicyPreviewResponse
+} from "../../lib/rowPolicyPreview";
+import {
+  describeAccessWriteFailure,
+  describeAccessWriteOutcome
+} from "../../lib/accessWriteOutcome";
 import { RolePermissionReviewDrawer } from "../../components/RolePermissionReviewDrawer";
 import {
   buildTableAllow,
   derivePermissionImpact,
   partitionGrantableTools,
   permissionTableKey,
+  READONLY_QA_PRESET,
   rolePermissionDraftHash,
+  ROW_POLICY_TEMPLATE_NAME_PATTERN,
   type PermissionImpactSummary,
   type PermissionSection,
   type RolePermissionDraft,
+  type RoleSelectorWithTemplate,
   type RowPolicyPredicateDraft,
   type TableGrant,
 } from "../../lib/rolePermissionDraft";
 import { isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID } from "../../lib/lucyAdminRole";
+import { isOpsEvidenceRole, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { queryKeys } from "../../lib/queryKeys";
 
 type PageMode = "create" | "edit" | "copy";
 
+/**
+ * Lucy v0.25 P1-1 §3.1 — 写回配置的行策略引用形态。
+ *
+ * `template` 是引用（可缺省 `predicates`），`predicates` 是内联谓词；
+ * 两者并用时服务端把模板谓词展开到内联谓词之前，在同一条选择器内取交集。
+ */
+type RoleRowPolicyPayload = {
+  template?: string;
+  predicates?: RoleRowPolicyPredicate[];
+};
+
+type RoleSelectorPayload =
+  | {
+      connection?: string;
+      schema: string;
+      names: string[];
+      row_access?: "all" | "scoped";
+      row_policy?: RoleRowPolicyPayload;
+    }
+  | {
+      connection?: string;
+      schema: string;
+      prefix: string;
+      row_access?: "all" | "scoped";
+      row_policy?: RoleRowPolicyPayload;
+    };
+
+type RoleAllowPayload = {
+  connections?: string[];
+  source_scope?: "catalog_bound";
+  tableSelectors?: RoleSelectorPayload[];
+  tools?: string[];
+};
+
 type RoleWritePayload = {
   description?: string;
   permission_model_version: 2;
-  allow: RoleAllowConfig;
+  allow: RoleAllowPayload;
 };
 
 type ReviewSnapshot = {
@@ -63,12 +110,53 @@ type DraftInit = {
   migratedPrefix: boolean;
 };
 
-const EMPTY_DRAFT: RolePermissionDraft = {
-  roleId: "",
-  description: "",
-  scope: { mode: "names", tables: [] },
-  tools: [],
+/**
+ * Spec 194 §4.2 — 一次本地校验的结果。
+ *
+ * `kind` 只在需要页内提示时给出：空可授予工具必须落在工具页里，
+ * Toast 不能替代它。
+ */
+type DraftValidation = {
+  section: PermissionSection;
+  message: string;
+  kind?: "no-grantable-tools";
 };
+
+/**
+ * Spec 194 §3 — 新建草稿的默认工具全集。
+ *
+ * 唯一事实源是 `READONLY_QA_PRESET`；这里只复制它的独立副本，
+ * 不另抄一份工具名单。编辑、复制与模板沿用各自已有的工具。
+ */
+function newCreateDraft(): RolePermissionDraft {
+  return {
+    roleId: "",
+    description: "",
+    scope: { mode: "names", tables: [] },
+    tools: [...READONLY_QA_PRESET],
+  };
+}
+
+/**
+ * Spec 194 §4.1 — 空权限草稿。
+ *
+ * 新建时它只作为「新增权限」的比较起点，不是新建草稿本身。
+ */
+function newEmptyDraft(): RolePermissionDraft {
+  return {
+    roleId: "",
+    description: "",
+    scope: { mode: "names", tables: [] },
+    tools: [],
+  };
+}
+
+/**
+ * Spec 194 §4.2 — 没有可授予工具时的页内校验提示。
+ *
+ * 与 Toast 用的是同一句话；页内提示另外给 `MCP` 加翻译防御。
+ */
+const EMPTY_GRANTABLE_TOOLS_MESSAGE = "请至少选择一个 MCP 工具。常规查询可选择“只读问答”。";
 
 const ROW_POLICY_INCOMPATIBLE_TOOLS = new Set([
   "lucy_read_source",
@@ -77,17 +165,33 @@ const ROW_POLICY_INCOMPATIBLE_TOOLS = new Set([
   "sl_validate",
 ]);
 
+/**
+ * Spec §14.3.2 — only `committed` is a success.
+ *
+ * A rolled-back write reverted the change and the old policy was verified back;
+ * a `recovery_required` write left the affected reads and the subsequent writes
+ * blocked. Neither may be reported as 「保存成功」.
+ */
 function toastAccessWriteAck(result: AccessWriteAck, message: string): boolean {
-  if (result.runtimeAck === false) {
-    toast.error("保存未生效：runtime 未确认（runtimeAck=false）。草稿已保留，请检查策略降级状态。");
-    return false;
-  }
-  const version = result.policyVersion ? ` · policyVersion=${result.policyVersion.slice(0, 12)}…` : "";
-  toast.success(`${message}${version}`);
-  return true;
+  const outcome = describeAccessWriteOutcome(result, message);
+  if (outcome.ok) toast.success(outcome.message);
+  else toast.error(outcome.message);
+  return outcome.ok;
 }
 
-function copyPredicates(selector: RoleSelector): RowPolicyPredicateDraft[] | undefined {
+/**
+ * Spec §14.3.2 — a REJECTED write carries the same three terminal states.
+ *
+ * `rolled_back` is HTTP 500 and `recovery_required` is HTTP 503, both with
+ * `ok:false`, so the client raises them as an error. The terminal state is read
+ * from the error envelope, never from the HTTP status alone.
+ */
+function toastAccessWriteError(error: unknown): void {
+  const outcome = describeAccessWriteFailure(error);
+  toast.error(outcome.message);
+}
+
+function copyPredicates(selector: RoleSelectorWithTemplate): RowPolicyPredicateDraft[] | undefined {
   if (selector.row_access !== "scoped" || !selector.row_policy?.predicates?.length) return undefined;
   return selector.row_policy.predicates.map((predicate) => ({
     field: String(predicate.field),
@@ -98,16 +202,28 @@ function copyPredicates(selector: RoleSelector): RowPolicyPredicateDraft[] | und
   }));
 }
 
-function explicitTables(selectors: RoleSelector[] | undefined): TableGrant[] {
+/**
+ * Lucy v0.25 P1-1 §3.1 — 选择器引用的行策略模板名。
+ *
+ * 引用形态原样读回草稿：配置里存的是引用，不是展开后的谓词。
+ */
+function copyTemplate(selector: RoleSelectorWithTemplate): string | undefined {
+  if (selector.row_access !== "scoped") return undefined;
+  const template = selector.row_policy?.template;
+  return typeof template === "string" && template.trim() ? template.trim() : undefined;
+}
+
+function explicitTables(selectors: RoleSelectorWithTemplate[] | undefined): TableGrant[] {
   const result: TableGrant[] = [];
   for (const selector of selectors ?? []) {
     if (!("names" in selector)) continue;
-    for (const name of selector.names) {
+    for (const name of selector.names ?? []) {
       result.push({
         connection: selector.connection ?? "",
         schema: selector.schema,
         name,
         predicates: copyPredicates(selector),
+        rowPolicyTemplate: copyTemplate(selector),
       });
     }
   }
@@ -145,6 +261,7 @@ function expandLegacyPrefixes(detail: RoleDetailType): {
         schema: source.schema,
         name: source.sourceName,
         predicates: copyPredicates(selector),
+        rowPolicyTemplate: copyTemplate(selector),
       };
       if (!tables.some((table) => permissionTableKey(table) === permissionTableKey(next))) tables.push(next);
     }
@@ -154,9 +271,12 @@ function expandLegacyPrefixes(detail: RoleDetailType): {
 
 function initializeDraft(detail: RoleDetailType | null, mode: PageMode): DraftInit {
   if (!detail) {
+    // Spec 194 §4.1 — 只有新建模式带默认工具；编辑与复制走各自的初始化。
+    // 草稿与基线各拿一份独立副本，默认工具数组不会跨生命周期共享。
+    const factory = mode === "create" ? newCreateDraft : newEmptyDraft;
     return {
-      baseline: EMPTY_DRAFT,
-      draft: EMPTY_DRAFT,
+      baseline: factory(),
+      draft: factory(),
       rejectedTools: [],
       migrationBlocked: null,
       migratedPrefix: false,
@@ -195,7 +315,7 @@ function initializeDraft(detail: RoleDetailType | null, mode: PageMode): DraftIn
 
 function serializeDraft(draft: RolePermissionDraft): RoleWritePayload {
   const partitioned = partitionGrantableTools(draft.tools);
-  let allow: RoleAllowConfig;
+  let allow: RoleAllowPayload;
   if (draft.scope.mode === "catalog_bound") {
     const connections = draft.roleId === LUCY_ADMIN_ROLE_ID
       ? ["*"]
@@ -207,14 +327,22 @@ function serializeDraft(draft: RolePermissionDraft): RoleWritePayload {
     };
   } else {
     const built = buildTableAllow({ mode: "names", tables: draft.scope.tables });
-    const tableSelectors: RoleSelector[] = (built.tableSelectors ?? []).map((selector) => {
-      const predicates = selector.row_policy?.predicates.map(({ sourceName: _sourceName, ...predicate }) => predicate as RoleRowPolicyPredicate);
+    const tableSelectors: RoleSelectorPayload[] = (built.tableSelectors ?? []).map((selector) => {
+      const predicates = selector.row_policy?.predicates?.map(({ sourceName: _sourceName, ...predicate }) => predicate as RoleRowPolicyPredicate);
+      // P1-1 §3.1：引用形态原样写回——`template` 与内联 `predicates` 可以并存，
+      // 只引用模板时 `predicates` 整体缺省（空数组会被服务端判为形状错误）。
+      const template = selector.row_policy?.template;
+      const rowPolicy: RoleRowPolicyPayload | undefined = template
+        ? { template, ...(predicates?.length ? { predicates } : {}) }
+        : predicates?.length
+          ? { predicates }
+          : undefined;
       return {
         connection: selector.connection || undefined,
         schema: selector.schema,
         names: selector.names,
         row_access: selector.row_access,
-        ...(predicates?.length ? { row_policy: { predicates } } : {}),
+        ...(rowPolicy ? { row_policy: rowPolicy } : {}),
       };
     });
     allow = {
@@ -261,7 +389,7 @@ function canonicalSection(raw: string | null): PermissionSection {
   return "overview";
 }
 
-function validateDraft(draft: RolePermissionDraft, migrationBlocked: string | null): { section: PermissionSection; message: string } | null {
+function validateDraft(draft: RolePermissionDraft, migrationBlocked: string | null): DraftValidation | null {
   if (migrationBlocked) return { section: "tables", message: migrationBlocked };
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(draft.roleId)) {
     return { section: "overview", message: "角色标识必须匹配 ^[A-Za-z0-9_-]{1,64}$" };
@@ -269,11 +397,20 @@ function validateDraft(draft: RolePermissionDraft, migrationBlocked: string | nu
   if (draft.tools.some((tool) => tool.includes("*"))) {
     return { section: "tools", message: "允许的 MCP 工具禁止使用 * 通配符" };
   }
+  // Spec 194 §4.2 — 空可授予工具的校验排在通配符之后、数据范围与行级策略之前。
+  if (partitionGrantableTools(draft.tools).grantable.length === 0) {
+    return { section: "tools", message: EMPTY_GRANTABLE_TOOLS_MESSAGE, kind: "no-grantable-tools" };
+  }
   if (draft.scope.mode === "catalog_bound" && draft.scope.connections.length === 0) {
     return { section: "tables", message: "启用目录绑定时至少选择一个允许的连接" };
   }
   if (draft.scope.mode === "names") {
     for (const table of draft.scope.tables) {
+      // P1-1 §3.1：模板名要能当 YAML 键，也要能当界面标识。
+      const template = table.rowPolicyTemplate?.trim();
+      if (template && !ROW_POLICY_TEMPLATE_NAME_PATTERN.test(template)) {
+        return { section: "rowPolicy", message: `${table.name} 引用的行策略模板名不合法（只允许字母、数字、下划线和连字符，且不能以数字开头）` };
+      }
       for (const predicate of table.predicates ?? []) {
         if (!predicate.field.trim()) return { section: "rowPolicy", message: `${table.name} 的行级策略缺少字段` };
         const values = Array.isArray(predicate.value) ? predicate.value : [predicate.value];
@@ -309,7 +446,7 @@ function RoleBoundarySummary({
     : draft.scope.mode === "catalog_bound"
     ? draft.scope.connections.filter((id) => id !== "*")
     : [...new Set(tables.map((table) => table.connection).filter(Boolean))];
-  const restricted = tables.filter((table) => table.predicates?.length).length;
+  const restricted = tables.filter((table) => table.predicates?.length || table.rowPolicyTemplate).length;
   const incompatible = draft.tools.filter((tool) => ROW_POLICY_INCOMPATIBLE_TOOLS.has(tool));
 
   return (
@@ -394,12 +531,15 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     enabled: needsDetail && roleId.length > 0,
   });
   const detail = detailQuery.data ?? null;
-  const [baseline, setBaseline] = useState<RolePermissionDraft>(EMPTY_DRAFT);
-  const [draft, setDraft] = useState<RolePermissionDraft>(EMPTY_DRAFT);
+  const [baseline, setBaseline] = useState<RolePermissionDraft>(() => (mode === "create" ? newCreateDraft() : newEmptyDraft()));
+  const [draft, setDraft] = useState<RolePermissionDraft>(() => (mode === "create" ? newCreateDraft() : newEmptyDraft()));
   const [rejectedTools, setRejectedTools] = useState<string[]>([]);
   const [migrationBlocked, setMigrationBlocked] = useState<string | null>(null);
   const [migratedPrefix, setMigratedPrefix] = useState(false);
   const [review, setReview] = useState<ReviewSnapshot | null>(null);
+  /** Spec 194 §4.2 — 空可授予工具的页内提示（只在保存失败后出现）。 */
+  const [toolGrantError, setToolGrantError] = useState<string | null>(null);
+  const toolGrantAlertRef = useRef<HTMLParagraphElement | null>(null);
   const reviewTriggerRef = useRef<HTMLElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const handledDeleteIntentRef = useRef<string | null>(null);
@@ -436,6 +576,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     setMigrationBlocked(initialized.migrationBlocked);
     setMigratedPrefix(initialized.migratedPrefix);
     setReview(null);
+    setToolGrantError(null);
   }, [detail, mode, needsDetail]);
 
   const tabs = useMemo(() => tabsFor(mode, detail?.source), [mode, detail?.source]);
@@ -460,12 +601,55 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   function updateDraft(next: RolePermissionDraft) {
     setDraft(next);
     setReview(null);
+    // Spec 194 §4.2 — 工具恢复为非空后，空工具提示随之消除。
+    if (toolGrantError && partitionGrantableTools(next.tools).grantable.length > 0) {
+      setToolGrantError(null);
+    }
   }
 
-  const impact = useMemo(
-    () => derivePermissionImpact(baseline, draft, rejectedTools, detail?.users ?? []),
-    [baseline, draft, rejectedTools, detail?.users]
+  /**
+   * Spec 194 §4.1 — 「新增权限」与「是否已修改」用两个基线。
+   *
+   * dirty 基线是带默认工具的初始草稿；权限比较基线是空权限草稿，
+   * 所以默认工具会完整出现在审阅摘要里。编辑与复制沿用各自基线。
+   */
+  const impactBaseline = useMemo(
+    () => (mode === "create" ? newEmptyDraft() : baseline),
+    [mode, baseline]
   );
+  const impact = useMemo(
+    () => derivePermissionImpact(impactBaseline, draft, rejectedTools, detail?.users ?? []),
+    [impactBaseline, draft, rejectedTools, detail?.users]
+  );
+  /**
+   * Lucy v0.25 (L25-14 §3.2) — the candidate Role the final-row preview is
+   * computed from. It is the in-memory draft, never the committed configuration.
+   */
+  const rowPolicyPreviewRole = useMemo(() => serializeDraft(draft), [draft]);
+  const tables = draft.scope.mode === "names" ? draft.scope.tables : [];
+  /**
+   * Spec §14.2.1 — the final-row preview.
+   *
+   * The query is shared with the row-policy panel, so the confirmation the save
+   * carries is the confirmation of the preview the operator actually saw.
+   */
+  const rowPolicyPreview = useRowPolicyPreview({
+    roleId: draft.roleId,
+    previewRole: rowPolicyPreviewRole,
+    tables
+  });
+  const rowPolicyConfirmation: RowPolicyPreviewConfirmation | null =
+    rowPolicyPreview.data?.confirmation ?? null;
+  /**
+   * Does this draft touch a row policy at all? A Role that never carries one
+   * has no row-policy impact to confirm.
+   */
+  const draftCarriesRowPolicy = useMemo(() => {
+    const selectors = rowPolicyPreviewRole.allow?.tableSelectors ?? [];
+    return selectors.some(
+      (selector) => selector.row_access === "scoped" || selector.row_policy !== undefined
+    );
+  }, [rowPolicyPreviewRole]);
   const dirty = mode === "copy"
     || migratedPrefix
     || rejectedTools.length > 0
@@ -487,36 +671,38 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   }
 
   const createMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary }) =>
-      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>("/api/admin/roles", { dryRun: vars.dryRun, roleId: vars.roleId, role: vars.payload }),
+    mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary; rowPolicyConfirmation?: RowPolicyPreviewConfirmation | null }) =>
+      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>("/api/admin/roles", { dryRun: vars.dryRun, roleId: vars.roleId, role: vars.payload, rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined }),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const preview = data as { diff: string; proposedYaml: string };
         setReview({ kind: "create", draftHash: vars.draftHash, payload: vars.payload, roleId: vars.roleId, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
       } else finishSave(data as AccessWriteAck, "Role 已创建", vars.roleId);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toastAccessWriteError(error),
   });
 
   const copyMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary }) =>
-      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}/copy`, { dryRun: vars.dryRun, newRoleId: vars.roleId, role: vars.payload }),
+    mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary; rowPolicyConfirmation?: RowPolicyPreviewConfirmation | null }) =>
+      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}/copy`, { dryRun: vars.dryRun, newRoleId: vars.roleId, role: vars.payload, rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined }),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const preview = data as { diff: string; proposedYaml: string };
         setReview({ kind: "copy", draftHash: vars.draftHash, payload: vars.payload, roleId: vars.roleId, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
       } else finishSave(data as AccessWriteAck, `Role '${vars.roleId}' 已复制`, vars.roleId);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toastAccessWriteError(error),
   });
 
   const patchMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; payload: RoleWritePayload; version?: string; draftHash: string; impact: PermissionImpactSummary }) => {
+    mutationFn: (vars: { dryRun: boolean; payload: RoleWritePayload; version?: string; draftHash: string; impact: PermissionImpactSummary; rowPolicyConfirmation?: RowPolicyPreviewConfirmation | null }) => {
       const { description, allow } = vars.payload;
       return apiPatch<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, {
         dryRun: vars.dryRun,
         version: vars.version,
         patch: { description, allow },
+        // Spec §14.2.1 — the save carries the preview confirmation.
+        rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined,
       });
     },
     onSuccess: (data, vars) => {
@@ -525,12 +711,16 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setReview({ kind: "patch", draftHash: vars.draftHash, payload: vars.payload, version: preview.version ?? vars.version, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
       } else finishSave(data as AccessWriteAck, "Role 已保存", roleId);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toastAccessWriteError(error),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; version?: string }) =>
-      apiDelete<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, { dryRun: vars.dryRun, version: vars.version }),
+    mutationFn: (vars: { dryRun: boolean; version?: string; rowPolicyConfirmation?: RowPolicyPreviewConfirmation }) =>
+      apiDelete<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, {
+        dryRun: vars.dryRun,
+        version: vars.version,
+        rowPolicyConfirmation: vars.rowPolicyConfirmation
+      }),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const preview = data as { diff: string; proposedYaml: string; version?: string };
@@ -542,7 +732,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         navigate("/admin/roles");
       }
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toastAccessWriteError(error),
   });
 
   useEffect(() => {
@@ -574,6 +764,13 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       setActiveSection(validation.section);
       toast.error(validation.message);
       if (validation.section === "overview") setTimeout(() => document.getElementById("role-id-input")?.focus(), 0);
+      if (validation.kind === "no-grantable-tools") {
+        // Spec 194 §4.2 — 页内提示与焦点都在工具页；此时不发 dryRun、不写角色、不开 Drawer。
+        setToolGrantError(validation.message);
+        setTimeout(() => toolGrantAlertRef.current?.focus(), 0);
+      } else {
+        setToolGrantError(null);
+      }
       return;
     }
     const payload = serializeDraft(draft);
@@ -583,7 +780,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     else patchMutation.mutate({ dryRun: true, payload, version: detail?.version, draftHash, impact });
   }
 
-  function confirmReview() {
+  async function confirmReview() {
     if (!review) return;
     if (review.kind !== "delete" && rolePermissionDraftHash(draft) !== review.draftHash) {
       setReview(null);
@@ -591,10 +788,61 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       return;
     }
     if (review.kind === "delete") {
-      deleteMutation.mutate({ dryRun: false, version: review.version });
+      const selectors = detail?.role.allow.tableSelectors ?? [];
+      const carriesRowPolicy = selectors.some(
+        (selector) => selector.row_access === "scoped" || selector.row_policy !== undefined
+      );
+      let rowPolicyConfirmation: RowPolicyPreviewConfirmation | undefined;
+      if (carriesRowPolicy) {
+        const tables = selectors.flatMap((selector) =>
+          "names" in selector
+            ? selector.names.map((name) => ({
+                connection: selector.connection ?? "",
+                schema: selector.schema,
+                name
+              }))
+            : []
+        );
+        try {
+          const preview = await apiPost<RowPolicyPreviewResponse>("/api/admin/roles/preview-row-policy", {
+            roleId,
+            removeRole: true,
+            tables
+          });
+          if (!preview.ok || !preview.confirmation) {
+            toast.error("最终行约束预览失败，无法删除带行级策略的 Role。请先解决预览报错。");
+            return;
+          }
+          rowPolicyConfirmation = preview.confirmation;
+        } catch (error) {
+          toastAccessWriteError(error instanceof Error ? error : new Error(String(error)));
+          return;
+        }
+      }
+      deleteMutation.mutate({ dryRun: false, version: review.version, rowPolicyConfirmation });
       return;
     }
-    const common = { dryRun: false, payload: review.payload!, draftHash: review.draftHash, impact: review.impact };
+    /**
+     * Spec §14.2.1 — a save that can change a row policy MUST carry the
+     * final-row-constraint preview confirmation. Without one the save is
+     * refused here, before anything is written.
+     */
+    if (draftCarriesRowPolicy && !rowPolicyConfirmation) {
+      setReview(null);
+      toast.error(
+        rowPolicyPreview.isError
+          ? "最终行约束预览失败，无法保存行级策略配置。请先解决预览报错。"
+          : "最终行约束预览尚未成功，无法保存行级策略配置。请稍候重试或先查看预览报错。"
+      );
+      return;
+    }
+    const common = {
+      dryRun: false,
+      payload: review.payload!,
+      draftHash: review.draftHash,
+      impact: review.impact,
+      rowPolicyConfirmation: draftCarriesRowPolicy ? rowPolicyConfirmation : null
+    };
     if (review.kind === "create") createMutation.mutate({ ...common, roleId: review.roleId! });
     else if (review.kind === "copy") copyMutation.mutate({ ...common, roleId: review.roleId! });
     else patchMutation.mutate({ ...common, version: review.version });
@@ -608,6 +856,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     setMigrationBlocked(initialized.migrationBlocked);
     setMigratedPrefix(initialized.migratedPrefix);
     setReview(null);
+    setToolGrantError(null);
   }
 
   if (needsDetail && detailQuery.isLoading) return <div className="pl-notice">加载中…</div>;
@@ -616,7 +865,6 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   }
 
   const mutationPending = createMutation.isPending || copyMutation.isPending || patchMutation.isPending || deleteMutation.isPending;
-  const tables = draft.scope.mode === "names" ? draft.scope.tables : [];
 
   return (
     <div className="pl-page-stack min-w-[880px] xl:min-w-[960px]">
@@ -662,13 +910,24 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         </div>
       ) : null}
 
+      {/* Spec 149 §6 / SC-23 — 运维问数角色的高权限警示。
+          文案不含「所有者」「登录管理员」「超管」。 */}
+      {isOpsEvidenceRole(detail) ? (
+        <div
+          className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+          data-testid="ops-evidence-role-warning"
+        >
+          {OPS_EVIDENCE_ROLE_WARNING}
+        </div>
+      ) : null}
+
       <div className="pl-admin-tabbar" role="tablist" aria-label="Role 权限编辑面">
         {tabs.map((tab) => (
           <button key={tab.key} type="button" role="tab" aria-selected={activeSection === tab.key} className={`pl-admin-tab ${activeSection === tab.key ? "pl-admin-tab--active" : ""}`} onClick={() => setActiveSection(tab.key)}>
             {tab.label}
             {tab.key === "tables" && <span className="ml-1 text-xs text-fg-muted">{draft.scope.mode === "catalog_bound" ? "目录" : tables.length}</span>}
             {tab.key === "tools" && <span className="ml-1 text-xs text-fg-muted">{draft.tools.length}</span>}
-            {tab.key === "rowPolicy" && <span className="ml-1 text-xs text-fg-muted">{tables.filter((table) => table.predicates?.length).length}</span>}
+            {tab.key === "rowPolicy" && <span className="ml-1 text-xs text-fg-muted">{tables.filter((table) => table.predicates?.length || table.rowPolicyTemplate).length}</span>}
           </button>
         ))}
       </div>
@@ -677,9 +936,20 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         <main className="pl-admin-tab-panel min-w-0" role="tabpanel">
           {activeSection === "overview" ? (
             <div className="grid max-w-2xl gap-4 pb-28">
+              {/* Lucy v0.25 P1-2 §4.2 —「概览」显示当前 Role 授权摘要（只读投影）。 */}
+              {mode !== "create" && roleId ? (
+                <AuthorizationSummarySection
+                  kind="role"
+                  id={roleId}
+                  title="授权摘要"
+                  testId="role-authorization-summary"
+                />
+              ) : null}
               <label className="grid gap-1" htmlFor="role-id-input">
                 <span className="text-sm font-medium">角色标识</span>
-                <input id="role-id-input" className="pl-input notranslate" translate="no" value={draft.roleId} disabled={isReadOnlyTemplate || (mode === "edit" || mode === "delete")} onChange={(event) => updateDraft({ ...draft, roleId: event.target.value })} placeholder="例：poc_data_engineer" />
+                {/* 删除深链（?mode=delete）解析后落在 edit 模式——PageMode 只有 create/edit/copy，
+                    删除意图由 deleteIntent 单独承载。所以只读判定只需覆盖 edit。 */}
+                <input id="role-id-input" className="pl-input notranslate" translate="no" value={draft.roleId} disabled={isReadOnlyTemplate || mode === "edit"} onChange={(event) => updateDraft({ ...draft, roleId: event.target.value })} placeholder="例：poc_data_engineer" />
                 <span className="text-xs text-fg-muted">供 <span className="notranslate" translate="no">Agent</span> 引用的技术标识；仅字母、数字、下划线和连字符，最多 64 位。</span>
               </label>
               <label className="grid gap-1" htmlFor="role-description-input">
@@ -687,6 +957,12 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 <input id="role-description-input" className="pl-input" value={draft.description} disabled={isReadOnlyTemplate} onChange={(event) => updateDraft({ ...draft, description: event.target.value })} placeholder="例如：POC 只读问答角色" />
               </label>
               {isReadOnlyTemplate ? <p className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">参考模板不会直接写入 <span className="notranslate" translate="no">access.yaml</span>，请基于模板创建正式 Role。</p> : null}
+              {mode === "create" ? (
+                /* Spec 194 §4.2 — 新建时的默认能力引导。 */
+                <p className="text-xs text-fg-muted" data-testid="role-create-default-tools-hint">
+                  已默认启用只读问答工具，请选择可访问的表；如需调整工具，可前往“允许的 <span className="notranslate" translate="no">MCP</span> 工具”。
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -701,6 +977,18 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
           {activeSection === "tools" ? (
             <div className="grid max-w-2xl gap-4 pb-28" data-testid="role-tools-field">
               <div><h2 className="notranslate text-base font-semibold" translate="no">允许的 MCP 工具</h2><p className="mt-1 text-sm text-fg-muted">可用职责预设，或在下方勾选具体 <span className="notranslate" translate="no">MCP</span> 工具。全选会授予当前全部可授予工具。</p></div>
+              {toolGrantError ? (
+                /* Spec 194 §4.2 — 空可授予工具的页内提示；焦点由保存失败触发。 */
+                <p
+                  className="pl-error text-sm"
+                  role="alert"
+                  tabIndex={-1}
+                  ref={toolGrantAlertRef}
+                  data-testid="role-tools-empty-error"
+                >
+                  请至少选择一个 <span className="notranslate" translate="no">MCP</span> 工具。常规查询可选择“只读问答”。
+                </p>
+              ) : null}
               {rejectedTools.length > 0 ? <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">旧配置包含 {rejectedTools.length} 个系统禁止工具，保存时将移除。</div> : null}
               <RoleToolGrants candidates={toolsQuery.data?.tools ?? []} value={draft.tools} onChange={(tools) => updateDraft({ ...draft, tools })} disabled={isReadOnlyTemplate} />
               {toolsQuery.isError ? <><p className="text-xs text-warning-strong">工具候选暂不可用，可手工填写工具 ID。</p><TagInput value={draft.tools} onChange={(tools) => updateDraft({ ...draft, tools })} placeholder="输入工具 ID 后回车" /></> : null}
@@ -710,7 +998,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
           {activeSection === "rowPolicy" ? (
             <div className="grid max-w-3xl gap-4 pb-28">
               <div><h2 className="text-base font-semibold">行级策略（可选）</h2><p className="mt-1 text-sm text-fg-muted">只为必须限制行的表配置静态条件；其余表保持全部行。</p></div>
-              <RoleRowPolicyPanel tables={tables} onChange={(nextTables) => updateDraft({ ...draft, scope: { mode: "names", tables: nextTables } })} disabled={isReadOnlyTemplate} catalogBound={draft.scope.mode === "catalog_bound"} />
+              <RoleRowPolicyPanel tables={tables} onChange={(nextTables) => updateDraft({ ...draft, scope: { mode: "names", tables: nextTables } })} disabled={isReadOnlyTemplate} catalogBound={draft.scope.mode === "catalog_bound"} roleId={draft.roleId} previewRole={rowPolicyPreviewRole} />
             </div>
           ) : null}
 

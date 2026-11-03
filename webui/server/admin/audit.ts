@@ -19,7 +19,20 @@ import { getSecurityStore } from "../security/instance.js";
 import { runProjection, type ProjectionStatus } from "../security/projector.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
 import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
-import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX } from "../proxy/audit.js";
+import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
+import {
+  inquiryKindLabelZh,
+  inquiryKindMatches,
+  inquiryKindOfTurn,
+  parseInquiryKindFilter,
+  type InquiryKind
+} from "./audit-inquiry-kind.js";
+import {
+  ensureBackfillBeforeAllocate,
+  ensureInquirySerialSchema,
+  lookupInquiryNo,
+  resolveTurnCorrelationKey
+} from "./audit-inquiry-serial.js";
 import { presentStoredClient, type ResolvedClientIdentity } from "../proxy/request-client-meta.js";
 import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
@@ -39,7 +52,7 @@ import {
   type EvidenceEventRow
 } from "../trace/evidence.js";
 import { readQueryArtifact } from "../audit/query-artifact-store.js";
-import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "../proxy/mcp-request-classification.js";
+import { accessGrade, accessGradeSql, protocolConditionSql, type AccessGrade } from "../proxy/usage-classification.js";
 import {
   appendClientObservations,
   resolveAdapterFromToken,
@@ -47,6 +60,28 @@ import {
   bodySizeError as agentAuditBodySizeError,
   isEventCountError as agentAuditIsEventCountError
 } from "./agent-audit-events.js";
+import {
+  buildExportPackV2,
+  performExportV2,
+  DEFAULT_CATCH_UP_DEADLINE_MS
+} from "./audit-export-v2.js";
+import {
+  CLASSIFICATION_VERSION_V2P5,
+  DIGEST_VERSION_V2P5
+} from "../proxy/audit-classification.js";
+import {
+  countPrimaryStatuses,
+  readAssociationStatus,
+  readAuthorizationStatus,
+  readDeliveryStatus,
+  readExecutionStatus,
+  readNullReason,
+  readPrimaryStatus
+} from "../proxy/audit-reconcile.js";
+import {
+  emptyPrimaryStatusCounts,
+  type PrimaryStatus
+} from "../proxy/audit-derivation.js";
 
 // Per-user lazy-rebuild debounce: GET /turns can be polled frequently (UI refresh, multiple
 // users in one window); skip re-running the full delete+reinsert rebuild if we just did it.
@@ -64,57 +99,30 @@ async function rebuildInferredTurnsDebounced(userId: string): Promise<void> {
 }
 
 let db: Database.Database | null = null;
-const ACCESS_LOG_COLUMNS = [
-  ["role_ids", "TEXT"],
-  ["permission_snapshot_hash", "TEXT"],
-  ["effective_tables_count", "INTEGER"],
-  ["decision_reason", "TEXT"],
-  ["token_label", "TEXT"],
-  ["token_hash_prefix", "TEXT"],
-  ["lucy_session_id", "TEXT"],
-  ["lucy_turn_id", "TEXT"],
-  ["turn_attribution_mode", "TEXT"],
-  ["turn_attribution_confidence", "TEXT"],
-  ["turn_attribution_reason", "TEXT"],
-  ["lucy_platform", "TEXT"],
-  ["query_hash", "TEXT"],
-  ["query_length", "INTEGER"],
-  ["query_operation", "TEXT"],
-  ["query_preview", "TEXT"],
-  ["query_artifact_ref", "TEXT"],
-  ["generated_sql", "TEXT"],
-  ["response_bytes", "INTEGER"],
-  ["response_row_count", "INTEGER"],
-  ["response_column_count", "INTEGER"],
-  ["response_truncated", "INTEGER"],
-  ["trace_id", "TEXT"],
-  ["client_ip", "TEXT"],
-  ["user_agent", "TEXT"],
-  ["client_version", "TEXT"],
-  ["device_name", "TEXT"],
-  ["policy_version", "TEXT"],
-  ["capability_digest", "TEXT"],
-  ["skill_uri", "TEXT"],
-  ["skill_version", "TEXT"],
-  ["skill_file_version", "TEXT"],
-  ["skill_action", "TEXT"],
-  ["skill_roles_allowed", "TEXT"],
-  ["matched_role_id", "TEXT"],
-  ["is_slow_call", "INTEGER"],
-  ["reported_client", "TEXT"],
-  ["reported_client_version", "TEXT"]
-] as const;
+// E-10 (B26): `ACCESS_LOG_COLUMNS` 曾有两份重复常量（此处 + `proxy/audit.ts`），
+// 新增列须两处同步否则导出元数据与写入漂移。现在只有**单一导出常量**。
+const ACCESS_LOG_COLUMNS = AUDIT_ACCESS_LOG_COLUMNS;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
   ["tool_classification_version", "TEXT"]
 ] as const;
-const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+/**
+ * Spec 189 §4.2 — one shared protocol condition for every audit read path.
+ * The previous local `tool NOT IN (...)` list could not express the
+ * `server/*` prefix rule, so the audit default view and the audit summary
+ * disagreed with the TypeScript classifier.
+ */
+const PROTOCOL_CONDITION = protocolConditionSql().sql;
+/** The same condition, qualified for the `access_log al` alias. */
+const PROTOCOL_CONDITION_AL = protocolConditionSql("al").sql;
 
 type AccessLogFilterQuery = {
   user?: string;
   tokenHashPrefix?: string;
   tool?: string;
   outcome?: string;
+  /** B27：汇总主状态八桶筛选（`succeeded` / `failed` / `denied` / `budget_stopped` / `cancelled` / `timeout` / `indeterminate` / `unknown`）。 */
+  primaryStatus?: string;
   since?: string;
   until?: string;
   tableSearch?: string;
@@ -122,14 +130,86 @@ type AccessLogFilterQuery = {
   turnId?: string;
   /** Spec 106: fuzzy match on access_log.id (CAST AS TEXT). */
   eventId?: string;
-  /** Spec 106: shared key box — matches event id OR lucy_turn_id. */
+  /** Spec 106: shared key box — matches event id OR lucy_turn_id. Pure digits are an inquiry serial, not an event id. */
   key?: string;
   platform?: string;
   callSource?: string;
   includeProtocol?: string;
+  /** Spec 20261102: exclusive access grade. Default and illegal values are exclude_connect. */
+  accessGrade?: string;
   clientIp?: string;
   deviceName?: string;
 };
+
+const ACCESS_GRADE_FILTERS = new Set([
+  "all",
+  "exclude_connect",
+  "connect",
+  "browse",
+  "prepare",
+  "ask",
+  "query",
+  "control",
+  "unclassified"
+]);
+
+/** Missing or illegal values follow the management default: hide connect-grade rows. */
+export function parseAccessGradeFilter(raw: string | null | undefined): string {
+  const value = raw?.trim() ?? "";
+  if (ACCESS_GRADE_FILTERS.has(value)) return value;
+  return "exclude_connect";
+}
+
+function accessGradeLabelZh(grade: AccessGrade): string {
+  switch (grade) {
+    case "connect":
+      return "连接";
+    case "browse":
+      return "浏览";
+    case "prepare":
+      return "准备";
+    case "ask":
+      return "问询动作";
+    case "query":
+      return "查数";
+    case "control":
+      return "运维操作";
+    default:
+      return "未分级";
+  }
+}
+
+/** A pure serial that does not resolve must not be sent through as a numeric fragment. */
+const MISSING_INQUIRY_SERIAL = "\u0000missing-inquiry-serial";
+
+function correlationKeyForAdminTurn(database: Database.Database, raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+  if (!/^\d+$/.test(value)) return value;
+  return resolveTurnCorrelationKey(database, value);
+}
+
+/**
+ * Call-list identity filters. A pure number is an inquiry serial: resolve it to
+ * the correlation key and do not OR it with access_log.id. `eventId` stays a
+ * separate exact event lookup.
+ */
+function resolveCallIdentityQuery(database: Database.Database, q: AccessLogFilterQuery): AccessLogFilterQuery {
+  const next: AccessLogFilterQuery = { ...q };
+  if (next.turnId && /^\d+$/.test(next.turnId.trim())) {
+    next.turnId = correlationKeyForAdminTurn(database, next.turnId) ?? MISSING_INQUIRY_SERIAL;
+  }
+  if (next.key) {
+    const raw = next.key.trim();
+    if (/^\d+$/.test(raw) || raw.startsWith("lucy_") || raw.startsWith("inf_")) {
+      next.turnId = /^\d+$/.test(raw)
+        ? (correlationKeyForAdminTurn(database, raw) ?? MISSING_INQUIRY_SERIAL)
+        : raw;
+      next.key = undefined;
+    }
+  }
+  return next;
+}
 
 function auditExportMaxRows(): number {
   const configured = Number(process.env.LUCY_AUDIT_EXPORT_MAX_ROWS ?? 10_000);
@@ -196,7 +276,10 @@ function chunksOf<T>(items: T[], size = 400): T[][] {
   return chunks;
 }
 
-function buildAccessLogFilter(q: AccessLogFilterQuery): {
+function buildAccessLogFilter(
+  q: AccessLogFilterQuery,
+  options: { applyAccessGrade?: boolean } = {}
+): {
   conditions: string[];
   baseConditions: string[];
   params: Record<string, string | null>;
@@ -207,12 +290,17 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
     tokenHashPrefix: q.tokenHashPrefix ?? null,
     tool: q.tool ?? null,
     outcome: q.outcome ?? null,
+    // B27：筛选接受 `primaryStatus`（八桶）。历史行的 `primary_status` 为 NULL，
+    // 归入 `unknown` 桶 —— 与读路径的桶映射同源。
+    primaryStatus: q.primaryStatus ?? null,
     since: q.since ?? null,
     until: q.until ?? null,
     tableSearch: q.tableSearch ? `%${q.tableSearch}%` : null,
     sessionId: q.sessionId ?? null,
-    turnId: q.turnId ? `%${q.turnId}%` : null,
-    eventId: q.eventId ? `%${q.eventId}%` : null,
+    turnId: q.turnId && !/^(lucy_|inf_)/.test(q.turnId) && q.turnId !== MISSING_INQUIRY_SERIAL ? `%${q.turnId}%` : null,
+    turnIdExact: null,
+    eventId: q.eventId && !/^\d+$/.test(q.eventId.trim()) ? `%${q.eventId.trim()}%` : null,
+    eventIdExact: null,
     key: q.key ? `%${q.key}%` : null,
     platform: q.platform ?? null,
     playgroundPlatform: MCP_PLAYGROUND_PLATFORM,
@@ -225,6 +313,13 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   if (params.tokenHashPrefix) baseConditions.push("token_hash_prefix = @tokenHashPrefix");
   if (params.tool) baseConditions.push("tool = @tool");
   if (params.outcome) baseConditions.push("outcome = @outcome");
+  if (params.primaryStatus) {
+    baseConditions.push(
+      params.primaryStatus === "unknown"
+        ? "(primary_status IS NULL OR primary_status = 'unknown')"
+        : "primary_status = @primaryStatus"
+    );
+  }
   if (params.since) baseConditions.push("ts >= @since");
   if (params.until) baseConditions.push("ts <= @until");
   if (params.tableSearch) baseConditions.push("tables LIKE @tableSearch");
@@ -238,16 +333,30 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
         WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id LIKE @key
       ))`
     );
-  } else {
-    if (params.turnId) {
-      baseConditions.push(
-        `(IFNULL(lucy_turn_id, '') LIKE @turnId OR EXISTS (
-          SELECT 1 FROM inferred_turn_access_logs ital
-          WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id LIKE @turnId
-        ))`
-      );
-    }
-    if (params.eventId) baseConditions.push("CAST(id AS TEXT) LIKE @eventId");
+  }
+  const turnRaw = q.turnId?.trim() ?? "";
+  if (turnRaw && (turnRaw.startsWith("lucy_") || turnRaw.startsWith("inf_") || turnRaw === MISSING_INQUIRY_SERIAL)) {
+    params.turnIdExact = turnRaw;
+    baseConditions.push(
+      `(IFNULL(lucy_turn_id, '') = @turnIdExact OR EXISTS (
+        SELECT 1 FROM inferred_turn_access_logs ital
+        WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id = @turnIdExact
+      ))`
+    );
+  } else if (params.turnId) {
+    baseConditions.push(
+      `(IFNULL(lucy_turn_id, '') LIKE @turnId OR EXISTS (
+        SELECT 1 FROM inferred_turn_access_logs ital
+        WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id LIKE @turnId
+      ))`
+    );
+  }
+  const eventRaw = q.eventId?.trim() ?? "";
+  if (/^\d+$/.test(eventRaw)) {
+    params.eventIdExact = eventRaw;
+    baseConditions.push("id = @eventIdExact");
+  } else if (params.eventId) {
+    baseConditions.push("CAST(id AS TEXT) LIKE @eventId");
   }
 
   const callSource = q.callSource?.trim() ?? "";
@@ -265,7 +374,14 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   const turnScoped = Boolean((q.turnId && q.turnId.trim()) || (q.key && q.key.trim()));
   const conditions = [...baseConditions];
   // Spec 172: a turn-id search must return that visit's handshake. The unfiltered list stays quiet.
-  if (!includeProtocol && !turnScoped) conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
+  if (!includeProtocol && !turnScoped) conditions.push(`NOT ${PROTOCOL_CONDITION}`);
+  // Access grade runs after the protocol gate. Packs opt out so linked handshakes stay.
+  if (options.applyAccessGrade !== false) {
+    const grade = parseAccessGradeFilter(q.accessGrade);
+    const expr = accessGradeSql().sql;
+    if (grade === "exclude_connect") conditions.push(`(${expr}) <> 'connect'`);
+    else if (grade !== "all") conditions.push(`(${expr}) = '${grade}'`);
+  }
 
   return { conditions, baseConditions, params, includeProtocol };
 }
@@ -276,8 +392,18 @@ const AUDIT_EXPORT_TIMEZONE = "Asia/Shanghai";
 let auditExportSequence = 0;
 
 export type ConfigAuditAssetKind = "governance" | "semantic" | "wiki" | "eval" | "publish" | "skill";
-export type ConfigAuditActorType = "ui_admin" | "batch_job" | "system";
-export type ConfigAuditWriteStatus = "pending" | "committed" | "failed";
+/**
+ * `mcp_control_plane` — L25-16 控制面工具（`lucy_ops_*`）的执行主体。
+ * 与 `ui_admin` 分开：控制面写入由 MCP 会话发起，审计归因需要区分「人操作 UI」
+ * 与「Agent 调用控制面工具」。
+ */
+export type ConfigAuditActorType =
+  | "ui_admin"
+  | "batch_job"
+  | "system"
+  | "anonymous"
+  | "mcp_control_plane";
+export type ConfigAuditWriteStatus = "pending" | "committed" | "failed" | "rolled_back";
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
   const rows = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
@@ -515,7 +641,10 @@ export async function getAuditDb(): Promise<Database.Database> {
   ensureColumn(db, "conversation_turns", "session_id", "TEXT");
   ensureColumn(db, "inferred_turns", "client", "TEXT");
   ensureColumn(db, "inferred_turns", "session_id", "TEXT");
+  ensureInquirySerialSchema(db);
   db.exec(`
+    -- 存量库可能没有 session_id 列 —— 索引必须在 ensureColumn 之后建。
+    CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
@@ -528,6 +657,8 @@ export async function getAuditDb(): Promise<Database.Database> {
   ensureColumn(db, "config_change_log", "write_status", "TEXT NOT NULL DEFAULT 'committed'");
   ensureColumn(db, "config_change_log", "error_reason", "TEXT");
   ensureColumn(db, "config_change_log", "actor_ip", "TEXT");
+  // L25-16 — 控制面委托归因：记录本次调用的委托人（`users[].delegated_from`）。
+  ensureColumn(db, "config_change_log", "delegated_from", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_ccl_asset_kind_ts ON config_change_log(asset_kind, ts);
     CREATE UNIQUE INDEX IF NOT EXISTS uq_ccl_idempotency ON config_change_log(idempotency_key);
@@ -550,6 +681,26 @@ export async function getAuditDb(): Promise<Database.Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_qaal_ts ON query_artifact_access_log(ts);
     CREATE INDEX IF NOT EXISTS idx_qaal_ref ON query_artifact_access_log(artifact_ref, ts);
+  `);
+  // Spec 190 §7.8 — live table queries get their own event type. They are
+  // read-only probes, so they never travel through the write audit channel,
+  // but the background poll is treated exactly like a manual read.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS discovery_audit_log (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts          TEXT    NOT NULL,
+      actor       TEXT    NOT NULL,
+      connection_id TEXT   NOT NULL,
+      schema_name TEXT    NOT NULL,
+      action      TEXT    NOT NULL,
+      outcome     TEXT    NOT NULL,
+      reason      TEXT,
+      latency_ms  INTEGER NOT NULL,
+      table_count INTEGER NOT NULL,
+      request_id  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_dal_ts ON discovery_audit_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_dal_conn_ts ON discovery_audit_log(connection_id, ts);
   `);
   return db;
 }
@@ -726,7 +877,7 @@ function serializeAuditSummary(changeType: string, value: unknown): string | nul
   return value === undefined ? null : JSON.stringify(redactAuditSummary(changeType, value));
 }
 
-export async function recordConfigChange(input: {
+export type ConfigChangeInput = {
   filePath: string;
   changeType: string;
   actor?: string;
@@ -744,8 +895,21 @@ export async function recordConfigChange(input: {
   diff?: string;
   requestId?: string;
   sessionId?: string | null;
-}): Promise<number | undefined> {
-  const database = await getAuditDb();
+  /** L25-16 — 控制面委托的委托人（`users[].delegated_from`）。 */
+  delegatedFrom?: string | null;
+};
+
+/**
+ * L25-16 / G34 — `config_change_log` 的**同步**写入核心。
+ *
+ * 暴露为同步函数，是为了让「本 attempt 的幂等认领 + 审计插入」能落在
+ * `audit.sqlite` 的**同一次** `db.transaction()` 里（better-sqlite3 的 transaction
+ * 回调必须是同步函数）。
+ */
+export function insertConfigChangeRow(
+  database: Database.Database,
+  input: ConfigChangeInput
+): number | undefined {
   const oldSummaryJson = serializeAuditSummary(input.changeType, input.oldSummary);
   const newSummaryJson = serializeAuditSummary(input.changeType, input.newSummary);
   const redactedDiff = input.diff ? redactAuditDiff(input.diff) : undefined;
@@ -776,9 +940,9 @@ export async function recordConfigChange(input: {
 
   const result = database.prepare(`
     INSERT INTO config_change_log
-      (ts, actor, actor_type, actor_ip, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, idempotency_key, write_status, error_reason)
+      (ts, actor, actor_type, actor_ip, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, idempotency_key, write_status, error_reason, delegated_from)
     VALUES
-      (@ts, @actor, @actor_type, @actor_ip, @source, @session_id, @file_path, @change_type, @asset_kind, @operation, @target_id, @old_summary, @new_summary, @diff, @request_id, @idempotency_key, @write_status, @error_reason)
+      (@ts, @actor, @actor_type, @actor_ip, @source, @session_id, @file_path, @change_type, @asset_kind, @operation, @target_id, @old_summary, @new_summary, @diff, @request_id, @idempotency_key, @write_status, @error_reason, @delegated_from)
     ON CONFLICT(idempotency_key) DO NOTHING
   `).run({
     ts: new Date().toISOString(),
@@ -798,7 +962,8 @@ export async function recordConfigChange(input: {
     request_id: input.requestId ?? null,
     idempotency_key: stableIdempotencyKey,
     write_status: input.writeStatus ?? "committed",
-    error_reason: input.errorReason ? redactAuditText(input.errorReason) : null
+    error_reason: input.errorReason ? redactAuditText(input.errorReason) : null,
+    delegated_from: input.delegatedFrom ?? null
   });
   if (typeof result.lastInsertRowid === "number" && result.lastInsertRowid > 0) return result.lastInsertRowid;
   const existing = database.prepare(
@@ -807,15 +972,28 @@ export async function recordConfigChange(input: {
   return existing?.id;
 }
 
-export async function updateConfigChangeStatus(input: {
+export async function recordConfigChange(input: ConfigChangeInput): Promise<number | undefined> {
+  const database = await getAuditDb();
+  return insertConfigChangeRow(database, input);
+}
+
+export type ConfigChangeStatusInput = {
   id: number;
   writeStatus: ConfigAuditWriteStatus;
   errorReason?: string;
   diff?: string | null;
   oldSummary?: unknown;
   newSummary?: unknown;
-}): Promise<void> {
-  const database = await getAuditDb();
+};
+
+/**
+ * L25-16 / G34 — `config_change_log` 的**同步**终态更新核心（按 `auditId` 更新既有行，
+ * 不重插——同键重插会被 `ON CONFLICT(idempotency_key) DO NOTHING` 静默丢弃）。
+ */
+export function updateConfigChangeRow(
+  database: Database.Database,
+  input: ConfigChangeStatusInput
+): void {
   const row = database.prepare("SELECT change_type FROM config_change_log WHERE id = ?").get(input.id) as
     | { change_type: string }
     | undefined;
@@ -842,6 +1020,36 @@ export async function updateConfigChangeStatus(input: {
     old_summary: serializeAuditSummary(changeType, input.oldSummary),
     new_summary: serializeAuditSummary(changeType, input.newSummary)
   });
+}
+
+export async function updateConfigChangeStatus(input: ConfigChangeStatusInput): Promise<void> {
+  const database = await getAuditDb();
+  updateConfigChangeRow(database, input);
+}
+
+/**
+ * Count the row-policy audit intents that were persisted but never terminated.
+ *
+ * Spec §14.3.1 — a `pending` row-policy intent means a configuration write may
+ * have reached the disk without a terminal record. The on-disk state is then not
+ * provable, and the recovery gate must stay closed.
+ *
+ * The counter that the recovery gate uses lives in
+ * {@link file://./config-audit-intents.ts}: it has to exclude the intents this
+ * process currently has in flight, and the configuration-audit module is
+ * replaced wholesale in several test suites.
+ */
+export async function countUnterminatedRowPolicyIntents(): Promise<number> {
+  const database = await getAuditDb();
+  const row = database
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM config_change_log
+       WHERE write_status = 'pending'
+         AND (change_type = 'row_policy_update' OR operation = 'row_policy.update')`
+    )
+    .get() as { count?: number } | undefined;
+  return Number(row?.count ?? 0);
 }
 
 interface QueryRow {
@@ -897,6 +1105,28 @@ interface QueryRow {
   is_slow_call?: number | null;
   /** Joined at read time; only set when lucy_turn_id is empty. */
   inferred_turn_id?: string | null;
+  /** Resolved at read time from the inquiry serial map. Not an access_log column. */
+  inquiry_no?: number | null;
+  // ─── Lucy v0.25 / L25-09 additive 列（历史行 NULL / 缺省）─────────────────
+  primary_status?: string | null;
+  derivation_version?: string | null;
+  delivery_status?: string | null;
+  null_reason?: string | null;
+  legacy_outcome?: string | null;
+  digest_kind?: string | null;
+  preview_version?: string | null;
+  ingress_event_id?: string | null;
+  endpoint_id?: string | null;
+  ledger_seq?: number | null;
+  error_category?: string | null;
+  // ─── 三条独立判断轴（20261019 §5）────────────────────────────────────
+  execution_status?: string | null;
+  authorization_status?: string | null;
+  association_status?: string | null;
+  effective_association_status?: string | null;
+  usability_status?: string | null;
+  client_event_id?: string | null;
+  credential_principal_id?: string | null;
 }
 
 const ACCESS_LOG_CSV_HEADERS = [
@@ -907,6 +1137,7 @@ const ACCESS_LOG_CSV_HEADERS = [
   "token_label",
   "token_hash_prefix",
   "lucy_session_id",
+  "inquiry_no",
   "lucy_turn_id",
   "inferred_turn_id",
   "turn_attribution_mode",
@@ -918,6 +1149,7 @@ const ACCESS_LOG_CSV_HEADERS = [
   "client_ip",
   "user_agent",
   "device_name",
+  "访问等级",
   "tool",
   "tables",
   "args_summary",
@@ -948,7 +1180,20 @@ const ACCESS_LOG_CSV_HEADERS = [
   "skill_roles_allowed",
   "matched_role_id",
   "reported_client",
-  "reported_client_version"
+  "reported_client_version",
+  // ─── Lucy v0.25 / L25-09（B27）：八桶主状态 + 规则版本 ────────────────────
+  // 与 API 汇总、v2 导出**同源同函数**。
+  "primary_status",
+  "derivation_version",
+  "delivery_status",
+  "null_reason",
+  "legacy_outcome",
+  "digest_kind",
+  "preview_version",
+  "ingress_event_id",
+  "endpoint_id",
+  "ledger_seq",
+  "error_category"
 ] as const;
 
 type CsvFieldMetadata = {
@@ -1002,16 +1247,22 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     description: "客户端上报或服务端归因的 Lucy 会话 ID。",
     trigger: "客户端上报会话或服务端从上下文推断到会话时输出。"
   },
-  lucy_turn_id: {
+  inquiry_no: {
     label: "问询 ID",
+    format: "integer|null",
+    description: "本实例问询流水号。与问询记录 CSV 的「问询 ID」是同一个数字，不含 Agent 或平台。",
+    trigger: "调用已挂到已上报或推断问询时输出；未挂接留空。"
+  },
+  lucy_turn_id: {
+    label: "关联键",
     format: "string|null",
-    description: "关联问询记录的 ID，用于从调用流水回溯到一次用户问询。",
+    description: "已上报问询的关联键，用于从调用流水回溯到问询记录。不是列表上的问询 ID。",
     trigger: "客户端上报问询或服务端完成问询归因时输出。"
   },
   inferred_turn_id: {
-    label: "推断问询 ID",
+    label: "关联键",
     format: "string|null",
-    description: "当问询 ID 为空时，由当前推断问询关联表回填的推断问询 ID，用于从调用流水跳回问询记录。",
+    description: "当已上报关联键为空时，由当前推断问询关联表回填的关联键，用于从调用流水跳回问询记录。",
     trigger: "lucy_turn_id 为空且 inferred_turn_access_logs 存在关联时输出；不回写 access_log。"
   },
   turn_attribution_mode: {
@@ -1031,6 +1282,73 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "string|null",
     description: "问询归因方式的补充原因。",
     trigger: "归因逻辑需要记录解释时输出。"
+  },
+  // ─── Lucy v0.25 / L25-09（B27）────────────────────────────────────────────
+  primary_status: {
+    label: "汇总主状态",
+    format: "enum {succeeded, failed, denied, budget_stopped, cancelled, timeout, indeterminate, unknown}",
+    description: "S01 派生的唯一汇总状态（八桶）。历史行未核验 → unknown；旧 outcome 单列在 legacy_outcome，不重解释历史数据。",
+    trigger: "v2p5-1 后写入；历史行为空。"
+  },
+  derivation_version: {
+    label: "主状态派生规则版本",
+    format: "string",
+    description: "汇总主状态的派生规则版本（v2p5-1）。",
+    trigger: "v2p5-1 后写入。"
+  },
+  delivery_status: {
+    label: "送达状态",
+    format: "enum {prepared, sent, acknowledged, unknown}",
+    description: "送达维度。unacknowledged 仅保留值域、本期不写入；无回执时接收观察为 unknown。",
+    trigger: "v2p5-1 后写入。"
+  },
+  null_reason: {
+    label: "空值原因",
+    format: "enum {not_applicable, not_collected, redacted, parse_failed, unknown, not_supported}",
+    description: "缺值原因（六值枚举）。",
+    trigger: "v2p5-1 后写入。"
+  },
+  legacy_outcome: {
+    label: "旧结果值",
+    format: "enum {ok, error, denied, budget_stop}",
+    description: "旧 outcome 原样保留，单列，不作为新执行状态的充分证据。",
+    trigger: "v2p5-1 后写入。"
+  },
+  digest_kind: {
+    label: "摘要类型",
+    format: "enum {search_text, sql, result}",
+    description: "摘要的来源类型。",
+    trigger: "有摘要时输出。"
+  },
+  preview_version: {
+    label: "预览版本",
+    format: "string",
+    description: "query_preview 的规则版本（v2p5-1 = 500 码点上限）；历史行保持 180 码点原值。",
+    trigger: "v2p5-1 后写入。"
+  },
+  ingress_event_id: {
+    label: "入口事件 ID",
+    format: "string|null",
+    description: "已提交 received 事件的 event_id；响应头 x-lucy-event-id 回传同一值。",
+    trigger: "v2p5-1 后写入。"
+  },
+  endpoint_id: {
+    label: "入口标识",
+    format: "enum {mcp-http, admin-http, agent-audit-ingest}",
+    description: "逻辑入口；端口是登记属性，不是入口身份。",
+    trigger: "v2p5-1 后写入。"
+  },
+  ledger_seq: {
+    label: "账本序号",
+    format: "integer|null",
+    description: "该行在 canonical ledger 的提交序号，用于 as-of S 视图。",
+    trigger: "v2p5-1 后写入。"
+  },
+  error_category: {
+    label: "错误分类",
+    format: "enum {client_schema_failure, validation_failed, policy_denied, upstream_failed, cancelled, timeout, budget_stopped}",
+    description: "S07 统一错误七分类，与 162 四维并行披露。",
+    trigger: "v2p5-1 后写入。"
   },
   lucy_platform: {
     label: "调用平台",
@@ -1067,6 +1385,12 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "string|null",
     description: "客户端上报的设备名。",
     trigger: "客户端上报设备名时输出。"
+  },
+  "访问等级": {
+    label: "访问等级",
+    format: "连接|浏览|准备|问询动作|查数|运维操作|未分级",
+    description: "这一行工具调用的访问等级，与 accessGrade(tool) 一致。",
+    trigger: "每条 access_log 行均输出。"
   },
   tool: {
     label: "工具",
@@ -1269,6 +1593,7 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.token_label),
         csvCell(row.token_hash_prefix),
         csvCell(row.lucy_session_id),
+        row.inquiry_no ?? "",
         csvCell(row.lucy_turn_id),
         csvCell(row.inferred_turn_id ?? null),
         csvCell(row.turn_attribution_mode),
@@ -1280,6 +1605,7 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.client_ip),
         csvCell(row.user_agent),
         csvCell(row.device_name),
+        csvCell(accessGradeLabelZh(accessGrade(row.tool))),
         csvCell(row.tool),
         csvCell(row.tables),
         csvCell(redactJsonString(row.args_summary)),
@@ -1310,7 +1636,20 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.skill_roles_allowed),
         csvCell(row.matched_role_id),
         csvCell(shown.reportedClient ?? ""),
-        csvCell(shown.reportedClientVersion ?? "")
+        csvCell(shown.reportedClientVersion ?? ""),
+        // ─── Lucy v0.25 / L25-09（B27）：八桶主状态与规则版本 ─────────────────
+        // 与 API 汇总、v2 导出**同源同函数**（`readPrimaryStatus`）。
+        csvCell(readPrimaryStatus(row as { primary_status?: string | null; outcome?: string | null })),
+        csvCell(row.derivation_version),
+        csvCell(row.delivery_status),
+        csvCell(row.null_reason),
+        csvCell(row.legacy_outcome),
+        csvCell(row.digest_kind),
+        csvCell(row.preview_version),
+        csvCell(row.ingress_event_id),
+        csvCell(row.endpoint_id),
+        row.ledger_seq ?? "",
+        csvCell(row.error_category)
       ].join(",")
     })
   ];
@@ -1337,7 +1676,8 @@ function filterSnapshotForManifest(
     callSource: q.callSource ?? null,
     clientIp: q.clientIp ?? null,
     deviceName: q.deviceName ?? null,
-    includeProtocol
+    includeProtocol,
+    accessGrade: q.accessGrade ?? null
   };
 }
 
@@ -1347,15 +1687,33 @@ function packFilenameStamp(now = new Date()): string {
   return `audit-pack-${iso}-${hex}.zip`;
 }
 
+/**
+ * B27 / E-12 — 汇总主状态八桶。
+ *
+ * 旧 `outcomeSummary` 只有 3 桶（ok / denied / error），`budget_stop` 被**完全
+ * 丢弃**（F01 的根因）。现在：
+ *   - `outcomeSummary` 保留为**旧直方图**（前端在用，不改形状）；
+ *   - `primaryStatusSummary` 是八桶主状态汇总（`budget_stopped` 不再丢失）。
+ *
+ * 八桶互斥且闭合：各桶之和 == 集合总数。
+ */
 interface TurnOutcomeSummary {
   ok: number;
   denied: number;
   error: number;
+  budgetStop: number;
 }
+
+/** 八桶主状态汇总（读路径与 API / CSV / v2 导出同源）。 */
+type PrimaryStatusSummary = Record<PrimaryStatus, number>;
 
 interface TurnEntry {
   id: string;
   source: "inferred" | "reported";
+  inquiryNo?: number;
+  correlationKey?: string;
+  inquiryKind?: InquiryKind;
+  questionSource?: string;
   userId: string;
   client?: string;
   reportedClient?: string;
@@ -1377,6 +1735,8 @@ interface TurnEntry {
   maxCallDurationMs?: number;
   slowCallCount?: number;
   outcomeSummary?: TurnOutcomeSummary;
+  /** B27：八桶主状态汇总（`budget_stopped` 不再被丢弃）。 */
+  primaryStatusSummary?: PrimaryStatusSummary;
 }
 
 type TurnFilterQuery = {
@@ -1388,6 +1748,7 @@ type TurnFilterQuery = {
   tableSearch?: string;
   outcome?: string;
   q?: string;
+  inquiryKind?: string;
   lookbackHours?: string;
   hours?: string;
   bom?: string;
@@ -1396,6 +1757,11 @@ type TurnFilterQuery = {
 type TurnListResult = {
   total: number;
   entries: TurnEntry[];
+  kindCounts: {
+    real: number;
+    unreportedQuery: number;
+    sessionVisit: number;
+  };
   summary: {
     reportedCount: number;
     inferredCount: number;
@@ -1445,17 +1811,31 @@ function loadAccessLogMetrics(
   maxCallDurationMs: number;
   slowCallCount: number;
   outcomeSummary: TurnOutcomeSummary;
+  /** B27：八桶主状态汇总（`budget_stopped` 不再被丢弃）。 */
+  primaryStatusSummary: PrimaryStatusSummary;
 } {
-  const empty = { totalCallDurationMs: 0, maxCallDurationMs: 0, slowCallCount: 0, outcomeSummary: { ok: 0, denied: 0, error: 0 } };
+  const empty = {
+    totalCallDurationMs: 0,
+    maxCallDurationMs: 0,
+    slowCallCount: 0,
+    outcomeSummary: { ok: 0, denied: 0, error: 0, budgetStop: 0 } as TurnOutcomeSummary,
+    primaryStatusSummary: emptyPrimaryStatusCounts() as PrimaryStatusSummary
+  };
   if (accessLogIds.length === 0) return empty;
   const placeholders = accessLogIds.map(() => "?").join(",");
   const rows = database
-    .prepare(`SELECT outcome, duration_ms FROM access_log WHERE id IN (${placeholders})`)
-    .all(...accessLogIds) as Array<{ outcome: string; duration_ms: number }>;
+    .prepare(
+      `SELECT outcome, primary_status, duration_ms FROM access_log WHERE id IN (${placeholders})`
+    )
+    .all(...accessLogIds) as Array<{
+    outcome: string;
+    primary_status: string | null;
+    duration_ms: number;
+  }>;
   let totalCallDurationMs = 0;
   let maxCallDurationMs = 0;
   let slowCallCount = 0;
-  const outcomeSummary: TurnOutcomeSummary = { ok: 0, denied: 0, error: 0 };
+  const outcomeSummary: TurnOutcomeSummary = { ok: 0, denied: 0, error: 0, budgetStop: 0 };
   for (const row of rows) {
     totalCallDurationMs += row.duration_ms;
     maxCallDurationMs = Math.max(maxCallDurationMs, row.duration_ms);
@@ -1463,8 +1843,11 @@ function loadAccessLogMetrics(
     if (row.outcome === "ok") outcomeSummary.ok += 1;
     else if (row.outcome === "denied") outcomeSummary.denied += 1;
     else if (row.outcome === "error") outcomeSummary.error += 1;
+    else if (row.outcome === "budget_stop") outcomeSummary.budgetStop += 1;
   }
-  return { totalCallDurationMs, maxCallDurationMs, slowCallCount, outcomeSummary };
+  // B27：八桶计数与列表 / CSV / v2 导出**同源同函数**。
+  const primaryStatusSummary = countPrimaryStatuses(rows).counts as PrimaryStatusSummary;
+  return { totalCallDurationMs, maxCallDurationMs, slowCallCount, outcomeSummary, primaryStatusSummary };
 }
 
 const TABLE_FORBIDDEN_PREFIX = "table_forbidden:";
@@ -1501,16 +1884,37 @@ function loadTurnToolCallStats(
   return { toolCallCount, forbiddenTables };
 }
 
+/**
+ * Lucy v0.25 / P0-4 §3.4 (E5): a source is identified by the full
+ * connection / schema / table triple. Two connections may legitimately expose
+ * the same `schema.table`, so deduplicating on `physicalTable` alone merged
+ * two distinct tables into one row and hid the difference from the reader.
+ * The fallback triple uses `unknown` for the parts a row cannot supply, which
+ * keeps the key unambiguous without inventing a connection.
+ */
+function sourceIdentityKey(source: {
+  connectionId?: string;
+  schema?: string;
+  sourceName?: string;
+  physicalTable: string;
+}): string {
+  const connection = source.connectionId ?? "unknown";
+  const schema = source.schema ?? "unknown";
+  const table = source.sourceName ?? source.physicalTable;
+  return `${connection}.${schema}.${table}`;
+}
+
 function mergeTurnSources(
   existing: TurnEntry["sources"],
   forbiddenTables: string[]
 ): TurnEntry["sources"] {
   if (forbiddenTables.length === 0) return existing;
-  const seen = new Set(existing.map((source) => source.physicalTable));
+  const seen = new Set(existing.map(sourceIdentityKey));
   const merged = [...existing];
   for (const physicalTable of forbiddenTables) {
-    if (seen.has(physicalTable)) continue;
-    seen.add(physicalTable);
+    const key = sourceIdentityKey({ physicalTable });
+    if (seen.has(key)) continue;
+    seen.add(key);
     merged.push({ physicalTable });
   }
   return merged;
@@ -1541,6 +1945,34 @@ function attachInferredTurnIds(database: Database.Database, rows: QueryRow[]): Q
   }));
 }
 
+/** Read-time inquiry serial. Does not write access_log. Unlinked calls stay empty. */
+function attachInquiryNumbers(database: Database.Database, rows: QueryRow[]): QueryRow[] {
+  ensureInquirySerialSchema(database);
+  const keys = new Set<string>();
+  for (const row of rows) {
+    const key = row.lucy_turn_id || row.inferred_turn_id;
+    if (key) keys.add(key);
+  }
+  const serials = new Map<string, number>();
+  for (const chunk of chunksOf([...keys])) {
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    const found = database.prepare(`
+      SELECT correlation_key, inquiry_no FROM inquiry_correlation_serial
+      WHERE correlation_key IN (${placeholders})
+    `).all(...chunk) as Array<{ correlation_key: string; inquiry_no: number }>;
+    for (const row of found) serials.set(row.correlation_key, row.inquiry_no);
+  }
+  return rows.map((row) => {
+    const key = row.lucy_turn_id || row.inferred_turn_id || "";
+    return { ...row, inquiry_no: key ? (serials.get(key) ?? null) : null };
+  });
+}
+
+function presentCallRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
+  return attachInquiryNumbers(database, attachInferredTurnIds(database, rows));
+}
+
 /** Spec 173: evidence packs include handshake rows already linked to the exported inquiries. */
 function linkedHandshakeRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
   const present = new Set(rows.map((row) => row.id));
@@ -1554,7 +1986,7 @@ function linkedHandshakeRows(database: Database.Database, rows: QueryRow[]): Que
   const placeholders = ids.map(() => "?").join(",");
   const extra = database.prepare(`
     SELECT * FROM access_log
-    WHERE tool IN (${PROTOCOL_TOOL_LIST})
+    WHERE ${PROTOCOL_CONDITION}
       AND (
         IFNULL(lucy_turn_id, '') IN (${placeholders})
         OR EXISTS (
@@ -1654,6 +2086,27 @@ function countSlowCallsForFilter(
   return row?.cnt ?? 0;
 }
 
+function matchesTurnIdFilter(entry: TurnEntry, raw: string): boolean {
+  if (!raw) return true;
+  if (/^\d+$/.test(raw)) return entry.inquiryNo === Number(raw);
+  if (raw.includes("lucy_") || raw.includes("inf_")) return entry.id === raw;
+  return entry.id.toLowerCase().includes(raw.toLowerCase());
+}
+
+function presentInquiry(database: Database.Database, entry: TurnEntry): TurnEntry {
+  const inquiryNo = entry.inquiryNo ?? lookupInquiryNo(database, entry.id) ?? undefined;
+  return {
+    ...entry,
+    inquiryNo,
+    correlationKey: entry.id,
+    inquiryKind: inquiryKindOfTurn({
+      source: entry.source,
+      questionSource: entry.questionSource,
+      questionSummary: entry.questionSummary
+    })
+  };
+}
+
 async function listAuditTurnEntries(
   database: Database.Database,
   q: TurnFilterQuery,
@@ -1661,12 +2114,14 @@ async function listAuditTurnEntries(
 ): Promise<TurnListResult> {
   const source = q.source === "inferred" || q.source === "reported" ? q.source : "all";
   const windowHours = parseWindowHours(q.hours);
-  const turnIdNeedle = (q.turnId ?? "").trim().toLowerCase();
+  const turnIdRaw = (q.turnId ?? "").trim();
   const tableNeedle = (q.tableSearch ?? "").trim().toLowerCase();
   const summaryNeedle = (q.q ?? "").trim().toLowerCase();
   const outcomeFilter = q.outcome === "ok" || q.outcome === "error" || q.outcome === "denied" ? q.outcome : "";
   const p95Ms = queryP95LatencyMs(database, windowHours);
   const sinceDefault = sinceIsoFromHours(windowHours);
+  ensureInquirySerialSchema(database);
+  ensureBackfillBeforeAllocate(database);
 
   if (source !== "reported") {
     const cutoff = new Date(Date.now() - INFERRED_TURN_REBUILD_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
@@ -1703,12 +2158,14 @@ async function listAuditTurnEntries(
       source_summary: string;
       question_summary: string | null;
       confidence: string;
+      inquiry_no: number | null;
     }>;
     for (const row of rows) {
       entries.push(
-        enrichTurnEntry(database, {
+        presentInquiry(database, enrichTurnEntry(database, {
           id: row.inferred_turn_id,
           source: "inferred",
+          inquiryNo: row.inquiry_no ?? undefined,
           userId: row.user_id,
           client: row.client ?? undefined,
           sessionId: row.session_id ?? undefined,
@@ -1720,7 +2177,7 @@ async function listAuditTurnEntries(
           confidence: row.confidence,
           tools: JSON.parse(row.tool_summary) as string[],
           sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
-        }, p95Ms)
+        }, p95Ms))
       );
     }
   }
@@ -1744,6 +2201,8 @@ async function listAuditTurnEntries(
       created_at: string;
       question_summary: string | null;
       question_preview: string | null;
+      question_source: string | null;
+      inquiry_no: number | null;
     }>;
     for (const row of rows) {
       const linked = database.prepare(`
@@ -1757,9 +2216,11 @@ async function listAuditTurnEntries(
           `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>
         : [];
       entries.push(
-        enrichTurnEntry(database, {
+        presentInquiry(database, enrichTurnEntry(database, {
           id: row.turn_id,
           source: "reported",
+          inquiryNo: row.inquiry_no ?? undefined,
+          questionSource: row.question_source ?? undefined,
           userId: row.user_id,
           client: row.client ?? undefined,
           sessionId: row.session_id ?? undefined,
@@ -1777,7 +2238,7 @@ async function listAuditTurnEntries(
             sourceName: s.source_name ?? undefined,
             physicalTable: s.physical_table
           }))
-        }, p95Ms)
+        }, p95Ms))
       );
     }
   }
@@ -1785,7 +2246,7 @@ async function listAuditTurnEntries(
   entries.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
 
   const filtered = entries.filter((entry) => {
-    if (turnIdNeedle && !entry.id.toLowerCase().includes(turnIdNeedle)) return false;
+    if (!matchesTurnIdFilter(entry, turnIdRaw)) return false;
     if (tableNeedle) {
       const hay = entry.sources.map((s) => s.physicalTable).join(" ").toLowerCase();
       if (!hay.includes(tableNeedle)) return false;
@@ -1809,21 +2270,30 @@ async function listAuditTurnEntries(
     return true;
   });
 
-  const total = filtered.length;
-  const reportedCount = filtered.filter((entry) => entry.source === "reported").length;
-  const inferredCount = filtered.filter((entry) => entry.source === "inferred").length;
+  const kindCounts = { real: 0, unreportedQuery: 0, sessionVisit: 0 };
+  for (const entry of filtered) {
+    if (entry.inquiryKind === "real") kindCounts.real += 1;
+    else if (entry.inquiryKind === "unreported_query") kindCounts.unreportedQuery += 1;
+    else if (entry.inquiryKind === "session_visit") kindCounts.sessionVisit += 1;
+  }
+  const kindFilter = parseInquiryKindFilter(q.inquiryKind);
+  const visible = filtered.filter((entry) => entry.inquiryKind != null && inquiryKindMatches(entry.inquiryKind, kindFilter));
+  const total = visible.length;
+  const reportedCount = visible.filter((entry) => entry.source === "reported").length;
+  const inferredCount = visible.filter((entry) => entry.source === "inferred").length;
   const reportedShare = total > 0 ? reportedCount / total : 0;
   const slowCallsInFilter = countSlowCallsForFilter(database, q.since ?? sinceDefault, p95Ms, q.user ?? null);
   const totalCallsRow = database
     .prepare(`SELECT COUNT(*) AS cnt FROM access_log WHERE ts >= ?`)
     .get(sinceDefault) as { cnt: number };
   const offset = options.offset ?? 0;
-  const limit = options.limit ?? filtered.length;
-  const paged = options.paginate ? filtered.slice(offset, offset + limit) : filtered;
+  const limit = options.limit ?? visible.length;
+  const paged = options.paginate ? visible.slice(offset, offset + limit) : visible;
 
   return {
     total,
     entries: paged,
+    kindCounts,
     summary: {
       reportedCount,
       inferredCount,
@@ -1840,6 +2310,7 @@ async function listAuditTurnEntries(
 
 const TURN_CSV_HEADERS = [
   "问询 ID",
+  "关联键",
   "来源",
   "Agent",
   "客户端",
@@ -1849,6 +2320,7 @@ const TURN_CSV_HEADERS = [
   "结束时间",
   "结束时间 UTC",
   "问询时长",
+  "问询种类",
   "问询摘要",
   "关联调用数",
   "工具调用数",
@@ -1860,6 +2332,7 @@ const TURN_CSV_HEADERS = [
   "成功次数",
   "拒绝次数",
   "错误次数",
+  "预算终止次数",
   "自报客户端",
   "自报客户端版本"
 ] as const;
@@ -1867,9 +2340,21 @@ const TURN_CSV_HEADERS = [
 const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFieldMetadata, "name">> = {
   "问询 ID": {
     label: "问询 ID",
-    format: "string",
-    description: "一次用户问询的唯一 ID，可用于关联调用流水。",
+    format: "integer",
+    description: "本实例问询流水号，与调用流水的 inquiry_no 对齐。不含 Agent 或平台。",
     trigger: "用户原始问询或系统推断问询均输出。"
+  },
+  "关联键": {
+    label: "关联键",
+    format: "string",
+    description: "问询的稳定关联键。已上报为 lucy_ 加随机串，推断为 inf_ 加用户和首条调用。不是列表上的问询 ID。",
+    trigger: "每条问询记录均输出。"
+  },
+  "问询种类": {
+    label: "问询种类",
+    format: "真实问询|未上报问询|会话访问",
+    description: "读取时判定的问询种类。未上报问询不表示发生了查数。",
+    trigger: "每条问询记录均输出。"
   },
   "来源": {
     label: "来源",
@@ -1934,7 +2419,7 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
   "关联调用数": {
     label: "关联调用数",
     format: "integer",
-    description: "该问询关联的全部非协议工具调用数量；成功次数 + 拒绝次数 + 错误次数等于本列。",
+    description: "该问询关联的全部非协议工具调用数量；成功次数 + 拒绝次数 + 错误次数 + 预算终止次数等于本列。",
     trigger: "每条问询记录均输出。"
   },
   "工具调用数": {
@@ -1991,6 +2476,12 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
     description: "该问询内 outcome=error 的调用数量。",
     trigger: "每条问询记录均输出。"
   },
+  "预算终止次数": {
+    label: "预算终止次数",
+    format: "integer",
+    description: "该问询内 outcome=budget_stop 的调用数量。这是 legacy 四桶之一，不是执行结论。执行结论看八桶主状态。",
+    trigger: "每条问询记录均输出。"
+  },
   "自报客户端": {
     label: "自报客户端",
     format: "string|null",
@@ -2014,7 +2505,8 @@ function renderTurnCsv(rows: TurnEntry[]): string {
     TURN_CSV_HEADERS.join(","),
     ...rows.map((row) =>
       [
-        csvCell(row.id),
+        row.inquiryNo ?? "",
+        csvCell(row.correlationKey ?? row.id),
         csvCell(turnSourceLabel(row.source)),
         csvCell(row.userId),
         csvCell(row.client ?? ""),
@@ -2024,6 +2516,7 @@ function renderTurnCsv(rows: TurnEntry[]): string {
         csvCell(formatAuditLocalTimestamp(row.endedAt)),
         csvCell(row.endedAt),
         row.turnSpanMs ?? "",
+        csvCell(row.inquiryKind ? inquiryKindLabelZh(row.inquiryKind) : ""),
         csvCell(row.questionPreview ?? row.questionSummary ?? ""),
         row.linkedCallCount,
         row.businessCallCount,
@@ -2035,6 +2528,7 @@ function renderTurnCsv(rows: TurnEntry[]): string {
         row.outcomeSummary?.ok ?? 0,
         row.outcomeSummary?.denied ?? 0,
         row.outcomeSummary?.error ?? 0,
+        row.outcomeSummary?.budgetStop ?? 0,
         csvCell(row.reportedClient ?? ""),
         csvCell(row.reportedClientVersion ?? "")
       ].join(",")
@@ -2043,9 +2537,14 @@ function renderTurnCsv(rows: TurnEntry[]): string {
   return lines.join("\n");
 }
 
-function csvFieldMetadataFields<T extends readonly string[]>(
-  headers: T,
-  metadata: Record<T[number], Omit<CsvFieldMetadata, "name">>
+// `T` is the header element type (not the array type) so that `headers.map`
+// yields `name: T` and `metadata[name]` stays indexable. With the array-level
+// generic (`T extends readonly string[]`) the map callback degrades to
+// `name: string` while `metadata` stays `Record<T[number], …>`, which TS cannot
+// prove indexable (TS7053).
+function csvFieldMetadataFields<T extends string>(
+  headers: readonly T[],
+  metadata: Record<T, Omit<CsvFieldMetadata, "name">>
 ): CsvFieldMetadata[] {
   return headers.map((name) => ({ name, ...metadata[name] }));
 }
@@ -2108,11 +2607,24 @@ const ACCESS_LOG_CSV_HEADERS_V2 = [
   "credential_principal_id",
   // Contract §2.2 — explicit actor + actor_kind (server-resolved)
   "actor_id",
-  "actor_type"
+  "actor_type",
+  // ─── Lucy v0.25 / L25-09（B27 / B13）：八桶主状态 + 规则版本 ──────────────
+  "primary_status",
+  "derivation_version",
+  "delivery_status",
+  "null_reason",
+  "legacy_outcome",
+  "digest_kind",
+  "preview_version",
+  "ingress_event_id",
+  "endpoint_id",
+  "ledger_seq",
+  "error_category"
 ] as const;
 
 const ACCESS_LOG_FIELD_METADATA_V2: Record<(typeof ACCESS_LOG_CSV_HEADERS_V2)[number], Omit<CsvFieldMetadata, "name">> = {
   ...ACCESS_LOG_FIELD_METADATA,
+  // B27 新增列的元数据已在 ACCESS_LOG_FIELD_METADATA 中声明（单一来源）。
   event_type: {
     label: "事件类型",
     format: "enum {tool_call, protocol, client_observation, audit_management}",
@@ -2122,7 +2634,7 @@ const ACCESS_LOG_FIELD_METADATA_V2: Record<(typeof ACCESS_LOG_CSV_HEADERS_V2)[nu
   transport_sub_type: {
     label: "传输子类型",
     format: "enum {handshake, probe, unknown_method, other}",
-    description: "transport=protocol 时的细分子类。handshake=initialize/notifications/initialized/tools/list; probe=ping/resources/list/resources/templates/list/notifications/cancelled; unknown_method=server/discover 与其他未知方法; other=其他协议调用。",
+    description: "transport=protocol 时的细分子类。handshake=initialize/notifications/initialized/tools/list; probe=ping/resources/list/resources/templates/list/prompts/list/notifications/cancelled; unknown_method=server/discover 与其他未知方法; other=其他协议调用。",
     trigger: "event_type=protocol 时输出。"
   },
   transport_status: {
@@ -2582,17 +3094,55 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
   app.get("/api/admin/audit/sources", async () => {
     const database = await getAuditDb();
+    // Lucy v0.25 / P0-4 §3.4 (E5): the connection identity must come from
+    // `access_log_sources.connection_id` — the audited source rows carry the
+    // real connection / schema / table triple. Deriving it from the
+    // `access_log.tables` string alone cannot tell two connections apart and
+    // used to report every table under one hardcoded "audit-derived" bucket.
+    // Rows without a recorded source keep the explicit `unknown` bucket instead
+    // of being folded into a made-up connection.
     const rows = database.prepare(`
-      SELECT tables, outcome
-      FROM access_log
-      WHERE tool NOT IN (${PROTOCOL_TOOL_LIST}) AND tables IS NOT NULL
-    `).all() as Array<{ tables: string | null; outcome: string }>;
+      SELECT al.tables AS tables, al.outcome AS outcome,
+             als.connection_id AS connection_id,
+             als.schema_name AS schema_name,
+             als.source_name AS source_name,
+             als.physical_table AS physical_table
+      FROM access_log al
+      LEFT JOIN access_log_sources als ON als.access_log_id = al.id
+      WHERE NOT ${PROTOCOL_CONDITION_AL} AND al.tables IS NOT NULL
+    `).all() as Array<{
+      tables: string | null;
+      outcome: string;
+      connection_id: string | null;
+      schema_name: string | null;
+      source_name: string | null;
+      physical_table: string | null;
+    }>;
     const connections = new Map<string, number>();
     const schemas = new Map<string, number>();
     const tables = new Map<string, { table: string; calls: number; denied: number }>();
 
+    // A source row is the authoritative identity when present; the `tables`
+    // string is only a fallback for rows written before source capture existed.
     for (const row of rows) {
       if (!row.tables) continue;
+      const recordedIdentity = row.physical_table
+        ? {
+            connection: row.connection_id ?? "unknown",
+            schema: row.schema_name ?? "unknown",
+            table: row.source_name ?? row.physical_table
+          }
+        : null;
+      if (recordedIdentity) {
+        connections.set(recordedIdentity.connection, (connections.get(recordedIdentity.connection) ?? 0) + 1);
+        schemas.set(recordedIdentity.schema, (schemas.get(recordedIdentity.schema) ?? 0) + 1);
+        const key = `${recordedIdentity.connection}.${recordedIdentity.schema}.${recordedIdentity.table}`;
+        const existing = tables.get(key) ?? { table: key, calls: 0, denied: 0 };
+        existing.calls += 1;
+        if (row.outcome === "denied") existing.denied += 1;
+        tables.set(key, existing);
+        continue;
+      }
       let parsed: unknown;
       try {
         parsed = JSON.parse(row.tables);
@@ -2605,12 +3155,16 @@ export function registerAuditRoutes(app: FastifyInstance) {
         const parts = item.split(".");
         const schema = parts.length >= 2 ? parts[0] : "unknown";
         const table = parts.length >= 2 ? parts.slice(1).join(".") : item;
-        connections.set("audit-derived", (connections.get("audit-derived") ?? 0) + 1);
+        // No recorded source row for this call: the connection is genuinely
+        // unknown. Report it under an explicit `unknown` connection instead of
+        // inventing one — two connections can hold the same schema.table.
+        connections.set("unknown", (connections.get("unknown") ?? 0) + 1);
         schemas.set(schema, (schemas.get(schema) ?? 0) + 1);
-        const existing = tables.get(item) ?? { table: item, calls: 0, denied: 0 };
+        const key = `unknown.${schema}.${table}`;
+        const existing = tables.get(key) ?? { table: key, calls: 0, denied: 0 };
         existing.calls += 1;
         if (row.outcome === "denied") existing.denied += 1;
-        tables.set(item, existing);
+        tables.set(key, existing);
       }
     }
 
@@ -2694,12 +3248,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const includeAuthFailures = q.includeAuthFailures !== "0" && q.includeAuthFailures !== "false";
 
     const database = await getAuditDb();
-    const { conditions, baseConditions, params } = buildAccessLogFilter(q);
+    const resolved = resolveCallIdentityQuery(database, q);
+    const { conditions, baseConditions, params } = buildAccessLogFilter(resolved);
     const baseWhere = baseConditions.length > 0 ? `WHERE ${baseConditions.join(" AND ")}` : "";
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const totalRow = database.prepare(`SELECT COUNT(*) AS cnt FROM access_log ${where}`).get(params) as { cnt: number };
-    const rows = attachInferredTurnIds(
+    const rows = presentCallRows(
       database,
       database
         .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT ${limit} OFFSET ${offset}`)
@@ -2707,12 +3262,24 @@ export function registerAuditRoutes(app: FastifyInstance) {
     );
     const summaryRow = database.prepare(`
       SELECT
-        SUM(CASE WHEN tool IN (${PROTOCOL_TOOL_LIST}) THEN 1 ELSE 0 END) AS protocol_calls,
-        SUM(CASE WHEN tool NOT IN (${PROTOCOL_TOOL_LIST}) THEN 1 ELSE 0 END) AS business_calls,
+        SUM(CASE WHEN ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS protocol_calls,
+        SUM(CASE WHEN NOT ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS business_calls,
         SUM(CASE WHEN outcome = 'denied' THEN 1 ELSE 0 END) AS denied_calls,
-        SUM(CASE WHEN tool NOT IN (${PROTOCOL_TOOL_LIST}) AND tables IS NOT NULL THEN 1 ELSE 0 END) AS data_bearing_calls
+        SUM(CASE WHEN NOT ${PROTOCOL_CONDITION} AND tables IS NOT NULL THEN 1 ELSE 0 END) AS data_bearing_calls
       FROM access_log ${baseWhere}
     `).get(params) as { protocol_calls: number | null; business_calls: number | null; denied_calls: number | null; data_bearing_calls: number | null };
+
+    // ─── B27 / E-12：八桶主状态汇总 ────────────────────────────────────────
+    //
+    // 旧汇总只有 3 桶（ok / denied / error），`budget_stop` 被**完全丢弃**（F01
+    // 根因）。这里按**同一筛选**（baseWhere）统计八桶，与列表 / CSV / v2 导出
+    // **同源同函数**（`countPrimaryStatuses`）。
+    //
+    // 历史行的 `primary_status` 为 NULL → 归 `unknown` 桶（不重解释历史数据）。
+    const primaryStatusRows = database
+      .prepare(`SELECT primary_status, outcome FROM access_log ${baseWhere}`)
+      .all(params) as Array<{ primary_status: string | null; outcome: string | null }>;
+    const primaryStatusCounts = countPrimaryStatuses(primaryStatusRows);
 
     const entries = rows.map((row) => {
       const shown = presentStoredClient(row);
@@ -2728,6 +3295,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       lucySessionId: row.lucy_session_id ?? undefined,
       lucyTurnId: row.lucy_turn_id ?? undefined,
       inferredTurnId: row.inferred_turn_id ?? undefined,
+      inquiryNo: row.inquiry_no ?? undefined,
+      accessGrade: accessGrade(row.tool),
       turnAttributionMode: row.turn_attribution_mode ?? undefined,
       turnAttributionConfidence: row.turn_attribution_confidence ?? undefined,
       turnAttributionReason: row.turn_attribution_reason ?? undefined,
@@ -2769,7 +3338,27 @@ export function registerAuditRoutes(app: FastifyInstance) {
       skillAction: row.skill_action ?? undefined,
       skillRolesAllowed: row.skill_roles_allowed ? (JSON.parse(row.skill_roles_allowed) as string[]) : undefined,
       matchedRoleId: row.matched_role_id ?? undefined,
-      usageSlowCall: row.is_slow_call === 1
+      usageSlowCall: row.is_slow_call === 1,
+      // B27：汇总主状态（历史行为 NULL → unknown，不重解释历史数据）。
+      primaryStatus: readPrimaryStatus(row as { primary_status?: string | null; outcome?: string | null }),
+      // 20261019 §5：三条**独立**判断轴（执行 / 关联 / 覆盖）各读各的列。
+      // 前端不得用其中一条推导另一条（执行成功不自动使关联或覆盖显示绿色已完成）。
+      // 读路径与 `readPrimaryStatus` 同源同函数；历史行一律落 unknown / legacy_unverified。
+      executionStatus: readExecutionStatus(row as { execution_status?: string | null }),
+      authorizationStatus: readAuthorizationStatus(row as { authorization_status?: string | null }),
+      associationStatus: readAssociationStatus(row as {
+        effective_association_status?: string | null;
+        association_status?: string | null;
+      }),
+      deliveryStatus: readDeliveryStatus(row as { delivery_status?: string | null }),
+      nullReason: readNullReason(row as { null_reason?: string | null }),
+      usabilityStatus: row.usability_status ?? "unknown",
+      // 受控客户端覆盖判据：客户端是否就本次调用上报过 observation 事件。
+      // 「有客户端证据」才可显示「客户端已采集」；否则只能是「后续动作不可见」
+      // （**禁止**「未外发」措辞，见 20261019 §5 与 Plan §4 T05）。
+      clientEventId: row.client_event_id ?? undefined,
+      ingressEventId: row.ingress_event_id ?? undefined,
+      credentialPrincipalId: row.credential_principal_id ?? undefined
     };
     });
 
@@ -2810,7 +3399,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
           protocolCalls: summaryRow.protocol_calls ?? 0,
           businessCalls: summaryRow.business_calls ?? 0,
           deniedCalls: summaryRow.denied_calls ?? 0,
-          dataBearingCalls: summaryRow.data_bearing_calls ?? 0
+          dataBearingCalls: summaryRow.data_bearing_calls ?? 0,
+          // B27：八桶主状态汇总（旧 3 桶保留为 legacy 直方图）。
+          primaryStatus: primaryStatusCounts.counts,
+          /** 闭合断言：八桶之和 == 集合总数。 */
+          primaryStatusClosed: primaryStatusCounts.closed,
+          /** 旧 outcome 直方图，单列，不作为新执行状态。 */
+          legacyOutcome: primaryStatusCounts.legacyOutcomeCounts
         }
       }
     };
@@ -2869,7 +3464,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
   }>("/api/admin/audit/export", async (request, reply) => {
     const q = request.query;
     const database = await getAuditDb();
-    const { conditions, params } = buildAccessLogFilter(q);
+    const resolved = resolveCallIdentityQuery(database, q);
+    const { conditions, params } = buildAccessLogFilter(resolved);
 
     // SC-18 — page size defaults to 10,000; `cursor` resumes after the last
     // row of the previous page so the second page can read row 10,001.
@@ -2882,7 +3478,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @pageSizePlusOne`)
       .all({ ...resumed.params, pageSizePlusOne: pageSize + 1 }) as QueryRow[];
     const hasMore = fetched.length > pageSize;
-    const rows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, pageSize) : fetched);
+    const rows = presentCallRows(database, hasMore ? fetched.slice(0, pageSize) : fetched);
     const last = fetched[pageSize - 1] ?? fetched[fetched.length - 1];
     const nextCursor = hasMore && last
       ? encodeAuditExportCursor({ ts: last.ts, id: last.id })
@@ -2906,7 +3502,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
   }>("/api/admin/audit/export-pack", async (request, reply) => {
     const q = request.query;
     const database = await getAuditDb();
-    const { conditions, params, includeProtocol } = buildAccessLogFilter(q);
+    const resolved = resolveCallIdentityQuery(database, q);
+    const { conditions, params, includeProtocol } = buildAccessLogFilter(resolved, { applyAccessGrade: false });
     const maxRows = auditExportMaxRows();
     // SC-18 — the pack pages by cursor too. Without one, an overflowing scope
     // is reported instead of being silently truncated.
@@ -2916,9 +3513,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
       .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @exportLimit`)
       .all({ ...resumed.params, exportLimit: maxRows + 1 }) as QueryRow[];
     const hasMore = fetched.length > maxRows;
-    const filteredRows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, maxRows) : fetched);
+    const filteredRows = presentCallRows(database, hasMore ? fetched.slice(0, maxRows) : fetched);
     const handshakeRows = includeProtocol ? [] : linkedHandshakeRows(database, filteredRows);
-    const rows = attachInferredTurnIds(
+    const rows = presentCallRows(
       database,
       [...filteredRows, ...handshakeRows].sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : b.id - a.id))
     );
@@ -3173,10 +3770,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     const database = await getAuditDb();
     const result = await listAuditTurnEntries(database, q, { limit, offset, paginate: true });
+    // 审计同步延迟（投影落后账本的程度）。顶部元条在问询页签也要显示它，
+    // 否则两个页签的「同步延迟」口径会不一致。
+    const projection = await auditProjectionStatus(database);
 
     return {
       ok: true,
-      data: result
+      data: { ...result, projection }
     };
   });
 
@@ -3211,7 +3811,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       tableSearch: q.tableSearch,
       includeProtocol: "true"
     };
-    const { conditions, params } = buildAccessLogFilter(callFilter);
+    const { conditions, params } = buildAccessLogFilter(callFilter, { applyAccessGrade: false });
     if (turnIds.length > 0) {
       const placeholders = turnIds.map((_, index) => `@turn${index}`);
       turnIds.forEach((id, index) => {
@@ -3228,7 +3828,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       conditions.push("1 = 0");
     }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const callRows = attachInferredTurnIds(
+    const callRows = presentCallRows(
       database,
       database.prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC`).all(params) as QueryRow[]
     );
@@ -3246,9 +3846,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
   // GET /api/admin/audit/turns/:turnId — single turn detail (inferred or reported).
   app.get<{ Params: { turnId: string }; Querystring: { hours?: string } }>("/api/admin/audit/turns/:turnId", async (request, reply) => {
-    const { turnId } = request.params;
     const windowHours = parseWindowHours(request.query.hours);
     const database = await getAuditDb();
+    const turnId = resolveTurnCorrelationKey(database, request.params.turnId);
+    if (!turnId) {
+      reply.code(404);
+      return { ok: false, error: "not found" };
+    }
     const p95Ms = queryP95LatencyMs(database, windowHours);
 
     const mapAccessLogRow = (
@@ -3320,11 +3924,15 @@ export function registerAuditRoutes(app: FastifyInstance) {
         client: (row.client as string | null) ?? undefined,
         questionSummary: (row.question_summary as string | null) ?? undefined
       });
+      const summaryText = (identity.questionSummary ?? row.question_summary) as string | null | undefined;
       return {
         ok: true,
         data: {
           id: row.inferred_turn_id,
           source: "inferred",
+          inquiryNo: lookupInquiryNo(database, turnId) ?? undefined,
+          correlationKey: turnId,
+          inquiryKind: inquiryKindOfTurn({ source: "inferred", questionSummary: summaryText }),
           userId: row.user_id,
           client: identity.client,
           reportedClient: identity.reportedClient,
@@ -3389,11 +3997,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
       client: (row.client as string | null) ?? undefined,
       questionSummary: (row.question_summary as string | null) ?? undefined
     });
+    const summaryText = (identity.questionSummary ?? row.question_summary) as string | null | undefined;
     return {
       ok: true,
       data: {
         id: row.turn_id,
         source: "reported",
+        inquiryNo: lookupInquiryNo(database, turnId) ?? undefined,
+        correlationKey: turnId,
+        inquiryKind: inquiryKindOfTurn({
+          source: "reported",
+          questionSource: row.question_source as string | null | undefined,
+          questionSummary: summaryText
+        }),
         userId: row.user_id,
         client: identity.client,
         reportedClient: identity.reportedClient,
@@ -3442,6 +4058,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
       if (Number.isFinite(parsed) && parsed > 0) filter.limit = parsed;
     }
     const database = await getAuditDb();
+    if (filter.turnId && /^\d+$/.test(filter.turnId.trim())) {
+      const resolvedTurnId = correlationKeyForAdminTurn(database, filter.turnId);
+      if (!resolvedTurnId) {
+        return { ok: true, data: { events: [], evidence: [] } };
+      }
+      filter.turnId = resolvedTurnId;
+    }
     const { events, evidence } = listTraceEvents(database, filter);
     return {
       ok: true,
@@ -3504,10 +4127,15 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }
 
     const database = await getAuditDb();
+    const originalTurnId = correlationKeyForAdminTurn(database, body.originalTurnId!);
+    if (!originalTurnId) {
+      reply.code(404);
+      return { ok: false, error: { code: "TURN_NOT_FOUND", message: "问询不存在" } };
+    }
     let row;
     try {
       row = appendAssociationRevision(database, {
-        originalTurnId: body.originalTurnId!,
+        originalTurnId,
         effectiveTurnId: body.effectiveTurnId ?? null,
         originalAssociationStatus: body.originalAssociationStatus ?? null,
         effectiveAssociationStatus: body.effectiveAssociationStatus!,
@@ -3602,9 +4230,15 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     const database = await getAuditDb();
     const limit = Math.min(parseInt(request.query.limit ?? "50", 10) || 50, 500);
-    const filterTurnId = request.query.originalTurnId ?? null;
+    const requestedTurnId = request.query.originalTurnId ?? null;
+    const filterTurnId = requestedTurnId && /^\d+$/.test(requestedTurnId.trim())
+      ? correlationKeyForAdminTurn(database, requestedTurnId)
+      : requestedTurnId;
+    if (requestedTurnId && /^\d+$/.test(requestedTurnId.trim()) && !filterTurnId) {
+      return { ok: true, data: [] };
+    }
     const rows = listAssociationRevisions(database, {
-      originalTurnId: request.query.originalTurnId,
+      originalTurnId: filterTurnId ?? undefined,
       limit
     });
 
@@ -3690,6 +4324,200 @@ export function registerAuditRoutes(app: FastifyInstance) {
       return { ok: true, data: view };
     }
   );
+
+  // ─── B19 / E-3：v2 导出正式路径 ────────────────────────────────────────────
+  //
+  // 此前 `performExportV2` / `buildExportPackV2` **没有任何 HTTP 路由**，只有测试
+  // 能调用（E-3）。这里把 v2 导出接成正式路径。
+  //
+  // 关键点（B19 / E-2 / B21）：
+  //   - `S` 取 canonical ledger 的**已提交上界**（`security/store.ts` 的
+  //     `maxEventSeq()`），**不取**投影自身的序号。
+  //   - T3 = 60s，自**捕获 S 那一刻**起算；等待重试不重置计时。
+  //   - 正式导出失败时**不发布**半成品包；诊断包必须显式标 partial。
+  app.get<{
+    Querystring: {
+      mode?: string;
+      confirmDiagnostic?: string;
+      from?: string;
+      until?: string;
+      userId?: string;
+      exportedBy?: string;
+      exportReason?: string;
+      exportApprovalRef?: string;
+      prevExportId?: string;
+    };
+  }>("/api/admin/audit/export-v2", async (request, reply) => {
+    const query = request.query;
+    const mode = query.mode === "diagnostic" ? "diagnostic" : "complete";
+    if (mode === "diagnostic" && query.confirmDiagnostic !== "true") {
+      reply.code(400);
+      return {
+        ok: false,
+        error: { code: "DIAGNOSTIC_REQUIRES_CONFIRM", message: "confirmDiagnostic=true is required" }
+      };
+    }
+
+    const store = await getSecurityStore();
+    if (!store.ok) {
+      reply.code(503);
+      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
+    }
+    // B19 / E-2：`S` 的唯一正确来源是账本已提交上界。
+    const upperSeq = store.value.maxEventSeq();
+    if (!upperSeq.ok) {
+      reply.code(503);
+      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
+    }
+
+    const database = await getAuditDb();
+    const projection = await auditProjectionStatus(database);
+    // B21：自捕获 S 那一刻起算，等待重试不重置。
+    const catchUpStartedAt = Date.now();
+    const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
+    const waitUntil = async (): Promise<boolean> => {
+      for (;;) {
+        const status = await auditProjectionStatus(database);
+        if (status.complete && status.latestSeq >= upperSeq.value) return true;
+        if (Date.now() - catchUpStartedAt >= deadlineMs) return false;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
+    const caughtUp = await waitUntil();
+
+    try {
+      const result = await performExportV2({
+        mode,
+        confirmDiagnostic: query.confirmDiagnostic === "true",
+        fixedFilter: {
+          from: query.from,
+          until: query.until,
+          userId: query.userId
+        },
+        fixedZone: "UTC",
+        projectionLag: projection.lag,
+        auditStoreAvailable: true,
+        securityStoreAvailable: true,
+        backupOk: true,
+        snapshotDb: database,
+        sourceDb: database,
+        classificationVersion: CLASSIFICATION_VERSION_V2P5,
+        digestVersion: DIGEST_VERSION_V2P5,
+        ledgerUpperSeq: upperSeq.value,
+        catchUpStartedAt,
+        catchUpDeadlineMs: deadlineMs,
+        provenance: {
+          exportedBy: query.exportedBy ?? null,
+          exportReason: query.exportReason ?? null,
+          exportApprovalRef: query.exportApprovalRef ?? null
+        },
+        prevExportId: query.prevExportId ?? null
+      });
+      if (mode === "complete" && !caughtUp) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
+        };
+      }
+      reply.header("content-type", "text/csv; charset=utf-8");
+      reply.header("x-lucy-audit-upper-seq", String(result.upperSeq));
+      return result.csv;
+    } catch (err) {
+      const message = String((err as Error).message ?? err);
+      reply.code(409);
+      return { ok: false, error: { code: "EXPORT_FAILED", message } };
+    }
+  });
+
+  app.get<{
+    Querystring: {
+      mode?: string;
+      confirmDiagnostic?: string;
+      from?: string;
+      until?: string;
+      userId?: string;
+      exportedBy?: string;
+      exportReason?: string;
+      exportApprovalRef?: string;
+      prevExportId?: string;
+    };
+  }>("/api/admin/audit/export-pack-v2", async (request, reply) => {
+    const query = request.query;
+    const mode = query.mode === "diagnostic" ? "diagnostic" : "complete";
+    if (mode === "diagnostic" && query.confirmDiagnostic !== "true") {
+      reply.code(400);
+      return {
+        ok: false,
+        error: { code: "DIAGNOSTIC_REQUIRES_CONFIRM", message: "confirmDiagnostic=true is required" }
+      };
+    }
+
+    const store = await getSecurityStore();
+    if (!store.ok) {
+      reply.code(503);
+      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
+    }
+    const upperSeq = store.value.maxEventSeq();
+    if (!upperSeq.ok) {
+      reply.code(503);
+      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
+    }
+
+    const database = await getAuditDb();
+    const projection = await auditProjectionStatus(database);
+    const catchUpStartedAt = Date.now();
+    const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
+    const waitUntil = async (): Promise<boolean> => {
+      for (;;) {
+        const status = await auditProjectionStatus(database);
+        if (status.complete && status.latestSeq >= upperSeq.value) return true;
+        if (Date.now() - catchUpStartedAt >= deadlineMs) return false;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
+    const caughtUp = await waitUntil();
+
+    try {
+      const pack = await buildExportPackV2({
+        mode,
+        confirmDiagnostic: query.confirmDiagnostic === "true",
+        fixedFilter: { from: query.from, until: query.until, userId: query.userId },
+        fixedZone: "UTC",
+        projectionLag: projection.lag,
+        auditStoreAvailable: true,
+        securityStoreAvailable: true,
+        backupOk: true,
+        snapshotDb: database,
+        sourceDb: database,
+        classificationVersion: CLASSIFICATION_VERSION_V2P5,
+        digestVersion: DIGEST_VERSION_V2P5,
+        ledgerUpperSeq: upperSeq.value,
+        catchUpStartedAt,
+        catchUpDeadlineMs: deadlineMs,
+        provenance: {
+          exportedBy: query.exportedBy ?? null,
+          exportReason: query.exportReason ?? null,
+          exportApprovalRef: query.exportApprovalRef ?? null
+        },
+        prevExportId: query.prevExportId ?? null
+      });
+      if (mode === "complete" && !caughtUp) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
+        };
+      }
+      reply.header("content-type", "application/zip");
+      reply.header("x-lucy-audit-upper-seq", String(pack.manifest.ledgerUpperSeq));
+      return reply.send(pack.zip);
+    } catch (err) {
+      const message = String((err as Error).message ?? err);
+      reply.code(409);
+      return { ok: false, error: { code: "EXPORT_FAILED", message } };
+    }
+  });
 }
 
 function serializeTraceEvent(row: TraceEventRow) {

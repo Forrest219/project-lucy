@@ -56,7 +56,7 @@ export type SourceSummary = {
   conn: string;
   schema: string;
   table: string;
-  /** Physical `schema.table` used to match `ktx.yaml` `enabled_tables`. */
+  /** Manifest `table:` 物理名，用来对齐 `ktx.yaml` `enabled_tables`。两段或三段都可以。 */
   qualifiedName: string;
   filePath: string;
   columnCount: number;
@@ -226,6 +226,12 @@ export type RemoveSchemaResult = {
   newSchemas: string[];
   removedEnabledTables: string[];
   deletedFiles: string[];
+  /**
+   * L25-16 F5-04 — pre-image of every deleted semantic content file.
+   * The legacy Schema removal entry deletes Manifest / Overlay files; keeping the
+   * pre-image makes the deletion reversible / auditable.
+   */
+  deletedFilePreImages?: Array<{ filePath: string; content: string }>;
 };
 
 /** Spec 179: reference kind that blocks connection deletion before write. */

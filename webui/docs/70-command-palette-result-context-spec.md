@@ -5,7 +5,7 @@
 | Spec 编号 | 70 |
 | 关联工单 | `webui/docs/plans/wo-M63-command-palette-result-context.md` |
 | 关联台账 | `docs/ui-ux-feedback/pages/global-shell.md` `UX-GLOBAL-SHELL-007` |
-| 状态 | Draft |
+| 状态 | **已实现**（提交 `e27ca521` `feat+fix(webui): global sidebar polish, command palette hardening, catalog/wiki visual clarity, connection schema casing`） |
 | 日期 | 2026-08-03 |
 | 范围 | WebUI 全局命令面板搜索结果 |
 

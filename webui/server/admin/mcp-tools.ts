@@ -26,6 +26,7 @@ const KNOWN_TOOLS: Array<{ name: string; description: string }> = [
   { name: "lucy_explain_query", description: "解释 Lucy 对查询的权限与 guardrail 判断" },
   { name: "lucy_freshness", description: "查询当前 agent 已授权 source 的新鲜度元数据" },
   { name: "lucy_begin_question", description: "记录一次业务问题，用于审计链路关联" },
+  { name: "lucy_continue_question", description: "问询预算用尽后继续同一问询，再开一档数据额度" },
   { name: "kx_catalog", description: "列出当前 agent 可访问的 KX 财务语义层 source" },
   { name: "lucy_skill_search", description: "检索已发布的业务 Skill" },
   { name: "lucy_skill_read", description: "读取业务 Skill 的操作规范" },
@@ -34,7 +35,10 @@ const KNOWN_TOOLS: Array<{ name: string; description: string }> = [
   { name: "sql_execution", description: "执行原始 SQL（受限）" },
   { name: "sql_dialect_notes", description: "读取 SQL 方言说明（受限）" },
   { name: "memory_ingest", description: "注入记忆" },
-  { name: "memory_ingest_status", description: "查询记忆注入状态" }
+  { name: "memory_ingest_status", description: "查询记忆注入状态" },
+  // L25-16 — 控制面工具（由 role.allow.ops 授权，不在 allow.tools 里授予）。
+  { name: "lucy_ops_connection_tables", description: "批量维护连接的启用表范围（控制面工具）" },
+  { name: "lucy_ops_source_import", description: "批量导入源表语义（控制面工具）" }
 ];
 
 export function registerMcpToolsRoutes(app: FastifyInstance) {

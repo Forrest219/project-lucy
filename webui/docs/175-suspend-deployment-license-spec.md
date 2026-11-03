@@ -8,7 +8,7 @@
 | 版本 | v0.2 |
 | 撰写日期 | 2026-10-18 |
 | 委托人 | xingchen |
-| 状态 | **已批准（2026-10-18，xingchen）**。v0.2 改为删除实现。本文件不包含实现 |
+| 状态 | **已批准（2026-10-18，xingchen）**。v0.2 改为删除实现，本文件不包含实现；**该删除动作已由工单 `webui/docs/plans/wo-202610-26-suspend-deployment-license.md` 落地（状态：已实现，2026-10-18）** |
 | 适用范围 | 部署许可运行时门禁、许可 API、治理台页面、签发脚本、导航与系统手册 |
 | 关联工单 | `webui/docs/plans/wo-202610-26-suspend-deployment-license.md` |
 | 上游 | [`docs/licensing/design-deployment-license.md`](../../docs/licensing/design-deployment-license.md)（设计归档，不再指导交付）、企业安全 Spec §3.3 与 SEC-15 |

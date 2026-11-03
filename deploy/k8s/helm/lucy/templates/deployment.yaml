@@ -1,3 +1,5 @@
+{{- $oidc := .Values.oidc | default dict -}}
+{{- $smtp := .Values.smtp | default dict -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -51,6 +53,16 @@ spec:
         {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if $oidc.enabled }}
+        # The OIDC profile is read once at startup (Spec §4.3), so a profile
+        # change must roll the pod to take effect.
+        checksum/oidc-profile: {{ include (print $.Template.BasePath "/oidc-configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- if $smtp.enabled }}
+        # The SMTP profile is read once at startup (Spec §3.2), so a profile or
+        # recipient change must roll the pod to take effect.
+        checksum/smtp-profile: {{ include (print $.Template.BasePath "/smtp-configmap.yaml") . | sha256sum }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -174,7 +186,38 @@ spec:
             - name: LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE
               value: /run/secrets/lucy-bootstrap/token
             {{- end }}
+            {{- if $oidc.enabled }}
+            {{- include "lucy.oidc.validate" . }}
+            # OIDC (Spec §10.1): exactly two env vars, both FILE paths. The
+            # client secret VALUE is never an env var, a values key, a
+            # ConfigMap entry or a command-line argument.
+            - name: LUCY_OIDC_CONFIG_FILE
+              value: {{ include "lucy.oidc.profilePath" . }}
+            - name: LUCY_OIDC_CLIENT_SECRET_FILE
+              value: {{ include "lucy.oidc.clientSecretPath" . }}
+            {{- end }}
+            {{- if $smtp.enabled }}
+            {{- include "lucy.smtp.validate" . }}
+            # SMTP (Spec §10.1): only FILE PATHS reach the process. The
+            # password VALUE is never an env var, a values key, a ConfigMap
+            # entry or a command-line argument.
+            - name: LUCY_SMTP_PROFILE_FILE
+              value: {{ include "lucy.smtp.profilePath" . }}
+            {{- if $smtp.username }}
+            - name: LUCY_SMTP_PASSWORD_FILE
+              value: {{ include "lucy.smtp.passwordPath" . }}
+            {{- end }}
+            {{- if $smtp.ca.enabled }}
+            - name: LUCY_SMTP_CA_FILE
+              value: {{ include "lucy.smtp.caPath" . }}
+            {{- end }}
+            {{- end }}
           {{- if .Values.extraEnvFrom }}
+          # Kubernetes gives an explicit `env` entry precedence over `envFrom`
+          # for the same name, so the pinned OIDC file paths, deployment mode
+          # and cookie flags above cannot be shadowed from here. The chart
+          # additionally rejects an extraEnvFrom source that would project
+          # the OIDC client secret Secret into the env (see _oidc.tpl).
           envFrom:
             {{- toYaml .Values.extraEnvFrom | nindent 12 }}
           {{- end }}
@@ -195,6 +238,41 @@ spec:
             - name: db-password
               mountPath: {{ .Values.db.mountPath | default "/var/run/secrets/lucy-db" | quote }}
               readOnly: true
+            {{- end }}
+            {{- if $oidc.enabled }}
+            # OIDC provider profile (non-sensitive ConfigMap), read-only.
+            - name: oidc-profile
+              mountPath: {{ include "lucy.oidc.profilePath" . }}
+              subPath: profile.yaml
+              readOnly: true
+            # OIDC client secret: mounted read-only from the customer's own
+            # Kubernetes Secret. Only the file path reaches the process.
+            - name: oidc-client-secret
+              mountPath: {{ include "lucy.oidc.clientSecretPath" . }}
+              subPath: client-secret
+              readOnly: true
+            {{- end }}
+            {{- if $smtp.enabled }}
+            # SMTP profile (non-sensitive ConfigMap), read-only.
+            - name: smtp-profile
+              mountPath: {{ include "lucy.smtp.profilePath" . }}
+              subPath: profile.yaml
+              readOnly: true
+            {{- if $smtp.username }}
+            # SMTP password: mounted read-only from the customer's own
+            # Kubernetes Secret. Only the file path reaches the process.
+            - name: smtp-password
+              mountPath: {{ include "lucy.smtp.passwordPath" . }}
+              subPath: password
+              readOnly: true
+            {{- end }}
+            {{- if $smtp.ca.enabled }}
+            # Optional private CA: also from a customer-managed Secret.
+            - name: smtp-ca
+              mountPath: {{ include "lucy.smtp.caPath" . }}
+              subPath: ca.pem
+              readOnly: true
+            {{- end }}
             {{- end }}
             {{- /* Secret is intentionally NOT mounted here: see secrets-sync init. */}}
           resources:
@@ -250,4 +328,56 @@ spec:
             items:
               - key: password
                 path: password
+        {{- end }}
+        {{- if $smtp.enabled }}
+        # SMTP profile. The chart renders no Secret for SMTP: the password
+        # Secret below is created and owned by the customer.
+        - name: smtp-profile
+          configMap:
+            name: {{ include "lucy.fullname" . }}-smtp-profile
+            defaultMode: 0444
+            items:
+              - key: profile.yaml
+                path: profile.yaml
+        {{- if $smtp.username }}
+        - name: smtp-password
+          secret:
+            secretName: {{ $smtp.existingSecret }}
+            defaultMode: 0440
+            items:
+              - key: {{ $smtp.passwordKey }}
+                path: password
+        {{- end }}
+        {{- if $smtp.ca.enabled }}
+        - name: smtp-ca
+          secret:
+            secretName: {{ $smtp.ca.existingSecret }}
+            defaultMode: 0444
+            items:
+              - key: {{ $smtp.ca.key }}
+                path: ca.pem
+        {{- end }}
+        {{- end }}
+        {{- if $oidc.enabled }}
+        # OIDC provider profile. The chart renders no Secret for OIDC: the
+        # client secret Secret below is created and owned by the customer.
+        - name: oidc-profile
+          configMap:
+            name: {{ include "lucy.fullname" . }}-oidc-profile
+            defaultMode: 0444
+            items:
+              - key: profile.yaml
+                path: profile.yaml
+        # OIDC client secret, referenced by name only (Spec §4.2: the file is
+        # read-only and never world-readable). 0440, not 0400: the pod sets
+        # podSecurityContext.fsGroup, so kubelet rewrites the mounted file to
+        # root:<fsGroup> 0440 even when the template declares 0400. Declaring
+        # 0440 keeps the manifest equal to what the container actually reads.
+        - name: oidc-client-secret
+          secret:
+            secretName: {{ $oidc.existingSecret }}
+            defaultMode: 0440
+            items:
+              - key: {{ $oidc.clientSecretKey }}
+                path: client-secret
         {{- end }}

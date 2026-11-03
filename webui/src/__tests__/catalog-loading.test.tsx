@@ -103,6 +103,41 @@ function LocationProbe() {
 }
 
 describe("Spec 174 R4 closure — Catalog fact-dependent navigation", () => {
+
+  /**
+   * Spec 195 §7 / SI-13 — a background refresh failure keeps the semantic
+   * asset table on screen and reports the last successful read.
+   */
+  it("Spec 195 §7: keeps the semantic asset table on screen when a background refresh fails", async () => {
+    const client = renderWith(<Catalog />, undefined, "/catalog?scope=all");
+    await act(async () => sources.resolve(new Response()));
+    await screen.findByTestId("catalog-row-orders");
+
+    const failing = deferred();
+    sources = failing;
+    sourcesBody = () => json({ ok: false, error: { code: "INTERNAL", message: "boom" } }, 500);
+    act(() => { void client.refetchQueries({ queryKey: queryKeys.sources }); });
+    await act(async () => { failing.resolve(new Response()); });
+
+    const notice = await screen.findByTestId("display-refresh-notice");
+    expect(notice).toHaveTextContent("刷新失败，当前显示上次成功读取的数据。");
+    expect(screen.getByTestId("display-refresh-notice-time")).toHaveTextContent("上次成功读取：");
+    // The table itself is untouched.
+    expect(screen.getByTestId("catalog-row-orders")).toBeInTheDocument();
+
+    const recovered = deferred();
+    sources = recovered;
+    sourcesBody = () => json({
+      tables: [summary("orders"), summary("refunds", { enabled: false })],
+      manifestSchemas: [],
+      meta: { snapshotVersion: "v2", generatedAt: "", authorizedCountsState: "ok", runtimeConsistency: "matched" }
+    });
+    act(() => { void client.refetchQueries({ queryKey: queryKeys.sources }); });
+    await act(async () => { recovered.resolve(new Response()); });
+    await waitFor(() => expect(screen.queryByTestId("display-refresh-notice")).not.toBeInTheDocument());
+    expect(screen.getByTestId("catalog-row-orders")).toBeInTheDocument();
+  });
+
   function syncWrites(client: QueryClient) {
     setDisplayWriteBeginHandler((scopes) => {
       for (const scope of scopes) void client.cancelQueries({ queryKey: DISPLAY_SCOPE_QUERY_KEYS[scope] });
@@ -378,7 +413,7 @@ describe("Spec 174 R5 — decorations never gate the cards; probes start after t
     expect(await screen.findByTestId("connection-card-perf-conn", {}, { timeout: 150 })).toBeInTheDocument();
     expect(screen.getByTestId("add-schema-perf-conn")).toBeInTheDocument();
     expect(screen.getByTestId("execution-runtime-slot")).toBeInTheDocument();
-    expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("正在读取配置同步状态...");
+    expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("正在读取刷新状态...");
     await act(async () => {
       runtime.resolve(json({ execution: { status: "stale" } }));
       reloads.resolve(json({ runs: [], last: null, lastByConnection: { "perf-conn": { id: "r1", connectionId: "perf-conn", status: "succeeded", startedAt: "2026-10-01T00:00:00.000Z", finishedAt: "2026-10-01T00:00:01.000Z", tables: 1, warnings: [] } } }));
@@ -399,7 +434,7 @@ describe("Spec 174 R5 — decorations never gate the cards; probes start after t
       runtime.resolve(json({ ok: false, error: { code: "INTERNAL", message: "runtime down" } }, 500));
       reloads.resolve(json({ ok: false, error: { code: "INTERNAL", message: "history down" } }, 500));
     });
-    await waitFor(() => expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("配置同步状态加载失败"));
+    await waitFor(() => expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("刷新状态加载失败"));
     expect(screen.queryByTestId("execution-runtime-notice")).not.toBeInTheDocument();
     expect(screen.getByTestId("execution-runtime-slot")).toBeInTheDocument();
     expect(screen.getByTestId("connection-card-perf-conn")).toBeInTheDocument();

@@ -51,12 +51,13 @@
 | `catalog-reload-warning-toggle-${conn.id}-${schema}` | Schema 警告详情开关 | 默认 `查看详情` 且 `aria-expanded=false`；点击后变 `收起详情` |
 | `catalog-reload-warning-${conn.id}-${schema}` | Schema Catalog 警告详情行 | 默认不出现；展开后显示 |
 | `catalog-reload-warning-details-${conn.id}-${schema}` | 警告详情 | — |
-| `schema-asset-table-${conn.id}` | Schema 资产表 | 列：`Schema / Manifest 状态 / 本地表数 / 启用表数 / 操作` |
+| `schema-asset-table-${conn.id}` | Schema 资产表 | 列：`Schema / Manifest 状态 / 库内表数 / 库内表清单 / 已发现表数 / 已启用表数 / 持续感知 / 操作`（Spec 190 起新增「库内表清单」与「持续感知」两列；四个计数口径分列，不得合并） |
 | `schema-row-${conn.id}-${schema}` | Schema 行 | 状态枚举 `已存在` / `缺失 Manifest` / `解析失败` |
 | `schema-asset-status-${conn.id}-${schema}` | Schema Manifest 状态 cell | 必含 `已存在` / `缺失 Manifest` / `解析失败` 之一 |
 | `schema-enabled-count-${conn.id}-${schema}` | Schema 启用表数 cell | 文案为 `<n> 张表`，数值来自该 Schema 下 `enabled_tables` 计数 |
 | `schema-whitelist-${conn.id}-${schema}` | `维护启用范围` / `上传 Manifest` 上下文动作 | 必含 `维护启用范围` 或 `上传 Manifest`；不得出现 `维护白名单` |
 | `add-schema-${conn.id}` | `+ 添加 Schema` 按钮 | 禁止 `添加架构` / `添加模式` |
+| `connection-discovery-notice-${conn.id}` | 连接卡「持续感知」状态提示 | 仅在连接级状态为 `paused` / `error` 时出现；文案 `持续感知已暂停：` / `持续感知失败：` + 原因；不得出现 `扫描` / `重新扫描物理库` |
 
 ### 2.2 AddSchemaDrawer.tsx
 
@@ -156,6 +157,18 @@
 | `connection-test-panel` | 状态面板 | — |
 | `connection-test-${section.label}` | 章节（模板） | — |
 
+### 2.7 SchemaDiscoveryCells.tsx（src/components/connections/）
+
+Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `live-table-list-toggle-${connectionId}-${schema}` | 库内表清单入口按钮 | 文案 `<n> 张表` 或 `查看表清单`；`aria-expanded` 随展开切换；不得出现 `扫描` / `物理扫描` / `重新扫描物理库` |
+| `live-table-list-${connectionId}-${schema}` | 库内表清单展开面板 | 展开后才出现；每项含表名与 `<n> 列`；读取失败显示原因文案，不得出现 `白名单` |
+| `discovery-state-${connectionId}-${schema}` | 持续感知状态 cell | 状态枚举 `未开启` / `已开启` / `感知失败` / `已暂停`；不得出现 `扫描` |
+| `discovery-paused-reason-${connectionId}-${schema}` | 暂停原因 | 仅在状态为 `已暂停` 时出现；文案取封闭 reason 词表的中文表述 |
+| `table-diff-count-${connectionId}-${schema}` | 表清单差异计数 | 文案 `新增 <n> · 已消失 <n> · 列数变化 <n>`；三项全为 0 时不出现；不得出现 `变更清单` / `差异结果` |
+
 ## 3. 启用表范围（src/pages/connections/TableWhitelist.tsx）
 
 | Test ID | 元素 | 文案约束 |
@@ -234,6 +247,8 @@
 | Test ID | 元素 |
 |---|---|
 | `wiki-read-title` | 文档标题 |
+| `wiki-agent-access` | Agent 权限条（阅读态） |
+| `wiki-agent-access-authorize` | 从阅读态跳去选择可访问角色 |
 | `wiki-read-summary` | 摘要 |
 | `wiki-read-meta` | meta 区域（含 sl_refs / tags） |
 | `wiki-read-tags` | 标签 |
@@ -253,11 +268,13 @@
 | Test ID | 元素 | 文案约束 |
 |---|---|---|
 | `wiki-edit-view` | 编辑态根 | 必含 `textarea` |
+| `wiki-edit-acl` | Agent 可见范围 | — |
 | `wiki-edit-meta` | 元信息区（折叠 `文档信息`） | — |
 | `wiki-edit-grid` | 编辑器 + 预览 grid | — |
 | `wiki-edit-source` | 源编辑区 | — |
 | `wiki-edit-textarea` | Markdown 文本框 | 占主工作区 ≥ 80% |
-| `wiki-acl-field` | 可访问角色（对象授权，默认无人可见） | `components/ObjectAclField.tsx` |
+| `wiki-acl-field` | 可访问角色（对象授权，默认无人可见；含 Agent 提示） | `components/ObjectAclField.tsx` |
+| `wiki-acl-field-hint` | 可访问角色对 Agent 的说明 | `components/ObjectAclField.tsx` |
 | `wiki-edit-preview` | 渲染预览 | — |
 
 ### 5.5 WikiSavePreflight.tsx
@@ -286,7 +303,7 @@
 
 | Test ID | 元素 | 文案约束 |
 |---|---|---|
-| `publish-workbench-layout` | 整体 layout | 桌面双列、窄屏单列 |
+| `publish-workbench-layout` | 整体 layout | 桌面三列（待发布变更 / 生效准备 / 最近发布），比例 4/5/3；窄屏单列 |
 | `workbench-empty-state` | 空态 | 必含 `暂无待同步变更` |
 | `workbench-batch-sync-hint` | 有待同步变更时的批量同步提示（已替代移除的 `workbench-pending-count` Badge） | 仅 `files.length > 0` 时出现；必含 `本批一并同步 N 项` |
 | `workbench-validate` | `校验变更` | 禁止 `Validate changed` |
@@ -296,6 +313,15 @@
 | `workbench-reindex-result` | reindex 成功结果 | 必含 `退出码 0` |
 | `workbench-reindex-error` | reindex 失败 | 必含 `stdout` `stderr` |
 | `review-boundary-checklist` | 边界说明卡 | — |
+| `workbench-pending-count` | 左栏待同步文件数 | 必含 `N 个待同步文件`；不得用校验通过数代替 |
+| `workbench-pending-groups` | 左栏分组容器 | 按语义资产 / Schema Manifest / 业务 Wiki 分组 |
+| `workbench-pending-group-${group.id}` | 单个分组（模板） | 组标题保留该组总数 |
+| `workbench-pending-error` | 待办加载失败 | 必含 `变更加载失败`；**不得**同时出现 `暂无待同步变更` |
+| `workbench-baseline-needs-verification` | 基线待核对提示 | 必含 `生效状态待核验` |
+| `workbench-recent-panel` | 右栏容器 | 承载最近发布 |
+| `workbench-refresh` | 页头刷新按钮 | 刷新期间保留已展示数据并标注更新中 |
+| `publish-primary-actions` | 中栏发布动作区 | 全页唯一的发布主动作在此；页头不得重复 |
+| `workbench-validation-stale` | 旧校验失效提示 | 必含 `已变化`；此时发布按钮不得可用 |
 
 ### 6.2 PublishHistory.tsx
 
@@ -340,9 +366,111 @@
 
 | Test ID | 元素 | 文案约束 |
 |---|---|---|
+| `semantic-asset-export-button` | 导出按钮根（`testId` prop 默认值，可被调用方覆盖） | — |
 | `semantic-asset-export-summary` | 导出摘要 | — |
 | `semantic-asset-export-download` | 下载按钮 | 必含 `下载当前快照` / `导出当前快照 (.zip)` |
 | `semantic-asset-export-excluded` | 被排除项列表 | — |
+
+### 6.5 RestoreReleaseDrawer.tsx（src/components/semantic-assets/）
+
+L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同步镜像」。
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `restore-release-drawer` | Drawer 根 | — |
+| `restore-package-export` | 导出恢复包链接 | — |
+| `restore-preview-targets` | 预检结果区 | — |
+| `restore-preview-index-scope` | 全局索引范围与既有待同步变更分区 | 必含「无法逐文件确认的内容也可能被本次索引纳入」 |
+| `restore-preview-mirror-sync-write-set` | 镜像同步写集分区 | 必含「变化方向是镜像向内容根对齐」 |
+| `restore-preview-semantic-deletion` | 恢复后从模型中消失的表 | — |
+| `restore-preview-readback` | 删除方向读回预期 | — |
+| `restore-release-confirm` | 确认恢复按钮 | 唯一 primary；禁用时给出「重新预检」入口 |
+
+### 6.6 发布工作台三栏组件（Spec 20261030 三栏）
+
+#### 6.6.1 PublishRecentReleases.tsx
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `publish-recent-releases` | 右栏最近发布区 | 标题必含 `最近发布`；**禁止** `已生效` 作栏标题 |
+| `publish-recent-releases-loading` | 加载态 | 不得宣布空态 |
+| `publish-recent-releases-error` | 加载失败 | 必含可读错误并提供重试 |
+| `publish-recent-releases-retry` | 重试按钮 | — |
+| `publish-recent-releases-empty` | 空态 | 必含 `暂无发布记录` |
+| `publish-recent-releases-list` | 批次列表 | 服务端已按 `businessChangesOnly` 过滤并限 5 条 |
+| `publish-recent-release` | 单个批次 | 技术 ID 为次级信息 |
+| `publish-recent-release-activation` | 批次的生效证据 | 未确认的记录**不得**呈现为 `已生效` |
+
+#### 6.6.2 PublishImpactReview.tsx
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `publish-impact-review` | 影响审阅根 | 常规同步与 staged 批次共用 |
+| `publish-impact-summary` | 范围摘要 | 必含 `涉及表 N 张` / `Schema Manifest M 个` / `业务 Wiki W 篇` / `待同步文件 F 个` |
+| `publish-impact-incomplete` | 范围不完整提示 | 必含 `影响范围未完整解析`；此时禁用提交 |
+| `publish-impact-blocking-reasons` | 阻断原因列表 | 逐条列出缺什么证据 |
+| `publish-impact-tables` | 涉及的表分区 | 标题必含 `涉及的表` |
+| `publish-impact-table-count` | 展示计数 | 必含 `当前显示 X / 共 N 张` |
+| `publish-impact-search` | 搜索框 | placeholder `按表名或原因搜索` |
+| `publish-impact-filter-note` | 搜索/折叠说明 | 必含 `仍会同步全部范围`；搜索**不得**缩小提交范围 |
+| `publish-impact-no-match` | 搜索无结果 | 必含 `没有匹配的表` |
+| `publish-impact-group` | 连接/Schema 分组 | 组标题保留该组总数 |
+| `publish-impact-group-toggle` | 分组折叠按钮（模板） | 折叠只影响展示 |
+| `publish-impact-table` | 单张表条目（模板） | 完整表身份 + 逐表原因 + 变更来源；**禁止**静默截断前 8 项 |
+| `publish-impact-reasons` | 该表的全部原因 | 同表多原因合并计数，总表数只算一次 |
+| `publish-impact-evidence-toggle` | 证据展开控件 | 文案 `展开变更证据` / `收起变更证据` |
+| `publish-impact-evidence-area` | 证据容器 | 就地展开，不叠加第二个抽屉 |
+| `publish-impact-evidence-loading` | 证据加载中 | 必含 `正在加载证据` |
+| `publish-impact-evidence-error` | 证据加载失败 | 必含 `证据加载失败` 并提供重试 |
+| `publish-impact-evidence-retry` | 证据重试按钮 | — |
+| `publish-impact-evidence` | 证据正文 | 同版本证据引用 |
+| `publish-impact-unresolved-blocking` | 影响范围待核对的阻断项 | 标题必含 `影响范围待核对` |
+| `publish-impact-wiki` | 业务 Wiki 分区 | 标题必含 `业务 Wiki`；与表影响分区 |
+| `publish-impact-wiki-rows` | 业务 Wiki 明细行 | — |
+| `publish-impact-schema-changes` | Schema 级变更分区 | 标题必含 `Schema 级变更`；不计入「涉及的表」 |
+| `publish-impact-schema-changes-rows` | Schema 级变更明细行 | — |
+| `publish-impact-related-scope` | 关联与校验范围分区 | 标题必含 `关联与校验范围`；不计入「涉及的表」 |
+| `publish-impact-related-scope-rows` | 关联与校验范围明细行 | — |
+| `publish-impact-other-changes` | 其它内容分区 | 不计入「涉及的表」 |
+| `publish-impact-other-changes-rows` | 其它内容明细行 | — |
+| `publish-impact-unresolved` | 影响范围待核对分区 | 标题必含 `影响范围待核对` |
+| `publish-impact-unresolved-rows` | 影响范围待核对明细行 | — |
+| `${testId}-rows` | 明细分区行容器（模板） | 对应各分区；实现见 `PublishImpactReview.tsx` |
+
+#### 6.6.3 PublishSyncConfirmDrawer.tsx
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `publish-sync-confirm-backdrop` | 遮罩 | — |
+| `publish-sync-confirm-panel` | 确认侧栏 | 标题必含 `确认同步索引并生效`；本页限定宽度 880px / 最大 960px |
+| `publish-sync-confirm-title` | 侧栏标题 | 打开时焦点落在此处 |
+| `publish-sync-confirm-close` | 关闭按钮 | — |
+| `publish-sync-confirm-body` | 唯一纵向滚动区 | 页头页脚固定；不得整体滚动 |
+| `publish-sync-confirm-error` | 提交失败 | 失败时侧栏**保持打开**并保留已核对内容 |
+| `publish-sync-confirm-digest` | 绑定的内容版本 | 次级信息 |
+| `publish-sync-confirm-pending` | 影响范围未就绪 | 必含 `正在解析影响范围` |
+| `publish-sync-confirm-cancel` | 取消按钮 | — |
+| `publish-sync-confirm-blocked-reason` | 阻断原因 | 禁用提交时必须给出可读原因 |
+| `publish-sync-confirm-submit` | 主按钮 | 文案 `同步索引并生效`；唯一 primary |
+
+#### 6.6.4 PublishBatchPlanPanel.tsx 的本轮新增
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `workbench-batch-impact-review` | staged 批次的影响审阅 | 复用 `publish-impact-review`；保留原计划摘要与覆盖确认 |
+| `workbench-batch-plan` | 批次计划根 | — |
+| `workbench-batch-plan-digest` | 计划摘要 | 次级信息 |
+| `workbench-batch-plan-loading` | 计划加载中 | — |
+| `workbench-batch-plan-error` | 计划加载失败 | — |
+| `workbench-batch-plan-summary` | 计划范围摘要 | 必含「整批同步」口径 |
+| `workbench-batch-candidates` | 本次导入候选 | — |
+| `workbench-batch-disk-changes` | 既有待同步磁盘变更 | — |
+| `workbench-batch-overwrite` | 覆盖确认提示 | — |
+| `workbench-batch-confirm` | 确认计划按钮 | — |
+| `workbench-batch-refresh` | 重新预览按钮 | — |
+| `workbench-batch-confirm-drawer` | 确认计划抽屉 | — |
+| `workbench-batch-confirm-summary` | 确认计划摘要 | — |
+| `workbench-batch-confirm-submit` | 确认计划主按钮 | — |
 
 ## 7. 其它（与 E2E 弱相关但已存在）
 
@@ -363,6 +491,7 @@
 | `plaintext-token` | 明文 token |
 | `role-detail` | 角色详情 |
 | `role-diff` | 角色 diff |
+| `role-permission-review-drawer` | 删除或保存 Role 前的确认抽屉 | `components/RolePermissionReviewDrawer.tsx` |
 | `role-dirty-bar` | 角色 dirty 浮条 |
 | `role-list-table` | 角色列表 Data Grid |
 | `role-row-${roleId}` | 角色行（模板） |
@@ -411,11 +540,16 @@
 | `agent-role-field` | Agent 角色复选框组 | `components/AgentRoleField.tsx` |
 | `agent-role-option` | Agent 角色复选项 | `components/AgentRoleField.tsx` |
 | `agent-role-capability` | 角色集合的数据能力卡 | `components/AgentRoleField.tsx` |
-| `agent-active-tokens-${agent.id}` | 近 7 天活跃 Token | `pages/admin/AgentList.tsx` |
-| `agent-calls-7d-${agent.id}` | 近 7 天调用量 | `pages/admin/AgentList.tsx` |
+| `agent-stats-range-7d` | Agent 统计窗：近 7 天 | `pages/admin/AgentList.tsx` |
+| `agent-stats-range-14d` | Agent 统计窗：近 14 天 | `pages/admin/AgentList.tsx` |
+| `agent-stats-range-30d` | Agent 统计窗：近 30 天（列表默认） | `pages/admin/AgentList.tsx` |
+| `agent-active-tokens-${agent.id}` | 可用 Token | `pages/admin/AgentList.tsx` |
+| `agent-calls-7d-${agent.id}` | 当前时间窗业务调用量 | `pages/admin/AgentList.tsx` |
 | `agent-leave-confirm-modal` | 未保存离开确认 | `pages/admin/AgentDetail.tsx` |
 | `agent-detail-mcp-playground` | 跳转 MCP 调试台 | `pages/admin/AgentDetail.tsx` |
 | `agent-constraints-editor` | 强制约束编辑器 | `pages/admin/AgentDetail.tsx` |
+| `agent-constraints-empty` | 个人行限制空态摘要「未设置」 | `pages/admin/AgentDetail.tsx` |
+| `agent-constraints-caveat-tooltip` | 个人行限制 ⓘ tooltip（编译≠取数 caveat） | `pages/admin/AgentDetail.tsx` |
 | `capability-preview` | 数据能力预览 | `pages/admin/AgentDetail.tsx` |
 | `diff-change-summary` | 变更字段摘要 | `pages/admin/AgentDetail.tsx` |
 | `dryrun-finalrows-preview` | dry-run 技术预览 | `pages/admin/AgentDetail.tsx` |
@@ -464,7 +598,6 @@
 | `version-info-product` | version-info-product | `pages/admin/VersionInfo.tsx` |
 | `version-info-sha` | version-info-sha | `pages/admin/VersionInfo.tsx` |
 | `version-info-copy` | version-info-copy | `pages/admin/VersionInfo.tsx` |
-| `version-info-workspace` | version-info-workspace | `pages/admin/VersionInfo.tsx` |
 | `version-info-ktx` | version-info-ktx | `pages/admin/VersionInfo.tsx` |
 | `sidebar-auth` | sidebar-auth | `app/App.tsx` |
 | `add-schema-select` | add-schema-select | `components/AddSchemaDrawer.tsx` |
@@ -533,6 +666,9 @@
 | `object-detail-role-not-found` | object-detail-role-not-found | `components/ObjectDetailDrawer.tsx` |
 | `object-detail-role-body` | object-detail-role-body | `components/ObjectDetailDrawer.tsx` |
 | `policy-degrade-banner` | policy-degrade-banner | `components/PolicyDegradeBanner.tsx` |
+| `metric-temporarily-unable-to-query` | metric-temporarily-unable-to-query | `components/PolicyDegradeMetric.tsx` |
+| `policy-degrade-metric-toggle` | policy-degrade-metric-toggle | `components/PolicyDegradeMetric.tsx` |
+| `policy-degrade-metric-panel` | policy-degrade-metric-panel | `components/PolicyDegradeMetric.tsx` |
 | `remove-schema-drawer` | remove-schema-drawer | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-close` | remove-schema-close | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-enabled-count` | remove-schema-enabled-count | `components/RemoveSchemaDrawer.tsx` |
@@ -579,6 +715,13 @@
 | `wiki-library-document` | wiki-library-document | `components/WikiLibraryHome.tsx` |
 | `wiki-library-document-title` | wiki-library-document-title | `components/WikiLibraryHome.tsx` |
 | `wiki-library-document-path` | wiki-library-document-path | `components/WikiLibraryHome.tsx` |
+| `wiki-library-access-filter-${filter}` | 目录文档按授权状态筛选 | `components/WikiLibraryHome.tsx` |
+| `wiki-library-batch-start` | 进入批量管理权限 | `components/WikiLibraryHome.tsx` |
+| `wiki-library-batch-continue` | 对已选文档继续批量管理权限 | `components/WikiLibraryHome.tsx` |
+| `wiki-batch-drawer` | 批量管理权限抽屉 | `components/WikiBatchAccessDrawer.tsx` |
+| `wiki-batch-preview` | 预检批量授权 | `components/WikiBatchAccessDrawer.tsx` |
+| `wiki-batch-submit` | 提交批量授权 | `components/WikiBatchAccessDrawer.tsx` |
+| `wiki-library-agent-access-${page.key}` | wiki-library-agent-access-${page.key} (template) | `components/WikiLibraryHome.tsx` |
 | `wiki-move-document-dialog` | wiki-move-document-dialog | `components/WikiMoveDocumentDialog.tsx` |
 | `wiki-move-source` | wiki-move-source | `components/WikiMoveDocumentDialog.tsx` |
 | `wiki-move-source-key` | wiki-move-source-key | `components/WikiMoveDocumentDialog.tsx` |
@@ -760,6 +903,8 @@
 | `wiki-upload-replace-button` | wiki-upload-replace-button | `pages/WikiEditor.tsx` |
 | `wiki-delete-document-button` | wiki-delete-document-button | `pages/WikiEditor.tsx` |
 | `wiki-status-pill` | wiki-status-pill | `pages/WikiEditor.tsx` |
+| `wiki-manage-access-button` | 打开单篇文档的管理访问权限 | `pages/WikiEditor.tsx` |
+| `wiki-manage-access-blocked` | 正文未保存时不能管理访问权限 | `pages/WikiEditor.tsx` |
 | `wiki-sidebar-create-directory` | wiki-sidebar-create-directory | `pages/WikiEditor.tsx` |
 | `wiki-sidebar-create-document` | wiki-sidebar-create-document | `pages/WikiEditor.tsx` |
 | `wiki-upload-input` | wiki-upload-input | `pages/WikiEditor.tsx` |
@@ -866,6 +1011,8 @@
 | `role-connections-field` | role-connections-field | `pages/admin/RoleDetail.tsx` |
 | `role-connections-fallback-hint` | role-connections-fallback-hint | `pages/admin/RoleDetail.tsx` |
 | `role-tools-field` | role-tools-field | `pages/admin/RoleDetail.tsx` |
+| `role-tools-empty-error` | 空可授予工具的页内校验提示（Spec 194） | `pages/admin/RoleDetail.tsx` |
+| `role-create-default-tools-hint` | 新建角色的默认只读问答引导（Spec 194） | `pages/admin/RoleDetail.tsx` |
 | `role-tools-fallback-hint` | role-tools-fallback-hint | `pages/admin/RoleDetail.tsx` |
 | `role-detail-invalid-warnings` | role-detail-invalid-warnings | `pages/admin/RoleDetail.tsx` |
 | `role-allowed-tools-label` | role-allowed-tools-label | `pages/admin/RoleDetail.tsx` |
@@ -956,6 +1103,7 @@
 | `publish-history-trigger` | publish-history-trigger | `pages/publish/PublishHistory.tsx` |
 | `publish-history-reindex-filter` | publish-history-reindex-filter | `pages/publish/PublishHistory.tsx` |
 | `publish-history-actor` | publish-history-actor | `pages/publish/PublishHistory.tsx` |
+| `publish-history-restore` | publish-history-restore | `pages/publish/PublishHistory.tsx` |
 | `publish-history-page-range` | publish-history-page-range | `pages/publish/PublishHistory.tsx` |
 | `publish-history-table` | publish-history-table | `pages/publish/PublishHistory.tsx` |
 | `publish-history-serial` | publish-history-serial | `pages/publish/PublishHistory.tsx` |
@@ -981,9 +1129,6 @@
 | `publish-post-eval-blocked` | publish-post-eval-blocked | `pages/publish/PublishWorkbench.tsx` |
 | `workbench-change-detail-drawer` | workbench-change-detail-drawer | `pages/publish/PublishWorkbench.tsx` |
 | `workbench-file-status` | workbench-file-status | `pages/publish/PublishWorkbench.tsx` |
-| `workbench-publish-confirm-drawer` | workbench-publish-confirm-drawer | `pages/publish/PublishWorkbench.tsx` |
-| `workbench-publish-confirm-summary` | workbench-publish-confirm-summary | `pages/publish/PublishWorkbench.tsx` |
-| `workbench-publish-confirm-submit` | workbench-publish-confirm-submit | `pages/publish/PublishWorkbench.tsx` |
 | `nav-link-${topLevelEntry.id}` | nav-link-${topLevelEntry.id} (template) | `app/App.tsx` |
 | `nav-group-${group.id}` | nav-group-${group.id} (template) | `app/App.tsx` |
 | `nav-group-toggle-${group.id}` | nav-group-toggle-${group.id} (template) | `app/App.tsx` |
@@ -1073,7 +1218,7 @@
 | `monitor-empty-action-${action}` | monitor-empty-action-${action} (template) | `pages/eval/Monitor.tsx` |
 | `run-row-detail-${run.id}` | run-row-detail-${run.id} (template) | `pages/eval/RunList.tsx` |
 | `workbench-validation-row-${table}` | workbench-validation-row-${table} (template) | `pages/publish/PublishWorkbench.tsx` |
-| `publish-impact-table-${tableName}` | publish-impact-table-${tableName} (template) | `pages/publish/PublishWorkbench.tsx` |
+| `publish-impact-table-${conn}-${tableName}` | publish-impact-table-${conn}-${tableName} (template) | `pages/publish/PublishWorkbench.tsx` |
 | `publish-post-eval-${domain}` | publish-post-eval-${domain} (template) | `pages/publish/PublishWorkbench.tsx` |
 
 ## 7.1 业务 Skill（Spec 151 / 153）
@@ -1102,6 +1247,10 @@
 | `skill-detail-path` | Skill 文件路径 | `pages/skills/SkillList.tsx` |
 | `skill-detail-validation-issues` | 中文校验问题 | `pages/skills/SkillList.tsx` |
 | `skill-detail-roles` | 阅读态可访问角色 | `pages/skills/SkillList.tsx` |
+| `skill-detail-owner` | 阅读态负责人 | `pages/skills/SkillList.tsx` |
+| `skill-owner` | 总览表负责人列 | `pages/skills/SkillList.tsx` |
+| `skill-field-owner` | 编辑态负责人 | `pages/skills/SkillList.tsx` |
+| `skill-preflight-owner` | 保存预检：负责人变化 | `pages/skills/SkillList.tsx` |
 | `skill-field-roles` | 编辑态可访问角色（对象授权，T05/T06） | `components/ObjectAclField.tsx` |
 | `skill-preflight-roles` | 保存预检：可访问角色变化 / 扩权 | `pages/skills/SkillList.tsx` |
 | `skill-editor-form` | 编辑表单 | `pages/skills/SkillList.tsx` |
@@ -1174,6 +1323,7 @@
 | `create-connection-probe-override` | 连接探测覆盖提示 | `components/CreateConnectionDrawer.tsx` |
 | `mcp-runtime-status-chips` | MCP 运行时状态组 | `components/McpRuntimeStatusPanel.tsx` |
 | `mcp-runtime-remediation` | MCP 运行时整改提示 | `components/McpRuntimeStatusPanel.tsx` |
+| `mcp-runtime-reload-outcome` | MCP 运行时重载结果（Spec 191，三维事实分区） | `components/McpRuntimeStatusPanel.tsx` |
 | `role-effective-digest-text` | Role 有效权限摘要 | `components/RoleEffectiveDigest.tsx` |
 | `capability-preview-details` | 能力预览详情 | `components/RoleEffectiveDigest.tsx` |
 | `capability-preview-body` | 能力预览正文 | `components/RoleEffectiveDigest.tsx` |
@@ -1205,7 +1355,6 @@
 | `governance-interface-groups` | 界面分组 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-menus` | 界面菜单 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-pages` | 界面页面 | `pages/admin/GovernanceOverview.tsx` |
-| `new-token-expiry-policy-notice` | Token 有效期策略提示 | `pages/admin/NewToken.tsx` |
 | `call-monitor-page` | 调用监控页面 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-controls` | 调用监控控制区 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-range-${option.range}` | 时间窗（模板） | `pages/ops/CallMonitor.tsx` |
@@ -1235,6 +1384,7 @@
 | `workbench-validation-rest-files` | 发布校验其余文件 | `pages/publish/PublishWorkbench.tsx` |
 | `mcp-runtime-status-${testConnectionId}` | MCP 运行时状态（模板） | `components/McpRuntimeStatusPanel.tsx` |
 | `mcp-runtime-recheck-${testConnectionId}` | MCP 运行时复检（模板） | `components/McpRuntimeStatusPanel.tsx` |
+| `mcp-runtime-reload-${testConnectionId}` | MCP 运行时重载执行（模板，Spec 191） | `components/McpRuntimeStatusPanel.tsx` |
 | `call-monitor-tool-${row.tool}` | 工具统计行（模板） | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-failure-${row.id}` | 失败调用行（模板） | `pages/ops/CallMonitor.tsx` |
 ## 2026-09-27 · Setup / Catalog / Role / Agent 增量合同
@@ -1315,8 +1465,439 @@
 | `execution-runtime-notice` | 连接概览问数运行时提示 | `pages/connections/ConnectionOverview.tsx` |
 | `connection-more-${conn.id}` | 连接卡更多菜单（模板） | `pages/connections/ConnectionOverview.tsx` |
 | `read-structure-${conn.id}-${schema}` | Schema 行 `从数据库读取表结构`（模板） | `pages/connections/ConnectionOverview.tsx` |
+| `refresh-structure-${conn.id}-${schema}` | 已有 Manifest 时「更多」中的 `从数据库读取表结构`（模板） | `pages/connections/ConnectionOverview.tsx` |
 | `schema-more-${conn.id}-${schema}` | Schema 行更多菜单（模板） | `pages/connections/ConnectionOverview.tsx` |
 | `whitelist-large-list-notice` | 启用表范围大列表折叠/分页提示 | `pages/connections/TableWhitelist.tsx` |
 | `whitelist-group-toggle-${conn.id}-${schema}` | 启用表范围 Schema 分组展开开关（模板） | `pages/connections/TableWhitelist.tsx` |
 | `monitor-field-panel` | 评测监控「现场」面板 | `pages/eval/Monitor.tsx` |
 | `call-monitor-usage-slow-mark` | 调用监控问询慢标记生效说明 | `pages/ops/CallMonitor.tsx` |
+
+## 2026-10-25 · v0.25 P1 梯队 selector 补录
+
+> 守门脚本 `webui/scripts/check-selector-contract.mjs` 规则 ①：实现的 `data-testid` 必须在本表登记。
+> 本轮 P1 梯队（行策略模板／授权摘要／访问关系图／Hive 编译侧）与此前轮次遗留的未登记元素在此一次性补录；
+> **只登记实现中确实存在的 testid，不发明任何 id**（v0.3 重写原则第 2 条）。
+> 登记后 `npm run e2e:selector-contract` 由红转绿，`npm run e2e:smoke` 的 pre-hook 不再阻断浏览器套件。
+
+### `webui/src/pages/admin/AccessMap.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-access-unavailable` | 访问关系图：access unavailable | `pages/admin/AccessMap.tsx` |
+| `access-map-back-to-full` | 访问关系图：back to full | `pages/admin/AccessMap.tsx` |
+| `access-map-empty` | 访问关系图：empty | `pages/admin/AccessMap.tsx` |
+| `access-map-error` | 访问关系图：error | `pages/admin/AccessMap.tsx` |
+| `access-map-folded-badge` | 访问关系图：folded badge | `pages/admin/AccessMap.tsx` |
+| `access-map-grant-unavailable` | 访问关系图：grant unavailable | `pages/admin/AccessMap.tsx` |
+| `access-map-layer` | 访问关系图：layer | `pages/admin/AccessMap.tsx` |
+| `access-map-methodology-snapshot` | 访问关系图：图下弱入口「口径与快照」（chart-first Spec §5.4，默认关） | `pages/admin/AccessMap.tsx` |
+| `access-map-partial-notice` | 访问关系图：partial notice | `pages/admin/AccessMap.tsx` |
+| `access-map-search` | 访问关系图：search | `pages/admin/AccessMap.tsx` |
+| `access-map-search-message` | 访问关系图：search message | `pages/admin/AccessMap.tsx` |
+| `access-map-search-submit` | 访问关系图：search submit | `pages/admin/AccessMap.tsx` |
+| `access-map-snapshot-id` | 访问关系图：snapshot id | `pages/admin/AccessMap.tsx` |
+| `access-map-token-filter-notice` | 访问关系图：token filter notice | `pages/admin/AccessMap.tsx` |
+| `access-map-trust` | 访问关系图：问询计入（已确认关联 / 含候选关联） | `pages/admin/AccessMap.tsx` |
+| `access-map-trust-hint` | 访问关系图：问询计入说明（授权始终显示，只影响问询） | `pages/admin/AccessMap.tsx` |
+| `access-map-view-map` | 访问关系图：view map | `pages/admin/AccessMap.tsx` |
+| `access-map-view-table` | 访问关系图：view table | `pages/admin/AccessMap.tsx` |
+| `access-map-window` | 访问关系图：window | `pages/admin/AccessMap.tsx` |
+
+### `webui/src/pages/admin/AgentList.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `new-agent-modal` | 新建 Agent：modal | `pages/admin/AgentList.tsx` |
+
+### `webui/src/pages/admin/AuthorizationSummary.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-summary-missing-id` | 授权摘要：summary missing id | `pages/admin/AuthorizationSummary.tsx` |
+
+### `webui/src/pages/admin/RoleDetail.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `role-repair-hint` | 角色修复：hint | `pages/admin/RoleDetail.tsx` |
+
+### `webui/src/pages/admin/RowPolicyTemplates.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-template-delete` | 行策略／行权限视图：template delete | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-delete-dry-run` | 行策略／行权限视图：template delete dry run | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-delete-target-mismatch` | 行策略／行权限视图：template delete target mismatch | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-dry-run` | 行策略／行权限视图：template dry run | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-edit` | 行策略／行权限视图：template edit | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-editor` | 行策略／行权限视图：template editor | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-issues` | 行策略／行权限视图：template issues | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-reset` | 行策略／行权限视图：template reset | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-save` | 行策略／行权限视图：template save | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-templates-error` | 行策略／行权限视图：templates error | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-templates-page` | 行策略／行权限视图：templates page | `pages/admin/RowPolicyTemplates.tsx` |
+
+### `webui/src/pages/admin/RowPolicyView.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-view-clear-filters` | 行策略／行权限视图：view clear filters | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-copy-identity` | 行策略／行权限视图：view copy identity | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail` | 行策略／行权限视图：view detail | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-empty` | 行策略／行权限视图：view detail empty | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-error` | 行策略／行权限视图：view detail error | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-identity` | 行策略／行权限视图：详情身份与状态区 | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-identity-primary` | 行策略／行权限视图：详情身份主行 | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-identity-secondary` | 行策略／行权限视图：详情状态次行 | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-subject-row` | 行策略／行权限视图：角色／Agent 两列行 | `pages/admin/RowPolicyView.tsx` / `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-source-roles` | 行策略 DNF 预览：来源角色次要行 | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-view-diagnostics` | 行策略／行权限视图：view diagnostics | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-failures` | 行策略／行权限视图：view failures | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-empty` | 行策略／行权限视图：view list empty | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-error` | 行策略／行权限视图：view list error | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-failures` | 行策略／行权限视图：view list failures | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-loading` | 行策略／行权限视图：view list loading | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-panel` | 行策略／行权限视图：view list panel | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-state` | 行策略／行权限视图：view list state | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-state-badge` | 行策略／行权限视图：view list state badge | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-outside-filter` | 行策略／行权限视图：view outside filter | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-page` | 行策略／行权限视图：view page | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-role-${role.roleId}` | 行策略／行权限视图：view role ${role.roleId} | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-role-access` | 行策略／行权限视图：view role access | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-role-branches` | 行策略／行权限视图：view role branches | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-role-templates` | 行策略／行权限视图：view role templates | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-table-${table.connectionId}-${table.schema}-${table.sourceName}` | 行策略／行权限视图：view table ${table.connectionId} ${table.schema} ${table.sourceName} | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-table-grant` | 行策略／行权限视图：view table grant | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-table-list` | 行策略／行权限视图：view table list | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-toolbar` | 行策略／行权限视图：view toolbar | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-workspace` | 行策略／行权限视图：view workspace | `pages/admin/RowPolicyView.tsx` |
+
+### `webui/src/components/AgentRoleField.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `agent-business-role-options` | Agent 业务角色：options | `components/AgentRoleField.tsx` |
+| `agent-ops-role-group` | Agent 运维角色：group | `components/AgentRoleField.tsx` |
+
+### `webui/src/components/CreateConnectionDrawer.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `create-connection-catalog` | 新建连接抽屉：catalog | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-region` | 新建连接抽屉：region | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-s3-staging-dir` | 新建连接抽屉：s3 staging dir | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-workgroup` | 新建连接抽屉：workgroup | `components/CreateConnectionDrawer.tsx` |
+
+### `webui/src/components/DeleteConnectionDrawer.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `delete-connection-block-reason` | 删除连接抽屉：block reason | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-user-count` | 删除连接抽屉：user count | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-write-error` | 删除连接抽屉：write error | `components/DeleteConnectionDrawer.tsx` |
+
+### `webui/src/components/RoleRowPolicyPanel.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-authoring-mode-${key}` | 行策略／行权限视图：authoring mode ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-drawer-template` | 行策略／行权限视图：drawer template | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-entry-${key}` | 行策略／行权限视图：entry ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-preview-details-${key}` | 行策略／行权限视图：preview details ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-preview-unavailable-${key}` | 行策略／行权限视图：preview unavailable ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-template-error-${key}` | 行策略／行权限视图：template error ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-template-missing-${key}` | 行策略／行权限视图：template missing ${key} | `components/RoleRowPolicyPanel.tsx` |
+
+### `webui/src/components/admin/AccessMapCanvas.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-canvas` | 访问关系图：canvas | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-chain-caption` | 访问关系图：正在看的链路名称 | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-chain-clear` | 访问关系图：看全图（取消链路高亮） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-chain-hint` | 访问关系图：链路高亮提示 | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-column-card-${column.depth}` | 访问关系图：列头 KPI 卡 ${column.depth} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-column-card-value-${column.depth}` | 访问关系图：列头 KPI 数字 ${column.depth} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-column-cards` | 访问关系图：列头 KPI 卡行 | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-badge-${link.edge.id}` | 访问关系图：edge badge ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-badge-button-${link.edge.id}` | 访问关系图：edge badge button ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-badges` | 访问关系图：edge badges | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-detail` | 访问关系图：edge detail | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-detail-path-${evaluation.pathKey}` | 访问关系图：edge detail path ${evaluation.pathKey} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-drawer` | 访问关系图：edge drawer（边明细右侧抽屉，呈现修订 D6） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-hover-tip` | 访问关系图：节点／边悬停浮层（chart-first Spec §5.6，非 SVG `<title>`） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-hit-${link.edge.id}-${index}` | 访问关系图：命中层 ${link.edge.id}（透明命中扩展，厚度 ≥ `MIN_HIT_PX`，不参与计量；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-kernel-${link.edge.id}` | 访问关系图：kernel ${link.edge.id}（访问内核填充面积） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-label-${node.id}` | 访问关系图：外标块 ${node.id}（只显示名称；路径数与僵尸授权在列头 KPI） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-link-${link.edge.id}` | 访问关系图：link ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-midline-${link.edge.id}` | 访问关系图：虚线中线 ${link.edge.id}（需复核；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-node-${node.id}` | 访问关系图：node ${node.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-node-button-${item.node.id}` | 访问关系图：node button ${item.node.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-node-list` | 访问关系图：node list | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-outline-${link.edge.id}` | 访问关系图：danger 实线轮廓 ${link.edge.id}（越权；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-plot-scroll` | 访问关系图：图面横向滚动区（列头 KPI 在它外面） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-ribbon-${link.edge.id}` | 访问关系图：授权面积 ${link.edge.id}（主视觉；需复核时为独立警示面积） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-svg` | 访问关系图：svg | `components/admin/AccessMapCanvas.tsx` |
+
+### `webui/src/components/admin/AccessMapCredentialList.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-credential-${agent.id}` | 访问关系图：credential ${agent.id} | `components/admin/AccessMapCredentialList.tsx` |
+| `access-map-credential-empty` | 访问关系图：credential empty | `components/admin/AccessMapCredentialList.tsx` |
+| `access-map-credential-list` | 访问关系图：credential list | `components/admin/AccessMapCredentialList.tsx` |
+| `access-map-token-${token.id}` | 访问关系图：token ${token.id} | `components/admin/AccessMapCredentialList.tsx` |
+
+### `webui/src/components/admin/AccessMapLegend.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-legend` | 访问关系图：legend | `components/admin/AccessMapLegend.tsx` |
+| `access-map-legend-trust` | 访问关系图：legend trust | `components/admin/AccessMapLegend.tsx` |
+| `access-map-legend-window` | 访问关系图：legend window | `components/admin/AccessMapLegend.tsx` |
+
+### `webui/src/components/admin/AccessMapSignalNotes.tsx`
+
+> 原 `AccessMapSignalBar.tsx`：chart-first Spec §5.2 把三张信号 Metric Card 从默认页壳卸下，
+> 卡片与其筛选按钮（`access-map-signal-bar` / `-dormant` / `-needs-review` / `-confirmed`）
+> 一并删除；只留下口径说明，落进图下弱入口「口径与快照」。
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-orphan-grants` | 访问关系图：orphan grants | `components/admin/AccessMapSignalNotes.tsx` |
+| `access-map-signal-calls` | 访问关系图：signal calls | `components/admin/AccessMapSignalNotes.tsx` |
+| `access-map-signal-confirmed-source` | 访问关系图：signal confirmed source（确凿越权档的来源标注，SC-10） | `components/admin/AccessMapSignalNotes.tsx` |
+| `access-map-signal-needs-review-note` | 访问关系图：signal needs review note（需复核档的档位说明，禁称「越权」，SC-10） | `components/admin/AccessMapSignalNotes.tsx` |
+| `access-map-snapshot-coverage` | 访问关系图：snapshot coverage | `components/admin/AccessMapSignalNotes.tsx` |
+
+### `webui/src/components/admin/AccessMapTable.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-table` | 访问关系图：table | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-edges` | 访问关系图：table edges | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-empty` | 访问关系图：table empty | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-node-${node.id}` | 访问关系图：table node ${node.id} | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-nodes` | 访问关系图：table nodes | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-row-${edge.id}` | 访问关系图：table row ${edge.id} | `components/admin/AccessMapTable.tsx` |
+
+### `webui/src/components/admin/AuthorizationHeadline.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-candidate-notice` | 授权摘要：candidate notice | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-denominator-unknown` | 授权摘要：denominator unknown | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-diagnostics` | 授权摘要：diagnostics | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-headline` | 授权摘要：headline | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-headline-text` | 授权摘要：headline text | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-headline-unavailable` | 授权摘要：headline unavailable | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-partial-notice` | 授权摘要：partial notice | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-scoped-count` | 授权摘要：scoped count | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-scoped-unknown` | 授权摘要：scoped unknown | `components/admin/AuthorizationHeadline.tsx` |
+
+### `webui/src/components/admin/AuthorizationResourceCard.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-playground-link` | 授权摘要：playground link | `components/admin/AuthorizationResourceCard.tsx` |
+| `authorization-resource-card` | 授权摘要：resource card | `components/admin/AuthorizationResourceCard.tsx` |
+| `authorization-resource-empty` | 授权摘要：resource empty | `components/admin/AuthorizationResourceCard.tsx` |
+| `authorization-resource-row` | 授权摘要：resource row | `components/admin/AuthorizationResourceCard.tsx` |
+| `authorization-row-summary` | 授权摘要：row summary | `components/admin/AuthorizationResourceCard.tsx` |
+
+### `webui/src/components/admin/AuthorizationRowBoundary.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-legacy-notice` | 授权摘要：legacy notice | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary` | 授权摘要：row boundary | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-basis` | 授权摘要：row boundary basis | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-empty` | 授权摘要：row boundary empty | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-error` | 授权摘要：row boundary error | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-item` | 授权摘要：row boundary item | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-shape` | 授权摘要：row boundary shape | `components/admin/AuthorizationRowBoundary.tsx` |
+
+### `webui/src/components/admin/AuthorizationSummaryPanel.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-access-map-link` | 授权摘要：access map link | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-playground-deep-link` | 授权摘要：playground deep link | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-referencing-agent-${agentId}` | 授权摘要：referencing agent ${agentId} | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-referencing-agents` | 授权摘要：referencing agents | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-related-links` | 授权摘要：related links | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-row-policy-link` | 授权摘要：row policy link | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-summary-panel` | 授权摘要：summary panel | `components/admin/AuthorizationSummaryPanel.tsx` |
+
+### `webui/src/components/admin/AuthorizationSummarySection.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-summary-error` | 授权摘要：summary error | `components/admin/AuthorizationSummarySection.tsx` |
+| `authorization-summary-loading` | 授权摘要：summary loading | `components/admin/AuthorizationSummarySection.tsx` |
+
+### `webui/src/components/admin/AuthorizationTechnicalDetails.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-technical-body` | 授权摘要：technical body | `components/admin/AuthorizationTechnicalDetails.tsx` |
+| `authorization-technical-details` | 授权摘要：technical details | `components/admin/AuthorizationTechnicalDetails.tsx` |
+
+### `webui/src/components/admin/AuthorizationToolGroups.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-tool-group-${key}` | 授权摘要：tool group ${key} | `components/admin/AuthorizationToolGroups.tsx` |
+| `authorization-tool-groups` | 授权摘要：tool groups | `components/admin/AuthorizationToolGroups.tsx` |
+| `authorization-unclassified-tools` | 授权摘要：unclassified tools | `components/admin/AuthorizationToolGroups.tsx` |
+
+### `webui/src/components/admin/RowPolicyDnfPreview.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `${testId}-all` | 既有模板元素（`${testId}-all`） | `components/admin/RowPolicyDnfPreview.tsx` |
+| `${testId}-arm-${index}` | 既有模板元素（`${testId}-arm-${index}`） | `components/admin/RowPolicyDnfPreview.tsx` |
+| `${testId}-empty` | 既有模板元素（`${testId}-empty`） | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-agent-${row.agentId}` | 行策略／行权限视图：dnf agent ${row.agentId} | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-agents-section` | 行策略／行权限视图：dnf agents section | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-boundary` | 行策略／行权限视图：dnf boundary | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-preview` | 行策略／行权限视图：dnf preview | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-unavailable` | 行策略／行权限视图：dnf unavailable | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-union-section` | 行策略／行权限视图：dnf union section | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-union-unavailable` | 行策略／行权限视图：dnf union unavailable | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-view-agent-expand` | 行策略／行权限视图：view agent expand | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-view-agent-uniform` | 行策略／行权限视图：view agent uniform | `components/admin/RowPolicyDnfPreview.tsx` |
+
+### `webui/src/components/admin/RowPolicyStateBadge.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-snapshot` | 行策略／行权限视图：snapshot | `components/admin/RowPolicyStateBadge.tsx` |
+| `row-policy-status-${status}` | 行策略／行权限视图：status ${status} | `components/admin/RowPolicyStateBadge.tsx` |
+| `row-policy-status-reason` | 行策略／行权限视图：status reason | `components/admin/RowPolicyStateBadge.tsx` |
+
+### `webui/src/components/admin/RowPolicyTemplatePanel.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-template-audit-state` | 行策略／行权限视图：template audit state | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-blocking-references` | 行策略／行权限视图：template blocking references | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-detail` | 行策略／行权限视图：template detail | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-detail-empty` | 行策略／行权限视图：template detail empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-empty` | 行策略／行权限视图：template empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-impact` | 行策略／行权限视图：template impact | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-impact-empty` | 行策略／行权限视图：template impact empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-impact-tables` | 行策略／行权限视图：template impact tables | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-impact-tables-empty` | 行策略／行权限视图：template impact tables empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-reference-count-${template.name}` | 行策略／行权限视图：template reference count ${template.name} | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-references` | 行策略／行权限视图：template references | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-references-empty` | 行策略／行权限视图：template references empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-row-${template.name}` | 行策略／行权限视图：template row ${template.name} | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-table` | 行策略／行权限视图：template table | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-usability` | 行策略／行权限视图：template usability | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-usability-empty` | 行策略／行权限视图：template usability empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+
+### `webui/src/components/admin/RowPolicyTemplatePicker.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-authoring-mode-${mode}` | 行策略／行权限视图：authoring mode ${mode} | `components/admin/RowPolicyTemplatePicker.tsx` |
+| `row-policy-template-option-${option.name}` | 行策略／行权限视图：template option ${option.name} | `components/admin/RowPolicyTemplatePicker.tsx` |
+| `row-policy-template-picker` | 行策略／行权限视图：template picker | `components/admin/RowPolicyTemplatePicker.tsx` |
+| `row-policy-template-picker-empty` | 行策略／行权限视图：template picker empty | `components/admin/RowPolicyTemplatePicker.tsx` |
+| `row-policy-template-picker-reason` | 行策略／行权限视图：template picker reason | `components/admin/RowPolicyTemplatePicker.tsx` |
+
+### `webui/src/components/audit-trust/AssociationRevisionTimeline.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `association-revision-effective` | 关联修订时间线：effective | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+| `association-revision-history` | 关联修订时间线：history | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+| `association-revision-item` | 关联修订时间线：item | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+| `association-revision-original` | 关联修订时间线：original | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+| `association-revision-timeline` | 关联修订时间线：timeline | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+
+### `webui/src/components/audit-trust/AuditStatusTriad.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `audit-status-association` | 审计状态三元组：association | `components/audit-trust/AuditStatusTriad.tsx` |
+| `audit-status-coverage` | 审计状态三元组：coverage | `components/audit-trust/AuditStatusTriad.tsx` |
+| `audit-status-execution` | 审计状态三元组：execution | `components/audit-trust/AuditStatusTriad.tsx` |
+| `audit-status-triad` | 审计状态三元组：triad | `components/audit-trust/AuditStatusTriad.tsx` |
+
+### `webui/src/components/audit-trust/ClientCoveragePill.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `client-coverage-pill` | 客户端覆盖：pill | `components/audit-trust/ClientCoveragePill.tsx` |
+
+### `webui/src/components/audit-trust/CredentialPrincipalCell.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `credential-principal-cell` | 凭据主体：cell | `components/audit-trust/CredentialPrincipalCell.tsx` |
+| `credential-principal-copy` | 凭据主体：copy | `components/audit-trust/CredentialPrincipalCell.tsx` |
+| `credential-principal-hint` | 凭据主体：hint | `components/audit-trust/CredentialPrincipalCell.tsx` |
+| `credential-principal-value` | 凭据主体：value | `components/audit-trust/CredentialPrincipalCell.tsx` |
+
+### `webui/src/components/audit-trust/ReadonlySqlRowset.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `readonly-sql-bytes` | 只读 SQL 结果集：bytes | `components/audit-trust/ReadonlySqlRowset.tsx` |
+| `readonly-sql-cols` | 只读 SQL 结果集：cols | `components/audit-trust/ReadonlySqlRowset.tsx` |
+| `readonly-sql-rows` | 只读 SQL 结果集：rows | `components/audit-trust/ReadonlySqlRowset.tsx` |
+| `readonly-sql-rowset` | 只读 SQL 结果集：rowset | `components/audit-trust/ReadonlySqlRowset.tsx` |
+| `readonly-sql-status` | 只读 SQL 结果集：status | `components/audit-trust/ReadonlySqlRowset.tsx` |
+
+### `webui/src/components/onboarding/Step1ConnectDb.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `setup-athena-hint` | 接入向导：athena hint | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-catalog` | 接入向导：catalog | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-region` | 接入向导：region | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-s3-staging-dir` | 接入向导：s3 staging dir | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-workgroup` | 接入向导：workgroup | `components/onboarding/Step1ConnectDb.tsx` |
+
+### `webui/src/pages/admin/NewToken.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `new-token-expiry-preset-${preset.id}` | 新建 Token：expiry preset ${preset.id} | `pages/admin/NewToken.tsx` |
+| `new-token-expiry-presets` | 新建 Token：expiry presets | `pages/admin/NewToken.tsx` |
+| `renew-token-dialog` | Token 续期对话框 | `components/admin/RenewTokenDialog.tsx` |
+| `renew-token-expiry` | Token 续期：过期日期 | `components/admin/RenewTokenDialog.tsx` |
+| `renew-token-expiry-presets` | Token 续期：快捷预设组 | `components/admin/RenewTokenDialog.tsx` |
+| `renew-token-expiry-preset-${preset.id}` | Token 续期：preset ${preset.id} | `components/admin/RenewTokenDialog.tsx` |
+| `renew-token-confirm` | Token 续期：确认 | `components/admin/RenewTokenDialog.tsx` |
+| `token-renew-${token.label}` | Tokens 列表续期按钮（模板） | `pages/admin/Tokens.tsx` |
+| `agent-token-renew-${token.label}` | Agent Token 行续期按钮（模板） | `pages/admin/AgentDetail.tsx` |
+
+### `webui/src/pages/publish/PublishHistory.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `publish-history-scope-manifest` | 发布历史：scope manifest | `pages/publish/PublishHistory.tsx` |
+| `publish-history-scope-removed` | 发布历史：scope removed | `pages/publish/PublishHistory.tsx` |
+| `publish-history-scope-written` | 发布历史：scope written | `pages/publish/PublishHistory.tsx` |
+
+### `webui/src/pages/publish/PublishWorkbench.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `workbench-mirror-only-semantic` | workbench mirror only semantic | `pages/publish/PublishWorkbench.tsx` |
+
+## 2026-11-02 · L25-02／03 对账表排行 selector 补录
+
+> 守门脚本 `webui/scripts/check-selector-contract.mjs` 规则 ①：实现的 `data-testid` 必须在本表登记。
+> 本轮只登记**本轮新增**的两个元素（对账使用概况页的完整表排行与其「复制全文」），
+> 目的是让本轮**不新增**未登记项；既有 `reconciliation-*` 元素的登记状态不在本轮范围内。
+
+### `webui/src/pages/admin/AuditReconciliation.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `reconciliation-table-ranking` | 对账使用概况：完整表排行（逐条完整 `connectionId / schema / table`） | `pages/admin/AuditReconciliation.tsx` |
+| `reconciliation-table-copy` | 对账使用概况：表排行「复制全文」 | `pages/admin/AuditReconciliation.tsx` |

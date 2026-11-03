@@ -3,11 +3,36 @@
  * Gate B approved 2026-08-09.
  */
 import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
-import { parse } from "yaml";
-import { resolveProjectRoot } from "../project.js";
-import { loadContentPaths } from "../paths.js";
+import {
+  loadSourceFieldCatalogWithProvenance,
+  normalizeRef,
+  type RowPolicyAdapterCapabilities,
+  type RowPolicyCatalogStage,
+  type RowPolicyCatalogStatus,
+  type SourceFieldCatalog
+} from "./row-policy-catalog.js";
+
+/**
+ * The field-catalog concern (Schema Manifest loading, overlay proving, catalog
+ * provenance) lives in `row-policy-catalog.ts` since Lucy v0.25. The names below
+ * are re-exported so every existing import path keeps working.
+ */
+export {
+  addProvenOverlayFields,
+  isProvenRowLevelExpr,
+  loadPhysicalColumnsFromSchema,
+  loadSourceFieldCatalog,
+  loadSourceFieldCatalogWithProvenance,
+  resetRowPolicyCatalogCacheForTests,
+  resolveManifestFilePath,
+  type OverlayField,
+  type RowPolicyAdapterCapabilities,
+  type RowPolicyCatalogResult,
+  type RowPolicyCatalogStage,
+  type RowPolicyCatalogStatus,
+  type RowPolicyTableIdentity,
+  type SourceFieldCatalog
+} from "./row-policy-catalog.js";
 
 export type RowPolicyOp = "eq" | "in";
 
@@ -43,16 +68,9 @@ export interface ForcedFiltersPayload {
   or: Array<{ and: Array<{ field: string; op: RowPolicyOp; value?: string | number | boolean; values?: Array<string | number | boolean> }> }>;
 }
 
-export interface SourceFieldCatalog {
-  columns: Set<string>;
-  measures: Set<string>;
-}
-
 const UNSAFE_FIELD = /[()'"`;\\]|--|\/\*|\*\/|\bor\b|\band\b|\bunion\b|\bselect\b/i;
 const SAFE_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SAFE_QUALIFIED = /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/;
-
-const catalogCache = new Map<string, SourceFieldCatalog | null>();
 
 /** Spec 99 §6.3 — default false until Gate C sets env after BY matrix green. */
 export function isUpstreamForcedPredicateProven(): boolean {
@@ -60,240 +78,108 @@ export function isUpstreamForcedPredicateProven(): boolean {
   return raw === "1" || raw === "true" || raw === "TRUE";
 }
 
-export function resetRowPolicyCatalogCacheForTests(): void {
-  catalogCache.clear();
-}
-
-function normalizeRef(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function catalogCacheKey(connectionId: string, sourceName: string, schema?: string): string {
-  return `${normalizeRef(connectionId)}\0${normalizeRef(sourceName)}\0${normalizeRef(schema ?? "")}`;
-}
-
-const AGGREGATE_CALL_RE =
-  /\b(sum|count|avg|min|max|stddev|std|variance|group_concat|array_agg|string_agg)\s*\(/i;
-const WINDOW_RE = /\b(over\s*\(|partition\s+by|rows\s+between|range\s+between)\b/i;
-const EXPR_UNSAFE_RE = /;|--|\/\*|\*\//;
-/** Keywords / row-level helpers allowed beside physical column identifiers. */
-const EXPR_ALLOWED_IDENTS = new Set(
-  [
-    "and",
-    "or",
-    "not",
-    "case",
-    "when",
-    "then",
-    "else",
-    "end",
-    "null",
-    "true",
-    "false",
-    "as",
-    "in",
-    "is",
-    "like",
-    "between",
-    "cast",
-    "year",
-    "month",
-    "day",
-    "hour",
-    "minute",
-    "second",
-    "lower",
-    "upper",
-    "trim",
-    "ltrim",
-    "rtrim",
-    "coalesce",
-    "ifnull",
-    "nullif",
-    "concat",
-    "substring",
-    "substr",
-    "length",
-    "abs",
-    "round",
-    "floor",
-    "ceil",
-    "greatest",
-    "least",
-    "date",
-    "timestamp",
-    "interval",
-    "extract",
-    "from",
-    "distinct"
-  ].map((s) => s.toLowerCase())
-);
-
-/**
- * Spec 99 §3.2 — prove overlay computed/dimension is row-level and source-local.
- * Exported for unit tests.
- */
-export function isProvenRowLevelExpr(
-  expr: unknown,
-  sourceName: string,
-  physicalColumns: Set<string>
-): boolean {
-  if (typeof expr !== "string" || !expr.trim()) return false;
-  const e = expr.trim();
-  if (AGGREGATE_CALL_RE.test(e) || WINDOW_RE.test(e) || EXPR_UNSAFE_RE.test(e)) return false;
-
-  for (const match of e.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g)) {
-    const left = match[1]!;
-    const right = match[2]!;
-    if (normalizeRef(left) !== normalizeRef(sourceName)) return false;
-    if (!physicalColumns.has(normalizeRef(right))) return false;
-  }
-
-  // Fail-closed on bare identifiers that are neither physical columns nor allowlisted helpers.
-  const withoutStrings = e.replace(/'[^']*'|"[^"]*"/g, " ");
-  const withoutQualified = withoutStrings.replace(
-    /\b[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\b/g,
-    " "
-  );
-  const withoutFuncs = withoutQualified.replace(/\b[A-Za-z_][A-Za-z0-9_]*\s*(?=\()/g, " ");
-  for (const match of withoutFuncs.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g)) {
-    const id = normalizeRef(match[1]!);
-    if (EXPR_ALLOWED_IDENTS.has(id) || physicalColumns.has(id)) continue;
-    return false;
-  }
-  return true;
-}
-
-type OverlayField = { name?: string; expr?: unknown };
-
-async function loadPhysicalColumnsFromSchema(
-  projectRoot: string,
-  connectionId: string,
-  sourceName: string,
-  schema?: string
-): Promise<Set<string>> {
-  const physical = new Set<string>();
-  const schemaDir = path.join((await loadContentPaths()).semanticLayer, connectionId, "_schema");
-  const files: string[] = [];
-  if (schema) {
-    files.push(path.join(schemaDir, `${schema}.yaml`));
-  } else {
-    try {
-      const entries = await readdir(schemaDir);
-      for (const entry of entries) {
-        if (entry.endsWith(".yaml") || entry.endsWith(".yml")) {
-          files.push(path.join(schemaDir, entry));
-        }
-      }
-    } catch {
-      return physical;
-    }
-  }
-
-  const want = normalizeRef(sourceName);
-  for (const file of files) {
-    try {
-      const yaml = parse(await readFile(file, "utf-8")) as {
-        tables?: Record<string, { columns?: Array<{ name?: string }> }>;
-      } | null;
-      const entry =
-        yaml?.tables?.[sourceName] ??
-        Object.entries(yaml?.tables ?? {}).find(([k]) => normalizeRef(k) === want)?.[1];
-      for (const col of entry?.columns ?? []) {
-        if (typeof col?.name === "string" && col.name.trim()) {
-          physical.add(normalizeRef(col.name));
-        }
-      }
-      if (physical.size > 0) break;
-    } catch {
-      // try next schema file
-    }
-  }
-  return physical;
-}
-
-function addProvenOverlayFields(
-  fields: OverlayField[] | undefined,
-  sourceName: string,
-  physical: Set<string>,
-  into: Set<string>
-): void {
-  for (const field of fields ?? []) {
-    if (typeof field?.name !== "string" || !field.name.trim()) continue;
-    const name = normalizeRef(field.name);
-    // Overlay name that is already a physical column: allow (documentation / alias).
-    if (physical.has(name) && (field.expr === undefined || field.expr === null || field.expr === "")) {
-      into.add(name);
-      continue;
-    }
-    if (isProvenRowLevelExpr(field.expr, sourceName, physical)) {
-      into.add(name);
-    }
-  }
-}
-
-/**
- * Spec 99 §3.2 catalog = _schema physical columns ∪ proven row-level overlay computed/dimensions.
- * Measures are tracked separately and never bindable.
- */
-export async function loadSourceFieldCatalog(
-  connectionId: string,
-  sourceName: string,
-  schema?: string
-): Promise<SourceFieldCatalog | null> {
-  const key = catalogCacheKey(connectionId, sourceName, schema);
-  if (catalogCache.has(key)) return catalogCache.get(key) ?? null;
-
-  const projectRoot = await resolveProjectRoot();
-  const physical = await loadPhysicalColumnsFromSchema(projectRoot, connectionId, sourceName, schema);
-  const columns = new Set<string>(physical);
-  const measures = new Set<string>();
-
-  const overlayPath = path.join((await loadContentPaths()).semanticLayer, connectionId, `${sourceName}.yaml`);
-  try {
-    const yaml = parse(await readFile(overlayPath, "utf-8")) as {
-      columns?: OverlayField[];
-      dimensions?: OverlayField[];
-      measures?: Array<{ name?: string }>;
-    } | null;
-    addProvenOverlayFields(yaml?.columns, sourceName, physical, columns);
-    addProvenOverlayFields(yaml?.dimensions, sourceName, physical, columns);
-    for (const measure of yaml?.measures ?? []) {
-      if (typeof measure?.name === "string" && measure.name.trim()) {
-        measures.add(normalizeRef(measure.name));
-      }
-    }
-  } catch {
-    // Overlay optional when _schema physical columns exist.
-  }
-
-  if (columns.size === 0 && measures.size === 0) {
-    catalogCache.set(key, null);
-    return null;
-  }
-
-  const catalog = { columns, measures };
-  catalogCache.set(key, catalog);
-  return catalog;
-}
-
 function isScalar(value: unknown): value is string | number | boolean {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
 
 /**
+ * R5 §3.5 — the attribution layer on top of the existing machine reason codes.
+ *
+ * The reason codes (`row_policy_field_unresolved:*`) stay exactly as they are; the
+ * attribution adds the four-tuple (connection / schema / table / field), the failure
+ * stage, and the three-way split between 「字段不存在」, 「清单不可用」 and
+ * 「目录能力未知」.
+ */
+export type RowPolicyFieldAttributionCode =
+  | "row_policy_field_unknown"
+  | "row_policy_catalog_unavailable"
+  | "row_policy_catalog_capability_unknown"
+  | "row_policy_field_unresolved";
+
+export interface RowPolicyFieldAttribution {
+  code: RowPolicyFieldAttributionCode;
+  /** Compile stage of the failure. */
+  stage: "row_grant";
+  /** Catalog stage, when the failure is a catalog failure. */
+  catalogStage?: RowPolicyCatalogStage;
+  connectionId: string;
+  schema: string;
+  sourceName: string;
+  field: string;
+  /** The machine reason code this attribution was derived from. */
+  reason: string;
+}
+
+/** Context the binder needs to attribute a failure (the four-tuple + catalog provenance). */
+export interface RowPolicyBindingContext {
+  connectionId?: string;
+  schema?: string;
+  catalogStatus?: RowPolicyCatalogStatus;
+  catalogStage?: RowPolicyCatalogStage;
+}
+
+function attributeBindingFailure(
+  reason: string,
+  rawField: string,
+  sourceName: string,
+  context?: RowPolicyBindingContext
+): RowPolicyFieldAttribution | undefined {
+  // Without a context the caller cannot be attributed (e.g. the Agent-constraint
+  // binder, which is outside the row-policy path). The machine reason still stands.
+  if (!context) return undefined;
+  const base = {
+    stage: "row_grant" as const,
+    connectionId: context.connectionId ?? "",
+    schema: context.schema ?? "",
+    sourceName,
+    field: rawField.trim(),
+    reason
+  };
+  const catalogDriven =
+    reason === "row_policy_field_unresolved:no_catalog" ||
+    reason === "row_policy_field_unresolved:unknown";
+  if (!catalogDriven) {
+    // empty / unsafe / shape / cross_source / measure keep their own codes.
+    return { code: "row_policy_field_unresolved", ...base };
+  }
+  if (context.catalogStatus === "catalog_capability_unknown") {
+    return { code: "row_policy_catalog_capability_unknown", ...base };
+  }
+  if (context.catalogStatus === "manifest_unavailable") {
+    return { code: "row_policy_catalog_unavailable", catalogStage: context.catalogStage, ...base };
+  }
+  if (context.catalogStatus === "loaded") {
+    // Only a reliably loaded catalog may claim 「字段不存在」.
+    return { code: "row_policy_field_unknown", ...base };
+  }
+  return { code: "row_policy_field_unresolved", ...base };
+}
+
+/**
  * Spec 99 §3.2 — bind field to row-level catalog; measures → unresolved.
+ *
+ * The failure branch now carries the R5 attribution next to the unchanged machine
+ * reason code. The attribution never widens a binding: an unbound field stays
+ * unbound and the request stays denied.
  */
 export function bindRowPolicyField(
   rawField: string,
   sourceName: string,
-  catalog: SourceFieldCatalog | null
-): { ok: true; field: string; sourceName: string } | { ok: false; reason: string } {
+  catalog: SourceFieldCatalog | null,
+  context?: RowPolicyBindingContext
+):
+  | { ok: true; field: string; sourceName: string }
+  | { ok: false; reason: string; attribution?: RowPolicyFieldAttribution } {
+  const fail = (reason: string) => ({
+    ok: false as const,
+    reason,
+    attribution: attributeBindingFailure(reason, rawField, sourceName, context)
+  });
   const trimmed = rawField.trim();
-  if (!trimmed) return { ok: false, reason: "row_policy_field_unresolved:empty" };
-  if (UNSAFE_FIELD.test(trimmed)) return { ok: false, reason: "row_policy_field_unresolved:unsafe" };
+  if (!trimmed) return fail("row_policy_field_unresolved:empty");
+  if (UNSAFE_FIELD.test(trimmed)) return fail("row_policy_field_unresolved:unsafe");
   if (!SAFE_IDENT.test(trimmed) && !SAFE_QUALIFIED.test(trimmed)) {
-    return { ok: false, reason: "row_policy_field_unresolved:shape" };
+    return fail("row_policy_field_unresolved:shape");
   }
 
   let fieldName = trimmed;
@@ -303,18 +189,18 @@ export function bindRowPolicyField(
     qualifiedSource = src;
     fieldName = field;
     if (normalizeRef(qualifiedSource) !== normalizeRef(sourceName)) {
-      return { ok: false, reason: "row_policy_field_unresolved:cross_source" };
+      return fail("row_policy_field_unresolved:cross_source");
     }
   }
 
-  if (!catalog) return { ok: false, reason: "row_policy_field_unresolved:no_catalog" };
+  if (!catalog) return fail("row_policy_field_unresolved:no_catalog");
 
   const normField = normalizeRef(fieldName);
   if (catalog.measures.has(normField)) {
-    return { ok: false, reason: "row_policy_field_unresolved:measure" };
+    return fail("row_policy_field_unresolved:measure");
   }
   if (!catalog.columns.has(normField)) {
-    return { ok: false, reason: "row_policy_field_unresolved:unknown" };
+    return fail("row_policy_field_unresolved:unknown");
   }
 
   return {
@@ -322,6 +208,24 @@ export function bindRowPolicyField(
     field: fieldName,
     sourceName
   };
+}
+
+/**
+ * R5 — human/machine readable rendering of the attribution, appended to the
+ * failure reason so the four-tuple travels with the error.
+ */
+export function formatRowPolicyAttribution(attribution: RowPolicyFieldAttribution): string {
+  const parts = [
+    `code=${attribution.code}`,
+    `connection=${attribution.connectionId}`,
+    `schema=${attribution.schema}`,
+    `source=${attribution.sourceName}`,
+    `field=${attribution.field}`
+  ];
+  if (attribution.catalogStage) {
+    parts.splice(1, 0, `catalog_stage=${attribution.catalogStage}`);
+  }
+  return parts.join(";");
 }
 
 export function parseRowPolicyShape(
@@ -380,23 +284,50 @@ export function rowGrantDigest(predicates: ResolvedRowPolicyPredicate[]): string
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex").slice(0, 16);
 }
 
+/**
+ * Spec 99 §3.2 — compile one scoped row grant.
+ *
+ * Lucy v0.25 (L25-14 §3.5): the field catalog is loaded WITH its provenance so a
+ * binding failure can be attributed to 「字段不存在」, 「清单不可用」 or
+ * 「目录能力未知」. The machine reason codes and the granted shape are unchanged;
+ * only the failure branch gained an `attribution` field.
+ */
 export async function compileScopedRowGrant(
   rowPolicyRaw: unknown,
-  sources: Array<{ connectionId: string; sourceName: string; schema?: string }>
-): Promise<{ ok: true; grant: RowGrant } | { ok: false; reason: string }> {
+  sources: Array<{
+    connectionId: string;
+    sourceName: string;
+    schema?: string;
+    /** Schema as it appears on disk — used for diagnostics only, never for the manifest path. */
+    schemaDisplay?: string;
+  }>,
+  options?: { adapterCapabilities?: RowPolicyAdapterCapabilities }
+): Promise<
+  | { ok: true; grant: RowGrant }
+  | { ok: false; reason: string; attribution?: RowPolicyFieldAttribution }
+> {
   const parsed = parseRowPolicyShape(rowPolicyRaw);
   if (!parsed.ok) return parsed;
 
   const resolved: ResolvedRowPolicyPredicate[] = [];
   for (const source of sources) {
-    const catalog = await loadSourceFieldCatalog(
-      source.connectionId,
-      source.sourceName,
-      source.schema
+    const catalogResult = await loadSourceFieldCatalogWithProvenance(
+      {
+        connectionId: source.connectionId,
+        schema: source.schema ?? "",
+        sourceName: source.sourceName
+      },
+      options?.adapterCapabilities
     );
     for (const pred of parsed.predicates) {
-      const bound = bindRowPolicyField(pred.field, source.sourceName, catalog);
-      if (!bound.ok) return { ok: false, reason: bound.reason };
+      const bound = bindRowPolicyField(pred.field, source.sourceName, catalogResult.catalog, {
+        connectionId: source.connectionId,
+        schema: source.schemaDisplay ?? source.schema ?? "",
+        catalogStatus: catalogResult.status,
+        catalogStage:
+          catalogResult.status === "manifest_unavailable" ? catalogResult.stage : undefined
+      });
+      if (!bound.ok) return { ok: false, reason: bound.reason, attribution: bound.attribution };
       resolved.push({
         field: bound.field,
         sourceName: bound.sourceName,

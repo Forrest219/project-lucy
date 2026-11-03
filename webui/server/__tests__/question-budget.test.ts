@@ -40,11 +40,18 @@ describe("question budget and repair hints", () => {
     expect(budget.consume("turn-1", 1_000, "turn-1").action).toBe("stop");
   });
 
-  it("stops when the wall clock reaches 120 seconds", () => {
-    const budget = new QuestionBudget();
-    expect(budget.consume("turn-wall", 5_000).action).toBe("allow");
-    const stopped = budget.consume("turn-wall", 5_000 + 120_000);
-    expect(stopped.action).toBe("stop");
+  it("stops when elapsed wall mode reaches 120 seconds", () => {
+    const previous = process.env.LUCY_QUESTION_BUDGET_WALL_MODE;
+    process.env.LUCY_QUESTION_BUDGET_WALL_MODE = "elapsed";
+    try {
+      const budget = new QuestionBudget();
+      expect(budget.consume("turn-wall", 5_000).action).toBe("allow");
+      const stopped = budget.consume("turn-wall", 5_000 + 120_000);
+      expect(stopped.action).toBe("stop");
+    } finally {
+      if (previous === undefined) delete process.env.LUCY_QUESTION_BUDGET_WALL_MODE;
+      else process.env.LUCY_QUESTION_BUDGET_WALL_MODE = previous;
+    }
   });
 
   it("does not count a call that has no turn, and ignores protocol tools", () => {
@@ -208,3 +215,64 @@ describe("usage actor groups", () => {
     expect(identified.identity.actorId).not.toBe(identified.identity.tokenLabel);
   });
 });
+
+// ─── D-24：并发首次消费不得穿透问询预算硬上限 ──────────────────────────────
+//
+// 缺陷：consumePersisted 的「从持久层加载 → 判定 → 落库」之间有 await，
+// 两个并发请求会各自 load 到同一份旧计数、各自 +1 后都判定放行 —— 实际执行
+// 次数因此超过硬上限，而落库只记到上限值。
+// 修法：同一作用域的这三步在进程内串行（单实例／单副本，不引入多副本锁）。
+describe("D-24 concurrent first consume must not exceed the hard cap", () => {
+  function makeBudget(startCalls: number) {
+    const budget = new QuestionBudget();
+    const saved: number[] = [];
+    budget.setPersistence({
+      load: async (scopeKey) => ({
+        startedAt: 0,
+        originStartedAt: 0,
+        calls: startCalls,
+        continuations: 0,
+        attempts: 0,
+        peakConcurrency: 0,
+        currentConcurrency: 0,
+        scopeKey
+      }),
+      save: async (_scopeKey, state) => {
+        saved.push(state.calls);
+      },
+      listScopes: async () => ["turn:d24"]
+    });
+    return { budget, saved };
+  }
+
+  it("两个并发的首次消费只有一个放行", async () => {
+    const { budget, saved } = makeBudget(19);
+    const [a, b] = await Promise.all([
+      budget.consumePersisted("d24", 1_000),
+      budget.consumePersisted("d24", 1_000)
+    ]);
+
+    const actions = [a.action, b.action].sort();
+    expect(actions).toEqual(["allow", "stop"]);
+
+    const stop = a.action === "stop" ? a : b;
+    if (stop.action !== "stop") return;
+    // 是「预算用尽」，不是「存储故障」——两者不得混用。
+    expect(stop.reason).toBe("question_budget_exhausted");
+
+    // 落库的计数不得超过上限。
+    expect(Math.max(...saved)).toBeLessThanOrEqual(20);
+  });
+
+  it("并发消费受在途上限约束，落库次数等于实际放行次数", async () => {
+    const { budget, saved } = makeBudget(0);
+    const results = await Promise.all(
+      Array.from({ length: 25 }, () => budget.consumePersisted("d24", 1_000))
+    );
+    const allowed = results.filter((r) => r.action === "allow").length;
+    expect(allowed).toBe(4);
+    expect(results.filter((r) => r.action === "reject").length).toBe(21);
+    expect(saved[saved.length - 1]).toBe(allowed);
+  });
+});
+

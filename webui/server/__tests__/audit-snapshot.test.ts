@@ -154,7 +154,7 @@ describe("audit access log CSV distinguishes empty tools/list ok from compile-fa
     await app.ready();
     try {
       const res = await request(app.server)
-        .get("/api/admin/audit/export?includeProtocol=true")
+        .get("/api/admin/audit/export?includeProtocol=true&accessGrade=all")
         .expect(200);
       const csv = String(res.text).replace(/^﻿/, "");
       const [headerLine, ...dataLines] = csv.trim().split("\n");

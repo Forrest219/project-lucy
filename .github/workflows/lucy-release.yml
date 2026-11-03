@@ -83,6 +83,7 @@ jobs:
             cp webui/config/access.yaml.example webui/config/access.yaml
           fi
       - run: npm run lint:spec
+      - run: npm run lint:spec-docs
       - run: npm run security:baseline
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -93,6 +94,8 @@ jobs:
       - run: npm ci
         working-directory: webui
       - run: npm run lint:terminology
+        working-directory: webui
+      - run: npm run lint:url-driven-input
         working-directory: webui
       - run: npm test
         working-directory: webui

@@ -19,7 +19,7 @@
 | 关联页面 | 横切：全站 `pl-btn` / PageHeader；首批落地：`/eval/cases`、`/overview`、`/connections`；规范事实源：`design-system/10-components-button.md` |
 | 关联台账 | `docs/ui-ux-feedback/pages/eval.md`（`UX-EVAL-004`）；`docs/ui-ux-feedback/pages/overview.md`（`UX-OVERVIEW-015`）；`docs/ui-ux-feedback/pages/connections.md`（`UX-CONNECTIONS-024`）；跨页面主题见 §11 |
 | 上游 Spec | Design System `10-components-button.md`；Spec 81（Wiki Header primary）；Spec 91（列表 Header）；Spec 73（secondary vs ghost） |
-| 状态 | Draft |
+| 状态 | **未实现**。工单 `webui/docs/plans/wo-202608-34-button-hierarchy-selection-and-icon-affordance.md` 已建但未落地：`pl-icon-btn` 契约、选中态分离与 PageHeader 动作预算在代码中均不存在 |
 | 日期 | 2026-08-05 |
 | 范围 | 升级按钮规范；禁止选中态用 primary；PageHeader 动作预算；新增 `pl-icon-btn`；首批页面收敛；loading / disabledTooltip 契约 |
 

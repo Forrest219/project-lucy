@@ -71,16 +71,16 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 24 second-level items in total", () => {
+  it("navGroups contains 26 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(24);
+    expect(totalItems).toBe(26);
   });
 
   it("flat sidebar entries match Spec 143 Runtime Status IA", () => {
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = navGroups.flatMap(
       (g) => g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
     );
-    expect(flat.length).toBe(24);
+    expect(flat.length).toBe(26);
     expect(flat).toEqual([
       { group: "运行状态", id: "overview", label: "系统概览", to: "/overview" },
       { group: "运行状态", id: "ops-calls", label: "调用监控", to: "/ops/calls" },
@@ -100,11 +100,13 @@ describe("navigation (shared sidebar config)", () => {
       { group: "访问治理", id: "admin-agents", label: "Agent", to: "/admin/agents" },
       { group: "访问治理", id: "admin-tokens", label: "Token 凭据", to: "/admin/tokens" },
       { group: "访问治理", id: "admin-roles", label: "角色权限", to: "/admin/roles" },
+      { group: "访问治理", id: "admin-row-policies", label: "行权限视图", to: "/admin/row-policies" },
+      { group: "访问治理", id: "admin-access-map", label: "访问关系图", to: "/admin/access-map" },
       { group: "访问治理", id: "admin-audit", label: "访问日志", to: "/admin/audit" },
       { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" },
       { group: "系统设置", id: "admin-branding", label: "品牌外观", to: "/admin/branding" },
-      { group: "系统设置", id: "admin-accounts", label: "登录账户", to: "/admin/admins" },
+      { group: "系统设置", id: "admin-accounts", label: "登录账户", to: "/admin/accounts" },
       { group: "系统设置", id: "admin-version", label: "版本信息", to: "/admin/version" }
     ]);
   });
@@ -120,6 +122,20 @@ describe("navigation (shared sidebar config)", () => {
     for (const path of forbiddenPaths) {
       expect(allPaths).not.toContain(path);
     }
+  });
+
+  it("SC-02 侧栏「登录账户」指向 /admin/accounts，旧路径不再是侧栏目标", () => {
+    const accounts = navGroups
+      .flatMap((g) => g.items)
+      .find((item) => item.id === "admin-accounts");
+    expect(accounts?.label).toBe("登录账户");
+    expect(accounts?.to).toBe("/admin/accounts");
+    // 当前页高亮这条。
+    expect(accounts?.active("/admin/accounts")).toBe(true);
+    expect(accounts?.active("/admin/other")).toBe(false);
+
+    const allPaths = navGroups.flatMap((g) => g.items.map((i) => i.to));
+    expect(allPaths).not.toContain("/admin/admins");
   });
 
   it("every nav item has a non-empty description for command palette context", () => {
@@ -154,12 +170,14 @@ describe("navigation (shared sidebar config)", () => {
       "admin-agents": "管理 Agent 身份、角色、Token 及数据访问边界。",
       "admin-tokens": "全局查看、签发与定向吊销 Agent 访问凭据。",
       "admin-roles": "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
+      "admin-row-policies": "按表反查角色的行策略与 Agent 的最终行约束。",
+      "admin-access-map": "查看授权路径与实际访问路径的对应关系。",
       "admin-audit": "按问询和工具调用追溯 Agent 访问行为、权限裁决与执行耗时。",
       "admin-mcp-playground": "检查 Agent 能不能连上，或者能不能查某张表。",
       "admin-config-audit": "查看各类配置与内容资产的写入记录、变更内容和操作者。",
       "admin-branding": "配置客户 Logo、产品名称与品牌副标题。",
       "admin-accounts": "管理 WebUI 登录账户，并配置所有者或运维角色。",
-      "admin-version": "查看产品版本、构建提交和随包 KTX 版本；有未提交改动时显示工作区状态。"
+      "admin-version": "查看产品版本、构建提交和随包 KTX 版本。"
     });
   });
 
@@ -222,7 +240,7 @@ describe("navigation (shared sidebar config)", () => {
       expect(findGroupIdForPathname("/admin/mcp-playground")).toBe("governance");
       expect(findGroupIdForPathname("/admin/config-audit")).toBe("governance");
       expect(findGroupIdForPathname("/admin/branding")).toBe("system-settings");
-      expect(findGroupIdForPathname("/admin/admins")).toBe("system-settings");
+      expect(findGroupIdForPathname("/admin/accounts")).toBe("system-settings");
       expect(findGroupIdForPathname("/admin/version")).toBe("system-settings");
     });
   });

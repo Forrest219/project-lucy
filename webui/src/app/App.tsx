@@ -46,11 +46,19 @@ const TokensRoute = lazyRoute(() => import("../pages/admin/Tokens"), "Tokens");
 const NewTokenRoute = lazyRoute(() => import("../pages/admin/NewToken"), "NewToken");
 const GovernanceOverviewRoute = lazyRoute(() => import("../pages/admin/GovernanceOverview"), "GovernanceOverview");
 const AuditRoute = lazyRoute(() => import("../pages/admin/Audit"), "Audit");
+const AuditReconciliationRoute = lazyRoute(() => import("../pages/admin/AuditReconciliation"), "AuditReconciliation");
 const McpPlaygroundRoute = lazyRoute(() => import("../pages/admin/McpPlayground"), "McpPlayground");
 const ConfigAuditRoute = lazyRoute(() => import("../pages/admin/ConfigAudit"), "ConfigAudit");
 const AuditSourcesRoute = lazyRoute(() => import("../pages/admin/AuditSources"), "AuditSources");
 const RoleListRoute = lazyRoute(() => import("../pages/admin/RoleList"), "RoleList");
 const RoleDetailRoute = lazyRoute(() => import("../pages/admin/RoleDetail"), "RoleDetail");
+// Lucy v0.25 / L25-14 R1、P1-3 — 行权限视图、行策略模板与访问关系图。
+const RowPolicyViewRoute = lazyRoute(() => import("../pages/admin/RowPolicyView"), "RowPolicyView");
+const RowPolicyTemplatesRoute = lazyRoute(() => import("../pages/admin/RowPolicyTemplates"), "RowPolicyTemplates");
+const AccessMapRoute = lazyRoute(() => import("../pages/admin/AccessMap"), "AccessMap");
+// Lucy v0.25 / P1-2 — 授权摘要独立页。它是深链落点（P1-2 §4.2「链接各自摘要」），
+// 因此**不进侧栏导航**（navigation.ts / navIcons.ts 不动），只在 URL 可达。
+const AuthorizationSummaryRoute = lazyRoute(() => import("../pages/admin/AuthorizationSummary"), "AuthorizationSummaryPage");
 const AdminAccountsRoute = lazyRoute(() => import("../pages/admin/AdminAccounts"), "AdminAccounts");
 const BrandingSettingsRoute = lazyRoute(() => import("../pages/admin/BrandingSettings"), "BrandingSettings");
 const VersionInfoRoute = lazyRoute(() => import("../pages/admin/VersionInfo"), "VersionInfo");
@@ -83,11 +91,16 @@ const {
   NewToken,
   GovernanceOverview,
   Audit,
+  AuditReconciliation,
   McpPlayground,
   ConfigAudit,
   AuditSources,
   RoleList,
   RoleDetail,
+  RowPolicyView,
+  RowPolicyTemplates,
+  AccessMap,
+  AuthorizationSummary,
   AdminAccounts,
   BrandingSettings,
   VersionInfo,
@@ -119,11 +132,16 @@ const {
   NewToken: NewTokenRoute.Component,
   GovernanceOverview: GovernanceOverviewRoute.Component,
   Audit: AuditRoute.Component,
+  AuditReconciliation: AuditReconciliationRoute.Component,
   McpPlayground: McpPlaygroundRoute.Component,
   ConfigAudit: ConfigAuditRoute.Component,
   AuditSources: AuditSourcesRoute.Component,
   RoleList: RoleListRoute.Component,
   RoleDetail: RoleDetailRoute.Component,
+  RowPolicyView: RowPolicyViewRoute.Component,
+  RowPolicyTemplates: RowPolicyTemplatesRoute.Component,
+  AccessMap: AccessMapRoute.Component,
+  AuthorizationSummary: AuthorizationSummaryRoute.Component,
   AdminAccounts: AdminAccountsRoute.Component,
   BrandingSettings: BrandingSettingsRoute.Component,
   VersionInfo: VersionInfoRoute.Component,
@@ -156,8 +174,13 @@ const ROUTE_PRELOADS: Array<{ match: (path: string) => boolean; route: LazyRoute
   { match: (p) => p === "/admin/usage", route: GovernanceOverviewRoute },
   { match: (p) => p === "/admin/roles", route: RoleListRoute },
   { match: (p) => p.startsWith("/admin/roles/"), route: RoleDetailRoute },
+  { match: (p) => p === "/admin/row-policies", route: RowPolicyViewRoute },
+  { match: (p) => p === "/admin/row-policy-templates", route: RowPolicyTemplatesRoute },
+  { match: (p) => p === "/admin/access-map", route: AccessMapRoute },
+  { match: (p) => p === "/admin/authorization-summary", route: AuthorizationSummaryRoute },
   { match: (p) => p === "/admin/tokens", route: TokensRoute },
   { match: (p) => p === "/admin/audit", route: AuditRoute },
+  { match: (p) => p === "/admin/audit-reconciliation", route: AuditReconciliationRoute },
   { match: (p) => p === "/help", route: HelpCenterRoute },
   { match: (p) => p === "/ops/calls", route: CallMonitorRoute },
   { match: (p) => p === "/wiki", route: WikiEditorRoute },
@@ -528,13 +551,21 @@ export function AppFrame() {
             <Route path="/admin/roles" element={<RoleList />} />
             <Route path="/admin/roles/new" element={<RoleDetail mode="create" />} />
             <Route path="/admin/roles/:roleId" element={<RoleDetail />} />
+            <Route path="/admin/row-policies" element={<RowPolicyView />} />
+            <Route path="/admin/row-policy-templates" element={<RowPolicyTemplates />} />
+            <Route path="/admin/access-map" element={<AccessMap />} />
+            <Route path="/admin/authorization-summary" element={<AuthorizationSummary />} />
             <Route path="/admin/audit" element={<Audit />} />
+            <Route path="/admin/audit-reconciliation" element={<AuditReconciliation />} />
             <Route path="/admin/audit-sources" element={<AuditSources />} />
             <Route path="/admin/mcp-playground" element={<McpPlayground />} />
             <Route path="/admin/config-audit" element={<ConfigAudit />} />
             <Route path="/admin/branding" element={<BrandingSettings />} />
             <Route path="/admin/license" element={<Navigate to="/overview" replace />} />
-            <Route path="/admin/admins" element={<AdminAccounts />} />
+            <Route path="/admin/accounts" element={<AdminAccounts />} />
+            {/* Spec 155 / D2 — the old path is a WebUI-only alias. It replaces
+                the address with the canonical one; the API stays /api/admin/admins. */}
+            <Route path="/admin/admins" element={<Navigate to="/admin/accounts" replace />} />
             <Route path="/admin/version" element={<VersionInfo />} />
             <Route path="/eval/cases" element={<CaseList />} />
             <Route path="/eval/cases/:domain" element={<CaseList />} />

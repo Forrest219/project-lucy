@@ -4,7 +4,9 @@ import { ChevronRight, Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchCatalogSchemaManifest } from "../../lib/catalog-assets";
+import { countEnabledForSchema, manifestTableIsEnabled } from "../../lib/enabled-table-identity";
 import { apiGet, apiPost } from "../../lib/apiClient";
+import { copyTextToClipboard } from "../../lib/clipboard";
 import {
   connectionHealthDrawerResult,
   connectionHealthStatusLabel,
@@ -12,6 +14,10 @@ import {
   formatProbeClock
 } from "../../lib/connectionHealth";
 import { queryKeys } from "../../lib/queryKeys";
+import {
+  OPS_EVIDENCE_CONNECTION_DISPLAY_NAME,
+  OPS_EVIDENCE_CONNECTION_ID
+} from "../../lib/opsEvidence";
 import type {
   CatalogReloadsResponse,
   CatalogReloadRun,
@@ -19,10 +25,12 @@ import type {
   CatalogSchemaManifestReadResponse,
   ConnectionInfo,
   ConnectionTestResult,
+  DiscoveryStatusResponse,
   ExecutionRuntimeStatus,
   LiveSchemasResponse,
   SourceSummary,
-  SourcesResponse
+  SourcesResponse,
+  TableDiffResponse
 } from "../../lib/types";
 import {
   canReadDatabaseStructure,
@@ -40,6 +48,11 @@ import {
   triggerCatalogManifestDownload
 } from "../../components/catalog";
 import { ConnectionTestDrawer } from "../../components/connections";
+import {
+  DiscoveryStateCell,
+  LiveTableListCell,
+  discoveryReasonLabel
+} from "../../components/connections/SchemaDiscoveryCells";
 import { PageHeader } from "../../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "./MetricCard";
@@ -49,6 +62,7 @@ import { catalogReloadsQueryOptions, mcpRuntimeStatusQueryOptions, projectQueryO
 const AddSchemaDrawer = lazy(() => import("../../components/AddSchemaDrawer").then((m) => ({ default: m.AddSchemaDrawer })));
 const PrepareSchemaStructureDrawer = lazy(() => import("../../components/SchemaStructurePrep").then((m) => ({ default: m.PrepareSchemaStructureDrawer })));
 const CreateConnectionDrawer = lazy(() => import("../../components/CreateConnectionDrawer").then((m) => ({ default: m.CreateConnectionDrawer })));
+const EditConnectionDialog = lazy(() => import("../../components/connections/EditConnectionDialog").then((m) => ({ default: m.EditConnectionDialog })));
 const DeleteConnectionDrawer = lazy(() => import("../../components/DeleteConnectionDrawer").then((m) => ({ default: m.DeleteConnectionDrawer })));
 const RemoveSchemaDrawer = lazy(() => import("../../components/RemoveSchemaDrawer").then((m) => ({ default: m.RemoveSchemaDrawer })));
 const SetupAssistantModal = lazy(() => import("../../components/onboarding").then((m) => ({ default: m.SetupAssistantModal })));
@@ -63,6 +77,8 @@ function engineLabel(engine?: string) {
   if (normalized === "doris") return "Doris";
   if (normalized === "starrocks") return "StarRocks";
   if (normalized === "athena") return "Athena";
+  // Spec 149 §4 — 运维问数连接指向审计热库，引擎显示 SQLite。
+  if (normalized === "sqlite") return "SQLite";
   return "DB";
 }
 
@@ -77,7 +93,7 @@ function engineKey(engine?: string): "mysql" | "postgres" | "doris" | "starrocks
 }
 
 function catalogReloadTimestampTitle(iso: string): string {
-  return `配置同步时间：${iso}。上传或修改 Schema Manifest 后，可用“刷新本地目录”让页面读取最新 YAML 资产，不会连接数据库。`;
+  return `上次刷新：${iso}。更新表结构说明后，可用「刷新本地目录」看到最新内容，不会连接数据库。`;
 }
 
 function executionNoticeCopy(status: ExecutionRuntimeStatus | undefined): string | null {
@@ -192,7 +208,7 @@ function catalogRunState(
 ): CatalogRunState {
   if (isLoading) {
     return {
-      label: "正在同步配置变更...",
+      label: "正在刷新...",
       detail: "",
       tone: "muted",
       badgeLabel: "刷新中",
@@ -202,7 +218,7 @@ function catalogRunState(
   }
   if (error) {
     return {
-      label: "配置同步失败",
+      label: "刷新失败",
       detail: error.message,
       tone: "danger",
       badgeLabel: "失败",
@@ -212,7 +228,7 @@ function catalogRunState(
   }
   if (isHistoryLoading) {
     return {
-      label: "正在读取配置同步状态...",
+      label: "正在读取刷新状态...",
       detail: "",
       tone: "muted",
       badgeLabel: "加载中",
@@ -222,7 +238,7 @@ function catalogRunState(
   }
   if (historyError) {
     return {
-      label: "配置同步状态加载失败",
+      label: "刷新状态加载失败",
       detail: historyError.message,
       tone: "danger",
       badgeLabel: "失败",
@@ -233,7 +249,7 @@ function catalogRunState(
   if (!run) {
     return {
       label: "本地目录未刷新",
-      detail: "尚未读取本地 YAML",
+      detail: "尚未读取本机表结构说明",
       tone: "muted",
       badgeLabel: "未刷新",
       tableCount: 0,
@@ -242,7 +258,7 @@ function catalogRunState(
   }
   if (run.status === "failed") {
     return {
-      label: "配置同步失败",
+      label: "刷新失败",
       detail: formatLocalTime(run.startedAt),
       tone: "danger",
       badgeLabel: "失败",
@@ -251,7 +267,7 @@ function catalogRunState(
     };
   }
   return {
-    label: "配置已同步",
+    label: "已刷新",
     detail: formatLocalTime(run.startedAt),
     tone: run.warnings.length > 0 ? "warning" : "success",
     badgeLabel: "已完成",
@@ -333,10 +349,19 @@ function localManifestSchemaRefs(
 }
 
 function enabledLocalTableCount(connections: ConnectionInfo[], tables: SourceSummary[]): number {
-  const enabledByConnection = new Map(connections.map((conn) => [conn.id, new Set(conn.enabledTables)]));
-  return tables.filter((table) =>
-    enabledByConnection.get(table.conn)?.has(table.qualifiedName ?? `${table.schema}.${table.table}`)
-  ).length;
+  const byId = new Map(connections.map((conn) => [conn.id, conn]));
+  return tables.filter((table) => {
+    const conn = byId.get(table.conn);
+    if (!conn) return false;
+    const logicalName = `${table.schema}.${table.table}`;
+    const physicalName = table.qualifiedName?.trim() || logicalName;
+    return manifestTableIsEnabled(
+      conn.enabledTables,
+      logicalName,
+      physicalName,
+      conn.driver === "sqlserver"
+    );
+  }).length;
 }
 
 function readOnlyStatus(conn: ConnectionInfo): { label: string; tone: "safe" | "risk"; title: string } {
@@ -470,6 +495,40 @@ export function ConnectionOverview() {
   const liveByConnectionId = new Map(
     connections.map((conn, index) => [conn.id, liveSchemaQueries[index]] as const)
   );
+  // Spec 190 §7.9 — continuous discovery state and the reconciliation state.
+  // Both are read-only sidecar reads: no database round trip on page load.
+  const discoveryQueries = useQueries({
+    queries: connections.map((conn) => ({
+      queryKey: queryKeys.connectionDiscovery(conn.id),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        apiGet<DiscoveryStatusResponse>(
+          `/api/connections/${encodeURIComponent(conn.id)}/discovery`,
+          { signal }
+        ),
+      staleTime: 30_000,
+      retry: false,
+      enabled: probesArmed
+    }))
+  });
+  const tableDiffQueries = useQueries({
+    queries: connections.map((conn) => ({
+      queryKey: queryKeys.connectionTableDiff(conn.id),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        apiGet<TableDiffResponse>(
+          `/api/connections/${encodeURIComponent(conn.id)}/table-diff`,
+          { signal }
+        ),
+      staleTime: 30_000,
+      retry: false,
+      enabled: probesArmed
+    }))
+  });
+  const discoveryByConnectionId = new Map(
+    connections.map((conn, index) => [conn.id, discoveryQueries[index]] as const)
+  );
+  const tableDiffByConnectionId = new Map(
+    connections.map((conn, index) => [conn.id, tableDiffQueries[index]] as const)
+  );
   // Spec 108: parallel connectivity probe on every page entry (staleTime 0).
   // gcTime 0 drops cache on leave so remount cannot show a stale「通」.
   const healthQueries = useQueries({
@@ -521,13 +580,18 @@ export function ConnectionOverview() {
   const sourcesFactsPending = useDisplayFactsPending("sources");
   const sourcesActionsReady = sourcesReady && !sourcesFactsPending && !sourcesQuery.isFetching && !sourcesQuery.isError;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
-  const [structureTarget, setStructureTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
+  const [structureTarget, setStructureTarget] = useState<{
+    connection: ConnectionInfo;
+    schema: string;
+    refreshExisting?: boolean;
+  } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantStep, setAssistantStep] = useState<SetupStep>(1);
   const [assistantConnId, setAssistantConnId] = useState("");
   const [removeTarget, setRemoveTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ConnectionInfo | null>(null);
+  const [editTarget, setEditTarget] = useState<ConnectionInfo | null>(null);
   const [reloadRunsByConnection, setReloadRunsByConnection] = useState<Record<string, CatalogReloadRun>>({});
   const [reloadErrorsByConnection, setReloadErrorsByConnection] = useState<Record<string, Error | null>>({});
   const [reloadingConnections, setReloadingConnections] = useState<Record<string, boolean>>({});
@@ -626,7 +690,11 @@ export function ConnectionOverview() {
   }
 
   async function copyWarningPath(key: string, manifestPath: string) {
-    await navigator.clipboard?.writeText(manifestPath);
+    const result = await copyTextToClipboard(manifestPath);
+    if (!result.ok) {
+      toast.error("复制路径失败，请手动选择文本");
+      return;
+    }
     setCopiedWarningPath(key);
   }
 
@@ -674,17 +742,20 @@ export function ConnectionOverview() {
     <div className="pl-page-stack">
       <PageHeader
         title="连接概览"
-        description={
-          <>
-            管理数据库连接、<span className="notranslate" translate="no">Schema</span> 与{" "}
-            <span className="notranslate" translate="no">Schema Manifest</span>，并查看连通性和本地目录同步状态。
-          </>
-        }
+        description="查看已接入的数据库，确认能否连上，并选择可以查询的表。"
         actions={
           <div className="flex items-center gap-2">
             <button
               type="button"
               className="pl-btn pl-btn--primary"
+              onClick={() => setCreateOpen(true)}
+              data-testid="create-connection-btn"
+            >
+              新建连接
+            </button>
+            <button
+              type="button"
+              className="pl-btn pl-btn--secondary"
               onClick={() => {
                 setAssistantConnId("");
                 setAssistantStep(1);
@@ -693,14 +764,6 @@ export function ConnectionOverview() {
               data-testid="start-onboarding-assistant-btn"
             >
               启动接入向导
-            </button>
-            <button
-              type="button"
-              className="pl-btn pl-btn--secondary"
-              onClick={() => setCreateOpen(true)}
-              data-testid="create-connection-btn"
-            >
-              新建连接
             </button>
           </div>
         }
@@ -721,12 +784,12 @@ export function ConnectionOverview() {
         <MetricCard
           type="localCatalogTables"
           value={sourcesReady ? semanticTables.length : unknownMetric}
-          subValue={sourcesReady && projectStatus === "success" ? `来自 ${configuredManifestSchemaCount} 个 Schema Manifest` : pendingSubValue}
+          subValue={sourcesReady && projectStatus === "success" ? `来自 ${configuredManifestSchemaCount} 个 Schema` : pendingSubValue}
         />
         <MetricCard
           type="unenabledTables"
           value={sourcesReady && projectStatus === "success" ? unenabledLocalTableCount : unknownMetric}
-          subValue={sourcesReady && projectStatus === "success" ? `已启用 ${enabledLocalCount} / 本地 ${semanticTables.length} 张表` : pendingSubValue}
+          subValue={sourcesReady && projectStatus === "success" ? `可查询 ${enabledLocalCount} / 已发现 ${semanticTables.length} 张表` : pendingSubValue}
         />
       </div>
 
@@ -757,16 +820,24 @@ export function ConnectionOverview() {
               <Database className="w-6 h-6" />
             </div>
             <div className="max-w-md mx-auto space-y-1">
-              <p className="text-sm text-fg-muted">暂无连接配置。</p>
-              <h3 className="text-base font-bold text-fg-default">欢迎使用 Lucy 数据库接入向导</h3>
-              <p className="text-xs text-fg-muted notranslate" translate="no">
-                一步只做一件事：从物理连接、上传 Schema Manifest、启用表配置到 Agent 客户端 MCP 接入，轻松完成配置。也可在 <code className="notranslate" translate="no">ktx.yaml</code> 中手工添加。
+              <p className="text-sm text-fg-muted">还没有接入数据库。</p>
+              <h3 className="text-base font-bold text-fg-default">先添加一个数据库连接</h3>
+              <p className="text-xs text-fg-muted">
+                填好连接信息后，再选择可查询的表。也可以按步骤使用接入向导。
               </p>
             </div>
             <div className="flex justify-center gap-3">
               <button
                 type="button"
                 className="pl-btn pl-btn--primary"
+                onClick={() => setCreateOpen(true)}
+                data-testid="create-connection-empty-btn"
+              >
+                新建连接
+              </button>
+              <button
+                type="button"
+                className="pl-btn pl-btn--secondary"
                 onClick={() => {
                   setAssistantConnId("");
                   setAssistantStep(1);
@@ -774,15 +845,7 @@ export function ConnectionOverview() {
                 }}
                 data-testid="start-assistant-empty-btn"
               >
-                启动数据库接入向导
-              </button>
-              <button
-                type="button"
-                className="pl-btn pl-btn--secondary"
-                onClick={() => setCreateOpen(true)}
-                data-testid="create-connection-empty-btn"
-              >
-                新建连接
+                启动接入向导
               </button>
             </div>
           </div>
@@ -801,10 +864,15 @@ export function ConnectionOverview() {
             );
             const liveQuery = liveByConnectionId.get(conn.id);
             const liveData = liveQuery?.data;
+            const discoveryState = discoveryByConnectionId.get(conn.id)?.data;
+            const tableDiffState = tableDiffByConnectionId.get(conn.id)?.data;
             const schemaRows = conn.schemas.map((schema) => {
-              const enabledTableCountForSchema = conn.enabledTables.filter((entry) =>
-                entry.startsWith(`${schema}.`)
-              ).length;
+              const enabledTableCountForSchema = countEnabledForSchema(
+                schema,
+                conn.enabledTables,
+                semanticTables.filter((table) => table.conn === conn.id),
+                conn.driver === "sqlserver"
+              );
               return {
                 schema,
                 assetState: schemaAssetState(
@@ -864,7 +932,24 @@ export function ConnectionOverview() {
                       <Database className="pl-connection-engine-icon-svg" strokeWidth={1.8} />
                     </span>
                     <span className="pl-connection-title-copy">
-                      <strong className="notranslate" translate="no">{conn.id}</strong>
+                      {/* Spec 149 §10 — 运维问数连接的卡片主称是「运维问数连接」；
+                          连接 ID 仍然以 translate="no" 单独呈现。 */}
+                      {conn.id === OPS_EVIDENCE_CONNECTION_ID ? (
+                        <>
+                          <strong data-testid={`connection-title-${conn.id}`}>
+                            {OPS_EVIDENCE_CONNECTION_DISPLAY_NAME}
+                          </strong>
+                          <code
+                            className="notranslate"
+                            translate="no"
+                            data-testid={`connection-id-${conn.id}`}
+                          >
+                            {conn.id}
+                          </code>
+                        </>
+                      ) : (
+                        <strong className="notranslate" translate="no">{conn.id}</strong>
+                      )}
                       <span
                         className="pl-engine-badge notranslate"
                         data-testid={`engine-badge-${conn.id}`}
@@ -962,7 +1047,7 @@ export function ConnectionOverview() {
                         title={headerTimestampIso ? catalogReloadTimestampTitle(headerTimestampIso) : undefined}
                         translate="no"
                       >
-                        <span>配置同步：</span>
+                        <span>上次刷新：</span>
                         <time className="notranslate" translate="no" dir="ltr">{headerTimestamp}</time>
                         {lastRun?.status === "failed" ? <span> · 失败</span> : null}
                       </span>
@@ -994,15 +1079,6 @@ export function ConnectionOverview() {
                         {formatAssistantProgressCompact(cardAssistantStep)}
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--secondary notranslate"
-                      onClick={() => setAddTarget(conn)}
-                      data-testid={`add-schema-${conn.id}`}
-                      translate="no"
-                    >
-                      添加 Schema
-                    </button>
                     <details
                       className="pl-row-action-more pl-connection-more"
                       open={openMore?.kind === "connection" && openMore.id === conn.id}
@@ -1053,7 +1129,7 @@ export function ConnectionOverview() {
                               })();
                             }}
                             data-testid={`refresh-live-catalog-${conn.id}`}
-                            title="向数据库查询当前可见的 Schema 和表数量。"
+                            title="向数据库查看现在有哪些 Schema 和多少张表。"
                             translate="no"
                           >
                             {liveQuery?.isFetching || refreshingLiveByConnection[conn.id]
@@ -1061,7 +1137,7 @@ export function ConnectionOverview() {
                               : "重新拉取库内目录"}
                           </button>
                           <p className="pl-connection-more-hint">
-                            向数据库查询当前可见的 <span className="notranslate" translate="no">Schema</span> 和表数量。
+                            向数据库查看现在有哪些 <span className="notranslate" translate="no">Schema</span> 和多少张表。
                           </p>
                         </div>
                         <div className="pl-connection-more-entry">
@@ -1082,10 +1158,35 @@ export function ConnectionOverview() {
                             onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
                           />
                           <p className="pl-connection-more-hint">
-                            重新读取本机 <span className="notranslate" translate="no">YAML</span>，不连接数据库。
+                            重新读取本机已保存的表结构说明，不会连接数据库。
                           </p>
                         </div>
                         <div className="pl-connection-more-separator" role="separator" />
+                        <button
+                          type="button"
+                          className="pl-row-action-link pl-connection-more-action notranslate"
+                          onClick={() => {
+                            closeMore();
+                            setEditTarget(conn);
+                          }}
+                          data-testid={`edit-connection-${conn.id}`}
+                          translate="no"
+                          disabled={
+                            conn.id === OPS_EVIDENCE_CONNECTION_ID ||
+                            conn.driver === "sqlite" ||
+                            conn.driver === "athena" ||
+                            !conn.host
+                          }
+                          aria-disabled={
+                            conn.id === OPS_EVIDENCE_CONNECTION_ID ||
+                            conn.driver === "sqlite" ||
+                            conn.driver === "athena" ||
+                            !conn.host
+                          }
+                        >
+                          编辑连接
+                        </button>
+                        {/* Spec 149 §10 — 运维问数连接不可删除：入口不可用。 */}
                         <button
                           type="button"
                           className="pl-row-action-link pl-row-action-link--danger pl-connection-more-action notranslate"
@@ -1095,6 +1196,8 @@ export function ConnectionOverview() {
                           }}
                           data-testid={`delete-connection-${conn.id}`}
                           translate="no"
+                          disabled={conn.id === OPS_EVIDENCE_CONNECTION_ID}
+                          aria-disabled={conn.id === OPS_EVIDENCE_CONNECTION_ID}
                         >
                           删除连接
                         </button>
@@ -1105,7 +1208,7 @@ export function ConnectionOverview() {
                     <div className="pl-connection-kv">
                       <dt className="notranslate" translate="no">
                         <Server className="pl-connection-kv-icon" aria-hidden="true" strokeWidth={1.8} />
-                        <span>Host：</span>
+                        <span>地址：</span>
                       </dt>
                       <dd>
                         <code
@@ -1121,7 +1224,7 @@ export function ConnectionOverview() {
                     <div className="pl-connection-kv">
                       <dt className="notranslate" translate="no">
                         <Database className="pl-connection-kv-icon" aria-hidden="true" strokeWidth={1.8} />
-                        <span>Database：</span>
+                        <span>数据库：</span>
                       </dt>
                       <dd>
                         <code
@@ -1137,6 +1240,20 @@ export function ConnectionOverview() {
                   </dl>
                 </div>
                 <div className="pl-connection-card-body">
+                  {discoveryState && (discoveryState.status === "paused" || discoveryState.status === "error") ? (
+                    <p
+                      className="pl-notice pl-connection-discovery-notice text-sm"
+                      role="status"
+                      data-testid={`connection-discovery-notice-${conn.id}`}
+                    >
+                      <span className="notranslate" translate="no">
+                        {discoveryState.status === "paused" ? "持续感知已暂停：" : "持续感知失败："}
+                      </span>
+                      <span className="notranslate" translate="no">
+                        {discoveryReasonLabel(discoveryState.lastReason) || "原因未知"}
+                      </span>
+                    </p>
+                  ) : null}
                   {showRefreshWarning ? (
                     <div
                       className="pl-connection-refresh-warning notranslate"
@@ -1145,8 +1262,8 @@ export function ConnectionOverview() {
                       translate="no"
                     >
                       <p className="pl-connection-refresh-warning-text">
-                        <span>本地目录未刷新：</span>
-                        <span>首次接入或修改本地 YAML 后，可刷新以读取最新资产。</span>
+                        <span>尚未刷新本地目录：</span>
+                        <span>添加或更新表结构后，点刷新即可看到最新内容。</span>
                       </p>
                       <CatalogReloadButton
                         connectionId={conn.id}
@@ -1165,16 +1282,32 @@ export function ConnectionOverview() {
                     </div>
                   ) : null}
 
+                  <div className="pl-connection-schema-toolbar" data-testid={`connection-schema-toolbar-${conn.id}`}>
+                    <p className="pl-connection-schema-toolbar-title notranslate" translate="no">
+                      Schema
+                    </p>
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--secondary notranslate"
+                      onClick={() => setAddTarget(conn)}
+                      data-testid={`add-schema-${conn.id}`}
+                      translate="no"
+                    >
+                      添加 Schema
+                    </button>
+                  </div>
                   {conn.schemas.length === 0 ? (
-                    <p className="text-sm text-fg-muted py-3 notranslate" translate="no">尚未配置 Schema。请先添加 Schema。</p>
+                    <p className="text-sm text-fg-muted py-1 notranslate" translate="no">还没有 Schema。请先添加 Schema。</p>
                   ) : (
                     <table className="pl-data-grid pl-data-table pl-schema-asset-table" data-testid={`schema-asset-table-${conn.id}`}>
                       <colgroup>
                         <col className="pl-schema-asset-col-schema" />
                         <col className="pl-schema-asset-col-status" />
                         <col className="pl-schema-asset-col-live-count" />
+                        <col className="pl-schema-asset-col-live-tables" />
                         <col className="pl-schema-asset-col-local-count" />
                         <col className="pl-schema-asset-col-enabled-count" />
+                        <col className="pl-schema-asset-col-discovery" />
                         <col className="pl-schema-asset-col-action" />
                       </colgroup>
                       <thead>
@@ -1184,11 +1317,17 @@ export function ConnectionOverview() {
                           <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="物理库中当前账号可见的 BASE TABLE 数量">
                             库内表数
                           </th>
+                          <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="该 Schema 在库内的表清单，可展开查看表名与列数">
+                            库内表清单
+                          </th>
                           <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="本地 Schema Manifest 中的表数量">
                             已发现表数
                           </th>
                           <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="ktx.yaml enabled_tables 中该 Schema 的表数量">
                             已启用表数
+                          </th>
+                          <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="持续感知状态与表清单差异计数">
+                            持续感知
                           </th>
                           <th>操作</th>
                         </tr>
@@ -1239,6 +1378,11 @@ export function ConnectionOverview() {
                                     {liveCount.text}
                                   </span>
                                 </td>
+                                <LiveTableListCell
+                                  connectionId={conn.id}
+                                  schema={schema}
+                                  tableDiff={tableDiffState}
+                                />
                                 <td className="pl-schema-asset-table-num">
                                   <span
                                     className="pl-schema-asset-local-count"
@@ -1270,29 +1414,24 @@ export function ConnectionOverview() {
                                 >
                                   {enabledTableCount} 张表
                                 </td>
+                                <DiscoveryStateCell
+                                  connectionId={conn.id}
+                                  schema={schema}
+                                  discovery={discoveryState}
+                                  tableDiff={tableDiffState}
+                                />
                                 <td className="pl-schema-asset-table-action">
                                   {/* Spec 174 §4.1: Manifest-dependent actions wait for real sources facts. */}
                                   {!sourcesActionsReady ? <span className="pl-notice pl-schema-asset-actions-pending" aria-hidden="true" data-testid={`schema-actions-pending-${conn.id}-${schema}`}>—</span> : (
                                   <div className="pl-schema-asset-actions">
                                     {hasReadableManifest ? (
-                                      <>
-                                        <button
-                                          type="button"
-                                          className="pl-row-action-link notranslate"
-                                          translate="no"
-                                          onClick={() => setManifestViewTarget({ connectionId: conn.id, schema })}
-                                          data-testid={`view-manifest-${conn.id}-${schema}`}
-                                        >
-                                          查看 Manifest
-                                        </button>
-                                        <Link
-                                          className="pl-row-action-link"
-                                          to={`/connections/enabled-tables?connection=${encodeURIComponent(conn.id)}&schema=${encodeURIComponent(schema)}`}
-                                          data-testid={`schema-whitelist-${conn.id}-${schema}`}
-                                        >
-                                          维护启用表范围
-                                        </Link>
-                                      </>
+                                      <Link
+                                        className="pl-row-action-link"
+                                        to={`/connections/enabled-tables?connection=${encodeURIComponent(conn.id)}&schema=${encodeURIComponent(schema)}`}
+                                        data-testid={`schema-whitelist-${conn.id}-${schema}`}
+                                      >
+                                        维护启用表范围
+                                      </Link>
                                     ) : canReadDatabaseStructure(conn) ? (
                                       <button
                                         type="button"
@@ -1368,6 +1507,18 @@ export function ConnectionOverview() {
                                               type="button"
                                               className="pl-row-action-link notranslate"
                                               translate="no"
+                                              onClick={() => {
+                                                closeMore();
+                                                setManifestViewTarget({ connectionId: conn.id, schema });
+                                              }}
+                                              data-testid={`view-manifest-${conn.id}-${schema}`}
+                                            >
+                                              查看 Manifest
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="pl-row-action-link notranslate"
+                                              translate="no"
                                               disabled={downloadingManifestKey === rowManifestKey}
                                               onClick={() => {
                                                 closeMore();
@@ -1396,6 +1547,24 @@ export function ConnectionOverview() {
                                             >
                                               重新上传 Manifest
                                             </button>
+                                            {canReadDatabaseStructure(conn) ? (
+                                              <button
+                                                type="button"
+                                                className="pl-row-action-link notranslate"
+                                                translate="no"
+                                                onClick={() => {
+                                                  closeMore();
+                                                  setStructureTarget({
+                                                    connection: conn,
+                                                    schema,
+                                                    refreshExisting: true
+                                                  });
+                                                }}
+                                                data-testid={`refresh-structure-${conn.id}-${schema}`}
+                                              >
+                                                从数据库读取表结构
+                                              </button>
+                                            ) : null}
                                           </>
                                         ) : canReadDatabaseStructure(conn) ? (
                                           <CatalogAssetUploadButton
@@ -1535,10 +1704,18 @@ export function ConnectionOverview() {
           existingIds={connections.map((conn) => conn.id)}
         />
       ) : null}
+      {editTarget ? (
+        <EditConnectionDialog
+          open
+          connection={editTarget}
+          onClose={() => setEditTarget(null)}
+        />
+      ) : null}
       {structureTarget ? (
         <PrepareSchemaStructureDrawer
           connection={structureTarget.connection}
           schema={structureTarget.schema}
+          refreshExisting={structureTarget.refreshExisting === true}
           open
           onClose={() => setStructureTarget(null)}
         />

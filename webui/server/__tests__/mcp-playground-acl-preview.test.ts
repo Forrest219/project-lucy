@@ -268,7 +268,7 @@ describe("POST /api/admin/mcp-playground/live-smoke", () => {
   });
 
   it("calls the local MCP endpoint with the bearer token and never echoes it back", async () => {
-    const fetchSpy = vi.fn(async () =>
+    const fetchSpy = vi.fn(async (_input: string, _init: RequestInit) =>
       new Response(JSON.stringify({ jsonrpc: "2.0", result: { tools: [{ name: "sl_query" }] } }), {
         status: 200,
         headers: { "content-type": "application/json" }
@@ -287,7 +287,7 @@ describe("POST /api/admin/mcp-playground/live-smoke", () => {
     expect(JSON.stringify(res.body)).not.toContain("super-secret-token");
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [calledUrl, calledInit] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const [calledUrl, calledInit] = fetchSpy.mock.calls[0];
     expect(new URL(calledUrl).hostname).toBe("127.0.0.1");
     const headers = calledInit.headers as Record<string, string>;
     expect(headers.authorization).toBe("Bearer super-secret-token");

@@ -58,8 +58,8 @@ fi
 
 # 写入 E2E fixture 凭据（占位字符串，绝不读真实 .ktx/secrets/*）
 mkdir -p "$DEST/.ktx/secrets"
-echo "e2e-fixture-password" > "$DEST/.ktx/secrets/mysql-aliyun-password"
-chmod 600 "$DEST/.ktx/secrets/mysql-aliyun-password"
+echo "e2e-fixture-password" > "$DEST/.ktx/secrets/demo-mysql-password"
+chmod 600 "$DEST/.ktx/secrets/demo-mysql-password"
 
 # 用 SRC（真实仓库）下的 fixture 目录作为源，
 # 而不是 DEST——DEST 刚 clone 完还没有我们后续 commit 的 webui/tests/e2e/* 目录。

@@ -6,7 +6,13 @@
  * share the same conventions (title extraction, TOC, template seeds,
  * validation findings) without leaning on a heavy markdown parser.
  */
-import type { WikiDirectorySummary, WikiFrontmatter, WikiPreview, WikiSummary } from "./types";
+import type {
+  WikiAclState,
+  WikiDirectorySummary,
+  WikiFrontmatter,
+  WikiPreview,
+  WikiSummary
+} from "./types";
 
 export type WikiTemplate = {
   /** Short Chinese label rendered on the empty-draft card. */
@@ -485,6 +491,55 @@ export function directoryOfWikiKey(key: string): string {
   const trimmed = key.trim().replace(/^\/+|\/+$/g, "");
   if (!trimmed.includes("/")) return "";
   return trimmed.split("/").slice(0, -1).join("/");
+}
+
+export type WikiAgentAccessKind = "none" | "roles" | "all" | "corrupt";
+
+export type WikiAgentAccessCopy = {
+  kind: WikiAgentAccessKind;
+  tone: "warning" | "ok" | "danger";
+  label: string;
+  shortLabel: string;
+  detail: string;
+};
+
+/** Surface copy for Wiki object ACL so Agent visibility is explicit in read/list/edit. */
+export function wikiAgentAccessCopy(acl: WikiAclState | undefined): WikiAgentAccessCopy {
+  if (acl?.state === "corrupt") {
+    return {
+      kind: "corrupt",
+      tone: "danger",
+      label: "Agent 权限：授权已损坏",
+      shortLabel: "授权已损坏",
+      detail: "问答 Agent 目前无人可见。请重新选择可访问角色后再保存。"
+    };
+  }
+  if (acl?.state === "all") {
+    return {
+      kind: "all",
+      tone: "ok",
+      label: "Agent 权限：所有角色可见",
+      shortLabel: "所有角色可见",
+      detail: "已分配对应通道的 Agent 都可以搜索和阅读这篇文档。"
+    };
+  }
+  if (acl?.state === "roles") {
+    const roles = acl.roles.length ? acl.roles.join("、") : "未勾选角色";
+    return {
+      kind: "roles",
+      tone: "ok",
+      label: `Agent 权限：${roles}`,
+      shortLabel: roles === "未勾选角色" ? "指定角色" : `可见：${roles}`,
+      detail: "仅这些角色对应的 Agent 能搜索和阅读。"
+    };
+  }
+  return {
+    kind: "none",
+    tone: "warning",
+    label: "Agent 权限：无人可见",
+    shortLabel: "无人可见",
+    detail: "问答 Agent 目前搜不到也读不到这篇文档。请选择可访问角色。"
+  };
 }
 
 export type WikiValidationLevel = "error" | "warning" | "info";

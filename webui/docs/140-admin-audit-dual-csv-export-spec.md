@@ -176,7 +176,8 @@ FUNCTION renderAuditHeaderActions(tab):
 | `since` / `until` | ISO 时间范围；优先于默认窗口 |
 | `tableSearch` | 涉及数据表模糊匹配 |
 | `turnId` | 问询 ID 模糊匹配；页面由统一搜索中的 ID 输入映射 |
-| `outcome` | `ok` / `denied` / `error` |
+| `outcome` | 旧 v1 原始口径：`ok` / `denied` / `error`；保留原义，不改名换义 |
+| `primaryStatus` | v0.25 新增：`succeeded` / `failed` / `denied` / `budget_stopped` / `cancelled` / `timeout` / `indeterminate` / `unknown` |
 | `q` | 问询摘要、预览、Agent、表名搜索 |
 | `bom` | `1` / `true` 时加 UTF-8 BOM |
 
@@ -187,6 +188,8 @@ FUNCTION renderAuditHeaderActions(tab):
 ```
 
 调用流水 CSV 字段沿用 Spec 137 的 `access_log` 导出字段，保留 `generated_sql` 与策略证据列，保障历史脚本兼容。
+
+v0.25 新增版本化 CSV／API 视图，旧列保持原义并另列 `legacy_outcome`。新视图必须包含 `primaryStatus`、`classificationVersion`、`derivationVersion`、`metricUnit`、`watermarkSeq` 及八桶计数；筛选、明细和汇总使用同一版本分类函数、同一计量单位与同一账本截止位置 S。八桶为 `succeeded / failed / denied / budget_stopped / cancelled / timeout / indeterminate / unknown`，合计必须等于纳入集合总数；不得再用旧成功／拒绝／错误三列冒充新主状态闭合。
 
 ## 7. UI / Help
 

@@ -11,6 +11,16 @@
 | 基于材料 | `dev-inbox/20260617-2320-project-lucy-progress-and-plan.md` P1 决策；`docs/governance/DEVELOPMENT.md` §Skills 当前状态；KTX MCP server 当前能力清单（4 tool，无 always-on prompt）；本会话 D-1 / E1 决策上下文；V5 验证材料 `inbox/lucy-skills-v5-report.md` |
 | 适用范围 | lucy-skills MCP server MVP 实施门控；data agent 客户端集成参考 |
 | 输出位置 | docs/specs/lucy-skills-mcp-spec.md（2026-09-25 自 lucy-skills/docs/01-spec.md 迁入；规划的 server 实现目录仍为 lucy-skills/） |
+| 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复，不改实现、不补验收证据。实现现状：规划的 server 实现目录 `lucy-skills/` 尚未建立，验证材料 `inbox/lucy-skills-v5-report.md` 仍只在工作区（被 `.gitignore` 排除）。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：`lucy-skills` MCP server 以 MVP 形态提供技能检索与读取能力，其工具集合与授权口径和 KTX 现有能力清单一致。
+- 本条出口：本 Spec 的 MVP 工具集合同（4 tool）、always-on prompt 的取舍口径，以及 data agent 客户端的集成参考。
+- 不在本条出口：`lucy-skills` server 的实际实现；data agent 客户端的真实集成与端到端旅程；整库旅程、跨模块故障演练、证据等级。
+- 上线关系：本条收口不表示可上线
+
 
 ## §1 背景与决策
 

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { setSessionClient, type Identity } from "./identity.js";
 import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
@@ -14,6 +14,13 @@ import {
 import { assertSkillsPassthroughPolicy, skillsPassthroughRequested } from "../auth/deployment-mode.js";
 import { ReleaseLedger, type ReleaseOperationContext } from "../security/ledger.js";
 import { beginGatedResponse, type ResponseCommitConfig } from "../security/response-commit.js";
+import { getSecurityStore } from "../security/instance.js";
+import {
+  allocateIngressIdentity,
+  appendIngressReceived,
+  buildCorrelationHeaders,
+  runStartupRecoveryScan
+} from "./ingress-registry.js";
 import {
   clearUpstreamSession,
   getUpstreamSession,
@@ -23,15 +30,19 @@ import {
   upstreamSessionOwner
 } from "./upstream-session.js";
 import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
-import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
+import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, loadBudgetState, saveBudgetState, listBudgetScopes, type AccessLogSourceRecord } from "./audit.js";
+import { setLedgerSeqResolver } from "./audit-reconcile.js";
 import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, formatIdentityCompilerReason, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
   extractQueryTables,
   questionPreviewMaxChars,
-  storeQuestionPreviewEnabled
+  storeQuestionPreviewEnabled,
+  buildQueryPreview,
+  QUERY_PREVIEW_MAX_CODEPOINTS
 } from "./audit-privacy.js";
+import { PREVIEW_VERSION_V2P5, executionEvidenceFromObservation } from "./audit-classification.js";
 import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { CONTEXT_NOT_AVAILABLE, CONTEXT_ROLE_REQUIRED } from "./context-acl.js";
@@ -39,7 +50,37 @@ import { loadAllSkillsFresh, getSkillByUri, getSkillByName } from "../skills/loa
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
+import { semanticReadHintsFromArgs, semanticRecoveryReadBlock } from "../semantic-recovery-journal.js";
+// L25-16 — 控制面工具由代理**本地**服务，绝不转发给 KTX。
+// 工具名单与描述来自 `ops/control-plane.ts`（单一事实源）。
+import { isControlPlaneTool } from "../ops/control-plane.js";
+import { invokeOpsTool, opsToolDescriptors } from "../ops/ops-tools.js";
+import { listSources } from "../semantic-layer.js";
 import { loadContentPaths } from "../paths.js";
+import {
+  firstConnectionIdFromArgs,
+  resolveAndMaybeServeHiveTool
+} from "../hive/proxy-hook.js";
+import type { HiveExecutionTool } from "../hive/execution.js";
+import {
+  isOpsEvidenceGovernanceSource,
+  OPS_EVIDENCE_CONNECTION_ID,
+  OPS_EVIDENCE_GOVERNANCE_UNREADY
+} from "../ops-evidence/contract.js";
+import {
+  applyStrippedGovFilters,
+  isGovFilterError,
+  parseAndStripGovFilters
+} from "../ops-evidence/gov-filters.js";
+import {
+  bindGovernanceMaterialization,
+  digestGovFiltersForKey,
+  GovernanceSnapshotUnreadyError,
+  injectSnapshotIdFilter,
+  rebuildGovernanceSnapshotAtomic,
+  releaseGovernanceMaterializationBind
+} from "../ops-evidence/governance-snapshot.js";
+import { readAccessYamlVersion } from "../admin/access-config.js";
 import { readKtxYamlDigest, recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
 import {
   recordMcpToolsCall,
@@ -66,12 +107,24 @@ import {
   publishedSourceName,
   questionBudget,
   questionBudgetEnabled,
+  questionBudgetScopeMode,
+  questionBudgetBypassEnabled,
+  budgetIdentityKey,
+  budgetScopeKey,
+  QUESTION_BUDGET_ABS_EXEC_MS,
+  installBudgetPersistence,
+  type BudgetPersistence,
   registerPublishedVersion,
   repairHint,
+  buildRepairClosure,
+  evaluateRepairTarget,
   resolveAppliedVersion,
   resolveResponseTruncated,
   TRUNCATION_REPAIR_HINT,
+  type RepairTargetEvidence,
+  isBudgetUnavailable,
 } from "./question-experience.js";
+import { bindQuestionBudgetSettlement } from "./question-budget-lifecycle.js";
 import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
 import {
   lookupReportTemplate,
@@ -186,9 +239,10 @@ function forwardToKtx(
   url: string,
   incomingHeaders: IncomingMessage["headers"],
   body?: Buffer,
-  sessionId?: string
+  sessionId?: string,
+  onRequest?: (request: ClientRequest) => void
 ): Promise<IncomingMessage> {
-  return forwardToUpstream({ host: KTX_HOST, port: KTX_PORT }, method, url, incomingHeaders, body, "KTX", sessionId);
+  return forwardToUpstream({ host: KTX_HOST, port: KTX_PORT }, method, url, incomingHeaders, body, "KTX", sessionId, onRequest);
 }
 
 function forwardToUpstream(
@@ -198,7 +252,8 @@ function forwardToUpstream(
   incomingHeaders: IncomingMessage["headers"],
   body: Buffer | undefined,
   label: string,
-  sessionId?: string
+  sessionId?: string,
+  onRequest?: (request: ClientRequest) => void
 ): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     // T04-3: no upstream call is started for a request a narrowing already covers.
@@ -228,6 +283,8 @@ function forwardToUpstream(
       { hostname: target.host, port: target.port, path: url, method, headers },
       resolve
     );
+    // Spec 162 §6.2 / SC-13：把在途请求句柄交给调用方，客户端断开时可以取消上游。
+    onRequest?.(upstream);
     upstream.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
       upstream.destroy(new Error(`${label} upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`));
     });
@@ -365,7 +422,8 @@ async function forwardToKtxWithSession(
   method: string,
   url: string,
   incomingHeaders: IncomingMessage["headers"],
-  body: Buffer | undefined
+  body: Buffer | undefined,
+  onRequest?: (request: ClientRequest) => void
 ): Promise<SessionAwareUpstream> {
   const keepalive = upstreamSessionKeepaliveEnabled();
   const clientSessionId = normalizeHeader(incomingHeaders["mcp-session-id"]);
@@ -376,7 +434,7 @@ async function forwardToKtxWithSession(
   const sessionId = resolveOutboundSession(identity, incomingHeaders);
   session.gatewaySupplied = Boolean(sessionId) && sessionId !== clientSessionId;
 
-  let upstream = await forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId);
+  let upstream = await forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId, onRequest);
   let upstreamBody = await readUpstreamBody(upstream);
   if (!keepalive) return { upstream, body: upstreamBody, session };
 
@@ -401,7 +459,7 @@ async function forwardToKtxWithSession(
   for (const key of Object.keys(retryHeaders)) {
     if (key.toLowerCase() === "mcp-session-id") delete retryHeaders[key];
   }
-  upstream = await forwardToKtx(method, url, retryHeaders, body, freshSession);
+  upstream = await forwardToKtx(method, url, retryHeaders, body, freshSession, onRequest);
   upstreamBody = await readUpstreamBody(upstream);
   const stillRefused = isSessionRequiredFailure(
     upstream.statusCode,
@@ -466,7 +524,12 @@ function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[
     client: resolved.client,
     clientVersion: resolved.clientVersion,
     reportedClient: resolved.reportedClient,
-    reportedClientVersion: resolved.reportedClientVersion
+    reportedClientVersion: resolved.reportedClientVersion,
+    // D-27: this is the JSON-RPC id observed on the actual MCP request. Keep
+    // unrelated client/upstream identifiers absent until their real sources exist.
+    rpcRequestId: entry.rpcRequestId ?? (
+      entry.requestId == null || entry.requestId === "" ? undefined : String(entry.requestId)
+    )
   };
   writeLog(normalized)
     .then((accessLogId) => {
@@ -703,8 +766,34 @@ function redactQueryPreview(query: string): string {
     .replace(/\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential)\b\s*[:=]\s*([^,\s;]+)/gi, "$1=[REDACTED]")
     .replace(/\b\d+(?:\.\d+)?\b/g, "?")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 180);
+    .trim();
+}
+
+/**
+ * Lucy v0.25 / L25-09 B5 / U11 — `query_preview` 由 180 扩展至 **500 码点**。
+ *
+ * - 先执行既有脱敏（`redactQueryPreview`），再生成有界预览。
+ * - 按 Unicode 码点截断，**不切断字符**（emoji / 中文边界）。
+ * - 记录 `truncated` 与原始输入 UTF-8 字节长度。
+ * - `preview_version=v2p5-1`；历史行保持 180 原值，**不改写历史行**（D7）。
+ */
+function buildAuditQueryPreview(query: string): {
+  queryPreview: string;
+  previewVersion: string;
+  previewTruncated: boolean;
+  previewOriginalBytes: number;
+} {
+  const redacted = redactQueryPreview(query);
+  const built = buildQueryPreview(redacted, {
+    maxCodePoints: QUERY_PREVIEW_MAX_CODEPOINTS,
+    previewVersion: PREVIEW_VERSION_V2P5
+  });
+  return {
+    queryPreview: built.preview,
+    previewVersion: built.previewVersion,
+    previewTruncated: built.truncated,
+    previewOriginalBytes: built.originalBytes
+  };
 }
 
 function queryOperation(query: string): string {
@@ -718,11 +807,17 @@ function queryOperation(query: string): string {
 function queryAuditMeta(toolArgs: unknown): Partial<Parameters<typeof writeLog>[0]> & { queryTables?: string[] } {
   const rawQuery = findRawQuery(toolArgs);
   if (!rawQuery) return {};
+  const preview = buildAuditQueryPreview(rawQuery);
   return {
     queryHash: createHash("sha256").update(rawQuery).digest("hex"),
     queryLength: rawQuery.length,
     queryOperation: queryOperation(rawQuery),
-    queryPreview: redactQueryPreview(rawQuery),
+    queryPreview: preview.queryPreview,
+    previewVersion: preview.previewVersion,
+    previewTruncated: preview.previewTruncated,
+    previewOriginalBytes: preview.previewOriginalBytes,
+    // U11：摘要基于完整的受控规范化输入，digest_kind 区分来源类型。
+    digestKind: "sql",
     queryTables: extractQueryTables(rawQuery)
   };
 }
@@ -987,6 +1082,22 @@ function lucyBeginQuestionTool() {
   };
 }
 
+function lucyContinueQuestionTool() {
+  return {
+    name: "lucy_continue_question",
+    description:
+      "Continue the current question after question_budget_exhausted. Pass the continueToken from that response. This does not start a new question and does not require a database connection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token: { type: "string" }
+      },
+      required: ["token"],
+      additionalProperties: false
+    }
+  };
+}
+
 function connectionListTool() {
   return {
     name: "connection_list",
@@ -1118,6 +1229,12 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
   ];
   if (process.env.LUCY_ENABLE_QUESTION_TOOL !== "false") {
     builders.push({ name: "lucy_begin_question", build: lucyBeginQuestionTool });
+    builders.push({ name: "lucy_continue_question", build: lucyContinueQuestionTool });
+  }
+  // L25-16 — 控制面工具（`lucy_ops_*`）同样由代理本地服务。可见性只取决于
+  // `role.allow.ops`（`allowedToolNames` 的控制面分支），**不要求任何数据面能力**。
+  for (const descriptor of opsToolDescriptors()) {
+    builders.push({ name: descriptor.name, build: () => descriptor });
   }
   return builders;
 }
@@ -1403,8 +1520,16 @@ function validateLucyToolArgs(toolName: string, args: unknown): string | undefin
     !toolName.startsWith("lucy_") ||
     toolName === "lucy_catalog" ||
     toolName === "lucy_begin_question" ||
+    toolName === "lucy_continue_question" ||
     toolName === "lucy_skill_search" ||
-    toolName === "lucy_skill_read"
+    toolName === "lucy_skill_read" ||
+    // L25-16 — 控制面工具的入参形状是 `{ targets: [...] }`，由控制面自己的
+    // 适配器校验（`parseTargets`）；数据面的 `connectionId` 规则不适用。
+    //
+    // 这里按**前缀**豁免（而不是按登记表）：登记表之外的 `lucy_ops_*` 也必须走
+    // 分类闸门（ACL → `tool_unclassified:<tool>`）得到准确的原因码，而不是先被
+    // 数据面的入参规则拦下、报出误导性的 `connection_required`。
+    toolName.startsWith("lucy_ops_")
   ) {
     return undefined;
   }
@@ -1569,7 +1694,15 @@ async function connectionList(identity: Identity): Promise<{
   filteredBy: "effective_permissions";
 }> {
   const resolved = await effectivePermissions(identity);
-  const connections = resolved.ok ? resolved.permissions.connections : [];
+  let connections = resolved.ok ? resolved.permissions.connections : [];
+  // Spec 149 §6 — 运维问数连接未就绪时不列出（目录与连接清单一致）。
+  if (connections.some((id) => id === OPS_EVIDENCE_CONNECTION_ID)) {
+    const { readOpsEvidenceReadiness } = await import("../ops-evidence/readiness.js");
+    const state = await readOpsEvidenceReadiness();
+    if (state.readiness !== "current") {
+      connections = connections.filter((id) => id !== OPS_EVIDENCE_CONNECTION_ID);
+    }
+  }
   return {
     connections,
     items: connections.map((connectionId) => ({ id: connectionId, connectionId })),
@@ -1843,6 +1976,55 @@ function passthroughBodyHeaders(upstream: IncomingMessage): Record<string, strin
   return headers;
 }
 
+/**
+ * L25-16 — 控制面拒绝码中「**效果未发生**」的集合。
+ *
+ * 这些拒绝都发生在任何正式效果（文件写 / 幂等终态）之前，审计里必须记
+ * `notExecuted` 而不是 `failed`——否则「授权通过但没写成」会被误读成「执行失败」。
+ */
+const OPS_NO_EFFECT_DENIAL_CODES = new Set<string>([
+  "tool_not_control_plane",
+  "ops_agent_disabled",
+  "ops_idempotency_key_required",
+  "ops_plan_id_required",
+  "ops_confirm_digest_required",
+  "ops_grant_unmatched",
+  "ops_owner_delegation_required",
+  "ops_target_unresolvable",
+  "ops_plan_not_found",
+  "ops_plan_expired",
+  "ops_plan_digest_mismatch",
+  "ops_plan_actor_mismatch",
+  "ops_plan_tool_mismatch",
+  "ops_confirm_digest_mismatch",
+  "ops_plan_blocked",
+  "ops_plan_target_set_mismatch",
+  "ops_plan_param_target_mismatch",
+  "ops_group_subset_incomplete",
+  "ops_idempotency_conflict",
+  "ops_idempotency_actor_mismatch",
+  "ops_operation_recovery_required",
+  "ops_operation_pending_activation",
+  "ops_operation_in_flight",
+  "ops_operation_scope_mismatch",
+  "ops_state_corrupt",
+  "ops_claim_failed"
+]);
+
+async function readSemanticRecoveryDenial(
+  toolArgs: unknown
+): Promise<{ code: string; message: string } | null> {
+  try {
+    const projectRoot = await resolveProjectRoot();
+    return await semanticRecoveryReadBlock(projectRoot, semanticReadHintsFromArgs(toolArgs));
+  } catch {
+    return {
+      code: "semantic_recovery_unreadable",
+      message: "语义恢复日志无法读取，涉及资产的读取和查询已关闭。"
+    };
+  }
+}
+
 function jsonRpcToolResult(requestId: string | number, text: string, options: { isError?: boolean } = {}): string {
   return JSON.stringify({
     jsonrpc: "2.0",
@@ -1852,6 +2034,138 @@ function jsonRpcToolResult(requestId: string | number, text: string, options: { 
       content: [{ type: "text", text }]
     }
   });
+}
+
+/**
+ * Hive bridge 的响应类型（由 `resolveAndMaybeServeHiveTool` 推导，避免与
+ * `server/hive/**` 的定义漂移）。
+ */
+type HiveServeResponse = Extract<
+  Awaited<ReturnType<typeof resolveAndMaybeServeHiveTool>>,
+  { action: "serve_hive" }
+>["response"];
+
+/**
+ * Hive bridge 响应 → 可审计的 payload。
+ *
+ * `HiveMcpBridgeResponse` 有两个分支：`handled:true`（带 `payload`）与
+ * `handled:false`（`missing_compiled_sql`，**没有** payload）。后者在编译
+ * SQL 为空时真的会返回（`handleHiveMcpTool`），直接读 `.payload` 得到
+ * `undefined`，下一行 `payload.ok` 就会抛 TypeError —— 所以这里收窄成与
+ * `error` 分支一致的失败 payload。
+ */
+function hiveBridgePayload(response: HiveServeResponse): Record<string, unknown> {
+  if (response.handled) return response.payload;
+  return {
+    ok: false,
+    reason: response.reason,
+    detail: "Hive execution requires compiled SQL; none was produced for this call",
+    jdbcInvokeCount: 0,
+    dialect: "hive"
+  };
+}
+
+/**
+ * L25-10 execution wave — after Lucy ACL, divert Hive connections away from KTX.
+ * Returns true when the response was already written.
+ */
+async function maybeWriteHiveDivertedResponse(input: {
+  identity: Identity;
+  toolName: HiveExecutionTool;
+  toolArgs: unknown;
+  requestId: string | number;
+  res: ServerResponse;
+  start: number;
+  requestMeta: Record<string, unknown>;
+  argsSummary?: Record<string, unknown>;
+  queryMeta: Record<string, unknown>;
+  queryTables: string[];
+  traceId: string;
+  /**
+   * 审计写入回调 —— 由 `handlePost` 传入。
+   *
+   * traceId 只在 `rpcMethod === "tools/call"` 时补齐（Spec 173 v0.3 /
+   * 2026-10-19 audit-trust），而 `rpcMethod` 只有 `handlePost` 知道；本函数
+   * 在模块作用域，拿不到它，因此审计写入必须由调用方回调。
+   */
+  recordAuditEntry: (entry: Parameters<typeof writeLog>[0]) => void;
+}): Promise<boolean> {
+  const projectRoot = await resolveProjectRoot();
+  const connectionId = firstConnectionIdFromArgs(input.toolArgs);
+  const args =
+    input.toolArgs && typeof input.toolArgs === "object" && !Array.isArray(input.toolArgs)
+      ? (input.toolArgs as Record<string, unknown>)
+      : {};
+  const decision = await resolveAndMaybeServeHiveTool({
+    projectRoot,
+    tool: input.toolName,
+    connectionId,
+    args,
+    correlationId: typeof input.requestId === "string" ? input.requestId : String(input.requestId)
+  });
+  if (decision.action === "passthrough_ktx") return false;
+
+  const payload =
+    decision.action === "error"
+      ? {
+          ok: false,
+          reason: decision.reason,
+          detail: decision.detail,
+          jdbcInvokeCount: 0,
+          dialect: "hive"
+        }
+      : hiveBridgePayload(decision.response);
+  const isError = payload.ok === false;
+  const responseBody = jsonRpcToolResult(input.requestId, JSON.stringify(payload, null, 2), { isError });
+  input.res.writeHead(200, {
+    "content-type": "application/json",
+    "content-length": Buffer.byteLength(responseBody)
+  });
+  input.res.end(responseBody);
+
+  const jdbcInvokeCount =
+    typeof payload.jdbcInvokeCount === "number" ? payload.jdbcInvokeCount : 0;
+  input.recordAuditEntry({
+    ts: new Date().toISOString(),
+    userId: input.identity.userId,
+    client: input.identity.client,
+    tool: input.toolName,
+    tables: input.queryTables.length > 0 ? input.queryTables : undefined,
+    argsSummary: input.argsSummary,
+    ...input.queryMeta,
+    outcome: isError ? "error" : "ok",
+    decisionReason: isError && typeof payload.reason === "string" ? payload.reason : undefined,
+    errorDetail: isError && typeof payload.detail === "string" ? payload.detail : undefined,
+    executionEvidence: executionEvidenceFromObservation({
+      authorizationAllowed: true,
+      ...(isError
+        ? jdbcInvokeCount > 0
+          ? { failed: true }
+          : { notExecuted: true }
+        : { executed: true })
+    }),
+    durationMs: Date.now() - input.start,
+    responseBytes: Buffer.byteLength(responseBody),
+    requestId: input.requestId,
+    ...input.requestMeta,
+    ...(await auditMeta(input.identity, isError && typeof payload.reason === "string" ? payload.reason : "allowed"))
+  });
+  recordMcpTraceForTool({
+    traceId: input.traceId,
+    identity: input.identity,
+    toolName: input.toolName,
+    status: isError ? "error" : "ok",
+    startedAt: new Date(input.start).toISOString(),
+    turnId: (input.requestMeta.lucyTurnId as string | null | undefined) ?? null,
+    sessionId: (input.requestMeta.lucySessionId as string | null | undefined) ?? null,
+    requestId: input.requestId,
+    argsSummary: input.argsSummary,
+    allowed: !isError,
+    reason:
+      isError && typeof payload.reason === "string" ? payload.reason : "allowed",
+    policySource: "other"
+  });
+  return true;
 }
 
 function firstStringValue(record: Record<string, unknown> | undefined, keys: string[]): string | undefined {
@@ -2586,8 +2900,31 @@ async function writeLucySemanticResponse(
     compilerReason = "filter_pushdown";
     preservedGeneratedSql = sql?.trim() ? sql : undefined;
     const visible = new Set(sourceRefs.map((ref) => ref.sourceName).filter((name): name is string => Boolean(name)));
-    const hint = repairHint({ failureDimension: "过滤条件下推", suggestedSources: [...visible] }, visible)
-      ?? "这次过滤条件无法下推。请改成等值、包含或枚举条件后再查。";
+    // B15：过滤下推的修复提示同样要走可用性闭环 —— 只推荐真实存在、
+    // 主体可见、语义可编译且参数形态合法的来源。
+    const { evidence: pushdownEvidence } = await collectRepairEvidence({
+      toolArgs: (toolArgs ?? undefined) as Record<string, unknown> | undefined,
+      candidateSources: [...visible],
+      visibleSources: visible,
+      callable: true,
+      knownExisting: visible
+    });
+    const pushdownClosure = buildRepairClosure({
+      failureDimension: "过滤条件下推",
+      candidates: pushdownEvidence,
+      availableCandidates: [...visible]
+    });
+    const hint =
+      (pushdownClosure.usableTargets.length > 0
+        ? repairHint(
+            { failureDimension: "过滤条件下推", suggestedSources: pushdownClosure.usableTargets },
+            visible
+          )
+        : null) ??
+      (pushdownClosure.usableTargets.length === 0 && pushdownClosure.rejected.length > 0
+        ? pushdownClosure.text
+        : null) ??
+      "这次过滤条件无法下推。请改成等值、包含或枚举条件后再查。";
     body = JSON.stringify({
       jsonrpc: "2.0",
       id: requestId,
@@ -2653,6 +2990,21 @@ async function writeLucySemanticResponse(
   const failureDimension = compilerReason
     ? "过滤条件下推"
     : classifyFailure({ outcome, decisionReason, errorDetail });
+  // ─── 执行凭据（D1 / L25-09 §4.3(a) 第 9 行）─────────────────────────────
+  // 上游响应**已被真实读取并解析**（上面的 JSON.parse / decodeSseMessage 已
+  // 判定 `outcome`），因此这里登记的是观测到的事实，不是由 outcome 反推的
+  // 结论：解析成功且无 error 信封 → 执行成功；解析到 error 信封或上游 4xx/5xx
+  // → 执行已发生但失败。
+  //
+  // ⚠️ 编译器改写下推失败（compilerReason）时请求**未真正执行**，因此只记
+  // `notExecuted`，不记 `failed` —— 那是入参/语义失败而非执行失败。
+  const upstreamExecutionEvidence = executionEvidenceFromObservation(
+    compilerReason
+      ? { notExecuted: true, authorizationAllowed: true }
+      : outcome === "ok"
+        ? { executed: true, authorizationAllowed: true }
+        : { failed: true, authorizationAllowed: true }
+  );
   // Spec 162 §8 / SC-20 — the new slow mark and the empty-result flag are
   // decided at write time so every consumer reads the same verdict.
   const slowVerdict = isSlowCall({ tool: toolName, durationMs: Date.now() - start });
@@ -2669,6 +3021,7 @@ async function writeLucySemanticResponse(
     errorDetail,
     compilerReason,
     failureDimension: failureDimension || undefined,
+    executionEvidence: upstreamExecutionEvidence,
     isSlowCall: slowVerdict.slow,
     slowBasis: slowVerdict.basis ?? undefined,
     resultEmpty: isEmptyResult({ outcome, responseRowCount: responseMeta.responseRowCount ?? null }),
@@ -2698,6 +3051,67 @@ async function writeLucySemanticResponse(
     resultSnapshot: resultSnapshotFromAuditMeta(responseMeta),
     sourceRefs: sourceRefs.length > 0 ? sourceRefs : null
   });
+}
+
+/**
+ * B15：收集 repairHint 的可用性证据。
+ *
+ * 五项检查：真实 Schema（对象存在性）、主体可见性、编译能力（语义模型
+ * 完成度）、参数形态、可调用性。
+ *
+ * **不发真实数据查询**：只读 Schema 清单与语义完成度元数据。
+ * Schema 证据不可得时返回 `schemaEvidenceAvailable=false`，由调用方决定
+ * 降级方式（提示是建议性的，不是权限裁决）。
+ */
+async function collectRepairEvidence(input: {
+  toolArgs: Record<string, unknown> | undefined;
+  candidateSources: readonly string[];
+  visibleSources: ReadonlySet<string>;
+  callable: boolean;
+  /** 已知存在的候选（由真实查询解析出来的来源）。 */
+  knownExisting?: ReadonlySet<string>;
+}): Promise<{ evidence: RepairTargetEvidence[]; schemaEvidenceAvailable: boolean }> {
+  const evidence: RepairTargetEvidence[] = [];
+  let schemaByName: Map<string, { compiled: boolean; measureCount: number }> | null = null;
+  try {
+    const projectRoot = await resolveProjectRoot();
+    const sources = await listSources(projectRoot);
+    schemaByName = new Map(
+      sources.map((source) => [
+        source.table,
+        {
+          // `done` / `partial` = 语义模型可编译；`not_started` / `validation_failed` = 不可编译。
+          compiled: source.completion === "done" || source.completion === "partial",
+          measureCount: source.measureCount
+        }
+      ])
+    );
+  } catch {
+    schemaByName = null;
+  }
+  const rawMeasures = input.toolArgs?.measures;
+  const measures = Array.isArray(rawMeasures)
+    ? rawMeasures.filter((item): item is string => typeof item === "string")
+    : [];
+  for (const target of input.candidateSources) {
+    const schema = schemaByName?.get(target);
+    const schemaExists =
+      schemaByName === null
+        ? input.knownExisting?.has(target)
+          ? true
+          : null
+        : schema !== undefined || Boolean(input.knownExisting?.has(target));
+    evidence.push({
+      target,
+      schemaExists,
+      visibleToPrincipal: input.visibleSources.has(target),
+      compiled: schema?.compiled ?? Boolean(input.knownExisting?.has(target)),
+      // 请求了度量时，目标必须真的定义了度量，否则参数形态不合法。
+      parameterShapeValid: measures.length === 0 ? true : (schema?.measureCount ?? 0) > 0,
+      callable: input.callable
+    });
+  }
+  return { evidence, schemaEvidenceAvailable: schemaByName !== null };
 }
 
 function toolsListErrorResponse(requestId: string | number, detail: string): Record<string, unknown> {
@@ -2958,6 +3372,25 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
   let parsedRpc: Record<string, unknown> | undefined;
   let initializeClientInfo: { name: string; version?: string } | undefined;
   let queryNormalizationReason: string | undefined;
+  // Spec 162 §6.2 / SC-13：在途上游请求句柄。客户端断开时据此取消上游。
+  // 结算发生在取消确认（上游 close）或绝对执行时限，不发生在 res.close。
+  let upstreamRequestHandle: ClientRequest | null = null;
+  let cancelUpstreamOnCapture = false;
+  const captureUpstreamRequest = (request: ClientRequest): void => {
+    upstreamRequestHandle = request;
+    if (!cancelUpstreamOnCapture || request.destroyed) return;
+    try {
+      request.destroy(new Error("client_disconnected"));
+    } catch {
+      // 句柄已经结束。
+    }
+  };
+  // Spec 162 §6.2 / SC-13 / SC-14：结算事实（绝对执行时限到点、取消未确认、
+  // 客户端断开）写进本次调用的审计行，不另开一行，避免污染四桶恒等式。
+  const noteBudgetSettlement = (facts: Record<string, unknown>): void => {
+    const previous = (argsSummary?.budgetSettlement ?? {}) as Record<string, unknown>;
+    argsSummary = { ...(argsSummary ?? {}), budgetSettlement: { ...previous, ...facts } };
+  };
 
   try {
     const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
@@ -3072,6 +3505,23 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
 
   // Spec 138: Session-bound matching is authoritative. Identity-only matching
   // remains a low-confidence compatibility fallback only when one candidate exists.
+  if (rpcMethod === "tools/call" && toolName && questionBudgetScopeMode() === "stable" && questionBudgetEnabled()) {
+    const preloaded = await questionBudget.preload(
+      budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+      requestMeta.lucySessionId
+    );
+    if (preloaded?.turnId) {
+      // Spec 162 §6.4 / SC-03：归属在**冻结前**从稳定作用域恢复。
+      // 注册表条目的 TTL 锚点是**恢复时刻**，不是问询原始起点 ——
+      // 否则一个已超过 10 分钟的问询刚恢复就被 purge 掉，归属当次丢失。
+      // 问询年龄（慢问询标记）仍读稳定作用域的 `originStartedAt`。
+      reportedTurns.record({
+        identity,
+        sessionId: requestMeta.lucySessionId,
+        turnId: preloaded.turnId
+      });
+    }
+  }
   if (rpcMethod === "tools/call" && toolName && toolName !== "lucy_begin_question") {
     const attribution = reportedTurns.resolve({
       identity,
@@ -3143,6 +3593,12 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
       ...queryMeta,
       outcome: "error",
       errorDetail: invalidArgumentsReason,
+      // 入参 / 语义校验失败发生在上游调用之前 → 本次尝试**未执行**，
+      // 不是执行失败（notExecuted 先于 verifiedFailure 判定）。
+      executionEvidence: executionEvidenceFromObservation({
+        notExecuted: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -3164,6 +3620,134 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
       policySource: "other"
     });
     return;
+  }
+
+  // Spec 20261101 §4.1 / D27 — lucy-ops：剥离 gov.*；治理源绑定 snapshot；旧源拒 gov。
+  let governanceBindId: string | undefined;
+  if (rpcMethod === "tools/call" && toolName === "lucy_query" && toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)) {
+    const record = toolArgs as Record<string, unknown>;
+    const connectionId =
+      typeof record.connectionId === "string"
+        ? record.connectionId
+        : typeof record.connection_id === "string"
+          ? record.connection_id
+          : typeof record.connection === "string"
+            ? record.connection
+            : undefined;
+    const sourceName =
+      typeof record.sourceName === "string"
+        ? record.sourceName
+        : typeof record.source_name === "string"
+          ? record.source_name
+          : typeof record.source === "string"
+            ? record.source
+            : typeof record.table === "string"
+              ? record.table
+              : undefined;
+
+    if (connectionId === OPS_EVIDENCE_CONNECTION_ID || (typeof record.filters !== "undefined" && connectionId)) {
+      const parsed = parseAndStripGovFilters(record.filters, { connectionId, sourceName });
+      if (isGovFilterError(parsed)) {
+        const reason = parsed.reason;
+        const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${reason}`, { isError: true });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          tables: queryTables.length > 0 ? queryTables : undefined,
+          argsSummary,
+          ...queryMeta,
+          outcome: "error",
+          errorDetail: reason,
+          executionEvidence: executionEvidenceFromObservation({
+            notExecuted: true,
+            authorizationAllowed: true
+          }),
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, reason))
+        });
+        return;
+      }
+
+      if (connectionId === OPS_EVIDENCE_CONNECTION_ID) {
+        let stripped = applyStrippedGovFilters(record, parsed);
+        if (isOpsEvidenceGovernanceSource(sourceName)) {
+          try {
+            const projectRoot = await resolveProjectRoot();
+            const accessVer = await readAccessYamlVersion(projectRoot).catch(() => ({ version: "unknown", raw: "" }));
+            const ktxDigest = await readKtxYamlDigest(projectRoot).catch(() => "unknown");
+            const filtersDigest = digestGovFiltersForKey({
+              trust: parsed.trust,
+              focus: parsed.focus,
+              rowFilters: parsed.rowFilters
+            });
+            const database = await getAdminAuditDb();
+            const bound = await rebuildGovernanceSnapshotAtomic(database, {
+              window: parsed.window,
+              trust: parsed.trust,
+              focus: parsed.focus,
+              filtersDigest,
+              versions: {
+                accessConfigVersion: accessVer.version,
+                policyVersion: ktxDigest,
+                sourceMapVersion: ktxDigest,
+                capabilityDigest: ktxDigest
+              },
+              projectRoot
+            });
+            governanceBindId = `${requestId}:${bound.materializationId}`;
+            bindGovernanceMaterialization(governanceBindId, bound.materializationId);
+            stripped = injectSnapshotIdFilter(stripped, bound.materializationId, sourceName!);
+          } catch (error) {
+            const reason =
+              error instanceof GovernanceSnapshotUnreadyError
+                ? `${OPS_EVIDENCE_GOVERNANCE_UNREADY}:${error.message}`
+                : `${OPS_EVIDENCE_GOVERNANCE_UNREADY}:rebuild_failed`;
+            const responseBody = jsonRpcToolResult(requestId, reason, { isError: true });
+            res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+            res.end(responseBody);
+            recordRequestAudit({
+              ts: new Date().toISOString(),
+              userId: identity.userId,
+              client: identity.client,
+              tool: toolName,
+              tables: queryTables.length > 0 ? queryTables : undefined,
+              argsSummary,
+              ...queryMeta,
+              outcome: "error",
+              errorDetail: reason,
+              executionEvidence: executionEvidenceFromObservation({
+                notExecuted: true,
+                authorizationAllowed: true
+              }),
+              durationMs: Date.now() - start,
+              responseBytes: Buffer.byteLength(responseBody),
+              requestId,
+              ...requestMeta,
+              ...(await auditMeta(identity, reason))
+            });
+            return;
+          }
+        }
+        toolArgs = stripped;
+        const params =
+          parsedRpc?.params && typeof parsedRpc.params === "object" && !Array.isArray(parsedRpc.params)
+            ? (parsedRpc.params as Record<string, unknown>)
+            : undefined;
+        if (params) params.arguments = stripped;
+      }
+    }
+  }
+  if (governanceBindId) {
+    res.on("close", () => {
+      if (governanceBindId) releaseGovernanceMaterializationBind(governanceBindId);
+    });
   }
 
   /**
@@ -3313,6 +3897,82 @@ async function writeCertifiedRouteResponse(
     return;
   }
 
+  if (questionBudgetBypassEnabled() && questionBudgetEnabled()) {
+    const compiledBudget = await effectivePermissions(identity).catch(() => null);
+    const allowedTools = compiledBudget && compiledBudget.ok ? (compiledBudget.permissions.tools ?? []) : [];
+    const budgetDecision = await questionBudget.consumePersisted(
+      requestMeta.lucyTurnId,
+      Date.now(),
+      undefined,
+      undefined,
+      {
+        identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+        sessionId: requestMeta.lucySessionId,
+        canContinue: allowedTools.includes("lucy_continue_question") || allowedTools.includes("*")
+      }
+    );
+    if (budgetDecision.action !== "allow") {
+      await respond(
+        {
+          reason: budgetDecision.reason,
+          ...(budgetDecision.action === "stop"
+            ? { partial: budgetDecision.partial, continueToken: budgetDecision.continueToken, continuable: budgetDecision.continuable }
+            : { partial: true })
+        },
+        true,
+        budgetDecision.reason,
+        budgetDecision.reason
+      );
+      return;
+    }
+    const ticket = budgetDecision.ticket;
+    // Spec 162 §6.2：旁路入口同样受绝对执行时限约束。到点停止等待、取消上游，
+    // 记账封顶；取消未确认的事实写进审计。
+    let upstreamHandle: ClientRequest | null = null;
+    const deadlineTimer = ticket
+      ? setTimeout(() => {
+          try {
+            upstreamHandle?.destroy(new Error("absolute_execution_deadline"));
+          } catch {
+            // 上游句柄可能已关闭；忽略。
+          }
+          void questionBudget.settle(ticket, ticket.startMonoMs + QUESTION_BUDGET_ABS_EXEC_MS, {
+            timeoutUnconfirmed: true
+          });
+        }, QUESTION_BUDGET_ABS_EXEC_MS)
+      : null;
+    deadlineTimer?.unref();
+    try {
+      const execution = await forwardAuthorizedLucyQuery(identity, gate.query, (request) => {
+        upstreamHandle = request;
+      });
+      if (!execution.ok) {
+        await respond(
+          { error: execution.reason, routeId: gate.routeId, source: gate.source },
+          true,
+          execution.reason,
+          execution.reason
+        );
+        return;
+      }
+      await respond(
+        {
+          routeId: gate.routeId,
+          source: gate.source,
+          ...(gate.version ? { appliedVersion: gate.version } : {}),
+          result: execution.payload
+        },
+        false,
+        "allowed"
+      );
+    } finally {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      // 成功、异常和提前退出都结算**同一张票据**（Spec §6.6）。
+      if (ticket) await questionBudget.settle(ticket, questionBudget.monoNow());
+    }
+    return;
+  }
+
   // Execution is a normal role-scoped lucy_query — the ACL still decides.
   const execution = await forwardAuthorizedLucyQuery(identity, gate.query);
   if (!execution.ok) {
@@ -3364,10 +4024,31 @@ async function buildDenialRepairPayload(
     connections: resolved.permissions.connections,
     sources: resolved.permissions.sources
   });
-  const hint = repairHint(
-    { failureDimension: "权限拒绝", suggestedSources: allow.sources },
-    new Set(allow.sources)
-  );
+  // B15：提示内容必须先通过可用性闭环（真实 Schema / 可见性 / 编译能力 /
+  // 参数形态 / 可调用性）。无合法目标时给**事实性错误**与可用候选。
+  const { evidence, schemaEvidenceAvailable } = await collectRepairEvidence({
+    toolArgs: undefined,
+    candidateSources: allow.sources,
+    visibleSources: new Set(allow.sources),
+    callable: true
+  });
+  const closure = buildRepairClosure({
+    failureDimension: "权限拒绝",
+    candidates: evidence,
+    availableCandidates: allow.sources
+  });
+  const hint =
+    closure.usableTargets.length > 0
+      ? repairHint(
+          { failureDimension: "权限拒绝", suggestedSources: closure.usableTargets },
+          new Set(allow.sources)
+        )
+      : schemaEvidenceAvailable
+        ? closure.text
+        : repairHint(
+            { failureDimension: "权限拒绝", suggestedSources: allow.sources },
+            new Set(allow.sources)
+          );
   const parts: string[] = [];
   if (allow.connections.length > 0) parts.push(`可用连接：${allow.connections.join("、")}。`);
   if (allow.sources.length > 0) parts.push(`可用来源：${allow.sources.join("、")}。`);
@@ -3468,6 +4149,12 @@ async function buildDenialRepairPayload(
         ...queryMeta,
         outcome: "denied",
         errorDetail: errorMsg,
+        // ACL 裁决已真实发生（decision.allowed === false）→ 授权拒绝是观测到的事实；
+        // 本次尝试未执行，故记 notExecuted 而非 failed。
+        executionEvidence: executionEvidenceFromObservation({
+          authorizationDenied: true,
+          notExecuted: true
+        }),
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
@@ -3500,14 +4187,162 @@ async function buildDenialRepairPayload(
         : undefined;
       if (params) params.arguments = record;
     }
+    // L25-16 — 控制面工具分流：`lucy_ops_*` 由**代理本地**执行，
+    // 绝不转发给 KTX（KTX 不认识这些工具）。
+    //
+    // fail-closed 的两道闸：
+    // ① 上面的 ACL 判定已按 `role.allow.ops` 放行或拒绝；未在登记表里的
+    //    `lucy_ops_*`（例如 W-B 的 `lucy_ops_semantic_publish`）在 ACL 阶段
+    //    就被判为 `tool_unclassified:` 并拒绝，不会走到这里。
+    // ② 控制面自己的授权判定在 `invokeOpsTool` 内再做一次（工具级 + 逐对象）。
+    if (rpcMethod === "tools/call" && toolName && isControlPlaneTool(toolName)) {
+      const projectRoot = await resolveProjectRoot();
+      const opsArgs = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+        ? (toolArgs as Record<string, unknown>)
+        : {};
+      const envelope = await invokeOpsTool({
+        toolName,
+        args: opsArgs,
+        userId: identity.userId,
+        projectRoot
+      });
+      const isError = envelope.ok === false;
+      const payload = envelope.ok ? envelope.data : envelope.error;
+      const responseBody = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          ...(isError ? { isError: true } : {}),
+          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+          data: payload
+        }
+      });
+      res.writeHead(200, {
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(responseBody)
+      });
+      res.end(responseBody);
+      const errorDetail = envelope.ok ? undefined : envelope.error.code;
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary,
+        ...queryMeta,
+        outcome: isError ? "error" : "ok",
+        errorDetail,
+        // 控制面信封是**观测到的事实**：ok 表示这次调用走到了执行与结算；
+        // 拒绝码若属于「效果发生前」的集合，则本次尝试**未执行**。
+        executionEvidence: executionEvidenceFromObservation({
+          authorizationAllowed: true,
+          ...(isError
+            ? (OPS_NO_EFFECT_DENIAL_CODES.has(envelope.error.code)
+              ? { notExecuted: true }
+              : { failed: true })
+            : { executed: true })
+        }),
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, errorDetail ?? "ops_control_plane_call"))
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: isError ? "error" : "ok",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: true,
+        reason: errorDetail ?? "ops_control_plane_call",
+        policySource: "access_policy"
+      });
+      return;
+    }
     // Count before local handlers return as well as before upstream dispatch.
     if (rpcMethod === "tools/call" && toolName && isQuestionDataTool(toolName) && questionBudgetEnabled()) {
-      const budgetDecision = questionBudget.consume(
+      // B16 / B24：持久化预算 + 无 turnId 时按凭证 / 会话级上限兜底。
+      // 兜底作用域键取凭证指纹 + 会话，**不因重连或省略 begin_question 而重置**。
+      const budgetScope = `${identity.tokenHashPrefix ?? "no-token"}:${requestMeta.lucySessionId ?? "no-session"}`;
+      const compiledBudget = await effectivePermissions(identity).catch(() => null);
+      const allowedTools = compiledBudget && compiledBudget.ok ? (compiledBudget.permissions.tools ?? []) : [];
+      const canContinue = allowedTools.includes("lucy_continue_question") || allowedTools.includes("*");
+      const budgetDecision = await questionBudget.consumePersisted(
         requestMeta.lucyTurnId,
         Date.now(),
-        normalizeHeader(req.headers["x-lucy-question-continue"])
+        normalizeHeader(req.headers["x-lucy-question-continue"]),
+        budgetScope,
+        {
+          identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          sessionId: requestMeta.lucySessionId,
+          canContinue
+        }
       );
+      if (budgetDecision.action === "reject") {
+        const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+          reason: budgetDecision.reason,
+          partial: true
+        }), { isError: true });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          ...queryMeta,
+          outcome: "error",
+          decisionReason: budgetDecision.reason,
+          errorDetail: budgetDecision.reason,
+          executionEvidence: { authorizationAllowed: true, notExecuted: true },
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, budgetDecision.reason)),
+        });
+        return;
+      }
       if (budgetDecision.action === "stop") {
+        // A durable-store fault is NOT a spent budget. It is refused with 503
+        // and recorded as an error, so a storage fault can never be read back
+        // as a legitimate `budget_stopped` credential.
+        if (isBudgetUnavailable(budgetDecision)) {
+          const failureBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            error: { code: -32000, message: "audit_unavailable", data: { reason: budgetDecision.reason } }
+          });
+          res.writeHead(503, {
+            "content-type": "application/json",
+            "content-length": Buffer.byteLength(failureBody)
+          });
+          res.end(failureBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            tables: queryTables.length > 0 ? queryTables : undefined,
+            argsSummary,
+            ...queryMeta,
+            outcome: "error",
+            decisionReason: "question_budget_unavailable",
+            errorDetail: "question_budget_unavailable",
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(failureBody),
+            requestId,
+            ...requestMeta,
+            ...(await auditMeta(identity, "question_budget_unavailable")),
+          });
+          return;
+        }
         const responseBody = JSON.stringify({
           jsonrpc: "2.0",
           id: requestId,
@@ -3531,11 +4366,26 @@ async function buildDenialRepairPayload(
           client: identity.client,
           tool: toolName,
           tables: queryTables.length > 0 ? queryTables : undefined,
-          argsSummary,
           ...queryMeta,
           outcome: "budget_stop",
           decisionReason: "question_budget_exhausted",
           errorDetail: "question_budget_exhausted",
+          argsSummary: {
+            ...(argsSummary ?? {}),
+            budgetContinuation: {
+              continuationPresented: budgetDecision.continuationPresented ?? false,
+              continuationMatched: budgetDecision.continuationMatched ?? false,
+              continuationCreditLeft: budgetDecision.continuationCreditLeft ?? false,
+              canContinueByCapability: budgetDecision.canContinueByCapability ?? false
+            }
+          },
+          // 闸序事实：ACL 裁决（上方 aclCheck）先于预算闸。预算终止时授权**已经
+          // 裁决通过**，因此显式记录该凭据 —— 预算桶不得覆盖已发生的授权裁决，
+          // 也不得反推 `not_evaluated`（Spec §4.3(b) / §18.10 F-03）。
+          executionEvidence: {
+            authorizationAllowed: true,
+            notExecuted: true
+          },
           durationMs: Date.now() - start,
           responseBytes: Buffer.byteLength(responseBody),
           requestId,
@@ -3557,6 +4407,49 @@ async function buildDenialRepairPayload(
           policySource: "other"
         });
         return;
+      }
+      if (budgetDecision.continued) {
+        // Spec 162 §6.7 / SC-30：续查生效是**独立于声明**的可区分事实，
+        // 并挂到本次数据调用上（同一 requestId）。声明事实写在
+        // `lucy_continue_question` 那一行的 `budgetContinuation.declared`。
+        const appliedFact = {
+          applied: true,
+          windowId: budgetDecision.ticket?.windowId ?? null,
+          round: budgetDecision.ticket?.round ?? null,
+          requestId: budgetDecision.ticket?.requestId ?? null
+        };
+        const previousFact = (argsSummary?.budgetContinuation ?? {}) as Record<string, unknown>;
+        argsSummary = { ...(argsSummary ?? {}), budgetContinuation: { ...previousFact, ...appliedFact } };
+      }
+      if (budgetDecision.ticket) {
+        const ticket = budgetDecision.ticket;
+        // Spec 162 §6.2 / SC-13：res.close 只取消上游。结算等上游 close（取消确认），
+        // 或绝对执行时限。断开本身不清定时器，也不按断开时刻少计。
+        bindQuestionBudgetSettlement({
+          res,
+          getUpstream: () => upstreamRequestHandle,
+          now: () => questionBudget.monoNow(),
+          startMonoMs: ticket.startMonoMs,
+          absMs: QUESTION_BUDGET_ABS_EXEC_MS,
+          settle: (endMonoMs, flags) => {
+            void questionBudget.settle(ticket, endMonoMs, flags);
+          },
+          onDisconnected: () => {
+            cancelUpstreamOnCapture = true;
+            noteBudgetSettlement({ clientDisconnected: true });
+          },
+          onDeadline: (upstream) => {
+            try {
+              upstream?.destroy(new Error("absolute_execution_deadline"));
+            } catch {
+              // 上游句柄可能已经关闭；忽略，记账照常进行。
+            }
+            noteBudgetSettlement({
+              absoluteExecutionDeadlineMs: QUESTION_BUDGET_ABS_EXEC_MS,
+              timeoutUnconfirmed: true
+            });
+          }
+        });
       }
     }
 
@@ -3583,6 +4476,12 @@ async function buildDenialRepairPayload(
         argsSummary,
         ...queryMeta,
         outcome: "ok",
+        // 目录已在本地真实构建并返回（connectionList / lucyCatalog / kxCatalog
+        // 的 await 已完成），执行成功是观测到的事实。
+        executionEvidence: executionEvidenceFromObservation({
+          executed: true,
+          authorizationAllowed: true
+        }),
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
@@ -3618,6 +4517,65 @@ async function buildDenialRepairPayload(
       return;
     }
     if (toolName === "lucy_explain_query" || toolName === "lucy_freshness") {
+      // lucy_explain_query is served locally and returns before the shared
+      // query gate below. The recovery admission has to run here.
+      if (toolName === "lucy_explain_query") {
+        const hiveHandled = await maybeWriteHiveDivertedResponse({
+          identity,
+          toolName: "lucy_explain_query",
+          toolArgs,
+          requestId,
+          res,
+          start,
+          requestMeta,
+          argsSummary,
+          queryMeta,
+          queryTables,
+          traceId,
+          recordAuditEntry: recordRequestAudit
+        });
+        if (hiveHandled) return;
+        const block = await readSemanticRecoveryDenial(toolArgs);
+        if (block) {
+          const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+            code: block.code,
+            message: block.message
+          }), { isError: true });
+          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          res.end(responseBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            argsSummary,
+            ...queryMeta,
+            outcome: "error",
+            decisionReason: block.code,
+            errorDetail: block.message,
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(responseBody),
+            requestId,
+            ...requestMeta,
+            ...(await auditMeta(identity, block.code)),
+          });
+          recordMcpTraceForTool({
+            traceId,
+            identity,
+            toolName,
+            status: "error",
+            startedAt: new Date(start).toISOString(),
+            turnId: requestMeta.lucyTurnId ?? null,
+            sessionId: requestMeta.lucySessionId ?? null,
+            requestId,
+            argsSummary,
+            allowed: false,
+            reason: block.code,
+            policySource: "other"
+          });
+          return;
+        }
+      }
       const data = toolName === "lucy_explain_query"
         ? await lucyExplainQuery(identity, toolArgs)
         : await lucyFreshness(identity, toolArgs);
@@ -3634,6 +4592,11 @@ async function buildDenialRepairPayload(
         argsSummary,
         ...queryMeta,
         outcome: "ok",
+        // explain / freshness 的计算已在本地真实完成并返回结果。
+        executionEvidence: executionEvidenceFromObservation({
+          executed: true,
+          authorizationAllowed: true
+        }),
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         responseRowCount: 0,
@@ -3704,6 +4667,52 @@ async function buildDenialRepairPayload(
         allowed,
         reason: allowed ? "allowed" : (decision.reason ?? "wiki_forbidden"),
         policySource: "wiki_acl"
+      });
+      return;
+    }
+    if (toolName === "lucy_continue_question") {
+      const args = (toolArgs as Record<string, unknown> | undefined) ?? {};
+      const token = typeof args.token === "string" ? args.token : "";
+      const scopeKey = budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? "");
+      const declared = await questionBudget.declareContinuation(
+        questionBudgetScopeMode() === "stable"
+          ? budgetScopeKey(scopeKey, requestMeta.lucySessionId)
+          : `turn:${requestMeta.lucyTurnId ?? "none"}`,
+        token
+      );
+      const responseBody = jsonRpcToolResult(
+        requestId,
+        JSON.stringify(declared.ok
+          ? { ok: true, idempotent: declared.idempotent === true, declared: declared.declared === true }
+          : { ok: false, reason: declared.reason }),
+        declared.ok ? {} : { isError: true }
+      );
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary: {
+          tokenPresent: token.length > 0,
+          // Spec 162 §6.7 / SC-30：续查**声明**事实。与后续数据调用上的
+          // `budgetContinuation.applied` 是两条可区分事实。
+          budgetContinuation: {
+            declared: declared.ok === true && declared.declared === true,
+            idempotent: declared.ok === true && declared.idempotent === true,
+            windowId: declared.ok ? declared.windowId ?? null : null,
+            round: declared.ok ? declared.round ?? null : null
+          }
+        },
+        outcome: declared.ok ? "ok" : "error",
+        decisionReason: declared.ok ? "budget_continuation_declared" : declared.reason,
+        errorDetail: declared.ok ? undefined : declared.reason,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, declared.ok ? "budget_continuation_declared" : declared.reason)),
       });
       return;
     }
@@ -3809,11 +4818,51 @@ async function buildDenialRepairPayload(
         });
         return;
       }
-      reportedTurns.record({
+      // Spec 162 §7.6 / SC-39：预算整体关闭时，问询开题不受预算存储故障牵连。
+      const begun = questionBudgetEnabled()
+        ? await questionBudget.beginQuestion({
+            identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+            sessionId: requestMeta.lucySessionId,
+            turnId
+          })
+        : { ok: true as const, previousTurnId: null, state: null as never };
+      if (!begun.ok) {
+        const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+          reason: begun.reason
+        }), { isError: true });
+        res.writeHead(503, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          outcome: "error",
+          decisionReason: begun.reason,
+          errorDetail: begun.reason,
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, begun.reason)),
+        });
+        return;
+      }
+      if (begun.previousTurnId) {
+        // Spec 162 §6.5：同身份同会话的新问询**显式取代**旧轮次。
+        // 取代事实写进本次开题的审计行（不另开一行，避免污染四桶恒等式）。
+        // 审计不得回传 scopeKey / identityKey —— 只记两个 turnId。
+        argsSummary = {
+          ...(argsSummary ?? {}),
+          budgetSupersession: { from: begun.previousTurnId, to: turnId }
+        };
+      }
+      reportedTurns.supersede({
         identity,
         sessionId: requestMeta.lucySessionId,
         turnId
-      });
+      }, begun.previousTurnId ?? undefined);
       await bindPriorSessionCalls({
         turnId,
         userId: identity.userId,
@@ -3850,6 +4899,12 @@ async function buildDenialRepairPayload(
         tool: toolName,
         argsSummary,
         outcome: "ok",
+        // 问询登记已真实持久化（writeConversationTurn 成功返回后才走到这里）。
+        // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+        executionEvidence: executionEvidenceFromObservation({
+          executed: true,
+          authorizationAllowed: true
+        }),
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
@@ -3930,6 +4985,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // resources/list：技能清单已真实加载并按可见性过滤后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4010,6 +5071,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // prompts/list：提示清单已真实加载并按可见性过滤后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4054,6 +5121,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // resources/read：技能内容已真实读取并通过读取 ACL 后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4137,6 +5210,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // prompts/get：提示内容已真实读取并通过读取 ACL 后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4189,6 +5268,12 @@ async function buildDenialRepairPayload(
       tool: toolName,
       argsSummary,
       outcome: "ok",
+      // lucy_skill_search：技能集合已真实加载并完成匹配后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4274,6 +5359,12 @@ async function buildDenialRepairPayload(
       tool: toolName,
       argsSummary,
       outcome: "ok",
+      // lucy_skill_read：技能内容已真实读取并通过读取 ACL 后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4368,6 +5459,55 @@ async function buildDenialRepairPayload(
     argsSummary = summarizeArgsForAudit(toolName, guard.args);
   }
 
+  // L25-11 §7.2 / D3 — an unresolved semantic write closes the affected Lucy
+  // read. This runs before the query slot is taken and before the call is
+  // forwarded, so a blocked asset never reaches KTX.
+  if (
+    rpcMethod === "tools/call"
+    && (toolName === "lucy_query" || toolName === "lucy_read_source" || toolName === "lucy_explain_query")
+  ) {
+    const block = await readSemanticRecoveryDenial(toolArgs);
+    if (block) {
+      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+        code: block.code,
+        message: block.message
+      }), { isError: true });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        tables: queryTables.length > 0 ? queryTables : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "error",
+        decisionReason: block.code,
+        errorDetail: block.message,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, block.code)),
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "error",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: false,
+        reason: block.code,
+        policySource: "other"
+      });
+      return;
+    }
+  }
 
   if (rpcMethod === "tools/call" && toolName === "lucy_query") {
     const slot = acquireLucyQuerySlot(identity);
@@ -4429,6 +5569,27 @@ async function buildDenialRepairPayload(
     releaseOnResponseEnd(res, slot.release);
   }
 
+  if (
+    rpcMethod === "tools/call"
+    && (toolName === "lucy_query" || toolName === "lucy_read_source")
+  ) {
+    const hiveHandled = await maybeWriteHiveDivertedResponse({
+      identity,
+      toolName,
+      toolArgs,
+      requestId,
+      res,
+      start,
+      requestMeta,
+      argsSummary,
+      queryMeta,
+      queryTables,
+      traceId,
+      recordAuditEntry: recordRequestAudit
+    });
+    if (hiveHandled) return;
+  }
+
   let outboundBody = body;
   if (rpcMethod === "tools/call" && parsedRpc && toolName === "lucy_read_source") {
     outboundBody = rewriteToolCall(parsedRpc, "sl_read_source", lucyReadSourceUpstreamArgs(toolArgs));
@@ -4450,7 +5611,7 @@ async function buildDenialRepairPayload(
   try {
     if (rpcMethod === "initialize") {
       // `initialize` is what establishes the session; never inject one into it.
-      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody);
+      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody, undefined, captureUpstreamRequest);
       upstreamBody = await readUpstreamBody(upstream);
     } else if (bufferedUpstream) {
       const forwarded = await forwardToKtxWithSession(
@@ -4458,7 +5619,8 @@ async function buildDenialRepairPayload(
         req.method ?? "POST",
         MCP_UPSTREAM_PATH,
         req.headers,
-        outboundBody
+        outboundBody,
+        captureUpstreamRequest
       );
       upstream = forwarded.upstream;
       upstreamBody = forwarded.body;
@@ -4469,7 +5631,8 @@ async function buildDenialRepairPayload(
         MCP_UPSTREAM_PATH,
         headersWithOwnedSession(identity, req.headers),
         outboundBody,
-        resolveOutboundSession(identity, req.headers)
+        resolveOutboundSession(identity, req.headers),
+        captureUpstreamRequest
       );
     }
   } catch (err) {
@@ -4632,6 +5795,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // initialize：上游握手响应已真实读取并写出。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       errorDetail: initResult.injectionFailed ? initResult.errorDetail : undefined,
       durationMs: Date.now() - start,
       responseBytes: initResult.responseBytes,
@@ -4947,6 +6116,13 @@ async function buildDenialRepairPayload(
       ...queryMeta,
       outcome,
       errorDetail,
+      // 上游响应已真实读取并 sniff 解析（上面的 JSON.parse 已判定 outcome），
+      // 因此登记的是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation(
+        outcome === "ok"
+          ? { executed: true, authorizationAllowed: true }
+          : { failed: true, authorizationAllowed: true }
+      ),
       durationMs: Date.now() - start,
       ...responseMeta,
       requestId,
@@ -5042,14 +6218,32 @@ function normalizeHeader(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-/** Same gate as a live lucy_query: authorize, then forward the call to KTX. */
+/** Same gate as a live lucy_query: authorize, then forward the call to KTX (or Hive). */
 export async function forwardAuthorizedLucyQuery(
   identity: Identity,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  onRequest?: (request: ClientRequest) => void
 ): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> {
   const decision = await authorizeAndRewrite(identity, "lucy_query", args);
   if (!decision.allowed) return { ok: false, reason: decision.reason ?? "acl_denied" };
   const outbound = decision.forcedFilters ? { ...args, forced_filters: decision.forcedFilters } : args;
+  const projectRoot = await resolveProjectRoot();
+  const hiveDecision = await resolveAndMaybeServeHiveTool({
+    projectRoot,
+    tool: "lucy_query",
+    connectionId: firstConnectionIdFromArgs(outbound),
+    args: outbound
+  });
+  if (hiveDecision.action === "error") {
+    return { ok: false, reason: hiveDecision.reason };
+  }
+  if (hiveDecision.action === "serve_hive") {
+    const payload = hiveBridgePayload(hiveDecision.response);
+    if (payload.ok === false) {
+      return { ok: false, reason: typeof payload.reason === "string" ? payload.reason : "hive_query_failed" };
+    }
+    return { ok: true, payload };
+  }
   try {
     const sessionId = getUpstreamSession(upstreamSessionOwner(identity)) ?? await handshakeUpstreamSession(identity);
     if (!sessionId) return { ok: false, reason: "execution_interrupted" };
@@ -5059,7 +6253,7 @@ export async function forwardAuthorizedLucyQuery(
       method: "tools/call",
       params: { name: "lucy_query", arguments: outbound }
     }));
-    const upstream = await forwardToKtx("POST", "/mcp", { "content-type": "application/json" }, body, sessionId);
+    const upstream = await forwardToKtx("POST", "/mcp", { "content-type": "application/json" }, body, sessionId, onRequest);
     const text = await readUpstreamBody(upstream);
     if ((upstream.statusCode ?? 200) >= 400) return { ok: false, reason: "execution_interrupted" };
     return {
@@ -5109,6 +6303,30 @@ export type BuildProxyOptions = {
   onOperationSettled?: () => void;
 };
 
+/**
+ * B16：构造预算持久化适配器。
+ *
+ * 审计模块在部分测试里被整体 mock，此时持久化导出不存在 —— 此时返回
+ * `null` 表示**未装配**（降级为进程内计数），而不是在请求路径上抛错。
+ */
+function createBudgetPersistence(): BudgetPersistence | null {
+  try {
+    const load = loadBudgetState;
+    const save = saveBudgetState;
+    const list = listBudgetScopes;
+    if (typeof load !== "function" || typeof save !== "function" || typeof list !== "function") {
+      return null;
+    }
+    return {
+      load: (scopeKey) => load(scopeKey),
+      save: (scopeKey, state, idempotencyKey) => save(scopeKey, state, idempotencyKey),
+      listScopes: () => list()
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function buildProxy(options: BuildProxyOptions = {}) {
   assertSkillsPassthroughPolicy();
   const ledger = options.ledger ?? new ReleaseLedger();
@@ -5116,14 +6334,73 @@ export function buildProxy(options: BuildProxyOptions = {}) {
   const port = Number(process.env.LUCY_PROXY_PORT ?? 7879);
   const host = process.env.LUCY_PROXY_HOST ?? "127.0.0.1";
 
+  // B16：装配**持久化**预算（重启不丢，Spec §10.5「以账本为准幂等重建计数」）。
+  //
+  // 持久层**未装配**（审计模块在测试中被整体 mock）→ 降级为进程内计数：
+  // 预算仍然生效，只是不跨进程。持久层已装配但读写失败仍然失败关闭。
+  installBudgetPersistence(createBudgetPersistence());
+
+  // B25：装配账本序号解析器 —— `access_log.ledger_seq` 记录行写入时
+  // canonical ledger 的已提交上界，供 as-of S 视图纳入。
+  setLedgerSeqResolver(async () => {
+    const store = await getSecurityStore();
+    if (!store.ok) return null;
+    const max = store.value.maxEventSeq();
+    return max.ok ? max.value : null;
+  });
+
+  // B7：启动时**从账本**派生未闭合操作并幂等追加恢复标记；不重放业务。
+  void runStartupRecoveryScan();
+
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       // T04-3: stamp before admission so a narrowing committed while identity
       // is being resolved still covers this request.
       const authorizationStamp = currentAuthorizationSequence();
+      // ─── Lucy v0.25 / L25-09 S02 / B6 / D3 ────────────────────────────────
+      // 入口身份在**准入之前**分配：operation_id / attempt_id / ingress_event_id
+      // 同时分配（D3）。被拒绝的请求也有 attempt_id，只是 execution=not_executed。
+      const ingress = allocateIngressIdentity({ endpointId: "mcp-http", operationPrefix: "mcp" });
       const admitted = await admitMcpRequest(req, res, ADMISSION_AUDIT, {
         skillsPassthroughEnabled,
-        readBody
+        readBody,
+        // 入口持久化屏障：`received` 写入成功才允许后续的授权 / 分派。
+        onReceived: async ({ identity, sessionId }) => {
+          const store = await getSecurityStore();
+          if (!store.ok) return { ok: false, reason: "security_store_unavailable" };
+          const appended = appendIngressReceived({
+            operationId: ingress.operationId,
+            attemptId: ingress.attemptId,
+            endpointId: ingress.endpointId,
+            actor: identity.userId,
+            actorType: "agent",
+            networkInfo: req.socket?.remoteAddress,
+            sessionFingerprint: identity.tokenHashPrefix,
+            method: req.method ?? "",
+            sessionId,
+            appender: (event) => {
+              const committed = store.value.appendEvent({
+                eventId: event.eventId,
+                operationId: event.operationId,
+                phase: event.phase,
+                actor: event.actor,
+                actorType: event.actorType,
+                networkInfo: event.networkInfo,
+                sessionFingerprint: event.sessionFingerprint,
+                endpointId: event.endpointId,
+                verdict: event.verdict,
+                resultSummary: event.resultSummary
+              });
+              if (!committed.ok) return { ok: false, reason: committed.reason };
+              return { ok: true, seq: committed.value.seq };
+            }
+          });
+          if (!appended.ok) return { ok: false, reason: appended.reason };
+          // U12：仅在 received 已提交后回传三项审计关联头。
+          const headers = buildCorrelationHeaders(ingress);
+          for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
+          return { ok: true };
+        }
       });
       if (!admitted.ok) return;
       const barrier = beginGuardedRequest(admitted.identity, res, authorizationStamp);
@@ -5131,7 +6408,8 @@ export function buildProxy(options: BuildProxyOptions = {}) {
       // content is released only after a durable `response_prepared`.
       const shape = ledgerRequestShape(req, admitted.body);
       const context: ReleaseOperationContext = {
-        operationId: `mcp_${randomUUID()}`,
+        // 复用入口分配的 operation_id —— `received` 与 `request_admitted` 属同一操作。
+        operationId: ingress.operationId,
         actor: admitted.identity.userId,
         actorType: "agent",
         networkInfo: req.socket?.remoteAddress,

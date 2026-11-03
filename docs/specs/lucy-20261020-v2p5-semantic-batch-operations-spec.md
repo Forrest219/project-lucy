@@ -1,16 +1,26 @@
-# Lucy v2.5 语义资产批量维护 Spec
+# Lucy v0.25 语义资产批量维护 Spec
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计草案 / v0.1-draft |
-| 日期 / 目标版本 | 2026-10-20 / v2.5 |
-| 功能编号 / 优先级 | L25-11 / P1，企业批量运维核心能力 |
-| 状态 | 纳入规划、待评审；仅授权起草和登记，暂不开发 |
-| 授权来源 | 本次用户要求：基于调查结果记录对比版本，起草含伪代码、验证机制的 Spec，加入 v2.5 功能清单；暂不开发 |
-| 规划入口 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.5 |
+| 文档类型 / 版本 | 功能设计基线 / v0.2-requirements-review |
+| 日期 / 目标版本 | 2026-10-24 / v0.25；2026-10-27 交叉审阅局部修订 |
+| 功能编号 / 优先级 | L25-11 / P0-3，企业批量运维核心能力 |
+| 状态 | **已关闭。** 出口是 FC-01–FC-32。G30 已收口：校验只产报告，不产可发布计划。不打开 W-B。本条关闭不表示可上线 |
+| 评审状态 | 2026-11-02：本行「应先补齐实现再安排完整 UAT」「V01–V22 全部未执行」「客户交付保持 blocked_delivery」已作废，不得当作现值。现行状态见头部。2026-10-27 的审阅记录保留为历史，依据见 §1.5 |
+| 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议，并要求完成四个 P0 设计材料 |
+| 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.5；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) |
+| 审查入口 | [首批 P0 需求审查清单](../plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md)；[2026-10-27 独立交叉审阅](../reviews/2026-10-27-codex-review-semantic-batch-operations-p0.md) |
 | 实施主体 | Lucy；复用 KTX 既有公开接口，不修改 KTX 源码 |
 
-本文件定义拟实现行为，不代表已实现、已冻结或已经通过验收。本次不修改程序、运行配置、客户资产、镜像或数据库，不新增测试代码，不执行功能验证或部署。
+本文件正文继续定义必须实现的冻结合同，不以当前实现缺口为由降低要求。2026-10-27 本轮仅做静态交叉审阅与 Spec／Plan 文档修订，不修改程序、测试、运行配置、客户资产、镜像或数据库，不执行功能验证、UAT、real-e2e、部署或发布；本修订本身不产生任何验收证据。
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：维护者按完整表身份下载可往返的语义维护包，导入只进入暂存，确认后的完整计划在同一发布窗口内写入、索引并留下可核对的终态；失败先回滚或进入待恢复，不把未生效记成已发布。
+- 本条出口：FC-01–FC-32 的仓库内直接检查，含本进程内的失败关闭与局部故障注入，以及 G30 的「校验只产报告、不产可发布计划」断言。清单见 §10.3。
+- 不在本条出口：30 表旅程、Agent 检索、桌面跨页交互、真实打包 KTX 的命令输出、客户 linux/amd64 单副本，以及在已部署进程上强杀再拉起。
+- 上线关系：本条收口不表示可上线
 
 ## 1. 调查基线与证据边界
 
@@ -21,12 +31,12 @@
 | 对象 | 本次记录 | 证据及限制 |
 |---|---|---|
 | 运行界面 | `http://127.0.0.1:55176/catalog`；本轮调查已登录 | 前一轮只读查看 Catalog、发布工作台；本轮起草不重复浏览器验证 |
-| 界面显示版本 | 产品 `v2.0.0`；修订 `135b2a8-dirty` | 界面当时显示值；dirty 不能还原为一个干净提交，也不能证明与本地源码一致 |
+| 界面显示版本 | 产品 `v2.0.0`；修订 `135b2a8-dirty` | **2026-10-20 历史运行时读数**；dirty 不能还原为一个干净提交，也不能证明与本地源码一致 |
 | 运行容器 / 镜像 | `compose-lucy-1` / `project-lucy:demo` | 2026-10-20 22:39（Asia/Shanghai）只读复核容器身份 |
 | 实际镜像 ID | `sha256:46f5a3adc38b35bf22c5af693e073e73a67963812ec5bf71352b3b831b4adb5f` | 容器 `.Image` 与当时 tag 指向一致；本地镜像 ID，不冒充 registry RepoDigest |
-| 本地源码 | `/Users/forrest/GitHub/project-lucy`；HEAD `a9eb574b435b813fb18af490d2c03181f5b9d9e9` | 工作区有未提交改动；下列摘要记录本次实际读取的关键文件 |
-| 本地产品版本 | 根目录 `VERSION=2.0.0`，根 `package.json=2.0.0` | `webui/package.json=1.0.0` 为子包版本，不作为 Lucy 产品版本 |
-| 目标版本 | `v2.5` | 规划版本；本次不改 `VERSION`、不升依赖版本 |
+| 本地源码（2026-10-20 调查快照） | `/Users/forrest/GitHub/project-lucy`；HEAD `a9eb574b435b813fb18af490d2c03181f5b9d9e9` | 当时工作区有未提交改动；下列摘要记录该次实际读取的关键文件，不冒充当前 HEAD |
+| 当前仓库产品版本（2026-10-25 复核） | 根目录 `VERSION=0.20.0`，根 `package.json=0.20.0` | 当前仓库事实；`webui/package.json=1.0.0` 为子包版本，不作为 Lucy 产品版本 |
+| 目标版本 | `v0.25` | 规划版本；本次不改 `VERSION`、不升依赖版本 |
 
 关键源码 SHA-256（本次文档写入前的读取快照；不是整仓构建证明）：
 
@@ -41,7 +51,7 @@
 
 ### 1.2 已证实事实与拟改进项
 
-| 证据 | 当前事实 | v2.5 增量 |
+| 证据 | 当前事实 | v0.25 增量 |
 |---|---|---|
 | [Catalog](../../webui/src/pages/Catalog.tsx) | 实机显示 12 张已启用表；有连接 / Schema、搜索、启用范围和语义状态筛选，无多选和批量入口 | 同一范围上的多选、批量下载、批量校验、导入资产包 |
 | [发布工作台](../../webui/src/pages/publish/PublishWorkbench.tsx)、[API](../../webui/server/index.ts) | `POST /api/validate-changed` 校验已有变更；不是任意一组现有资产的主动巡检 | 增加独立批量校验；与发布校验共用合法性检查 |
@@ -50,7 +60,72 @@
 | 同上及 [API 类型](../../webui/src/lib/types.ts) | 导出上限 200 文件 / 16 MiB；导入上限 50 YAML / 3 MiB，总量和单文件限制不同 | 对维护包统一往返限制，拒绝静默截断 |
 | [Spec 123](../../webui/docs/123-publish-workbench-activation-ia-spec.md) | 工作台刻意移除上传 / 导出，只承担校验与整批索引生效 | Catalog 管理输入输出，工作台继续承担生效；不恢复上传导出按钮 |
 
-运行页缺少入口已通过界面观察确认；后端复用结论来自本地源码静态阅读，未对运行镜像做接口贯通证明。现有逐文件 rename 不等于整批事务，已有发布成功状态也不能替代本功能验收。
+运行页缺少入口已通过界面观察确认；后端复用结论来自本地源码静态阅读，未对运行镜像做接口贯通证明。现有逐文件 rename 不等于整批事务，已有发布成功状态也不能替代本功能验收。本节是 2026-10-20／2026-10-25 的历史调查记录，不表示 2026-10-27 的当前实现状态。
+
+### 1.3 当前实现状态与后续修复基线（2026-10-27 静态复核）
+
+本小节依据指定提交 `21de5168`、当前 HEAD `7382bac4` 的生产调用链与既有测试源码静态复核。测试文件或测试标签的存在不等于生产入口已接线，也不等于对应 V 项已执行或已覆盖。
+
+| 层次 | 当前事实 | 尚待完成及验收关联 |
+|---|---|---|
+| 基础模块 | `21de5168` 已加入身份、范围、维护包、共享限额、共享检查、批量任务、持久幂等、恢复日志与 release 状态等基础模块及模块级用例 | 只能登记“基础模块已落地”；不得由 helper 用例推定完整能力。生产复用与端到端证据见 V01–V21 |
+| 生产入口 | `scopes` / `check` / `operations` / `plans` 路由已注册；生产导出支持 `packageKind=semantic-maintenance-package/v1` 并留存服务端导出基线；导入走受控 staging；Catalog 已有多选与批量动作；工作台已能接收批次 ID 并展示完整计划 | 已落地（见 §1.4）。2026-11-02：「仍未产生验收证据」已作废，不得当作本条收口的现值。对应 V 行是发布目录的场景文本 |
+| 提交与恢复 | 生产发布已按完整计划 CAS（`planDigest`）与持久幂等键执行；journal 引入阶段概念，文件落盘后保持 `files_saved` 直到索引与终结证据可核对；release 增补 `recoveryRequired` / `activationStatus` / `attemptId`；启动恢复前移至 WebUI 监听之前 | 已落地（见 §1.4）；镜像异常与恢复异常的完整失败关闭仍需 V14–V16 的故障注入证据 |
+| 后续源码修复 | D-23 的 rename 后 `applied` 标记丢失漏回滚已由 `2cc79f49` 修复：遍历全部 entry 并按实际字节分 `restored/unchanged/conflict`。生产 ZIP/TGZ 输出上限与角色保存锁内版本复核的源码修复由 `9b249f6d` 落地 | 仅准确登记源码修复，不回填历史缺陷为当前缺陷，也不据此关闭其余恢复、幂等或验收边界。D-19／D-21 台账是否关闭仍按其正式证据处理。2026-11-02：「V09、V14–V15 及共享协调器相关项保持未执行」已作废，不得当作本条收口的现值。这些行是发布目录的场景文本 |
+| 正式验收 | 2026-11-02：「V01–V22 全部未执行」已作废，不得当作本条收口的现值。本节已从功能合同删除，场景文本保留给发布目录，不决定 FC 是否关闭 | 行状态不改成通过 |
+| 客户交付 | 2026-11-02：Wave 0b 与客户交付退出本条升级状态 | 它们留在 E2E 与交付记录，不回开已关闭的 FC |
+
+### 1.4 2026-10-27 实施落地后的状态校准
+
+本小节记录本轮**实际改动的源码**与**实际执行的测试**。它不产生验收证据。2026-11-02：「§10 的 V01–V22 状态一律保持未执行」已作废，不得当作本条收口的现值。本节已从功能合同删除，场景文本保留给发布目录，不决定 FC 是否关闭。
+
+**生产接线（已落地，见 §7.5）**
+
+| 实施项 | 本轮落地位置 | 状态 |
+|---|---|---|
+| D11 严格 HTTP 信封 | `webui/server/semantic-batch-service.ts` `parseSemanticValidateEnvelope`；`webui/server/index.ts` `/api/semantic-assets/validate` | 已落地 |
+| D11 新增路由 | `webui/server/semantic-batch-routes.ts`：`scopes` / `check` / `operations/:id` / `operations/:id/cancel` / `operations/:id/report.csv` / `plans/:validationId` | 已落地 |
+| D4／D7 维护包导出与基线 | `webui/server/semantic-batch-service.ts` `exportSemanticMaintenancePackage`；`semantic-maintenance-package.ts` 增补 `scopeId` 与导出记录的 `actor` | 已落地 |
+| D6 共享限额 | `webui/server/semantic-assets.ts` 导入侧改用 `SEMANTIC_BATCH_LIMITS`（替代原 50 YAML／3 MiB） | 已落地 |
+| D8 共享检查 | `semantic-assets.ts` `runValidateGate` 改为调用 `semantic-checks.ts` 的 `runSemanticTableCheck`（与单表保存、独立批量、导入预检同一实现）；无法解析身份的新表仍走原 KTX 门禁 | 已落地 |
+| D12 导入暂存 | `webui/server/semantic-batch-service.ts` `stageSemanticMaintenanceImport`；`semantic-assets.ts` `persistSemanticBatchSnapshot` | 已落地 |
+| D13 完整计划 | `webui/server/semantic-assets.ts` `describeSemanticBatchPlan`（候选 + 既有待同步磁盘变更 + 精确覆盖集合） | 已落地 |
+| D14 计划 CAS | `semantic-assets.ts` `rebuildBatchPlan` + `recomputeSemanticPlanDigest`；批量发布废止全局布尔覆盖确认（`confirmOverwrite` 仅对无批次计划的单文件旧导入路径保留并标记 `@deprecated`） | 已落地 |
+| D15 持久幂等 | `semantic-assets.ts` 发布路径接入 `registerSemanticIdempotencyKey`；重放检查前置于快照读取 | 已落地 |
+| D16／D17 journal 全生命周期 | `semantic-recovery-journal.ts` 增补 `phase`（`write_in_progress` / `files_saved` / `activation_pending` / `completed`）与 `markRecoveryJournalFilesSaved`；启动恢复按阶段分流 | 已落地 |
+| D18 启动恢复准入 | `webui/server/index.ts` `recoverSemanticJournals()` 前移至 `app.listen()` 之前 | 已落地 |
+| D19／D20 生效状态 | `semantic-assets.ts` release 增补 `recoveryRequired` / `activationStatus` / `attemptId` / `planDigest`；`published` 仅在最终 digest 核验与终结审计持久化之后写入 | 已落地 |
+| D21 Catalog 多选 | `webui/src/pages/Catalog.tsx`；`webui/src/components/semantic-assets/CatalogBatchPanel.tsx` | 已落地 |
+| D22 审计 | `semantic-batch-audit.ts` 的 payload／record 用于导出（交付前）、校验与暂存；导出审计失败即导出失败 | 已落地 |
+| D23 共享协调器 | 复核确认：单表保存、Manifest 上传、批量导入、手动 reindex、角色／行策略保存五类写入口**已全部**在 `publish-coordinator.ts` 的同一窗口内 | 已落地（复核确认，非本轮新增） |
+
+**本轮实际执行的测试（局部直接证据，不回填整项）**
+
+| 测试 | 直接覆盖的子断言 | 未覆盖 |
+|---|---|---|
+| `server/__tests__/api.semantic-batch.test.ts` | V05(b) 的「29 合法 + 1 错形整批拒绝」；V05(c) 的「合法包 + 1 错形 package 整批拒绝」；V07(d) 的「未知目标拒绝」；V08(c) 的「精确覆盖集合变化使旧确认失效」；V13(a)/(c) 的同键同 release 与同键异计划冲突 | 其余全部子断言 |
+| `server/__tests__/semantic-batch-journal-lifecycle.test.ts` | §7.2 第 5／6 条的 journal 阶段分流；D19／D20 的 `activationStatus` 状态机 | V14／V15／V16 的故障注入时序、镜像核验与跨重启证据 |
+
+以上测试是**真实 HTTP 入口**用例（`buildServer()` + supertest），不是 helper 单测；但它们只覆盖上表列出的窄子场景。2026-11-02：「V01–V22 状态一律保持未执行，也不得据此申请 UAT 准入」已作废，不得当作本条收口的现值。这些行是发布目录的场景文本，不决定 FC 是否关闭。
+
+### 1.5 状态行事实对齐（2026-10-28）
+
+本小节只更正**状态陈述**，不修改正文合同、不改 V01–V22 状态、不关闭任何台账条目，也不产生验收证据。
+
+**更正原因**：本 Spec 头部原写「评审状态：Spec／Plan 文档评审已关闭，修订通过（2026-10-27）」。该行由 `f008490a`（2026-10-27 15:11）写入；同一日 19:29 的 `36e390d1` 落盘独立审阅报告，其结论为「**退回**」，且该审阅**明确未修改本 Spec 正文与 V01–V22 状态**。因此状态行停留在被后续审阅结论取代的旧陈述，与实际状态不一致。
+
+**git 定序事实**
+
+| 时间 | 提交 | 事件 | 对状态行的影响 |
+|---|---|---|---|
+| 10-27 15:11 | `f008490a` | 「close semantic batch spec and plan review」→ 写入「评审已关闭，修订通过」 | 写入旧陈述 |
+| 10-27 17:57 | `2e98be74` | 「implement the semantic asset batch P0 D1-D23 contract」→ 生产接线落地（见 §1.4） | 实施事实已更新，**未复审** |
+| 10-27 19:29 | `36e390d1` | 「record P0-1 and P0-3 codex review returns」→ 审阅结论「退回」（1 阻塞 B01 + 5 高 H01–H05 + 2 中 M01/M02），并把 `docs/README.md` 索引改为「设计审查退回，待修订」 | 结论**取代**旧陈述，状态行未同步 |
+| 10-28 | 本次（PM 授权） | 头部状态行按上述事实更正 | 仅状态陈述对齐 |
+
+**更正后的当前状态**：2026-11-02：本段「独立审阅退回」「应先补齐实现再安排完整 UAT」已作废，不得当作现值。现行状态见头部。2026-10-27 的审阅记录保留为历史。
+
+**未随之改变的项**：2026-11-02：本段「V01–V22 未执行、Wave 0b 未解锁、客户交付 blocked_delivery、实质修订仍待进行」已作废，不得当作现值。现行状态见头部。冻结合同不因这次对齐而改写。
 
 ## 2. 需求判断、目标与边界
 
@@ -93,13 +168,15 @@ Catalog 导入只写受控 staging，不立即改正式文件或触发索引。�
 
 拟新增 `semantic-maintenance-package/v1`，ZIP 包含 `package.json` 元数据、可编辑 overlay 和只读 Manifest / 关联依赖。此元数据不是 npm 包，不执行脚本。路径仅用于 ZIP 内定位，目标路径始终由服务端按模型身份计算。
 
-每条 entry 至少包含：`entryId`、`role`（`editable_overlay` / `readonly_context`）、完整表身份、包内相对路径、原导出内容 digest、原目标 digest（或 absent）、原语义基线 digest。元数据还记录 schemaVersion、导出时间、实例 ID、Lucy 产品 / 构建标识、全部所选表和依赖角色。
+每条 entry 至少包含：`entryId`、`role`（`editable_overlay` / `readonly_context`）、完整表身份、共享同一物理文件的全部 `sharedIdentities`、包内相对路径、原导出内容 digest、原目标 digest（或 absent）、`baseTarget`、原语义基线 digest。元数据还记录 schemaVersion、导出时间、实例 ID、Lucy 产品 / 构建标识、全部所选表和依赖角色。
 
 - 原文件 digest 用于来源和冲突对比，不作为作者签名。外部编辑后候选内容 hash 可以变化；导入服务重算新 hash，不要求用户手改原 digest。只读 entry 内容变化、entry 身份被改绑或缺少必要 entry 均阻断。
+- 服务端导出记录必须独立保存每个 entry 的完整授权事实：`entryId`、`role`、主身份与 `sharedIdentities`、`packagePath`、`exportedDigest`、`targetDigest/baseTarget`、`baselineDigest`，以及包级 `selected`、`dependencies` 和基线 digest。导入时以该服务端原记录为唯一授权基线，逐项核对 **entry 全集恰好相等** 及上述绑定关系；上传方不得通过把 `readonly_context` 改成 `editable_overlay`、删改 metadata 与对应文件、改写共享身份或基线摘要来重新授权。除允许编辑的 overlay 内容字节外，其余字段均不可由客户端自报覆盖；任一缺项、多项或绑定不符都整包拒绝，正式效果为零。
 - 包的基线由服务端保存的导出记录核验，不相信客户端自报。原包来自其他实例、记录过期或无法核验时，本期阻断并说明需在目标实例重新导出，暂不支持跨实例迁移 / 重绑定。
 - 无 overlay 的选中表导出显式模板，附 `baseTarget=absent`；未改动模板导回为无变化，修改后按完整语义校验处理。不能以空模板冒充已有业务定义。
 - 安全解包拒绝绝对路径、`..`、符号链接 / 硬链接、重复归一化路径、重复身份、嵌套包和未登记 entry。禁止 secrets、凭据、ACL、原始数据、运行状态库及任意脚本文件；不返回宿主绝对路径。
-- 草案统一限制：最多 200 个 YAML entry（包括只读上下文），单 YAML ≤512 KiB，metadata ≤256 KiB，解压内容总计 ≤16 MiB，ZIP ≤20 MiB；HTTP JSON 请求体 ≤32 MiB，覆盖 Base64 开销。上传多 YAML 使用相同内容总量 / 数量限制；限制由同一共享定义提供，不能只改前端常量。
+- 统一限制（2026-10-30 用户批准容量修订）：最多 200 个 YAML entry（包括只读上下文），单 YAML ≤8 MiB，metadata ≤256 KiB，解压内容总计 ≤16 MiB，ZIP ≤20 MiB；HTTP JSON 请求体 ≤32 MiB，覆盖 Base64 开销。上传多 YAML 使用相同内容总量 / 数量限制；限制由同一共享定义提供，不能只改前端常量。
+- 目录 Manifest validate/upload 与 semantic-assets validate 三条携带资产内容的路由必须显式设置共享 HTTP 上限，不得被框架默认 1 MiB 提前拒绝。单 YAML 与 JSON 内容按 UTF-8 字节计数；超限拒绝且不截断、不写入。超出请求体上限返回中文 413 提示；只传引用的发布与批量校验路由保持原 HTTP 上限。此局部修复及其 API 回归不替代 V01–V22 正式验收。
 - 导出先按导入规则自检，再生成包；任一超限或依赖缺失则明确失败，不返回缺表的成功包。批量校验最多 200 张所选表；依赖最多 200 个 YAML，超过限制须拆分显式任务，不自动截断。
 
 维护包基线有效期为 7 天；与短时预览 / 校验的 30 分钟不同。导出记录到期后重新导出，不能靠编辑时间戳延长。正在使用的快照和恢复材料不得被普通 staging GC 删除。
@@ -113,11 +190,11 @@ Catalog 导入只写受控 staging，不立即改正式文件或触发索引。�
 | 范围与输入 | 完整身份、已配置连接 / Schema、Manifest 存在、包结构、目标安全、冲突、限额 | 错误阻断整批提交 |
 | 语义 | YAML / 模型解析、Manifest + overlay 合并、列类型合同、指标 / 分群 / 关联引用、依赖闭包；调用共享 `validateSource` / 既有 KTX validate 接口 | 校验失败、超时、依赖不足均不能成为通过 |
 | 完整度 | 描述、grain 等现有完成度事实 | 独立列示，不能当作合法性证明；本期不新增业务完整度阻断规则 |
-| 执行 | 实库查询、SQL 方言运行、业务结果正确性 | 本任务固定 `not_run`；合法性通过不宣称查询或业务口径已验证 |
+| 执行证据 | 实库查询、SQL 方言运行、业务结果正确性 | 本期不要求执行，独立记录 `not_applicable / evidence_available / blocked_evidence / unknown`；不进入提交 verdict，合法性通过不宣称查询或业务口径已验证 |
 
-单项 verdict 为 `passed / failed / not_run / stale`，问题另记 `severity`。汇总数量必须满足 selected = passed + failed + not_run + stale；依赖检查另计，不重复冒充所选表。任一阻断错误、not_run 或 stale 都禁止提交，告警可以继续但需在确认摘要可见。
+单项提交 verdict 为 `passed / failed / not_run / stale`，问题另记 `severity`。汇总数量必须满足 selected = passed + failed + not_run + stale；依赖检查另计，不重复冒充所选表。任一阻断错误、`not_run` 或 `stale` 都禁止提交，告警可以继续但需在确认摘要可见。`not_run` **仅**表示本应执行的必需检查因超时、取消或中断而未执行；本期明确不要求的实库执行证据不得写入该值，也不得制造正常发布必被阻断的矛盾。
 
-任务固定最多 4 个并行检查，每表执行上限 30 秒，整个任务 10 分钟；超时项 failed、未调度项 not_run，其余已完成结果保留。取消只读任务不撤销已完成报告；取消导入只能在正式写入前进行。运行中的范围和内容不可变。
+任务固定最多 4 个并行检查，每表执行上限 30 秒，整个任务 10 分钟；超时项 failed、应执行而未调度项 not_run，其余已完成结果保留。取消只读任务不撤销已完成报告；取消导入只能在正式写入前进行。运行中的范围和内容不可变。
 
 报告至少提供任务 ID、基线版本 / digest、所选及依赖范围、逐表层次结果、原因码、可读定位、耗时、开始结束时间和操作者；提供 JSON、CSV 下载（CSV 公式注入转义）。过期结果显示 stale，不静默改为新检查的结果。
 
@@ -127,23 +204,86 @@ Catalog 导入只写受控 staging，不立即改正式文件或触发索引。�
 
 扩展现有资产服务和发布工作台，所有写入口共用单实例发布协调器及既有类型合同门禁；既有豁免仍由原规则处理，本功能不新增“跳过校验”选项。不新增并行发布引擎，也不修改 KTX。
 
+共享协调器的覆盖范围已裁决为：**单表保存、Manifest 上传、批量导入、手动 reindex，以及 L25-14 的角色／行策略保存**。这些入口的基线复核、配置或资产写入、运行镜像同步、生效与终结状态持久化串行执行；只读预览、独立校验和报告查询可并行，但提交时必须重新核对 digest。不得仅凭入口不同并行写入或生效；未来只有在证明资源与故障域完全隔离并完成独立评审后才可放宽。
+
+> 实施回写见 §7.4（2026-10-25）。
+
 导入任务：`staged → checking → ready / blocked / cancelled / expired`；在工作台确认后关联 releaseId。发布沿用 `blocked / promote_failed / reindexing / published / reindex_failed`，增加恢复必要信息 `recoveryRequired` 及独立 `activationStatus=unconfirmed / confirmed`，不改写历史状态含义。旧记录缺少新字段时为 unknown，不从旧 published 自动补 confirmed。界面分别显示“已暂存”“校验通过”“文件已保存”“索引同步中 / 失败”“已生效”。HTTP accepted 仅代表受理。
 
 ### 7.2 提交合同
 
-- 锁覆盖基线复核、最终校验、正式写入、镜像同步、索引和最终状态持久化；单表保存、Manifest 上传、导入和手动 reindex 进入同一协调器，竞争返回可读 busy。外部 CLI / Git 写入不受进程锁控制，digest 发现后停止并重新预览；本期不承诺任意外部写者并发事务。
-- 校验未全通过前，正式文件、运行镜像目录、索引均不写。提交时重读授权和完整计划；预览、覆盖确认绑定同一个 planDigest，不能用一个全局 confirmOverwrite 布尔值授权变化后的目标集合。
-- 使用服务端持久幂等键（按实例 + 操作者 + 客户端幂等键查找，记录所绑定的 planDigest，保留至少 24 小时）；重复提交返回同一个 releaseId，禁止重复写盘或重复索引。同一幂等键与其他计划组合返回冲突。
-- 写入前持久化每个实际目标的原 bytes / absent、预期新 digest、处理顺序和恢复日志；每次替换前再校验该目标基线，用同目录临时文件 + rename，更新恢复日志。只操作已确认目标。
-- 中途写入、镜像同步或持久记录失败，停止后续步骤；按日志逆序恢复本批次已改目标，并同步恢复镜像。不触发新索引，不还原其他既有磁盘变更。恢复时发现第三方新内容不覆盖，标记 `recoveryRequired=true`，展示已写 / 已恢复 / 待修复对象，并阻止后续发布和手动索引直到恢复核验完成。
-- 启动恢复先处理未终结日志，再开放发布。进程在 rename 后、日志更新前退出时，以原 / 新 digest 判定；无法判定则待人工修复，不猜成功。恢复材料保留到终结且可审阅后再按既有保留策略清理。
-- 索引失败保留已保存文件，记 reindex_failed 和“不保证 Agent 已生效”；从发布工作台重试索引，核对已保存计划及当前待同步范围，不重复上传或 promote。范围变化须重新预览、校验、确认；重试关联原 releaseId 和新的 attemptId，不篡改原失败记录。
+- 锁覆盖完整计划重建与基线复核、最终校验、正式写入、镜像同步及 digest 核验、索引、最终 digest 复核、终结审计／历史／状态持久化；§7.1 列明的全部写入口进入同一协调器，竞争返回可读 busy。手动 reindex 的终结记录也必须留在同一窗口内。任何失败或异常路径只有在完成恢复，或持久化可继续启动恢复的 `recoveryRequired`／生效待确认状态后，才允许释放窗口。外部 CLI / Git 写入不受进程锁控制，digest 发现后停止并重新预览；本期不承诺任意外部写者并发事务。
+- 校验未全通过前，正式文件、运行镜像目录、索引均不写。提交时重读授权并构建“已有待同步磁盘变更 + 本次导入候选”的完整计划；`planDigest` 必须覆盖所选对象、全部依赖、候选内容、每个目标的原 digest／absent 标记和精确覆盖集合。预览、覆盖确认绑定同一个 `planDigest`，不能用一个全局 `confirmOverwrite` 布尔值授权变化后的目标或依赖集合。
+
+> 2026-10-25 实施回写见 §7.4 N11。该注记写下时，CAS 与覆盖确认尚未接到生产发布。2026-10-27 的 `2e98be74` 已让批量发布按 `planDigest` 重核；2026-10-30 的收口 Task 把发布锁留到终态证据落盘之后，见 [发布窗口 Task](../plans/2026-10-30-l25-11-publish-window-task.md)。本注记不改 §7.2 正文，也不产生 V14–V16 验收证据。
+- 使用服务端持久幂等键（按实例 + 操作者 + 客户端幂等键查找，记录所绑定的 planDigest，保留至少 24 小时）。幂等意图及 releaseId 绑定必须先于任何正式文件、镜像或索引效果持久化；重复提交在断线、进程重启及 validation snapshot 已消费后仍返回同一个 releaseId 和当前状态，禁止重复写盘或重复索引，同一幂等键与其他计划组合返回冲突。容量裁剪只能移除已过期记录；存储达到容量且仍存在未满 24 小时的有效键时，必须拒绝新意图或扩容，不得提前淘汰有效键。
+
+- 写入前持久化每个实际目标的原 bytes / absent、预期新 digest、处理顺序和恢复日志；每次替换前再校验该目标基线，用同目录临时文件 + rename，更新恢复日志。只操作已确认目标。journal 在全部文件 promote 后只能进入“文件已保存、索引／终结结果待确认”阶段，不能提前 `completed`；只有适用的镜像、索引、最终 digest 与终结审计／状态证据均可核对后才能终结。
+- 中途 journal、rename、镜像同步或核验、审计／历史／状态持久化失败，停止后续步骤；按日志逆序恢复本批次已改目标，并同步恢复镜像、逐项核对恢复后的实际 digest。恢复不得以待写失败记录或失败审计成功为前置条件；记录写入失败不能跳过回滚。不触发新索引，不还原其他既有磁盘变更。镜像同步异常不得吞没，恢复镜像失败不得登记 `restored`。发现第三方新内容不覆盖，标记 `recoveryRequired=true`，展示已写 / 已恢复 / 待修复对象及各自 digest，并阻止后续发布和手动索引直到恢复核验完成。
+- 启动恢复先处理全部未终结日志，再开放任何配置／资产写入、发布和手动索引；普通 `open` journal、恢复读取异常、镜像异常或无法判定均按未恢复处理，不得仅因缺少 `recoveryRequired` 标记而放行。进程在 rename 后、日志更新前退出时，以原 / 新 digest 判定；无法判定则待人工修复，不猜成功。WebUI 监听和受影响资产的 Lucy 读取／查询也必须受恢复准入约束：恢复未完成或结果不确定时，涉及资产明确失败关闭。恢复材料保留到终结且可审阅后再按既有保留策略清理。
+
+> 2026-10-25 的 N26 是历史缺陷及修复记录：当时即时恢复只遍历 `applied` 列表，rename 成功而标记写入失败时会漏回滚；`2cc79f49` 已把即时恢复统一为遍历全部 entry、按实际字节判定 `restored` / `unchanged` / `conflict`。该源码修复不替代本条其余 journal、镜像、索引和终结边界，也不构成 V14–V16 验收证据。
+
+- 索引失败保留已保存文件，记 reindex_failed 和“不保证 Agent 已生效”；从发布工作台重试索引，核对已保存计划及当前待同步范围，不重复上传或 promote。范围变化须重新预览、校验、确认；重试关联原 releaseId 和新的 attemptId，不篡改原失败记录。索引返回成功只说明索引命令成功，不能在最终 digest 与终结证据持久化前登记 `published`。
 
 这些是应用级可恢复批次，不宣称文件系统多文件与 SQLite 索引具备共同原子事务，也不承诺发布过程中所有读取看到同一瞬时版本。`published` 只在正式文件 / 运行镜像与目标 digest 一致、索引成功且终结记录已持久化后成立；不满足时绝不能给成功提示。若出现未恢复的部分写入，必须沿用或补齐现有运行一致性拦截，使涉及资产的 Lucy 读取 / 查询明确不可用，不能继续宣称一致；不改变 ACL 或预算规则。
 
 ### 7.3 审计
 
-复用配置审计、安全账本及 [L25-09](lucy-20261020-v2p5-audit-increment-spec.md) 适用契约。记录 actor、operationId、scopeId、planDigest、releaseId、attemptId、基线与候选 hash、对象数量、分项结果及恢复状态；不得把下载、预检或校验记成发布成功。导出前和正式效果前完成所需审计持久化，失败按既有 fail-closed 合同处理；效果后终结记录失败需恢复核验，不能谎称未发生。普通日志不存原始 YAML、凭据或宿主路径；受控 staging / 备份独立受管理员访问控制。
+复用配置审计、安全账本及 [L25-09](lucy-20261020-v2p5-audit-increment-spec.md) 适用契约。记录 actor、operationId、scopeId、planDigest、releaseId、attemptId、基线与候选 hash、对象数量、分项结果及恢复状态；不得把下载、预检或校验记成发布成功。导出前和正式效果前完成所需审计持久化，失败按既有 fail-closed 合同处理；效果后终结记录失败需恢复核验，不能谎称未发生。终结审计、release 历史与最终状态均属于 §7.2 的同一协调器临界区和 journal 终结条件，不得在锁外补写后宣称完整串行。普通日志不存原始 YAML、凭据或宿主路径；受控 staging / 备份独立受管理员访问控制。
+
+### 7.4 实施回写（2026-10-25，Lucy v0.25 W5；2026-10-27 状态校准）
+
+本小节保留 2026-10-25 实施期偏差事实及后续修复记录。文件头当前状态由 2026-10-27 静态交叉审阅按 §1.3 校准，不再沿用“头部仍是 2026-10-24 基线”的历史表述；本小节及本轮修订均不产生验收证据，§10 的 V01–V22 状态一律保持「未执行」。
+
+#### N11 覆盖确认凭据与发布锁陈旧回收
+
+**（a）偏差事实与证据**
+
+两处偏差都落在 §7.2 提交合同。
+
+1. 覆盖确认仍是全局布尔。§7.2 第 2 条要求「预览、覆盖确认绑定同一个 planDigest，不能用一个全局 confirmOverwrite 布尔值授权变化后的目标集合」。现发布合同仍只认全局布尔：请求字段 `confirmOverwrite?: boolean`（`webui/server/semantic-assets.ts:243`），覆写集合非空时以 `request.confirmOverwrite !== true` 决定放行或拒绝（`webui/server/semantic-assets.ts:1945`），HTTP 层原样透传 `body.confirmOverwrite === true`（`webui/server/index.ts:1840`、`webui/server/index.ts:1946`）。计划摘要尚未接入覆盖确认，因此「变化后的目标集合」仍可被同一个布尔授权。
+2. 锁的陈旧回收存在活锁风险。§7.1／§7.2 要求发布窗口覆盖完整临界区，并能回收崩溃遗留的锁。锁文件 `.ktx-ui/semantic-publish.lock` 写入 `acquiredAt`（`webui/server/publish-coordinator.ts:250`），但回收判定此前不读持有者身份：锁文件缺 `pid` 时被补成当前进程，使「持有者身份未知」的旧格式锁被误判为存活而长期占用窗口；若改为纯按年龄回收，又会让长耗时发布的活锁被抢占。
+
+**（b）本轮处理**
+
+- 发布协调器另立为独立模块 `webui/server/publish-coordinator.ts`，陈旧锁回收按持有者身份分流：持有进程已知时，只在该进程确实死亡后回收，年龄不再是回收依据（`webui/server/publish-coordinator.ts:130-144`）；持有者身份未知（旧格式锁）时才回退到年龄判定；锁文件缺 `pid` 时不再补成当前进程，而是记为持有者未知（`webui/server/publish-coordinator.ts:168-172`）。进程内重入由上下文标记保护，避免自锁。
+- 新增恢复日志 `webui/server/semantic-recovery-journal.ts`：写入前持久化每个实际目标的原字节／缺失标记、原摘要、预期新摘要与处理顺序（`webui/server/semantic-recovery-journal.ts:49-62`）；写入或镜像同步失败时按日志逆序恢复本批次已改目标并同步恢复镜像；发现第三方新内容时不覆盖，置 `recoveryRequired` 并阻断后续发布与手动索引（`webui/server/semantic-recovery-journal.ts:358-393`、`webui/server/semantic-assets.ts:1903`、`webui/server/semantic-assets.ts:2071`、`webui/server/semantic-assets.ts:2123`）。
+- 恢复日志与「废止全局布尔」的关系：§7.2 废止全局 `confirmOverwrite` 的意图是覆盖确认必须绑定到具体计划；恢复日志补的是另一半——发布过程本身现在可回滚。两者不可互相替代：覆盖凭据决定「被授权的是哪一组目标」，恢复日志决定「已写入后失败如何逐项核回」。本轮覆盖确认仍以全局布尔为凭据（planDigest 绑定待落地），恢复日志不构成对该项的豁免，也不把覆盖确认改写为布尔以外的另一种隐式授权。
+
+**（c）受影响条款编号**
+
+- §7.1 第 2 段（共享协调器覆盖范围与串行写入）。
+- §7.2 第 1 条（锁覆盖范围与 busy 语义）、第 2 条（planDigest 绑定覆盖确认）、第 4 条（写入前持久化原 bytes／预期新 digest 与恢复日志）、第 5 条（失败逆序恢复与 `recoveryRequired`）、第 6 条（启动恢复先处理未终结日志）。
+- §10 的 V08、V13、V14、V15；§11 的 D3、D4。
+
+**（d）是否改变冻结契约**
+
+2026-10-25 的 N11 回写当时不改变冻结契约，也未改写 §7.1–§7.3 正文；§7.2 第 2 条仍为待实现项，本小节不构成裁决、豁免或版本变更，因此不涉及新版本号与批准记录来源。恢复日志是 §7.2 第 4–6 条的部分落地实现，不等于 2026-10-27 复核所需的全生命周期闭环。本小节不产生验收证据。
+
+#### N26 即时恢复路径只信 `applied` 列表，写入已落地但标记丢失时漏回滚（D-23）
+
+**（a）偏差事实与证据**
+
+§7.2 第 6 条已写明「进程在 rename 后、日志更新前退出时，以原 / 新 digest 判定；无法判定则待人工修复，不猜成功」。该规则此前**只在启动恢复路径**（`recoverPendingRecoveryJournals`）落地；**即时恢复路径**（`restoreRecoveryJournal`，即发布过程中写入失败后的当场回滚）只遍历 `journal.applied` 列表，而 `applied` 的标记写在 rename **之后** —— 若 rename 成功而标记写入失败（磁盘满／进程崩溃），目标已被替换却不在 `applied` 里，于是该目标**不会被回滚**，且因 `recoveryRequired` 仍为 false，对外报「已恢复」。目标文件因此停留在**本批次的新内容**上，而恢复报告称成功，语义层内容与预期不一致却无人察觉。
+
+同时 `restoreEntry` 的返回值只有 `{ restored, reason }`，把「写入从未落地（或已被回滚）」与「存在第三方改动、拒绝覆盖」压进同一个 `restored=false` 分支，调用方无法区分「无需恢复」与「拒绝覆盖」——后者本应置 `recoveryRequired=true` 并阻断后续发布与手动索引。
+
+**（b）本轮处理**
+
+- 恢复一律**遍历 `journal.entries` 的全部 entry**（逆序处理，与写入顺序相反），**不依赖 `applied` 标记**；判定一律**按实际字节**（`restoreEntry` 的 digest 比对），即 §7.2 第 6 条已写明的规则，**不猜成功**。
+- `restoreEntry` 返回值改为三态：`restored`（已按原始字节回滚）／`unchanged`（目标仍是原始内容 ⇒ **写入从未落地**，既不算恢复也不算异常）／`conflict`（第三方内容，**不猜、不覆盖**，留给人工）。仅 `conflict` 置 `recoveryRequired=true` 并阻断后续发布与手动索引。
+- 启动恢复路径 `recoverPendingRecoveryJournals` 同步适配为同一形态，两条路径不再有两种判定口径。
+- 已补 2 条用例，并做过去修复反向验证（移除修复后「写入已落地但 applied 标记丢失」用例实测真红：第二个目标未被回滚）。
+
+**（c）受影响条款编号**
+
+- §7.2 第 5 条（失败逆序恢复与 `recoveryRequired`）、第 6 条（启动恢复以原／新 digest 判定、不猜成功）。
+- §10 的 V14、V15、V16；§11 的 D3。
+
+**（d）是否改变冻结契约**
+
+2026-10-25 的 N26 回写不改变冻结契约；当时未改写 §7.1–§7.3 正文，本条是实现向既有冻结条款对齐 —— 原 §7.2 第 6 条从未允许「只信标记列表」或「无法判定时猜成功」。2026-10-27 对正文的补强同样不降低该要求。本小节不产生验收证据，V01–V22 状态一律保持「未执行」。台账见 `docs/qa/security-findings.yaml` 条目 **D-23**（severity P1，status `fixed`，`fixedIn` = 实现提交 `2cc79f4`）。
 
 ## 8. 拟议接口与兼容边界
 
@@ -162,6 +302,8 @@ Catalog 导入只写受控 staging，不立即改正式文件或触发索引。�
 所有新增接口使用 WebUI 管理员会话、既有请求来源 / CSRF 防护；owner / operator 沿用既有语义维护权限，Agent MCP Token 不可调用。旧开放模式只按现有部署合同处理，不因本功能新增开放开关。非维护包的既有导出参数保持原含义；新增格式显式区分，旧记录缺字段显示 unknown，不反推成功。
 
 裸 YAML 无包元数据时，只允许显式绑定已配置 connection / Schema，并从实际模型解析身份；目标有歧义则阻断。它没有导出基线，首次预检读取当前目标形成 CAS 基线；不能伪称具有原包来源证明。所有文件都纳入预览，不能忽略错误文件后提交剩余部分。
+
+HTTP 预检请求中的 `files`／`packages` 一旦提供就必须是数组；每个元素必须是具备对应必填字符串字段的对象。缺字段、错类型、`null`、标量或其他错形 entry 必须在进入解包／语义校验前按原始数组索引定位并**整批拒绝**，不得先 `.filter` 丢弃错误元素再校验剩余合法项。混合“29 个合法文件 + 1 个错形文件”或“合法包 + 1 个错形 package”同样零 staging、零正式写入、零镜像与索引效果；数组缺省与显式空数组按既有兼容合同处理，不得借兼容路径接受非数组值。
 
 ## 9. 核心流程（伪代码）
 
@@ -193,14 +335,17 @@ checkBatch(actor, scopeId):
   rows = runSharedChecks(snapshot, concurrency=4, perTable=30s, total=10min)
   retainFailuresAndNotRunOnTimeoutOrCancel(rows)
   if currentDigests != snapshot.digests: markAffectedResultsStale(rows)
-  persistReport(rows, execution=not_run)        // 不 promote、不 reindex
+  persistReport(rows, executionEvidence=not_applicable) // 独立证据维度；不 promote、不 reindex
 
 stageImport(actor, input):
   requireCurrentWebuiMaintenancePermission(actor)
+  assertHttpEnvelopeArraysAndEveryEntryShapeOrRejectWholeBatch(input) // 不过滤错形 entry
   entries = safelyExpandAndValidateAllInput(input)  // 边解压边检查大小
   if maintenancePackage:
-    requireSameInstanceAndUnexpiredServerExportBaseline(entries)
-    reject changedReadonlyContext / reboundEntry / missingEntry
+    baseline = requireSameInstanceAndUnexpiredServerExportBaseline(entries)
+    requireExactEntrySetAndBindingsFromServerBaseline(entries, baseline)
+    // 全集、role、主/共享身份、路径、target/base/baseline digest、selected/dependencies
+    reject changedReadonlyContext / reboundEntry / missingOrExtraEntry
   targets = resolveAllTargetsFromModels(entries)    // 裸 YAML 必须显式绑定范围
   reject unknownTarget / duplicateTarget / manifestEdit / outOfScopeWrite
   snapshot = readStableCurrentBaseline(targetsAndDependencies)
@@ -215,87 +360,128 @@ prepareWorkbench(actor, validationId):
   plan = combineCurrentDiskChangesAndStagedCandidates()
   reject unknownFullScope / targetConflict / changedBaseline
   validateEntirePlanWithSharedChecksAndExistingContractGate(plan)
+  planDigest = digest(plan.refs, plan.dependencies, plan.candidates,
+                      plan.targetOldDigestOrAbsent, plan.exactOverwriteSet)
   return fullPlanPreview(planDigest, allEffects, overwriteSet, results)
 
 confirmAndPublish(actor, validationId, confirmedPlanDigest, idempotencyKey):
   requireCurrentWebuiMaintenancePermission(actor)
   with sharedSingleInstancePublishCoordinator:
-    if idempotencyAlreadyAccepted(actor, key, digest): return sameReleaseStatus
-    reject idempotencyPayloadMismatch / recoveryRequired
-    plan = rebuildCompletePlan(validationId)
+    existing = findPersistentIdempotentIntent(instance, actor, idempotencyKey)
+    if existing && existing.planDigest == confirmedPlanDigest:
+      return existing.releaseIdAndCurrentStatus
+    reject idempotencyPayloadMismatch / recoveryRequired / unresolvedOpenJournal
+    plan = rebuildCompletePlan(validationId)       // 包含已有磁盘变更与全部候选
     reject expired / actorMismatch / planDigestMismatch / targetOrDependencyChanged
     finalChecks = validateEntirePlanWithSharedChecksAndExistingContractGate(plan)
     if anyBlockingOrIncomplete(finalChecks): return blockedWithoutFormalWrites
-    persistIdempotentIntentAndRecoveryJournalOrFail(plan)
+    reserveIdempotentIntentWithoutEvictingUnexpiredKeysOrFail(plan, releaseId)
+    journal = createRecoveryJournalOrFail(plan)    // 先于任何正式效果
     try:
       for target in plan.stagedWriteTargets:
         compareBaselineAgain(target); atomicReplaceAndJournal(target)
-      synchronizeRuntimeMirrorAndVerifyDigests()
-    catch writeOrMirrorFailure:
+      synchronizeRuntimeMirrorAndVerifyDigestsOrFail()
+      persistFilesSavedAndReindexingOrFail()       // journal 仍为 activation_pending
+      reindexResult = runExistingIncrementalReindexOnce(plan)
+      if reindexResult.failed:
+        persistReindexFailedOrFail()
+        return filesSavedButActivationUnconfirmed
+      verifyFormalAndMirrorFinalDigestsOrFail()
+      persistTerminalAuditHistoryAndPublishedOrFail()
+      completeJournalOnlyAfterAllApplicableEvidenceIsDurable(journal)
+      return published
+    catch writeMirrorAuditIndexTerminalOrJournalFailure:
+      // 回滚不以失败记录写入成功为前置；不得吞镜像或状态持久化异常
       restoreOnlyThisBatchTargetsUsingJournalOrMarkRecoveryRequired()
-      persistFailureAndReturnWithoutReindex()
-    persistFilesSavedAndReindexingOrRecover()
-    reindexResult = runExistingIncrementalReindexOnce(plan)
-    if reindexResult.failed:
-      persistReindexFailed(); return filesSavedButActivationUnconfirmed
-    if not formalAndMirrorDigestsStillMatch(plan):
-      persistActivationUnconfirmed(); return staleAndRequireNewPreview
-    persistTerminalAuditAndPublishedOrMarkUnconfirmed()
-    return published
+      synchronizeAndVerifyRestoredMirrorOrKeepRecoveryBlock()
+      persistFailureBestEffortWithoutReindex()
+      return failedWithoutPublishedClaim()
 
 recoverAfterRestart():
-  beforeEnablingPublishOrManualReindex:
-    for incompleteJournal:
+  beforeEnablingAnyConfigOrAssetWritePublishManualReindexOrAffectedRead:
+    for everyUnfinishedJournal:
       compareActualBytesWithOldAndNewDigests()
-      if writesIncomplete: restoreOwnedWritesOrRequireRepair()
-      else if indexOrTerminalOutcomeUnproven: recordActivationUnconfirmed()
-    doNotReleaseRecoveryBlockUntilVerified()
+      if journal.phase == open_or_write_failed:
+        restoreOwnedWritesOrRequireRepair()         // 含无法证明阶段的旧 open journal
+      else if journal.phase in [files_saved, reindexing, reindex_failed, activation_pending]:
+        if formalOrMirrorBytesDoNotMatchSavedPlan: restoreOrRequireRepair()
+        else: doNotRollbackSolelyBecauseIndexOrTerminalOutcomeIsUnknown()
+      synchronizeAndVerifyRuntimeMirrorOrKeepRecoveryBlock()
+      if indexOrTerminalOutcomeUnproven: persistActivationUnconfirmed()
+      doNotCompleteJournalUntilAllApplicableEvidenceIsVerifiable()
+    on anyReadParseWriteMirrorOrDecisionFailure: keepRecoveryAndAffectedReadBlocks()
+    releaseApplicableBlocksAfterVerification()       // reindex_failed 可进入已核对的索引重试
 ```
 
 ## 10. 验证机制与验收矩阵
 
 ### 10.1 验证层次与证据
 
-未来实施分四层：共享身份 / 包 / 状态规则单元测试；临时内容根上的 API 集成及文件 hash 断言；真实打包 KTX 的合成语义集成；经后续实施计划明确授权的桌面用户旅程验证。Mock 仅覆盖失败注入，不能独自证明 KTX 兼容、可导回、Agent 可检索或镜像交付成立。本次只做文档检查，以下全部为 **未执行**。
+验证分四层：共享身份 / 包 / 状态规则单元测试；临时内容根上的 API 集成及文件 hash 断言；真实打包 KTX 的合成语义集成；经明确授权的桌面用户旅程验证。Mock 仅覆盖失败注入，不能独自证明 KTX 兼容、可导回、Agent 可检索或镜像交付成立。2026-10-27 本轮只做静态交叉审阅与文档修订。2026-11-02：「V01–V22 全部保持未执行」已作废，不得当作本条收口的现值。
+
+本节已从功能合同删除。场景文本保留给发布目录，不决定 FC 是否关闭。
 
 每项证据保存测试编号、候选产品版本、完整构建提交 / dirty 状态、镜像 ID、依赖版本、输入 fixture hash、操作 / 发布 ID、前后目标及未选文件 hash、实际结果、错误及报告。`passed / failed / not_run / blocked_environment` 分开；缺少 KTX 或环境不能登记通过。仅合成 / 脱敏 fixture，不访问客户真实库。
 
-| 编号 | 场景 / 必须断言 | 状态 |
-|---|---|---|
-| V01 | 同名表分布在两个连接、两个 Schema，overlay 文件名无 Schema：下载 / 校验 / 导入均精确匹配，歧义阻断 | 未执行 |
-| V02 | 筛选结果跨多页，选择全部；切换筛选清空选择；未启用表维护后仍未启用 | 未执行 |
-| V03 | 30 表下载→修改→导入→工作台确认→生效；未选文件前后 hash 相同；使用获授权的合成 Agent 经 Lucy Proxy 检索 / 读取新增语义，不能直连 KTX 证明 Lucy 生效 | 未执行 |
-| V04 | 单文件承载多表、跨 Schema / 连接关联、缺失依赖：实际影响必须完整；依赖只读，不暗中扩写 | 未执行 |
-| V05 | 包中一个 YAML / 引用 / 类型错误，其余 29 正确：整批提交阻断，正式目录、镜像及索引 hash 不变 | 未执行 |
-| V06 | 原包不修改及无 overlay 的模板不修改导回：no_change，不发布、不索引；修改后新 hash 可合法预检 | 未执行 |
-| V07 | 修改只读 Manifest、包 entry 改绑、其他实例包、过期导出基线、未知目标：逐项阻断，启用范围 / ACL 不变 | 未执行 |
-| V08 | 预览后另一会话、单表保存、Manifest 上传、CLI / Git 改目标或依赖，含 absent→存在：409 / stale，重预览，不能沿用覆盖确认 | 未执行 |
-| V09 | ZIP 穿越、绝对路径、软 / 硬链接、重复归一化路径、重复身份、未知 entry、解压炸弹、嵌套包：无越界写或部分接受 | 未执行 |
-| V10 | 200 YAML、512 KiB 单文件、16 MiB 内容、metadata / ZIP / HTTP 边界及各 +1；导出成功的维护包满足导入限制，无截断 | 未执行 |
-| V11 | 独立批量校验含 passed、failed、not_run、stale；并行 / 超时 / 取消后计数守恒，正式文件和索引不变 | 未执行 |
-| V12 | 30 表导入时已有其他待同步磁盘变更：完整计划可见且统一校验；变更计划后旧确认失效，不能声称局部生效 | 未执行 |
-| V13 | 重复点击、HTTP 重试、客户端断开重连：同幂等键同 releaseId、只写一次只索引一次；不同计划复用键冲突 | 未执行 |
-| V14 | 第 N 次 rename、镜像同步、审计持久化失败：可核对已写 / 已恢复集合；恢复失败阻断后续发布及受影响读取 | 未执行 |
-| V15 | 在 journal / rename / index / 终结记录各边界 kill 并重启：不猜 published，不误删恢复材料，不覆盖外部新内容 | 未执行 |
-| V16 | reindex 失败后文件仍保存、界面不报已生效；重试不重复 promote，范围变更要求重新确认，保留失败 attempt | 未执行 |
-| V17 | 未登录、失效会话、Agent Token、其他操作者的 ID，以及轮询 / 下载 / 提交期间撤权：拒绝且不泄露内容 | 未执行 |
-| V18 | 合法性通过但描述不全、实库未查询：三类结论分开；JSON / CSV 与逐表报告相符，CSV 转义，无原始凭据 | 未执行 |
-| V19 | 内容根为默认、定制路径、旧布局：均只读写解析出的事实源及受控镜像，无硬编码仓库路径 | 未执行 |
-| V20 | 发布工作台保留校验 / 整批同步，无上传导出按钮；Catalog 多选、导入预览、错误定位、返回后任务结果可达 | 未执行 |
-| V21 | 真实打包 KTX 合并 / 校验合成 Manifest + overlay；CLI / 单表 / 批量结论一致；不支持方言明确失败 / 未验证 | 未执行 |
-| V22 | 候选客户 amd64 镜像按现有单副本 Helm 交付合同跑合成往返和中断恢复；区分本机 Compose 与客户验收 | 未执行 |
+证据追踪必须建立“**V 编号 → 下列子断言 → 实际测试／fixture → 原始结果与产物 → 适用环境**”的可核对映射。一个测试、`coversV025` 注释或结果汇总标签只能登记它实际执行的子断言，不能自动覆盖同项其他子断言；只有该项全部子断言均在适用环境取得直接证据后，才可把整项改为通过。直接调用 helper 的测试不能替代真实 HTTP／页面入口证据，静态源码、测试源码和历史运行记录不能替代本轮正式执行。现有 real-e2e 中 V09 的匿名拒绝、V16 的页面边界、V05／V06 的单文件非法校验均只覆盖各自狭窄子场景，不得按标签回填整项。
+
+本节已从功能合同删除。场景文本保留给发布目录，不决定 FC 是否关闭。
+
+| 编号 | 子断言（全部必达） | 最低直接证据 | 状态 |
+|---|---|---|---|
+| V01 | (a) 两个连接的同名表精确隔离；(b) 同连接两个 Schema 的同名表精确隔离；(c) 无 Schema overlay 文件名不造成误归属；(d) 下载、校验、导入均使用完整三元身份，歧义整批阻断 | 真实 API 往返的规范化 refs、目标预览、导入结果及歧义拒绝记录；正式文件零误写 | 未执行 |
+| V02 | (a) “选择全部筛选结果”覆盖跨页全集而非当前页；(b) 任一既定筛选变化清空选择并提示；(c) 未启用表可维护但维护后不自动启用；(d) 操作前可预览完整对象 | 桌面交互记录、服务端 scope refs、选择计数及维护前后启用范围 | 未执行 |
+| V03 | (a) 30 表完成下载→修改→导入→完整计划确认→索引终结；(b) 未选文件与未授权目标前后 hash 不变；(c) 最终文件／镜像 digest 与状态一致；(d) 获授权合成 Agent 经 Lucy Proxy 可检索／读取新增语义，不能直连 KTX 替代 | 每阶段 operation／validation／release／attempt ID、fixture 与前后 hash、终结记录；Agent 级证据受 Wave 0b 约束，未解锁保持 blocked_delivery，本机或模拟结果不替代 | 未执行 |
+| V04 | (a) 单文件多表的全部写入影响完整列出，未全覆盖时阻断；(b) 跨 Schema／连接依赖闭包完整；(c) 只读依赖字节不变且不扩写；(d) 缺失依赖整批阻断 | 生产导出／导入的 selected、sharedIdentities、dependencies、写入集合及依赖前后 hash | 未执行 |
+| V05 | (a) 分别注入 YAML、引用、列类型错误，均为 29 正确 + 1 错误且整批拒绝；(b) 29 合法 + 1 缺字段／错类型／null HTTP entry 整批拒绝；(c) 合法包 + 1 错形 package 整批拒绝；(d) 各子例正式目录、镜像、索引及 release 效果为零 | 每个子例的输入数、定位、拒绝数与错误码，以及正式目录／镜像／索引前后 hash；不能只验单文件或发布列表 | 未执行 |
+| V06 | (a) 原包不改导回为 no_change；(b) 无 overlay 模板不改导回为 no_change；(c) 即使存在无关待同步变更也不发布、不索引；(d) 合法修改后的新 hash 可预检 | validate 响应、候选集合、release／reindex 计数与无关变更前后 hash，以及修改正例 | 未执行 |
+| V07 | (a) readonly→editable 与只读内容修改均拒绝；(b) 同时删除 metadata entry 与文件仍因服务端全集不符而拒绝；(c) 主／共享身份、路径、target/base/baseline digest、selected/dependencies 改绑均拒绝；(d) 异实例、过期、未知目标分别拒绝；(e) 合法编辑 overlay 正例可导回；(f) 全程启用范围／ACL 不变且正式效果为零 | 服务端原导出记录与上传包逐项 diff、各攻击 fixture hash、拒绝原因、零效果 hash 及合法编辑正例 | 未执行 |
+| V08 | (a) 另一会话、单表保存、Manifest 上传、CLI／Git 分别改变目标或依赖后均 409／stale；(b) absent→存在同样冲突；(c) 精确覆盖集合变化使旧确认失效；(d) 必须重预览并取得新 planDigest，不能沿用覆盖布尔 | 并发／故障控制时序、旧新 planDigest、目标与依赖 digest、拒绝响应及零覆盖证据 | 未执行 |
+| V09 | (a) 穿越、绝对路径、软／硬链接分别拒绝；(b) 重复归一化路径、重复身份、未知 entry、嵌套包分别拒绝；(c) 解压炸弹在限幅处拒绝；(d) 每例均无越界写、无部分接受 | 从实际 HTTP 入口逐个发送恶意 ZIP 的响应、fixture hash、宿主 canary、正式目录／镜像／索引前后 hash；helper 用例不单独成证 | 未执行 |
+| V10 | (a) 200 YAML、8 MiB、16 MiB、metadata、ZIP、HTTP 各边界值可用；(b) 各 +1 明确拒绝；(c) 生产导出与导入共用同一限额；(d) 成功导出包通过同一导入自检且无截断 | 边界／+1 请求与响应、实际条目和字节计数、导出包自检报告及共享配置来源 | 未执行 |
+| V11 | (a) passed／failed／not_run／stale 分别产生且计数守恒；(b) 并行上限 4、单表 30 秒、任务 10 分钟、取消与超时语义成立；(c) 实库未要求为独立 not_applicable，不制造提交 not_run；(d) 必需检查未调度才记 not_run并阻断；(e) 正式文件与索引不变 | 持久任务报告、调度时间线、逐表 verdict 与汇总、超时／取消记录、提交阻断及前后 hash | 未执行 |
+| V12 | (a) 30 表候选与既有无关待同步变更全部进入同一计划；(b) 全计划统一校验且影响可见；(c) 任一计划变化使旧确认失效；(d) 不把 Catalog 选择伪装成局部生效 | 完整计划 JSON、全部 refs／effects／校验结果、旧新 planDigest、拒绝与重确认记录 | 未执行 |
+| V13 | (a) 重复点击、HTTP 重试、断线重连均同键同 releaseId且只写／索引一次；(b) 进程重启及 snapshot 消费后仍可重放；(c) 同键异计划冲突；(d) 超过既有 500 条容量且记录未满 24h 时不提前淘汰，容量不足拒绝或扩容 | 持久幂等文件、重启前后响应、releaseId／planDigest、写盘与索引调用计数、容量fixture及24h内有效键全集 | 未执行 |
+| V14 | (a) 第 N 次 rename、journal 更新、镜像同步／核验、导出前后审计、reindexing／终结审计与状态写入分别故障关闭；(b) 失败记录写入失败仍先恢复；(c) 可核对已写／已恢复／待修复集合及 digest；(d) 恢复或镜像核验失败阻断发布、手动索引和受影响读取 | 每个故障点的注入时序、journal、实际文件／镜像 bytes、审计与 release 记录、发布／读取拒绝证据 | 未执行 |
+| V15 | (a) 在 journal 创建、rename、applied 标记、files_saved、index、终结记录各边界 kill 重启均不猜 published；(b) 普通 open journal、启动恢复异常和镜像异常保持阻断；(c) 恢复材料不误删、第三方新内容不覆盖；(d) 恢复核验前写入与受影响读取不开放 | 故障时间线、重启前后 journal／release／审计、实际 digest、恢复材料、监听／读取／写入准入结果 | 未执行 |
+| V16 | (a) reindex 失败保留已保存文件且 activationStatus=unconfirmed；(b) 重试关联原 releaseId与新 attemptId且不重复 promote；(c) 范围变化必须重预览／校验／确认；(d) 原失败 attempt 保留；(e) 索引成功但终结写入受阻时其他四类写入口仍 busy | release／attempt 历史、promote／index 计数、界面状态、范围变化拒绝及锁内阻塞时序 | 未执行 |
+| V17 | (a) 未登录、失效／伪造会话、Agent Token、跨操作者 ID 均拒绝；(b) scopes／check／operations／cancel／export／download／validate／publish 每个真实入口均覆盖；(c) 轮询、下载、提交期间撤权立即生效；(d) 不泄露内容且零副作用 | 各入口状态码与响应体、canary／凭据泄漏扫描、操作归属及正式效果前后 hash；旧路由匿名拒绝不能替代新入口 | 未执行 |
+| V18 | (a) 合法但描述不全可发布且三维结论独立；(b) 实库未要求记 not_applicable且不阻断；(c) 必需检查 not_run／stale必阻断；(d) JSON／CSV 与逐表报告一致，CSV 公式转义且无原始凭据 | 同一任务的合法性／完整度／执行证据字段、提交结果、JSON／CSV 原文对照与泄漏扫描 | 未执行 |
+| V19 | (a) 默认、定制、旧布局分别只读写解析出的事实源与受控镜像；(b) 发布与启动／失败恢复均核验镜像；(c) 镜像异常不得记 restored／published；(d) 无硬编码仓库路径或重复写入 | 三种 fixture 的解析配置、实际读写清单、正式／镜像 hash、恢复记录及镜像故障拒绝证据 | 未执行 |
+| V20 | (a) 工作台保留校验／整批同步且无上传导出按钮；(b) Catalog 多选与跨页选择可用；(c) 导入预览与错误定位完整；(d) 离开并返回后任务结果可达 | 桌面截图／交互记录与对应 API 结果；页面动作边界不能替代 Catalog 完整交互 | 未执行 |
+| V21 | (a) 真实打包 KTX 对合成 Manifest + overlay 合并／校验；(b) CLI、单表、独立批量、导入预检与发布最终校验复用同一规则且结论一致；(c) 不支持方言明确失败／未验证，Mock 不替代 | KTX 产品／依赖版本、真实命令与 API 输出、逐表结论对照及不支持方言结果 | 未执行 |
+| V22 | (a) 候选客户 linux/amd64 镜像按单副本 Helm 路径完成合成往返；(b) 在客户路径执行中断恢复并核对文件／镜像／索引／终结证据；(c) 本机 Compose 不冒充客户验收 | 镜像摘要与 ELF 架构、Chart／产品版本、Helm 环境、合成 fixture、故障时间线及前后 hash；受 Wave 0b 约束，未解锁保持 blocked_delivery | 未执行 |
 
 ### 10.2 完成判定
 
-范围身份、安全输入、冲突保护、校验前零正式写入、失败恢复和不虚报生效均为本功能未来验收必达项；其余 V01–V22 按适用环境提供明确结果。功能可交付必须有 30 表完整旅程、包往返与失败恢复的实证。没有执行的用例继续记未执行，不把 Spec 评审通过写成实现通过。本文件不新增当前 v2.0 发布门禁，后续实施和客户发布分别沿用当时已批准的门禁。
+范围身份、安全输入、冲突保护、校验前零正式写入、失败恢复和不虚报生效仍是本功能的承诺。2026-10-30 起，本条出口改由 §10.3 的 FC-01–FC-32 打假。30 表完整旅程不再作为本条收口条件。本节已从功能合同删除。场景文本保留给发布目录，不决定 FC 是否关闭。本文件不新增当前 v2.0 发布门禁。本条收口不表示可上线。
 
-## 11. 实施准备、风险与待裁决
+### 10.3 出口切分（2026-10-30）
 
-后续经授权再制定实施 Plan：先固定身份与共享检查 / 包合同，再补齐协调器、CAS、恢复和审计，随后接入 Catalog 与工作台，最后执行 §10 验证。不是只恢复旧按钮：旧自动 promote + reindex 路径须接入同一服务和完整计划合同，不能因入口不同绕过确认或漏校验。
+本条是功能合同，并于 2026-10-31 关闭。落地步骤与 FC 对照见 [功能合同收口 Task](../plans/lucy-20261030-semantic-batch-functional-contract-plan.md)。FC-01–FC-32 已有直接通过检查。
+
+留在本条的不变量是：三元身份、服务端范围、依赖闭包、错形整批拒绝、包往返与授权、`planDigest`、导入入口的恶意包拒绝、共享限额、校验结论、幂等与容量、镜像失败关闭、失败记录不是回滚前置、恢复准入、不把索引返回记成已发布、索引失败后的重试、终态未完成时其他写入口仍忙、本模块入口的会话拒绝、报告三维与 CSV、布局与受控镜像、四条校验入口共用同一套规则。证明这些不变量的局部故障注入留在本条。
+
+不在本条出口的是：桌面跨页与 V20 的交互记录、30 表完整旅程、Agent 经 Proxy 检索、在已部署进程上强杀再拉起、真实打包 KTX 的命令输出与不支持方言、客户 linux/amd64 单副本。场景文本保留给发布目录，不决定 FC 是否关闭。
+
+G30 已收口：校验只产报告，不产可发布计划。断言见 `webui/server/__tests__/semantic-batch-functional-contract.test.ts`（`G30 — the batch check produces a report, not a publishable plan`）。G31 与 W-B 的现行状态在 L25-16，不在本条。
+
+## 11. 实施准备、风险与已裁决设计参数
+
+实施 Plan 已存在于 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §6，并于 2026-10-27 按本次交叉审阅局部补强。后续先完成生产 API／页面接线、共享检查与限额复用，再补齐完整计划 CAS、覆盖确认、持久幂等、恢复和审计的完整临界区，最后经另行授权执行 §10 验证。不是只恢复旧按钮：旧自动 promote + reindex 路径须接入同一服务和完整计划合同，不能因入口不同绕过确认或漏校验；基础模块存在不等于这些生产步骤已完成。
 
 主要风险为同名误归属、维护包无法导回、Manifest / overlay 混写、全局索引带入其他变更、逐文件失败留下部分状态，以及工作区与镜像版本混淆。上述风险分别由身份快照、包自检、只读依赖、完整计划、恢复日志和 §1 双基线处理。
 
-以下为草案默认值，评审时需逐项确认，不影响本次文档登记，也不授权实现：D1 固定容量与 4 并行 / 30 秒 / 10 分钟是否覆盖目标客户规模；D2 30 分钟预览及 7 天包基线的运维适用性；D3 既有运行一致性拦截能否覆盖恢复失败的所有受影响读取；D4 共享发布协调器覆盖哪些现存写入口及其迁移工单。任何调整必须同步伪代码、错误提示与验收矩阵，不能留给实现者暗选。
+D1–D4 已于 2026-10-24 按 P0 Final 决议收口，不再留待实现者选择：
+
+| 编号 | 已裁决值 | 设计落点 |
+|---|---|---|
+| D1 容量与并行 | 最多 200 个 YAML entry、4 个并行检查、单表 30 秒、任务 10 分钟；其他 ZIP／HTTP 限制见 §5 | §5、§6、§9、V10–V11 |
+| D2 有效期 | 预览与校验快照 30 分钟；维护包基线 7 天 | §4–§5、V07 |
+| D3 恢复失败 | 阻断后续发布和手动索引，并使受影响资产的 Lucy 读取／查询失败关闭，直到恢复核验完成 | §7.1–§7.2、V14–V16 |
+| D4 共享协调器 | 覆盖单表保存、Manifest 上传、批量导入、手动 reindex 和 L25-14 角色／行策略保存；基线复核、写入、镜像与生效、最终 digest、终结审计／历史／状态均串行，只读预览和校验可并行 | §7.1–§7.2、V08、V13–V16 |
+
+任何后续调整必须重新需求审查，并同步伪代码、错误提示与验收矩阵，不能留给实现者暗选。
 
 ## Terminology Compliance
 
@@ -310,6 +496,8 @@ This feature follows [webui/docs/00-product-terminology-standard.md](../../webui
 | Staged semantic import | 导入语义资产包 / 已暂存 | 不以“上传成功”代替“已生效”；单表继续“导入 YAML” |
 | Selection scope | 已选择 N 张表 | 不用“全部”混淆当前页与完整筛选结果 |
 | Activation unconfirmed | 生效状态待确认 | 不用绿色成功掩盖索引或恢复失败 |
+
+以上术语已按 [webui/docs/00-product-terminology-standard.md](../../webui/docs/00-product-terminology-standard.md) §5 的登记流程写入该标准 §4.3（新增 `Batch Selection Scope` / `Select All Filtered Results` / `Batch Download Semantic Assets` / `Batch Semantic Validation` / `Import Semantic Assets Package` / `Semantic Maintenance Package` / `Activation Unconfirmed` 七行），并在 `webui/src/__tests__/catalog.test.tsx` 中加入关键文案断言防止回归。
 
 Schema、Manifest、semantic overlay、连接、启用表范围沿用现有定义。完整表身份、英文格式名、路径和 URL 的 DOM 节点必须带 `translate="no"` 与 `notranslate`。
 

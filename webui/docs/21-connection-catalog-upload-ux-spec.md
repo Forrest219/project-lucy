@@ -408,7 +408,7 @@ semantic-layer/<connection>/_schema/<schema>.yaml
 
 - `connectionId` 存在于 `ktx.yaml`。
 - `schema` 已配置在该 connection 的 schemas 中。
-- 文件大小不超过 512 KB。
+- 文件大小不超过 8 MiB（2026-10-30 容量修订，与 `server/semantic-limits.ts` 共用上限）；目录 Manifest 校验与上传接口的 HTTP 请求体上限为 32 MiB。
 - 文件名扩展名为 `.yaml` 或 `.yml`。
 - YAML 可解析。
 - YAML 顶层包含可识别的 schema manifest 表清单。

@@ -1,0 +1,413 @@
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  PUBLISH_COORDINATOR_LOCK_REL,
+  PublishCoordinatorBusyError,
+  acquirePublishCoordinatorLock,
+  isInsidePublishCoordinator,
+  isPublishCoordinatorBusy,
+  readPublishCoordinatorLock,
+  releasePublishCoordinatorLock,
+  withPublishCoordinator,
+  type PublishEntryKind
+} from "../publish-coordinator.js";
+import {
+  SemanticRecoveryClosedError,
+  createRecoveryJournal,
+  isSemanticRecoveryAdmissionLatched,
+  markRecoveryJournalActivationPending,
+  markRecoveryJournalBlocked,
+  markRecoveryJournalFilesSaved,
+  recoverSemanticJournalsAtStartup,
+  resetSemanticRecoveryAdmissionForTests
+} from "../semantic-recovery-journal.js";
+
+let projectRoot: string;
+
+async function writeRawLock(payload: Record<string, unknown>): Promise<void> {
+  const abs = path.resolve(projectRoot, PUBLISH_COORDINATOR_LOCK_REL);
+  await mkdir(path.dirname(abs), { recursive: true });
+  await writeFile(abs, JSON.stringify(payload), "utf8");
+}
+
+describe("shared single-instance publish coordinator", () => {
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), "lucy-publish-coord-"));
+  });
+
+  afterEach(async () => {
+    resetSemanticRecoveryAdmissionForTests();
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  it("holds the publish window while the critical section runs and releases it afterwards", async () => {
+    let observedHolder: unknown = null;
+
+    await withPublishCoordinator(
+      "role_policy_save",
+      async () => {
+        observedHolder = await readPublishCoordinatorLock(projectRoot);
+        expect(isInsidePublishCoordinator()).toBe(true);
+      },
+      { projectRoot }
+    );
+
+    expect(observedHolder).toMatchObject({ kind: "role_policy_save", pid: process.pid });
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+    expect(isInsidePublishCoordinator()).toBe(false);
+  });
+
+  it("returns a readable busy error instead of silently queueing a competing write", async () => {
+    let releaseFirst!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let markAcquired!: () => void;
+    const acquired = new Promise<void>((resolve) => {
+      markAcquired = resolve;
+    });
+
+    const first = withPublishCoordinator(
+      "batch_import",
+      async () => {
+        markAcquired();
+        await gate;
+      },
+      { projectRoot }
+    );
+    await acquired;
+
+    let innerError: unknown = null;
+    try {
+      await withPublishCoordinator("manual_reindex", async () => undefined, { projectRoot });
+    } catch (err) {
+      innerError = err;
+    }
+    releaseFirst();
+    await first;
+
+    expect(innerError).toBeInstanceOf(PublishCoordinatorBusyError);
+    const busy = innerError as PublishCoordinatorBusyError;
+    expect(busy.code).toBe("PUBLISH_COORDINATOR_BUSY");
+    expect(busy.holder).toMatchObject({ kind: "batch_import" });
+    expect(busy.message).toContain("batch_import");
+  });
+
+  it("serializes different write entry points against each other", async () => {
+    const order: string[] = [];
+
+    let releaseFirst!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let markAcquired!: () => void;
+    const acquired = new Promise<void>((resolve) => {
+      markAcquired = resolve;
+    });
+
+    const first = withPublishCoordinator(
+      "semantic_table_save",
+      async () => {
+        markAcquired();
+        order.push("table_save:start");
+        await gate;
+        order.push("table_save:end");
+      },
+      { projectRoot }
+    );
+    await acquired;
+
+    const second = withPublishCoordinator(
+      "manifest_upload",
+      async () => {
+        order.push("manifest:start");
+        order.push("manifest:end");
+      },
+      { projectRoot }
+    ).catch((err) => {
+      order.push(`manifest:busy:${(err as PublishCoordinatorBusyError).code}`);
+    });
+
+    await second;
+    releaseFirst();
+    await first;
+
+    expect(order[0]).toBe("table_save:start");
+    expect(order).toContain("manifest:busy:PUBLISH_COORDINATOR_BUSY");
+    expect(order).not.toContain("manifest:start");
+  });
+
+  it("is re-entrant so a nested coordinated call cannot deadlock on itself", async () => {
+    const result = await withPublishCoordinator(
+      "batch_import",
+      async () =>
+        withPublishCoordinator("semantic_table_save", async () => "nested-ok", { projectRoot }),
+      { projectRoot }
+    );
+
+    expect(result).toBe("nested-ok");
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+
+  it("releases the publish window when the critical section throws", async () => {
+    await expect(
+      withPublishCoordinator(
+        "batch_import",
+        async () => {
+          throw new Error("publish failed");
+        },
+        { projectRoot }
+      )
+    ).rejects.toThrow("publish failed");
+
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+
+  it("does NOT reclaim a live holder just because the lock is old", async () => {
+    // A long-running publish is still a live holder. Age alone must not let a
+    // second writer into the critical section and overwrite its targets.
+    const staleAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    await writeRawLock({
+      kind: "batch_import",
+      operationId: "long-running-run",
+      acquiredAt: staleAt,
+      pid: process.pid
+    });
+
+    await expect(
+      withPublishCoordinator("role_policy_save", async () => "reclaimed", {
+        projectRoot,
+        staleAfterMs: 30 * 60 * 1000
+      })
+    ).rejects.toThrowError(PublishCoordinatorBusyError);
+
+    const holder = await readPublishCoordinatorLock(projectRoot);
+    expect(holder?.operationId).toBe("long-running-run");
+  });
+
+  it("reclaims a lock whose owning process no longer exists", async () => {
+    // A crashed process leaves a lock behind. The pid is gone, so the lock is
+    // reclaimed immediately — no waiting for the stale window.
+    await writeRawLock({
+      kind: "manual_reindex",
+      operationId: "dead-pid-run",
+      acquiredAt: new Date().toISOString(),
+      pid: 2 ** 22
+    });
+
+    const result = await withPublishCoordinator(
+      "role_policy_save",
+      async () => "reclaimed-dead-pid",
+      { projectRoot, staleAfterMs: 30 * 60 * 1000 }
+    );
+
+    expect(result).toBe("reclaimed-dead-pid");
+  });
+
+  it("reclaims an old lock whose owning process cannot be determined", async () => {
+    // A lock written by a build that predates the pid field has no owner to
+    // check; age is then the only available signal.
+    const staleAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    await writeRawLock({
+      kind: "batch_import",
+      operationId: "ownerless-run",
+      acquiredAt: staleAt
+    });
+
+    const result = await withPublishCoordinator(
+      "role_policy_save",
+      async () => "reclaimed-ownerless",
+      { projectRoot, staleAfterMs: 30 * 60 * 1000 }
+    );
+
+    expect(result).toBe("reclaimed-ownerless");
+  });
+
+  it("reports busy for a lock held by a live foreign process", async () => {
+    // pid 1 always exists; a lock stamped with it is not ours and not stale.
+    await writeRawLock({
+      kind: "manifest_upload",
+      operationId: "other-instance",
+      acquiredAt: new Date().toISOString(),
+      pid: 1
+    });
+
+    await expect(
+      withPublishCoordinator("role_policy_save", async () => "should-not-run", {
+        projectRoot,
+        staleAfterMs: 30 * 60 * 1000
+      })
+    ).rejects.toBeInstanceOf(PublishCoordinatorBusyError);
+
+    const busy = await isPublishCoordinatorBusy(projectRoot);
+    expect(busy.busy).toBe(true);
+    expect(busy.holder).toMatchObject({ kind: "manifest_upload" });
+
+    // The foreign lock is left untouched.
+    const raw = JSON.parse(
+      await readFile(path.resolve(projectRoot, PUBLISH_COORDINATOR_LOCK_REL), "utf8")
+    ) as { operationId: string };
+    expect(raw.operationId).toBe("other-instance");
+  });
+
+  it("does not treat an absent lock as busy", async () => {
+    expect(await isPublishCoordinatorBusy(projectRoot)).toEqual({ busy: false, holder: null });
+  });
+
+  it("releases only the lock with the same operationId", async () => {
+    const { holder } = await acquirePublishCoordinatorLock(projectRoot, "batch_import", {}, {
+      operationId: "op-ours"
+    });
+    await writeRawLock({
+      kind: "batch_import",
+      operationId: "op-theirs",
+      acquiredAt: holder.acquiredAt,
+      pid: process.pid
+    });
+
+    await releasePublishCoordinatorLock(projectRoot, holder);
+
+    const current = await readPublishCoordinatorLock(projectRoot);
+    expect(current?.operationId).toBe("op-theirs");
+  });
+
+  it("removes the lock when the operationId matches", async () => {
+    const { holder } = await acquirePublishCoordinatorLock(projectRoot, "batch_import", {}, {
+      operationId: "op-ours"
+    });
+
+    await releasePublishCoordinatorLock(projectRoot, holder);
+
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+});
+
+describe("semantic recovery closes the shared write window", () => {
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), "lucy-publish-coord-"));
+    resetSemanticRecoveryAdmissionForTests();
+  });
+
+  afterEach(async () => {
+    resetSemanticRecoveryAdmissionForTests();
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function openJournal(): Promise<string> {
+    const journal = await createRecoveryJournal(projectRoot, {
+      releaseId: "rel-gate",
+      operationId: "op-gate",
+      actor: "admin-a",
+      instanceId: "inst-a",
+      targets: [{
+        targetPath: "semantic-layer/demo.yaml",
+        originalContent: "old\n",
+        newContent: "new\n"
+      }]
+    });
+    return journal.journalId;
+  }
+
+  async function expectWriteRefused(kind: PublishEntryKind): Promise<void> {
+    let called = false;
+    await expect(
+      withPublishCoordinator(kind, async () => {
+        called = true;
+      }, { projectRoot })
+    ).rejects.toBeInstanceOf(SemanticRecoveryClosedError);
+    expect(called).toBe(false);
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  }
+
+  it("refuses table save, manifest upload, and access writes during write_in_progress", async () => {
+    await openJournal();
+    const kinds: PublishEntryKind[] = [
+      "semantic_table_save",
+      "manifest_upload",
+      "role_policy_save",
+      "agent_save"
+    ];
+    for (const kind of kinds) {
+      await expectWriteRefused(kind);
+    }
+  });
+
+  it("refuses those writes while recovery_required is persisted", async () => {
+    const journalId = await openJournal();
+    await markRecoveryJournalBlocked(projectRoot, journalId, "needs a human");
+    await expectWriteRefused("semantic_table_save");
+    await expectWriteRefused("manifest_upload");
+    await expectWriteRefused("role_policy_save");
+  });
+
+  it("keeps files_saved and activation_pending open for the next write", async () => {
+    const saved = await openJournal();
+    await markRecoveryJournalFilesSaved(projectRoot, saved);
+    let savedCalled = false;
+    await withPublishCoordinator("semantic_table_save", async () => {
+      savedCalled = true;
+    }, { projectRoot });
+    expect(savedCalled).toBe(true);
+
+    const pending = await openJournal();
+    await markRecoveryJournalActivationPending(projectRoot, pending);
+    let pendingCalled = false;
+    await withPublishCoordinator("manifest_upload", async () => {
+      pendingCalled = true;
+    }, { projectRoot });
+    expect(pendingCalled).toBe(true);
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+
+  it("keeps single-table save, manifest upload, batch import, and role save busy while the window is held", async () => {
+    let releaseFirst!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let markAcquired!: () => void;
+    const acquired = new Promise<void>((resolve) => {
+      markAcquired = resolve;
+    });
+
+    const holder = withPublishCoordinator(
+      "semantic_table_save",
+      async () => {
+        markAcquired();
+        await gate;
+      },
+      { projectRoot }
+    );
+    await acquired;
+
+    const kinds: PublishEntryKind[] = [
+      "semantic_table_save",
+      "manifest_upload",
+      "batch_import",
+      "role_policy_save"
+    ];
+    for (const kind of kinds) {
+      await expect(
+        withPublishCoordinator(kind, async () => undefined, { projectRoot })
+      ).rejects.toMatchObject({ code: "PUBLISH_COORDINATOR_BUSY" });
+    }
+
+    releaseFirst();
+    await holder;
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+
+  it("latches admission when startup recovery cannot read the journal directory", async () => {
+    const journals = path.join(projectRoot, ".ktx-ui", "semantic-recovery-journals");
+    await mkdir(path.dirname(journals), { recursive: true });
+    await writeFile(journals, "not-a-directory", "utf8");
+
+    expect(isSemanticRecoveryAdmissionLatched()).toBe(false);
+    await expect(recoverSemanticJournalsAtStartup(projectRoot)).resolves.toBeNull();
+    expect(isSemanticRecoveryAdmissionLatched()).toBe(true);
+
+    await expectWriteRefused("semantic_table_save");
+    await expectWriteRefused("role_policy_save");
+  });
+});

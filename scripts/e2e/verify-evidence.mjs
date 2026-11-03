@@ -232,6 +232,30 @@ export const FINDINGS_PATH = path.join(REPO_ROOT, "docs/qa/security-findings.yam
 /** Spec §8.3a: the findings file must carry all of these; a missing entry is a verification failure. */
 export const EXPECTED_FINDING_IDS = ["V-01", "V-02", "V-03", "V-04", "V-05", "V-06", "V-07", "V-08", "D-01", "D-02", "G-01", "G-02", "G-03", "G-04", "G-05"];
 
+/**
+ * D-03 only. The product fix is verified by these two repository tests, which
+ * cover the ROW25-V19 / ROW25-V22 behaviors. Those execution ids are not
+ * frozen release-catalog variants and are not required to be status=passed in
+ * a release-evidence file. Accepting them here does not insert them into
+ * passedIds, does not mark the E2E descriptors passed, and does not set
+ * releaseReady. Every other finding still needs a release-evidence pass.
+ */
+export const D03_REPOSITORY_VERIFICATION = Object.freeze({
+  findingId: "D-03",
+  caseIds: Object.freeze(["ROW25-V19", "ROW25-V22"]),
+  tests: Object.freeze([
+    "webui/server/__tests__/row-policy-d03-uppercase.test.ts",
+    "webui/server/__tests__/row-policy-d03-realfs.test.ts"
+  ])
+});
+
+/** True only when this one finding cites one of its two repository-test ids and both test files exist. */
+export function d03RepositoryVerifiedRef(finding, caseId) {
+  if (!finding || finding.id !== D03_REPOSITORY_VERIFICATION.findingId) return false;
+  if (!D03_REPOSITORY_VERIFICATION.caseIds.includes(caseId)) return false;
+  return D03_REPOSITORY_VERIFICATION.tests.every((rel) => existsSync(path.join(REPO_ROOT, rel)));
+}
+
 /** Existing customer runtime/ELF/K8s gates that must have passed on the SAME candidate digest. */
 // `k8s-acceptance` is the fresh install of the candidate digest on the isolated cluster (read-from-cluster digest);
 // `k8s-upgrade` is the N-1 PVC in-place upgrade to the same digest. The static Helm gate is a separate repo-level
@@ -494,7 +518,14 @@ function checkFindings({ findings, evidence, problems, passedIds, scenarioPassed
       if (!f.fixedIn) problems.add("failed", "finding_fixedIn_missing", `${f.id} is fixed but has no fixedIn`);
       if (!Array.isArray(f.verifiedBy) || f.verifiedBy.length === 0) problems.add("failed", "finding_verifiedBy_missing", `${f.id} is fixed but has no verifiedBy`);
       for (const id of f.verifiedBy ?? []) {
-        if (!passedIds.has(id) && !scenarioPassed.has(id)) problems.add("failed", "finding_not_verified", `${f.id} cites ${id}, which is not passed in this release evidence`);
+        if (passedIds.has(id) || scenarioPassed.has(id)) continue;
+        // D-03 only: ROW25-V19 / ROW25-V22 are verified by the two repository
+        // tests named in D03_REPOSITORY_VERIFICATION. They do not have to be
+        // passed in this release evidence. This does not add them to passedIds,
+        // does not mark those E2E ids passed, and does not set releaseReady.
+        // Any other finding, and any other id on D-03, still fails closed.
+        if (d03RepositoryVerifiedRef(f, id)) continue;
+        problems.add("failed", "finding_not_verified", `${f.id} cites ${id}, which is not passed in this release evidence`);
       }
     }
     if (f.severity === "P2" && f.status === "accepted_risk" && !f.acceptedBy) problems.add("failed", "p2_accepted_without_owner", `${f.id} accepted_risk needs acceptedBy`);

@@ -6,11 +6,20 @@ import { trustProxyEnabled } from "../web-security.js";
 
 const MINUTE_MS = 60_000;
 
-/** Spec §3.1 item 5 proposal defaults. Windows are fixed (not extended by further attempts). */
+/**
+ * Spec §3.1 item 5 proposal defaults. Windows are fixed (not extended by further attempts).
+ *
+ * L25-06 adds the OIDC buckets: `sourceTotal` is deliberately shared with the other
+ * authentication entry points, so an OIDC flood cannot open a hole around the local
+ * login and bootstrap limits.
+ */
 export const AUTH_RATE_LIMITS = {
   sourceTotal: { limit: 30, windowMs: 5 * MINUTE_MS },
   loginAccountSource: { limit: 5, windowMs: 15 * MINUTE_MS },
   bootstrapSource: { limit: 5, windowMs: 15 * MINUTE_MS },
+  oidcStartSource: { limit: 30, windowMs: 5 * MINUTE_MS },
+  oidcCallbackSource: { limit: 30, windowMs: 5 * MINUTE_MS },
+  oidcTransaction: { limit: 5, windowMs: 10 * MINUTE_MS },
   maxBuckets: 10_000
 } as const;
 
@@ -125,6 +134,46 @@ export function gateBootstrapAttempt(request: FastifyRequest): Promise<AuthGateR
     { name: "source_total", key: sourceKey(source), ...sourceTotal },
     { name: "bootstrap_source", key: bootstrapKey(source), ...bootstrapSource }
   ]);
+}
+
+/**
+ * OIDC start (L25-06 Spec §8.2.1). Hit before a login transaction is created.
+ *
+ * There is no account dimension here: the caller is not authenticated yet, so the
+ * bucket is keyed by the trusted client source only.
+ */
+export function gateOidcStartAttempt(request: FastifyRequest): Promise<AuthGateResult> {
+  const source = clientSource(request);
+  const { sourceTotal, oidcStartSource } = AUTH_RATE_LIMITS;
+  return hitBuckets(source, [
+    { name: "source_total", key: sourceKey(source), ...sourceTotal },
+    { name: "oidc_start_source", key: `oidc-start:${source}`, ...oidcStartSource }
+  ]);
+}
+
+/**
+ * OIDC callback (L25-06 Spec §8.2.1).
+ *
+ * The source buckets always apply. The transaction bucket only applies when the
+ * state hash really matches a live login transaction — a random state must not
+ * create a bucket, otherwise an unauthenticated caller could fill the bucket store
+ * with junk keys.
+ */
+export function gateOidcCallbackAttempt(
+  request: FastifyRequest,
+  stateHash: string,
+  transactionExists: boolean
+): Promise<AuthGateResult> {
+  const source = clientSource(request);
+  const { sourceTotal, oidcCallbackSource, oidcTransaction } = AUTH_RATE_LIMITS;
+  const buckets: BucketSpec[] = [
+    { name: "source_total", key: sourceKey(source), ...sourceTotal },
+    { name: "oidc_callback_source", key: `oidc-callback:${source}`, ...oidcCallbackSource }
+  ];
+  if (transactionExists) {
+    buckets.push({ name: "oidc_transaction", key: `oidc-tx:${stateHash}`, ...oidcTransaction });
+  }
+  return hitBuckets(source, buckets);
 }
 
 async function clearBucket(key: string): Promise<void> {

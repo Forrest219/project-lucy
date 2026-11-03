@@ -212,7 +212,10 @@ describe("T06a appendClientObservations", () => {
       .prepare(`SELECT client_event_id, ack_status FROM agent_audit_idempotency ORDER BY client_event_id`)
       .all() as Array<{ client_event_id: string; ack_status: string }>;
     expect(idem.map((r) => r.client_event_id)).toEqual(["client-evt-1", "client-evt-2"]);
-    expect(idem.every((r) => r.ack_status === "accepted")).toBe(true);
+    // B23 / E-7：`ack_status` 不再硬编码 "accepted" —— 记**真实送达状态**。
+    // 这两条观测不是 `result_received`（无有效回执），因此送达观察为 unknown，
+    // 绝不记 acknowledged，也绝不记 unacknowledged（U1）。
+    expect(idem.every((r) => r.ack_status === "unknown")).toBe(true);
 
     const ledger = db
       .prepare(

@@ -2,6 +2,24 @@ import { mkdir, mkdtemp, rename, rm, stat, utimes, writeFile } from "node:fs/pro
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/** Spec 195 §6 — a verification task can be held or broken on purpose. */
+const fsGate = vi.hoisted(() => ({ hold: null as Promise<void> | null }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    readFile: async (file: unknown, options?: unknown) => {
+      if (fsGate.hold) await fsGate.hold;
+      return (actual.readFile as (f: unknown, o?: unknown) => Promise<unknown>)(file, options);
+    },
+    stat: async (file: unknown, options?: unknown) => {
+      if (fsGate.hold) await fsGate.hold;
+      return (actual.stat as (f: unknown, o?: unknown) => Promise<unknown>)(file, options);
+    }
+  };
+});
+
 import {
   beginDisplayWrite,
   displayGenerations,
@@ -11,8 +29,10 @@ import {
   withDisplayWriteBarrier
 } from "../display-generation";
 import {
+  createDisplayRequestBudget,
   displayCacheVerified,
   displaySnapshotDiagnostics,
+  DISPLAY_RECOVERY_WAIT_BUDGET_MS,
   DisplaySnapshotBusyError,
   getDisplaySnapshot,
   reconcileFullDigest,
@@ -38,6 +58,8 @@ function deferred<T = void>() {
 }
 
 const manifestPath = () => path.join(projectRoot, "config", "semantic-layer", "warehouse", "_schema", "fin.yaml");
+/** Spec 195 §4 — a plain table overlay only feeds D (never P). */
+const overlayPath = () => path.join(projectRoot, "config", "semantic-layer", "warehouse", "fin_ledger.yaml");
 
 beforeEach(async () => {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-display-snapshot-"));
@@ -322,14 +344,17 @@ describe("Spec 174 T3 — external change reconciliation (SC-05/13, DI-12/13)", 
     expect(displayGenerations().D).toBeGreaterThan(d2);
   });
 
-  it("finds same-size, same-mtime rewrites in the full digest", async () => {
+  it("finds same-size, same-mtime rewrites exactly once (Spec 195 §5.2)", async () => {
     const before = await stat(manifestPath());
     await writeFile(manifestPath(), "tables:\n  fin_ledgeR:\n    table: fin.fin_ledger\n", "utf8");
     await utimes(manifestPath(), before.atime, before.mtime);
     await reconcileMetadata();
     const afterMeta = displayGenerations().D;
+    // The metadata signature moved (ctime), so the metadata pass confirmed the
+    // version; the full digest must not invalidate the same version again.
+    expect(afterMeta).toBeGreaterThan(0);
     await reconcileFullDigest();
-    expect(displayGenerations().D).toBeGreaterThan(afterMeta);
+    expect(displayGenerations().D).toBe(afterMeta);
   });
 
   it("migrates to a new content root when ktx.yaml paths.content_root changes", async () => {
@@ -382,5 +407,198 @@ describe("Spec 174 T3 — external change reconciliation (SC-05/13, DI-12/13)", 
     expect(displaySnapshotDiagnostics().reconcilerRunning).toBe(true);
     own();
     expect(displaySnapshotDiagnostics().reconcilerRunning).toBe(false);
+  });
+});
+
+/**
+ * Spec 195 §5 — one confirmed change invalidates the derived scopes once,
+ * whichever of the two reconciliations observes it first.
+ */
+describe("Spec 195 SI-01/SI-02 — one confirmed change, one invalidation", () => {
+  async function seedOverlay(): Promise<void> {
+    await writeFile(overlayPath(), "grain: [id]\n", "utf8");
+    await reconcileMetadata();
+  }
+
+  it("SI-01 metadata → full: one external overlay version invalidates D exactly once", async () => {
+    await seedOverlay();
+    const before = displayGenerations();
+    await writeFile(overlayPath(), "grain: [id, region]\n", "utf8");
+    await reconcileMetadata();
+    const afterMeta = displayGenerations();
+    expect(afterMeta.D).toBe(before.D + 1);
+    // An ordinary overlay never feeds the permission display.
+    expect(afterMeta.P).toBe(before.P);
+    await reconcileFullDigest();
+    expect(displayGenerations().D).toBe(afterMeta.D);
+  });
+
+  it("SI-01 full → metadata: the same version is not invalidated twice", async () => {
+    await seedOverlay();
+    const before = displayGenerations();
+    await writeFile(overlayPath(), "grain: [id, region]\n", "utf8");
+    await reconcileFullDigest();
+    const afterFull = displayGenerations();
+    expect(afterFull.D).toBe(before.D + 1);
+    await reconcileMetadata();
+    expect(displayGenerations().D).toBe(afterFull.D);
+  });
+
+  it("SI-01 concurrent observation: one version invalidates D once", async () => {
+    await seedOverlay();
+    const before = displayGenerations();
+    await writeFile(overlayPath(), "grain: [id, region]\n", "utf8");
+    await Promise.all([reconcileMetadata(), reconcileFullDigest()]);
+    expect(displayGenerations().D).toBe(before.D + 1);
+  });
+
+  it("SI-02 a second version, a deletion and a recreation are each confirmed once", async () => {
+    await seedOverlay();
+    let gens = displayGenerations();
+    await writeFile(overlayPath(), "grain: [id, region]\n", "utf8");
+    await reconcileMetadata();
+    expect(displayGenerations().D).toBe(gens.D + 1);
+    gens = displayGenerations();
+
+    await rm(overlayPath());
+    await reconcileMetadata();
+    expect(displayGenerations().D).toBe(gens.D + 1);
+    gens = displayGenerations();
+
+    await writeFile(overlayPath(), "grain: [id, region, amount]\n", "utf8");
+    await reconcileMetadata();
+    expect(displayGenerations().D).toBe(gens.D + 1);
+  });
+
+  it("SI-02 an atomic replace is confirmed once", async () => {
+    await seedOverlay();
+    const before = displayGenerations();
+    const tmp = `${overlayPath()}.next`;
+    await writeFile(tmp, "grain: [id, region]\n", "utf8");
+    await rename(tmp, overlayPath());
+    await reconcileMetadata();
+    const afterMeta = displayGenerations();
+    expect(afterMeta.D).toBe(before.D + 1);
+    await reconcileFullDigest();
+    expect(displayGenerations().D).toBe(afterMeta.D);
+  });
+
+  it("SI-02 a same-content rewrite with a new mtime still moves the semantic generation once", async () => {
+    await seedOverlay();
+    const before = displayGenerations();
+    await writeFile(overlayPath(), "grain: [id]\n", "utf8");
+    await reconcileMetadata();
+    const afterMeta = displayGenerations();
+    expect(afterMeta.D).toBe(before.D + 1);
+    await reconcileFullDigest();
+    expect(displayGenerations().D).toBe(afterMeta.D);
+  });
+});
+
+/**
+ * Spec 195 §6 / §7 — SI-09, SI-10, SI-12: shared bounded recovery, one
+ * request budget and distinguishable diagnostics.
+ */
+describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () => {
+  afterEach(() => {
+    fsGate.hold = null;
+  });
+
+  /** Push the clock past the freshness windows so the scope is overdue. */
+  function makeOverdue(): () => void {
+    const realNow = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValue(realNow + 60_000);
+    return () => spy.mockRestore();
+  }
+
+  it("SI-09 an overdue verification serves no payload and recovers afterwards", async () => {
+    const hold = deferred();
+    fsGate.hold = hold.promise;
+    const restoreClock = makeOverdue();
+    const started = Date.now();
+    await expect(getDisplaySnapshot("overdue", ["D"], async () => "payload")).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    const waited = Date.now() - started;
+    // The request waits for the shared task, but never past its own budget.
+    expect(waited).toBeLessThan(DISPLAY_RECOVERY_WAIT_BUDGET_MS + 1500);
+    hold.resolve();
+    fsGate.hold = null;
+    restoreClock();
+    await reconcileMetadata();
+    await reconcileFullDigest();
+    const recovered = await getDisplaySnapshot("overdue", ["D"], async () => "payload");
+    expect(recovered.payload).toBe("payload");
+  });
+
+  it("SI-09 a request that gives up does not stop the shared verification task", async () => {
+    const hold = deferred();
+    fsGate.hold = hold.promise;
+    const restoreClock = makeOverdue();
+    const shortBudget = createDisplayRequestBudget(3, 60);
+    await expect(getDisplaySnapshot("shared", ["D"], async () => "payload", { budget: shortBudget })).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    // The shared task is still running: the reconciler is alive and the scope
+    // has no completed verification yet.
+    expect(displaySnapshotDiagnostics().reconcilerRunning).toBe(true);
+    expect(displaySnapshotDiagnostics().scopeHealth.D.metadataCompletedAt).toBeLessThan(Date.now());
+    hold.resolve();
+    fsGate.hold = null;
+    restoreClock();
+    await reconcileMetadata();
+    const health = displaySnapshotDiagnostics().scopeHealth.D;
+    expect(health.metadataError ?? null).toBeNull();
+  });
+
+  it("SI-10 one request spends at most three attempts and one recovery budget", async () => {
+    const hold = deferred();
+    fsGate.hold = hold.promise;
+    const restoreClock = makeOverdue();
+    const budget = createDisplayRequestBudget();
+    const started = Date.now();
+    await expect(getDisplaySnapshot("attempts", ["D"], async () => "payload", { budget })).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    const elapsed = Date.now() - started;
+    expect(budget.attemptsLeft).toBeGreaterThanOrEqual(0);
+    expect(elapsed).toBeLessThan(DISPLAY_RECOVERY_WAIT_BUDGET_MS + 1500);
+    const diagnostics = displaySnapshotDiagnostics();
+    expect(diagnostics.lastRequest?.attempts ?? 0).toBeLessThanOrEqual(3);
+    expect(diagnostics.lastRequest?.name).toBe("attempts");
+    hold.resolve();
+    fsGate.hold = null;
+    restoreClock();
+  });
+
+  it("SI-10 concurrent readers of one scope share the verification task", async () => {
+    const hold = deferred();
+    fsGate.hold = hold.promise;
+    const requests = Array.from({ length: 4 }, () =>
+      getDisplaySnapshot("shared-scope", ["D"], async () => "payload").catch((error) => error)
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    hold.resolve();
+    fsGate.hold = null;
+    const results = await Promise.all(requests);
+    // Every reader either got the payload or the same busy envelope — none of
+    // them started a second full scan.
+    expect(results.every((result) => result instanceof Error || result.payload === "payload")).toBe(true);
+    expect(displaySnapshotDiagnostics().fileIoPeak).toBeLessThanOrEqual(2);
+  });
+
+  it("SI-10 the display build cap stays at four and file I/O at two", async () => {
+    await getDisplaySnapshot("io-cap", ["D"], async () => "payload");
+    const diagnostics = displaySnapshotDiagnostics();
+    expect(diagnostics.fileIoPeak).toBeLessThanOrEqual(2);
+    expect(MAX_CONCURRENT_DISPLAY_BUILDS).toBe(4);
+  });
+
+  it("SI-12 a busy request reports a distinguishable reason without sensitive content", async () => {
+    const token = beginDisplayWrite(["D"]);
+    await expect(
+      getDisplaySnapshot("busy", ["D"], async () => "payload", { budget: createDisplayRequestBudget(3, 40) })
+    ).rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", reason: "write_pending" });
+    endDisplayWrite(token);
+
+    const diagnostics = displaySnapshotDiagnostics();
+    expect(diagnostics.busyByReason.write_pending).toBeGreaterThan(0);
+    // No absolute path, file content or credential may appear in diagnostics.
+    expect(JSON.stringify(diagnostics)).not.toContain(projectRoot);
+    expect(JSON.stringify(diagnostics)).not.toContain("ktx.yaml");
   });
 });

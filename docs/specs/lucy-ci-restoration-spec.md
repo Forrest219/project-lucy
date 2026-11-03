@@ -228,7 +228,12 @@ on event:
 
 ## Terminology Compliance
 
-遵循 `webui/docs/00-product-terminology-standard.md`。无新增产品术语；CI、job、workflow、SHA、digest、Required checks 为工程术语。PASS / failure / BLOCKED 分别描述验证、执行及前置缺失，不表示客户发布批准。
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms:
+- None
+
+无新增产品术语；CI、job、workflow、SHA、digest、Required checks 为工程术语，不进入任何用户可见文案、错误码、Toast、Modal、表格列名或导航，无需在术语标准登记。PASS / failure / BLOCKED 分别描述验证、执行及前置缺失，不表示客户发布批准。
 
 ## 参考
 

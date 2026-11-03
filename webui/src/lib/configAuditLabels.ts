@@ -37,12 +37,17 @@ export const CHANGE_TYPE_OPTIONS: ChangeTypeOption[] = [
   { value: "role_create", label: "创建角色", assetKinds: ["governance"] },
   { value: "role_patch", label: "角色变更", assetKinds: ["governance"] },
   { value: "role_delete", label: "删除角色", assetKinds: ["governance"] },
+  // Lucy v0.25 (L25-14 §3.4) — a Role save that touches a row policy is recorded
+  // as a row-permission change, so it is distinguishable from an ordinary config change.
+  { value: "row_policy_update", label: "行权限变更", assetKinds: ["governance"] },
   { value: "token_create", label: "创建 Token", assetKinds: ["governance"] },
+  { value: "token_renew", label: "续期 Token", assetKinds: ["governance"] },
   { value: "token_revoke", label: "吊销 Token", assetKinds: ["governance"] },
   { value: "enabled_tables_update", label: "启用表范围更新", assetKinds: ["governance"] },
   { value: "schema_add", label: "新增 Schema", assetKinds: ["governance"] },
   { value: "schema_remove", label: "移除 Schema", assetKinds: ["governance"] },
   { value: "connection_create", label: "新建连接", assetKinds: ["governance"] },
+  { value: "connection_endpoint_update", label: "编辑连接", assetKinds: ["governance"] },
   { value: "connection_delete", label: "删除连接", assetKinds: ["governance"] },
   { value: "semantic_table_save", label: "表语义保存", assetKinds: ["semantic"] },
   { value: "semantic_table_import", label: "表语义导入", assetKinds: ["semantic"] },

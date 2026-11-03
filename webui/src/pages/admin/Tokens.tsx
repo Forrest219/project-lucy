@@ -1,17 +1,18 @@
 import { useState, useMemo } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiDelete } from "../../lib/apiClient";
+import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import type { TokensResponse, TokenInventoryItem } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
+import { RenewTokenDialog } from "../../components/admin/RenewTokenDialog";
 import { formatLastSeen } from "./AgentList";
-import { Code2, Terminal, ExternalLink, Key, Trash2 } from "lucide-react";
+import { Key, Trash2 } from "lucide-react";
 import { queryKeys } from "../../lib/queryKeys";
 
 export function Tokens() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
@@ -19,7 +20,25 @@ export function Tokens() {
   const filterAgent = searchParams.get("agent") ?? "all";
   const filterStatus = searchParams.get("status") ?? "all";
 
+  // ── 局部状态镜像（Spec §5.2／§5.3）──────────────────────────────────────
+  // 搜索框的 `value` 由本地 state 驱动，URL 作为下游事实源跟随。
+  //
+  // ★ 搜索框**不复用** `updateParam` 里的 `value !== "all"` 清空哨兵——那个哨兵
+  // 只适用于下拉框。文本 `all` 必须是普通文本：留在输入框里，也留在 `search`
+  // 参数里（Spec §5.2 写入契约、SC-23）。
+  const searchMirror = useUrlMirroredField({
+    read: (sp) => sp.get("search") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("search", raw);
+      else next.delete("search");
+      return next;
+    },
+    history: "push"
+  });
+
   const [revokingToken, setRevokingToken] = useState<{ userId: string; label: string } | null>(null);
+  const [renewingToken, setRenewingToken] = useState<{ userId: string; label: string } | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "tokens", { search, agent: filterAgent, status: filterStatus }],
@@ -50,13 +69,16 @@ export function Tokens() {
   });
 
   const updateParam = (key: string, value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value && value !== "all") {
-      next.set(key, value);
-    } else {
-      next.delete(key);
-    }
-    setSearchParams(next);
+    // 函数式更新：从 prev 拷贝后再改本字段，禁止闭包快照（Spec §5.2 写入契约）。
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value && value !== "all") {
+        next.set(key, value);
+      } else {
+        next.delete(key);
+      }
+      return next;
+    });
   };
 
   const tokens = data?.tokens ?? [];
@@ -121,49 +143,6 @@ export function Tokens() {
         }
       />
 
-      {/* Quickstart Integration Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="pl-card flex items-start gap-3 p-4 border border-border-default hover:border-brand/40 transition-colors">
-          <div className="p-2.5 rounded-lg bg-bg-muted text-brand shrink-0">
-            <Code2 className="size-5" />
-          </div>
-          <div className="grid gap-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">客户端接入配置</span>
-              <span className="pl-badge text-xs"><span className="notranslate" translate="no">MCP</span> 协议</span>
-            </div>
-            <p className="text-xs text-fg-muted leading-relaxed">
-              支持一键配置 <span className="notranslate" translate="no">Hermes</span>、<span className="notranslate" translate="no">Claude Code</span>、<span className="notranslate" translate="no">Codex</span> 或任意标准 <span className="notranslate" translate="no">MCP</span> 客户端。
-            </p>
-            <div className="pt-1">
-              <Link to="/admin/tokens/new" className="text-xs text-brand hover:underline inline-flex items-center gap-1 font-medium">
-                前往生成客户端配置片段 →
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="pl-card flex items-start gap-3 p-4 border border-border-default hover:border-brand/40 transition-colors">
-          <div className="p-2.5 rounded-lg bg-bg-muted text-accent shrink-0">
-            <Terminal className="size-5" />
-          </div>
-          <div className="grid gap-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">调用流水与排障</span>
-              <span className="pl-badge text-xs">实时审计</span>
-            </div>
-            <p className="text-xs text-fg-muted leading-relaxed">
-              追溯各 <span className="notranslate" translate="no">Token</span> 的实际调用、来源 <span className="notranslate" translate="no">IP</span>、客户端版本与权限裁决结果。
-            </p>
-            <div className="pt-1">
-              <Link to="/admin/audit" className="text-xs text-accent hover:underline inline-flex items-center gap-1 font-medium">
-                查看访问日志流水 <ExternalLink className="size-3" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 notranslate" translate="no" data-testid="token-kpis">
         <MetricCard
@@ -176,29 +155,29 @@ export function Tokens() {
         />
         <MetricCard
           helpId="kpi-active-tokens"
-          label={<span>近 7 天活跃</span>}
-          labelText="近 7 天活跃"
+          label={<span>近 7 天业务活跃 <span className="notranslate" translate="no">Token</span></span>}
+          labelText="近 7 天业务活跃 Token"
           value={stats.activeLast7dTokens}
-          help={<span>最近 7 天内至少有一次 <span className="notranslate" translate="no">MCP</span> 调用记录的 <span className="notranslate" translate="no">Token</span> 数量。</span>}
-          subValue="基于访问日志实时统计"
+          help={<span>最近 7 天内至少有一次默认用量业务调用的 <span className="notranslate" translate="no">Token</span> 数量；排除协议事件与默认视图排除的评测探针（<span className="notranslate" translate="no">Spec 189</span>）。</span>}
+          subValue="按业务调用判定"
         />
         <MetricCard
           helpId="kpi-expiring-tokens"
           label={<span>30 天内到期</span>}
           labelText="30 天内到期"
           value={stats.expiringSoonTokens}
-          help={<span>即将于 30 天内到期的可用 <span className="notranslate" translate="no">Token</span>，建议提前准备换签。</span>}
+          help={<span>即将于 30 天内到期的可用 <span className="notranslate" translate="no">Token</span>，建议提前续期或换签。</span>}
           tone={stats.expiringSoonTokens > 0 ? "warning" : undefined}
-          subValue={stats.expiringSoonTokens > 0 ? "需关注换签" : "无近期到期"}
+          subValue={stats.expiringSoonTokens > 0 ? "需关注续期或换签" : "无近期到期"}
         />
         <MetricCard
           helpId="kpi-expired-tokens"
           label={<span>已过期 / 停用</span>}
           labelText="已过期 / 停用"
           value={stats.expiredTokens}
-          help={<span>已过期的 <span className="notranslate" translate="no">Token</span> 凭据（<span className="notranslate" translate="no">Proxy</span> 会自动拒绝访问）。</span>}
+          help={<span>已过期的 <span className="notranslate" translate="no">Token</span> 可由管理员续期恢复；已吊销的不可续期。</span>}
           tone={stats.expiredTokens > 0 ? "danger" : undefined}
-          subValue="已自动阻止访问"
+          subValue="可续期或吊销"
         />
       </div>
 
@@ -211,8 +190,8 @@ export function Tokens() {
               className="pl-input max-w-xs text-sm notranslate"
               translate="no"
               placeholder="搜索 Token 标签、备注、Agent、客户端…"
-              value={search}
-              onChange={(e) => updateParam("search", e.target.value)}
+              value={searchMirror.value}
+              onChange={(e) => searchMirror.onChange(e.target.value)}
               aria-label="搜索 Token"
             />
             {agentOptions.length > 0 && (
@@ -263,9 +242,9 @@ export function Tokens() {
               <tr>
                 <th><span className="notranslate" translate="no">Token</span> 标签 / 备注</th>
                 <th>所属 <span className="notranslate" translate="no">Agent</span></th>
-                <th><span className="notranslate" translate="no">Token</span> 前缀</th>
+                <th><span className="notranslate" translate="no">Token</span> 核对提示</th>
                 <th>生效角色</th>
-                <th>最近活跃</th>
+                <th>最近业务使用</th>
                 <th>过期时间</th>
                 <th className="text-right">操作</th>
               </tr>
@@ -297,7 +276,11 @@ export function Tokens() {
                 </tr>
               ) : (
                 tokens.map((token) => {
-                  const lastSeen = formatLastSeen(token.last_used);
+                  // Spec 189 §6 — the list's main time is 最近业务使用
+                  // (Default Usage Call). 最近 MCP 访问 stays as the
+                  // technical context line underneath.
+                  const lastSeen = formatLastSeen(token.last_business_use);
+                  const lastMcpAccess = formatLastSeen(token.last_used);
                   const expiry = getExpiryDisplay(token.expires_at, token.status);
 
                   return (
@@ -355,11 +338,21 @@ export function Tokens() {
                         </div>
                       </td>
 
-                      {/* Token Prefix */}
-                      <td className="py-3 px-3">
-                        <code className="text-xs font-mono bg-bg-muted px-1.5 py-0.5 rounded text-fg-muted notranslate" translate="no">
-                          {token.hashPrefix ? `${token.hashPrefix}…` : "—"}
-                        </code>
+                      {/* Token Display Hint — Spec lucy-20261102-token-display-hint */}
+                      <td className="py-3 px-3 max-w-[9rem]">
+                        {token.tokenHint ? (
+                          <code
+                            className="text-xs font-mono bg-bg-muted px-1.5 py-0.5 rounded text-fg-muted notranslate break-all whitespace-normal inline-block max-w-full"
+                            translate="no"
+                            data-testid="token-display-hint"
+                          >
+                            {token.tokenHint}
+                          </code>
+                        ) : (
+                          <span className="text-xs text-fg-muted" data-testid="token-display-hint-missing">
+                            无核对提示
+                          </span>
+                        )}
                       </td>
 
                       {/* Scope / Roles */}
@@ -387,6 +380,11 @@ export function Tokens() {
                           <span className="text-xs font-medium text-fg-default" title={lastSeen.title}>
                             {lastSeen.label}
                           </span>
+                          {token.last_business_use && token.last_used && token.last_used !== token.last_business_use && (
+                            <span className="text-xs text-fg-muted truncate max-w-[160px]" title={lastMcpAccess.title}>
+                              最近 <span className="notranslate" translate="no">MCP</span> 访问 {lastMcpAccess.label}
+                            </span>
+                          )}
                           {(token.last_client || token.last_device_name_seen) && (
                             <span className="text-xs text-fg-muted truncate max-w-[160px] notranslate" translate="no">
                               {token.last_client
@@ -424,6 +422,16 @@ export function Tokens() {
                           >
                             日志
                           </Link>
+                          <button
+                            type="button"
+                            className="pl-btn pl-btn--ghost text-xs p-1"
+                            data-testid={`token-renew-${token.label}`}
+                            onClick={() => setRenewingToken({ userId: token.agent.id, label: token.label })}
+                            aria-label={`续期 ${token.label}`}
+                            title="续期"
+                          >
+                            续期
+                          </button>
                           <button
                             type="button"
                             className="pl-btn pl-btn--ghost text-xs text-danger p-1 notranslate"
@@ -476,6 +484,18 @@ export function Tokens() {
             </div>
           </div>
         </div>
+      )}
+
+      {renewingToken && (
+        <RenewTokenDialog
+          userId={renewingToken.userId}
+          label={renewingToken.label}
+          onClose={() => setRenewingToken(null)}
+          onSuccess={() => {
+            void queryClient.invalidateQueries({ queryKey: ["admin", "tokens"] });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
+          }}
+        />
       )}
     </div>
   );

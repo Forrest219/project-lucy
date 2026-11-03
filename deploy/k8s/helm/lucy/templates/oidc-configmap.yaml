@@ -1,0 +1,28 @@
+{{- /*
+OIDC provider profile (non-sensitive).
+
+Rendered ONLY when oidc.enabled=true. With the default `oidc.enabled=false`
+this file produces nothing at all — no ConfigMap, no Secret volume, no
+mounts, no env vars (OIDC-21).
+
+The client secret is deliberately NOT here: it stays in the customer's own
+Kubernetes Secret and is mounted separately as a read-only file (see
+deployment.yaml). The chart renders no Secret for OIDC.
+
+The chart never reaches the network while rendering: discoveryUrl, the
+provider endpoints and jwksUri are plain values, so a customer install
+stays offline (Spec §8.3, OIDC-22).
+*/}}
+{{- $oidc := .Values.oidc | default dict -}}
+{{- if $oidc.enabled }}
+{{- include "lucy.oidc.validate" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lucy.fullname" . }}-oidc-profile
+  labels:
+    {{- include "lucy.labels" . | nindent 4 }}
+data:
+  profile.yaml: |-
+    {{- include "lucy.oidc.profile" . | nindent 4 }}
+{{- end }}

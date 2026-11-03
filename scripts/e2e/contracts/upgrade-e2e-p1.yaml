@@ -1,0 +1,326 @@
+version: 1
+kind: upgrade-e2e-p1-scenarios
+contract: lucy-upgrade-e2e-p1/v1
+releaseEligible: false
+scope: customer-upgrade-e2e-and-candidate-verification
+gate: none
+owners:
+  upgradeE2E: scripts/e2e/run-upgrade.mjs
+  candidateVerification: scripts/upgrade/verify-candidate.mjs
+sources:
+  upgradeE2E: docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md
+  candidateVerification: docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md
+  plan: docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md
+
+# ---------------------------------------------------------------------------
+# Namespace partition. The P0 feature-coverage namespace and the P1-5 upgrade
+# scenario namespace share the numbers UPG-01.. but NOT the meaning. They are
+# reported side by side and are never merged.
+# ---------------------------------------------------------------------------
+namespaces:
+  - namespace: UPG
+    contract: lucy-upgrade-e2e-p1/v1
+    range: UPG-01..UPG-16
+    meaning: 客户升级场景（P1-5）
+    source: docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md#6-验收矩阵
+    producedByThisContract: true
+  - namespace: UPG
+    contract: lucy-upgrade-checklist/v1
+    range: UPG-01..UPG-14
+    meaning: P0 期功能覆盖（管理台登录安全、多角色保存与查询等）
+    source: scripts/e2e/contracts/upgrade-features.yaml
+    producedByThisContract: false
+    note: 同号不同义。本合约不产出该命名空间的任何结论，既有合约文件未被写入。
+  - namespace: RVC
+    contract: lucy-upgrade-candidate-verification/v1
+    range: RVC-01..RVC-13
+    meaning: 升级候选验证场景（P1-6）
+    source: docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md#6-验收矩阵
+    producedByThisContract: true
+
+# ---------------------------------------------------------------------------
+# Delivery state of this round. The executor is implemented; the real inputs
+# are not delivered yet.
+# ---------------------------------------------------------------------------
+delivery:
+  status: blocked_delivery
+  blockers:
+    - id: G-01
+      note: 受保护 runner 未注册，真实交付环境不可调度。
+    - id: G-06
+      note: 候选镜像推不上 GHCR（IMAGE_NAMESPACE 默认 kaelio，令牌只能写 owner Forrest219 名下）。
+  missingInputs:
+    - 真实旧版镜像身份
+    - 真实候选镜像身份（digest / SHA256）
+    - 真实一致性备份
+    - 最新安全状态受控来源
+    - 隔离 linux/amd64 客户目标环境
+  note: 交付链未解锁时，本合约所有验收项按 blocked_delivery 记录，不得记 passed。
+
+# ---------------------------------------------------------------------------
+# P1-5 upgrade scenarios. `stage` matches UPG_STAGES in scripts/e2e/run-upgrade.mjs.
+# ---------------------------------------------------------------------------
+upgradeScenarios:
+  - id: UPG-01
+    title: 固定身份与预检
+    stage: identity
+    standard: 两端身份可复现；缺 Secret、错误卷、资源漂移与不兼容明确报告；预检零迁移
+    evidence: [baseline-identity, candidate-identity, isolation-checks, zero-mutation-proof]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-02
+    title: 备份可恢复
+    stage: backup
+    standard: 独立实例恢复登录、确定性查询、历史审计与安全行为
+    evidence: [backup-method, sha256, file-manifest, independent-restore-assertions]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-03
+    title: 真实原地升级
+    stage: upgrade
+    standard: 运行镜像确实切换，继续原卷；模板不覆盖客户资产
+    evidence: [actual-image-identity, volume-continuity, asset-preservation]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-04
+    title: 有效业务连续
+    stage: continuity
+    standard: 有效 Token 经公共 MCP 查询，结果等于独立答案；工具与内容可见性正确
+    evidence: [public-mcp-query, independent-answer, tool-visibility]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-05
+    title: 安全状态连续
+    stage: continuity
+    standard: 吊销、过期、停用与越权仍按预期拒绝，不用 500 代替
+    evidence: [revocation-refusal, expiry-refusal, disabled-refusal, cross-domain-refusal]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-06
+    title: 权限与内容迁移
+    stage: continuity
+    standard: Role／ACL 按预期保留或迁移；跨域探针不可访问
+    evidence: [role-retention, acl-retention, cross-domain-probe]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-07
+    title: 审计连续
+    stage: continuity
+    standard: 旧记录按 ID／关键字段可查，新调用追加；所有者经管理 API 成功读取
+    evidence: [historical-audit-by-id, audit-append, owner-read]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-08
+    title: 管理员迁移
+    stage: admin
+    standard: 原账号按合同登录；旧 Cookie 按版本契约失效；职责保持
+    evidence: [admin-login, old-cookie-invalidation, role-retention]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-09
+    title: 无管理员旧环境
+    stage: admin
+    standard: 进入受控引导；无／错误引导密钥拒绝；正确认领不可重复
+    evidence: [controlled-bootstrap, missing-key-refusal, wrong-key-refusal, single-claim]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-10
+    title: 无部署许可
+    stage: admin
+    standard: 无 license.yaml 仍可运行合法业务；Bearer 与 ACL 不受遗留变量影响
+    evidence: [business-without-license, bearer-isolation, acl-isolation]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-11
+    title: 切换前失败
+    stage: recovery
+    standard: 镜像不可用或启动失败时按合同恢复旧版；配置与卷未重置
+    evidence: [rollback-to-baseline, config-preserved, volume-preserved]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-12
+    title: 切换后业务失败
+    stage: recovery
+    standard: 候选已写数据后按声明路径恢复业务并重验安全；不覆盖初始失败证据
+    evidence: [declared-recovery-path, security-revalidation, initial-failure-retained]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-13
+    title: 旧快照安全恢复
+    stage: recovery
+    standard: 已吊销 Token 与会话仍不可用；缺最新安全状态则维护模式
+    evidence: [revoked-token-still-refused, session-invalidated, maintenance-mode]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-14
+    title: 中断与重试
+    stage: recovery
+    standard: 声明检查点后可恢复或幂等重试；无重复身份、半写配置或误开放
+    evidence: [declared-checkpoint, idempotent-retry, no-duplicate-identity, no-half-written-config]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-15
+    title: 运维与重启
+    stage: recovery
+    standard: 内容路径、可写性、连接测试与 reindex 正常；重启后业务与吊销状态保持
+    evidence: [content-path, writability, connection-test, reindex, restart-continuity]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: UPG-16
+    title: 中断时间
+    stage: availability
+    standard: 外部探针记录旧版最后成功、不可用区间、新版首次业务成功与恢复耗时
+    evidence: [last-baseline-success, unavailable-window, first-candidate-success, recovery-duration]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+
+# ---------------------------------------------------------------------------
+# P1-6 candidate verification scenarios. `stage` matches RVC_STAGES in
+# scripts/upgrade/verify-candidate.mjs.
+# ---------------------------------------------------------------------------
+candidateVerificationScenarios:
+  - id: RVC-01
+    title: 备份一致性
+    stage: preflight
+    standard: SHA256 与清单通过；含安全库时为 quiesced，否则 BLOCKED
+    evidence: [backup-method, sha256, file-manifest, quiesced-proof]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-02
+    title: 隔离与归属
+    stage: preflight
+    standard: namespace／PVC／Service 独立，客户网络不可达，资源归本次运行
+    evidence: [namespace-isolation, pvc-isolation, ingress-unreachable, ownership]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-03
+    title: 空卷起步
+    stage: empty_volume
+    standard: 覆盖前文件数 0，未启用 seed-only；任一不满足 FAILED
+    evidence: [zero-file-count, seed-only-absent]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-04
+    title: 整卷覆盖完整
+    stage: restore
+    standard: 文件清单与备份一致；配置、秘密引用与 .ktx-ui/ 关键路径符合版本清单
+    evidence: [file-manifest-match, config-paths, secret-reference-paths, ktx-ui-paths]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-05
+    title: 结构无混合态
+    stage: structure
+    standard: 基线逐项符合候选预期，结构变更确实生效；失败不得降级警告
+    evidence: [structure-baseline-comparison, structural-change-applied]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-06
+    title: 业务查询一致
+    stage: assertions
+    standard: 有效凭据经公共 MCP 查询，结果与独立答案一致，不只断言非空
+    evidence: [public-mcp-query, independent-answer]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-07
+    title: 授权允许路径
+    stage: assertions
+    standard: 授权范围内调用按预期允许，工具与内容可见性一致
+    evidence: [allowed-call, tool-visibility, content-visibility]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-08
+    title: 授权拒绝路径
+    stage: assertions
+    standard: 越权探针为预期认证／授权拒绝，不用 500 代替
+    evidence: [expected-authz-refusal, no-500-substitute]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-09
+    title: 审计连续
+    stage: assertions
+    standard: 历史 ID／关键字段可读，新调用追加；行数不下降仅辅助
+    evidence: [historical-audit-by-id, audit-append]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-10
+    title: 会话与最新安全状态
+    stage: assertions
+    standard: 轮换后旧会话失效、新登录可用；已核对最新吊销状态生效；不声称证明原地不回滚
+    evidence: [session-rotation, old-session-invalidated, verified-revocation-applied]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-11
+    title: 跨域探针
+    stage: assertions
+    standard: 跨域与未授权对象不可访问
+    evidence: [cross-domain-refusal]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-12
+    title: 独立重放
+    stage: replay
+    standard: 同一备份在两个新空卷环境重放，结论一致，无重复身份或半写配置
+    evidence: [second-fresh-empty-volume, equivalent-conclusions, no-duplicate-identity, no-half-written-config]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+  - id: RVC-13
+    title: 清理完整
+    stage: teardown
+    standard: 卷、namespace、Secret、临时副本销毁；残留与清理失败如实记录
+    evidence: [volume-destroyed, namespace-destroyed, secret-destroyed, residual-inventory]
+    status: BLOCKED
+    reason: IDENTITY_INCOMPLETE
+    category: delivery
+
+# ---------------------------------------------------------------------------
+# What is executable in this round. The refusal paths are self-proved by the
+# executor's own test suite; no real scenario has an executable case yet.
+# ---------------------------------------------------------------------------
+executableSurface:
+  kind: executor-self-proof
+  runner: node --test scripts/e2e/__tests__/run-upgrade.test.mjs scripts/upgrade/verify-candidate.test.mjs
+  covers:
+    - 身份预检先于任何变更
+    - 非空卷拒绝
+    - 热备拒绝
+    - 非归属拒绝
+    - 缺能力拒绝
+    - 缺实现拒绝
+    - 结构混合态判为 FAILED
+    - 安全来源不明时安全断言 SKIPPED
+    - 独立重放一致性与重复身份／半写配置拒绝
+    - 产物清单与脱敏
+  notCovered:
+    - 真实旧版原地升级
+    - 真实备份整卷恢复
+    - 真实候选镜像验证
+    - 客户流量或共享 demo 变更
+  note: 以上 notCovered 项在交付链解锁前不得转记为通过。

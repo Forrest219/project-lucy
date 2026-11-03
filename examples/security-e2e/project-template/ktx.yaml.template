@@ -5,7 +5,7 @@
 # databases + a dedicated LOGIN role.
 connections:
   fin-db:
-    driver: postgres
+    driver: {{DB_DRIVER}}
     enabled_tables:
       - analytics.marketing_daily
       - analytics.orders_masked
@@ -17,7 +17,7 @@ connections:
     schemas:
       - analytics
   sales-db:
-    driver: postgres
+    driver: {{DB_DRIVER}}
     enabled_tables:
       - analytics.orders_masked
     host: "{{DB_HOST}}"

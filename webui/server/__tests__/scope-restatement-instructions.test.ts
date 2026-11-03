@@ -45,7 +45,8 @@ describe("scope restatement instructions (SC-25)", () => {
     const text = await instructions();
     // WO-12 T3 already moved this file from an 8-minute wording to the proxy
     // budget; the restatement section must not have displaced it.
-    expect(text).toContain("同一问询最多 20 次数据工具调用，或墙钟 120 秒");
+    // Spec 162 修订（D8）：口径改为「已结算数据处理时长」，不含思考时间。
+    expect(text).toContain("同一问询最多 20 次数据工具调用，或累计 120 秒数据处理时长（不含思考时间）");
     expect(text).toContain("question_budget_exhausted");
   });
 

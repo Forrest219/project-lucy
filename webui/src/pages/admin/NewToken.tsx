@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiPost, isStaleResponseError } from "../../lib/apiClient";
+import { CLIPBOARD_COPY_FAILED_MESSAGE, copyTextToClipboard } from "../../lib/clipboard";
 import { queryKeys } from "../../lib/queryKeys";
 import type { Agent, CreateTokenResponse, McpEndpointInfo } from "../../lib/types";
 import { buildCodexMcpToml, buildMcpConfig } from "../../lib/mcpEndpoint";
@@ -103,7 +104,7 @@ export function NewToken() {
   const [selectedUserId, setSelectedUserId] = useState(routeUserId ?? "");
   const [label, setLabel] = useState("");
   const [deviceName, setDeviceName] = useState("");
-  const [expiresAt, setExpiresAt] = useState(() => computePresetDate(90));
+  const [expiresAt, setExpiresAt] = useState(() => computePresetDate(365));
   const [generatedToken, setGeneratedToken] = useState<CreateTokenResponse | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeSnippet, setActiveSnippet] = useState<ClientId>("hermes");
@@ -167,12 +168,15 @@ export function NewToken() {
     });
   }
 
-  function handleCopyToken() {
+  async function handleCopyToken() {
     if (!generatedToken) return;
-    void navigator.clipboard.writeText(generatedToken.token).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    const result = await copyTextToClipboard(generatedToken.token);
+    if (!result.ok) {
+      toast.error(CLIPBOARD_COPY_FAILED_MESSAGE);
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   function handleClose() {
@@ -187,13 +191,16 @@ export function NewToken() {
   const snippets = generatedToken && endpoint ? buildClientSnippets(generatedToken.token, endpoint) : null;
   const activeSnippetContent = snippets ? snippets[activeSnippet] : "";
 
-  function handleCopySnippet() {
+  async function handleCopySnippet() {
     if (!activeSnippetContent) return;
-    void navigator.clipboard.writeText(activeSnippetContent).then(() => {
-      setCopiedSnippet(true);
-      toast.success("客户端配置已复制");
-      setTimeout(() => setCopiedSnippet(false), 2000);
-    });
+    const result = await copyTextToClipboard(activeSnippetContent);
+    if (!result.ok) {
+      toast.error("客户端配置复制失败，请手动选择文本");
+      return;
+    }
+    setCopiedSnippet(true);
+    toast.success("客户端配置已复制");
+    setTimeout(() => setCopiedSnippet(false), 2000);
   }
 
   if (generatedToken && snippets) {
@@ -247,7 +254,9 @@ export function NewToken() {
               type="button"
               className="pl-btn pl-btn--secondary text-sm"
               onClick={handleCopySnippet}
-              aria-label="复制当前选中的配置"
+              aria-label={
+                copiedSnippet ? "已复制当前配置" : "复制当前配置（当前选中的客户端）"
+              }
             >
               {copiedSnippet ? "已复制" : "复制当前配置"}
             </button>
@@ -415,10 +424,6 @@ export function NewToken() {
             仅用于管理员标识设备或用途（如：张三的 MacBook），不参与权限校验。可留空。
           </span>
         </label>
-        <div className="pl-notice" data-testid="new-token-expiry-policy-notice" role="status">
-          新签发的 <span className="notranslate" translate="no">Token</span> 默认有效期为 90 天，最长为 365 天；到期后
-          <span className="notranslate" translate="no"> Proxy </span>立即拒绝访问。
-        </div>
         <div className="grid gap-1">
           <span className="text-sm font-medium">过期时间（必填）</span>
           <input
@@ -433,7 +438,7 @@ export function NewToken() {
           <div className="grid gap-1.5 pt-1">
             <span className="text-xs text-fg-muted">快捷预设</span>
             <div
-              className="grid grid-cols-4 gap-2"
+              className="pl-segmented-control pl-segmented-control--cols-4"
               role="group"
               aria-label="快捷预设"
               data-testid="new-token-expiry-presets"
@@ -445,7 +450,11 @@ export function NewToken() {
                   <button
                     key={preset.id}
                     type="button"
-                    className={active ? "pl-btn pl-btn--primary" : "pl-btn pl-btn--secondary"}
+                    className={
+                      active
+                        ? "pl-segmented-control-item pl-segmented-control-item--active"
+                        : "pl-segmented-control-item"
+                    }
                     aria-pressed={active}
                     data-testid={`new-token-expiry-preset-${preset.id}`}
                     onClick={() => setExpiresAt(date)}

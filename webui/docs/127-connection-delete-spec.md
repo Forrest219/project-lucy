@@ -55,7 +55,7 @@
 | 不自动改写 `access.yaml` | 角色权限仍是 ACL 写入路径。本单不改权限；引用还在时由 Spec 179 拒绝删除 |
 | 不删除 Wiki Markdown | 与 Spec 117 一致：只统计失效 `sl_refs` |
 | 不删除评测用例、发布包历史 | 独立治理 |
-| 不编辑连接凭据 / 不轮换密码 | Spec 124 仍保留 |
+| 不编辑连接凭据 / 不轮换密码 | 本删除 Spec 仍不做编辑。**后继编辑**见 [`lucy-20261101-connection-endpoint-edit-spec.md`](../../docs/specs/lucy-20261101-connection-endpoint-edit-spec.md) |
 | 不引入 WebUI 登录鉴权 | 沿用 ADR-05 |
 | 不做浏览器 / E2E 验证 | 与连接模块近期交付一致：Vitest + terminology + build |
 

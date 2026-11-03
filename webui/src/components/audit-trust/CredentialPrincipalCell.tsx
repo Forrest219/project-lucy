@@ -7,6 +7,9 @@
  * (per Contract §5 "仅根据 User-Agent 显示的客户端家族不能写「身份已验证」").
  */
 
+import { toast } from "sonner";
+import { CLIPBOARD_COPY_FAILED_MESSAGE, copyTextToClipboard } from "../../lib/clipboard";
+
 export type CredentialPrincipalCellProps = {
   userId: string;
   /** Optional descriptive label rendered next to the userId (e.g. role hint). */
@@ -16,11 +19,13 @@ export type CredentialPrincipalCellProps = {
 export function CredentialPrincipalCell({ userId, hint }: CredentialPrincipalCellProps) {
   const handleCopy = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(userId).catch(() => {
-        // swallow — clipboard may be unavailable in headless test environments.
-      });
-    }
+    void copyTextToClipboard(userId).then((result) => {
+      // The cell has no success affordance of its own; only a failure needs to
+      // be surfaced, otherwise a failed copy looks identical to a successful one.
+      if (!result.ok) {
+        toast.error(CLIPBOARD_COPY_FAILED_MESSAGE);
+      }
+    });
   };
 
   return (

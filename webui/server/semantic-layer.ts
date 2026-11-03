@@ -18,10 +18,27 @@ import {
 } from "./admin/permission-display.js";
 import type { DisplayPolicyInputs } from "./proxy/acl.js";
 import { readConnections } from "./project";
+import { isSqlServerDriver, manifestTableIsEnabled } from "../src/lib/enabled-table-identity.js";
 import { loadContentPaths } from "./paths";
 import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
 import { countEntryPerf, timeAsync } from "./entry-performance-timing";
-import { withDisplayWriteBarrier } from "./display-generation";
+import {
+  expandDisplayWrite,
+  scopeContextFor,
+  scopesForPath,
+  withDisplayWriteBarrier,
+  type DisplayScope
+} from "./display-generation";
+// L25-16 N05 / G17 — 旧的源表导入写入口接入**同一把** ktx.yaml 写锁，
+// 否则控制面批量导入的互斥承诺不成立（旧入口可以在批量持锁期间交错写）。
+import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock";
+import { withPublishCoordinator } from "./publish-coordinator.js";
+import { openPromotingContentRelease, closeContentBatch, failContentBatch } from "./semantic-assets.js";
+import { readOrCreateSemanticInstanceId } from "./semantic-release-snapshots.js";
+import {
+  createRecoveryJournal,
+  markRecoveryJournalFilesSaved
+} from "./semantic-recovery-journal.js";
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
 
@@ -435,14 +452,17 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
   const authorizedInputs: AuthorizedCountInput[] = [];
 
   let enabledByConnection = new Map<string, Set<string>>();
+  let driverByConnection = new Map<string, string | undefined>();
   try {
     const connections = await readConnections(projectRoot);
     enabledByConnection = new Map(
       connections.map((conn) => [conn.id, new Set(conn.enabledTables)])
     );
+    driverByConnection = new Map(connections.map((conn) => [conn.id, conn.driver]));
   } catch {
     // Missing / unreadable ktx.yaml: treat every Manifest table as not enabled.
     enabledByConnection = new Map();
+    driverByConnection = new Map();
   }
 
   const schemaFiles = await timeAsync("manifest", () => readSchemaFiles(projectRoot));
@@ -484,9 +504,17 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
       entry.overlay
     );
 
-    const qualifiedName = model.qualifiedName ?? `${entry.file.schema}.${entry.table}`;
-    const enabled =
-      enabledByConnection.get(entry.file.conn)?.has(qualifiedName) ?? false;
+    const logicalName = `${entry.file.schema}.${entry.table}`;
+    const qualifiedName = model.qualifiedName?.trim() || logicalName;
+    const enabledNames = enabledByConnection.get(entry.file.conn);
+    const enabled = enabledNames
+      ? manifestTableIsEnabled(
+          [...enabledNames],
+          logicalName,
+          qualifiedName,
+          isSqlServerDriver(driverByConnection.get(entry.file.conn))
+        )
+      : false;
 
     return {
       conn: entry.file.conn,
@@ -726,6 +754,25 @@ export async function previewSourcePatch(
   return buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
 }
 
+/**
+ * Spec 195 §4 — the display scopes of the files a semantic write really
+ * touches. A Manifest feeds D and P (the permission display derives its
+ * source map from Manifests); a plain overlay feeds D only.
+ */
+async function scopesForSourceFiles(
+  projectRoot: string,
+  files: ReadonlyArray<{ filePath: string }>
+): Promise<DisplayScope[]> {
+  if (files.length === 0) return [];
+  const paths = await loadContentPaths();
+  const context = scopeContextFor(projectRoot, paths.semanticLayer);
+  const scopes = new Set<DisplayScope>();
+  for (const file of files) {
+    for (const scope of scopesForPath(path.join(paths.configDir, file.filePath), context)) scopes.add(scope);
+  }
+  return [...scopes];
+}
+
 export async function writeSourcePatch(
   projectRoot: string,
   conn: string,
@@ -734,22 +781,98 @@ export async function writeSourcePatch(
   patch: TablePatch,
   actor?: TrustedActor
 ): Promise<SourcePreview> {
-  const preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
+  // Lucy v0.25 (L25-11 D4) — the preview is built INSIDE the publish window.
+  //
+  // Building it outside would let two concurrent edits of different tables
+  // that share one Manifest both compute their patch against the same old
+  // baseline; the later write would then replace the whole file and silently
+  // erase the first edit. Rebuilding under the lock means the second writer
+  // sees the first writer's result.
+  let preview: SourcePreview | undefined;
   // Spec 174 §3.2 — one barrier over the multi-file write (partial failure still invalidates).
-  await withDisplayWriteBarrier(["D", "P"], async () => {
-    for (const file of preview.files) {
-      await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
-        enabled: true,
-        changeType: "semantic_table_save",
-        assetKind: "semantic",
-        ...auditActorFields(actor),
-        source: "semantic_layer_patch_api",
-        targetId: `${conn}:${schema}:${table}`,
-        diff: file.diff,
-        operation: "save"
-      });
-    }
-  });
+  // Lucy v0.25 (L25-11 D4) — the single-table save shares the publish window with the
+  // manifest upload, the batch import, the manual reindex and the access.yaml writers.
+  await withPublishCoordinator(
+    "semantic_table_save",
+    () =>
+      withDisplayWriteBarrier(["D"], async (token) => {
+        preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
+        if (preview.files.length > 0) {
+          // Spec 195 §4 — the outer barrier covers the scopes of the files this
+          // write really touches. A Manifest write also feeds the permission
+          // display (P); a plain overlay only feeds D. The scope is widened
+          // BEFORE the first file is written.
+          expandDisplayWrite(token, await scopesForSourceFiles(projectRoot, preview.files));
+          const opened = await openPromotingContentRelease({
+            projectRoot,
+            actor: actor?.actorId ?? "local-admin",
+            targets: preview.files.map((file) => ({
+              targetPath: file.filePath,
+              expectedNewDigest: createHash("sha256").update(file.proposedYaml, "utf8").digest("hex"),
+              assetKind: file.filePath.includes("/_schema/") ? "manifest" : "overlay",
+              identity: { connectionId: conn, schema, table }
+            }))
+          });
+          const journal = await createRecoveryJournal(projectRoot, {
+            releaseId: opened.releaseId,
+            operationId: opened.releaseId,
+            actor: actor?.actorId ?? "local-admin",
+            instanceId: await readOrCreateSemanticInstanceId(projectRoot),
+            targets: preview.files.map((file) => ({
+              targetPath: file.filePath,
+              identity: { connectionId: conn, schema, table },
+              newContent: file.proposedYaml
+            }))
+          });
+          try {
+            for (const file of preview.files) {
+              await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
+                enabled: true,
+                changeType: "semantic_table_save",
+                assetKind: "semantic",
+                ...auditActorFields(actor),
+                source: "semantic_layer_patch_api",
+                targetId: `${conn}:${schema}:${table}`,
+                diff: file.diff,
+                operation: "save"
+              });
+            }
+            await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
+            // L25-15 — the batch has to reach a terminal state inside the
+            // publish window. A record left at `promoting` blocks every later
+            // content write.
+            await closeContentBatch(projectRoot, {
+              releaseId: opened.releaseId,
+              attemptId: opened.attemptId,
+              actor: actor?.actorId ?? "local-admin",
+              journalId: journal.journalId,
+              changeType: "semantic_table_save_terminal",
+              source: "semantic_layer_patch_api",
+              targetId: `${conn}:${schema}:${table}`,
+              operation: "save_terminal",
+              newSummary: { connectionId: conn, schema, table, fileCount: preview.files.length }
+            });
+          } catch (error) {
+            // Spec 174 §3.2 / IM-02: a partial failure after touching disk
+            // still invalidates the cache and leaves the written content in
+            // place. Rolling a landed write back would contradict that
+            // contract, so the batch settles with the files as they are.
+            await failContentBatch(projectRoot, {
+              releaseId: opened.releaseId,
+              journalId: journal.journalId,
+              keepLandedWrites: true
+            });
+            throw error;
+          }
+        }
+      }),
+    { projectRoot }
+  );
+  if (!preview) {
+    // The coordinator always runs the callback; this guard only satisfies the
+    // type checker and can never be reached in practice.
+    throw new Error("semantic_table_save did not produce a preview");
+  }
   return preview;
 }
 
@@ -830,16 +953,34 @@ function mergeManifestColumns(existing: unknown, incoming: unknown): unknown {
   });
 }
 
-export async function previewSourceYamlImport(
+/**
+ * L25-16 — 一次 YAML 导入对【共享内容文件】的增量（不落盘）。
+ *
+ * 共享内容文件只有两类（Spec §6.3 / F07）：
+ * - Manifest：`semantic-layer/<conn>/_schema/<schema>.yaml`（按连接 + Schema 共享）；
+ * - Overlay：`semantic-layer/<conn>/<table>.yaml`（**路径不含 Schema**，故同连接不同 Schema
+ *   的同名表也写同一文件）。
+ *
+ * 返回增量而不是整份文件内容，是为了让**同组多目标合并成一次文件写入**：
+ * 多个目标的 Manifest 增量作用在同一份文档上，最后只写一次。
+ */
+export type SourceYamlImportDelta = {
+  /** 会改的 Manifest 文件。 */
+  manifest?: { relPath: string; table: string; merged: Record<string, unknown> };
+  /** 会改的 Overlay 文件。 */
+  overlay?: { relPath: string; grain: string[]; measures: Measure[]; segments: Segment[] };
+};
+
+export async function planSourceYamlImport(
   projectRoot: string,
   conn: string,
   schema: string,
   table: string,
   yaml: string
-): Promise<SourcePreview> {
+): Promise<SourceYamlImportDelta> {
   assertSafeSegment(table, "table");
   const relPath = schemaRelPath(conn, schema);
-  const { doc, text } = await readYamlDocument(projectRoot, relPath);
+  const { doc } = await readYamlDocument(projectRoot, relPath);
   const existingTables = valueAsRecord(valueAsRecord(doc.toJSON()).tables);
   const existingTable = valueAsRecord(existingTables[table]);
   if (!existingTables[table]) {
@@ -853,10 +994,9 @@ export async function previewSourceYamlImport(
   //   patch Manifest columns (avoids wiping pk after a normal Manifest-then-source upload).
   // - Schema Manifest doc or structure-only snippet: merge into Manifest; P1 keeps
   //   existing pk/nullable when the incoming column omits them.
-  let proposedYaml = text;
-  let diff = "";
   const shouldPatchManifest =
     hasMeaningfulSchemaImport(importedValue) && (fromSchemaManifest || !isBusinessSourceImport(importedValue));
+  let manifest: SourceYamlImportDelta["manifest"];
   if (shouldPatchManifest) {
     const schemaPatch: Record<string, unknown> = {};
     for (const key of SCHEMA_IMPORT_KEYS) {
@@ -872,9 +1012,7 @@ export async function previewSourceYamlImport(
     delete merged.grain;
     delete merged.measures;
     delete merged.segments;
-    doc.setIn(["tables", table], doc.createNode(merged));
-    proposedYaml = serialize(doc);
-    diff = previewDiff(text, proposedYaml, relPath);
+    manifest = { relPath, table, merged };
   }
 
   const hasOverlayImport =
@@ -882,8 +1020,9 @@ export async function previewSourceYamlImport(
     Object.prototype.hasOwnProperty.call(importedValue, "measures") ||
     Object.prototype.hasOwnProperty.call(importedValue, "segments");
 
-  const overlayPreview = hasOverlayImport
-    ? await previewOverlayUpdate(projectRoot, conn, table, {
+  const overlay = hasOverlayImport
+    ? {
+        relPath: path.posix.join("semantic-layer", conn, `${table}.yaml`),
         grain: stringArray(importedValue.grain) ?? [],
         measures: compact(
           (Array.isArray(importedValue.measures) ? importedValue.measures : []).map(normalizeMeasure)
@@ -891,6 +1030,62 @@ export async function previewSourceYamlImport(
         segments: compact(
           (Array.isArray(importedValue.segments) ? importedValue.segments : []).map(normalizeSegment)
         )
+      }
+    : undefined;
+
+  return { manifest, overlay };
+}
+
+/**
+ * L25-16 — 把**同一 Manifest 文件**上的多个导入增量合并成**一次**文件写入。
+ *
+ * 同连接同 Schema 的多表共享 `semantic-layer/<conn>/_schema/<schema>.yaml`——
+ * 逐表 read-modify-write 会让后写者抹掉先写者的改动（D7 / G16）。这里在**一份文档**
+ * 上依次应用各目标的增量，最后只产出一份内容。
+ */
+export async function applySourceYamlImportDeltas(
+  projectRoot: string,
+  manifestRelPath: string,
+  deltas: ReadonlyArray<{ table: string; merged: Record<string, unknown> }>
+): Promise<string> {
+  const { doc } = await readYamlDocument(projectRoot, manifestRelPath);
+  for (const delta of deltas) {
+    doc.setIn(["tables", delta.table], doc.createNode(delta.merged));
+  }
+  return serialize(doc);
+}
+
+export async function previewSourceYamlImport(
+  projectRoot: string,
+  conn: string,
+  schema: string,
+  table: string,
+  yaml: string
+): Promise<SourcePreview> {
+  assertSafeSegment(table, "table");
+  const relPath = schemaRelPath(conn, schema);
+  const { doc, text } = await readYamlDocument(projectRoot, relPath);
+  const existingTables = valueAsRecord(valueAsRecord(doc.toJSON()).tables);
+  if (!existingTables[table]) {
+    throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`);
+  }
+
+  // 增量计算只有这一处实现（控制面与既有 REST 入口共用）。
+  const delta = await planSourceYamlImport(projectRoot, conn, schema, table, yaml);
+
+  let proposedYaml = text;
+  let diff = "";
+  if (delta.manifest) {
+    doc.setIn(["tables", delta.manifest.table], doc.createNode(delta.manifest.merged));
+    proposedYaml = serialize(doc);
+    diff = previewDiff(text, proposedYaml, relPath);
+  }
+
+  const overlayPreview = delta.overlay
+    ? await previewOverlayUpdate(projectRoot, conn, table, {
+        grain: delta.overlay.grain,
+        measures: delta.overlay.measures,
+        segments: delta.overlay.segments
       })
     : null;
   const files = [];
@@ -927,19 +1122,79 @@ export async function writeSourceYamlImport(
   actor?: TrustedActor
 ): Promise<SourcePreview> {
   const preview = await previewSourceYamlImport(projectRoot, conn, schema, table, yaml);
-  await withDisplayWriteBarrier(["D", "P"], async () => {
-    for (const file of preview.files) {
-      await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
-        enabled: true,
-        changeType: "semantic_table_import",
-        assetKind: "semantic",
-        ...auditActorFields(actor),
-        source: "semantic_layer_import_api",
-        targetId: `${conn}:${schema}:${table}`,
-        diff: file.diff,
-        operation: "import"
-      });
-    }
-  });
+  // L25-16 N05 / G17 — 旧的源表导入写入口接入**同一把** ktx.yaml 写锁。
+  // 锁顺序与控制面批量服务一致：withKtxYamlWriteLock → withDisplayWriteBarrier → 写。
+  await withKtxYamlWriteLock(() =>
+    withDisplayWriteBarrier(["D"], async (token) => {
+      // Spec 195 §4 — the outer barrier covers the scopes of the files this
+      // write really touches (the preview is already known here).
+      expandDisplayWrite(token, await scopesForSourceFiles(projectRoot, preview.files));
+      return withPublishCoordinator(
+        "semantic_table_save",
+        async () => {
+          if (preview.files.length === 0) return;
+          const opened = await openPromotingContentRelease({
+            projectRoot,
+            actor: actor?.actorId ?? "local-admin",
+            targets: preview.files.map((file) => ({
+              targetPath: file.filePath,
+              expectedNewDigest: createHash("sha256").update(file.proposedYaml, "utf8").digest("hex"),
+              assetKind: file.filePath.includes("/_schema/") ? "manifest" : "overlay",
+              identity: { connectionId: conn, schema, table }
+            }))
+          });
+          const journal = await createRecoveryJournal(projectRoot, {
+            releaseId: opened.releaseId,
+            operationId: opened.releaseId,
+            actor: actor?.actorId ?? "local-admin",
+            instanceId: await readOrCreateSemanticInstanceId(projectRoot),
+            targets: preview.files.map((file) => ({
+              targetPath: file.filePath,
+              identity: { connectionId: conn, schema, table },
+              newContent: file.proposedYaml
+            }))
+          });
+          try {
+            for (const file of preview.files) {
+              await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
+                enabled: true,
+                changeType: "semantic_table_import",
+                assetKind: "semantic",
+                ...auditActorFields(actor),
+                source: "semantic_layer_import_api",
+                targetId: `${conn}:${schema}:${table}`,
+                diff: file.diff,
+                operation: "import"
+              });
+            }
+            await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
+            await closeContentBatch(projectRoot, {
+              releaseId: opened.releaseId,
+              attemptId: opened.attemptId,
+              actor: actor?.actorId ?? "local-admin",
+              journalId: journal.journalId,
+              changeType: "semantic_table_import_terminal",
+              source: "semantic_layer_import_api",
+              targetId: `${conn}:${schema}:${table}`,
+              operation: "import_terminal",
+              newSummary: { connectionId: conn, schema, table, fileCount: preview.files.length }
+            });
+          } catch (error) {
+            // Spec 174 §3.2 / IM-02: a partial failure after touching disk
+            // still invalidates the cache and leaves the written content in
+            // place. Rolling a landed write back would contradict that
+            // contract, so the batch settles with the files as they are.
+            await failContentBatch(projectRoot, {
+              releaseId: opened.releaseId,
+              journalId: journal.journalId,
+              keepLandedWrites: true
+            });
+            throw error;
+          }
+        },
+        { projectRoot }
+      );
+    })
+  );
   return preview;
 }

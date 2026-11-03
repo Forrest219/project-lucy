@@ -20,7 +20,7 @@
 | 关联工单 | `webui/docs/plans/wo-202608-07-wiki-workbench-secondary-feedback-fixes.md` |
 | 关联页面 | `/wiki` |
 | 关联台账 | `docs/ui-ux-feedback/pages/wiki.md`（新增 `UX-WIKI-019` ~ `UX-WIKI-025`） |
-| 状态 | Draft |
+| 状态 | **已实现**（提交 `8c7a4f4b` `fix(webui): tighten Wiki workbench IA for directory, move, and version UX`） |
 | 日期 | 2026-08-04 |
 | 范围 | 目录树层级视觉、目录树内容模型（目录 vs 文档）、新建文档弹窗文案、Markdown 正文重复标题、移动到目录弹窗字段与 Diff 展示、版本记录表格化与历史预览懒加载 |
 

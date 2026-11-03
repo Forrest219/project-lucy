@@ -1,4 +1,5 @@
 import { isSkillSegment } from "./identifiers.js";
+import { SKILL_OWNER_INVALID_CODE } from "./owner.js";
 import type { SkillAsset, SkillValidationIssue, SkillValidationResult } from "./types.js";
 
 /**
@@ -60,6 +61,20 @@ export function validateSkill(skill: SkillAsset): SkillValidationResult {
       type: "error",
       field: "status",
       message: `状态“${skill.status}”无效，必须为 ${validStatuses.join("、")} 之一。`,
+    });
+  }
+
+  // L25-04: a corrupt `owner` declaration is DISCLOSED, not treated as a failed
+  // Skill. It stays a warning on purpose: `owner` carries no runtime meaning, so
+  // an existing Skill must not flip from "valid" to "invalid" because of it
+  // (Spec §3.2). A corrupt `roles_allowed` above is the opposite case — it denies
+  // runtime access, so it is an error.
+  if (skill.owner_invalid) {
+    issues.push({
+      code: SKILL_OWNER_INVALID_CODE,
+      type: "warning",
+      field: "owner",
+      message: "负责人声明无效，请编辑修复。",
     });
   }
 

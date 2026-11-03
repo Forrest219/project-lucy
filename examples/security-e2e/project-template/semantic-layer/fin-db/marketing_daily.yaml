@@ -13,8 +13,11 @@ measures:
     expr: sum(new_customers)
     description: 新增客户数合计。new_customers 为 NULL 的行不参与求和。
   - name: cac_cents
-    expr: sum(spend_cents) / nullif(sum(new_customers), 0)
-    description: 获客成本（分）。必须用 SUM/SUM 重算，禁止对日比率取平均。
+    expr: round((sum(case when channel in ('search','social','referral') and new_customers is not null then spend_cents else 0 end))::numeric / nullif(sum(case when channel in ('search','social','referral') then new_customers end), 0))
+    description: 获客成本（分）。实际口径（ACTUAL）：仅 channel 属于 search/social/referral 的行，预测口径（channel 以 forecast- 开头）不计入；必须用 SUM/SUM 重算，禁止对日比率取平均；new_customers 为 NULL 的行不计入分子分母；除法按 numeric 进行后按分取整（半进位）。
+  - name: forecast_cac_cents
+    expr: round((sum(case when channel like 'forecast-%' and new_customers is not null then spend_cents else 0 end))::numeric / nullif(sum(case when channel like 'forecast-%' then new_customers end), 0))
+    description: 预测口径获客成本（分）。仅 channel 以 forecast- 开头的行；与 cac_cents（实际口径）分开报告，混算即为失败。
 
 segments:
   - name: east

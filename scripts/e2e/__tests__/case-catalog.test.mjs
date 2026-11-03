@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { parse } from "yaml";
 import { REPO_ROOT } from "../lib/common.mjs";
-import { EXPECTED_FINDING_IDS, crossCheckDependencies } from "../verify-evidence.mjs";
+import { D03_REPOSITORY_VERIFICATION, EXPECTED_FINDING_IDS, crossCheckDependencies, d03RepositoryVerifiedRef } from "../verify-evidence.mjs";
 import { computeGold, generateDataset } from "../../../examples/security-e2e/gold/compute-gold.mjs";
 import {
   CAPABILITIES, REQUIRED_SUBSCENARIO_IDS, SPEC_SCENARIO_IDS, catalogDigest, checkLock, expandCatalog,
@@ -43,6 +43,16 @@ describe("case catalog (Spec §7, frozen denominator)", () => {
     assert.deepEqual(checkLock(cases, readLock()), []);
     assert.equal(readLock().catalogDigest, catalogDigest(cases));
     assert.deepEqual(readLock().requiredIds, requiredIds(cases));
+  });
+
+  it("the frozen denominator is pinned here (the ONE literal of the digest and the case count)", () => {
+    // 冻结分母的唯一字面量钉。变更必须**有意**进行：改 case-catalog.yaml → 重推
+    // case-catalog.lock.json → 更新下面两行 → 在评审里说明为什么动分母。
+    //
+    // 2026-10-28（D2 路径 A）：AUD25-A01..A12 与 ARV25-V01..V12 并入冻结 catalog，
+    // 分母 255 → 279、digest 240bff0f…4a694 → c62cf23f…ae4。
+    assert.equal(cases.length, 279);
+    assert.equal(catalogDigest(cases), "sha256:c62cf23f112484589e41486b7e53886d6e412e3bfc4bd587833eed3d0585aae4");
   });
 
   it("rejects a silently removed variant (the denominator cannot shrink)", () => {
@@ -110,7 +120,20 @@ describe("case catalog (Spec §7, frozen denominator)", () => {
       } else {
         assert.equal(f.fixedIn, null, `${f.id} is ${f.status} but names a fixing commit`);
       }
-      for (const ref of f.verifiedBy) assert.ok(ids.has(ref) || scenarios.has(ref), `${f.id} cites ${ref}, which is not in the frozen catalog`);
+      for (const ref of f.verifiedBy) {
+        // D-03 only: ROW25-V19 / ROW25-V22 are not frozen release-catalog variants.
+        // They are accepted when the two repository tests exist. This does not
+        // mark those E2E ids passed and does not claim releaseReady. Every
+        // other finding still has to cite a frozen catalog id or scenario name.
+        const d03RepositoryCase = d03RepositoryVerifiedRef(f, ref);
+        if (d03RepositoryCase) {
+          assert.deepEqual([...f.verifiedBy], [...D03_REPOSITORY_VERIFICATION.caseIds], "D-03 repository verification cites exactly ROW25-V19 and ROW25-V22");
+          for (const rel of D03_REPOSITORY_VERIFICATION.tests) {
+            assert.ok(existsSync(path.join(REPO_ROOT, rel)), `${rel} must exist for D-03 repository verification`);
+          }
+        }
+        assert.ok(ids.has(ref) || scenarios.has(ref) || d03RepositoryCase, `${f.id} cites ${ref}, which is not in the frozen catalog`);
+      }
     }
   });
 

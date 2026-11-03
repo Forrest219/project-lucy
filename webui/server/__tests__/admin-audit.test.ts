@@ -189,7 +189,7 @@ describe("GET /api/admin/audit", () => {
         }
       });
 
-      const withProtocol = await request(app.server).get("/api/admin/audit?includeProtocol=true&limit=10").expect(200);
+      const withProtocol = await request(app.server).get("/api/admin/audit?includeProtocol=true&accessGrade=all&limit=10").expect(200);
       expect(withProtocol.body.data.total).toBe(3);
       expect(withProtocol.body.data.entries.map((entry: { tool: string }) => entry.tool)).toContain("tools/list");
       const protocol = withProtocol.body.data.entries.find((entry: { requestId: string }) => entry.requestId === "protocol-1");
@@ -230,7 +230,7 @@ describe("GET /api/admin/audit", () => {
       expect(businessCsv?.[columnCountIndex]).toBe("2");
       expect(businessCsv?.[truncatedIndex]).toBe("0");
       const csvWithProtocol = (await request(app.server)
-        .get("/api/admin/audit/export?includeProtocol=true")
+        .get("/api/admin/audit/export?includeProtocol=true&accessGrade=all")
         .expect(200)).text;
       const [protocolHeaderLine, ...protocolDataLines] = csvWithProtocol.trimEnd().split("\n");
       const protocolHeaders = parseCsvLine(protocolHeaderLine);
@@ -254,11 +254,17 @@ describe("GET /api/admin/audit", () => {
       expect(filtered.body.data.entries[0].requestId).toBe("business-1");
 
       const sources = await request(app.server).get("/api/admin/audit/sources").expect(200);
+      // Lucy v0.25 / P0-4 §3.4 (E5): a table is identified by the full
+      // connection / schema / table triple. This call has no recorded
+      // `access_log_sources` row, so the connection is explicitly `unknown`
+      // instead of a fabricated one — two connections may hold the same
+      // schema.table, so a single flat name would merge them.
       expect(sources.body.data.topTables).toContainEqual({
-        table: "dataforai.kx_fact_financial_amount",
+        table: "unknown.dataforai.kx_fact_financial_amount",
         calls: 1,
         denied: 0
       });
+      expect(sources.body.data.connections).toContainEqual({ connection: "unknown", calls: 1 });
     } finally {
       await app.close();
     }
@@ -372,7 +378,7 @@ describe("GET /api/admin/audit", () => {
       const defaultList = await request(app.server).get("/api/admin/audit?limit=20").expect(200);
       expect(defaultList.body.data.entries.map((e: { requestId: string }) => e.requestId)).not.toContain("playground-1");
 
-      const playground = await request(app.server).get("/api/admin/audit?callSource=playground&limit=20").expect(200);
+      const playground = await request(app.server).get("/api/admin/audit?callSource=playground&accessGrade=all&limit=20").expect(200);
       expect(playground.body.data.total).toBe(1);
       expect(playground.body.data.entries[0].requestId).toBe("playground-1");
       expect(playground.body.data.entries[0].lucyPlatform).toBe("mcp-playground");
@@ -383,7 +389,7 @@ describe("GET /api/admin/audit", () => {
       expect(agentIds).toContain("agent-2");
       expect(agentIds).not.toContain("playground-1");
 
-      const exportPlayground = await request(app.server).get("/api/admin/audit/export?callSource=playground").expect(200);
+      const exportPlayground = await request(app.server).get("/api/admin/audit/export?callSource=playground&accessGrade=all").expect(200);
       expect(exportPlayground.text).toContain("playground-1");
       expect(exportPlayground.text).not.toContain("agent-1");
     } finally {
@@ -559,7 +565,7 @@ describe("GET /api/admin/audit/turns", () => {
       expect(csvRes.text.charCodeAt(0)).toBe(0xFEFF);
       const csvBody = csvRes.text.replace(/^\uFEFF/, "");
       const [headerLine, firstDataLine] = csvBody.split("\n");
-      expect(headerLine).toBe("问询 ID,来源,Agent,客户端,会话 ID,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,关联调用数,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数,自报客户端,自报客户端版本");
+      expect(headerLine).toBe("问询 ID,关联键,来源,Agent,客户端,会话 ID,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询种类,问询摘要,关联调用数,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数,预算终止次数,自报客户端,自报客户端版本");
       const turnHeaders = parseCsvLine(headerLine);
       const turnCells = parseCsvLine(firstDataLine);
       expect(turnCells[turnHeaders.indexOf("开始时间")]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
@@ -893,7 +899,7 @@ describe("GET /api/admin/audit/turns", () => {
     await app.ready();
     try {
       const turns = await request(app.server)
-        .get("/api/admin/audit/turns?user=handshake-user&source=inferred")
+        .get("/api/admin/audit/turns?user=handshake-user&source=inferred&inquiryKind=all")
         .expect(200);
       expect(turns.body.data.entries).toHaveLength(1);
       expect(turns.body.data.entries[0]).toMatchObject({
@@ -910,7 +916,7 @@ describe("GET /api/admin/audit/turns", () => {
       expect(defaultCalls.body.data.entries.map((row: { tool: string }) => row.tool)).not.toContain("initialize");
 
       const filtered = await request(app.server)
-        .get(`/api/admin/audit?user=handshake-user&turnId=${encodeURIComponent(turnId)}`)
+        .get(`/api/admin/audit?user=handshake-user&turnId=${encodeURIComponent(turnId)}&accessGrade=all`)
         .expect(200);
       const tools = filtered.body.data.entries.map((row: { tool: string }) => row.tool);
       expect(tools).toContain("initialize");
@@ -940,7 +946,7 @@ describe("GET /api/admin/audit/turns", () => {
     await app.ready();
     try {
       const turns = await request(app.server)
-        .get("/api/admin/audit/turns?user=wb-display-user&source=inferred")
+        .get("/api/admin/audit/turns?user=wb-display-user&source=inferred&inquiryKind=all")
         .expect(200);
       expect(turns.body.data.entries).toHaveLength(1);
       expect(turns.body.data.entries[0]).toMatchObject({
@@ -951,7 +957,7 @@ describe("GET /api/admin/audit/turns", () => {
       });
 
       const calls = await request(app.server)
-        .get("/api/admin/audit?user=wb-display-user&includeProtocol=true")
+        .get("/api/admin/audit?user=wb-display-user&includeProtocol=true&accessGrade=all")
         .expect(200);
       expect(calls.body.data.entries[0]).toMatchObject({
         client: "workbuddy",
@@ -962,11 +968,17 @@ describe("GET /api/admin/audit/turns", () => {
       });
 
       const exported = await request(app.server)
-        .get("/api/admin/audit/export?user=wb-display-user&includeProtocol=true")
+        .get("/api/admin/audit/export?user=wb-display-user&includeProtocol=true&accessGrade=all")
         .expect(200);
       const lines = exported.text.replace(/^\uFEFF/, "").trim().split("\n");
       const headers = parseCsvLine(lines[0]!);
-      expect(headers.slice(-2)).toEqual(["reported_client", "reported_client_version"]);
+      // B27：末尾追加了 v2p5-1 additive 列（八桶主状态等），`reported_client`
+      // 不再是最后两列，但**仍然存在**且顺序不变。
+      expect(headers).toContain("reported_client");
+      expect(headers).toContain("reported_client_version");
+      expect(headers.indexOf("reported_client")).toBeLessThan(
+        headers.indexOf("reported_client_version")
+      );
       expect(headers.indexOf("client")).toBeLessThan(headers.indexOf("reported_client"));
       const cells = parseCsvLine(lines[1]!);
       expect(cells[headers.indexOf("client")]).toBe("workbuddy");
@@ -1020,7 +1032,7 @@ describe("GET /api/admin/audit/turns", () => {
     await app.ready();
     try {
       const response = await request(app.server)
-        .get("/api/admin/audit/export-inquiry-pack?user=pack-user&source=inferred")
+        .get("/api/admin/audit/export-inquiry-pack?user=pack-user&source=inferred&inquiryKind=all")
         .buffer(true)
         .parse((res, callback) => {
           const chunks: Buffer[] = [];
@@ -1037,18 +1049,25 @@ describe("GET /api/admin/audit/turns", () => {
       const callLines = entries.get("calls.csv")!.toString("utf8").replace(/^\uFEFF/, "").trim().split("\n");
       const turnHeaders = parseCsvLine(turnLines[0]!);
       const callHeaders = parseCsvLine(callLines[0]!);
-      expect(turnHeaders).toEqual(expect.arrayContaining(["问询 ID", "客户端", "会话 ID"]));
-      const turnIds = new Set(turnLines.slice(1).map((line) => parseCsvLine(line)[turnHeaders.indexOf("问询 ID")]));
-      expect(turnIds.size).toBe(3);
+      expect(turnHeaders).toEqual(expect.arrayContaining(["问询 ID", "关联键", "问询种类", "客户端", "会话 ID"]));
+      const turnSerials = new Set(turnLines.slice(1).map((line) => parseCsvLine(line)[turnHeaders.indexOf("问询 ID")]));
+      const turnKeys = new Set(turnLines.slice(1).map((line) => parseCsvLine(line)[turnHeaders.indexOf("关联键")]));
+      expect(turnKeys.size).toBe(3);
       const callTurnIds = new Set<string>();
+      const inquiryNos = new Set<string>();
       for (const line of callLines.slice(1)) {
         const cells = parseCsvLine(line);
         for (const column of ["lucy_turn_id", "inferred_turn_id"]) {
           const value = cells[callHeaders.indexOf(column)];
           if (value) callTurnIds.add(value);
         }
+        const inquiryNo = cells[callHeaders.indexOf("inquiry_no")];
+        if (inquiryNo) inquiryNos.add(inquiryNo);
       }
-      expect(callTurnIds).toEqual(turnIds);
+      expect(callTurnIds).toEqual(turnKeys);
+      expect(inquiryNos.size).toBeGreaterThan(0);
+      for (const inquiryNo of inquiryNos) expect(turnSerials.has(inquiryNo)).toBe(true);
+      expect(callLines.join("\n")).toContain("initialize");
     } finally {
       await app.close();
     }
@@ -1098,8 +1117,18 @@ describe("GET /api/admin/audit/turns", () => {
     try {
       const calls = await request(app.server).get("/api/admin/audit?user=pack-handshake-user").expect(200);
       const tools = calls.body.data.entries.map((row: { tool: string }) => row.tool);
-      expect(tools).toContain("server/discover");
+      // Spec 189 §4.2 / §5.3: `server/*` methods are protocol events, so the
+      // default audit view hides them like it hides the handshake.
+      expect(tools).not.toContain("server/discover");
       expect(tools).not.toContain("initialize");
+
+      // …but the raw protocol rows stay auditable.
+      const withProtocol = await request(app.server)
+        .get("/api/admin/audit?user=pack-handshake-user&includeProtocol=true&accessGrade=all")
+        .expect(200);
+      const protocolTools = withProtocol.body.data.entries.map((row: { tool: string }) => row.tool);
+      expect(protocolTools).toContain("server/discover");
+      expect(protocolTools).toContain("initialize");
 
       const response = await request(app.server)
         .get("/api/admin/audit/export-pack?user=pack-handshake-user")
@@ -1408,7 +1437,7 @@ describe("Spec 137 audit evidence pack", () => {
         completeness: { complete: boolean };
         files: Array<{ name: string; sha256: string; filterScope: string }>;
       };
-      expect(manifest.appVersion).toBe("0.20.0");
+      expect(manifest.appVersion).toBe("0.25.0");
       expect(manifest.includeProtocol).toBe(true);
       expect(manifest.filter).toMatchObject({
         user: "audit-user",
@@ -1578,8 +1607,14 @@ describe("Spec 137 audit evidence pack", () => {
       const entry = turns.body.data.entries[0];
       expect(entry.linkedCallCount).toBe(3);
       expect(entry.businessCallCount).toBe(2);
-      expect(entry.outcomeSummary).toEqual({ ok: 2, denied: 1, error: 0 });
-      expect(entry.outcomeSummary.ok + entry.outcomeSummary.denied + entry.outcomeSummary.error).toBe(
+      // Spec 162 修订：legacy 四桶 = 成功 / 拒绝 / 错误 / **预算终止**。
+      expect(entry.outcomeSummary).toEqual({ ok: 2, denied: 1, error: 0, budgetStop: 0 });
+      expect(
+        entry.outcomeSummary.ok
+        + entry.outcomeSummary.denied
+        + entry.outcomeSummary.error
+        + entry.outcomeSummary.budgetStop
+      ).toBe(
         entry.linkedCallCount
       );
       expect(entry.sources.map((s: { physicalTable: string }) => s.physicalTable)).toContain(
@@ -1661,6 +1696,436 @@ describe("T07 audit projection completeness (Spec §5.2)", () => {
       (await getAuditDb()).exec("DROP TRIGGER proj_poison");
       const recovered = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
       expect(recovered.body.data.projection).toMatchObject({ complete: true, lag: 0, cursor: 6 });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+/**
+ * Spec 162 修订 / Plan S1 —— 预算终止的可观测性。
+ *
+ * SC-27：问询汇总有独立的「预算终止次数」列，恒等式
+ *        **关联调用数 = 成功 + 拒绝 + 错误 + 预算终止**。
+ * SC-28：执行结论仍以**八桶主状态**为准，四桶不是执行结论。
+ * SC-25 / SC-26：导出的两种情形 —— 不带 `outcome` 参数必须包含预算终止行；
+ *        显式 `outcome=ok` 只含 ok 行（显式筛选语义不被破坏）。
+ */
+describe("GET /api/admin/audit budget-stop observability (Spec 162 SC-25…SC-28)", () => {
+  it("SC-27 / SC-28 keeps budget terminations in their own bucket and keeps the linked-call identity", async () => {
+    const { writeConversationTurn, writeLog } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+
+    await writeConversationTurn({
+      turnId: "lucy_turn_budget_1",
+      userId: "budget-user",
+      questionSummary: "预算桶恒等式",
+      questionSource: "reported_tool"
+    });
+    const rows: Array<{ tool: string; outcome: "ok" | "denied" | "error" | "budget_stop"; reason?: string }> = [
+      { tool: "lucy_query", outcome: "ok" },
+      { tool: "lucy_read_source", outcome: "denied" },
+      { tool: "lucy_query", outcome: "error" },
+      { tool: "lucy_query", outcome: "budget_stop", reason: "question_budget_exhausted" }
+    ];
+    for (const [index, row] of rows.entries()) {
+      await writeLog({
+        ts: at(index * 1_000),
+        userId: "budget-user",
+        tool: row.tool,
+        outcome: row.outcome,
+        decisionReason: row.reason,
+        durationMs: 5,
+        requestId: `budget-call-${index}`,
+        lucyTurnId: "lucy_turn_budget_1"
+      });
+    }
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const listRes = await request(app.server)
+        .get("/api/admin/audit/turns?user=budget-user&source=reported")
+        .expect(200);
+      const entry = listRes.body.data.entries[0];
+      expect(entry.outcomeSummary).toMatchObject({ ok: 1, denied: 1, error: 1, budgetStop: 1 });
+      // 恒等式：关联调用数 = 成功 + 拒绝 + 错误 + 预算终止。
+      const buckets = entry.outcomeSummary;
+      expect(buckets.ok + buckets.denied + buckets.error + buckets.budgetStop).toBe(entry.linkedCallCount);
+      expect(entry.linkedCallCount).toBe(4);
+      // 执行结论仍以八桶主状态为准（预算终止进 budget_stopped 桶，不是错误桶）。
+      expect(entry.primaryStatusSummary.budget_stopped).toBe(1);
+
+      const csvRes = await request(app.server)
+        .get("/api/admin/audit/turns/export?user=budget-user&source=reported")
+        .expect(200);
+      const [headerLine, dataLine] = csvRes.text.replace(/^﻿/, "").split("\n");
+      const headers = parseCsvLine(headerLine);
+      const cells = parseCsvLine(dataLine);
+      expect(cells[headers.indexOf("预算终止次数")]).toBe("1");
+      expect(cells[headers.indexOf("关联调用数")]).toBe("4");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("SC-25 / SC-26 exports budget-stop rows unless the caller asks for outcome=ok", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    const now = Date.now();
+
+    await writeLog({
+      ts: new Date(now).toISOString(),
+      userId: "export-user",
+      tool: "lucy_query",
+      outcome: "budget_stop",
+      decisionReason: "question_budget_exhausted",
+      durationMs: 5,
+      requestId: "export-budget-call"
+    });
+    await writeLog({
+      ts: new Date(now + 1_000).toISOString(),
+      userId: "export-user",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 5,
+      requestId: "export-ok-call"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      // 无 `outcome` 参数：必须包含预算终止行。
+      const all = await request(app.server)
+        .get("/api/admin/audit/export?user=export-user")
+        .expect(200);
+      expect(all.text).toContain("export-budget-call");
+      expect(all.text).toContain("export-ok-call");
+
+      // 显式 `outcome=ok`：只含 ok 行。
+      const okOnly = await request(app.server)
+        .get("/api/admin/audit/export?user=export-user&outcome=ok")
+        .expect(200);
+      expect(okOnly.text).toContain("export-ok-call");
+      expect(okOnly.text).not.toContain("export-budget-call");
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("inquiry kind filter on GET /api/admin/audit/turns", () => {
+  it("hides session visits by default, returns serial numbers, and treats an illegal kind as management", async () => {
+    const { writeLog, writeConversationTurn } = await import("../proxy/audit");
+    const started = Date.now() - 60_000;
+    const at = (offsetMs: number) => new Date(started + offsetMs).toISOString();
+
+    await writeLog({
+      ts: at(0),
+      userId: "kind-unreported-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "kind-unreported-1",
+      lucySessionId: "sess-unreported",
+      client: "cursor-vscode"
+    });
+    await writeLog({
+      ts: at(1_000),
+      userId: "kind-unreported-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "kind-unreported-2",
+      lucySessionId: "sess-unreported",
+      client: "cursor-vscode"
+    });
+    await writeLog({
+      ts: at(10_000),
+      userId: "kind-visit-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "kind-visit",
+      lucySessionId: "sess-visit",
+      client: "WorkBuddy Connector"
+    });
+    await writeConversationTurn({
+      turnId: "lucy_kind_real",
+      userId: "kind-real-user",
+      questionSummary: "真实问句",
+      questionSource: "reported_tool"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const management = await request(app.server)
+        .get("/api/admin/audit/turns?hours=168")
+        .expect(200);
+      expect(management.body.data.entries.map((entry: { inquiryKind: string }) => entry.inquiryKind).sort())
+        .toEqual(["real", "unreported_query"]);
+      expect(management.body.data.total).toBe(2);
+      expect(management.body.data.kindCounts).toEqual({
+        real: 1,
+        unreportedQuery: 1,
+        sessionVisit: 1
+      });
+
+      const all = await request(app.server)
+        .get("/api/admin/audit/turns?hours=168&inquiryKind=all")
+        .expect(200);
+      expect(all.body.data.total).toBe(3);
+      expect(all.body.data.entries.map((entry: { inquiryKind: string }) => entry.inquiryKind).sort())
+        .toEqual(["real", "session_visit", "unreported_query"]);
+      const serials = all.body.data.entries.map((entry: { inquiryNo: number }) => entry.inquiryNo);
+      expect(new Set(serials).size).toBe(3);
+      for (const entry of all.body.data.entries as Array<{ inquiryNo: number; correlationKey: string; id: string }>) {
+        expect(Number.isInteger(entry.inquiryNo)).toBe(true);
+        expect(entry.inquiryNo).toBeGreaterThan(0);
+        expect(String(entry.inquiryNo)).not.toMatch(/lucy_|inf_/);
+        expect(entry.correlationKey).toMatch(/^(lucy_|inf_)/);
+        expect(entry.id).toBe(entry.correlationKey);
+      }
+
+      const real = all.body.data.entries.find((entry: { inquiryKind: string }) => entry.inquiryKind === "real") as {
+        inquiryNo: number;
+        correlationKey: string;
+      };
+      expect(all.body.data.entries.some((entry: { inquiryNo: number; correlationKey: string }) =>
+        entry.inquiryNo !== real.inquiryNo && entry.correlationKey.includes(String(real.inquiryNo))
+      )).toBe(true);
+      const bySerial = await request(app.server)
+        .get(`/api/admin/audit/turns?hours=168&inquiryKind=all&turnId=${real.inquiryNo}`)
+        .expect(200);
+      expect(bySerial.body.data.entries).toHaveLength(1);
+      expect(bySerial.body.data.entries[0].correlationKey).toBe(real.correlationKey);
+      expect(bySerial.body.data.entries[0].inquiryKind).toBe("real");
+
+      const byKey = await request(app.server)
+        .get(`/api/admin/audit/turns?hours=168&inquiryKind=all&turnId=${encodeURIComponent(real.correlationKey)}`)
+        .expect(200);
+      expect(byKey.body.data.entries.map((entry: { correlationKey: string }) => entry.correlationKey)).toEqual([real.correlationKey]);
+
+      const detail = await request(app.server)
+        .get(`/api/admin/audit/turns/${real.inquiryNo}`)
+        .expect(200);
+      expect(detail.body.data.id).toBe(real.correlationKey);
+
+      const illegal = await request(app.server)
+        .get("/api/admin/audit/turns?hours=168&inquiryKind=nope")
+        .expect(200);
+      expect(illegal.body.data.entries.map((entry: { inquiryKind: string }) => entry.inquiryKind).sort())
+        .toEqual(["real", "unreported_query"]);
+      expect(illegal.body.data.total).toBe(management.body.data.total);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("access grade and inquiry serial on call CSV", () => {
+  it("defaults to exclude_connect, labels grades, and keeps handshake rows in packs", async () => {
+    const { writeLog, writeConversationTurn } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    await writeConversationTurn({
+      turnId: "lucy_grade_real",
+      userId: "grade-user",
+      questionSummary: "真实问句",
+      questionSource: "reported_tool"
+    });
+    const queryId = await writeLog({
+      ts: at(0),
+      userId: "grade-user",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 4,
+      requestId: "grade-query",
+      lucyTurnId: "lucy_grade_real",
+      lucyPlatform: "cursor"
+    });
+    await writeLog({
+      ts: at(1_000),
+      userId: "grade-user",
+      tool: "lucy_catalog",
+      outcome: "ok",
+      durationMs: 2,
+      requestId: "grade-catalog",
+      lucyTurnId: "lucy_grade_real"
+    });
+    await writeLog({
+      ts: at(2_000),
+      userId: "grade-user",
+      tool: "custom_unknown_tool",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "grade-unknown"
+    });
+    const initId = await writeLog({
+      ts: at(3_000),
+      userId: "grade-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "grade-init",
+      lucySessionId: "grade-session",
+      client: "cursor-vscode",
+      lucyTurnId: "lucy_grade_real"
+    });
+    await writeLog({
+      ts: at(4_000),
+      userId: "grade-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "grade-visit",
+      lucySessionId: "grade-visit-session",
+      client: "cursor-vscode"
+    });
+    await writeLog({
+      ts: at(5_000),
+      userId: "grade-playground",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 3,
+      requestId: "grade-playground-query",
+      lucyPlatform: "mcp-playground"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const turns = await request(app.server)
+        .get("/api/admin/audit/turns?user=grade-user&inquiryKind=all&hours=168")
+        .expect(200);
+      const real = turns.body.data.entries.find((entry: { inquiryKind: string }) => entry.inquiryKind === "real");
+      const visit = turns.body.data.entries.find((entry: { inquiryKind: string }) => entry.inquiryKind === "session_visit");
+      expect(real.inquiryNo).toEqual(expect.any(Number));
+      expect(visit.questionSummary).toMatch(/^会话建立：/);
+      expect(visit.correlationKey).toMatch(/^inf_/);
+
+      const managementCsv = await request(app.server)
+        .get("/api/admin/audit/turns/export?user=grade-user&hours=168")
+        .expect(200);
+      const [managementHeader, ...managementRows] = managementCsv.text.trim().split("\n");
+      const managementHeaders = parseCsvLine(managementHeader!);
+      expect(managementHeaders.indexOf("问询 ID")).toBe(0);
+      expect(managementHeaders[1]).toBe("关联键");
+      expect(managementHeaders.indexOf("问询种类")).toBe(managementHeaders.indexOf("问询摘要") - 1);
+      const managementKinds = managementRows.map((line) => parseCsvLine(line)[managementHeaders.indexOf("问询种类")]);
+      expect(managementKinds).toContain("真实问询");
+      expect(managementKinds).not.toContain("会话访问");
+      const realRow = managementRows
+        .map((line) => parseCsvLine(line))
+        .find((cells) => cells[managementHeaders.indexOf("关联键")] === "lucy_grade_real");
+      expect(realRow?.[managementHeaders.indexOf("问询 ID")]).toBe(String(real.inquiryNo));
+
+      const allCsv = await request(app.server)
+        .get("/api/admin/audit/turns/export?user=grade-user&hours=168&inquiryKind=all")
+        .expect(200);
+      const [allHeader, ...allRows] = allCsv.text.trim().split("\n");
+      const allHeaders = parseCsvLine(allHeader!);
+      const visitRow = allRows
+        .map((line) => parseCsvLine(line))
+        .find((cells) => cells[allHeaders.indexOf("问询种类")] === "会话访问");
+      expect(visitRow?.[allHeaders.indexOf("问询摘要")]).toMatch(/^会话建立：/);
+      expect(visitRow?.[allHeaders.indexOf("关联键")]).toMatch(/^inf_/);
+      expect(visitRow?.[allHeaders.indexOf("问询 ID")]).toBe(String(visit.inquiryNo));
+
+      const defaultCalls = await request(app.server)
+        .get("/api/admin/audit?user=grade-user&limit=20")
+        .expect(200);
+      const defaultTools = defaultCalls.body.data.entries.map((row: { tool: string }) => row.tool);
+      expect(defaultTools).not.toContain("initialize");
+      expect(defaultCalls.body.data.entries.find((row: { requestId: string }) => row.requestId === "grade-query")).toMatchObject({
+        accessGrade: "query",
+        inquiryNo: real.inquiryNo
+      });
+      expect(defaultCalls.body.data.entries.find((row: { requestId: string }) => row.requestId === "grade-catalog").accessGrade).toBe("browse");
+      expect(defaultCalls.body.data.entries.find((row: { requestId: string }) => row.requestId === "grade-unknown").accessGrade).toBe("unclassified");
+
+      const illegal = await request(app.server)
+        .get("/api/admin/audit?user=grade-user&accessGrade=nope&limit=20")
+        .expect(200);
+      expect(illegal.body.data.entries.map((row: { tool: string }) => row.tool)).not.toContain("initialize");
+      expect(illegal.body.data.total).toBe(defaultCalls.body.data.total);
+
+      const withHandshake = await request(app.server)
+        .get("/api/admin/audit?user=grade-user&accessGrade=all&includeProtocol=true&limit=20")
+        .expect(200);
+      const initRow = withHandshake.body.data.entries.find((row: { requestId: string }) => row.requestId === "grade-init");
+      expect(initRow).toMatchObject({ tool: "initialize", accessGrade: "connect", inquiryNo: real.inquiryNo });
+
+      const bySerial = await request(app.server)
+        .get(`/api/admin/audit?user=grade-user&turnId=${real.inquiryNo}&accessGrade=query`)
+        .expect(200);
+      expect(bySerial.body.data.entries.map((row: { requestId: string }) => row.requestId)).toEqual(["grade-query"]);
+
+      const byEvent = await request(app.server)
+        .get(`/api/admin/audit?user=grade-user&eventId=${initId}&accessGrade=all&includeProtocol=true`)
+        .expect(200);
+      expect(byEvent.body.data.entries.map((row: { id: number }) => row.id)).toEqual([initId]);
+      expect(byEvent.body.data.entries.some((row: { id: number }) => row.id === queryId)).toBe(false);
+
+      const queryOnly = await request(app.server)
+        .get("/api/admin/audit?accessGrade=query&callSource=agent&limit=20")
+        .expect(200);
+      expect(queryOnly.body.data.entries.map((row: { requestId: string }) => row.requestId)).toContain("grade-query");
+      expect(queryOnly.body.data.entries.map((row: { requestId: string }) => row.requestId)).not.toContain("grade-playground-query");
+      expect(queryOnly.body.data.entries.every((row: { accessGrade: string }) => row.accessGrade === "query")).toBe(true);
+
+      const defaultExport = await request(app.server)
+        .get("/api/admin/audit/export?user=grade-user")
+        .expect(200);
+      expect(defaultExport.text).not.toContain("initialize");
+      const [callHeader, ...callRows] = defaultExport.text.trim().split("\n");
+      const callHeaders = parseCsvLine(callHeader!);
+      expect(callHeaders).toContain("inquiry_no");
+      expect(callHeaders).toContain("lucy_turn_id");
+      expect(callHeaders).toContain("inferred_turn_id");
+      expect(callHeaders.indexOf("访问等级")).toBe(callHeaders.indexOf("tool") - 1);
+      const queryCsv = callRows.map((line) => parseCsvLine(line)).find((cells) => cells[callHeaders.indexOf("request_id")] === "grade-query");
+      expect(queryCsv?.[callHeaders.indexOf("inquiry_no")]).toBe(String(real.inquiryNo));
+      expect(queryCsv?.[callHeaders.indexOf("lucy_turn_id")]).toBe("lucy_grade_real");
+      expect(queryCsv?.[callHeaders.indexOf("访问等级")]).toBe("查数");
+      const unknownCsv = callRows.map((line) => parseCsvLine(line)).find((cells) => cells[callHeaders.indexOf("request_id")] === "grade-unknown");
+      expect(unknownCsv?.[callHeaders.indexOf("访问等级")]).toBe("未分级");
+      const catalogCsv = callRows.map((line) => parseCsvLine(line)).find((cells) => cells[callHeaders.indexOf("request_id")] === "grade-catalog");
+      expect(catalogCsv?.[callHeaders.indexOf("访问等级")]).toBe("浏览");
+
+      const handshakeExport = await request(app.server)
+        .get("/api/admin/audit/export?user=grade-user&accessGrade=all&includeProtocol=true")
+        .expect(200);
+      const [handshakeHeader, ...handshakeRows] = handshakeExport.text.trim().split("\n");
+      const handshakeHeaders = parseCsvLine(handshakeHeader!);
+      const initCsv = handshakeRows.map((line) => parseCsvLine(line)).find((cells) => cells[handshakeHeaders.indexOf("request_id")] === "grade-init");
+      expect(initCsv?.[handshakeHeaders.indexOf("tool")]).toBe("initialize");
+      expect(initCsv?.[handshakeHeaders.indexOf("访问等级")]).toBe("连接");
+
+      const listIds = defaultCalls.body.data.entries.map((row: { id: number }) => row.id).sort();
+      const exportIds = callRows
+        .map((line) => Number(parseCsvLine(line)[callHeaders.indexOf("id")]))
+        .sort((a, b) => a - b);
+      expect(exportIds).toEqual(listIds);
+
+      const metadata = await request(app.server)
+        .get("/api/admin/audit/export-metadata?kind=calls")
+        .expect(200);
+      expect(metadata.body.fields.map((field: { name: string }) => field.name)).toEqual(callHeaders);
+      expect(metadata.body.fields.find((field: { name: string }) => field.name === "inquiry_no").label).toBe("问询 ID");
+      expect(metadata.body.fields.find((field: { name: string }) => field.name === "lucy_turn_id").label).toBe("关联键");
+      expect(metadata.body.fields.find((field: { name: string }) => field.name === "inferred_turn_id").label).toBe("关联键");
+      const turnMetadata = await request(app.server)
+        .get("/api/admin/audit/export-metadata?kind=turns")
+        .expect(200);
+      expect(turnMetadata.body.fields.map((field: { name: string }) => field.name)).toEqual(managementHeaders);
     } finally {
       await app.close();
     }

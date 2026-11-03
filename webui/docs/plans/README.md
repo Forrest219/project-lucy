@@ -68,9 +68,13 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 
 | 工单 | 里程碑 | 主题 |
 | --- | --- | --- |
+| [wo-20261030-display-snapshot-invalidation-isolation.md](wo-20261030-display-snapshot-invalidation-isolation.md) | 20261030 | Spec 195：展示快照变更去重与影响范围隔离，重点解决同版本重复重建和普通 overlay 牵连 Agent；**仅文档落盘，实现未开始，SI-01–SI-14 未执行** |
 | [wo-202609-03-admin-audit-csv-readability-metadata.md](wo-202609-03-admin-audit-csv-readability-metadata.md) | 202609-03 | Spec 141：访问日志 CSV 本地时间、秒级流水号文件名与字段说明元数据 |
 | [wo-202609-03-admin-audit-dual-csv-export.md](wo-202609-03-admin-audit-dual-csv-export.md) | 202609-03 | Spec 140：访问日志双粒度 CSV 导出，问询记录一问一行、调用流水一调用一行 |
 | [wo-202609-03-lucy-query-and-answer-reliability.md](wo-202609-03-lucy-query-and-answer-reliability.md) | 202609-03 | Spec 138/139：查询参数与 Turn 归因可靠性、Data Agent 可回答性和最终交付门禁（Implemented，未部署） |
+| [wo-202610-26-live-table-discovery-and-continuous-sync.md](wo-202610-26-live-table-discovery-and-continuous-sync.md) | 202610-26 | Spec 190：库表发现与持续感知 —— Schema 级库内表清单、持续感知（成功快照 / 物理基线 / 当前对账状态 / 变更事件历史）、接入预览接入持久化快照、差异读取与列级深查、连接概览最小展示。全程只读，不写 Schema Manifest 与 `enabled_tables`（**已实现，待验收**；T0 的 KTX 实测与真实存量连接对账未做）。审阅记录见 [2026-10-26-spec-190-plan-work-order-cross-review.md](../../../docs/reviews/2026-10-26-spec-190-plan-work-order-cross-review.md) |
+| [wo-202610-28-usage-metrics-truthfulness.md](wo-202610-28-usage-metrics-truthfulness.md) | 202610-28 | Spec 189：用量统计真实性与跨页面口径统一 —— 协议事件与评测探针退出默认用量 KPI（**已实施：T1～T6 已完成；自动化验收通过**）。审阅记录见 [review-spec189-wo-202610-28.md](review-spec189-wo-202610-28.md) |
+| [wo-20261027-ktx-execution-runtime-reload.md](wo-20261027-ktx-execution-runtime-reload.md) | 202610-27 | Spec 191：执行层重载 —— 只重载 KTX daemon（免重启 Pod），用户点确认触发；`reloadStatus` 与 `configVerification` 正交；全局串行重载协议 + 通道能力握手；失败如实报告、不回滚 `ktx.yaml`（**已实现，未验收**；提交 `21d59b83`，实施记录见工单 §8，验收与复审记录见 [2026-10-26-spec-191-execution-runtime-reload-plan-review.md](../../../docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md)） |
 | [wo-M0-scaffold.md](wo-M0-scaffold.md) | M0 | 脚手架 + fs-safe 安全基座 |
 | [wo-M1-readonly-catalog.md](wo-M1-readonly-catalog.md) | M1 | 项目读取 + 只读目录/单表 |
 | [wo-M2-table-editor-diff.md](wo-M2-table-editor-diff.md) | M2 | 就地补丁 + 单表编辑 + diff 预览 |
@@ -109,10 +113,14 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M55-agent-admin-usage-observability-and-role-discoverability.md](wo-M55-agent-admin-usage-observability-and-role-discoverability.md) | M55 | Agent Admin 使用观测与 role 可发现性：活跃 Token、近 7 天调用/拒绝、role 链接与 MCP 工具限制解释 |
 | [wo-M56-business-wiki-directory-document-governance.md](wo-M56-business-wiki-directory-document-governance.md) | M56 | 业务 Wiki 目录与文档治理：顶层目录、目录删除、文档移动、下载作用域与上传覆盖预检清晰化 |
 | [wo-M57-role-admin-ops-ux-clarification.md](wo-M57-role-admin-ops-ux-clarification.md) | M57 | Role Admin 运维心智澄清：正式 Role 优先、参考模板降噪、待修复与已停用语义分离 |
+| [wo-M58-help-qa-section.md](wo-M58-help-qa-section.md) | M58 | Help Center 常见问题速查章节：按开发者 / 管理员 / 接入协作者三角色分组的 Q&A，每条一句话答 + 正文章节深链 + 关键术语 inline code 化 |
+| [wo-M59-help-sidebar-entry-map.md](wo-M59-help-sidebar-entry-map.md) | M59 | Help 侧栏入口速查：§1.5 WebUI 入口地图（5+1 侧栏）、navigation.ts 共享导航配置抽离、入口对齐测试 |
 | [wo-M60-sidebar-brand-navigation-polish.md](wo-M60-sidebar-brand-navigation-polish.md) | M60 | 侧栏品牌与导航体验升级：品牌区、折叠菜单、active 状态和命令面板入口 |
 | [wo-M61-sidebar-brand-navigation-followup.md](wo-M61-sidebar-brand-navigation-followup.md) | M61 | 侧栏品牌与导航二轮修正：Logo 返回、命令面板默认态、菜单字体体系和品牌名对齐 |
+| [wo-M62-connection-schema-identifier-casing-consistency.md](wo-M62-connection-schema-identifier-casing-consistency.md) | M62 | Connection & Schema 标识符大小写一致性：移除 `/connections`、`/connections/enabled-tables`、`/catalog` 三页分组标题的硬编码 `.toUpperCase()`，直接渲染源大小写，与链接文案 / aria-label / URL 口径统一 |
 | [wo-M63-command-palette-result-context.md](wo-M63-command-palette-result-context.md) | M63 | 命令面板结果上下文升级：breadcrumb、页面说明、命中高亮与稳定排序 |
 | [wo-M64-catalog-and-business-wiki-visual-clarity.md](wo-M64-catalog-and-business-wiki-visual-clarity.md) | M64 | Catalog 与业务 Wiki 视觉层级修复：表名字重、Wiki 首页精简、小三角移除与上传预检层级 |
+| [wo-M65-clipboard-non-secure-context-fallback.md](wo-M65-clipboard-non-secure-context-fallback.md) | M65 | 剪贴板复制在非安全上下文的降级：统一 clipboard helper（原生 API → `execCommand` 回退 → 明确失败），迁移 12 处复制入口，补单测 / e2e / QA 来源判定 |
 | [wo-202608-01-trace-evidence-kernel.md](wo-202608-01-trace-evidence-kernel.md) | 202608-01 | Trace / Evidence Kernel：append-only event store、MCP Proxy 基础写入、自检脚本 |
 | [wo-202608-GOV-02-admin-governance-observability-dashboard.md](wo-202608-GOV-02-admin-governance-observability-dashboard.md) | 202608-GOV-02 | Admin Governance Observability Dashboard：**仅补** `/api/admin/governance/*` 聚合 API + Dashboard UI + 测试；不要重做 Trace Detail / Risk Review / Release Package |
 | [wo-202608-GOV-02a-admin-governance-usage-overview-dashboard.md](wo-202608-GOV-02a-admin-governance-usage-overview-dashboard.md) | 202608-GOV-02a | 治理概览 usage-first：8 KPI + Agent/Token 使用 + 最受访问表；对齐 `pl-page-stack` 布局；风险列表主屏下沉 |

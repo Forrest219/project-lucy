@@ -11,6 +11,7 @@ const MOCK_TOKENS_RESPONSE: TokensResponse = {
   tokens: [
     {
       hashPrefix: "sha256:aaaa0000",
+      tokenHint: "a1b2c3…9f0e",
       label: "cursor-desk-xingchen",
       created: "2026-08-20",
       expires_at: "2026-12-31",
@@ -22,6 +23,8 @@ const MOCK_TOKENS_RESPONSE: TokensResponse = {
         roles: ["bi_analyst"]
       },
       last_used: "2026-08-28T10:00:00.000Z",
+      // Spec 189 — 最近业务使用 is a separate source from 最近 MCP 访问.
+      last_business_use: "2026-08-28T10:00:00.000Z",
       last_tool: "sl_query",
       last_outcome: "allow",
       last_ip: "192.168.1.100",
@@ -33,6 +36,7 @@ const MOCK_TOKENS_RESPONSE: TokensResponse = {
     },
     {
       hashPrefix: "sha256:bbbb1111",
+      tokenHint: null,
       label: "hermes-agent-prod",
       created: "2026-06-01",
       expires_at: "2026-07-01",
@@ -44,6 +48,7 @@ const MOCK_TOKENS_RESPONSE: TokensResponse = {
         roles: ["data_viewer"]
       },
       last_used: "2026-07-01T08:00:00.000Z",
+      last_business_use: "2026-07-01T08:00:00.000Z",
       status: "expired"
     }
   ],
@@ -95,12 +100,20 @@ describe("Tokens (/admin/tokens)", () => {
 
     // Verify header and primary action
     expect(await screen.findByRole("heading", { name: /Token 凭据/ })).toBeInTheDocument();
-    expect(screen.getByTestId("create-token-btn")).toBeInTheDocument();
+    const createBtn = screen.getByTestId("create-token-btn");
+    expect(createBtn).toBeInTheDocument();
+    expect(createBtn).toHaveAttribute("href", "/admin/tokens/new");
+
+    // Pure jump-link cards removed: page focuses on Token inventory.
+    expect(screen.queryByText("客户端接入配置")).not.toBeInTheDocument();
+    expect(screen.queryByText("调用流水与排障")).not.toBeInTheDocument();
+    expect(screen.queryByText(/前往生成客户端配置片段/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/查看访问日志流水/)).not.toBeInTheDocument();
 
     // Verify KPI metrics
     const kpiSection = screen.getByTestId("token-kpis");
     expect(kpiSection).toHaveTextContent("可用 Token");
-    expect(kpiSection).toHaveTextContent("近 7 天活跃");
+    expect(kpiSection).toHaveTextContent("近 7 天业务活跃 Token");
     expect(kpiSection).toHaveTextContent("已过期 / 停用");
 
     // Verify tokens table rows
@@ -112,6 +125,14 @@ describe("Tokens (/admin/tokens)", () => {
     expect(table).toHaveTextContent("xingchen-mbp");
     expect(table).toHaveTextContent("hermes-agent-prod");
     expect(table).toHaveTextContent("已过期");
+    expect(table).toHaveTextContent("Token 核对提示");
+    expect(table).toHaveTextContent("a1b2c3…9f0e");
+    expect(table).toHaveTextContent("无核对提示");
+    expect(table).not.toHaveTextContent("sha256:aaaa0000");
+    const hint = within(screen.getByTestId("token-row-cursor-desk-xingchen")).getByTestId(
+      "token-display-hint"
+    );
+    expect(hint.className).toMatch(/break-all/);
   });
 
   it("handles revoke modal confirmation flow", async () => {

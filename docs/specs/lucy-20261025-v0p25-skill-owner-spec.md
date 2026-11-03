@@ -1,0 +1,293 @@
+# Lucy v0.25 业务 Skill 负责人 Spec
+
+| 元数据 | 内容 |
+|---|---|
+| 文档类型 | 功能设计基线（Business Context / WebUI / Audit） |
+| 文档版本 / 日期 | v0.5-functional-contract-closed / 2026-11-01，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1／S2 → v0.5 功能合同收口） |
+| 功能编号 / 目标版本 | L25-04 / v0.25 |
+| 优先级 | P2；不改变既有 P0／P1 验收与交付阻断状态 |
+| 状态 | **v0.5 功能合同已收口（2026-11-01）**。SKO-01–SKO-15 关闭，证据见 [收口记录](../reviews/2026-11-01-skill-owner-closure.md)，逐条落点见 §8.1。SKO-16 工程门禁于 2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。**本条收口不表示可上线**——浏览器实测与移动窄屏验证、镜像构建与部署、客户环境验证与客户交付不在本条出口 |
+| 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2 L25-04；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1 保持 P2 |
+| 审查记录 | [L25-04／L25-05 Spec 审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)（F-01–F-08 已关闭；F-09–F-12 为实施前待办，已回写本文） |
+| 现有基础 | Skill frontmatter、统一 Skill 工作台、保存预检、`file_version` 乐观并发、`skill` 类配置审计 |
+| 实施主体 | Lucy；不修改 KTX，不改变 MCP Skill 授权或问答运行时 |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：业务 Skill 带一个自由文本的负责人标签，用户可以填写、修改、清除它；它只影响显示与审计摘要，**不改变访问授权**。
+- 本条出口：§8 验收矩阵 SKO-01–SKO-15 及其 §8.1 逐条落点。由自动化断言关闭。
+- 不在本条出口：SKO-16 工程门禁（构建、术语 lint、Spec lint、selector contract 不新增 issue）；浏览器实测与移动窄屏验证；镜像构建与部署；客户环境验证与客户交付；整库旅程、Agent 路径、跨模块或系统级故障演练；证据等级（归发布取证层，该层目前没有承载本轮已收口功能的已执行 Spec）。
+- 上线关系：本条收口不表示可上线
+
+> 本文件定义拟实现行为，不代表功能已经实现或验收通过。PM 签核只确认设计基线，不授权开发；开发授权另行决定。
+
+## 0. 设计决议摘要
+
+| 编号 | 决议 |
+|---|---|
+| D01 | 在 Skill frontmatter 增加可选 `owner` 字符串，UI 主术语为「负责人」；缺失或空字符串显示「未指定」。 |
+| D02 | 负责人是人员或团队的自由文本治理标签，**不是登录账户引用、所有者角色、邮箱、授权主体或通知订阅**；不建立账户生命周期依赖。 |
+| D03 | 复用现有创建、编辑、预检、`expected_version` 和 `skill` 配置审计；不新增独立负责人 API、表或存储。 |
+| D04 | 既有 Skill 不迁移、不批量回填；负责人缺省不改变发布状态、版本、可访问角色或 MCP 行为。 |
+| D05 | 非法 `owner` 不阻断 Agent 读取既有 Skill，但必须显式披露；未修复前不得通过另一次保存静默清除或改写该声明。 |
+| D06 | 只增加总览列、详情字段、编辑字段、预检差异和审计摘要；不增加技能市场、负责人筛选、工作量统计或审批流。 |
+
+## 1. 现状证据与复用边界
+
+### 1.1 已存在的能力
+
+| 现有能力 | 本 Spec 的处理 |
+|---|---|
+| `SkillFrontmatter`／`SkillAsset` 尚无负责人字段 | 增加 `owner` 与只读 `owner_invalid`；列表摘要和详情复用同一对象 |
+| 统一工作台已有名称、域、状态、版本和校验结果列 | 在版本后增加「负责人」列，不重排页面信息架构 |
+| 新建／编辑使用结构化元数据和 Markdown 双栏 | 在元数据区增加负责人输入；`Cmd/Ctrl+S` 仍只打开预检 |
+| 更新使用原始文件 SHA-256 `file_version` 和 `expected_version` | 负责人修改走同一 CAS，不另设 `owner_version` |
+| 预检返回 `proposedMarkdown`、`diff`、`validation` 和 `impact` | `impact` 增加负责人前后值；预检仍不写文件、审计或缓存 |
+| `auditedWriteFile` 已持久化 intent／terminal，`assetKind=skill`；当前 Skill writer 未自行处理 terminal 失败后的文件回滚 | 在 old／new summary 增加 `owner`，沿用既有 change type 和 actor；S1 必须补齐 Skill 文件回滚闭包，不得把 helper 的存在误记为已闭环 |
+| loader 对损坏 `roles_allowed` 使用显式 invalid 标记 | owner 采用同构的损坏披露，但不把负责人错误升级为授权拒绝 |
+| 前端 React 文本输出与 `notranslate` 已有模式 | 负责人按纯文本渲染；不解释 Markdown、HTML 或链接 |
+
+### 1.2 明确不变
+
+- `domain`／`name` 创建后不可变；更新仍写回原路径。
+- `roles_allowed` 与 Role 工具授权仍是唯一 Skill 对象／通道权限事实源。
+- `published` 仍只是 Skill frontmatter 状态，不进入语义发布流水线。
+- 内容校验问题的既有保存策略不变；owner 的结构错误按本 Spec 单独处理。
+- MCP `lucy_skill_search`／`lucy_skill_read`、Resource、Prompt 的授权矩阵不变。
+- 本地账户「所有者」与业务资产「负责人」是两个概念，不得互相推导。
+
+## 2. 目标与非目标
+
+### 2.1 目标
+
+1. 用户可为一条草稿或已发布 Skill 指定、修改或清除负责人。
+2. 总览和详情无需打开原始 Markdown 即可看到负责人。
+3. 保存预检和配置审计能区分「负责人是谁」与「这次由谁修改」。
+4. 既有 Skill、外部手工文件和损坏元数据均有确定、可验收的兼容行为。
+
+### 2.2 非目标
+
+- 负责人必须是 Lucy 登录账户、必须是唯一人员或必须含邮箱。
+- 按负责人授权、审批、通知、搜索、筛选、分页或统计。
+- 技能市场、评分、下载量、执行历史或外部客户端安装。
+- 批量设置负责人、账户删除后的自动改派或组织目录同步。
+- 自动递增 Skill 版本；版本仍由编辑者显式维护。
+
+## 3. 数据契约
+
+### 3.1 frontmatter
+
+```yaml
+---
+name: revenue-report
+domain: analysis
+title: 收入分析规程
+version: 1.3.0
+status: published
+owner: 数据治理组
+roles_allowed: ["*"]
+---
+```
+
+`owner` 合同：
+
+| 项 | 规则 |
+|---|---|
+| 类型 | 可选字符串；禁止数组、对象、数字、布尔值和显式 `null` |
+| 规范化 | 只 trim 首尾空白，不折叠内部空白，不转小写 |
+| 长度 | trim 后 0–80 个 Unicode code point；空字符串等价于未指定 |
+| 字符 | 允许中文、英文、数字、空格及常见团队标点；禁止 C0／C1 控制字符和换行。**控制字符检查作用于 trim 前的原始值**：首尾的 `\n`／`\t` 等同样判非法，不按 trim 结果放行 |
+| 缺省 | 缺失显示「未指定」；读取结果为 `owner: ""` |
+| 身份 | 不参与 `lucy-skill://<domain>/<name>`，不进入 `file_version` 之外的第二身份 |
+
+实现不得用 `String(value)` 把对象或数组变成看似合法的负责人。
+
+### 3.2 损坏声明
+
+loader 返回：
+
+```ts
+owner: string
+owner_invalid?: true
+```
+
+- 非字符串、超长或含控制字符时，`owner=""`、`owner_invalid=true`，validator 增加 `skill_owner_invalid`，字段为 `owner`，`type` 固定为 `warning`。
+- 该 issue 为 warning，**不得使 `validation.valid` 由 `true` 翻转为 `false`**：既有 Skill 因 owner 损坏而新增的校验结论仍是「校验通过」，损坏声明只在总览校验列与详情中披露。`valid` 仍按既有规则判定（只有 `type:"error"` 才使其为 false）。owner 损坏与 `roles_allowed` 损坏不同——后者影响运行时授权，故为 error；前者按 D05 只披露、不阻断。
+- 既有文件仍可出现在治理台，Agent 的既有授权与读取不因 owner 损坏而拒绝。
+- 阅读态显示「负责人声明无效，请编辑修复」，不得把原始损坏值当作负责人展示。
+- 结构化更新若未显式提供合法 `owner`，返回 `400 skill_owner_invalid`；显式填写合法值或空字符串后可保存。
+- `rawContent` 必须直接包含合法 `owner` 或移除该键；不能靠输入模型忽略损坏声明。
+
+## 4. API 与审计
+
+### 4.1 现有 API 增量
+
+| API | 增量 |
+|---|---|
+| `GET /api/skills?includeContent=false` | 每项增加 `owner`，损坏时增加 `owner_invalid`；仍不返回正文 |
+| `GET /api/skills/:domain/:name` | 返回同一负责人形状 |
+| `POST /api/skills`／`PUT /api/skills/:domain/:name` | `SkillWriteInput` 增加可选 `owner?: string`；更新缺省保留，空字符串清除 |
+| 两个 preview API | `impact.owner={from,to}`；diff 与 proposedMarkdown 包含拟写入 frontmatter |
+| `DELETE` | 不改变请求；删除审计 old summary 保留删除前负责人 |
+
+除新增 `skill_owner_invalid` 外，不创建一套负责人专用路由或错误码。既有 `skill_write_conflict`、`skill_expected_version_required`、身份不可变和路径冲突合同继续优先适用。
+
+### 4.2 配置审计
+
+- `skill_create.newSummary`、`skill_edit_save.oldSummary/newSummary`、`skill_delete.oldSummary` 增加 `owner` 字符串；损坏声明被显式修复时，对应 summary 增加布尔 `owner_invalid`，不得伪造损坏原文。
+- actor、actorType、source、requestId、targetId 继续来自既有可信上下文；`owner` 不得覆盖 actor。
+- 配置审计详情可直接回答：谁在哪次写入把哪条 Skill 的负责人从什么值改为什么值。
+- 复用现有 intent／terminal 原语，并在 S1 为 Skill 文件补齐回滚闭包。无 intent 不写文件；committed terminal 失败时恢复写入前字节并尽力记录 `rolled_back`，不得返回成功。恢复也失败时必须返回 500、保留 pending／failed 证据并触发修复，不得宣称已回滚。
+- 预检没有审计副作用；审计 CSV 和导出不新增第二套负责人事实源。
+
+## 5. WebUI 合同
+
+1. 总览列顺序为：名称、域、状态、版本、**负责人**、校验结果。缺省显示「未指定」，不使用空白或虚构账户头像。
+2. 阅读态元数据区增加「负责人」；损坏状态使用既有 warning 样式。
+3. 编辑元数据区增加单行文本框，label 为「负责人」，辅助说明「可填写人员或团队；不影响访问权限」。
+4. 新建默认为空；从详情进入编辑时载入当前 owner。清除后保存即写入 `owner: ""`，后端可规范化为省略该键，但 API 读取形状保持一致。
+5. 预检增加「负责人：旧值 → 新值」，无变化时不需单独高亮；草稿改变后旧预检继续失效。
+6. 不新增负责人筛选、下拉账户选择器、邮箱字段或通知开关。
+7. `owner`、`skill_owner_invalid`、Skill URI 和文件路径等 DOM 按术语标准做浏览器翻译防御；负责人文本本身可翻译属性不强制，但始终按纯文本转义。
+8. 写入失败沿用既有 skills 错误信封：后端 `error` 字段**只返回稳定码**，用户可见中文由前端错误映射表负责。`skill_owner_invalid` 必须登记到 `webui/src/lib/skills.ts` 的错误映射表（与既有 `skill_roles_invalid` 同处），界面不得显示裸码。
+
+## 6. 核心流程（伪代码）
+
+```text
+parseOwner(frontmatter):
+  if key absent:
+    return { value: "", invalid: false }
+  if typeof value != string:
+    return { value: "", invalid: true }
+  normalized = trim(value)
+  if codePointLength(normalized) > 80 or containsControlCharacter(value):
+    return { value: "", invalid: true }
+  return { value: normalized, invalid: false }
+
+load skill:
+  parsedOwner = parseOwner(frontmatter)
+  asset.owner = parsedOwner.value
+  if parsedOwner.invalid: asset.owner_invalid = true
+  // owner 不参与 ACL、发布状态或 MCP 裁决
+
+structured update(existing, input, expected_version):
+  fresh = reload exact existing URI
+  require expected_version == fresh.file_version
+  require domain/name unchanged
+
+  if fresh.owner_invalid and input.owner is absent:
+    deny 400 skill_owner_invalid
+  owner = input.owner is absent ? fresh.owner : validateOwner(input.owner)
+  if owner invalid: deny 400 skill_owner_invalid
+
+  candidate = serialize all existing fields + owner + other explicit edits
+  preview or write uses the same candidate serializer
+  // no version, status or roles_allowed side effect unless explicitly edited
+
+confirm write:
+  persist config-audit intent with old/new owner and trusted actor
+  atomically write original path
+  persist committed terminal
+  if committed terminal cannot persist:
+    restore previous file bytes atomically
+    if restore succeeds: best-effort record rolled_back; return failure
+    else: preserve pending/failed evidence; return 500 requiring repair
+  invalidate skill cache and return reloaded asset
+```
+
+## 7. 用户可见错误与边界
+
+| 场景 | 码／展示 | 行为 |
+|---|---|---|
+| owner 类型、长度或字符非法 | `skill_owner_invalid`／「负责人格式无效，请输入 80 个字符以内的人员或团队名称」 | 400；不写文件、不写审计成功记录 |
+| 已损坏 owner 未显式修复 | `skill_owner_invalid`／「负责人声明无效，请填写或清空后再保存」 | 400；不得静默省略旧键 |
+| 并发修改 | 既有 `skill_write_conflict` | 409；重新加载，不覆盖他人修改 |
+| 审计不可用 | 沿用既有配置审计错误 | 不把文件修改当作已成功提交 |
+| Agent 读取 owner 损坏的旧 Skill | 无新增 MCP 错误 | 原授权结果不变；治理台披露修复 |
+
+表中「码」是后端 `error` 字段返回的稳定码，「展示」是前端错误映射表给出的用户可见文案；**两者不出现在同一个响应里**。后端不得把中文文案塞进 `error` 字段——既有前端按已知码查表映射（`webui/src/lib/skills.ts:103-118`），查不到时直接回显原始字符串，界面会显示裸码或裸中文。
+
+## 8. 验收矩阵
+
+设计签核不计任何一项通过；默认不额外执行移动窄屏测试。**执行结果见 §8.1（2026-11-01 收口时逐条关闭）。**
+
+| 编号 | 验收场景 | 通过标准 |
+|---|---|---|
+| SKO-01 | 既有文件无 owner | 读取为 `owner:""`，总览／详情显示「未指定」；无迁移或批量回填 |
+| SKO-02 | 新建草稿并指定负责人 | 文件、摘要、详情和响应均为同一 owner；其余默认合同不变 |
+| SKO-03 | 已发布 Skill 修改负责人 | 保存后只改变显式编辑字段；不自动改状态、版本或授权 |
+| SKO-04 | 清除负责人 | 空字符串保存后显示「未指定」；后续读取无旧值残留 |
+| SKO-05 | 中文、团队和首尾空白 | trim 后准确保留内部文本；按纯文本显示，无 HTML／Markdown 注入 |
+| SKO-06 | 非字符串、超长、控制字符 | loader 标记 `owner_invalid`；validator 有稳定 code `skill_owner_invalid` 且 `type` 为 warning；首尾带 `\n`／`\t` 的原始值判非法（控制字符检查在 trim 前）；`validation.valid` 不因 owner 损坏翻转为 false；原 Skill 的 MCP 授权不因此改变 |
+| SKO-07 | 损坏声明修复 | 未显式提供 owner 的保存被拒；合法填写、清空或 rawContent 修复后可保存 |
+| SKO-08 | rawContent 创建／更新 | 与结构化路径使用同一 parseOwner 合同，对象不被字符串化 |
+| SKO-09 | 预检 | 显示 owner 前后值和真实 frontmatter diff；无文件、审计或缓存写副作用 |
+| SKO-10 | CAS 与身份 | 过期 `expected_version` 拒绝；owner 修改不改变 domain、name、URI 或原路径 |
+| SKO-11 | 配置审计 | create／edit／delete 摘要包含 owner；edit 可同时看到 actor 与 owner 前后值 |
+| SKO-12 | 审计失败与回滚 | intent 缺失不写文件；committed terminal 失败恢复原文件且不返回成功；恢复失败保留证据并显式要求修复 |
+| SKO-13 | 权限隔离 | owner 不是登录账户或角色；修改 owner 不改变 roles_allowed、工具能力或 MCP 拒绝原因 |
+| SKO-14 | 摘要与导出 | 摘要仍无正文；既有 Skill 导出保留 owner，MCP 不新增负责人授权语义 |
+| SKO-15 | 工作台回归 | 创建、编辑、取消、脏数据保护、删除和发布状态预检不回归；无技能市场入口 |
+| SKO-16 | 工程门禁 | **拆出。** 构建、术语 lint、Spec lint、selector contract 不新增 issue 是过程记录，不在本条出口 |
+
+### 8.1 执行结果与逐条落点（2026-11-01）
+
+证据等级：**本地自动化（vitest）＋ 本地工程门禁**。无 CI job 证据，无客户环境证据。完整记录见 [收口记录](../reviews/2026-11-01-skill-owner-closure.md)。
+
+| 编号 | 验收场景 | 结果 | 落点（文件 → 用例） |
+|---|---|---|---|
+| SKO-01 | 既有文件无 owner | 通过 | `skill-owner-l25-04.test.ts`「既有文件没有 owner 时读为未指定，且不产生损坏声明」；`skill-owner-sko-acceptance.test.ts`「既有文件无 owner：读为未指定，读取不回写磁盘（无迁移、无批量回填）」；`skill-list.test.tsx`「总览有负责人列，缺省显示「未指定」」；`skill-owner-sko-acceptance.test.tsx`「详情态在没有负责人时显示「未指定」」；`skill-owner-l25-04.test.ts`「SKO-01/SKO-14 列表与详情返回同一个 owner」 |
+| SKO-02 | 新建草稿并指定负责人 | 通过 | `skill-owner-l25-04.test.ts`「新建并指定负责人：文件、响应与审计摘要一致」；`skill-owner-sko-acceptance.test.ts`「新建草稿并指定负责人：文件、摘要、详情、响应四处一致」；`skill-list.test.tsx`「编辑态可填写负责人，保存时随载荷提交」 |
+| SKO-03 | 已发布 Skill 修改负责人 | 通过 | `skill-owner-l25-04.test.ts`「修改已发布 Skill 的负责人只改负责人，不动状态、版本与授权」；`skill-owner-sko-acceptance.test.ts`「只改变显式编辑的字段」；`skill-owner-sko-acceptance.test.tsx`「只改标题时载荷仍带原负责人，不会被静默清空」 |
+| SKO-04 | 清除负责人 | 通过 | `skill-owner-l25-04.test.ts`「清除负责人后读回未指定，文件里不再有该键」；`skill-owner-sko-acceptance.test.ts`「保存后读回未指定，磁盘与后续读取都无旧值残留」＋「提交显式的空字符串，保存后总览显示「未指定」」 |
+| SKO-05 | 中文、团队和首尾空白 | 通过 | `skill-owner-l25-04.test.ts`「写入时首尾空白被 trim，内部空白保留」；`skill-owner-sko-acceptance.test.ts`「首尾空白被 trim、内部空白原样保留；注入型文本按纯文本存取，不被解释」；`skill-list.test.tsx`「预检显示负责人旧值 → 新值」；`skill-owner-sko-acceptance.test.tsx`「注入型负责人按纯文本显示：总览与详情都不产生真实元素」 |
+| SKO-06 | 非字符串、超长、控制字符 | 通过 | `skill-owner-l25-04.test.ts` 四条（损坏声明披露且不改变授权／非字符串不字符串化且 warning／显式 null 与超长判非法且 80 code point 合法／超长写入被拒且不落盘）；`skill-list.test.tsx`「损坏声明在阅读态披露，且不显示为负责人」；`skill-owner-sko-acceptance.test.tsx`「总览列对损坏声明显示「声明无效」」 |
+| SKO-07 | 损坏声明修复 | 通过 | `skill-owner-l25-04.test.ts`「未提供负责人时保存被拒」；`skill-owner-sko-acceptance.test.ts`「未修复被拒且磁盘不变；显式清空或 rawContent 修复后可保存」；`skill-list.test.tsx`「损坏声明未修复前不随保存静默清除」 |
+| SKO-08 | rawContent 创建／更新 | 通过 | `skill-owner-l25-04.test.ts`「rawContent 路径使用同一合同：对象不会被字符串化」；`skill-owner-sko-acceptance.test.ts`「rawContent 更新路径与创建路径同一合同」 |
+| SKO-09 | 预检 | 通过 | `skill-owner-l25-04.test.ts`「预检显示负责人前后值与真实 frontmatter diff，且不写文件」；`skill-owner-sko-acceptance.test.ts`「且无文件、审计与缓存副作用」；`skill-owner-sko-acceptance.test.tsx`「预检披露负责人旧值 → 新值」 |
+| SKO-10 | CAS 与身份 | 通过 | `skill-owner-l25-04.test.ts`「过期 expected_version 被拒，负责人修改不改变身份」；`skill-owner-sko-acceptance.test.ts`「改负责人不改变 URI 与原路径，过期 expected_version 仍被拒」 |
+| SKO-11 | 配置审计 | 通过 | `skill-owner-l25-04.test.ts`「删除审计摘要保留删除前的负责人」；`skill-owner-sko-acceptance.test.ts`「create／edit／delete 摘要含 owner；edit 同时能看到 actor 与 owner 前后值」 |
+| SKO-12 | 审计失败与回滚 | 通过 | `skill-owner-l25-04.test.ts` 三条（意图记录缺失不写文件／committed terminal 失败恢复原文件且记 rolled_back 且不返回成功／恢复也失败时显式要求修复，不谎称已回滚） |
+| SKO-13 | 权限隔离 | 通过 | `skill-owner-l25-04.test.ts`「改动它不动 roles_allowed」；`skill-owner-sko-acceptance.test.ts`「改它不改变授权判定与 MCP 拒绝原因」 |
+| SKO-14 | 摘要与导出 | 通过 | `skill-owner-l25-04.test.ts`「列表与详情返回同一个 owner，缺省为空且不返回正文」；`skill-owner-sko-acceptance.test.ts`「摘要无正文；既有导出保留 owner；MCP 授权集合未新增负责人语义」 |
+| SKO-15 | 工作台回归 | 通过（**收口时补 2 条缺口用例**） | `skill-owner-sko-acceptance.test.ts`「无二级市场入口」；**新增** `skill-owner-sko-15-workbench-regression.test.tsx` 两条（「删除是两步确认：第一步只武装删除、不发请求，确认后才发 DELETE」「发布状态进入预检：「状态变化」反映 草稿 → 已发布，且未确认前不写盘」）；其余工作台回归项（创建／编辑／保存／取消／脏数据保护／预检主体）由 `skill-list.test.tsx` 既有断言承载 |
+| SKO-16 | 工程门禁 | **拆出** | 原过程记录保留：定向测试 5 文件 / 53 条、build exit 0、`lint:terminology` exit 0、`lint:spec` exit 0、`lint:spec-docs` exit 0、selector contract 新增 0 条。不构成用户承诺。行为断言在 SKO-01–15 |
+
+> **口径更正**：本条旧文写的「selector contract fail 数保持 24」是 2026-10-26 的旧值。当前门禁的**决定退出码的 fail 集为 201**（`UNREGISTERED` 143 ＋ `UNREGISTERED TEMPLATE` 56 ＋ `SPEC-DANGLES-IMPL` 2），另有 57 条 warn 级 `ORPHAN` 不计入该集。SKO-16 的判据是「**不新增 issue**」，不是「issue 总数为 0」；本批以「移走新增用例文件复跑、issue 集合逐条 diff 为空」证明新增 0 条。可归因到本条的残留只有 1 条 warn 级 ORPHAN `skill-detail-owner`（该 testid 经 `DetailRow` 的 `testId` prop 渲染，门禁脚本只识别字面量 `data-testid="..."`，运行时实现存在）。
+
+## 9. 实施拆分与状态（2026-10-26 已授权并实施 S1／S2）
+
+实施 Plan 见 [L25-04 实施 Plan](../plans/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-plan.md)，实施记录见 [L25-04 实施记录](../reviews/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-record.md)。
+
+| 阶段 | 内容 | 退出条件 | 状态 |
+|---|---|---|---|
+| S1 数据与写入 | types、loader、validator、writer、rawContent、preview impact、audit summary；**F-03 的文件回滚闭包**（`requireIntent` + `rollbackOnTerminalFailure`，opt-in，不改变既有调用方行为） | SKO-01～14 的服务端用例 | **已实施**，21 项新测试全过 |
+| S2 工作台 | client types、总览列、详情、编辑字段、预检和错误映射 | SKO-02～05／09／15 的 UI 用例 | **已实施**，6 项新 UI 测试全过 |
+| S3 文档与验证 | selector（新增 `data-testid` 须登记进 `docs/qa/selector-contract.md`）、系统手册、术语复核及定向工程门禁 | 过程记录，不在功能合同出口 | **已完成**：4 个新 testid 已登记；系统手册 §3.12 已补「负责人」字段说明；构建与 lint 的退出码改记为过程记录 |
+
+> **2026-11-01 功能合同收口。** S1／S2／S3 的自动化覆盖与文档落点已就位并通过，SKO-01–15 **关闭**（服务端 13／13 ＋ 工作台 6／6 ＋ 收口时补的 2 条）。SKO-16 已拆出。**本条收口不表示可上线**：浏览器实测与移动窄屏验证、镜像构建与部署、客户环境验证与客户交付均不在本条出口。selector contract 的旧口径「fail 数保持 24」已按 §8.1 更正为「**不新增 issue**」，当前门禁 fail 集为 201（既有欠账，非本条引入）；可归因到本条的残留只有 1 条 warn 级 ORPHAN（`skill-detail-owner`）。
+
+## Terminology Compliance
+
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms（已同步登记到术语标准 §4.10）:
+
+| Canonical Term | UI 主术语 | 禁止文案／边界 |
+|---|---|---|
+| Skill Owner | 负责人 | 不写成「所有者」「管理员」「审批人」；自由文本人员或团队标签，不授权 |
+| Unassigned Skill Owner | 未指定 | 不写成「无负责人账户」；表示缺省，不是异常 |
+
+既有「业务 Skill」「所有者」「可访问角色」「保存并预检」「配置审计」继续按全局标准使用。
+
+## 10. 评审检查点
+
+- [x] 认可 owner 为自由文本治理标签，不绑定登录账户或邮箱。
+- [x] 认可既有文件缺省不迁移、损坏不阻断 MCP、保存必须显式修复。
+- [x] 认可复用预检、CAS 和配置审计闭环，不新增存储。
+- [x] PM 签核设计基线（2026-10-26）：设计基线成立；开发授权与验收另行决定。
+- [x] 2026-10-26 取得开发授权并实施 S1／S2（见 §9）。
+- [x] 2026-10-26 补齐 S3 文档项：系统手册 §3.12 增「负责人」字段说明；新增 `data-testid` 全部登记进 selector contract。
+- [x] 2026-11-01 **功能合同收口**：SKO-01–SKO-15 关闭，逐条落点见 §8.1，证据见 [收口记录](../reviews/2026-11-01-skill-owner-closure.md)。收口时补 2 条 SKO-15 缺口用例（删除两步确认、发布状态预检），**未改任何运行代码**。SKO-16 于次日拆出，见下条。
+- [x] 2026-11-02 出口拆分：SKO-16 工程门禁拆出。SKO-01–SKO-15 的通过结论不变。见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。

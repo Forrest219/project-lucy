@@ -14,6 +14,8 @@
 | 关联页面 | `/eval/cases`、`/eval/cases/:domain/:caseId`、`/eval/runs/:id`、`/eval/monitor`、`/eval/field-questions` |
 | 修订 | Spec 46 的套件交换与哈希归档仍有效。客户主路径由「本机 Agent 运行」改为本 Spec 的离线跑批。Spec 65 的安全评测候选不改；本 Spec 另开业务池，不自动晋升、不把成功调用当标准答案。v0.2 吸收评审终稿：执行路径不变量、执行身份、趋势页没答出来计数、结果文件完整性；本版移除数据变化 |
 
+> **Spec 189 修订（2026-10-27）**：本文 §8.4「现场」面板（`/api/eval/monitor/field`）的 calls／errors／denies 与比率改为 **Default Usage Call**（排除全部协议事件与默认视图排除的评测探针）。**domain 绑定的 Role 人口、client family 聚合、空态、趋势黄线／红线一律不变**；现场是真实使用观察，不是原始评测探针监控，现场报错占比也不因此变成评测门禁。口径以 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md` §6 为准。
+
 ## 1. 评审时要确认的决定
 
 1. 客户页面上的一轮评测是：在 Lucy 里维护套件，在能访问客户库的环境里跑批，再把结果上传回来。Lucy 不接入大模型，跑批不调用 Agent。

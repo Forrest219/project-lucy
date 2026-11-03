@@ -44,8 +44,8 @@
 | 函数 | 行为 |
 |---|---|
 | `ABSOLUTE_DENY_TOOL_NAMES` | 与 `webui/server/proxy/acl.ts` 的 `ABSOLUTE_DENY_TOOLS` 成员相同：`sl_query`、`sl_read_source`、`sql_execution`、`sql_dialect_notes`、`memory_ingest`、`memory_ingest_status` |
-| `READONLY_QA_PRESET` | 恰好 6 个：`lucy_catalog`、`lucy_read_source`、`lucy_query`、`lucy_explain_query`、`lucy_freshness`、`lucy_begin_question`。不含 `sl_validate` |
-| `READONLY_QA_WIKI_PRESET` | 上一组加 `wiki_search`、`wiki_read`，共 8 个 |
+| `READONLY_QA_PRESET` | 只读问答工具全集，清单以 `webui/src/lib/rolePermissionDraft.ts` 的同名常量为唯一事实源，不在此写死个数。不含 `sl_validate`；`lucy_continue_question` 于 2026-10-30 随问询预算续查通道（Spec 162 v0.4）加入本预设 |
+| `READONLY_QA_WIKI_PRESET` | 上一组加 `wiki_search`、`wiki_read`；该预设已于 Spec 170 从角色页撤回，代码中已不存在（通道工具现由 `CONTEXT_TOOL_NAMES` 表达） |
 | `stampPreset(current, preset)` | 返回预设的完整副本。忽略 `current`。不是并集 |
 | `matchingPresetName(tools)` | 集合相等时返回「只读问答」或「只读问答 + 知识库」。多一个或少一个返回 `null`。顺序无关 |
 | `partitionGrantableTools(tools)` | 拆成 `grantable` 与 `rejected`。`rejected` 只含 AbsoluteDeny |
@@ -122,7 +122,7 @@ cd webui && npm run lint:terminology
 cd webui && npx vitest run src/__tests__/role-detail.test.tsx --maxWorkers=1
 ```
 
-断言至少包括：点「只读问答」后 `sl_validate` 不在选中集合；页面上没有 `sl_query` 的 checkbox；文本含「已选 6 个」且不含「/16」；页底系统禁止句存在。
+断言至少包括：点「只读问答」后 `sl_validate` 不在选中集合；页面上没有 `sl_query` 的 checkbox；文本含「已选 N 个」（N 为该预设全集的工具数）且不含「/16」；页底系统禁止句存在。
 
 ## 6. T5 — 表树、行策略、高级扩权
 

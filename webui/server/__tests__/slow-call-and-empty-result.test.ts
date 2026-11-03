@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  budgetIdentityKey,
   isEmptyResult,
   isSlowCall,
   questionBudget,
@@ -102,7 +103,14 @@ describe("slow call and empty result (SC-20)", () => {
     process.env.LUCY_AUDIT_DB = auditDbPath;
     questionBudget.resetForTests();
     const started = Date.now() - 120_000;
-    questionBudget.ensureTurn("turn-wall", started);
+    // Spec 162 修订 / Plan S2：慢问询标记读**稳定作用域**的 originStartedAt，
+    // 不再按 `turn:<id>` 键读取（`ensureTurn` 在 stable 模式下不再建桶）。
+    await questionBudget.beginQuestion({
+      identityKey: budgetIdentityKey("analyst", "sha256:slow-test"),
+      sessionId: "sess-wall",
+      turnId: "turn-wall",
+      now: started
+    });
     expect(questionBudget.wallClockMs("turn-wall", started + 120_000)).toBe(120_000);
     // A continuation must not erase the original question start.
     questionBudget.consume("turn-wall", started + 120_000, "turn-wall");

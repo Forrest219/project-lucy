@@ -1,0 +1,28 @@
+# 真浏览器 IME 组合探针输出（SC-17）
+
+- Chrome: Chrome/156.0.8078.73
+- 组合序列: zhong → zhongwen → 中文
+- 通过: 15 / 15
+
+| 输入框 | 页面 | compositionstart | 最终 DOM 值 | value setter（该框） | 焦点保持 | 期望 | 结论 |
+|---|---|---|---|---|---|---|---|
+| audit-user | Audit | 1 | 中文 | 0 | 是 | pass | PASS |
+| audit-unified-search | Audit | 1 | 中文 | 0 | 是 | pass | PASS |
+| audit-tool | Audit | 1 | 中文 | 0 | 是 | pass | PASS |
+| audit-session-id | Audit | 1 | 中文 | 0 | 是 | pass | PASS |
+| audit-client-ip | Audit | 1 | 中文 | 0 | 是 | pass | PASS |
+| audit-device-name | Audit | 1 | 中文 | 0 | 是 | pass | PASS |
+| audit-table-search | Audit | 1 | 中文 | 0 | 是 | pass | PASS |
+| config-audit-target-id | ConfigAudit | 1 | 中文 | 0 | 是 | pass | PASS |
+| config-audit-file-path | ConfigAudit | 1 | 中文 | 0 | 是 | pass | PASS |
+| config-audit-source | ConfigAudit | 1 | 中文 | 0 | 是 | pass | PASS |
+| tokens-search | Tokens | 1 | 中文 | 0 | 是 | pass | PASS |
+| catalog-q | Catalog | 1 | 中文 | 0 | 是 | pass | PASS |
+| publish-history-actor | PublishHistory | 1 | 中文 | 0 | 是 | pass | PASS |
+| control-local-state | ProbeControl | 1 | 中文 | 0 | 是 | pass | PASS |
+| control-url-driven | ProbeControl | 3 | zhongzhongwen中文 | 6 | 是 | detect-defect | PASS |
+
+## 备注
+- 临时入口已生成：ime-probe.html + src/ime-probe-main.tsx（跑完删除）
+- vite dev server: http://127.0.0.1:5199/ime-probe.html
+- Chrome: Chrome/156.0.8078.73

@@ -22,9 +22,11 @@ import { reloadCatalog, type CatalogReloadRun } from "./catalog-reload";
 import { syncContentToProjectRoot } from "./content-mirror";
 import { resolveContentPaths } from "./paths";
 import { readProject } from "./project";
-import { withDisplayWriteBarrier } from "./display-generation";
+import { registerDisplayTouchedPath, scopeContextFor, scopesForPath, withDisplayWriteBarrier } from "./display-generation";
+import { withPublishCoordinator } from "./publish-coordinator.js";
+import { SEMANTIC_BATCH_LIMITS } from "./semantic-limits.js";
 
-const MAX_BYTES = 512 * 1024;
+const MAX_BYTES = SEMANTIC_BATCH_LIMITS.maxSingleYamlBytes;
 const MAX_RECORDS = 50;
 const SIDECAR_REL = ".ktx-ui/catalog-asset-uploads.json";
 
@@ -564,7 +566,7 @@ function buildBaseValidation(
   if (sizeBytes > MAX_BYTES) {
     errors.push({
       code: "FILE_TOO_LARGE",
-      message: `文件超过 ${MAX_BYTES / 1024} KB 上限`
+      message: `文件超过 ${MAX_BYTES / 1024 / 1024} MiB 上限，请减少文件内容后重试。`
     });
   }
 
@@ -853,6 +855,63 @@ export async function uploadCatalogAsset(
     );
   }
 
+  // Lucy v0.25 (L25-11 D4) — the manifest upload shares the publish window with the
+  // single-table save, the batch import, the manual reindex and the access.yaml writers.
+  return withPublishCoordinator(
+    "manifest_upload",
+    () => writeCatalogAssetIntoWindow(projectRoot, request, validation, safety),
+    { projectRoot }
+  );
+}
+
+async function writeCatalogAssetIntoWindow(
+  projectRoot: string,
+  request: CatalogAssetUploadRequest,
+  validation: CatalogAssetValidateResponse,
+  safety: { safeParentAbs: string; targetAbs: string }
+): Promise<UploadCatalogAssetResult> {
+  const targetRel = validation.targetPath;
+  const { openPromotingContentRelease, closeContentBatch, failContentBatch } = await import(
+    "./semantic-assets.js"
+  );
+  const { createRecoveryJournal, markRecoveryJournalFilesSaved } = await import(
+    "./semantic-recovery-journal.js"
+  );
+  const { readOrCreateSemanticInstanceId } = await import("./semantic-release-snapshots.js");
+  const opened = await openPromotingContentRelease({
+    projectRoot,
+    actor: "local-admin",
+    targets: [
+      {
+        targetPath: targetRel,
+        assetKind: "manifest",
+        expectedNewDigest: createHash("sha256").update(request.content, "utf8").digest("hex"),
+        identity: {
+          connectionId: request.connectionId,
+          schema: request.schema,
+          table: request.schema
+        }
+      }
+    ]
+  });
+  const journal = await createRecoveryJournal(projectRoot, {
+    releaseId: opened.releaseId,
+    operationId: opened.releaseId,
+    actor: "local-admin",
+    instanceId: await readOrCreateSemanticInstanceId(projectRoot),
+    targets: [
+      {
+        targetPath: targetRel,
+        identity: {
+          connectionId: request.connectionId,
+          schema: request.schema,
+          table: request.schema
+        },
+        newContent: request.content
+      }
+    ]
+  });
+
   // Atomic write: temp file in the same directory, then rename.
   const tempName = `.${randomUUID()}.upload.tmp`;
   const tempAbs = path.join(safety.safeParentAbs, tempName);
@@ -876,7 +935,14 @@ export async function uploadCatalogAsset(
     }
   }
   // Spec 174 §3.2 — the rename bypasses safeWrite; barrier it explicitly (tmp file is ignored).
-  await withDisplayWriteBarrier(["D", "P", "C"], () => rename(tempAbs, safety.targetAbs));
+  // Spec 195 §4 — the scope comes from the target path itself: a Manifest feeds D and P.
+  const contentPaths = await resolveContentPaths(projectRoot);
+  const scopeContext = scopeContextFor(projectRoot, contentPaths.semanticLayer);
+  const targetScopes = scopesForPath(safety.targetAbs, scopeContext);
+  await withDisplayWriteBarrier(targetScopes, async () => {
+    registerDisplayTouchedPath(safety.targetAbs, targetScopes);
+    await rename(tempAbs, safety.targetAbs);
+  });
 
   // A2: the ktx daemon/CLI still read the project-root sibling view. Push the
   // just-written manifest (and any other content-root drift) there so query
@@ -921,6 +987,32 @@ export async function uploadCatalogAsset(
     reloadRunId: reload.id
   };
   await appendRecord(projectRoot, finalRecord);
+  await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
+  // L25-15 — the batch has to reach a terminal state inside the publish
+  // window. A record left at `promoting` blocks every later content write.
+  try {
+    await closeContentBatch(projectRoot, {
+      releaseId: opened.releaseId,
+      attemptId: opened.attemptId,
+      actor: "local-admin",
+      journalId: journal.journalId,
+      changeType: "manifest_upload_terminal",
+      source: "catalog_asset_upload_api",
+      targetId: targetRel,
+      operation: "upload_terminal",
+      newSummary: {
+        connectionId: validation.connectionId,
+        schema: validation.schema,
+        tableCount: validation.tables
+      }
+    });
+  } catch (error) {
+    await failContentBatch(projectRoot, {
+      releaseId: opened.releaseId,
+      journalId: journal.journalId
+    });
+    throw error;
+  }
   return {
     uploaded: true,
     record: finalRecord,

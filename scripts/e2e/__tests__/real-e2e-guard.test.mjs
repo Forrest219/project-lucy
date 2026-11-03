@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { REPO_ROOT } from "../lib/common.mjs";
@@ -54,6 +56,46 @@ describe("real-user browser E2E guarantees (Spec §6.4, Plan T11)", () => {
       for (const id of covered) assert.ok(ids.has(id), `${path.relative(REPO_ROOT, file)} covers unknown case ${id}`);
     }
   });
+
+  it("the real-e2e specs type-check (webui/tsconfig.json does not cover them)", () => {
+    // `webui/tsconfig.json` includes only `src` and `server`, so NOTHING type-checks the
+    // real-e2e specs. A renamed helper therefore stayed a stale call in a spec until a
+    // REAL run hit it (a `ReferenceError` in the middle of a UAT leg). This check
+    // closes that gap: the specs must compile.
+    const webui = path.join(REPO_ROOT, "webui");
+    const tsc = path.join(webui, "node_modules", ".bin", "tsc");
+    if (!existsSync(tsc)) return; // no toolchain installed — nothing to check against
+    const dir = mkdtempSync(path.join(os.tmpdir(), "lucy-real-e2e-tsc-"));
+    try {
+      const config = path.join(dir, "tsconfig.json");
+      writeFileSync(
+        config,
+        `${JSON.stringify(
+          {
+            extends: path.join(webui, "tsconfig.json"),
+            compilerOptions: {
+              // The temp config lives outside the package, so the node type packages
+              // have to be pointed at explicitly.
+              typeRoots: [path.join(webui, "node_modules", "@types")],
+              types: ["node"],
+              // The specs import plain `.mjs` helpers, which have no type declarations.
+              // Those imports are a known, separate gap; they must not mask real errors.
+              noImplicitAny: false
+            },
+            include: [path.join(webui, "tests", "real-e2e"), path.join(webui, "playwright.real.config.ts")]
+          },
+          null,
+          2
+        )}\n`
+      );
+      const result = spawnSync(tsc, ["--noEmit", "-p", config], { cwd: webui, encoding: "utf8" });
+      const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+      assert.equal(output, "", `the real-e2e specs do not type-check:\n${output}`);
+      assert.equal(result.status, 0, `tsc exited ${result.status}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("management evidence collection never turns missing work into a pass", () => {
@@ -94,5 +136,51 @@ describe("management evidence collection never turns missing work into a pass", 
     assert.equal(find(collectManagementResults({ run, report: skipped, cases, capabilities: caps }), "SEC-01-V06").status, "skipped");
     const failed = test("SEC-01-V06", { status: "unexpected", resultStatus: "failed", annotations: [a("deny"), a("no_side_effect")] });
     assert.equal(find(collectManagementResults({ run, report: failed, cases, capabilities: caps }), "SEC-01-V06").status, "failed");
+  });
+});
+
+describe("a binding-contract runner blocks the case instead of failing it", () => {
+  const { cases } = loadCatalog();
+  const run = { runId: "t-run-0001", db: { applied: false } };
+  const caps = new Set(["lucy-http", "browser"]);
+  const a = (token, passed = true) => ({ type: "assert", description: JSON.stringify({ token, passed }) });
+  const contractOnly = (tokensById) => ({ type: "contract-only", description: JSON.stringify(tokensById) });
+  const find = (results, id) => results.find((r) => r.id === id);
+  const test = (caseId, { annotations = [] } = {}) => ({
+    suites: [{ specs: [{ title: `spec ${caseId}`, tests: [{ status: "expected", annotations: [{ type: "case", description: caseId }, ...annotations], results: [{ status: "passed", annotations: [] }] }] }] }]
+  });
+
+  it("a declared token the contract-only runner declared it will not evaluate blocks the case", () => {
+    // UX-06-V02 declares [allow_control, real_query, typed_gold]; the offline
+    // binding-contract runner asserts a command constant and never the live evidence.
+    const report = test("UX-06-V02", { annotations: [contractOnly({ "UX-06-V02": ["allow_control", "real_query", "typed_gold"] })] });
+    const entry = find(collectManagementResults({ run, report, cases, capabilities: caps }), "UX-06-V02");
+    assert.equal(entry.status, "blocked");
+    assert.match(entry.detail, /binding contract/);
+    assert.deepEqual(entry.blockedBy, ["live_evidence_not_evaluated"]);
+  });
+
+  it("the fail-closed rule is unchanged for a runner that stayed silent about the missing token", () => {
+    // Same case, same missing tokens, but the runner never declared itself
+    // contract-only: the case must still FAIL (no vacuous pass).
+    const report = test("UX-06-V02", { annotations: [] });
+    const entry = find(collectManagementResults({ run, report, cases, capabilities: caps }), "UX-06-V02");
+    assert.equal(entry.status, "failed");
+    assert.match(entry.detail, /never evaluated/);
+  });
+
+  it("a declared token that another covering spec DID evaluate still decides the case", () => {
+    // UX-07-V03 declares [consistency, no_leak] and the authorization-summary spec
+    // evaluates both: the contract-only binding spec must not turn a real pass into
+    // a block.
+    const report = test("UX-07-V03", { annotations: [a("consistency"), a("no_leak")] });
+    const entry = find(collectManagementResults({ run, report, cases, capabilities: caps }), "UX-07-V03");
+    assert.equal(entry.status, "passed");
+  });
+
+  it("a contract-only declaration for a DIFFERENT case never rescues this case", () => {
+    const report = test("UX-06-V03", { annotations: [contractOnly({ "UX-06-V02": ["allow_control", "real_query", "typed_gold"] })] });
+    const entry = find(collectManagementResults({ run, report, cases, capabilities: caps }), "UX-06-V03");
+    assert.equal(entry.status, "failed");
   });
 });

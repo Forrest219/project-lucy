@@ -12,10 +12,25 @@ export const queryKeys = {
   wiki: ["wiki"] as const,
   wikiPage: (key: string) => ["wiki", key] as const,
   wikiVersions: (key: string) => ["wiki", "versions", key] as const,
+  /**
+   * Spec 193 §6.2 — the full per-document authorization summary (Role channel
+   * effects + affected Agent ids). The aggregate list keeps using
+   * `queryKeys.wiki`; POST previews are mutations and get no cache key.
+   */
+  wikiAccess: (key: string) => ["wiki", "access", key] as const,
+  /** Spec 193 §7.4 — a durable bulk authorization result, queryable by operation id. */
+  wikiBatchAccess: (operationId: string) => ["wiki", "access", "batch", operationId] as const,
   joinCandidates: ["joins", "candidates"] as const,
   connections: ["connections"] as const,
   connectionTables: (connId: string) => ["connections", connId, "tables"] as const,
   connectionLiveSchemas: (connId: string) => ["connections", connId, "live-schemas"] as const,
+  /** Spec 190: Schema-level live table list (`GET .../live-tables`). */
+  connectionLiveTables: (connId: string, schema: string) =>
+    ["connections", connId, "live-tables", schema] as const,
+  /** Spec 190: continuous discovery status (`GET .../discovery`). */
+  connectionDiscovery: (connId: string) => ["connections", connId, "discovery"] as const,
+  /** Spec 190: reconciliation state and change events (`GET .../table-diff`). */
+  connectionTableDiff: (connId: string) => ["connections", connId, "table-diff"] as const,
   /** Spec 108: per-connection connectivity probe (`POST .../test`). */
   connectionHealth: (connId: string) => ["connections", connId, "health"] as const,
   mcpRuntime: ["admin", "mcp-runtime"] as const,
@@ -32,6 +47,15 @@ export const queryKeys = {
     ["catalog", "schema-manifest", connId, schema] as const,
   // M19 self-service publish and sanitized export.
   semanticAssetReleases: ["semantic-assets", "releases"] as const,
+  /**
+   * Spec 20261030 §6 — the workbench's "最近发布" summary is a DIFFERENT query
+   * from the full history page: it filters the maintenance runs on the server
+   * and takes only the newest five business batches. The filter is part of the
+   * cache key, so a filtered summary can never serve an unfiltered result.
+   * It stays under `semanticAssetReleases`, so one invalidation clears both.
+   */
+  semanticAssetRecentReleases: (businessChangesOnly: boolean) =>
+    ["semantic-assets", "releases", "recent", { businessChangesOnly }] as const,
   semanticAssetRelease: (releaseId: string) =>
     ["semantic-assets", "releases", releaseId] as const,
   // Spec 144 read-only 业务 Skill assets (`GET /api/skills`).

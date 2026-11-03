@@ -38,3 +38,7 @@ npm run demo:upgrade -- --fresh
 默认**不** `down -v` 整个 stack（避免无故清掉 `demo-db`），只清 `lucy-demo-data`。若用户明确要求数据库也从零开始，再对 demo-db 做额外重置。
 
 **不要用 `--no-cache`**（除非用户明确要求无缓存）。
+
+## 回复时带出 WebUI 地址
+
+每次重建或升级完成后，回复里必须写出可打开的 WebUI 地址（不要只写 `/api/health`）。Demo 默认是 `http://127.0.0.1:${LUCY_DEMO_WEBUI_HOST_PORT:-55176}`，以本次容器实际映射端口为准。

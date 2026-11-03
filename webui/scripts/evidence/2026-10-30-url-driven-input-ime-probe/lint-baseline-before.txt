@@ -1,0 +1,35 @@
+# lint:url-driven-input 基线（改造前）
+# 生成时间: 2026-10-30 00:46:29 CST
+# 命令: node webui/scripts/lint-url-driven-input.mjs
+# 期望: 恰好 13 处（Spec §2.1）
+
+URL-driven input lint failed.
+
+Found 13 controlled text input(s) whose value comes from router state.
+
+webui/src/pages/Catalog.tsx:490 搜索表名或字段名...
+  value={search} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/Audit.tsx:2056 按 Agent 名称或 ID 筛选
+  value={user} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/Audit.tsx:2075 统一搜索
+  value={unifiedSearchValue} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/Audit.tsx:2173 按工具名筛选
+  value={tool} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/Audit.tsx:2181 按 Session ID 筛选
+  value={sessionId} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/Audit.tsx:2189 访问 IP
+  value={clientIp} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/Audit.tsx:2197 最近设备名
+  value={deviceNameFilter} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/Audit.tsx:2212 按表名筛选
+  value={tableSearch} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/ConfigAudit.tsx:316 目标 ID
+  value={targetId} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/ConfigAudit.tsx:324 文件路径
+  value={filePath} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/ConfigAudit.tsx:331 来源
+  value={source} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/admin/Tokens.tsx:209 搜索 Token
+  value={search} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）
+webui/src/pages/publish/PublishHistory.tsx:504 操作人
+  value={actor} — value 源取自路由状态，改用局部状态镜像（Spec §5.2）

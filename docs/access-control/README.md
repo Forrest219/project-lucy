@@ -37,11 +37,16 @@
 | **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | 可交付开发任务计划 |
 | **WebUI 登录 / Token 失效** | [`design-webui-admin-auth.md`](design-webui-admin-auth.md) · [`plans/wo-202608-62-webui-admin-auth-and-token-expiry.md`](plans/wo-202608-62-webui-admin-auth-and-token-expiry.md) | Token `expires_at` 强制；多管理员本地登录 |
 | 行级策略后续顺序 | [`adr-row-policy-next-iteration.md`](adr-row-policy-next-iteration.md) | 已确认：当前维持静态行级策略；下一次增量候选为可复用静态策略引用；动态数据策略另批 |
-| 行权限管理（v2.5 L25-14） | [`../specs/lucy-20261022-v2p5-row-permission-management-spec.md`](../specs/lucy-20261022-v2p5-row-permission-management-spec.md) v0.1-draft | **待评审，暂不开发**：把 ADR §2.2 的「可复用静态策略引用」落为 v2.5 需求，含最终行约束预览与按表反查视图；不改 Spec 99 / 100 运行时语义，动态策略仍按 §2.3 冻结 |
-| 已登记缺陷（行级策略字段绑定） | [`../qa/security-findings.yaml`](../qa/security-findings.yaml) **D-03（P1 / open）** | **存量缺陷，未修**：大写 schema 的清单文件名按小写化路径查找失败，合法行级字段被判 `row_policy_field_unresolved:unknown`；根因与复现见 L25-14 Spec §1.4。2026-10-22 裁决：只登记不修，留 v2.0 线排期。不得以改成「全部行」绕过 |
+| 行权限管理（v0.25 L25-14） | [`../specs/lucy-20261022-v2p5-row-permission-management-spec.md`](../specs/lucy-20261022-v2p5-row-permission-management-spec.md) v0.2-requirements-review | **P0-2 设计完成、待需求审查，暂不开发**：P0 仅含 R2 保存前最终行约束预览、R4 配置审计、R5 字段诊断；R1 模板与 R3 反查视图保持 P1。不改 Spec 99 / 100 运行时语义，动态策略仍冻结 |
+| 行策略模板与按表反查（v0.25 P1-1） | [`../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md`](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) | **设计完成、需求审查已签核通过，暂不开发**：L25-14 R1 静态模板与 R3 独立只读视图；全部 P1 验收未执行 |
+| Agent 与角色授权摘要（v0.25 P1-2） | [`../specs/lucy-20261025-v0p25-access-authorization-summary-spec.md`](../specs/lucy-20261025-v0p25-access-authorization-summary-spec.md) | **设计完成、需求审查已签核通过，暂不开发**：L25-01 同源只读摘要、资源卡片与深链；不改变授权或运行时裁决 |
+| 业务 Wiki 上传授权、独立权限管理与批量授权 | [`../../webui/docs/193-business-wiki-access-management-spec.md`](../../webui/docs/193-business-wiki-access-management-spec.md) · [`../../webui/docs/plans/wo-M66-business-wiki-access-management.md`](../../webui/docs/plans/wo-M66-business-wiki-access-management.md) | **已实施（Plan M66）**：保留默认拒绝和逐文档 `allowed_roles` 事实源；上传预检内完成授权、单篇独立权限管理、最多 100 篇显式选择的批量授权；扩权先写 durable security operation + per-key hold，未提交前该 key 的 Agent 搜索与读取全部拒绝；不含目录继承。批量 journal 与幂等记录复用 `.ktx-ui/security.sqlite`，不新建 JSON sidecar |
+| 访问关系图（v0.25 P1-3） | [`../../webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md) | **设计完成、需求审查已签核通过，暂不开发**：L25-08 授权／访问双层只读关系图；路径、表与调用计数分开 |
+| 已登记缺陷（行级策略字段绑定） | [`../qa/security-findings.yaml`](../qa/security-findings.yaml) **D-03（P1 / open）** | **存量缺陷，未修**：根因与复现见 L25-14 Spec §1.5。归属 **0.20.Z 维护线（当前基线 `0.20.0`）**，是受影响客户场景的交付价值依赖而非 R2／R4／R5 开工依赖；V19／V22 证据齐全前不得宣称该场景交付价值。不得以改成「全部行」绕过 |
 | 实现契约 | [`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) | Runtime ACL / Proxy（AC-P0 须更新） |
 | Admin 契约 | [`webui/docs/14-agent-admin-enterprise-delivery-spec.md`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md)、[`15-role-admin-spec.md`](../../webui/docs/15-role-admin-spec.md) | Agent / Role Admin |
 | Role 权限配置结构 | [`webui/docs/150-role-permission-configuration-structure-spec.md`](../../webui/docs/150-role-permission-configuration-structure-spec.md) | Role 详情三个独立编辑面、共享草稿、保存确认 Drawer；不改运行时契约 |
+| 新建角色默认只读问答工具 | [`docs/specs/lucy-20261030-role-create-readonly-defaults-spec.md`](../specs/lucy-20261030-role-create-readonly-defaults-spec.md) · [`实施 Plan`](../plans/lucy-20261030-role-create-readonly-defaults-plan.md) | **已实现**（Task 1–4 落地，RD-01–RD-10 全通过）：新建默认预选只读问答工具全集（清单以 `READONLY_QA_PRESET` 常量为准），保留完整权限审阅，补充配置引导及空工具就地校验；编辑和复制不自动补工具 |
 | Skill 对象授权 | [`webui/docs/151-business-skill-authorization-and-file-safety-spec.md`](../../webui/docs/151-business-skill-authorization-and-file-safety-spec.md) | 文件身份与并发版本仍有效。对象授权与通道勾选由 [Spec 170](../../webui/docs/170-mvp-open-skill-wiki-access-spec.md) 暂停：已发布 Skill 与全部 Wiki 对所有已解析角色开放 |
 | 企业安全与真实用户 E2E 整改 | [Spec](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md) · [Plan](../plans/2026-10-18-enterprise-security-and-real-e2e-plan.md) · [ADR](./adr-20261018-security-ledger-and-context-acl.md) · [Cursor 提示词](../plans/2026-10-18-enterprise-security-cursor-prompts.md) | **2026-10-18 已批准，按批次实施中。** 修复 P0/P1、用显式角色 ACL 替代 170 全开放；实施完成前运行时仍以上方现行基线为准 |
 
@@ -74,7 +79,12 @@
 | `proposal-access-onboarding-simplification-202609.md` | **待审批**：访问治理「加人 / 开权限」体验简化（意图优先 + 渐进披露；与 Spec 133 顺序裁决） |
 | `integrity-p0-decision.md` | 企业完整性 P0 决策备忘（承诺表 / 已知限制 / 与工程 P0 对齐） |
 | `adr-row-policy-next-iteration.md` | 行级策略后续迭代 ADR；记录静态策略引用与动态数据策略的开工顺序 |
-| `../specs/lucy-20261022-v2p5-row-permission-management-spec.md` | 行权限管理 Spec v0.1-draft（v2.5 L25-14，待评审）；静态策略引用、最终行约束预览、行权限视图与配置审计 |
+| `../specs/lucy-20261022-v2p5-row-permission-management-spec.md` | 行权限管理 Spec v0.25 P0-2（L25-14，待需求审查）；P0 仅最终行约束预览、配置审计与字段诊断，模板引用和按表反查视图归 P1；D-03 归 0.20.Z 维护线 |
+| `../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md` | v0.25 P1-1 行策略模板与按表反查；需求审查已签核通过、未开发 |
+| `../specs/lucy-20261025-v0p25-access-authorization-summary-spec.md` | v0.25 P1-2 Agent 与角色授权摘要；需求审查已签核通过、未开发 |
+| `../../webui/docs/187-access-relation-sankey-spec.md` | v0.25 P1-3 访问关系图；需求审查已签核通过、未开发 |
+| `../../webui/docs/193-business-wiki-access-management-spec.md` | 业务 Wiki 上传授权、单篇独立权限管理与显式多选批量授权；待交叉审阅、未开发 |
+| `../reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md` | v0.25 P1 需求审查记录（2026-10-25 已签核；逐项依据、四条实施前待办 F-01–F-04；全部 P1 验收未执行，不授权开发） |
 | `feasibility-row-acl.SUPERSEDED.md` | **SUPERSEDED**；不得作为实施依据 |
 | `plans/` | 本域 Work Order |
 

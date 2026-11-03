@@ -1,16 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { accountEmailTaken, normalizeAccountEmail } from "./account-email.js";
 import {
   countEnabledOwners,
+  countEnabledOwnersWithLocalPassword,
   enabledAdmins,
   findAdmin,
   loadAdminsConfig,
   normalizeWebuiAdminRole,
+  ownerAdminView,
   publicAdminView,
   resolveAuthMode,
   saveAdminsConfig,
+  withAdminsWrite,
   ADMIN_ID_RE,
   type AdminsConfig,
+  type OidcBinding,
   type WebuiAdminRecord,
   type WebuiAdminRole
 } from "./admins-store.js";
@@ -25,7 +30,13 @@ import {
 } from "./rate-limit.js";
 import { clearSessionCookie, setSessionCookie } from "./session.js";
 import { actorIdFromRequest, AUTH_STATE_UNAVAILABLE, requireOwner } from "./guard.js";
-import { attemptedIdDigest, recordAuthEvent, type AuthEventKind } from "../security/auth-events.js";
+import {
+  attemptedIdDigest,
+  bindingDigest,
+  recordAuthEvent,
+  type AuthEventKind,
+  type AuthEventSummary
+} from "../security/auth-events.js";
 import {
   enableAccount,
   ensureAccountUid,
@@ -33,7 +44,7 @@ import {
   narrowAccount,
   revokeRequestSession
 } from "./account-state.js";
-import { ACTIVE_LOGIN_METHODS } from "./oidc-profile.js";
+import { getStartupOidcRuntimeView } from "./oidc-runtime.js";
 
 // Verified against when the account is unknown/disabled so both paths cost one scrypt (no existence oracle).
 let dummyHash: Promise<string> | null = null;
@@ -55,13 +66,16 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const me = request.lucyAdmin?.admin
       ? publicAdminView(request.lucyAdmin.admin)
       : null;
+    // Derived from the startup cache; the unauthenticated path never reads a file.
+    const runtime = await getStartupOidcRuntimeView();
+    const methods = mode === "required" && runtime.enabled ? ["local", "oidc"] : ["local"];
     return {
       ok: true,
       data: {
         mode,
         me,
         authEnabled: mode !== "open",
-        methods: ACTIVE_LOGIN_METHODS
+        methods
       }
     };
   });
@@ -136,7 +150,11 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         request,
         actor: "anonymous",
         actorType: "anonymous",
-        summary: { reason: "invalid_credentials", attemptedIdDigest: attemptedIdDigest(adminId) }
+        summary: {
+          method: "local",
+          reason: "invalid_credentials",
+          attemptedIdDigest: attemptedIdDigest(adminId)
+        }
       });
       return reply.status(401).send(AUTH_INVALID);
     }
@@ -157,7 +175,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         : reply.status(503).send(AUTH_STATE_UNAVAILABLE);
     }
     // The session is only handed out once its login is durably on the ledger.
-    if (!(await recordAuthEvent({ kind: "login_success", request, actor: account.id }))) {
+    if (!(await recordAuthEvent({ kind: "login_success", request, actor: account.id, summary: { method: "local" } }))) {
       return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
     }
     setSessionCookie(reply, session.token, session.exp);
@@ -223,16 +241,111 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   });
 }
 
-type AccountEvent = { kind: AuthEventKind; targetId: string; role?: string };
+type AccountEvent = {
+  kind: AuthEventKind;
+  targetId: string;
+  role?: string;
+  summary?: Omit<AuthEventSummary, "targetId" | "role">;
+};
 
 /** Account changes are recorded after the config write; a ledger failure is reported, not hidden. */
 async function recordAccountEvents(request: FastifyRequest, events: AccountEvent[]): Promise<boolean> {
   const actor = actorIdFromRequest(request);
   for (const event of events) {
-    const summary = { targetId: event.targetId, ...(event.role ? { role: event.role } : {}) };
+    const summary = {
+      targetId: event.targetId,
+      ...(event.role ? { role: event.role } : {}),
+      ...(event.summary ?? {})
+    };
     if (!(await recordAuthEvent({ kind: event.kind, request, actor, summary }))) return false;
   }
   return true;
+}
+
+/**
+ * Validates an OIDC identity binding (L25-06 §5.3).
+ *
+ * The issuer must equal the configured issuer byte for byte — no trailing-slash,
+ * case or URL normalization. A binding for another provider would never match a
+ * login, so it is refused at write time rather than at callback time.
+ */
+async function checkOidcBinding(
+  input: { issuer?: string; sub?: string; email?: string } | undefined
+): Promise<
+  | { ok: true; binding: OidcBinding }
+  | { ok: false; status: number; code: string; message: string }
+> {
+  const issuer = (input?.issuer ?? "").trim();
+  const sub = (input?.sub ?? "").trim();
+  const email = (input?.email ?? "").trim();
+  if (!issuer || !sub || !email.includes("@") || email.startsWith("@") || email.endsWith("@")) {
+    return {
+      ok: false,
+      status: 400,
+      code: "BAD_REQUEST",
+      message: "身份绑定需要 issuer、sub 与有效的 email"
+    };
+  }
+  const runtime = await getStartupOidcRuntimeView();
+  if (!runtime.enabled || !runtime.profile) {
+    return {
+      ok: false,
+      status: 503,
+      code: "OIDC_NOT_AVAILABLE",
+      message: "单点登录当前不可用，无法维护身份绑定"
+    };
+  }
+  if (issuer !== runtime.profile.issuer) {
+    return {
+      ok: false,
+      status: 400,
+      code: "OIDC_ISSUER_MISMATCH",
+      message: "身份绑定与当前单点登录配置不一致"
+    };
+  }
+  return { ok: true, binding: { issuer, sub, email } };
+}
+
+/**
+ * Account contact email. Omitted, null, and "" all mean "no address" for a
+ * create. A patch distinguishes omission from a present empty value at the
+ * call site. Whitespace and a missing `@` or domain suffix are refused.
+ */
+function readAccountEmail(
+  raw: unknown
+):
+  | { ok: true; email: string | null }
+  | { ok: false; status: 400; code: "ACCOUNT_EMAIL_INVALID"; message: string } {
+  if (raw === undefined || raw === null) return { ok: true, email: null };
+  if (typeof raw !== "string") {
+    return { ok: false, status: 400, code: "ACCOUNT_EMAIL_INVALID", message: "邮箱格式不正确" };
+  }
+  const checked = normalizeAccountEmail(raw);
+  if (!checked.ok) {
+    return { ok: false, status: 400, code: "ACCOUNT_EMAIL_INVALID", message: checked.message };
+  }
+  return { ok: true, email: checked.email };
+}
+
+/** A `(issuer, sub)` or `(issuer, email)` pair may belong to one account only. */
+function bindingConflicts(config: AdminsConfig, binding: OidcBinding, exceptAdminId?: string): boolean {
+  for (const admin of config.admins) {
+    if (exceptAdminId && admin.id === exceptAdminId) continue;
+    for (const existing of admin.oidc_bindings ?? []) {
+      if (existing.issuer !== binding.issuer) continue;
+      if (existing.sub === binding.sub) return true;
+      if (existing.email.toLowerCase() === binding.email.toLowerCase()) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The recovery floor of L25-06 D05: at least one enabled owner must keep a local
+ * password, so Lucy never depends on the identity provider alone.
+ */
+function recoveryOwnerFloorBroken(config: AdminsConfig): boolean {
+  return countEnabledOwnersWithLocalPassword(config) < 1;
 }
 
 export function registerAdminAccountRoutes(app: FastifyInstance): void {
@@ -262,11 +375,13 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       });
     }
     const config = await loadAdminsConfig({ fresh: true });
+    // Owners see the login methods and the identity bindings; operators do not.
+    const isOwner = request.lucyAdmin?.admin?.role === "owner";
     return {
       ok: true,
       data: {
         mode,
-        admins: config.admins.map(publicAdminView)
+        admins: config.admins.map((admin) => (isOwner ? ownerAdminView(admin) : publicAdminView(admin)))
       }
     };
   });
@@ -277,6 +392,8 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       displayName?: string;
       password?: string;
       role?: WebuiAdminRole | "admin";
+      email?: string | null;
+      oidcBinding?: { issuer?: string; sub?: string; email?: string };
     };
   }>("/api/admin/admins", async (request, reply) => {
     if ((await resolveAuthMode()) !== "required") {
@@ -285,7 +402,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         error: { code: "AUTH_NOT_CONFIGURED", message: "请先完成管理员引导" }
       });
     }
-    if (!requireOwner(request, reply)) return;
+    if (!(await requireOwner(request, reply))) return;
 
     const adminId = request.body?.adminId?.trim() ?? "";
     const displayName = request.body?.displayName?.trim() || adminId;
@@ -303,18 +420,36 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         }
       });
     }
-    try {
-      assertPasswordPolicy(password);
-    } catch (error) {
-      return reply.status(400).send({
-        ok: false,
-        error: {
-          code: "PASSWORD_TOO_SHORT",
-          message: error instanceof Error ? error.message : "密码不符合要求"
-        }
-      });
+
+    // A binding is optional; an account without one must carry a local password.
+    const hasBindingInput = request.body?.oidcBinding !== undefined && request.body?.oidcBinding !== null;
+    let binding: OidcBinding | undefined;
+    if (hasBindingInput) {
+      const checked = await checkOidcBinding(request.body?.oidcBinding);
+      if (!checked.ok) {
+        return reply.status(checked.status).send({
+          ok: false,
+          error: { code: checked.code, message: checked.message }
+        });
+      }
+      binding = checked.binding;
     }
 
+    if (!binding || password.length > 0) {
+      try {
+        assertPasswordPolicy(password);
+      } catch (error) {
+        return reply.status(400).send({
+          ok: false,
+          error: {
+            code: "PASSWORD_TOO_SHORT",
+            message: error instanceof Error ? error.message : "密码不符合要求"
+          }
+        });
+      }
+    }
+
+    return withAdminsWrite(async () => {
     const config = await loadAdminsConfig({ fresh: true });
     if (findAdmin(config, adminId)) {
       return reply.status(409).send({
@@ -322,18 +457,48 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         error: { code: "ADMIN_ID_TAKEN", message: `管理员 '${adminId}' 已存在` }
       });
     }
+    if (binding && bindingConflicts(config, binding)) {
+      return reply.status(409).send({
+        ok: false,
+        error: { code: "OIDC_BINDING_CONFLICT", message: "该身份已绑定其他登录账户" }
+      });
+    }
+    const accountEmail = readAccountEmail(request.body?.email);
+    if (!accountEmail.ok) {
+      return reply.status(accountEmail.status).send({
+        ok: false,
+        error: { code: accountEmail.code, message: accountEmail.message }
+      });
+    }
+    if (accountEmail.email && accountEmailTaken(config, accountEmail.email)) {
+      return reply.status(409).send({
+        ok: false,
+        error: { code: "ACCOUNT_EMAIL_TAKEN", message: "该邮箱已被其他登录账户使用" }
+      });
+    }
 
-    const password_hash = await hashPassword(password);
+    const password_hash = password.length > 0 ? await hashPassword(password) : undefined;
     const record: WebuiAdminRecord = {
       id: adminId,
       account_uid: randomUUID(),
       display_name: displayName,
-      password_hash,
+      ...(password_hash ? { password_hash } : {}),
       role,
+      ...(accountEmail.email ? { email: accountEmail.email } : {}),
       enabled: true,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      ...(binding ? { oidc_bindings: [binding] } : {})
     };
     const next: AdminsConfig = { ...config, admins: [...config.admins, record] };
+    if (recoveryOwnerFloorBroken(next)) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "LOCAL_OWNER_REQUIRED",
+          message: "至少保留一名可使用本地密码登录的启用中所有者"
+        }
+      });
+    }
     await saveAdminsConfig(next, {
       changeType: "admin_create",
       actor: actorIdFromRequest(request),
@@ -342,11 +507,23 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       newSummary: { count: next.admins.length, id: adminId, role },
       requestId: request.id
     });
-    if (!(await recordAccountEvents(request, [{ kind: "admin_created", targetId: adminId, role }]))) {
+    const events: AccountEvent[] = [{ kind: "admin_created", targetId: adminId, role }];
+    if (binding) {
+      events.push({
+        kind: "oidc_binding_added",
+        targetId: adminId,
+        summary: {
+          bindingDigest: bindingDigest(binding.issuer, binding.sub),
+          hasLocalPassword: String(Boolean(password_hash))
+        }
+      });
+    }
+    if (!(await recordAccountEvents(request, events))) {
       return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
     }
 
-    return { ok: true, data: { admin: publicAdminView(record) } };
+    return { ok: true, data: { admin: ownerAdminView(record) } };
+    });
   });
 
   app.patch<{
@@ -356,6 +533,8 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       password?: string;
       role?: WebuiAdminRole | "admin";
       enabled?: boolean;
+      removeLocalPassword?: boolean;
+      email?: string | null;
     };
   }>("/api/admin/admins/:adminId", async (request, reply) => {
     if ((await resolveAuthMode()) !== "required") {
@@ -364,9 +543,10 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         error: { code: "AUTH_NOT_CONFIGURED", message: "请先完成管理员引导" }
       });
     }
-    if (!requireOwner(request, reply)) return;
+    if (!(await requireOwner(request, reply))) return;
 
     const { adminId } = request.params;
+    return withAdminsWrite(async () => {
     const config = await loadAdminsConfig({ fresh: true });
     const index = config.admins.findIndex((a) => a.id === adminId);
     if (index < 0) {
@@ -381,6 +561,22 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
 
     if (typeof request.body?.displayName === "string" && request.body.displayName.trim()) {
       nextRecord.display_name = request.body.displayName.trim();
+    }
+    if (request.body && Object.prototype.hasOwnProperty.call(request.body, "email")) {
+      const accountEmail = readAccountEmail(request.body.email);
+      if (!accountEmail.ok) {
+        return reply.status(accountEmail.status).send({
+          ok: false,
+          error: { code: accountEmail.code, message: accountEmail.message }
+        });
+      }
+      if (accountEmail.email && accountEmailTaken(config, accountEmail.email, adminId)) {
+        return reply.status(409).send({
+          ok: false,
+          error: { code: "ACCOUNT_EMAIL_TAKEN", message: "该邮箱已被其他登录账户使用" }
+        });
+      }
+      nextRecord.email = accountEmail.email ?? undefined;
     }
     if (request.body?.role === "owner" || request.body?.role === "operator" || request.body?.role === "admin") {
       nextRecord.role = normalizeWebuiAdminRole(request.body.role);
@@ -403,6 +599,31 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       nextRecord.password_hash = await hashPassword(request.body.password);
     }
 
+    // Removing the local password is an explicit, separate operation (L25-06 §5.3):
+    // it is only allowed while an OIDC binding still provides a way in.
+    const removingLocalPassword = request.body?.removeLocalPassword === true;
+    if (removingLocalPassword) {
+      if (request.body?.password) {
+        return reply.status(400).send({
+          ok: false,
+          error: {
+            code: "BAD_REQUEST",
+            message: "移除本地密码与设置新密码不能同时提交"
+          }
+        });
+      }
+      if (!current.oidc_bindings?.length) {
+        return reply.status(400).send({
+          ok: false,
+          error: {
+            code: "AUTH_CREDENTIAL_REQUIRED",
+            message: "登录账户至少需要一种可用登录方式"
+          }
+        });
+      }
+      nextRecord.password_hash = undefined;
+    }
+
     // A row that never logged in has no uid yet; give it one in this same write.
     if (!nextRecord.account_uid) nextRecord.account_uid = randomUUID();
 
@@ -414,6 +635,16 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       return reply.status(400).send({
         ok: false,
         error: { code: "LAST_OWNER_REQUIRED", message: "至少保留一名启用中的所有者" }
+      });
+    }
+    // L25-06 D05: at least one enabled owner must keep a local password.
+    if (recoveryOwnerFloorBroken(nextConfig)) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "LOCAL_OWNER_REQUIRED",
+          message: "至少保留一名可使用本地密码登录的启用中所有者"
+        }
       });
     }
 
@@ -443,7 +674,8 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         role: nextRecord.role,
         enabled: nextRecord.enabled,
         displayName: nextRecord.display_name,
-        passwordRotated: Boolean(request.body?.password)
+        passwordRotated: Boolean(request.body?.password) && !removingLocalPassword,
+        passwordRemoved: removingLocalPassword
       },
       requestId: request.id
     });
@@ -454,13 +686,19 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     }
 
     const events: AccountEvent[] = [];
-    if (nextRecord.password_hash !== current.password_hash) events.push({ kind: "password_rotated", targetId: adminId });
+    // A removal is NOT a rotation: the two events stay distinguishable in the ledger.
+    if (removingLocalPassword) {
+      events.push({ kind: "password_removed", targetId: adminId, summary: { hasLocalPassword: "false" } });
+    } else if (nextRecord.password_hash !== current.password_hash) {
+      events.push({ kind: "password_rotated", targetId: adminId, summary: { hasLocalPassword: "true" } });
+    }
     if (nextRecord.role !== current.role) events.push({ kind: "admin_role_changed", targetId: adminId, role: nextRecord.role });
     if (current.enabled && !nextRecord.enabled) events.push({ kind: "admin_disabled", targetId: adminId });
     if (!current.enabled && nextRecord.enabled) events.push({ kind: "admin_enabled", targetId: adminId });
     if (!(await recordAccountEvents(request, events))) return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
 
     return { ok: true, data: { admin: publicAdminView(nextRecord) } };
+    });
   });
 
   app.delete<{
@@ -472,9 +710,10 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         error: { code: "AUTH_NOT_CONFIGURED", message: "请先完成管理员引导" }
       });
     }
-    if (!requireOwner(request, reply)) return;
+    if (!(await requireOwner(request, reply))) return;
 
     const { adminId } = request.params;
+    return withAdminsWrite(async () => {
     const config = await loadAdminsConfig({ fresh: true });
     const target = findAdmin(config, adminId);
     if (!target) {
@@ -492,6 +731,17 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       return reply.status(400).send({
         ok: false,
         error: { code: "LAST_OWNER_REQUIRED", message: "至少保留一名启用中的所有者" }
+      });
+    }
+
+    // L25-06 D05: at least one enabled owner must keep a local password.
+    if (recoveryOwnerFloorBroken(nextConfig)) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "LOCAL_OWNER_REQUIRED",
+          message: "至少保留一名可使用本地密码登录的启用中所有者"
+        }
       });
     }
 
@@ -513,5 +763,212 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     }
 
     return { ok: true, data: { deleted: adminId } };
+    });
+  });
+
+  /**
+   * Add or replace the identity binding of one account (L25-06 §5.3).
+   *
+   * Adding a binding opens a login path; replacing one narrows it. A replacement
+   * therefore revokes the existing sessions BEFORE the configuration write, and a
+   * failed write never restores them.
+   */
+  app.put<{
+    Params: { adminId: string };
+    Body: { issuer?: string; sub?: string; email?: string };
+  }>("/api/admin/admins/:adminId/oidc-binding", async (request, reply) => {
+    if ((await resolveAuthMode()) !== "required") {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: "AUTH_NOT_CONFIGURED", message: "请先完成管理员引导" }
+      });
+    }
+    if (!(await requireOwner(request, reply))) return;
+
+    const { adminId } = request.params;
+    return withAdminsWrite(async () => {
+    const config = await loadAdminsConfig({ fresh: true });
+    const index = config.admins.findIndex((a) => a.id === adminId);
+    if (index < 0) {
+      return reply.status(404).send({
+        ok: false,
+        error: { code: "ADMIN_NOT_FOUND", message: `管理员 '${adminId}' 不存在` }
+      });
+    }
+
+    const checked = await checkOidcBinding(request.body);
+    if (!checked.ok) {
+      return reply.status(checked.status).send({
+        ok: false,
+        error: { code: checked.code, message: checked.message }
+      });
+    }
+    const binding = checked.binding;
+
+    if (bindingConflicts(config, binding, adminId)) {
+      return reply.status(409).send({
+        ok: false,
+        error: { code: "OIDC_BINDING_CONFLICT", message: "该身份已绑定其他登录账户" }
+      });
+    }
+
+    const current = config.admins[index];
+    const replacing = Boolean(current.oidc_bindings?.some((b) => b.issuer === binding.issuer));
+    const nextBindings = [
+      ...(current.oidc_bindings ?? []).filter((b) => b.issuer !== binding.issuer),
+      binding
+    ];
+    const nextRecord: WebuiAdminRecord = { ...current, oidc_bindings: nextBindings };
+    const nextAdmins = [...config.admins];
+    nextAdmins[index] = nextRecord;
+    const nextConfig: AdminsConfig = { ...config, admins: nextAdmins };
+
+    if (recoveryOwnerFloorBroken(nextConfig)) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "LOCAL_OWNER_REQUIRED",
+          message: "至少保留一名可使用本地密码登录的启用中所有者"
+        }
+      });
+    }
+
+    // Narrowing: revoke first, write second.
+    if (replacing && !(await narrowAccount(current, "revoke_sessions"))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
+
+    await saveAdminsConfig(nextConfig, {
+      changeType: "admin_oidc_binding",
+      actor: actorIdFromRequest(request),
+      targetId: adminId,
+      oldSummary: { id: current.id, bindings: (current.oidc_bindings ?? []).length },
+      newSummary: { id: nextRecord.id, bindings: nextBindings.length },
+      requestId: request.id
+    });
+
+    const events: AccountEvent[] = [
+      {
+        kind: replacing ? "oidc_binding_replaced" : "oidc_binding_added",
+        targetId: adminId,
+        summary: {
+          bindingDigest: bindingDigest(binding.issuer, binding.sub),
+          hasLocalPassword: String(Boolean(nextRecord.password_hash))
+        }
+      }
+    ];
+    if (!(await recordAccountEvents(request, events))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
+
+    return { ok: true, data: { admin: ownerAdminView(nextRecord) } };
+    });
+  });
+
+  /** Remove the identity binding of one account (L25-06 §5.3). */
+  app.delete<{
+    Params: { adminId: string };
+    Querystring: { issuer?: string };
+  }>("/api/admin/admins/:adminId/oidc-binding", async (request, reply) => {
+    if ((await resolveAuthMode()) !== "required") {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: "AUTH_NOT_CONFIGURED", message: "请先完成管理员引导" }
+      });
+    }
+    if (!(await requireOwner(request, reply))) return;
+
+    const { adminId } = request.params;
+    return withAdminsWrite(async () => {
+    const config = await loadAdminsConfig({ fresh: true });
+    const index = config.admins.findIndex((a) => a.id === adminId);
+    if (index < 0) {
+      return reply.status(404).send({
+        ok: false,
+        error: { code: "ADMIN_NOT_FOUND", message: `管理员 '${adminId}' 不存在` }
+      });
+    }
+
+    const issuer = (request.query.issuer ?? "").trim();
+    const runtime = await getStartupOidcRuntimeView();
+    if (!runtime.enabled || !runtime.profile) {
+      return reply.status(503).send({
+        ok: false,
+        error: {
+          code: "OIDC_NOT_AVAILABLE",
+          message: "单点登录当前不可用，无法维护身份绑定"
+        }
+      });
+    }
+    if (!issuer || issuer !== runtime.profile.issuer) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "OIDC_ISSUER_MISMATCH",
+          message: "身份绑定与当前单点登录配置不一致"
+        }
+      });
+    }
+
+    const current = config.admins[index];
+    const removed = (current.oidc_bindings ?? []).filter((b) => b.issuer === issuer);
+    if (!removed.length) {
+      return reply.status(404).send({
+        ok: false,
+        error: {
+          code: "OIDC_BINDING_NOT_FOUND",
+          message: "该登录账户没有当前身份源的绑定"
+        }
+      });
+    }
+    const remaining = (current.oidc_bindings ?? []).filter((b) => b.issuer !== issuer);
+    if (!remaining.length && !current.password_hash) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "AUTH_CREDENTIAL_REQUIRED",
+          message: "登录账户至少需要一种可用登录方式"
+        }
+      });
+    }
+
+    const nextRecord: WebuiAdminRecord = {
+      ...current,
+      ...(remaining.length ? { oidc_bindings: remaining } : { oidc_bindings: undefined })
+    };
+    const nextAdmins = [...config.admins];
+    nextAdmins[index] = nextRecord;
+    const nextConfig: AdminsConfig = { ...config, admins: nextAdmins };
+
+    // Narrowing: revoke first, write second.
+    if (!(await narrowAccount(current, "revoke_sessions"))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
+
+    await saveAdminsConfig(nextConfig, {
+      changeType: "admin_oidc_binding",
+      actor: actorIdFromRequest(request),
+      targetId: adminId,
+      oldSummary: { id: current.id, bindings: (current.oidc_bindings ?? []).length },
+      newSummary: { id: nextRecord.id, bindings: remaining.length },
+      requestId: request.id
+    });
+
+    const events: AccountEvent[] = [
+      {
+        kind: "oidc_binding_removed",
+        targetId: adminId,
+        summary: {
+          bindingDigest: bindingDigest(removed[0].issuer, removed[0].sub),
+          hasLocalPassword: String(Boolean(nextRecord.password_hash))
+        }
+      }
+    ];
+    if (!(await recordAccountEvents(request, events))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
+
+    return { ok: true, data: { admin: ownerAdminView(nextRecord) } };
+    });
   });
 }
