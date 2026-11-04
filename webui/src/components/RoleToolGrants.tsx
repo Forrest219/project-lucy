@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import type { McpToolInfo } from "../lib/types";
 import {
   ABSOLUTE_DENY_TOOL_NAMES,
+  BUSINESS_QA_PRESET,
+  CONTROL_PLANE_TOOL_NAMES,
   READONLY_QA_PRESET,
   matchingPresetName,
   stampPreset,
@@ -19,10 +21,11 @@ const DATA_PLANE_TOOL_NAMES: readonly string[] = [
   "sl_validate",
 ];
 
-/** 目录与知识 (Meta). lucy_skill_search / lucy_skill_read 若存在也归此组。 */
+/** 目录与知识 (Meta). 续查与 begin 同组；Skill 工具若存在也归此组。 */
 const META_TOOL_NAMES: readonly string[] = [
   "lucy_catalog",
   "lucy_begin_question",
+  "lucy_continue_question",
   "wiki_search",
   "wiki_read",
   "dictionary_search",
@@ -38,6 +41,7 @@ const META_TOOL_NAMES: readonly string[] = [
 const DATA_PLANE_SET = new Set<string>(DATA_PLANE_TOOL_NAMES);
 const META_SET = new Set<string>(META_TOOL_NAMES);
 const DENY_SET = new Set<string>(ABSOLUTE_DENY_TOOL_NAMES);
+const CONTROL_PLANE_SET = new Set<string>(CONTROL_PLANE_TOOL_NAMES);
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -60,7 +64,7 @@ export function RoleToolGrants({
 }: RoleToolGrantsProps) {
   // Exclude globalDenied + AbsoluteDeny from renderable candidates
   const grantableCandidates = useMemo(
-    () => candidates.filter((t) => !t.globalDenied && !DENY_SET.has(t.name)),
+    () => candidates.filter((t) => !t.globalDenied && !DENY_SET.has(t.name) && !CONTROL_PLANE_SET.has(t.name)),
     [candidates]
   );
 
@@ -127,6 +131,14 @@ export function RoleToolGrants({
     <div className="grid gap-4">
       {/* Preset buttons */}
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className="pl-btn pl-btn--secondary text-sm"
+          onClick={() => handlePreset(BUSINESS_QA_PRESET)}
+          disabled={disabled}
+        >
+          业务问答
+        </button>
         <button
           type="button"
           className="pl-btn pl-btn--secondary text-sm"
@@ -212,11 +224,7 @@ export function RoleToolGrants({
 
       {/* System-denied static sentence — no checkbox */}
       <p className="text-xs text-fg-muted">
-        原始 SQL、旧版{" "}
-        <span className="notranslate" translate="no">
-          sl_query / sl_read_source
-        </span>
-        、记忆注入由系统禁止，不能授予。
+        角色只能授予受控查数与知识能力；不能授予直接执行 SQL，也不能绕过 Lucy 的权限与审计通道。
       </p>
     </div>
   );

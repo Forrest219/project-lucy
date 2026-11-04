@@ -812,6 +812,17 @@ describe("Help handbook", () => {
     );
   });
 
+  it("the bundled handbook documents role tool grant matrix and business-qa create default", async () => {
+    const handbook = await readHelpHandbook(realAppRoot);
+    const toc = parseHelpToc(handbook.markdown);
+    const byTitle = Object.fromEntries(toc.map((t) => [t.title, t.id]));
+
+    expect(byTitle["角色工具勾选速查"]).toBe("role-tool-grant-matrix");
+    expect(handbook.markdown).toContain("/help?section=role-tool-grant-matrix");
+    expect(handbook.markdown).toContain("新建默认 = 业务问答");
+    expect(handbook.markdown).toMatch(/业务问答.*新建默认|新建默认.*业务问答/);
+  });
+
   it("the bundled handbook documents audit hot/cold store and SQL retention boundaries", async () => {
     const handbook = await readHelpHandbook(realAppRoot);
 

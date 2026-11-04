@@ -269,12 +269,15 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Policy Scope Expanded | 授权范围扩大 | `policy_scope_expanded`、前缀扩权记录 | 静默扩权、无审计扩权 | legacy v1 `prefix` 因语义层变化扩权时的可观测事件 |
 | Policy Degraded | 策略降级 | 权限降级态、DataPlane 整体拒绝 | 服务不可用、完全健康（降级时） | 编译失败导致受影响 Agent 或整体 DataPlane deny |
 | Table & Row Policy Access | 可访问的表与行策略 | 表授权与行策略 | 资产边界、数据范围 | Role 详情中展示可访问表范围及行级策略配置的区域；对应 `allow.tableSelectors` + `row_policy` |
-| Read-only QA Preset | 只读问答 | 问答预设 | 纯只读、Viewer | 预设工具集是**只读问答工具全集**，清单以 `webui/src/lib/rolePermissionDraft.ts` 的 `READONLY_QA_PRESET` 常量为唯一事实源，不在此写死个数；不含 `sl_validate`。新建角色默认预选该全集（Spec 194） |
-| Read-only QA + Wiki Preset | 只读问答 + 知识库 | 问答 + Wiki 预设 | 查数+Wiki | Spec 170 起从角色页撤回。`wiki_search`、`wiki_read`、`lucy_skill_search`、`lucy_skill_read` 对已解析角色始终可用，不再作为预设差集 |
+| Read-only QA Preset | 只读问答 | 问答预设 | 纯只读、Viewer | 预设工具集是**只读问答查数全集**，清单以 `webui/src/lib/rolePermissionDraft.ts` 的 `READONLY_QA_PRESET` 为唯一事实源，不在此写死个数；不含 `sl_validate` 与 Wiki / Skill 通道。用作收窄戳印；**不再**作为新建角色默认（已被业务问答取代，见 Spec lucy-20261104） |
+| Business QA Preset | 业务问答 | 业务问答预设 | 查数+Wiki、只读问答 + 知识库（作本按钮主术语） | 预设 = `READONLY_QA_PRESET` ∪ `CONTEXT_TOOL_NAMES`（常量 `BUSINESS_QA_PRESET`）；新建角色默认预选该全集；不含 `sl_validate` / `lucy_ops_*`（Spec lucy-20261104） |
+| Role Tool Grant Matrix | 角色工具勾选速查 | 工具×角色矩阵 | MCP 权限矩阵（作帮助 H4 主标题） | 帮助 H4；深链 `role-tool-grant-matrix` |
+| Modeling Config Role | 建模配置 | 语义建模（允许同义说明） | 数据建模、DBA（作本列主术语） | 角色工具勾选速查矩阵列：含 `sl_validate` 的语义配置职责；不是数据库物理建模 |
+| Read-only QA + Wiki Preset | 只读问答 + 知识库 | 问答 + Wiki 预设 | 查数+Wiki | **弃用别名**：角色页主按钮现为「业务问答」。通道工具须由角色显式列举；新建默认经 `BUSINESS_QA_PRESET` 写入 |
 | Matches Preset | 当前与{预设名}一致 | 与预设匹配 | 已绑定预设、跟随预设 | 当前工具集合与某预设完全相等时的界面提示文案；集合比较与顺序无关 |
 | Row Access: All Rows | 行权限：全部行 | 不限制行 | 全部行 all、row_access 作界面主文案 | 表未配置 `row_policy` 时的显示文案；`row_access` 字段只作存储，不作为界面主文案 |
 | Equals / In | 等于 / 属于 | 等于、属于（单独使用） | eq / in / op 作界面主文案（存储仍为 eq / in） | 行级策略条件的界面展示；存储用 `op: eq` 或 `op: in`，界面主文案用「等于」「属于」 |
-| System Denied | 系统禁止 | 系统不可授予 | 全局禁止作该行主标题（单项禁用态仍可用既有「全局禁止」） | AbsoluteDeny 工具集说明文案；页底固定句为「原始 SQL、旧版 sl_query / sl_read_source、记忆注入由系统禁止，不能授予。」 |
+| System Denied | 系统禁止 | 系统不可授予 | 全局禁止作该行主标题（单项禁用态仍可用既有「全局禁止」） | AbsoluteDeny 工具集说明文案；页底固定句为「角色只能授予受控查数与知识能力；不能授予直接执行 SQL，也不能绕过 Lucy 的权限与审计通道。」 |
 | Published Measures | 已发布指标 | 已发布的指标 | 可授权指标、指标组 | 已通过发布工作台激活的 Measure 集合；权限摘要中用「对应 N 个已发布指标」；非授权对象，不新增指标授权字段 |
 | Pending Changes | 待发布变更 | 本次将同步的变更（作栏标题） | 当前作者内容与最近有可靠同步证据的内容版本之间的差异；用于发布工作台左栏与系统概览的待办统计（Spec 20261030 三栏） |
 

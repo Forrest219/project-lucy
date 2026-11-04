@@ -146,6 +146,7 @@ export const SECTION_ID_CONTRACT = new Map<string, string>([
   ["排障速查", "mcp-session-troubleshooting"],
   ["先建立三层对象关系", "role-agent-token-overview"],
   ["什么时候该配角色", "when-to-configure-role"],
+  ["角色工具勾选速查", "role-tool-grant-matrix"],
   ["什么时候该配 Agent", "when-to-configure-agent"],
   ["什么时候该配 Token", "when-to-configure-token"],
   ["场景速查", "role-agent-token-scenarios"],

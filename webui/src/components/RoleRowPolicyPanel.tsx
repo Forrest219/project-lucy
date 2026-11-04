@@ -299,7 +299,7 @@ export function RoleRowPolicyPanel({
     return (
       <div className="rounded-md border border-border-default bg-bg-subtle p-4" data-testid="row-policy-catalog-bound-disabled">
         <p className="text-sm font-medium">启用目录绑定不支持行级策略</p>
-        <p className="mt-1 text-xs text-fg-muted">如需限制行，请先回到“可访问的表”，关闭启用目录绑定并明确选择表。</p>
+        <p className="mt-1 text-xs text-fg-muted">如需限制行，请先回到“可访问的表”，关闭「跟随此连接的启用表」并明确选择表。</p>
       </div>
     );
   }

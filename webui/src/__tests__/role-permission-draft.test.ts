@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ABSOLUTE_DENY_TOOL_NAMES,
+  BUSINESS_QA_PRESET,
   CONTEXT_TOOL_NAMES,
   READONLY_QA_PRESET,
   buildEffectiveDigest,
@@ -29,8 +30,12 @@ describe("Role permission draft helpers", () => {
 
   it("stamps presets as replacement and detects exact matches", () => {
     expect(stampPreset(["sl_validate"], READONLY_QA_PRESET)).toEqual([...READONLY_QA_PRESET]);
+    expect(BUSINESS_QA_PRESET).toEqual([...READONLY_QA_PRESET, ...CONTEXT_TOOL_NAMES]);
+    expect(BUSINESS_QA_PRESET).not.toContain("sl_validate");
+    expect(BUSINESS_QA_PRESET).not.toContain("lucy_ops_connection_tables");
+    expect(matchingPresetName([...BUSINESS_QA_PRESET])).toBe("业务问答");
     expect(matchingPresetName([...READONLY_QA_PRESET])).toBe("只读问答");
-    expect(matchingPresetName([...READONLY_QA_PRESET, ...CONTEXT_TOOL_NAMES])).toBe("只读问答");
+    expect(matchingPresetName([...READONLY_QA_PRESET, "wiki_search"])).toBeNull();
     expect(matchingPresetName(["lucy_query"])).toBeNull();
   });
 
@@ -121,6 +126,6 @@ describe("Role permission draft helpers", () => {
     });
     expect(digest).toContain("包含 2 张表");
     expect(digest).toContain("orders 已配置行级策略");
-    expect(digest).toContain("系统禁止能力");
+    expect(digest).toContain("不能授予直接执行 SQL");
   });
 });

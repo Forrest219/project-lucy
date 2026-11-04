@@ -25,10 +25,10 @@ export const ABSOLUTE_DENY_TOOL_NAMES = [
 // ─── Presets ─────────────────────────────────────────────────────────────────
 
 /**
- * 只读问答预设：全部只读问答工具，不含 sl_validate。
+ * 只读问答预设：全部只读问答查数工具，不含 sl_validate、不含 Wiki / Skill 通道。
  *
- * 名单只以本常量为准——新建角色默认预选该全集（Spec 194 §3）。
- * 其它地方引用它，不另抄一份。
+ * 名单只以本常量为准。新建角色默认见 `BUSINESS_QA_PRESET`
+ *（Spec lucy-20261104-role-create-business-qa-defaults）。
  */
 export const READONLY_QA_PRESET = [
   "lucy_catalog",
@@ -42,7 +42,7 @@ export const READONLY_QA_PRESET = [
 
 /**
  * Wiki / Skill discover + read channels (Spec §4.2). A Role must list them to open a channel;
- * they do not change object authorization, so preset matching ignores them.
+ * object ACL is decided separately.
  */
 export const CONTEXT_TOOL_NAMES = [
   "wiki_search",
@@ -51,14 +51,32 @@ export const CONTEXT_TOOL_NAMES = [
   "lucy_skill_read",
 ] as const;
 
-const CONTEXT_TOOL_SET = new Set<string>(CONTEXT_TOOL_NAMES);
+/**
+ * 业务问答预设：只读问答 ∪ Wiki / Skill 通道。不含 sl_validate / lucy_ops_*。
+ *
+ * 新建角色默认预选该全集（Spec lucy-20261104-role-create-business-qa-defaults §3.1）。
+ * 禁止在调用处另抄一份名单。
+ */
+export const BUSINESS_QA_PRESET = [
+  ...READONLY_QA_PRESET,
+  ...CONTEXT_TOOL_NAMES,
+] as const;
+
+/**
+ * 控制面工具由 role.allow.ops 授权，不能在工具页写进 allow.tools。
+ * 成员必须与 webui/server/ops/control-plane.ts 的 CONTROL_PLANE_TOOL_NAMES 相等。
+ */
+export const CONTROL_PLANE_TOOL_NAMES = [
+  "lucy_ops_connection_tables",
+  "lucy_ops_source_import",
+] as const;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /** Spec 150: v2 editing supports explicit names or catalog binding only. */
 export type ScopeMode = "names" | "catalog_bound";
 
-export type PresetName = "只读问答";
+export type PresetName = "业务问答" | "只读问答";
 
 export interface PartitionedTools {
   /** 可授予工具（不属于 AbsoluteDeny）。 */
@@ -213,14 +231,18 @@ export function stampPreset(
 }
 
 /**
- * 集合相等时返回预设名称；多一个或少一个返回 null；顺序无关。
+ * 集合精确相等时返回预设名称；多一个或少一个返回 null；顺序无关。
+ * 业务问答优先于只读问答（全集匹配）。
  */
 export function matchingPresetName(tools: string[]): PresetName | null {
-  const comparable = tools.filter((tool) => !CONTEXT_TOOL_SET.has(tool));
-  const toolSet = new Set(comparable);
-  const qaSet = new Set<string>(READONLY_QA_PRESET);
+  const toolSet = new Set(tools);
+  const businessSet = new Set<string>(BUSINESS_QA_PRESET);
+  const readonlySet = new Set<string>(READONLY_QA_PRESET);
 
-  if (toolSet.size === qaSet.size && [...qaSet].every((tool) => toolSet.has(tool))) {
+  if (toolSet.size === businessSet.size && [...businessSet].every((tool) => toolSet.has(tool))) {
+    return "业务问答";
+  }
+  if (toolSet.size === readonlySet.size && [...readonlySet].every((tool) => toolSet.has(tool))) {
     return "只读问答";
   }
   return null;
@@ -628,7 +650,7 @@ export function buildEffectiveDigest(input: DigestInput): string {
   }
 
   // 3. 系统边界句（固定）
-  lines.push("原始 SQL、旧版 sl_query / sl_read_source、记忆注入属于系统禁止能力，不可授予。");
+  lines.push("角色只能授予受控查数与知识能力；不能授予直接执行 SQL，也不能绕过 Lucy 的权限与审计通道。");
 
   return lines.join("\n");
 }

@@ -85,6 +85,7 @@
 | 问题 | 快速答案 | 详见 |
 | --- | --- | --- |
 | 什么时候该建角色，什么时候该建 `Agent` / `Token`？ | 角色 = 可复用的权限边界；`Agent` = 要对审计负责的人/机器人；`Token` = 某台设备或某个客户端的接入凭证。先角色、再 `Agent`、最后签发 `Token`。 | [什么时候配置角色、Agent 和 Token](#admin-role-agent-token-guide) |
+| 新建角色该勾哪些 `MCP` 工具？ | **新建默认 = 业务问答**（查数 + Wiki / Skill）。可收窄为「只读问答」；建模加 `sl_validate`；`lucy_ops_*` 只给运维角色。 | [角色工具勾选速查](#role-tool-grant-matrix) |
 | 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#admin-role-agent-token-guide) |
 | 想用脚本 / 运维 Agent 开通 `Agent`、签发 `Token`，不要反解前端？ | 先拉公开 `GET /api/openapi.json`；再用管理员 Cookie 会话调 Admin API。没有 scoped Admin Bearer。 | [用 Admin API 脚本开通（Agent／Token）](#admin-api-script-provisioning) |
 | `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC `Access denied` / `decision_reason` 怎么查？](#json-rpc-access-denied-decision-reason)、[3.5 访问治理 · 角色 / Agent / Token](#access-governance) |
@@ -1186,7 +1187,42 @@ PUT /api/wiki/:key
 - 仅为某台笔记本单独开权限 → 发 `Token`，不要为设备造角色
 - 把角色当成「某个人」或「`WebUI` 登录名」 → 那是 `Agent` / 登录账户的事
 
-**做法建议：** 角色标识用业务含义（如 `kx_readonly`），写清说明；工具显式列举，禁止 `*`；表尽量精确到表名。正式角色优先；参考模板只用于「复制后改成正式角色」，不要直接当线上权限源。有 `Agent` 引用时先改绑定再删角色。
+**做法建议：** 角色标识用业务含义（如 `kx_readonly`），写清说明；工具显式列举，禁止 `*`；表尽量精确到表名。按职责勾工具见下节 [角色工具勾选速查](#role-tool-grant-matrix)。正式角色优先；参考模板只用于「复制后改成正式角色」，不要直接当线上权限源。有 `Agent` 引用时先改绑定再删角色。
+
+#### 角色工具勾选速查
+
+深链：`/help?section=role-tool-grant-matrix`。
+
+在 `/admin/roles/new?tab=tools`（或编辑角色的「允许的 MCP 工具」）按职责勾选。图例：`●` 建议开 · `○` 按需 · `—` 不要开。
+
+| 工具 | 只读查询 | 业务问答 | 建模配置 | 运维控制 |
+| --- | --- | --- | --- | --- |
+| `lucy_catalog` | ● | ● | ● | ○ |
+| `lucy_begin_question` | ● | ● | ○ | — |
+| `lucy_continue_question` | ● | ● | ○ | — |
+| `lucy_read_source` | ● | ● | ● | — |
+| `lucy_query` | ● | ● | ● | — |
+| `lucy_explain_query` | ● | ● | ● | — |
+| `lucy_freshness` | ● | ● | ○ | — |
+| `wiki_search` / `wiki_read` | — | ● | ○ | — |
+| `lucy_skill_search` / `lucy_skill_read` | — | ●¹ | ○ | — |
+| `entity_details` | ○ | ○ | ○ | — |
+| `connection_list` | ○ | ○ | ○ | ○ |
+| `sl_validate` | — | — | ● | — |
+| `lucy_ops_connection_tables` | — | — | — | ● |
+| `lucy_ops_source_import` | — | — | — | ● |
+
+¹ 环境里已有已发布业务 Skill 时再开；没有就保持 `—`。
+
+**怎么用**
+
+- **业务问答**（新建默认）：只读查询 + Wiki；有 Skill 再加 Skill。产品合同见 [`lucy-20261104-role-create-business-qa-defaults-spec.md`](../specs/lucy-20261104-role-create-business-qa-defaults-spec.md)。
+- **只读查询**：点页面「只读问答」收窄为纯查数。
+- **建模配置**：查数工具 + `sl_validate`；Wiki / Skill 按需。指语义配置校验，不是数据库物理建模。
+- **运维控制**：只开 `lucy_ops_*`，不要和查询角色绑在同一套权限里。
+
+探索辅助默认全不勾，仅探索型角色按需：`dictionary_search`、`discover_data`、`kx_catalog`、`lucy_certified_route`、`lucy_report_template`。  
+系统禁止授予（无勾选框）：原始 SQL、`sl_query` / `sl_read_source`、记忆注入。表范围仍要单独配置；工具勾齐但表为空时仍查不了数。
 
 #### 什么时候该配 Agent
 
@@ -2778,6 +2814,8 @@ export LUCY_AGENT_TOKEN="$(cat <PROJECT_ROOT>/.ktx/secrets/lucy-agent-token)"
 生产或客户部署中，将 token 存在 Agent 平台的 secret store，再通过环境变量或平台变量注入。
 
 ### 4.4 可用工具面
+
+管理员按角色职责勾选工具时，优先看 [角色工具勾选速查](#role-tool-grant-matrix)（只读查询 / 业务问答 / 建模 / 运维）。本节给接入侧工具面说明。
 
 R1 / 新接入 Agent 推荐只暴露 6 个 `lucy_*` 核心工具：
 

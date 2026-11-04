@@ -1022,8 +1022,11 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `legacy-prefix-migration` | 旧版 prefix 迁移提示或阻断 | `pages/admin/RoleDetail.tsx` |
 | `role-table-grants` | 明确表授权编辑面 | `components/RoleTableGrants.tsx` |
 | `table-grants-tree` | 连接 / Schema / 表选择树 | `components/RoleTableGrants.tsx` |
-| `table-grants-manual-connections` | 目录绑定连接选择区 | `components/RoleTableGrants.tsx` |
-| `table-grants-advanced` | 表范围高级设置 | `components/RoleTableGrants.tsx` |
+| `table-grants-manual-connections` | 目录绑定态连接卡列表容器 | `components/RoleTableGrants.tsx` |
+| `table-grants-connection-card-<connectionId>` | 单连接卡 | `components/RoleTableGrants.tsx` |
+| `table-grants-follow-enabled-<connectionId>` | 「跟随此连接的启用表」开关 | `components/RoleTableGrants.tsx` |
+| `table-grants-scope-confirm` | 进入／退出跟随确认 | `components/RoleTableGrants.tsx` |
+| `table-grants-advanced` | **已移除**（原高级设置目录绑定入口；见 Spec `lucy-20261104-role-catalog-bound-connection-card-ux`） | — |
 | `role-custom-tools` | 自定义 MCP 工具折叠区 | `components/RoleToolGrants.tsx` |
 | `role-row-policy-panel` | 行级策略表清单 | `components/RoleRowPolicyPanel.tsx` |
 | `row-policy-catalog-bound-disabled` | 目录绑定下行级策略禁用提示 | `components/RoleRowPolicyPanel.tsx` |

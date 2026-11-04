@@ -93,6 +93,7 @@ roles:
         - lucy_explain_query
         - lucy_freshness
         - lucy_begin_question
+        - lucy_continue_question
         - kx_catalog
         - connection_list
         - entity_details
@@ -107,12 +108,12 @@ roles:
         - lucy_report_template
 ```
 
-上例 18 个工具等于 `webui/server/admin/role-templates.ts` 的 `LUCY_ADMIN_TOOLS = DATA_PLANE_TOOLS ∪ META_TOOLS`
-（`webui/server/proxy/acl.ts`，共 18 个，排除 AbsoluteDeny）。新增工具须同步改这份示例。
+上例 19 个工具等于 `webui/server/admin/role-templates.ts` 的 `LUCY_ADMIN_TOOLS = DATA_PLANE_TOOLS ∪ META_TOOLS`
+（`webui/server/proxy/acl.ts`，共 19 个，排除 AbsoluteDeny）。新增工具须同步改这份示例。
 
 其中 `wiki_search`、`wiki_read`、`lucy_skill_search`、`lucy_skill_read` 自 Spec 170 起归入
 `CONTEXT_TOOLS`，对任意已解析且启用的 Agent 常开，不依赖本字段授权；写在这里只为与实现保持一致。
-真正需要本字段授予的是 `sl_validate`、`lucy_certified_route`、`lucy_report_template` 这三个后续新增项。
+真正需要本字段授予的是 `sl_validate`、`lucy_continue_question`、`lucy_certified_route`、`lucy_report_template` 这四个后续新增项。
 Demo 模板 `examples/docker-demo/project-template/webui/config/access.yaml` 已补齐同一组工具，
 `scripts/runtime/docker-entrypoint.sh` 的 `patch_lucy_admin_tools` 负责给存量卷幂等补齐。
 
@@ -215,7 +216,7 @@ SourcesGrantedBy(r) =
 ## 6. Admin UI / API
 
 - `GET /api/admin/roles` 合并返回模板 `lucy_admin`（`source=template`）。
-- Role 编辑：`source_scope` 可选 `（默认：指定表名）` / `catalog_bound（启用目录绑定）`。
+- Role 编辑：`source_scope` 可选 `（默认：指定表名）` / `catalog_bound（启用目录绑定）`。**可见入口呈现**（连接卡「跟随此连接的启用表」、不再依赖页底高级设置）以 [`docs/specs/lucy-20261104-role-catalog-bound-connection-card-ux-spec.md`](../../docs/specs/lucy-20261104-role-catalog-bound-connection-card-ux-spec.md) 为准；本条仍管编译与安全语义。
 - 选 `catalog_bound` 时：隐藏或禁用 tableSelectors 编辑；保存 payload 不得带非空 `tableSelectors`。
 - Preview / dryRun 必须展示当前匹配的 source 数量与列表摘要（复用 effective permissions）。
 - `permission_model_version` 对新建含 `catalog_bound` 的 Role 强制为 `2`。
