@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TableWhitelist } from "../pages/connections/TableWhitelist";
@@ -1484,5 +1485,89 @@ describe("TableWhitelist", () => {
         expect(body.enabledTables).toEqual([]);
       });
     });
+  });
+});
+
+describe("TableWhitelist column density (P0/P1/P2)", () => {
+  it("marks field-count cells as numeric and action cells as nowrap", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const table = await screen.findByTestId("pl-whitelist-table");
+    expect(table.className).toContain("pl-whitelist-table");
+
+    const numHead = within(table).getByRole("columnheader", { name: "字段数" });
+    expect(numHead.className).toContain("pl-whitelist-table-num-head");
+
+    const row = await screen.findByTestId("whitelist-row-dataforai.superstore_orders");
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[2].className).toContain("pl-whitelist-table-num");
+    expect(cells[2]).toHaveTextContent("8 个");
+    expect(cells[3].querySelector(".pl-status-badge")).not.toBeNull();
+    expect(cells[4].className).toContain("pl-whitelist-table-action");
+  });
+
+  it("pins a shared colgroup and truncates table names with a title fallback", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const table = await screen.findByTestId("pl-whitelist-table");
+    const cols = table.querySelectorAll(":scope > colgroup > col");
+    expect([...cols].map((col) => col.className)).toEqual([
+      "pl-whitelist-col-select",
+      "pl-whitelist-col-table",
+      "pl-whitelist-col-columns",
+      "pl-whitelist-col-status",
+      "pl-whitelist-col-action"
+    ]);
+
+    const name = within(
+      await screen.findByTestId("whitelist-row-dataforai.superstore_orders")
+    ).getByText("superstore_orders");
+    expect(name.className).toContain("pl-whitelist-table-name");
+    expect(name).toHaveAttribute("title", "superstore_orders");
+  });
+
+  it("keeps whitelist fixed layout, numeric, status, and action CSS tokens aligned", () => {
+    const css = readFileSync("src/app/app.css", "utf8");
+
+    const tableRule = css.match(/\.pl-whitelist-table\s*\{[^}]*\}/);
+    expect(tableRule).not.toBeNull();
+    expect(tableRule![0]).toMatch(/table-layout:\s*fixed/);
+
+    const widthOf = (className: string): number => {
+      const rule = css.match(new RegExp(`\\.${className}\\s*\\{[^}]*\\}`));
+      expect(rule).not.toBeNull();
+      const width = rule![0].match(/width:\s*(\d+)%/);
+      expect(width).not.toBeNull();
+      return Number(width![1]);
+    };
+    expect(
+      widthOf("pl-whitelist-col-select") +
+        widthOf("pl-whitelist-col-table") +
+        widthOf("pl-whitelist-col-columns") +
+        widthOf("pl-whitelist-col-status") +
+        widthOf("pl-whitelist-col-action")
+    ).toBe(100);
+
+    const nameRule = css.match(/\.pl-whitelist-table-name\s*\{[^}]*\}/);
+    expect(nameRule).not.toBeNull();
+    expect(nameRule![0]).toMatch(/truncate/);
+
+    const numRule = css.match(/\.pl-whitelist-table-num\s*\{[^}]*\}/);
+    expect(numRule).not.toBeNull();
+    expect(numRule![0]).toMatch(/tabular-nums/);
+    expect(numRule![0]).toMatch(/whitespace-nowrap/);
+    expect(numRule![0]).toMatch(/font-normal/);
+    expect(numRule![0]).toMatch(/text-fg-body/);
+
+    const badgeRule = css.match(/\.pl-whitelist-table\s+\.pl-status-badge\s*\{[^}]*\}/);
+    expect(badgeRule).not.toBeNull();
+    expect(badgeRule![0]).toMatch(/min-w-\[64px\]/);
+    expect(badgeRule![0]).toMatch(/whitespace-nowrap/);
+
+    const actionRule = css.match(/\.pl-whitelist-table-action\s*\{[^}]*\}/);
+    expect(actionRule).not.toBeNull();
+    expect(actionRule![0]).toMatch(/whitespace-nowrap/);
   });
 });

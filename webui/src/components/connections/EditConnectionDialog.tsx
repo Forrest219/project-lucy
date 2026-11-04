@@ -216,60 +216,71 @@ export function EditConnectionDialog({ open, connection, onClose }: EditConnecti
 
         <div className="grid gap-3">
           {loadError ? <p className="pl-notice pl-notice--danger">{loadError}</p> : null}
-          <label className="pl-field">
+          <label className="pl-connection-field">
             <span>连接 ID</span>
-            <input
-              className="notranslate"
-              translate="no"
-              value={connection.id}
-              readOnly
-              disabled
-              data-testid="edit-connection-id"
-            />
+            <div className="pl-connection-field-control">
+              <input
+                className="pl-input notranslate"
+                translate="no"
+                value={connection.id}
+                readOnly
+                disabled
+                data-testid="edit-connection-id"
+              />
+            </div>
           </label>
-          <label className="pl-field">
+          <label className="pl-connection-field">
             <span>服务器地址</span>
-            <input
-              className="notranslate"
-              translate="no"
-              value={host}
-              onChange={(event) => setHost(event.target.value)}
-              data-testid="edit-connection-host"
-              disabled={submitting}
-            />
+            <div className="pl-connection-field-control">
+              <input
+                className="pl-input notranslate"
+                translate="no"
+                value={host}
+                onChange={(event) => setHost(event.target.value)}
+                data-testid="edit-connection-host"
+                disabled={submitting}
+              />
+            </div>
           </label>
-          <label className="pl-field">
+          <label className="pl-connection-field">
             <span>端口</span>
-            <input
-              className="notranslate"
-              translate="no"
-              value={port}
-              onChange={(event) => setPort(event.target.value)}
-              data-testid="edit-connection-port"
-              disabled={submitting}
-            />
+            <div className="pl-connection-field-control">
+              <input
+                className="pl-input notranslate"
+                translate="no"
+                value={port}
+                onChange={(event) => setPort(event.target.value)}
+                data-testid="edit-connection-port"
+                disabled={submitting}
+              />
+            </div>
           </label>
-          <label className="pl-field">
+          <label className="pl-connection-field">
             <span>用户名</span>
-            <input
-              className="notranslate"
-              translate="no"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              data-testid="edit-connection-username"
-              disabled={submitting}
-            />
+            <div className="pl-connection-field-control">
+              <input
+                className="pl-input notranslate"
+                translate="no"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                data-testid="edit-connection-username"
+                disabled={submitting}
+              />
+            </div>
           </label>
-          <label className="pl-field">
+          <label className="pl-connection-field">
             <span>数据库密码</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="留空则保留原密码"
-              data-testid="edit-connection-password"
-              disabled={submitting}
-            />
+            <div className="pl-connection-field-control">
+              <input
+                className="pl-input"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="留空则保留原密码"
+                data-testid="edit-connection-password"
+                disabled={submitting}
+              />
+            </div>
           </label>
           {gateError ? (
             <div className="pl-notice pl-notice--warning" data-testid="edit-connection-conflict">

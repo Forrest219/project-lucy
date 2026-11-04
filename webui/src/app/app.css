@@ -1474,6 +1474,19 @@
     @apply flex items-center justify-between gap-3 text-xs text-fg-muted;
   }
   .pl-whitelist-pagination div { @apply flex gap-1; }
+  /* Enabled-tables density: fixed colgroup + numeric field-count + stable status/action
+     (aligned with schema-asset / catalog grid conventions). */
+  .pl-whitelist-table { table-layout: fixed; }
+  .pl-whitelist-col-select { width: 6%; }
+  .pl-whitelist-col-table { width: 42%; }
+  .pl-whitelist-col-columns { width: 10%; }
+  .pl-whitelist-col-status { width: 24%; }
+  .pl-whitelist-col-action { width: 18%; }
+  .pl-whitelist-table-name { @apply block min-w-0 truncate; }
+  .pl-whitelist-table th.pl-whitelist-table-num-head { @apply text-left; }
+  .pl-whitelist-table-num { @apply text-left font-normal tabular-nums whitespace-nowrap text-fg-body; }
+  .pl-whitelist-table .pl-status-badge { @apply min-w-[64px] justify-center whitespace-nowrap; }
+  .pl-whitelist-table-action { @apply whitespace-nowrap; }
   .pl-table-wrapper { @apply grid gap-2; }
   .pl-data-table { @apply w-full; }
 
