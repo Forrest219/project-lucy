@@ -6,9 +6,12 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   assertCoverage,
+  assertSectionAnchored,
+  cleanSectionTitle,
   CoverageError,
   findFaqSectionReferences,
   findHandbookSectionReferences,
+  findSectionSpan,
   parseHandbookSectionAnchors,
   parseSection15Paths,
   readNavEntries,
@@ -502,4 +505,140 @@ test("parseSection15Paths returns the cleaned path set from the §1.5 table", ()
   assert.ok(paths.has("/publish/history"));
   // Backticks should be stripped: the table cell is `/overview`, not `` `/overview` ``.
   assert.ok(paths.has("/overview"));
+});
+
+/* ------------------------------------------------------------------ *
+ * Criterion D — dedicated section anchoring
+ * ------------------------------------------------------------------ */
+
+const SECTION_CONTRACT = new Map([
+  ["品牌外观（/admin/branding）", "admin-branding"],
+  ["语义发布 · 发布工作台与发布记录", "semantic-publish"]
+]);
+
+const SECTION_HANDBOOK = [
+  "### 5.5 品牌外观（/admin/branding）",
+  "",
+  "入口：`/admin/branding`，配置客户侧看到的品牌。",
+  "",
+  "### 5.6 登录账户（/admin/accounts）",
+  "",
+  "入口：`/admin/accounts`，管理登录账户。",
+  "",
+  "### 3.13 语义发布 · 发布工作台与发布记录",
+  "",
+  "发布工作台负责审阅与同步索引。",
+  "",
+  "#### 发布工作台（/publish/workbench）",
+  "",
+  "三栏布局。",
+  "",
+  "## 6. FAQ 与排障指南"
+].join("\n");
+
+test("cleanSectionTitle strips a leading section number", () => {
+  assert.equal(cleanSectionTitle("3.13 语义发布"), "语义发布");
+  assert.equal(cleanSectionTitle("6 FAQ"), "FAQ");
+  assert.equal(cleanSectionTitle("品牌外观（/admin/branding）"), "品牌外观（/admin/branding）");
+});
+
+test("findSectionSpan returns the heading plus its nested subsections", () => {
+  const span = findSectionSpan(SECTION_HANDBOOK, "语义发布 · 发布工作台与发布记录");
+  assert.ok(span, "expected to find the §3.13 heading");
+  assert.equal(span.level, 3);
+  assert.match(span.text, /发布工作台（\/publish\/workbench）/);
+  assert.ok(!span.text.includes("品牌外观"), "the span must stop at the next H3");
+});
+
+test("findSectionSpan returns null for a title that is not in the handbook", () => {
+  assert.equal(findSectionSpan(SECTION_HANDBOOK, "不存在的章节"), null);
+});
+
+test("assertSectionAnchored passes when the mapped section documents the route", () => {
+  const entries = [
+    {
+      id: "admin-branding",
+      label: "品牌外观",
+      to: "/admin/branding",
+      handbookSection: "admin-branding",
+      groupTitle: "系统设置"
+    }
+  ];
+  assert.equal(assertSectionAnchored(entries, SECTION_CONTRACT, SECTION_HANDBOOK), 1);
+});
+
+test("assertSectionAnchored throws when an entry declares no handbookSection", () => {
+  const entries = [
+    { id: "x", label: "某页", to: "/somewhere", groupTitle: "某组" }
+  ];
+  assert.throws(
+    () => assertSectionAnchored(entries, SECTION_CONTRACT, SECTION_HANDBOOK),
+    (error) => {
+      assert.ok(error instanceof CoverageError);
+      assert.match(error.message, /missing-handbook-section/);
+      assert.match(error.message, /\/somewhere/);
+      return true;
+    }
+  );
+});
+
+test("assertSectionAnchored throws when the declared section id is not registered", () => {
+  const entries = [
+    {
+      id: "x",
+      label: "某页",
+      to: "/somewhere",
+      handbookSection: "not-registered",
+      groupTitle: "某组"
+    }
+  ];
+  assert.throws(
+    () => assertSectionAnchored(entries, SECTION_CONTRACT, SECTION_HANDBOOK),
+    (error) => {
+      assert.match(error.message, /unknown-handbook-section/);
+      assert.match(error.message, /not-registered/);
+      return true;
+    }
+  );
+});
+
+test("assertSectionAnchored throws when the registered section is absent from the handbook", () => {
+  const entries = [
+    {
+      id: "x",
+      label: "某页",
+      to: "/somewhere",
+      handbookSection: "semantic-publish",
+      groupTitle: "某组"
+    }
+  ];
+  // Point the contract at a title that does not exist in the handbook.
+  const contract = new Map([["根本不存在的章节", "semantic-publish"]]);
+  assert.throws(
+    () => assertSectionAnchored(entries, contract, SECTION_HANDBOOK),
+    (error) => {
+      assert.match(error.message, /absent-handbook-section/);
+      return true;
+    }
+  );
+});
+
+test("assertSectionAnchored throws when the section never mentions the route", () => {
+  const entries = [
+    {
+      id: "x",
+      label: "某页",
+      to: "/never-mentioned",
+      handbookSection: "admin-branding",
+      groupTitle: "某组"
+    }
+  ];
+  assert.throws(
+    () => assertSectionAnchored(entries, SECTION_CONTRACT, SECTION_HANDBOOK),
+    (error) => {
+      assert.match(error.message, /unmentioned-route/);
+      assert.match(error.message, /\/never-mentioned/);
+      return true;
+    }
+  );
 });

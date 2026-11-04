@@ -22,6 +22,16 @@ export type NavItem = {
   id: string;
   label: string;
   to: string;
+  /**
+   * 该导航入口对应的系统手册章节 id（`webui/server/help.ts` 的 `SECTION_ID_CONTRACT`）。
+   *
+   * 门禁 `lint:handbook-coverage` 的判据 D 要求每个入口都登记一个**已存在**的章节
+   * id，且该章节正文（含其子节）必须提到本入口的 `to` 路径。登记 id 只是声明
+   * 「这个入口在手册里由哪一节负责」，真正的覆盖度由门禁校验，不靠自觉。
+   *
+   * 多个入口可以指向同一节（一节覆盖多个入口是合理的）；但不允许留空。
+   */
+  handbookSection?: string;
   /** Lucide icon name. Resolved by AppFrame via a static icon registry. */
   iconKey: NavIconKey;
   active: (pathname: string) => boolean;
@@ -76,6 +86,7 @@ export const topLevelEntry: NavItem = {
   id: "overview",
   label: "系统概览",
   to: "/overview",
+  handbookSection: "runtime-status-checklist",
   iconKey: "overview",
   active: (path) => path === "/overview",
   description: "确认系统可用，处理当前待办。",
@@ -97,6 +108,7 @@ export const navGroups: Array<{
         id: "ops-calls",
         label: "调用监控",
         to: "/ops/calls",
+        handbookSection: "call-monitor",
         iconKey: "callMonitor",
         active: (path) => path === "/ops/calls" || path.startsWith("/ops/calls/"),
         description: "准实时查看 MCP 工具调用量、成败与请求时效。",
@@ -106,6 +118,7 @@ export const navGroups: Array<{
         id: "admin-governance",
         label: "使用概况",
         to: "/admin/usage",
+        handbookSection: "admin-usage",
         iconKey: "governanceOverview",
         active: (path) => path === "/admin/usage" || path === "/admin/governance",
         description: "查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。",
@@ -121,6 +134,7 @@ export const navGroups: Array<{
         id: "connections-overview",
         label: "连接概览",
         to: "/connections",
+        handbookSection: "data-access-connections",
         iconKey: "connections",
         active: (path) => path === "/connections",
         description: "管理数据库连接、Schema 与 Schema Manifest，并查看连通性和本地目录同步状态。",
@@ -130,6 +144,7 @@ export const navGroups: Array<{
         id: "connections-enabled-tables",
         label: "启用表范围",
         to: "/connections/enabled-tables",
+        handbookSection: "data-access-connections",
         iconKey: "whitelist",
         active: (path) => path === "/connections/enabled-tables" || path === "/connections/whitelist",
         description: "配置各连接进入语义层的表范围，并审阅保存前变更。",
@@ -147,6 +162,7 @@ export const navGroups: Array<{
         id: "semantic-catalog",
         label: "语义资产",
         to: "/catalog",
+        handbookSection: "semantic-layer",
         iconKey: "catalog",
         active: (path) =>
           path === "/" ||
@@ -161,6 +177,7 @@ export const navGroups: Array<{
         id: "semantic-wiki",
         label: "业务 Wiki",
         to: "/wiki",
+        handbookSection: "business-wiki",
         iconKey: "wiki",
         active: (path) => path === "/wiki",
         description: "管理业务口径、指标说明与分析指引等业务文档。",
@@ -170,6 +187,7 @@ export const navGroups: Array<{
         id: "semantic-skills",
         label: "业务 Skill",
         to: "/skills",
+        handbookSection: "business-skill",
         iconKey: "skills",
         active: (path) => path === "/skills" || path.startsWith("/skills/"),
         description: "查看受治理的业务 Skill 资产及其发布状态与角色授权。",
@@ -185,6 +203,7 @@ export const navGroups: Array<{
         id: "publish-workbench",
         label: "发布工作台",
         to: "/publish/workbench",
+        handbookSection: "publish-workbench",
         iconKey: "publish",
         active: (path) => path.startsWith("/publish/workbench"),
         description: "审阅并校验语义与 Wiki 变更，同步索引后使其对 Agent 生效。",
@@ -194,6 +213,7 @@ export const navGroups: Array<{
         id: "publish-history",
         label: "发布记录",
         to: "/publish/history",
+        handbookSection: "publish-history",
         iconKey: "history",
         active: (path) => path.startsWith("/publish/history"),
         description: "查看历次语义发布的变更范围、执行结果与操作记录。",
@@ -209,6 +229,7 @@ export const navGroups: Array<{
         id: "eval-cases",
         label: "评测用例",
         to: "/eval/cases",
+        handbookSection: "quality-evaluation",
         iconKey: "evalCases",
         active: (path) => path.startsWith("/eval/cases"),
         description: "管理数据问答与语义质量的评测用例及预期结果。",
@@ -218,6 +239,7 @@ export const navGroups: Array<{
         id: "eval-runs",
         label: "运行历史",
         to: "/eval/runs",
+        handbookSection: "quality-evaluation",
         iconKey: "evalRuns",
         active: (path) => path.startsWith("/eval/runs"),
         description: "查看评测运行记录、通过率、结果明细与失败诊断。",
@@ -227,6 +249,7 @@ export const navGroups: Array<{
         id: "eval-monitor",
         label: "趋势监控",
         to: "/eval/monitor",
+        handbookSection: "eval-monitor",
         iconKey: "monitor",
         active: (path) => path === "/eval/monitor",
         description: "监控评测通过率、失败集中度与质量漂移趋势。",
@@ -236,6 +259,7 @@ export const navGroups: Array<{
         id: "eval-field-questions",
         label: "现场提问",
         to: "/eval/field-questions",
+        handbookSection: "field-questions",
         iconKey: "fieldQuestions",
         active: (path) => path === "/eval/field-questions",
         description: "审定访问日志里反复出现的业务问法，补问法后收成评测用例。",
@@ -245,6 +269,7 @@ export const navGroups: Array<{
         id: "eval-security-candidates",
         label: "安全评测候选",
         to: "/eval/security-candidates",
+        handbookSection: "security-candidates",
         iconKey: "securityEval",
         active: (path) => path === "/eval/security-candidates",
         description: "从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。",
@@ -260,6 +285,7 @@ export const navGroups: Array<{
         id: "admin-agents",
         label: "Agent",
         to: "/admin/agents",
+        handbookSection: "access-governance",
         iconKey: "agents",
         active: (path) => path.startsWith("/admin/agents"),
         description: "管理 Agent 身份、角色、Token 及数据访问边界。",
@@ -269,6 +295,7 @@ export const navGroups: Array<{
         id: "admin-tokens",
         label: "Token 凭据",
         to: "/admin/tokens",
+        handbookSection: "agent-tokens",
         iconKey: "tokens",
         active: (path) => path === "/admin/tokens" || path.startsWith("/admin/tokens/"),
         description: "全局查看、签发与定向吊销 Agent 访问凭据。",
@@ -278,6 +305,7 @@ export const navGroups: Array<{
         id: "admin-roles",
         label: "角色权限",
         to: "/admin/roles",
+        handbookSection: "access-governance",
         iconKey: "roles",
         active: (path) => path.startsWith("/admin/roles"),
         description: "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
@@ -287,6 +315,7 @@ export const navGroups: Array<{
         id: "admin-row-policies",
         label: "行权限视图",
         to: "/admin/row-policies",
+        handbookSection: "admin-row-policy-view",
         iconKey: "rowPolicies",
         active: (path) => path === "/admin/row-policies" || path.startsWith("/admin/row-policy-templates"),
         description: "按表反查角色的行策略与 Agent 的最终行约束。",
@@ -296,6 +325,7 @@ export const navGroups: Array<{
         id: "admin-access-map",
         label: "访问关系图",
         to: "/admin/access-map",
+        handbookSection: "admin-access-map",
         iconKey: "accessMap",
         active: (path) => path === "/admin/access-map" || path.startsWith("/admin/access-map"),
         description: "查看授权路径与实际访问路径的对应关系。",
@@ -305,6 +335,7 @@ export const navGroups: Array<{
         id: "admin-audit",
         label: "访问日志",
         to: "/admin/audit",
+        handbookSection: "access-governance",
         iconKey: "audit",
         active: (path) => path === "/admin/audit" || path.startsWith("/admin/audit/"),
         description: "按问询和工具调用追溯 Agent 访问行为、权限裁决与执行耗时。",
@@ -314,6 +345,7 @@ export const navGroups: Array<{
         id: "admin-mcp-playground",
         label: "MCP 调试台",
         to: "/admin/mcp-playground",
+        handbookSection: "mcp-playground",
         iconKey: "mcpPlayground",
         active: (path) => path === "/admin/mcp-playground" || path.startsWith("/admin/mcp-playground"),
         description: "检查 Agent 能不能连上，或者能不能查某张表。",
@@ -323,6 +355,7 @@ export const navGroups: Array<{
         id: "admin-config-audit",
         label: "配置审计",
         to: "/admin/config-audit",
+        handbookSection: "admin-config-audit",
         iconKey: "configAudit",
         active: (path) => path === "/admin/config-audit",
         description: "查看各类配置与内容资产的写入记录、变更内容和操作者。",
@@ -338,6 +371,7 @@ export const navGroups: Array<{
         id: "admin-branding",
         label: "品牌外观",
         to: "/admin/branding",
+        handbookSection: "admin-branding",
         iconKey: "branding",
         active: (path) => path === "/admin/branding" || path.startsWith("/admin/branding/"),
         description: "配置客户 Logo、产品名称与品牌副标题。",
@@ -347,6 +381,7 @@ export const navGroups: Array<{
         id: "admin-accounts",
         label: "登录账户",
         to: "/admin/accounts",
+        handbookSection: "admin-accounts",
         iconKey: "admins",
         active: (path) => path === "/admin/accounts" || path.startsWith("/admin/accounts/"),
         description: "管理 WebUI 登录账户，并配置所有者或运维角色。",
@@ -356,6 +391,7 @@ export const navGroups: Array<{
         id: "admin-version",
         label: "版本信息",
         to: "/admin/version",
+        handbookSection: "admin-version",
         iconKey: "versionInfo",
         active: (path) => path === "/admin/version" || path.startsWith("/admin/version/"),
         description: "查看产品版本、构建提交和随包 KTX 版本。",

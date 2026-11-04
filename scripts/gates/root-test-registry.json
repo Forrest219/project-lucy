@@ -734,6 +734,16 @@
       "reason": null
     },
     {
+      "path": "scripts/gates/handbook-tool-surface.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/gates/handbook-tool-surface.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
       "path": "scripts/gates/k8s-gate-negative.test.mjs",
       "runner": "node --test",
       "environment": "helm",

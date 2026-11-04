@@ -18,7 +18,7 @@
 | 产品版本标签 | 0.25.0 | `webui/src/lib/lucyVersion.ts` FALLBACK |
 | Helm `appVersion` | 0.25.0 | `deploy/k8s/helm/lucy/Chart.yaml` `appVersion` |
 | 捆绑 KTX 版本 | 0.16.0 | `Dockerfile` `LUCY_BUNDLED_KTX_VERSION` |
-| 上次手册审计 | 2026-10-24 | 人工维护；下次审计由治理 PR 触发 |
+| 上次手册审计 | 2026-11-05 | 人工维护；下次审计由治理 PR 触发 |
 | 版本号规则 | `0.25.x`（同一版本线按数值递增，见 `docs/governance/version-matrix.md` §1.1） | `docs/governance/version-matrix.md` |
 
 > **不要**手改本表。改完事实源后跑 `npm run lint:handbook-baseline`；脚本会因更新而失败时，按报错提示同步本表，再跑一次。
@@ -430,6 +430,49 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 - §3.9 [接入向导](#onboarding-guide) Step 6（首问验证）：本窗口可用于观察首问后的工具调用是否符合预期。
 
 权威 Spec：`webui/docs/143-call-monitoring-ops-page-spec.md`、`webui/docs/165-call-monitor-window-series-spec.md`、`webui/docs/156-runtime-status-usage-boundary-spec.md` §5.1。
+
+#### 使用概况（/admin/usage）
+
+入口：`/admin/usage`，位于「运行状态」分组，回答两类问题——**业务侧用了多少**（`Agent` / `Token` / 表的活跃度），以及**界面侧访问了多少**（`WebUI` 自己的页面打开）。
+
+页面有两个视图，用 URL 参数 `?view=interface` 切换：
+
+| 视图 | 内容 |
+| --- | --- |
+| 数据访问（默认） | 活跃度 `KPI` + 按日问询 + 三块调用排行 |
+| 界面使用 | 页面访问 / 访问账户 / 活跃菜单三张卡 + 三块访问排行 |
+
+时间窗为 `24 小时` / `7 天` 两个分段按钮，**默认 7 天**。页面右上角显示「统计时间」，它来自前端最近一次取数时间，不是服务端快照时刻。
+
+**数据访问视图的 `KPI`（7 张）**：
+
+| 指标 | 口径 |
+| --- | --- |
+| `Agent` 资产与活跃 | 活跃数 / 配置总数；分母是已配置 `Agent` 总数（含未启用），分子是窗口内有**默认用量业务调用**的去重 `Agent` |
+| `Token` 凭据与活跃 | 配置数 · 活跃数；口径同上，但按 `Token` 统计 |
+| 授权表与活跃 | 活跃表数 / 角色权限中明确授权的表数 |
+| 近 N 真实问询 / 未上报查数会话 / 仅连接会话 / 浏览未问会话 | 四类会话量 |
+
+下面的「按日问询」表按 Asia/Shanghai 日历日列出这四类的每日计数，边缘日会标注「未覆盖全天」。
+
+**三块排行**：`Agent` 调用排行 / `Token` 调用排行 / 表调用排行，每条显示调用数、占**本榜合计**的百分比与条形。**前端只取前 10 名**，且只显示调用数大于 0 的行；`Token` 榜只含当前配置的 `Token`。
+
+**界面使用视图**统计的是 `WebUI` 自己被打开的次数，由前端埋点采集，与客户侧 `MCP` 调用无关——**不要把它读成业务用量**。没有埋点时全为 0。
+
+**权限**：需要已登录的 `WebUI` 管理员，`owner` 与运维角色都能看。页面纯只读，**没有导出按钮**。
+
+**边界与限制**：
+
+- `hours` 服务端钳制在 1–720，默认 168（7 天）；但界面使用端点只接受 `24` 或 `168`，其余一律按 168 处理。
+- 「近 24 小时」是**滚动 24 小时**，不是自然日；「按日问询」才是 Asia/Shanghai 日历日。
+- 数据不可用时主值渲染成「—」而不是 0，副行会说明原因（活跃数超过配置数、计数口径冲突、含前缀或通配符授权等）。
+
+**常见困惑**：
+
+1. **「活跃 > 配置」不等于数据异常**——页面会显式提示，并引导到 `/admin/audit-reconciliation` 做对账。
+2. 排行榜百分比的分母是**该榜自身合计**，不是全量调用量。
+3. 界面使用视图里的「页面访问」是 `WebUI` 打开次数，与 `Agent` 的业务问询是两套数。
+4. 少数日志时间无法解析时会被跳过，并在表下提示「有 N 条时间无法解析，未计入」。
 
 ### 3.2 数据接入 · 连接 / Schema / 表范围
 
@@ -1752,6 +1795,74 @@ curl -fsS -b "$CK" -X POST "$BASE/api/admin/agents/<agentId>/tokens" \
 
 权威 Spec：`webui/docs/99-mcp-playground-acl-decision-visibility-spec.md`。
 
+#### 访问关系图（/admin/access-map）
+
+入口：`/admin/access-map`。这个页面把「谁被授权了什么」与「谁实际访问了什么」画在同一张图上，用来发现**僵尸授权**、**需复核**与**确凿越权**。
+
+图有六类节点（`Agent` / 角色 / 连接 / Schema / 表 / `Token`），按 depth 0→4 分层。边表示两条路径的对照：
+
+| 边状态 | 含义 |
+| --- | --- |
+| `normal` | 授权与访问一致 |
+| `dormant` | 僵尸授权——有授权但窗口内无访问 |
+| `needs_review` | 需复核——证据不足，不判越权 |
+| `overflow` | 访问超出授权（确凿越权） |
+
+**呈现**：自研的轻量分层 `SVG` 实现，语义上是 Sankey，但**没有引入 `d3-sankey`**（实施时的硬约束是不新增运行时依赖）。几何是双层的——流带宽度 = 授权路径数，流带内的深色内核 = 访问路径数。图例四项：流带宽度=授权路径数、深色内核=访问路径数、虚线=需复核、实线=确凿越权。
+
+**筛选**（全部走 URL，可分享）：时间窗 `window`（24h/168h/720h，默认 168h）、分层 `layer`（`flat`/`schema`）、信任档 `trust`（默认 `confirmed`）、问询种类 `inquiryKind`（默认 `management`）、访问等级 `accessGrade`（默认 `exclude_connect`），以及 `agent` / `role` / `table` / `connection` / `focus`。**参数非法一律返回 400，不做静默纠正**；页面上也明确写了这一点。`table` 参数必须是 `conn::schema::table` 三段。
+
+**两个视图共用同一端点与同一筛选**，靠 `view=map|table` 切换。表格视图是**同筛选的小时级审计明细**，列为：小时 · `Agent` · 角色 · 连接 · Schema · 表 · 问询种类 · 访问等级 · 允许调用 · 拒绝调用。
+
+**数字口径（关键，不要混用）**：
+
+| 口径 | 定义 | 与时间窗的关系 |
+| --- | --- | --- |
+| 授权路径 | `(Agent, 角色, 连接, Schema, 表)` 五元组去重实例数 | **与窗口无关**，等于当前授权面 |
+| 访问路径 | 同五元组、窗口内至少有一次 allow 的去重路径数 | **随窗口变化** |
+
+- **表数 ≠ 路径数**：一个 `Agent` 持两个角色覆盖同一张表 = 2 条授权路径、1 张表。
+- 图上的「调用数」是**边上的计数**，一次调用归两个角色会在两条边各计一次；全局调用数必须按稳定 `callId` 去重。
+- 授权路径只来自逐角色的授权编译，绝不从合并后的有效权限反推。
+- 授权面与访问面**各自独立降级**：授权面不可用时不渲染图；访问面不可用时只画授权骨架。
+
+**与访问日志的关系**：两页已共用 `inquiryKind` 与 `accessGrade` 的词汇与缺省，但**人口不同**——图的主体是真实表访问（`access_log` 关联 `access_log_sources`），日志的默认调用流水是原始审计人口，且图的主路径**不套默认用量条件、不过滤评测探针**。所以**图上的「访问路径数」与日志的「调用次数」不是同一个数**，不能互相替代。
+
+**其他边界**：
+
+- 折叠只影响渲染，不影响计数——全量图的节点与边是计数唯一真源。
+- 覆盖率分母只算需复核与溢出路径；**缺失快照只保留需复核，不判确凿越权**。
+- 第一档文案（需复核）里**不得出现「越权」二字**；确凿越权单独标注来源为「取自调用当时的授权快照」。
+
+**常见困惑**：
+
+1. 三种「空」要分清：本页没有数据（偏移超出明细末尾）、当前窗口与筛选下没有调用明细、尚无 `Agent` 授权关系（只在**无范围筛选**时出现；有筛选时显示「当前筛选范围内没有匹配的关系」）。
+2. 「没有进入访问路径的允许调用」≠ 没有授权——授权骨架仍按当前授权显示。
+3. 覆盖率低 ≠ 越权率高。
+
+#### 配置审计（/admin/config-audit）
+
+入口：`/admin/config-audit`。这个页面回答「谁、什么时候、改了哪个配置或内容资产、改成了什么」。
+
+**审计对象（资产域）**：访问治理、语义 `YAML`、业务 `Wiki`、评测、发布。服务端还多一类 `skill`——**前端资产域下拉里选不到**，所以 `Skill` 的写入记录在这页筛不出来，标签也会回落成裸值。
+
+落到具体文件：`webui/config/access.yaml`、`ktx.yaml`、`webui/config/admins.yaml`、`semantic-layer/` 下的语义文件、wiki 目录、评测用例。
+
+**列表列**：序号 / 时间 / 操作者 / 来源 / 资产域 / 变更类型 / 目标 / 文件路径。展开行再加请求 `ID`、会话、操作者原始值与类型、来源 code、操作、写入状态、旧摘要与新摘要，并渲染 diff。
+
+**筛选**：资产域、变更类型（随资产域联动收窄，共 30 项）、来源、目标（精确匹配）、文件路径（模糊匹配）、时间窗（首屏默认 24 小时，可切 24h/7d/30d 或自定义起止）。分页每页 20 条。
+
+**两条必须知道的限制**：
+
+1. **只显示已落盘成功的写入。** 列表与 `CSV` 都硬过滤 `write_status = committed`；`pending` / `failed` / `rolled_back` 的记录看不到。
+2. **`CSV` 导出不含 diff。** 导出 7 列（时间、操作者、来源、资产域、变更类型、目标、文件路径），没有 diff、旧新摘要与请求 `ID`。文件名为 `config-audit-YYYYMMDD-HHmmss.csv`，带 `BOM`。
+
+**diff 的粒度**：内容资产（wiki / skill）的 diff 只保留 frontmatter 差异，正文降级为摘要行（`body: sha256:xxx -> sha256:yyy, +N -M lines (content not stored)`）——正文原文不进审计库。
+
+**权限**：需要已登录的 `WebUI` 管理员，`owner` 与运维都能看。页面**只读**，导出走同一个筛选条件。
+
+**问责语义有限**：响应固定带「本机管理入口」标识——`actor=local-admin` 只表示操作来自本机管理入口，**不具备多人问责语义**，不能当作「谁做的」的证据。
+
 ### 3.6 质量评测
 
 入口：
@@ -1914,6 +2025,44 @@ POST /api/eval/runs
 - 与 §3.6「现场提问（/eval/field-questions）」互斥——同一访问要么 success 要么 denied，不会同时入选两边。
 - Redaction fail-closed：高熵凭据 / 已知 secret 签名 → 候选直接 reject，不进入审阅。
 - Trace / Evidence 链路：抽取写 `span_type = "eval_run"` + `metadata.gateKind = "security_eval_candidate_extraction"`；晋升写 `evidence_events.relation = "promoted"`；拒绝写 `relation = "denied_by"`。
+
+#### 趋势监控（/eval/monitor）
+
+入口：`/eval/monitor`。回答「质量在变好还是变差」。
+
+控件：domain 下拉（默认第一个 domain）、时间窗 `7d`/`30d`/`90d`（**默认 30 天**）、刷新按钮。
+
+**四张 `KPI`**：最新通过率、最近运行、`Top` 失败用例数、红线状态（取值 `红线` / `黄线` / `正常` / `无数据`，副行给出红线与黄线的百分比）。
+
+**通过率趋势图**：`Y` 轴 0–100%，黄线与红线以虚线画出并带文字标签，跌破红线的点变红并可下钻；面板右上角显示「N 个点跌破红线」徽标。下面是 Drift 分布（按 count 降序的横条）。
+
+**三张表**：
+
+| 表 | 列 |
+| --- | --- |
+| `Top` 失败用例数 | Case `ID` / 失败次数 / 最近失败 |
+| 现场 | 客户端类型 / 调用 / 错误率 |
+| 告警阈值配置 | domain / 黄线（%）/ 红线（%）/ 连续失败告警次数 / 绑定角色，底部「保存阈值」 |
+
+**权限**：需要已登录的 `WebUI` 管理员。**这是本组页面里唯一有写入的页面**——「保存阈值」写入实例级阈值配置（`.ktx-ui/eval/monitor-config.json`），且**没有 owner 门禁**，任何已登录管理员都能改全实例阈值。
+
+**边界与限制**：
+
+- `Top` 失败用例数默认只取 10 条，所以卡片上的值是**条数**，不是失败总次数。
+- 阈值默认黄线 0.9、红线 0.8；黄线必须高于红线，否则前端拒绝保存。
+- domain **未绑定角色**时，现场表不渲染（返回「尚未为该 domain 绑定角色」）。
+- 趋势只统计 `status=succeeded` 且 `hash_status` 为 null 或匹配的运行。
+- 现场表按**默认用量**口径，排除协议事件与评测探针，与趋势线口径不同。
+- `days` 在趋势与现场端点钳制到 365，其余端点不钳制。
+
+**通过率有两套口径**：页面的说明文字用「新口径 = 答对了 /(答对了 + 答错了)，没答出来不进分母」，而趋势统计统一用 `SUM(pass_count) / SUM(total_cases)`（分母含跳过）。混合当日由副行标注「旧口径 / 新口径」。
+
+**常见困惑**：
+
+1. `Top` 失败用例数的卡片值是列表条数（最多 10），不是失败总次数。
+2. 「最近运行」是**最后一个统计点**覆盖的运行次数，不是近 N 天总运行数。
+3. 「查看相关运行」的下钻当前**只按 domain 过滤**，`date` 参数尚未被运行历史页消费。
+4. 「刷新」只失效趋势相关的缓存，不含 domain 列表——新增 domain 后需要重新进入页面。
 
 ### 3.7 YAML 规范与交付验收
 
@@ -2637,6 +2786,37 @@ Step 6 输出的 MCP 配置是**占位符 + 环境变量**，**不写明文**。
 
 **这不是什么**：行级策略**不是**动态 RLS、不是多租户隔离、也不是数据库原生行级安全。按人或按 Token 动态变化的策略尚未立项。
 
+#### 行权限视图（/admin/row-policies）
+
+入口：`/admin/row-policies`。它解决的是**按表反查**：「这张表上，每个角色给了什么行约束，每个 `Agent` 最终能看到哪些行？」
+
+页面是双栏结构：左栏表清单，右栏单表详情。表身份是三元组（连接 / Schema / 表），**同名不同连接或 Schema 是不同的表**。
+
+- **清单列**：表 / 角色数 / `Agent` 数 / 有效行授予。
+- **详情三块**：① 有效行授予（跨角色的 `OR` 并集）② 角色贡献（互斥三组：参与并集 / 不授予该表 / 编译失败）③ 各 `Agent` 的最终行约束。每个角色分支给出 `rowAccess`（`all`/`scoped`/无）、引用的模板名、内联谓词与错误信息，并深链到角色详情与授权摘要。
+
+**本页面纯只读。** 页面上只有一句「本页只读。修改请到角色权限」和两个链接，**没有任何编辑控件**；服务端也没有对应写路由（对该路径的 `POST`/`PUT`/`PATCH`/`DELETE` 一律 404）。
+
+**三个面的职责边界**：
+
+| 面 | 位置 | 职责 |
+| --- | --- | --- |
+| 本视图 | `/admin/row-policies` | **只读**：按表反查角色行策略与 `Agent` 最终行约束 |
+| 角色编辑 | `/admin/roles/:roleId` 的「行级策略（可选）」页签 | **写**：引用模板或写内联谓词，保存前可预览最终行约束 |
+| 模板管理 | `/admin/row-policy-templates` | **写**：两步（先 dry-run 看影响面，再正式保存）；模板绑定到角色仍发生在角色编辑器 |
+
+**权限**：需要已登录的 `WebUI` 管理员，`owner` 与运维都能看，页内链接可达角色详情。
+
+**必须知道的一条边界——视图不反映上游证明开关**：行级策略依赖上游对强制谓词的拼接能力，该能力默认**未证明**（`LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 不应设置）。在未证明状态下：
+
+- 受行级策略保护的表通过 `lucy_query` 取数会返回 `row_policy_upstream_unproven`——这是**预期的安全拒绝，不是故障**；
+- 受保护表上的 `lucy_read_source` / `lucy_freshness` / `entity_details` 会被 `row_policy_requires_wrapped_tool` 拒绝，只允许走已包装的查询路径；
+- `lucy_explain_query` 始终可在本地执行，用于诊断。
+
+也就是说：**行权限视图可能显示「受限行授予」，而真实取数会被拒**。视图展示的是配置态，执行是否放行取决于上游开关。
+
+**四种降级态互不共用空态**：无授权、不可满足、编译失败、空筛选各有独立文案；全部必需编译失败时显示不可用，**不会显示成「零授权」**。字段绑定失败时也要先分清是运维侧（目录不可用）还是用户侧（字段不存在）。
+
 ### 3.11 访问治理 · MCP 会话与上游连接
 
 面向接入 `Agent` 客户端的开发者与运维。
@@ -2745,6 +2925,84 @@ Skill 状态（草稿 / 已发布 / 已停用）只是 frontmatter 字段，**�
 
 本工作台**不提供**：文件上传替换、目录增删改、跨领域移动、版本历史与恢复、语义发布与索引同步。需要这些能力时改用语义资产与发布工作台路径。
 
+### 3.13 语义发布 · 发布工作台与发布记录
+
+「语义发布」这一组有两个页面：
+
+| 页面 | 路径 | 职责 |
+| --- | --- | --- |
+| 发布工作台 | `/publish/workbench` | 审阅待发布变更 → 校验 → 同步索引 → 让变更对 `Agent` 生效 |
+| 发布记录 | `/publish/history` | 查看历次发布的变更范围、执行结果，并做预检恢复 |
+
+**核心分工**：语义建模与业务 `Wiki` 负责**写内容**；发布工作台负责**审阅 → 校验 → 同步索引 → 记历史**。工作台**不写**语义文件，它只检测内容根的磁盘变化。
+
+#### 发布工作台（/publish/workbench）
+
+三栏布局：左栏「待发布变更」、中栏「生效准备」（唯一的发布主动作在这里）、右栏「最近发布」。若 URL 带 `?validationId=`，三栏之上还会渲染「批次计划面板」。
+
+**发布对象**分四组：语义资产、Schema Manifest、业务 `Wiki`、其它内容。服务端按三类资产类型判定：语义 overlay、Schema Manifest、业务 wiki。
+
+**不支持分文件勾选。** 左栏明写「本批一并同步 N 项（不可分文件勾选）」——工作台是**整批**语义。
+
+**前置检查**：
+
+1. **静态与契约校验**：每张表跑 `ktx sl validate`，再叠加列类型契约（合法值仅 `string|number|time|boolean`）与共享语义合法性。
+2. **影响面**：服务端按「连接 + Schema + 表」逐表比较，未能解析的项进 `unresolved` 且**标记为阻断**。
+3. **内容版本绑定**：内容摘要变化即让旧的校验结果失效，需要重新校验。
+
+校验范围只覆盖「非删除 + overlay 且恰好归属一张表」的文件，所以 **wiki / Manifest / 删除项不产生校验对象**。
+
+**「同步索引」实际执行 `ktx admin reindex`**（强制重建时加 `--force`）。工作台**不调用** `sl read`——只跑 `ktx sl validate`。所以「overlay 是否真的合并进 source」这一步不在工作台内，仍要按 [3.7.6 GO / NO-GO 交付 checklist](#yaml-go-no-go-checklist) 在发布后验收。
+
+**门禁四态**：`empty` / `stale` / `pending` / `ready`，只有 `ready` 才能提交。可观测到的阻断文案：
+
+| 文案 | 原因 |
+| --- | --- |
+| 待发布变更加载失败，无法提交 | 待办列表取不到 |
+| 生效基线需要核对，暂不能提交 | 基线代次需人工确认 |
+| 影响范围未完整解析，暂不能提交 | 影响模型有 `unresolved` 项 |
+| 待发布内容已变化，请重新校验 | 摘要过期 |
+| N 张表校验未通过，同步已被阻断 | 校验未过 |
+
+**服务端错误码**：`REINDEX_IN_PROGRESS`（已有发布批次在重建索引）、`PUBLISH_CONTENT_VERSION_CHANGED`（确认后内容变了）、`semantic_recovery_required`（上一笔语义写入有未决恢复日志）、`PUBLISH_COORDINATOR_BUSY`、`PUBLISH_BASELINE_CONFLICT`（基线代次被其它发布推进）。
+
+**一条必须知道的限制**：**纯 wiki、纯 Manifest、纯删除的批次无法通过工作台提交**——这类批次没有产生任何表级校验结果，工作台状态停在 `pending`，提交按钮保持禁用。这与该页设计文档里「不以『没有 overlay 校验结果』一律阻断」的描述不一致，**当前以代码行为为准**。
+
+**权限**：需要已登录的 `WebUI` 管理员。发布**不设 owner 门禁**，运维角色也能发布；操作人会被写进发布记录。
+
+**边界与限制**：
+
+- 扫描上限 5000 个业务文件，超出即报「扫描未完成」并阻断提交；单文件超过 8MB 记为过大。
+- `ktx admin reindex` 超时 180 秒，`ktx sl validate` 超时 60 秒。
+- **真正不可逆的是「基线推进」**（即标记「已生效」）。重建索引本身不改业务文件；索引期间内容漂移则**不推进基线，内容留在待办**。启动时对账崩溃窗口时只标记为「待确认」，**绝不自动重建索引或回滚内容**。
+- 工作台**没有回滚按钮**，回滚在发布记录里做。
+
+#### 发布记录（/publish/history）
+
+**列表列**（8 列 + 序号）：发布时间、触发方式（`WebUI` 发布 / 强制重建索引 / 整批恢复 / 系统）、操作人、变更范围、规模（`文件 N · 语义源 M`）、重建索引状态、操作。
+
+**筛选**：时间窗口预设（全部 / 24h / 7d / 30d）+ 自定义起止、触发方式、重建索引状态、操作人，**全部镜像到 URL**。默认窗口 24 小时。分页每页 20 条。
+
+**`CSV` 导出**：一条发布记录一行，表头 9 列（序号、发布时间、发布状态、触发方式、操作人、变更范围、规模、重建索引状态、发布 `ID`）。**导出忽略分页，导出当前筛选条件下的全部结果**。
+
+**状态取值**：`blocked` 已阻断 / `promoting` 写入中 / `promote_failed` 落盘失败 / `reindexing` 重建索引中 / `published` 已发布 / `reindex_failed` 重建索引失败。另有「生效待确认」态，对外投影为重建索引中 + 未确认。
+
+**恢复（回滚）**：行内「可预检恢复」会打开预检抽屉，列出恢复目标、索引范围、镜像写集与删除集合，确认后才真正恢复。语义是**恢复到该批次发布之前，并生成一条新发布记录，原记录保持不变**。只有非「手动重建索引」触发的批次可恢复，且需要快照可用。
+
+**存储上限**：发布记录最多保留 100 条，快照最多 50 份。
+
+#### 什么时候用哪个
+
+| 场景 | 用什么 | 说明 |
+| --- | --- | --- |
+| 改指标、维度、关联定义 | `/catalog` 语义建模 | 写 overlay 文件到内容根 |
+| 改业务口径文档 | `/wiki` 编辑器 | 工作台只把 wiki 列为待办并计入影响面 |
+| 批量导入语义资产 | `/catalog` 导入 → 暂存 → 跳工作台 | 带批次计划的工作台路径 |
+| **让变更对 `Agent` 生效** | **发布工作台 → 同步索引并生效** | 唯一让索引追上内容变更的 `WebUI` 入口 |
+| 命令行等价物 | `ktx admin reindex` | 工作台内部就是它，但**命令行直跑不产生 Lucy 的基线与消费证据**，这些变更在工作台上仍会显示为待办 |
+| 校验 overlay 是否真的合并进 source | `ktx sl read <source> --connection-id <conn>` | 工作台不做这一步，属于发布之后的运行时验收 |
+| 查历史、导出、做恢复 | `/publish/history` | 工作台右栏只给最近 5 条摘要 |
+
 ## 4. Agent / 客户端接入指南
 
 ### 4.1 接入地址
@@ -2815,24 +3073,57 @@ export LUCY_AGENT_TOKEN="$(cat <PROJECT_ROOT>/.ktx/secrets/lucy-agent-token)"
 
 ### 4.4 可用工具面
 
-管理员按角色职责勾选工具时，优先看 [角色工具勾选速查](#role-tool-grant-matrix)（只读查询 / 业务问答 / 建模 / 运维）。本节给接入侧工具面说明。
+本节是**接入侧**的工具面说明：接入方按这里决定给 `Agent` 暴露哪些 `MCP` 工具。管理员在角色编辑器里按职责勾选时，看 [角色工具勾选速查](#role-tool-grant-matrix)（只读查询 / 业务问答 / 建模 / 运维）——那是同一批工具的**管理员视角**，本节是**接入视角**，两者讲的是同一份清单。
 
-R1 / 新接入 Agent 推荐只暴露 6 个 `lucy_*` 核心工具：
+#### 工具全集
 
-| 工具 | 用途 | 备注 |
+下表是运行时**可授予**的全部工具（21 个），按类别分组。工具是否对某个 `Agent` 可见，取决于角色的 `allow.tools` 与全局 `defaults.deny_tools`；不在角色里显式列出的工具不会隐式授予。
+
+| 工具 | 类别 | 用途 |
 | --- | --- | --- |
-| `lucy_catalog` | 列出当前 token 可见 connection/source 和安全示例 | 查询前首选 |
-| `lucy_read_source` | 读取一个授权 semantic source | 上游内部工具名为 `sl_read_source`；Agent 侧只能调 `lucy_read_source` |
-| `lucy_query` | 运行授权语义查询 | 上游内部工具名为 `sl_query`；禁止 raw SQL |
-| `lucy_explain_query` | 解释同一参数会如何被授权/限流，不执行查询 | 排障用，不是常规 dry-run |
-| `lucy_freshness` | 返回 source 的语义层更新时间与物理 freshness 可用性 | 当前物理数据 freshness 不可用时显式说明 |
-| `lucy_begin_question` | 可选，上报自然语言问题，便于审计关联 | 可用 `LUCY_ENABLE_QUESTION_TOOL=false` 关闭 |
+| `lucy_query` | 数据面 | 运行授权语义查询；上游内部工具名为 `sl_query`，禁止原始 `SQL` |
+| `lucy_read_source` | 数据面 | 读取一个已授权 `semantic source` 的字段、指标与限制；上游内部工具名为 `sl_read_source` |
+| `lucy_explain_query` | 数据面 | 解释同一组参数会如何被授权与限流，**不执行查询**；排障用，不是常规 dry-run |
+| `lucy_freshness` | 数据面 | 返回 `source` 的语义层更新时间与物理数据 freshness 可用性 |
+| `entity_details` | 数据面 | 实体画像、维度详情与元数据核对 |
+| `sl_validate` | 数据面 | 语义配置校验（建模用），不读业务数据 |
+| `lucy_catalog` | 元信息面 | 列出当前 `token` 可见的 connection / source 与安全示例；取数前首选 |
+| `lucy_begin_question` | 元信息面 | 上报一次自然语言问询，用于审计关联；可用 `LUCY_ENABLE_QUESTION_TOOL=false` 关闭 |
+| `lucy_continue_question` | 元信息面 | 问询预算用尽后凭 `continueToken` 继续本轮问询；同一问询只能继续一次 |
+| `dictionary_search` | 元信息面 | 在已采样字典值里定位业务值所在的源列 |
+| `discover_data` | 元信息面 | 跨 wiki、语义层、原始表与列做自然语言发现 |
+| `kx_catalog` | 元信息面 | 列出上游 `KTX` 侧可见的连接与源 |
+| `connection_list` | 元信息面 | 列出当前 `token` 可见的数据库连接 |
+| `wiki_search` | 上下文面 | 检索业务 wiki 页面；需角色显式授予 |
+| `wiki_read` | 上下文面 | 读取一篇业务 wiki 页面；需角色显式授予 |
+| `lucy_skill_search` | 上下文面 | 检索受治理的业务 `Skill`；需角色显式授予 |
+| `lucy_skill_read` | 上下文面 | 读取一篇业务 `Skill` 正文；需角色显式授予 |
+| `lucy_certified_route` | 认证路线 | 运行一条已发布的认证路线，产出与审计；其取数仍走 `lucy_query` 的授权 |
+| `lucy_report_template` | 认证路线 | 按已发布的报告模板产出报告；其取数仍走 `lucy_query` 的授权 |
+| `lucy_ops_connection_tables` | 控制面 | 批量维护连接的启用表范围 / 移除 Schema；整批全成或全拒 |
+| `lucy_ops_source_import` | 控制面 | 批量导入源表语义、校验与版本回滚 |
 
-兼容/辅助工具可能包括 `kx_catalog`、`wiki_search`、`wiki_read`、`connection_list`、`entity_details` 等。是否可见完全由 role 的 `allow.tools` 和全局 defaults 决定。
+> **这张表是机器校验的。** 运行时新增或下线工具而本表未同步，`npm run lint:handbook-tool-surface` 会失败。事实源是 `webui/server/proxy/acl.ts` 的 `DATA_PLANE_TOOLS` / `META_TOOLS` / `CONTEXT_TOOLS` 与 `webui/server/ops/control-plane.ts` 的 `CONTROL_PLANE_TOOLS`。
 
-`sl_query` 与 `sl_read_source` 是上游 KTX 的内部工具名，**不是 Agent 可见工具**：Proxy 对它们一律返回 `AbsoluteDeny`，与 role 的 `allow.tools` 无关。Agent 直连调用必然被拒；对应能力只能通过 `lucy_query` / `lucy_read_source` 使用。
+#### 接入侧三档推荐
 
-`lucy_query` 参数建议：
+新接入 `Agent` 按用途选一档起步，不要一上来就把 21 个全开。
+
+| 档位 | 工具 | 适合什么场景 |
+| --- | --- | --- |
+| 最小只读 | `lucy_catalog`、`lucy_read_source`、`lucy_query`、`lucy_explain_query`、`lucy_freshness` | 只回答「这张表怎么定义的」这类结构问题，不需要读业务文档 |
+| 标准业务问答 | 最小只读 + `lucy_begin_question`、`lucy_continue_question`、`wiki_search`、`wiki_read`、`lucy_skill_search`、`lucy_skill_read` | 需要引用业务口径与 `Skill` 规程作答；**这是新建角色的默认档** |
+| 运维控制 | 只开 `lucy_ops_*` | 批量维护连接表范围与导入语义；不要和查询角色绑在同一套权限里 |
+
+`entity_details`、`discover_data`、`dictionary_search`、`kx_catalog`、`connection_list`、`sl_validate`、`lucy_certified_route`、`lucy_report_template` 属于按需工具，默认不开。
+
+**上下文面（`wiki_*` 与 `lucy_skill_*`）必须显式授予。** 业务问答档里的 `Skill` 读取通道靠 `lucy_skill_search` / `lucy_skill_read`；不勾这两个工具，`Agent` 就查不到业务 `Skill`，即使库里已经发布了。
+
+#### 绝对禁止授予的工具
+
+`sl_query` 与 `sl_read_source` 是上游 `KTX` 的内部工具名，**不是 `Agent` 可见工具**：`Proxy` 对它们一律返回 `AbsoluteDeny`，与角色的 `allow.tools` 无关。`Agent` 直连调用必然被拒；对应能力只能通过 `lucy_query` / `lucy_read_source` 使用。原始 `SQL` 执行与记忆注入同样不可授予。
+
+#### `lucy_query` 参数建议
 
 ```json
 {
@@ -2853,11 +3144,83 @@ R1 / 新接入 Agent 推荐只暴露 6 个 `lucy_*` 核心工具：
 
 | 规则 | 原因 |
 | --- | --- |
-| 使用 source-qualified key，如 `source.measure` | ACL 需要显式表归属 |
-| `dimensions` / `order_by` 用对象数组 | Proxy 会校验 shape |
-| 不传 `query` / `sql` 原始 SQL | raw query 默认拒绝 |
+| 使用 source-qualified key，如 `source.measure` | `ACL` 需要显式表归属 |
+| `dimensions` / `order_by` 用对象数组 | `Proxy` 会校验 shape |
+| 不传 `query` / `sql` 原始 `SQL` | raw query 默认拒绝 |
 | `limit` 默认 `LUCY_QUERY_DEFAULT_LIMIT`，最大 `LUCY_QUERY_MAX_LIMIT` | 防止过大结果 |
 | 每 token 并发 `lucy_query` 默认最多 4 个 | 超限 `query_concurrency_exceeded` |
+
+### 4.5 治理语义源与可问治理面
+
+除业务语义与业务 `Wiki` 外，Lucy 还提供**第三个语义来源域** `lucy-ops`：把治理侧的事实（配置人口、窗口活动、访问分级、授权与访问路径、表采用率）物化成**只读语义源**，让运维侧的 `Agent` 用 `lucy_query` 直接问出来，而不必人去翻审计页面。
+
+本节讲清三件事：有哪些源、怎么授权、怎么问。
+
+#### `lucy-ops` 的 12 个语义源
+
+连接 ID 是 `lucy-ops`，`schema` 固定为 `main`，共 12 个源：
+
+| 源 | 回答什么 |
+| --- | --- |
+| `ops_agents` | 配置了多少 `Agent`（配置人口） |
+| `ops_tokens` | 可用 `Token` 数量与调用量 |
+| `ops_agent_activity` | 窗口内的 `Agent` 活跃情况 |
+| `ops_question_kpi_agents` | 问询 KPI 口径下的 `Agent` 分档 |
+| `ops_grant_paths` | 授权路径 |
+| `ops_access_paths` | 实际访问路径 |
+| `ops_edge_signals` | 边的状态信号（僵尸授权、需复核、溢出等） |
+| `ops_map_nodes` | 图节点计数 |
+| `ops_map_meta` | 图元数据与覆盖率 |
+| `ops_table_adoption` | 表采用率与近窗未访问 |
+| `ops_calls` | 原始调用（旧源） |
+| `ops_call_tables` | 调用到表（旧源） |
+
+`ops_calls` 与 `ops_call_tables` 是**旧源**：它们不带时间窗与快照语义，出现任何 `gov.*` 参数会被拒绝。
+
+#### 怎么授权（四步，缺一不可）
+
+1. **连接块**：服务端在启动时确保 `ktx.yaml` 里存在 `lucy-ops` 连接块（`driver: sqlite`、`readonly: true`、指向审计库、`schemas: [main]`），并把 `enabled_tables` 收敛到本地 Manifest 实际有的物理表。
+2. **角色**：参考模板是 `lucy_ops_reader`，它列出了全部 12 个源。**从模板新建**才会一次带齐。
+3. **表范围**：**这一步必须管理员手动做**。`ensure` **永不写** `access.yaml`——它不自动改正式角色或 `Agent`。已落盘的正式角色（含早期 `Docker` demo 模板）可能仍只有两三个表，需要管理员到 `/admin/roles` 显式扩表选择器，或重建 / 改绑。源没有列入角色的表选择器，就不在该角色的允许集内，查询会被拒。
+4. **业务 Skill**：已发布的 `lucy-ops/ops-questioning`（`roles_allowed: [lucy_ops_reader]`）是这套问法的规程，它把「谁被拒绝」「哪些授权没人用」「哪些表近窗没访问」这类问法路由到对应源，并附带 `lucy-ops/ops-questioning.md` 这篇 wiki。
+
+第 3 步是最常见的卡点：**工具勾齐、角色建好，但表范围没扩**——此时 `Agent` 会报「无权访问」，而不是「没有数据」。
+
+#### 怎么问：`gov.*` 参数
+
+治理源通过 `lucy_query` 的 `filters` 接受 `gov.*` 参数，`Proxy` 会**先剥离再转发**，这些字段不会进入语义层或上游 `KTX`：
+
+| 参数 | 取值 | 作用 |
+| --- | --- | --- |
+| `gov.window_hours` | `24`、`168` | 按小时窗口 |
+| `gov.calendar_days` | `7`、`30` | 按日历日窗口，可配 `gov.calendar_tz`（缺省 `Asia/Shanghai`） |
+| `gov.start_iso` + `gov.end_iso` | 成对 | 显式半开区间 |
+| `gov.trust` | 与访问关系图同一枚举 | 按信任档过滤 |
+| `gov.focus_agent` / `gov.focus_role` / `gov.focus_table` | `conn::schema::table` | 收窄物化子图 |
+| `gov.focus_token_label` | `Token` 标签 | 只过滤访问层，不改授权层 |
+
+三条硬规则：
+
+- **窗三选一**，同时给多个窗参数会返回 `invalid_arguments`。
+- **默认窗是 `gov.calendar_days=30`（`Asia/Shanghai`），且含今日**：快照时刻 `2026-11-01T12:00:00+08:00`、`calendar_days=30` 对应 `[2026-10-03T00:00:00+08:00, 2026-11-02T00:00:00+08:00)`。这不是「此前 30 个完整日」。问「近 7 天」要显式传 `gov.calendar_days=7`。
+- **未知 `gov.` 前缀直接 `invalid_arguments`**，不做静默忽略。
+
+示例：
+
+```json
+{
+  "connectionId": "lucy-ops",
+  "sourceName": "ops_agents",
+  "measures": ["ops_agents.agent_count"],
+  "filters": [{ "field": "gov.calendar_days", "op": "eq", "value": 30 }]
+}
+```
+
+#### 边界与不适用的场景
+
+- **图 ≠ 论述**：访问关系图是静态渲染，问数是动态投影，两者数字**不要求逐格对等**。谈 `Agent` 用量以问数为准。
+- **问数不替代审计导出**：需要证据链时仍走 [访问日志](#access-governance) 与 `CSV` 导出。
+- **本能力不随收口自动上线**：客户环境的部署、镜像与升级台账不在这条功能合同的出口内，需要走交付流程。
 
 ## 5. 配置与环境变量速查
 
@@ -3118,6 +3481,88 @@ SMTP 服务器接受信件**不等于**最终投递到收件箱；Lucy 只记录
 #### 5.4.5 禁用与回滚
 
 把 `smtp.enabled` 改回 `false` 并重启即停止新投递，已排队的行保留但不投递。回滚到不识别 `notification_outbox` 表的旧版本前，按 Chart 的 `UPGRADE.md`／`ROLLBACK.md`「Optional SMTP notifications (chart 0.2.8+)」段处理该表——**默认保留**（旧版本不读写它），清理是可选项。禁用与回滚都不影响登录账户、审计账本、权限与恢复密钥；密码不会进入备份明文附件。
+
+### 5.5 品牌外观（/admin/branding）
+
+入口：`/admin/branding`。配置客户侧看到的品牌，**只有三项**：
+
+| 项 | 说明 |
+| --- | --- |
+| 客户 `Logo` | 图片文件 |
+| 产品名称 | 最长 64 字符，留空回落默认 `Lucy WebUI` |
+| 品牌副标题 | 最长 64 字符，留空回落默认「可信 Agent 数据层」 |
+
+**`Logo` 的限制**：
+
+- 格式仅 `PNG` / `JPEG` / `GIF`；`.svg`、`.webp` 不接受。
+- 大小上限 **512 KB**。
+- 像素限制宽高各 32–160 px，推荐 48×48。
+- 按**内容嗅探**判定类型，不只看扩展名；嗅探失败报「无法识别为 PNG、JPEG 或 GIF 图像」。
+
+**存储位置**：元数据写 `webui/config/branding.yaml`，二进制写 `webui/config/branding/logo.<ext>`。上传会覆盖旧文件，文件名被强制改写为 `logo<ext>`。
+
+**生效范围**：侧栏品牌区与登录页。**浏览器标签页标题不变**（静态页面标题），也**不影响 `MCP` 客户端看到的名称**——代理回落到本地时 `serverInfo.name` 是固定的 `lucy-mcp-proxy`。
+
+**权限**：读取是公开的（登录页在鉴权前就要拿品牌），**写入需要登录会话但不设 owner 门禁**——运维角色也能改品牌。写入会落配置审计。
+
+### 5.6 登录账户（/admin/accounts）
+
+入口：`/admin/accounts`，管理 `WebUI` 登录账户。身份判定与权限裁决读的是 `webui/config/admins.yaml`（示例见 `webui/config/admins.yaml.example`），**每次安全判定都重新读盘**，不依赖展示缓存。
+
+**字段**：登录账户 `ID`（主键）、邮箱、显示名、角色（所有者 / 运维）、状态（启用 / 已禁用）。**owner 额外可见**登录方式与身份绑定；运维看不到这两项。
+
+**邮箱是可选的**，用途明确为「所有者维护的联系信息」——**不用于登录，也不参与单点登录匹配**（单点登录只匹配签发方与主体标识）。邮箱在账户间不可重复。
+
+**操作**：新建、改密码、改邮箱、改角色、启用/禁用、移除本地密码、维护身份绑定、删除。**没有独立的「重置密码」按钮**——重置就是另一位 owner 在抽屉里设置新密码。
+
+**owner 与运维的权限差异**：
+
+| | owner | 运维 |
+| --- | --- | --- |
+| 看列表 | ✓ | ✓（但看不到「登录方式」与「操作」两列，按钮不渲染） |
+| 新建 / 改 / 删 / 绑定 | ✓ | ✗，返回 403 `OWNER_REQUIRED` |
+
+新建账户默认角色是**运维**，owner 必须显式改选。
+
+**删除保护的四条硬约束**：
+
+1. 不能禁用或删除当前登录的账户。
+2. 至少保留 1 名启用中的 owner（否则 `LAST_OWNER_REQUIRED`）。
+3. 至少保留 1 名**可用本地密码登录**的启用 owner（否则 `LOCAL_OWNER_REQUIRED`）。
+4. 移除本地密码必须有身份绑定兜底，且不能与「设置新密码」同时提交。
+
+删除需要**键入账户 `ID`** 才解锁确认按钮，比较时只去首尾空白、大小写敏感。
+
+**会话与密码策略**：
+
+| 项 | 取值 |
+| --- | --- |
+| 会话空闲超时 | 30 分钟 |
+| 会话绝对上限 | 12 小时（滑动，但不突破绝对上限） |
+| 密码强度 | 至少 10 字符，`scrypt` + 16 字节盐 |
+| 登录限流 | 源 `IP` 总量 30 次 / 5 分钟；账户 + 源 `IP` 5 次 / 15 分钟 |
+
+**没有账户级锁定计数，也没有密码有效期或到期策略。**
+
+**忘记密码怎么办**：登录页底部「无法登录？查看系统手册」直达 [丢失管理员账号或密码时如何恢复](#admin-break-glass)。自托管环境**不提供邮箱找回**。另一条路径见 [WebUI 管理员登录](#admin-webui-login)。
+
+### 5.7 版本信息（/admin/version）
+
+入口：`/admin/version`。展示**三项**：
+
+| 项 | 来源 | 缺失时 |
+| --- | --- | --- |
+| 产品版本 | `LUCY_VERSION` 环境变量 → 仓库根 `VERSION` 文件 → 内置回落值 | 显示回落值而非 `unknown` |
+| 构建提交 | 构建期盖章文件 → 源码仓 `git rev-parse HEAD` | 显示 `unknown` |
+| 随包 `KTX` 版本 | `LUCY_BUNDLED_KTX_VERSION` 环境变量 | 显示 `unknown` |
+
+**构建提交的显示与复制规则**：可见文本是完整 40 位十六进制的**前 12 位**；复制按钮复制的是**完整 40 位**。复制按钮仅在提交是合法 40 位小写十六进制时才出现，否则既无按钮也无完整提示。
+
+**产品版本不带 `v` 前缀**，显示为纯 `X.Y.Z`。服务端**强制**这个形态：带 `v` 前缀或不是三段数字会让版本接口直接抛错（表现为「加载版本信息失败」，而不是回落成 `unknown`）。客户端侧的回落值比服务端更宽容——会剥掉 `v` 前缀，不符合格式时返回 `unknown`。
+
+**工作区脏状态不在客户可见页面展示。** 健康检查接口的响应里带有该字段，但版本页不渲染它。
+
+**用途**：对照客户正在跑的版本时，看这一页的**构建提交**，而不只看产品版本号——同一产品版本可能对应不同构建。
 
 ## 6. FAQ 与排障指南
 
