@@ -6,7 +6,7 @@
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号无，不进入 v0.25 登记册 |
 | 主 Spec | [`docs/specs/lucy-20261102-access-map-audit-echo-spec.md`](../specs/lucy-20261102-access-map-audit-echo-spec.md)（**v0.3 可定稿**；实施按该版） |
 | 权威语义 | Spec 187 路径／信任；inquiry-kind Spec；Spec 194／`usage-classification`；chart-first 弱入口 |
-| 状态 | **v0.3 功能合同已收口（2026-11-04）**。S1–S3 已落地；SC-01–SC-20 关闭；证据见 [实施笔记](../reviews/2026-11-04-access-map-audit-echo-implementation-notes.md)。本条收口不表示可上线。原 Deferred → `REQ-030-003` 已拉出并实施完成 |
+| 状态 | **功能合同已收口（2026-11-04）**。S1–S3 已落地；SC-14 逐边在出口；SC-12 页序子句已拆出。本条收口不表示可上线。证据见 [实施笔记](../reviews/2026-11-04-access-map-audit-echo-implementation-notes.md)。出口修订见 [`lucy-20261104-access-map-echo-exit-revision-plan.md`](lucy-20261104-access-map-echo-exit-revision-plan.md) |
 | 授权边界 | **已授权**改 `webui/server`／`webui/src` 运行代码与本条文档指针。**不授权** git commit（除非用户另行要求）、镜像、部署、浏览器走查、Playwright、客户环境 |
 | 验收 | 以主 Spec §7 SC-01–SC-20 为准 |
 | 实施主体 | Lucy：`webui/server/admin/access-map.ts`、`webui/src/pages/admin/AccessMap.tsx`、相关组件与测试 |

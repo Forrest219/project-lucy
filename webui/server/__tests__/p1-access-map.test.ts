@@ -1569,7 +1569,9 @@ describe("访问关系图 · audit-echo 投影集合（SC-10–SC-16）", () => 
     db.close();
   });
 
-  it("SC-12 — 先开关系图／先开审计页：重建准备后 E 一致", async () => {
+  // 过程证据（主 Spec SC-12 页序子句已拆出，见 lucy-20261104-access-map-echo-exit-revision）：
+  // 不构成主 Spec 收口阻塞；保留夹具防回归。
+  it("SC-12 — 先开关系图／先开审计页：重建准备后 E 一致（过程证据）", async () => {
     /** 模拟审计／关系图共用的推断重建：把尚无显式键、尚未挂 inferred 的调用链上。 */
     const linkPendingInferred: EchoRebuildFn = async ({ db }) => {
       const sqlite = db as unknown as Database.Database;

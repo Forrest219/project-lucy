@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计基线 / **v0.3** |
 | 日期 / 目标版本 | 2026-11-02 / 不绑定产品版本号。不升 Spec 187 版本号，不进入 v0.25 登记册 |
 | 功能编号 / 优先级 | **无** / **P1**（访问关系图工具条与访问层筛选口径） |
-| 状态 | **v0.3 功能合同已收口（2026-11-04）**。S1–S3 已落地；SC-01–SC-20 关闭；证据见 [实施笔记](../reviews/2026-11-04-access-map-audit-echo-implementation-notes.md)。本条收口不表示可上线。原 Deferred → [`REQ-030-003`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) 已拉出并实施完成。剥离背景见 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md) |
+| 状态 | **功能合同已收口（2026-11-04）**。S1–S3 已落地；SC-14 逐边在出口；SC-12 页序子句已拆出。本条收口不表示可上线。证据见 [实施笔记](../reviews/2026-11-04-access-map-audit-echo-implementation-notes.md)。出口修订见 [`lucy-20261104-access-map-echo-exit-revision-spec.md`](lucy-20261104-access-map-echo-exit-revision-spec.md)。原 Deferred → [`REQ-030-003`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) 已拉出。剥离背景见 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md) |
 | 决策来源 | 2026-11-02 对 `http://127.0.0.1:55176/admin/access-map?trust=include_candidate` 的反馈：①筛选器行不对齐；②「问询计入」分段控件突兀。澄清后拍板 **方案 B**：桑基图是访问日志／调用流水的可视化，不得另造核心分类；维度与数量须呼应。Codex 第 1 轮退回（高 3／中 2）→ v0.2；第 2 轮退回（中 2：结构筛选后 meta、deny 集合 D）→ v0.3 闭合 |
 | 需求来源 | 治理台访问关系图应让管理员用与访问日志相同的管理语言筛选访问面；关联质量口径可保留，但不得冒充「问询」主筛选 |
 | 实施主体 | Lucy WebUI：`webui/server/admin/access-map.ts`、`webui/src/pages/admin/AccessMap.tsx` 及相关组件／测试。不修改 KTX |
@@ -18,8 +18,8 @@
 
 - 层级：功能合同
 - 本条承诺：访问关系图工具条与访问层筛选使用与访问日志同一套「问询种类／访问等级」词汇与缺省；「关联口径」（原「问询计入」／`trust`）降为弱入口；筛选行单行对齐；进入访问路径构建的允许调用集合 E 可按合同打假，不以另一套分类伪造数量；当前筛选下无访问路径不得表述为「全量日志无访问」。
-- 本条出口：SC-01–SC-20。服务端测试打假关联链路、投影集合 E、跨边并集、非法 URL；组件测试打假工具条、弱入口、文案。
-- 不在本条出口：浏览器走查、Playwright、窄屏、镜像构建、部署、客户环境；Spec 187 全量历史 SC 的重新执行；把问询种类筛选项反向加进调用流水 Tab；改凭证清单 Spec 189 Default Usage 口径。
+- 本条出口：SC-01–SC-20，其中 SC-12 的「先开关系图／先开审计页」页序子句已按 [出口修订 Spec](lucy-20261104-access-map-echo-exit-revision-spec.md) **拆出**；SC-12 仍含关联五态与重建失败 → unavailable；SC-14 须含逐边 `accessCalls(e)=\|I(e)\|`。服务端测试打假关联链路、投影集合 E、跨边并集、非法 URL；组件测试打假工具条、弱入口、文案。
+- 不在本条出口：SC-12 页序子句（拆出）；浏览器走查、Playwright、窄屏、镜像构建、部署、客户环境；Spec 187 全量历史 SC 的重新执行；把问询种类筛选项反向加进调用流水 Tab；改凭证清单 Spec 189 Default Usage 口径。
 - 上线关系：本条收口不表示可上线
 
 ---
@@ -226,7 +226,7 @@ function buildBandED(f: EchoFilter, db: Db): { B: Set<CallId>; E: Set<CallId>; D
 | SC-09 | 关联口径写 `trust`；默认 confirmed；可切 include_candidate；非法 trust → 400 | 组件 + 服务端 |
 | SC-10 | 仅推断关联的会话访问允许表调用：缺省 inquiryKind 不进 E；session_visit 或 all 可进。夹具走推断键，不靠显式 lucy_turn_id | 服务端 |
 | SC-11 | 连接级工具调用：缺省 accessGrade 不进 E；connect 或 all 且仍有 sources 时可进。对照时期望集含协议调用候选再套等级 | 服务端 |
-| SC-12 | 关联链路：显式关联、仅推断、二者同时（显式优先）、悬空显式键、无关联。management 下无关联不进 E；all 下可进。覆盖先开关系图／先开审计页顺序下重建准备后结果一致；重建失败 → unavailable | 服务端 |
+| SC-12 | 关联链路：显式关联、仅推断、二者同时（显式优先）、悬空显式键、无关联。management 下无关联不进 E；all 下可进；重建失败 → unavailable。**页序子句已拆出**（「先开关系图／先开审计页」不在本条出口；见 [出口修订](lucy-20261104-access-map-echo-exit-revision-spec.md)）。仓内若保留页序夹具，仅作过程证据 | 服务端 |
 | SC-13 | 真实 SQL 得到的 E 与夹具预写期望 id 集逐项相等（含时间上界半开、数量同但 id 不同必须失败）。meta.enteringAllowCallCount=\|E\| | 服务端 |
 | SC-14 | 结构筛选前 ⋃I(e)=E；不得用 Σ accessCalls 冒充 \|E\|；改变候选集合但路径去重／归因规则不变；多角色／多表／同路径多调用夹具。夹具 E={a,b}：scope／focus 后仅保留含 a 的边时，返回并集为 {a}，`enteringAllowCallCount` 仍为 2 且标明结构筛选前；切换 flat／schema 不改变 E；逐边 `accessCalls(e)=\|I(e)\|`。候选 B 中 deny 构成 D：匹配／不匹配新增筛选的 deny、多表源重复 deny 均不进 E，但 `deniedCalls=\|D\|`（去重）正确；loadAccessSide 不得因「只返回 E」而把拒绝计数归零 | 服务端 |
 | SC-15 | 仅改 inquiryKind／accessGrade 时授权骨架不变 | 服务端 |
@@ -255,4 +255,4 @@ function buildBandED(f: EchoFilter, db: Db): { B: Set<CallId>; E: Set<CallId>; D
 
 ---
 
-**定稿条件：** Codex 两轮已完成；第 2 轮 R3 残留与 N1 已按可贴句写入 D8／§6／SC-14。**2026-11-04 实施完成并功能合同已收口**（Plan v0.4；S1–S3；SC-01–SC-20 关闭）。本条收口不表示可上线。
+**定稿条件：** Codex 两轮已完成；第 2 轮 R3 残留与 N1 已按可贴句写入 D8／§6／SC-14。**功能合同已收口（2026-11-04）**。S1–S3 已落地；SC-14 逐边在出口；SC-12 页序子句已拆出。本条收口不表示可上线。
