@@ -1,14 +1,12 @@
 # 行权限真实 e2e 审判包（强度 B）Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** 本机一次两阶段 run，对 ROW25-V01…V22 + RTP25-01…10 + RTV25-01…08 + BY-01…19 做真实一推一；数据面绑阿里云 RDS 只读 `mysql-aliyun`／`dataforai.superstore_orders`（华东／西南），禁止假 `coversV025` 与写库 seed。
 
 **Architecture:** 新建 `examples/row-policy-e2e` 审判包；`row-policy-pack.mjs` 持有 id→owner 注册表与区划常量；`prepare-environment --pack row-policy` 渲染包并挂载 RDS 密码文件；`run-row-policy-b.mjs` 串 Gate-Off→Gate-On；重写 `row-policy-v025`／`row-policy-templates-v025` 与改绑 BY handlers。
 
 **Tech Stack:** Node ESM（`scripts/e2e`）、Playwright real-e2e、MySQL RDS 只读、现有 `v025-coverage.yaml`／`access-v025.mjs` 描述符。
 
-**Design authority:** [`docs/superpowers/specs/2026-11-04-row-policy-real-e2e-pack-design.md`](../specs/2026-11-04-row-policy-real-e2e-pack-design.md)
+**Design authority:** [`docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md`](./2026-11-04-row-policy-real-e2e-pack-design.md)
 
 ## Global Constraints
 

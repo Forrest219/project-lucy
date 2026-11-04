@@ -1,7 +1,5 @@
 # PageHeader Context Dedup Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Remove duplicated PageHeader context from six confirmed pages while preserving each page's authoritative body content and controls.
 
 **Architecture:** Keep the shared `PageHeader` contract unchanged and simplify only its call sites. Pages with fully duplicated context remove the `badges` prop; Run detail retains only its runtime status badge. Existing body summaries, controls, validation gates, APIs, routes, and data contracts remain unchanged.

@@ -1,7 +1,5 @@
 # Lucy Agent Chat A3 Optimization Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** 在不改变 Lucy 默认 headless / 客户交付路径的前提下，将 Agent Chat A3 收敛为可复现、可审计、默认安全的单租户验证附包。
 
 **Architecture:** Lucy 与 A3 采用物理隔离和运行旁路双重隔离：Lucy 默认镜像、源码包、发布硬门禁不携带 A3 密钥、状态或悬空入口；A3 作为可选旁路连接已部署 Lucy MCP。M0 收紧为一个 Hermes profile、一个 Lucy Agent token、一个 Open WebUI 验证账号和串行问题验证；通过结论必须由 Lucy Admin 会话下的两段式 `turnId` / `accessLogs` 证据链支撑。

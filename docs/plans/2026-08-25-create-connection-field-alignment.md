@@ -1,7 +1,5 @@
 # 新建连接两列表单对齐 Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | 新建连接两列表单对齐 |

@@ -1,7 +1,5 @@
 # M16 System Overview Runtime Monitoring Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Reposition `/onboarding` from a one-time deployment guide into a post-launch system overview and runtime monitoring dashboard.
 
 **Architecture:** Keep the existing `/onboarding` route to avoid breaking bookmarks and tests, but change the information architecture, copy, and component structure to express ongoing runtime status. Reuse existing React Query data sources from `Onboarding.tsx`; this is a front-end refactor with no API or data model changes.

@@ -1,7 +1,5 @@
 # M58 Help Q&A Section Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** 升级 `docs/SYSTEM_HANDBOOK.md` §0 常见问题速查为按 3 种用户角色分组的 Q&A（开发者 / 管理员 / 接入协作者），每条 Q&A 一句话答 + 跳到正文章节深链 + 关键术语 inline code 化；§6 FAQ 与排障指南 保持不变；补 3 条 `SECTION_ALIASES`；不引入搜索、不暴露到 MCP 工具面、不改 Help API 与 Markdown 渲染器。
 
 **Architecture:** 文档层（handbook §0 重组 + 术语 inline code 化）+ 后端测试层（验证 3 个 H3 子节被 parseHelpToc 正确收）+ 前端测试层（验证 §0 渲染 + 角色子节 + inline code 节点 + 深链可达 + 不出现 forbidden 术语）。Help API / Markdown 渲染器 / Wiki 编辑能力 / KTX upstream 全部保持不变。

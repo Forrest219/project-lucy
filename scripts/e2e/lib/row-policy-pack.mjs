@@ -1,6 +1,6 @@
 // Row-policy real e2e pack (strength B) — registry, constants, phase membership.
 //
-// Authority: docs/superpowers/specs/2026-11-04-row-policy-real-e2e-pack-design.md
+// Authority: docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md
 // Execution ids: ROW25 (access-v025), RTP25/RTV25 (row-policy-templates-v025), BY-01..19.
 
 import path from "node:path";

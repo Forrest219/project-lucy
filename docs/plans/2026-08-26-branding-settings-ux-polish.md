@@ -1,7 +1,5 @@
 # Branding Settings UX Polish Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Refine the existing branding settings page so Logo management, brand preview, default-value semantics, save state, and accessibility are clear and testable without changing the global app-shell layout.
 
 **Architecture:** Keep the change local to `BrandingSettings.tsx` and its focused component test. Reuse the existing Lucy design-system classes and shared `BrandMark`; add no new global component or color/typography primitive. Derive clean/dirty form state from the fetched overrides, render contextual sidebar/login preview surfaces, and keep the native file input accessible while visually hidden.

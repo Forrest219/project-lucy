@@ -1,7 +1,5 @@
 # M33 Business Wiki Read/Edit Workbench Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Upgrade `/wiki` from a Markdown file editor into a SaaS-grade Business Wiki workbench with default reading, focused editing, save preflight, tree navigation and semantic-object links.
 
 **Architecture:** Keep the existing Wiki API contract and Markdown storage model. Refactor the frontend into read/edit subviews, introduce a Save Preflight flow over the existing dry-run API, and progressively enhance navigation and semantic links without adding YAML upload or backend write paths.

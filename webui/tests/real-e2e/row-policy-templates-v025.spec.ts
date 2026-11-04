@@ -1,7 +1,7 @@
 // RTP25-01..10 and RTV25-01..08 — real template writes and per-table reverse lookup.
 //
 // Authority: docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md §8
-//   and docs/superpowers/specs/2026-11-04-row-policy-real-e2e-pack-design.md §1 / §3.
+//   and docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md §1 / §3.
 // Each test title is RTP_RTV_OWNER_SYMBOLS so `run-row-policy-b --grep` selects one id.
 // coversV025 lists only the id that test's assertions evaluate.
 // Table identity is mysql-aliyun / dataforai / superstore_orders.

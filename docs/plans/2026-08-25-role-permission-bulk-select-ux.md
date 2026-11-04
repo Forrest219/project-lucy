@@ -12,8 +12,6 @@
 | 适用范围 | 仅规划「允许的 MCP 工具」「可访问的表范围」选择交互优化；确认后再进入编码 |
 | 输出位置 | `docs/plans/2026-08-25-role-permission-bulk-select-ux.md` |
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** 在 Role 新建/编辑的「权限配置」中，让「允许的 MCP 工具」与「可访问的表范围 → 指定表名」支持全选/取消全选，并在候选 >10 时可用搜索快速定位，避免逐条滚动勾选。
 
 **Architecture:** 保持现有 checkbox 清单 + `TagInput` 回退结构；在清单上方补齐与「启用表范围」一致的批量工具条与本地过滤。优先抽一个小组件复用于工具与表，避免两处逻辑分叉。不改 ACL / `access.yaml` 语义。

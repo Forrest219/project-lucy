@@ -1,7 +1,5 @@
 # Spec 160 P1 Remediation Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Close every P1 raised by the Spec 160 v0.3 acceptance review, add interaction-level regression coverage, and re-run the delivery gates.
 
 **Architecture:** Keep the endpoint decision as a server-enforced soft gate, but make every `ktx.yaml` write share one in-process queue. Reuse paths must bypass the live-catalog cache and all supported database types must have an explicit catalog query. The shared conflict panel owns retry presentation while each caller owns the actual read/add action.

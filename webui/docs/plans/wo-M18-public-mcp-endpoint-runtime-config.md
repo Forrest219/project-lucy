@@ -1,7 +1,5 @@
 # M18 Public MCP Endpoint Runtime Config Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make Lucy's advertised MCP endpoint a single deployment/runtime configuration consumed by all WebUI MCP config surfaces.
 
 **Architecture:** Add a backend runtime resolver for `LUCY_PUBLIC_MCP_URL`, expose the resolved endpoint through `GET /api/project`, and refactor frontend MCP config generation to use one shared helper and one API field. Preserve local development through an explicit fallback state while preventing customer deployments from silently copying guessed `localhost`, `127.0.0.1`, or browser-derived endpoints.

@@ -1,7 +1,5 @@
 # M25 Connection And Semantic Layer Boundary Automation Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make the database connection vs semantic-layer maintenance boundary explicit and enforceable through terminology, UI copy, API asset kind, upload validation, lint automation, and Review checklist prompts.
 
 **Architecture:** Keep the existing static Catalog Loading architecture. This work adds guardrails around the current controlled Schema Manifest upload and semantic asset publishing flows: explicit asset kind, route-aware validation, IA boundary lint, and small UI copy updates. It does not add physical database scanning or WebUI-created database connections.

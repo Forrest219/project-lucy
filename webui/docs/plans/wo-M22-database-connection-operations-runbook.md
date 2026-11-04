@@ -1,7 +1,5 @@
 # M22 Database Connection Operations Runbook Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Update Lucy's system handbook and Help Center so operations users can safely add any supported database connection through `ktx.yaml` and secrets, while understanding exactly what WebUI does and does not manage.
 
 **Architecture:** This is a documentation and Help Center governance task. Do not implement WebUI connection creation. Keep `ktx.yaml` and secret files as the source of truth for new physical database connections; WebUI remains the management surface for declared connections, Schema, table whitelist, YAML assets, local Catalog status, tests, and ACL observability.

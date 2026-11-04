@@ -1,7 +1,5 @@
 # Minimal RDS Data-Plane Gate Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** 把已批准的「最小化 RDS 迁移」收成可执行门禁：一推一／Strength B 只认 `row-policy` + `rds-mysql-readonly`；`security-e2e` 合成库明确不迁；禁止用错误 pack 跑 SEC-11 当证据。
 
 **Architecture:** 双包并存。`examples/row-policy-e2e` 是唯一 RDS 同步面（只读 `mysql-aliyun`／`cw_rds_bot`）。`examples/security-e2e` 继续 `fin-db` + 可选 `--apply-db`，服务非行权限 SEC／UX／fault。本计划不重绑 SEC-09／10／12／16／UX／ARV／AUD。只补：设计台账、SEC-11 错包拒绝、一推一入口硬校验、回归测试。
@@ -30,7 +28,7 @@
 
 | File | Responsibility |
 |---|---|
-| `docs/superpowers/specs/2026-11-04-row-policy-real-e2e-pack-design.md` §8.1 | 台账：已切／不迁／门禁 |
+| `docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md` §8.1 | 台账：已切／不迁／门禁 |
 | `scripts/e2e/lib/rds-dataplane-policy.mjs` | 纯函数：一推一／SEC-11 是否允许在当前 run 上执行 |
 | `scripts/e2e/__tests__/rds-dataplane-policy.test.mjs` | 上列策略的单测 |
 | `scripts/e2e/run-security.mjs` | 选中 SEC-11 时调用策略；非 RDS pack → blocked |
@@ -44,7 +42,7 @@
 ### Task 1: 设计台账收口（最小化批准）
 
 **Files:**
-- Modify: `docs/superpowers/specs/2026-11-04-row-policy-real-e2e-pack-design.md`（§8 决策表 + §8.1）
+- Modify: `docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md`（§8 决策表 + §8.1）
 - Modify: `examples/row-policy-e2e/README.md`（边界段）
 
 - [x] **Step 1: 在决策表追加一行**
@@ -327,7 +325,7 @@ Expected: pass
 ### Task 5: 收口自检与证据说明
 
 **Files:**
-- Modify: `docs/superpowers/specs/2026-11-04-row-policy-real-e2e-pack-design.md` §8.1（勾选「SEC-11 错包防护」为已落地，若 Task 3 完成）
+- Modify: `docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md` §8.1（勾选「SEC-11 错包防护」为已落地，若 Task 3 完成）
 
 - [x] **Step 1: 跑门禁相关测**
 
@@ -380,7 +378,7 @@ rds-mysql-readonly + readonlyProven for Strength B execute.
 
 ## Execution Handoff
 
-Plan saved to `docs/superpowers/plans/2026-11-04-minimal-rds-dataplane-plan.md`.
+Plan saved to `docs/plans/2026-11-04-minimal-rds-dataplane-plan.md`.
 
 **执行方式二选一：**
 

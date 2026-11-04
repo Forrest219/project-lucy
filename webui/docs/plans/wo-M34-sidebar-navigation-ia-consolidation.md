@@ -1,7 +1,5 @@
 # M34 Sidebar Navigation IA Consolidation Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Consolidate Lucy WebUI's left sidebar from 7 first-level groups to 5 lifecycle-aligned groups plus a top-level Dashboard entry, and harmonize the 6 second-level item names whose current wording is too technical / security-flavored for a B-end data-semantics product.
 
 > **v0.2 (2026-08-01)**: Data Heatmap 已下沉为 `/admin/audit?tab=heatmap` 内的 Tab，由 `wo-M35-data-heatmap-tab-subsumption` 跟踪实施。访问治理分组从 5 项收敛为 4 项（移除"数据热力"主导航项），原独立路由 `/admin/audit-sources` 保留为兼容重定向。

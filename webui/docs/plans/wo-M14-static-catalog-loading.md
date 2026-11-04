@@ -1,7 +1,5 @@
 # Static Catalog Loading Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Replace WebUI-triggered `ktx ingest` subprocesses with a zero-LLM static Catalog reload pipeline based only on `ktx.yaml` and `semantic-layer/**/*.yaml`.
 
 **Architecture:** Add a static `POST /api/catalog/reload` backend endpoint that re-reads local YAML assets and records bounded reload history in `.ktx-ui`. Safely downgrade `/api/connections/:connId/ingest` to a deprecated alias that never shells out. Refactor connection overview, whitelist, and Add Schema UI from Ingest semantics to Reload Catalog semantics.

@@ -1,7 +1,5 @@
 # Ingest First-Class UX Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Promote KTX ingest from a hidden follow-up action into a first-class WebUI capability across `/connections`, schema rows, `/connections/whitelist`, and Add Schema diagnostics.
 
 **Architecture:** Add a small Ingest run model and bounded sidecar history in `.ktx-ui`, extend the existing ingest endpoint to accept optional schema intent, and reuse shared React components for triggering ingest and inspecting stdout/stderr. M13 must remain compatible with current KTX behavior where only `ktx ingest <connection>` is guaranteed.

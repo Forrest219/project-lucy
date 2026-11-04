@@ -1,7 +1,5 @@
 # Agent Admin Enterprise Delivery Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Upgrade Lucy WebUI Agent Admin into an enterprise-ready delivery workflow for creating, handing off, editing, auditing, and rotating governed Agent access.
 
 **Architecture:** Reuse the existing role-first Admin API and Lucy MCP Proxy permission preview. Keep `access.yaml` writes behind dryRun diff confirmation, keep token plaintext one-time only, and implement the UX polish mostly in `AgentList.tsx`, `AgentDetail.tsx`, `NewToken.tsx`, shared helpers, and focused tests.

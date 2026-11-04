@@ -1,7 +1,5 @@
 # Admin Audit Dual CSV Export Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Give `/admin/audit` two explicit CSV exports: question-level「导出问询记录」and call-level「导出调用流水」, with matching Help guidance.
 
 **Architecture:** Keep the existing call export endpoint `/api/admin/audit/export` stable. Extract the turn-list assembly into a shared server helper and add `/api/admin/audit/turns/export` so list and export share the same filters and enrichment. Update the Audit page header to expose both export granularities while preserving the audit evidence pack action.

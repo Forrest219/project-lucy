@@ -6,8 +6,6 @@
 | 授权边界 | 只收口已经存在的产品行为，并删除发布类现行义务。不跑 E2E，不把发布编号改成通过，不改冻结发布目录，不打开 W-B，不把批量校验改成可发布计划 |
 | 验收 | 功能缺口有本机断言。发布编号从五条的现行状态删除。`npm run lint:spec-docs` 通过，0 条 stale-status |
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** 五条清单在功能上收口。发布类从现行状态删除，不再因为没执行而显示不通过。
 
 **Architecture:** 功能缺口只补本机断言和缺的页面展示。发布编号从功能 Spec、升级建议书、概览和索引的现行句里删除。场景若仍被发布目录引用，留在 E2E 主线和冻结 catalog，本任务不跑、不改通过、不删 catalog 行。

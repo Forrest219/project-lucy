@@ -8,7 +8,7 @@
 | 上游门 | 同 run 两阶段（先关后开） |
 | 夹具策略 | 方案 2：独立审判包（fork security-e2e 结构，**数据面改绑线上 RDS 只读**） |
 | 数据面 | 阿里云 RDS MySQL（AI Workspace「演示环境配置」）；账号 `cw_rds_bot` **只读**；**禁止**对本库 seed／DDL／DML |
-| 权威需求 | [`lucy-20261022-v2p5-row-permission-management-spec.md`](../../specs/lucy-20261022-v2p5-row-permission-management-spec.md) §9；[`lucy-20261025-v0p25-row-policy-templates-and-view-spec.md`](../../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) §8；[`v025-coverage.yaml`](../../../scripts/e2e/contracts/v025-coverage.yaml) ACCESS 旁线；`scripts/e2e/security/row-policy-cases.mjs` BY-01…19 |
+| 权威需求 | [`lucy-20261022-v2p5-row-permission-management-spec.md`](../specs/lucy-20261022-v2p5-row-permission-management-spec.md) §9；[`lucy-20261025-v0p25-row-policy-templates-and-view-spec.md`](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) §8；[`v025-coverage.yaml`](../../scripts/e2e/contracts/v025-coverage.yaml) ACCESS 旁线；`scripts/e2e/security/row-policy-cases.mjs` BY-01…19 |
 
 本条收口不表示可上线。本设计只授权「本机真实一推一」的夹具与执行形态，不改功能合同状态。
 

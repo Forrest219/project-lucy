@@ -1,7 +1,5 @@
 # 访问关系图图优先呈现 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 | 元数据 | 内容 |
 |---|---|
 | 文档版本 / 日期 | **v0.2** / 2026-11-01 |

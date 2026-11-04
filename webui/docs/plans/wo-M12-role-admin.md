@@ -1,7 +1,5 @@
 # Role Admin Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Build a WebUI Role Admin module so administrators can create, edit, preview, delete, and copy Agent roles without hand-editing `webui/config/access.yaml`.
 
 **Architecture:** Keep `access.yaml` as the only persisted permission source. Add role CRUD routes beside the existing Agent Admin routes, reuse the current ACL role preview/resolution helpers, and implement a React role management surface under `/admin/roles` with dryRun diff confirmation for every write.

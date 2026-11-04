@@ -2,8 +2,6 @@
 
 > **修订状态**: v0.2-cross-review（2026-08-01）— 已根据 [`review-spec40-m37.md`](review-spec40-m37.md) 的 3 blocker + 5 建议完成修订；待二次交叉验证。
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Bring Lucy WebUI's user-visible brand, terminology standard, design spec notes, and key test assertion in sync with the new `Data Agent Ops Control Plane` positioning declared in spec 39. Scope is intentionally narrow: positioning copy + notes + terminology + assertion only. M36's larger UX overhaul (ops dashboard, object detail drawer, action-required queue, publish risk workbench, quality operations, cross-module traceability) is out of scope and tracked in `wo-M36-data-agent-ops-platform-global-ux.md`.
 
 **Architecture:** Documentation + UI copy + test assertion changes only. No new components, no new routes, no API contract changes, no runtime config changes. One UI touch point (`webui/src/app/App.tsx` brand block + `app.css` two new utility classes) plus five documentation files plus one test file. Browser `<title>` is **not** modified.

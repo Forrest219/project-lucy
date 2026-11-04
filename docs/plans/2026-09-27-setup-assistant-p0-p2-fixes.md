@@ -1,7 +1,5 @@
 # Lucy Setup Assistant P0–P2 Fixes Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make Lucy Setup Assistant resume from authoritative connection state, enforce every required guard, report truthful service readiness, meet modal/form accessibility requirements, and reduce avoidable setup friction.
 
 **Architecture:** Keep Lucy's supported single-instance topology and existing APIs. Derive a typed setup snapshot from `GET /api/project`, `GET /api/sources`, connection probes, and `GET /api/admin/mcp-runtime/status`; local draft state may advance optional steps but may never override an unmet required guard. Each step remains independently writable through the current API, while the UI invalidates and rebuilds its snapshot after writes.

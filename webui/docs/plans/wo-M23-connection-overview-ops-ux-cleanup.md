@@ -1,7 +1,5 @@
 # M23 Connection Overview Operations UX Cleanup Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make the database connection overview safer and faster for operations users by separating operation levels, locking row-scoped Manifest uploads, standardizing Schema terminology, improving YAML editing, and making connection-test logs actionable.
 
 **Architecture:** This is a focused WebUI and API-contract cleanup over existing database access surfaces. Keep `ktx.yaml`, semantic-layer YAML, Catalog reload, Add Schema and connection-test behaviors on their current backends; adjust the presentation, contracts and tests so Connection-level, Schema-level and row-level operations are explicit.

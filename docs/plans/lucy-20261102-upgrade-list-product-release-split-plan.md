@@ -6,8 +6,6 @@
 | 授权边界 | 只改升级清单的现行归属。不改运行代码，不重跑产品测试，不把未执行的发布编号改成通过 |
 | 验收 | `npm run lint:spec-docs` 通过，0 条 stale-status |
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** 版本升级清单只保留产品合同。四条历史清单里的发布和现场验收不再决定该功能收口。
 
 **Architecture:** 不新建发布 Spec。场景文本留在原 Spec 或既有 QA 文件里，执行编号继续由 E2E 主线持有。升级建议书、概览和 Spec 头部只写产品出口。已有行为断言的产品合同收口；没有断言的产品承诺保持未收口。未执行的发布编号不改成通过。

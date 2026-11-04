@@ -1,7 +1,5 @@
 # M32 Semantic Publish Workbench IA Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Rename and restructure the current `/review` experience into a focused `语义发布` module with two second-level pages: `发布工作台` and `发布记录`.
 
 **Architecture:** This is an IA and workflow refactor over the existing Review page and semantic asset publish APIs. Keep the existing validate, publish, export, and reindex primitives, but expose them through user-facing publish language: publish automatically rebuilds the KTX index, while manual reindex remains a visible recovery action.

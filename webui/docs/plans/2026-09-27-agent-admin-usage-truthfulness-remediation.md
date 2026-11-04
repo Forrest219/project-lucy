@@ -1,7 +1,5 @@
 # Agent Admin Usage Truthfulness Remediation Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task.
-
 **Goal:** 让 `/admin/agents` 的最近访问、业务活跃、调用量、凭据使用和数据新鲜度准确反映用户真实使用行为。
 
 **Architecture:** 保留 `access_log` 的全部 MCP 协议与业务流水，集中复用协议请求分类；Agent API 在同一 7 天窗口内一次聚合业务/协议/凭据指标，并以显式状态传播不可用或部分可信。前端仅用业务调用判定活跃，展示双时间语义、Token 生命周期和审计完整性。

@@ -2,8 +2,6 @@
 
 > 先读 [README.md 总纲](README.md)。本工单是 M9 体验升级，范围集中在语义层维护的 `/`、`/sources/...`、`/joins/...`，优先改 `/sources/...` 单表编辑器。
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Upgrade semantic-layer maintenance so the table editor has stable metadata layout, Human/AI description collaboration, explicit overlay write hints, embedded candidate join actions, a cleaner inspector, and a DryRun shortcut.
 
 **Architecture:** Frontend-first refinement over existing WebUI APIs. Reuse `GET /api/sources`, `GET/PUT /api/sources/:conn/:schema/:table`, and `GET/PUT /api/joins/candidates`. Keep write rules unchanged: Human descriptions write to `descriptions.human`; grain/measures/segments write overlay; candidate/rejected joins stay in `.ktx-ui`; confirmed joins write formal YAML.

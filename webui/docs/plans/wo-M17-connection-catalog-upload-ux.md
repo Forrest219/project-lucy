@@ -1,7 +1,5 @@
 # M17 Connection Catalog Upload UX Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Turn database connection Catalog maintenance into a self-service WebUI workflow: simplify `/connections` IA, clarify Add Schema guidance, rename ambiguous reload actions, and let analysts upload validated local schema manifest YAML without relying on ops to copy files.
 
 **Architecture:** Preserve M14's zero-CLI static Catalog architecture. Add a controlled YAML asset upload API that validates and writes only `semantic-layer/<connection>/_schema/<schema>.yaml`, records bounded audit sidecar metadata, then calls the existing static `POST /api/catalog/reload`. Refactor the frontend around explicit actions: add schema, upload YAML, test connection, and refresh local directory.

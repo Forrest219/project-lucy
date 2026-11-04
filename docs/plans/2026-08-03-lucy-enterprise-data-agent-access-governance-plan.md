@@ -1,7 +1,5 @@
 # Lucy Enterprise Governance & Observability Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Build the 202608 Governance & Observability iteration so Lucy can explain, audit, observe, review, and package Agent / Role / Token access behavior as a trustworthy enterprise data agent platform.
 
 **Architecture:** Keep `access.yaml` as the access configuration fact source and `.ktx-ui/audit.sqlite` as the audit / Trace / Evidence hot store. Extend existing `/admin` pages and APIs rather than creating a new console; route risky governance actions through append-only evidence, tiered gates, reviewer evidence, and security regression cases.

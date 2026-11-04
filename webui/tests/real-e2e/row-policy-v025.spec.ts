@@ -1,7 +1,7 @@
 // ROW25 — real preview + MCP for the row-policy pack (RDS mysql-aliyun / superstore_orders).
 //
 // Authority: docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md §9
-//   and docs/superpowers/specs/2026-11-04-row-policy-real-e2e-pack-design.md §3.
+//   and docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md §3.
 // Each test title is ROW25_OWNER_SYMBOLS so `run-row-policy-b --grep` selects one id.
 // coversV025 lists only the id that test's assertions evaluate.
 // V04/V05 are compile-failure previews. V09 is the rp_all union. V10 is the

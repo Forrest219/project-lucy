@@ -1,7 +1,5 @@
 # WebUI Navigation Subtitle Copy Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Apply the approved enterprise-grade menu subtitle copy across Lucy WebUI and verify every affected route in a desktop browser.
 
 **Architecture:** Keep the existing 6+1 navigation IA and route structure. Update PageHeader descriptions in place, align command-palette navigation descriptions with the same page responsibilities, register the new “安全评测候选” term, and update documentation/tests that assert the affected copy. Preserve all unrelated worktree changes.

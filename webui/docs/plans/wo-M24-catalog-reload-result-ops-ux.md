@@ -1,7 +1,5 @@
 # M24 Catalog Reload Result Operations UX Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make `刷新本地目录` feedback on `/connections` read like a compact DataOps status and diagnostic workflow inside the current Connection Card.
 
 **Architecture:** This is a frontend-first UX refinement over the existing local Catalog reload flow. Keep the backend reload semantics unchanged; reshape the Connection Card so reload summary, Schema asset table and warning diagnostics share one context and can be tested as a stable UI contract.

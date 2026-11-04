@@ -1,7 +1,5 @@
 # M26 Help Markdown Rendering Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make the Help Center render `docs/SYSTEM_HANDBOOK.md` as real Markdown, starting with GFM pipe tables on `/help?section=deployment-checklist`.
 
 **Architecture:** Frontend-only enhancement over the existing fixed-source Help API. Keep `GET /api/help/handbook` unchanged, extend the local Markdown renderer with safe table parsing, preserve deep-link scrolling, and add regression tests around Help Center and Markdown preview behavior.
