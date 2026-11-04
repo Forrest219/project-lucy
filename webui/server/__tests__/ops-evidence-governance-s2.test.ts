@@ -53,6 +53,8 @@ const DEFAULT_QUERY: AccessMapQuery = {
   window: "168h",
   layer: "flat",
   trust: "confirmed",
+  inquiryKind: "management",
+  accessGrade: "exclude_connect",
   view: "map",
   focus: null
 };

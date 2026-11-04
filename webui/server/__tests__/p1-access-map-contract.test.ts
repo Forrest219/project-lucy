@@ -130,6 +130,9 @@ const DEFAULT_QUERY = {
   window: "168h" as const,
   layer: "flat" as const,
   trust: "confirmed" as const,
+  // Contract 用例打假授权／路径计数，放开 echo 以免无关联调用被滤掉。
+  inquiryKind: "all" as const,
+  accessGrade: "all" as const,
   view: "map" as const,
   focus: null
 };
@@ -187,12 +190,32 @@ function openAuditDb(): Database.Database {
       role_ids TEXT,
       token_label TEXT,
       tool TEXT NOT NULL DEFAULT 'lucy_query',
+      lucy_turn_id TEXT,
       eval_mark INTEGER,
       args_summary TEXT,
       outcome TEXT NOT NULL,
       permission_snapshot_hash TEXT,
       capability_digest TEXT,
       association_status TEXT
+    );
+    CREATE TABLE conversation_turns (
+      turn_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      question_source TEXT NOT NULL,
+      question_summary TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE inferred_turns (
+      inferred_turn_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      question_summary TEXT,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL
+    );
+    CREATE TABLE inferred_turn_access_logs (
+      inferred_turn_id TEXT NOT NULL,
+      access_log_id INTEGER NOT NULL,
+      PRIMARY KEY(inferred_turn_id, access_log_id)
     );
     CREATE TABLE access_log_sources (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

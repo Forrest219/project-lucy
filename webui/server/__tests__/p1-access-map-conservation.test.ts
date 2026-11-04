@@ -309,6 +309,7 @@ function openEmptyAuditDb(): Database.Database {
       role_ids TEXT,
       token_label TEXT,
       tool TEXT NOT NULL DEFAULT 'lucy_query',
+      lucy_turn_id TEXT,
       eval_mark INTEGER,
       args_summary TEXT,
       outcome TEXT NOT NULL,
@@ -328,6 +329,25 @@ function openEmptyAuditDb(): Database.Database {
       roles_json TEXT,
       resolved_json TEXT,
       capability_digest TEXT
+    );
+    CREATE TABLE conversation_turns (
+      turn_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      question_source TEXT NOT NULL,
+      question_summary TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE inferred_turns (
+      inferred_turn_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      question_summary TEXT,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL
+    );
+    CREATE TABLE inferred_turn_access_logs (
+      inferred_turn_id TEXT NOT NULL,
+      access_log_id INTEGER NOT NULL,
+      PRIMARY KEY(inferred_turn_id, access_log_id)
     );
   `);
   return db;
@@ -406,6 +426,8 @@ describe("P1-3 §10 — SC-02 流带宽度守恒", () => {
           window: "168h",
           layer,
           trust: "confirmed",
+          inquiryKind: "all",
+          accessGrade: "all",
           view: "map",
           focus: null
         });
@@ -471,6 +493,8 @@ describe("P1-3 §10 — SC-02 流带宽度守恒", () => {
       window: "168h",
       layer: "flat",
       trust: "confirmed",
+      inquiryKind: "all",
+      accessGrade: "all",
       view: "map",
       focus: null
     });

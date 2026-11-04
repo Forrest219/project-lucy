@@ -8,6 +8,9 @@
  * 断言针对**行为**（守恒、四口径、快照证据分档、Token 只过滤访问层），
  * 不是「函数存在」。每条失败关闭场景都有对应用例。
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import Fastify from "fastify";
 import Database from "better-sqlite3";
@@ -19,6 +22,7 @@ import {
   buildAccessMap,
   buildGrantLayer,
   countOrphanGrants,
+  mergeLayers,
   parseAccessMapQuery,
   splitTableParam,
   type AccessMapAccessSide,
@@ -29,6 +33,12 @@ import {
   type AccessMapQuery,
   type AccessMapRoleContribution
 } from "../admin/access-map.js";
+import {
+  buildBandED,
+  resolveTurn,
+  type EchoRebuildFn
+} from "../admin/access-map-echo.js";
+import { SESSION_VISIT_SUMMARY_PREFIX } from "../proxy/audit.js";
 
 const DEFAULT_QUERY: AccessMapQuery = {
   agent: null,
@@ -39,8 +49,17 @@ const DEFAULT_QUERY: AccessMapQuery = {
   window: "168h",
   layer: "flat",
   trust: "confirmed",
+  inquiryKind: "management",
+  accessGrade: "exclude_connect",
   view: "map",
   focus: null
+};
+
+/** Isolates trust／window／token SQL tests from inquiry／grade echo filters. */
+const ALL_ECHO_QUERY: AccessMapQuery = {
+  ...DEFAULT_QUERY,
+  inquiryKind: "all",
+  accessGrade: "all"
 };
 
 function source(connectionId: string, schema: string, sourceName: string) {
@@ -610,6 +629,8 @@ describe("P1-3 访问关系图 · URL 参数（§6.3）", () => {
     expect(parsed.query.window).toBe("168h");
     expect(parsed.query.layer).toBe("flat");
     expect(parsed.query.trust).toBe("confirmed");
+    expect(parsed.query.inquiryKind).toBe("management");
+    expect(parsed.query.accessGrade).toBe("exclude_connect");
     expect(parsed.query.view).toBe("map");
 
     const full = parseAccessMapQuery({
@@ -621,6 +642,8 @@ describe("P1-3 访问关系图 · URL 参数（§6.3）", () => {
       window: "24h",
       layer: "schema",
       trust: "include_candidate",
+      inquiryKind: "session_visit",
+      accessGrade: "query",
       view: "table",
       focus: "agent:agent_a"
     });
@@ -635,6 +658,8 @@ describe("P1-3 访问关系图 · URL 参数（§6.3）", () => {
       window: "24h",
       layer: "schema",
       trust: "include_candidate",
+      inquiryKind: "session_visit",
+      accessGrade: "query",
       view: "table",
       focus: "agent:agent_a"
     });
@@ -665,6 +690,55 @@ describe("P1-3 访问关系图 · URL 参数（§6.3）", () => {
       sourceName: "table"
     });
     expect(splitTableParam("conn::schema")).toBeNull();
+  });
+});
+
+describe("访问关系图 · audit-echo URL（SC-03／SC-09／SC-19）", () => {
+  it("SC-03 — 参数缺席 → inquiryKind=management、accessGrade=exclude_connect", () => {
+    const parsed = parseAccessMapQuery({});
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.query.inquiryKind).toBe("management");
+    expect(parsed.query.accessGrade).toBe("exclude_connect");
+  });
+
+  it("SC-19 — 非法 inquiryKind／accessGrade → 400；与非法 trust 同现仍 400", () => {
+    const badKind = parseAccessMapQuery({ inquiryKind: "nope" });
+    expect(badKind.ok).toBe(false);
+    if (badKind.ok) return;
+    expect(badKind.error.param).toBe("inquiryKind");
+    expect(badKind.error.code).toBe("INVALID_ACCESS_MAP_PARAMETER");
+
+    const badGrade = parseAccessMapQuery({ accessGrade: "nope" });
+    expect(badGrade.ok).toBe(false);
+    if (badGrade.ok) return;
+    expect(badGrade.error.param).toBe("accessGrade");
+
+    // 与非法 trust 同现：先撞上的参数报 400（trust 校验在前）。
+    const both = parseAccessMapQuery({ trust: "everything", inquiryKind: "nope" });
+    expect(both.ok).toBe(false);
+    if (both.ok) return;
+    expect(both.error.param).toBe("trust");
+  });
+
+  it("SC-09 — 非法 trust 仍 400（机制与 inquiryKind／accessGrade 一致）", () => {
+    const bad = parseAccessMapQuery({ trust: "everything" });
+    expect(bad.ok).toBe(false);
+    if (bad.ok) return;
+    expect(bad.error.param).toBe("trust");
+    expect(bad.error.code).toBe("INVALID_ACCESS_MAP_PARAMETER");
+  });
+
+  it("路由对非法 inquiryKind／accessGrade 返回 400", async () => {
+    const app = Fastify();
+    registerAccessMapRoutes(app, provider(grantSide(), accessSide([])));
+    const kindRes = await app.inject({ method: "GET", url: "/api/admin/access-map?inquiryKind=nope" });
+    expect(kindRes.statusCode).toBe(400);
+    expect(kindRes.json().data.param).toBe("inquiryKind");
+    const gradeRes = await app.inject({ method: "GET", url: "/api/admin/access-map?accessGrade=nope" });
+    expect(gradeRes.statusCode).toBe(400);
+    expect(gradeRes.json().data.param).toBe("accessGrade");
+    await app.close();
   });
 });
 
@@ -745,6 +819,7 @@ describe("P1-3 访问关系图 · 真实 provider 的审计读取（SQL 口径�
         role_ids TEXT,
         token_label TEXT,
         tool TEXT NOT NULL DEFAULT 'lucy_query',
+        lucy_turn_id TEXT,
         eval_mark INTEGER,
         args_summary TEXT,
         outcome TEXT NOT NULL,
@@ -764,6 +839,25 @@ describe("P1-3 访问关系图 · 真实 provider 的审计读取（SQL 口径�
         roles_json TEXT,
         resolved_json TEXT,
         capability_digest TEXT
+      );
+      CREATE TABLE conversation_turns (
+        turn_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        question_source TEXT NOT NULL,
+        question_summary TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE inferred_turns (
+        inferred_turn_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        question_summary TEXT,
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL
+      );
+      CREATE TABLE inferred_turn_access_logs (
+        inferred_turn_id TEXT NOT NULL,
+        access_log_id INTEGER NOT NULL,
+        PRIMARY KEY(inferred_turn_id, access_log_id)
       );
     `);
     const insertLog = db.prepare(
@@ -798,22 +892,38 @@ describe("P1-3 访问关系图 · 真实 provider 的审计读取（SQL 口径�
       "cap-1"
     );
 
-    const provider = createAdminAccessMapProvider({ openAuditDb: async () => db });
+    const mapProvider = createAdminAccessMapProvider({ openAuditDb: async () => db });
     const window = { startIso: "2026-10-18T00:00:00.000Z", endIso: "2026-10-25T00:00:00.000Z", asOf: "2026-10-25T00:00:00.000Z" };
+    const echoAll = { inquiryKind: "all" as const, accessGrade: "all" as const };
 
-    const confirmed = await provider.loadAccessSide({ window, trust: "confirmed", tokenLabel: null });
+    const confirmed = await mapProvider.loadAccessSide({
+      window,
+      trust: "confirmed",
+      tokenLabel: null,
+      ...echoAll
+    });
     expect(confirmed.state).toBe("ok");
     if (confirmed.state !== "ok") return;
     const confirmedTables = confirmed.rows.map((row) => row.sourceName).sort();
     // 候选口径与窗口外记录都不进来。
     expect(confirmedTables).toEqual(["orders", "orders"]);
 
-    const withCandidate = await provider.loadAccessSide({ window, trust: "include_candidate", tokenLabel: null });
+    const withCandidate = await mapProvider.loadAccessSide({
+      window,
+      trust: "include_candidate",
+      tokenLabel: null,
+      ...echoAll
+    });
     expect(withCandidate.state).toBe("ok");
     if (withCandidate.state !== "ok") return;
     expect(withCandidate.rows.map((row) => row.sourceName).sort()).toEqual(["orders", "orders", "returns"]);
 
-    const tokenScoped = await provider.loadAccessSide({ window, trust: "confirmed", tokenLabel: "p0-demo" });
+    const tokenScoped = await mapProvider.loadAccessSide({
+      window,
+      trust: "confirmed",
+      tokenLabel: "p0-demo",
+      ...echoAll
+    });
     expect(tokenScoped.state).toBe("ok");
     if (tokenScoped.state !== "ok") return;
     expect(tokenScoped.rows.every((row) => row.tokenLabel === "p0-demo")).toBe(true);
@@ -831,15 +941,17 @@ describe("P1-3 访问关系图 · 真实 provider 的审计读取（SQL 口径�
   });
 
   it("审计库打不开 → 访问层不可用（授权骨架仍可渲染）", async () => {
-    const provider = createAdminAccessMapProvider({
+    const mapProvider = createAdminAccessMapProvider({
       openAuditDb: async () => {
         throw new Error("audit store unavailable");
       }
     });
-    const access = await provider.loadAccessSide({
+    const access = await mapProvider.loadAccessSide({
       window: { startIso: "2026-10-18T00:00:00.000Z", endIso: "2026-10-25T00:00:00.000Z", asOf: "2026-10-25T00:00:00.000Z" },
       trust: "confirmed",
-      tokenLabel: null
+      tokenLabel: null,
+      inquiryKind: "all",
+      accessGrade: "all"
     });
     expect(access.state).toBe("unavailable");
   });
@@ -951,6 +1063,7 @@ describe("P1-3 §10 — SC-05 访问层信任口径", () => {
         role_ids TEXT,
         token_label TEXT,
         tool TEXT NOT NULL DEFAULT 'lucy_query',
+        lucy_turn_id TEXT,
         eval_mark INTEGER,
         args_summary TEXT,
         outcome TEXT NOT NULL,
@@ -970,6 +1083,25 @@ describe("P1-3 §10 — SC-05 访问层信任口径", () => {
         roles_json TEXT,
         resolved_json TEXT,
         capability_digest TEXT
+      );
+      CREATE TABLE conversation_turns (
+        turn_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        question_source TEXT NOT NULL,
+        question_summary TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE inferred_turns (
+        inferred_turn_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        question_summary TEXT,
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL
+      );
+      CREATE TABLE inferred_turn_access_logs (
+        inferred_turn_id TEXT NOT NULL,
+        access_log_id INTEGER NOT NULL,
+        PRIMARY KEY(inferred_turn_id, access_log_id)
       );
     `);
     const ts = new Date(Date.now() - 3_600_000).toISOString();
@@ -1000,14 +1132,14 @@ describe("P1-3 §10 — SC-05 访问层信任口径", () => {
     const parsed = parseAccessMapQuery({});
     if (parsed.ok) expect(parsed.query.trust).toBe("confirmed");
 
-    // 默认口径下候选记录不计入访问内核。
-    const confirmed = await buildAccessMap(hybrid, DEFAULT_QUERY);
+    // 本用例只打假 trust；inquiryKind／accessGrade 放开以免无关联调用被 echo 滤掉。
+    const confirmed = await buildAccessMap(hybrid, { ...ALL_ECHO_QUERY, trust: "confirmed" });
     expect(confirmed.meta.access.trust).toBe("confirmed");
     expect(confirmed.meta.counts.accessPaths).toBe(1);
 
     // 切到含候选口径后计入。
     const withCandidate = await buildAccessMap(hybrid, {
-      ...DEFAULT_QUERY,
+      ...ALL_ECHO_QUERY,
       trust: "include_candidate"
     });
     expect(withCandidate.meta.access.trust).toBe("include_candidate");
@@ -1154,5 +1286,633 @@ describe("P1-3 §10 — SC-13 快照覆盖率披露", () => {
     expect(coverage.missingOrInvalid).toBe(2);
     expect(response.meta.signals.needsReviewEdges).toBeGreaterThan(0);
     expect(response.meta.signals.confirmedUnauthorizedEdges).not.toBe(coverage.ratio);
+  });
+});
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Spec lucy-20261102-access-map-audit-echo — S1 服务端（SC-10–SC-16）
+ * 夹具用预写期望 call id 集逐项比较，禁止只比数量。
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+const ECHO_WINDOW = {
+  startIso: "2026-10-18T00:00:00.000Z",
+  endIso: "2026-10-25T00:00:00.000Z",
+  asOf: "2026-10-25T00:00:00.000Z"
+};
+
+function openEchoDb(): Database.Database {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE access_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      matched_role_id TEXT,
+      role_ids TEXT,
+      token_label TEXT,
+      tool TEXT NOT NULL DEFAULT 'lucy_query',
+      lucy_turn_id TEXT,
+      eval_mark INTEGER,
+      args_summary TEXT,
+      outcome TEXT NOT NULL,
+      permission_snapshot_hash TEXT,
+      capability_digest TEXT,
+      association_status TEXT
+    );
+    CREATE TABLE access_log_sources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      access_log_id INTEGER NOT NULL,
+      connection_id TEXT,
+      schema_name TEXT,
+      source_name TEXT
+    );
+    CREATE TABLE permission_snapshots (
+      hash TEXT PRIMARY KEY,
+      roles_json TEXT,
+      resolved_json TEXT,
+      capability_digest TEXT
+    );
+    CREATE TABLE conversation_turns (
+      turn_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      question_source TEXT NOT NULL,
+      question_summary TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE inferred_turns (
+      inferred_turn_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      question_summary TEXT,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL
+    );
+    CREATE TABLE inferred_turn_access_logs (
+      inferred_turn_id TEXT NOT NULL,
+      access_log_id INTEGER NOT NULL,
+      PRIMARY KEY(inferred_turn_id, access_log_id)
+    );
+  `);
+  return db;
+}
+
+function insertEchoCall(
+  db: Database.Database,
+  input: {
+    ts?: string;
+    userId?: string;
+    roleId?: string;
+    token?: string;
+    tool?: string;
+    lucyTurnId?: string | null;
+    outcome?: string;
+    association?: string;
+    connectionId?: string;
+    schema?: string;
+    sourceName?: string;
+    sources?: Array<{ connectionId: string; schema: string; sourceName: string }>;
+  }
+): string {
+  const info = db
+    .prepare(
+      `INSERT INTO access_log (ts, user_id, matched_role_id, role_ids, token_label, tool, lucy_turn_id,
+        outcome, permission_snapshot_hash, capability_digest, association_status)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, ?)`
+    )
+    .run(
+      input.ts ?? "2026-10-19T12:00:00.000Z",
+      input.userId ?? "agent_a",
+      input.roleId ?? "role_reader",
+      input.token ?? "p0-demo",
+      input.tool ?? "lucy_query",
+      input.lucyTurnId ?? null,
+      input.outcome ?? "allow",
+      input.association ?? "confirmed"
+    );
+  const callId = String(info.lastInsertRowid);
+  const sources =
+    input.sources ??
+    [
+      {
+        connectionId: input.connectionId ?? "mysql_main",
+        schema: input.schema ?? "finance",
+        sourceName: input.sourceName ?? "orders"
+      }
+    ];
+  const insertSource = db.prepare(
+    `INSERT INTO access_log_sources (access_log_id, connection_id, schema_name, source_name)
+     VALUES (?, ?, ?, ?)`
+  );
+  for (const source of sources) {
+    insertSource.run(Number(callId), source.connectionId, source.schema, source.sourceName);
+  }
+  return callId;
+}
+
+function insertReportedTurn(
+  db: Database.Database,
+  turnId: string,
+  opts: { questionSource?: string; questionSummary?: string; userId?: string } = {}
+): void {
+  db.prepare(
+    `INSERT INTO conversation_turns (turn_id, user_id, question_source, question_summary, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(
+    turnId,
+    opts.userId ?? "agent_a",
+    opts.questionSource ?? "reported",
+    opts.questionSummary ?? "真实业务问题",
+    "2026-10-19T11:00:00.000Z"
+  );
+}
+
+function insertInferredTurn(
+  db: Database.Database,
+  inferredId: string,
+  callIds: string[],
+  opts: { questionSummary?: string; userId?: string } = {}
+): void {
+  db.prepare(
+    `INSERT INTO inferred_turns (inferred_turn_id, user_id, question_summary, started_at, ended_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(
+    inferredId,
+    opts.userId ?? "agent_a",
+    opts.questionSummary ?? "未上报问询摘要",
+    "2026-10-19T11:00:00.000Z",
+    "2026-10-19T12:00:00.000Z"
+  );
+  const link = db.prepare(
+    `INSERT INTO inferred_turn_access_logs (inferred_turn_id, access_log_id) VALUES (?, ?)`
+  );
+  for (const callId of callIds) link.run(inferredId, Number(callId));
+}
+
+function echoFilter(overrides: Partial<{
+  trust: "confirmed" | "include_candidate";
+  inquiryKind: AccessMapQuery["inquiryKind"];
+  accessGrade: AccessMapQuery["accessGrade"];
+  tokenLabel: string | null;
+}> = {}) {
+  return {
+    window: { startIso: ECHO_WINDOW.startIso, endIso: ECHO_WINDOW.endIso },
+    trust: overrides.trust ?? ("confirmed" as const),
+    inquiryKind: overrides.inquiryKind ?? ("management" as const),
+    accessGrade: overrides.accessGrade ?? ("exclude_connect" as const),
+    tokenLabel: overrides.tokenLabel ?? null
+  };
+}
+
+async function bandE(
+  db: Database.Database,
+  overrides: Parameters<typeof echoFilter>[0] = {}
+): Promise<Set<string>> {
+  const result = await buildBandED(echoFilter(overrides), db, {
+    ensureInquiryRebuild: async () => undefined
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return new Set();
+  return result.band.E;
+}
+
+function expectCallSet(actual: Iterable<string>, expected: string[]): void {
+  expect([...actual].sort()).toEqual([...expected].sort());
+}
+
+describe("访问关系图 · audit-echo 投影集合（SC-10–SC-16）", () => {
+  it("SC-10 — 仅推断关联的会话访问：缺省 inquiryKind 不进 E；session_visit／all 可进", async () => {
+    const db = openEchoDb();
+    const visitCall = insertEchoCall(db, { tool: "lucy_query", sourceName: "orders" });
+    insertInferredTurn(db, "inf_visit_1", [visitCall], {
+      questionSummary: `${SESSION_VISIT_SUMMARY_PREFIX}Cursor`
+    });
+    const expectedVisit = [visitCall];
+
+    expectCallSet(await bandE(db, { inquiryKind: "management" }), []);
+    expectCallSet(await bandE(db, { inquiryKind: "session_visit" }), expectedVisit);
+    expectCallSet(await bandE(db, { inquiryKind: "all" }), expectedVisit);
+    db.close();
+  });
+
+  it("SC-11 — 连接级工具：缺省 accessGrade 不进 E；connect／all 且仍有 sources 时可进", async () => {
+    const db = openEchoDb();
+    const connectCall = insertEchoCall(db, {
+      tool: "initialize",
+      lucyTurnId: "turn_real_1",
+      sourceName: "orders"
+    });
+    insertReportedTurn(db, "turn_real_1");
+    const expected = [connectCall];
+
+    expectCallSet(await bandE(db, { accessGrade: "exclude_connect" }), []);
+    expectCallSet(await bandE(db, { accessGrade: "connect" }), expected);
+    expectCallSet(await bandE(db, { accessGrade: "all" }), expected);
+    db.close();
+  });
+
+  it("SC-12 — 关联五态 + 重建失败 → unavailable", async () => {
+    const db = openEchoDb();
+
+    // 1) 显式关联（真实问询）
+    const explicit = insertEchoCall(db, { lucyTurnId: "turn_explicit", sourceName: "orders" });
+    insertReportedTurn(db, "turn_explicit");
+
+    // 2) 仅推断（未上报）
+    const inferredOnly = insertEchoCall(db, { sourceName: "returns" });
+    insertInferredTurn(db, "inf_only", [inferredOnly], { questionSummary: "未上报摘要" });
+
+    // 3) 二者同时：显式优先（显式=真实；推断即使是会话访问也不改种类）
+    const both = insertEchoCall(db, { lucyTurnId: "turn_both", sourceName: "people" });
+    insertReportedTurn(db, "turn_both");
+    insertInferredTurn(db, "inf_both", [both], {
+      questionSummary: `${SESSION_VISIT_SUMMARY_PREFIX}Other`
+    });
+    expect(resolveTurn({ id: both, lucyTurnId: "turn_both" }, db)?.source).toBe("reported");
+
+    // 4) 悬空显式键
+    const dangling = insertEchoCall(db, { lucyTurnId: "turn_missing", sourceName: "ghost" });
+
+    // 5) 无关联
+    const unlinked = insertEchoCall(db, {
+      sourceName: "orphan_tbl",
+      connectionId: "mysql_main",
+      schema: "finance"
+    });
+
+    const managementE = await bandE(db, { inquiryKind: "management" });
+    expectCallSet(managementE, [explicit, inferredOnly, both]);
+    expect(managementE.has(dangling)).toBe(false);
+    expect(managementE.has(unlinked)).toBe(false);
+
+    const allE = await bandE(db, { inquiryKind: "all" });
+    expectCallSet(allE, [explicit, inferredOnly, both, dangling, unlinked]);
+
+    // 重建失败 → unavailable（不得空 E 冒充无关联）
+    const failing = createAdminAccessMapProvider({
+      openAuditDb: async () => db,
+      ensureInquiryRebuild: async () => {
+        throw new Error("rebuild boom");
+      }
+    });
+    const access = await failing.loadAccessSide({
+      window: ECHO_WINDOW,
+      trust: "confirmed",
+      tokenLabel: null,
+      inquiryKind: "management",
+      accessGrade: "exclude_connect"
+    });
+    expect(access.state).toBe("unavailable");
+    if (access.state === "unavailable") {
+      expect(access.reason).toContain("重建");
+    }
+    db.close();
+  });
+
+  it("SC-12 — 先开关系图／先开审计页：重建准备后 E 一致", async () => {
+    /** 模拟审计／关系图共用的推断重建：把尚无显式键、尚未挂 inferred 的调用链上。 */
+    const linkPendingInferred: EchoRebuildFn = async ({ db }) => {
+      const sqlite = db as unknown as Database.Database;
+      const orphans = sqlite
+        .prepare(
+          `SELECT al.id AS id FROM access_log al
+           WHERE (al.lucy_turn_id IS NULL OR trim(al.lucy_turn_id) = '')
+             AND NOT EXISTS (
+               SELECT 1 FROM inferred_turn_access_logs x WHERE x.access_log_id = al.id
+             )`
+        )
+        .all() as Array<{ id: number }>;
+      for (const row of orphans) {
+        const inferredId = `inf_order_${row.id}`;
+        sqlite
+          .prepare(
+            `INSERT OR IGNORE INTO inferred_turns
+               (inferred_turn_id, user_id, question_summary, started_at, ended_at)
+             VALUES (?, 'agent_a', '未上报摘要', '2026-10-19T11:00:00.000Z', '2026-10-19T12:00:00.000Z')`
+          )
+          .run(inferredId);
+        sqlite
+          .prepare(
+            `INSERT OR IGNORE INTO inferred_turn_access_logs (inferred_turn_id, access_log_id)
+             VALUES (?, ?)`
+          )
+          .run(inferredId, row.id);
+      }
+    };
+
+    function seedPending(): { db: Database.Database; pending: string; explicit: string } {
+      const db = openEchoDb();
+      const pending = insertEchoCall(db, { sourceName: "orders" });
+      const explicit = insertEchoCall(db, {
+        lucyTurnId: "turn_order_explicit",
+        sourceName: "returns"
+      });
+      insertReportedTurn(db, "turn_order_explicit");
+      return { db, pending, explicit };
+    }
+
+    // 对照：不重建时，pending 在 management 下不进 E
+    const baseline = seedPending();
+    expectCallSet(await bandE(baseline.db, { inquiryKind: "management" }), [baseline.explicit]);
+    baseline.db.close();
+
+    // 顺序 A：先开关系图（buildBandED 触发重建）
+    const mapFirst = seedPending();
+    const bandMapFirst = await buildBandED(echoFilter({ inquiryKind: "management" }), mapFirst.db, {
+      ensureInquiryRebuild: linkPendingInferred
+    });
+    expect(bandMapFirst.ok).toBe(true);
+    if (!bandMapFirst.ok) return;
+    expectCallSet(bandMapFirst.band.E, [mapFirst.pending, mapFirst.explicit]);
+
+    // 顺序 B：先开审计页（先跑同一套重建），再开关系图（重建幂等）
+    const auditFirst = seedPending();
+    await linkPendingInferred({ db: auditFirst.db, userIds: ["agent_a"] });
+    const bandAuditFirst = await buildBandED(
+      echoFilter({ inquiryKind: "management" }),
+      auditFirst.db,
+      { ensureInquiryRebuild: linkPendingInferred }
+    );
+    expect(bandAuditFirst.ok).toBe(true);
+    if (!bandAuditFirst.ok) return;
+    expectCallSet(bandAuditFirst.band.E, [auditFirst.pending, auditFirst.explicit]);
+    expectCallSet(bandMapFirst.band.E, [...bandAuditFirst.band.E]);
+
+    mapFirst.db.close();
+    auditFirst.db.close();
+  });
+
+  it("SC-13 — E 与预写期望 id 集逐项相等；enteringAllowCallCount=|E|；半开上界", async () => {
+    const db = openEchoDb();
+    insertReportedTurn(db, "turn_a");
+    insertReportedTurn(db, "turn_b");
+    const inWindow = insertEchoCall(db, {
+      ts: "2026-10-24T23:59:59.000Z",
+      lucyTurnId: "turn_a",
+      sourceName: "orders"
+    });
+    const atEnd = insertEchoCall(db, {
+      ts: "2026-10-25T00:00:00.000Z",
+      lucyTurnId: "turn_b",
+      sourceName: "returns"
+    });
+    const expectedE = [inWindow];
+
+    const band = await buildBandED(echoFilter({ inquiryKind: "management" }), db, {
+      ensureInquiryRebuild: async () => undefined
+    });
+    expect(band.ok).toBe(true);
+    if (!band.ok) return;
+    expectCallSet(band.band.E, expectedE);
+    expect(band.band.E.has(atEnd)).toBe(false);
+
+    const mapProvider = createAdminAccessMapProvider({ openAuditDb: async () => db });
+    const hybrid: AccessMapProvider = {
+      loadGrantSide: async () => grantSide(),
+      loadAccessSide: (input) => mapProvider.loadAccessSide(input)
+    };
+    const response = await buildAccessMap(hybrid, {
+      ...DEFAULT_QUERY,
+      inquiryKind: "management",
+      accessGrade: "exclude_connect"
+    }, { injectedWindow: ECHO_WINDOW });
+    expect(response.meta.echo?.enteringAllowCallCount).toBe(expectedE.length);
+    expect(response.meta.echo?.enteringAllowCallCountBasis).toBe("pre_structure");
+    expect(response.meta.access.rawCalls).toBe(expectedE.length);
+    db.close();
+  });
+
+  it("SC-14 — ⋃I(e)=E；scope 后并集⊆E 且 enteringAllowCallCount 仍为 |E|；deny→D；layer 不改 E；逐边 accessCalls=|I(e)|", async () => {
+    const db = openEchoDb();
+    insertReportedTurn(db, "turn_a", { userId: "agent_a" });
+    insertReportedTurn(db, "turn_b", { userId: "agent_b" });
+    insertReportedTurn(db, "turn_deny_match");
+    insertReportedTurn(db, "turn_deny_skip");
+
+    const callA = insertEchoCall(db, {
+      userId: "agent_a",
+      lucyTurnId: "turn_a",
+      sourceName: "orders",
+      tool: "lucy_query"
+    });
+    // 同路径第二条允许调用：边上 |I(e)| 应变为 2，且不得把 Σ accessCalls 当成 |E|
+    const callA2 = insertEchoCall(db, {
+      userId: "agent_a",
+      lucyTurnId: "turn_a",
+      sourceName: "orders",
+      tool: "lucy_query",
+      ts: "2026-10-19T12:30:00.000Z"
+    });
+    // 另一个 Agent 上的允许调用：scope agent=agent_a 后应从返回边并集中消失。
+    const callB = insertEchoCall(db, {
+      userId: "agent_b",
+      roleId: "role_reader",
+      lucyTurnId: "turn_b",
+      sourceName: "returns",
+      tool: "lucy_query"
+    });
+    // 匹配筛选的 deny（应进 D，不进 E）
+    const denyMatch = insertEchoCall(db, {
+      lucyTurnId: "turn_deny_match",
+      sourceName: "orders",
+      outcome: "deny",
+      tool: "lucy_query"
+    });
+    // 不匹配 accessGrade 的 deny（connect 级；exclude_connect 下不进 B/D）
+    insertEchoCall(db, {
+      lucyTurnId: "turn_deny_skip",
+      sourceName: "orders",
+      outcome: "deny",
+      tool: "initialize"
+    });
+    // 多表源同一 deny：只计一次 D
+    const denyMulti = insertEchoCall(db, {
+      lucyTurnId: "turn_a",
+      outcome: "deny",
+      tool: "lucy_query",
+      sources: [
+        { connectionId: "mysql_main", schema: "finance", sourceName: "orders" },
+        { connectionId: "mysql_main", schema: "finance", sourceName: "returns" }
+      ]
+    });
+
+    const expectedE = [callA, callA2, callB];
+    const expectedD = [denyMatch, denyMulti];
+
+    const band = await buildBandED(echoFilter(), db, {
+      ensureInquiryRebuild: async () => undefined
+    });
+    expect(band.ok).toBe(true);
+    if (!band.ok) return;
+    expectCallSet(band.band.E, expectedE);
+    expectCallSet(band.band.D, expectedD);
+
+    const mapProvider = createAdminAccessMapProvider({ openAuditDb: async () => db });
+    const hybrid: AccessMapProvider = {
+      loadGrantSide: async () => grantSide(),
+      loadAccessSide: (input) => mapProvider.loadAccessSide(input)
+    };
+
+    const full = await buildAccessMap(hybrid, DEFAULT_QUERY, { injectedWindow: ECHO_WINDOW });
+    expect(full.meta.echo?.enteringAllowCallCount).toBe(3);
+    expect(full.meta.echo?.enteringAllowCallCountBasis).toBe("pre_structure");
+    expect(full.meta.access.deniedCalls).toBe(expectedD.length);
+    expect(full.meta.access.rawCalls).toBe(3);
+    // enteringAllowCallCount 等于预写 |E|，不得改写成 Σ accessCalls
+    expect(full.meta.echo?.enteringAllowCallCount).toBe(expectedE.length);
+
+    // 结构筛选前 ⋃I(e) 经由 access layer 核对
+    const accessSide = await mapProvider.loadAccessSide({
+      window: ECHO_WINDOW,
+      trust: "confirmed",
+      tokenLabel: null,
+      inquiryKind: "management",
+      accessGrade: "exclude_connect"
+    });
+    expect(accessSide.state).toBe("ok");
+    if (accessSide.state !== "ok") return;
+    const layer = buildAccessLayer({ rows: accessSide.rows, tokenLabel: null });
+    const unionIds = new Set(layer.paths.flatMap((path) => path.calls.map((call) => call.callId)));
+    expectCallSet(unionIds, expectedE);
+    expect(accessSide.deniedCalls).toBe(expectedD.length);
+
+    // 逐边 accessCalls(e) = |I(e)|：序列化值必须等于 mergeLayers 边上的调用 id 集合大小
+    const grantLayer = buildGrantLayer({ side: grantSide(), withSchema: false });
+    const merged = mergeLayers({
+      grant: grantLayer,
+      paths: layer.paths,
+      loadSnapshot: () => null,
+      withSchema: false
+    });
+    for (const edge of full.edges) {
+      const internal = merged.edges.get(edge.id);
+      expect(internal, `missing internal edge ${edge.id}`).toBeDefined();
+      if (!internal) continue;
+      expect(edge.accessCalls).toBe(internal.accessCallIds.size);
+    }
+    const agentReader = full.edges.find(
+      (edge) => edge.source === "agent:agent_a" && edge.target === "role:role_reader"
+    );
+    expect(agentReader?.accessCalls).toBe(2);
+    const sumAccessCalls = full.edges.reduce((sum, edge) => sum + edge.accessCalls, 0);
+    expect(sumAccessCalls).toBeGreaterThan(expectedE.length);
+    expect(full.meta.echo?.enteringAllowCallCount).not.toBe(sumAccessCalls);
+
+    // scope 到 agent_a 后：返回边并集只含 callA／callA2；enteringAllowCallCount 仍为 |E|
+    const grantWithB = grantSide({
+      agents: [
+        agent("agent_a", ["role_reader", "role_auditor"], [{ label: "p0-demo" }]),
+        agent("agent_b", ["role_reader"], [{ label: "p0-demo" }])
+      ],
+      contributions: [
+        {
+          agentId: "agent_a",
+          roleId: "role_reader",
+          sources: [
+            source("mysql_main", "finance", "orders"),
+            source("mysql_main", "finance", "returns")
+          ]
+        },
+        {
+          agentId: "agent_a",
+          roleId: "role_auditor",
+          sources: [source("mysql_main", "finance", "orders")]
+        },
+        {
+          agentId: "agent_b",
+          roleId: "role_reader",
+          sources: [source("mysql_main", "finance", "returns")]
+        }
+      ]
+    });
+    const hybridScoped: AccessMapProvider = {
+      loadGrantSide: async () => grantWithB,
+      loadAccessSide: (input) => mapProvider.loadAccessSide(input)
+    };
+    const scoped = await buildAccessMap(
+      hybridScoped,
+      { ...DEFAULT_QUERY, agent: "agent_a" },
+      { injectedWindow: ECHO_WINDOW }
+    );
+    expect(scoped.meta.echo?.enteringAllowCallCount).toBe(expectedE.length);
+    expect(scoped.meta.echo?.enteringAllowCallCountBasis).toBe("pre_structure");
+    expect(scoped.nodes.some((node) => node.id === "agent:agent_a")).toBe(true);
+    expect(scoped.nodes.some((node) => node.id === "agent:agent_b")).toBe(false);
+    const scopedAccessCalls = scoped.edges
+      .filter((edge) => edge.accessCalls > 0)
+      .reduce((sum, edge) => sum + edge.accessCalls, 0);
+    // agent_a 侧只剩 callA／callA2（多 Role 边可重复计，但不得把 enteringAllowCallCount 改成局部）
+    expect(scopedAccessCalls).toBeGreaterThan(0);
+    expect(scoped.meta.echo?.enteringAllowCallCount).toBe(expectedE.length);
+
+    // layer flat/schema 不改变 E
+    const flatE = await bandE(db);
+    const schemaMap = await buildAccessMap(
+      hybrid,
+      { ...DEFAULT_QUERY, layer: "schema" },
+      { injectedWindow: ECHO_WINDOW }
+    );
+    expect(schemaMap.meta.echo?.enteringAllowCallCount).toBe(flatE.size);
+    expect(schemaMap.meta.echo?.enteringAllowCallCount).toBe(expectedE.length);
+
+    db.close();
+  });
+
+  it("SC-15 — 仅改 inquiryKind／accessGrade 时授权骨架不变", async () => {
+    const db = openEchoDb();
+    insertReportedTurn(db, "turn_q");
+    insertEchoCall(db, { lucyTurnId: "turn_q", tool: "lucy_query", sourceName: "orders" });
+    insertEchoCall(db, {
+      lucyTurnId: "turn_q",
+      tool: "initialize",
+      sourceName: "orders"
+    });
+
+    const mapProvider = createAdminAccessMapProvider({ openAuditDb: async () => db });
+    const hybrid: AccessMapProvider = {
+      loadGrantSide: async () => grantSide(),
+      loadAccessSide: (input) => mapProvider.loadAccessSide(input)
+    };
+
+    const base = await buildAccessMap(hybrid, DEFAULT_QUERY, { injectedWindow: ECHO_WINDOW });
+    const kindAll = await buildAccessMap(
+      hybrid,
+      { ...DEFAULT_QUERY, inquiryKind: "all" },
+      { injectedWindow: ECHO_WINDOW }
+    );
+    const gradeAll = await buildAccessMap(
+      hybrid,
+      { ...DEFAULT_QUERY, accessGrade: "all" },
+      { injectedWindow: ECHO_WINDOW }
+    );
+
+    const skeleton = (response: typeof base) =>
+      response.edges.map((edge) => ({
+        id: edge.id,
+        grantPaths: edge.grantPaths,
+        grantUsers: edge.grantUsers
+      }));
+    expect(skeleton(kindAll)).toEqual(skeleton(base));
+    expect(skeleton(gradeAll)).toEqual(skeleton(base));
+    expect(base.meta.counts.grantPaths).toBe(kindAll.meta.counts.grantPaths);
+    expect(base.meta.counts.grantPaths).toBe(gradeAll.meta.counts.grantPaths);
+    db.close();
+  });
+
+  it("SC-16 — 无 access-map 私有第二份种类／等级枚举；复用既有模块", () => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const echoSrc = readFileSync(path.join(here, "../admin/access-map-echo.ts"), "utf8");
+    expect(echoSrc).toMatch(/from ["'].*audit-inquiry-kind/);
+    expect(echoSrc).toMatch(/from ["'].*usage-classification/);
+    expect(echoSrc).toMatch(/inquiryKindOfTurn/);
+    expect(echoSrc).toMatch(/inquiryKindMatches/);
+    expect(echoSrc).toMatch(/\baccessGrade\b/);
+    expect(echoSrc).not.toMatch(/ACCESS_QUERY_TOOLS|ACCESS_BROWSE_TOOLS|ACCESS_PREPARE_TOOLS/);
+    // 禁止 import／调用审计的非法回落解析（注释中点名除外）。
+    expect(echoSrc).not.toMatch(/import\s*\{[^}]*\bparseInquiryKindFilter\b/);
+    expect(echoSrc).not.toMatch(/import\s*\{[^}]*\bparseAccessGradeFilter\b/);
+    expect(echoSrc).not.toMatch(/\bparseInquiryKindFilter\s*\(/);
+    expect(echoSrc).not.toMatch(/\bparseAccessGradeFilter\s*\(/);
+    expect(echoSrc).not.toMatch(/SESSION_VISIT_SUMMARY_PREFIX/);
   });
 });

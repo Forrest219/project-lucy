@@ -24,6 +24,8 @@
 > **呈现修订（再修订，2026-11-01）**：数据语义、API、URL、边状态判定、两档措辞与 Token 过滤句**全部不变**。**首屏页壳**（三张信号 Metric Card、信号筛选 UI、两个独立宽条「口径说明」/「快照」）已被 [`docs/specs/lucy-20261101-access-map-chart-first-spec.md`](../../docs/specs/lucy-20261101-access-map-chart-first-spec.md) 取代：图例短行贴图正上方，口径与快照沉底为单个弱入口「口径与快照」，图区抬高、栏距加大、悬停改为可读浮层。本文 §7.4 图例的**四项线型释义**不变，只是窗口 ISO 与访问口径从图例短行挪进弱入口。着色、抽屉、数据表与凭证表沿用 2026-10-30 的呈现修订与本文语义。
 >
 > **几何语言修订（2026-11-01）**：本文的**语义与权威性不变**（授权面、访问面、边状态判定、路径守恒、API、URL、两档措辞）。**图面几何**（节点形状、计量刻度、流带画法、标签排版、槽位分配、命中区）已由 [`docs/specs/lucy-20261101-access-map-geometry-spec.md`](../../docs/specs/lucy-20261101-access-map-geometry-spec.md) **v0.2 功能合同已收口**规定并实施：节点为**细柱**（不再是定宽卡片），计量厚度 = 权重 × 刻度且**无最小厚度地板**，刻度按 `MAX_PX_PER_PATH` 封顶，流带为**填充面积**，四态各自有明确的面积 / 内核 / 轮廓几何，计量与命中解耦。本文 §4.4 的状态判定顺序与 §9 登记的着色 token（`series/grant`、`series/access`、`warning`、`danger`；禁止裸 hex；状态不得只靠颜色区分）**保持不变**，只是载体从描边改为填充面。
+>
+> **访问层筛选修订（有效指针，2026-11-04）**：路径主键、角色归因、守恒算法、边状态判定顺序**不变**。进入访问路径构建的允许调用候选集合在时间窗、`trust`、Token 条件上**相与**问询种类（`inquiryKind`）与访问等级（`accessGrade`）；主工具条两下拉、弱入口「关联口径」（原「问询计入」／`trust` UI 标签）与缺省／非法 URL 行为以 [`docs/specs/lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) 为准。本文 §4.2／§5.2／§6.3／§7.4 仅作交叉指针，不在此重写算法正文。
 
 ---
 
@@ -187,7 +189,9 @@ AccessPath = (AgentId, RoleId, ConnectionId, Schema, TableName)
   WHERE 该路径在 [startIso, endIso) 内至少有一次 outcome='allow' 调用
 ```
 
-访问路径是统计窗口内的**存在性去重结果**，不是一次调用，也不把 `ts` 放进路径主键。先按当前 Token／信任口径筛选审计调用，再按路径去重；原始调用次数另记 `accessCalls`。因此同一路径调用 1 次或 100 次，`accessPaths` 都为 1，`accessCalls` 分别为 1 或 100。
+访问路径是统计窗口内的**存在性去重结果**，不是一次调用，也不把 `ts` 放进路径主键。先按当前 Token／信任口径（`trust`）筛选审计调用，再按路径去重；原始调用次数另记 `accessCalls`。因此同一路径调用 1 次或 100 次，`accessPaths` 都为 1，`accessCalls` 分别为 1 或 100。
+
+> **有效指针（2026-11-04）**：进入路径构建的允许调用候选集合，在时间窗、`trust`、Token 之上还须相与问询种类与访问等级；集合 E／D、关联链路与 `meta.echo` 以 [`lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) §4 D6–D8／§6 为准。**本小节路径主键五元组、存在性去重与角色归因正文语义不变。**
 
 **Role 归因口径（两侧必须一致）**
 
@@ -440,6 +444,8 @@ function buildGrantLayer(
 
 ### 5.2 访问层构建
 
+> **有效指针（2026-11-04）**：在下述时间窗、`trust`、Token 与 `access_log_sources` 条件之上，候选调用集合还须相与问询种类／访问等级（及 D6 关联链路）；投影集合 E／D、`deniedCalls`、`meta.echo.enteringAllowCallCount` 的合同以 [`lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) 为准。**下文伪代码仍描述路径主键／归因／allow／deny 分流；不因指针改写守恒或边状态判定。**
+
 ```ts
 type AccessRow = {
   userId: string;
@@ -458,6 +464,7 @@ function buildAccessLayer(
   window: MetricWindow,        // 复用 metric-window.ts 的 buildMetricWindow
   trust: "confirmed_only" | "include_candidate",
   tokenLabel: string | null,   // 只过滤访问层；不参与路径主键或授权骨架
+  // inquiryKind / accessGrade：相与进候选集合；解析与缺省见 audit-echo Spec §5.3
 ): { state: "ok" | "unavailable"; rows: AccessRow[]; denied: number } {
   // A1. 审计库不可用 → 访问层不可用（授权骨架仍可渲染）
   const db = openAuditDb();
@@ -475,6 +482,7 @@ function buildAccessLayer(
       AND (:trust = 'include_candidate' OR al.association_status = 'confirmed')
       AND (:tokenLabel IS NULL OR al.token_label = :tokenLabel)
   `).all({ startIso: window.startIso, endIso: window.endIso, trust, tokenLabel });
+  // A2b. 对 rows 再相与 inquiryKind／accessGrade（及 D6 关联）；见 audit-echo Spec §6
 
   // A3. 归因到 Role：
   //     - matched_role_id 单值优先
@@ -625,11 +633,13 @@ GET /api/admin/access-map
 | `connection` | connectionId | 只看该连接的子图 |
 | `window` | `24h` / `168h` / `720h` | 默认 `168h`（与 L25-03 使用概况一致） |
 | `layer` | `flat` / `schema` | 默认 `flat`（折叠 Schema，§4.6） |
-| `trust` | `confirmed` / `include_candidate` | 默认 `confirmed`（§4.9） |
+| `trust` | `confirmed` / `include_candidate` | 默认 `confirmed`（§4.9）；UI 标签为「关联口径」，见 audit-echo Spec |
+| `inquiryKind` | `management` / `real` / `unreported_query` / `session_visit` / `all` | **参数缺席**默认 `management`；非法 → 400。主筛选呈现见 [`lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) §5 |
+| `accessGrade` | `exclude_connect` / `all` / `connect` / `browse` / `prepare` / `ask` / `query` / `control` / `unclassified` | **参数缺席**默认 `exclude_connect`；非法 → 400。同上 |
 | `view` | `map` / `table` | 默认 `map`；`table` 为无障碍等价视图（§7.5） |
 | `focus` | node id | 下钻聚焦的节点 |
 
-参数组合必须全部生效且可分享；非法参数值返回 400（用户可见错误按术语标准措辞）。
+参数组合必须全部生效且可分享；非法参数值返回 400（用户可见错误按术语标准措辞）。`inquiryKind`／`accessGrade` 的缺省与非法行为细节（含与访问日志「非法回落缺省」的有意差异）以 audit-echo Spec 为准。
 
 ---
 
@@ -664,8 +674,9 @@ GET /api/admin/access-map
 ### 7.4 图例与信号
 
 - 图例固定在图区上方，说明：流带宽度 = 授权路径数；深色内核 = 访问路径数；虚线 = 凭证清单；警示描边 = 需复核 / 确凿越权。
-- 图例必须标明当前访问层口径（`confirmed` 或 `含候选`）与统计窗口起止。
-- 顶部信号条：「僵尸授权 N 条 · 需复核 M 条 · 确凿越权 K 条」，点击可筛选。
+- 图例／弱入口须标明当前**关联口径**（已确认关联／含候选关联；对应 `trust=confirmed|include_candidate`），禁止再用「问询计入」作标签或前缀；统计窗口起止仍须可见（chart-first 起可沉入「口径与快照」）。
+- **主筛选呈现**（问询种类、访问等级下拉；关联口径弱入口；筛选行对齐）改指 [`lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) §5；本条不另定工具条控件布局。
+- 顶部信号条：「僵尸授权 N 条 · 需复核 M 条 · 确凿越权 K 条」，点击可筛选（chart-first 起默认首屏不再提供该筛选入口，见该呈现 Spec）。
 
 ### 7.5 无障碍等价视图（SC-09）
 

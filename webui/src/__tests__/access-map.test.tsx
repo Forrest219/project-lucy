@@ -131,6 +131,10 @@ function makeResponse(overrides: Partial<AccessMapResponse> = {}): AccessMapResp
         deniedCalls: 3,
         rawCalls: 11
       },
+      echo: {
+        enteringAllowCallCount: 11,
+        enteringAllowCallCountBasis: "pre_structure"
+      },
       counts: {
         agents: 1,
         roles: 1,
@@ -748,6 +752,8 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
       "access-map-view-table",
       "access-map-window",
       "access-map-layer",
+      "access-map-inquiry-kind",
+      "access-map-access-grade",
       "access-map-trust",
       "access-map-search",
       "access-map-search-submit"
@@ -755,6 +761,173 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     for (const id of alwaysPresent) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
+  });
+});
+
+/**
+ * 访问关系图 ↔ 访问日志口径对齐（audit-echo Spec §7 组件侧）。
+ *
+ * Authority: `docs/specs/lucy-20261102-access-map-audit-echo-spec.md`
+ *   SC-01–SC-09、SC-17–SC-18
+ */
+describe("访问关系图 audit-echo 工具条与弱入口（Spec §7 组件侧）", () => {
+  it("SC-01／SC-06 — 主工具条无「问询计入」分段与 trust-hint", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-toolbar")).toBeInTheDocument());
+
+    const toolbar = screen.getByTestId("access-map-toolbar");
+    expect(toolbar.textContent ?? "").not.toContain("问询计入");
+    expect(within(toolbar).queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(within(toolbar).queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
+    expect(within(toolbar).queryByRole("tablist", { name: "问询计入" })).not.toBeInTheDocument();
+  });
+
+  it("SC-02 — 问询种类／访问等级下拉选项文案与审计一致", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-inquiry-kind")).toBeInTheDocument());
+
+    const kind = screen.getByTestId("access-map-inquiry-kind");
+    expect([...kind.querySelectorAll("option")].map((el) => el.textContent)).toEqual([
+      "管理相关",
+      "真实问询",
+      "未上报问询",
+      "会话访问",
+      "全部种类"
+    ]);
+
+    const grade = screen.getByTestId("access-map-access-grade");
+    expect([...grade.querySelectorAll("option")].map((el) => el.textContent)).toEqual([
+      "全部",
+      "排除连接",
+      "连接",
+      "浏览",
+      "准备",
+      "问询动作",
+      "查数",
+      "运维操作",
+      "未分级"
+    ]);
+  });
+
+  it("SC-03 — 缺省请求不写 inquiryKind／accessGrade，交给服务端缺省", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).not.toContain("inquiryKind=");
+    expect(url).not.toContain("accessGrade=");
+  });
+
+  it("SC-04 — 弱入口有关联口径控件与「只影响访问面」说明", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+
+    const weak = screen.getByTestId("access-map-methodology-snapshot");
+    const trust = within(weak).getByTestId("access-map-trust");
+    expect(trust.tagName).toBe("SELECT");
+    expect(trust).toHaveTextContent("已确认关联");
+    expect(trust).toHaveTextContent("含候选关联");
+
+    const hint = within(weak).getByTestId("access-map-trust-hint");
+    expect(hint).toHaveTextContent("授权连接始终显示");
+    expect(hint).toHaveTextContent("只影响访问面");
+    expect(hint).toHaveTextContent("候选关联上的允许调用也计入访问");
+
+    const status = within(weak).getByTestId("access-map-filter-status");
+    expect(status).toHaveTextContent("关联口径：已确认关联");
+    expect(status).toHaveTextContent("问询种类：管理相关");
+    expect(status).toHaveTextContent("访问等级：排除连接");
+  });
+
+  it("SC-05 — legend-trust 为「关联口径：…」，无「问询计入」", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-legend-trust")).toBeInTheDocument());
+
+    const legendTrust = screen.getByTestId("access-map-legend-trust");
+    expect(legendTrust).toHaveTextContent("关联口径：已确认关联");
+    expect(legendTrust.textContent ?? "").not.toContain("问询计入");
+  });
+
+  it("SC-07 — 切换问询种类写 URL 并重请求", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-inquiry-kind")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId("access-map-inquiry-kind"), { target: { value: "all" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("inquiryKind=all"));
+
+    fireEvent.change(screen.getByTestId("access-map-inquiry-kind"), { target: { value: "" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).not.toContain("inquiryKind="));
+  });
+
+  it("SC-08 — 切换访问等级写 URL 并重请求", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-access-grade")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId("access-map-access-grade"), { target: { value: "connect" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("accessGrade=connect"));
+
+    fireEvent.change(screen.getByTestId("access-map-access-grade"), { target: { value: "" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).not.toContain("accessGrade="));
+  });
+
+  it("SC-09 — 关联口径写 trust；默认 confirmed；可切 include_candidate", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-trust")).toBeInTheDocument());
+
+    const trust = screen.getByTestId("access-map-trust");
+    expect(trust).toHaveValue("confirmed");
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("trust=");
+
+    fireEvent.change(trust, { target: { value: "include_candidate" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("trust=include_candidate"));
+  });
+
+  it("SC-17 — 工具条各列仅标签+单控件（定位列除外）", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-toolbar")).toBeInTheDocument());
+
+    const toolbar = screen.getByTestId("access-map-toolbar");
+    const columns = [...toolbar.children].filter((child) =>
+      (child as HTMLElement).classList.contains("flex-col")
+    ) as HTMLElement[];
+    // 统计窗口 / Schema 层 / 问询种类 / 访问等级 / 定位
+    expect(columns).toHaveLength(5);
+    for (const column of columns.slice(0, 4)) {
+      // 标签 + 单控件根（分段或下拉）；禁止旧 trust-hint 那种列内多行说明。
+      const controlRoots = column.querySelectorAll("select, .pl-segmented-control");
+      expect(controlRoots).toHaveLength(1);
+      expect(column.querySelectorAll("p")).toHaveLength(0);
+      expect(within(column).queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
+    }
+  });
+
+  it("SC-18 — 可见文案无「问询计入」；E 空时提示点名筛选，不声称全量无访问", async () => {
+    const response = makeResponse();
+    response.meta.echo = {
+      enteringAllowCallCount: 0,
+      enteringAllowCallCountBasis: "pre_structure"
+    };
+    response.meta.counts.accessPaths = 0;
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-empty-access")).toBeInTheDocument());
+
+    expect(document.body.textContent ?? "").not.toContain("问询计入");
+    const notice = screen.getByTestId("access-map-empty-access");
+    expect(notice).toHaveTextContent("问询种类");
+    expect(notice).toHaveTextContent("管理相关");
+    expect(notice).toHaveTextContent("访问等级");
+    expect(notice).toHaveTextContent("排除连接");
+    expect(notice.textContent ?? "").not.toContain("无访问日志");
+    expect(notice.textContent ?? "").not.toContain("系统无访问");
   });
 });
 
@@ -1368,7 +1541,7 @@ describe("链路高亮与列头 KPI", () => {
     expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("2");
   });
 
-  it("问询计入说明授权始终显示，并区分已确认关联与含候选关联", async () => {
+  it("弱入口关联口径说明只影响访问面，并可切换含候选关联", async () => {
     const fetchMock = stubAccessMap(makeResponse());
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-trust")).toBeInTheDocument());
@@ -1377,9 +1550,9 @@ describe("链路高亮与列头 KPI", () => {
     expect(control).toHaveTextContent("已确认关联");
     expect(control).toHaveTextContent("含候选关联");
     expect(screen.getByTestId("access-map-trust-hint")).toHaveTextContent("授权连接始终显示");
-    expect(screen.getByTestId("access-map-trust-hint")).toHaveTextContent("推断对上的问询");
+    expect(screen.getByTestId("access-map-trust-hint")).toHaveTextContent("只影响访问面");
 
-    within(control).getByRole("tab", { name: "含候选关联" }).click();
+    fireEvent.change(control, { target: { value: "include_candidate" } });
     await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("trust=include_candidate"));
   });
 

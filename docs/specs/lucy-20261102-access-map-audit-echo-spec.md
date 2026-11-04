@@ -5,13 +5,13 @@
 | 文档类型 / 版本 | 功能设计基线 / **v0.3** |
 | 日期 / 目标版本 | 2026-11-02 / 不绑定产品版本号。不升 Spec 187 版本号，不进入 v0.25 登记册 |
 | 功能编号 / 优先级 | **无** / **P1**（访问关系图工具条与访问层筛选口径） |
-| 状态 | **Deferred → `0.30.0` 池 [`REQ-030-003`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)（2026-11-03）**。v0.3 可定稿保留；本版不授权开发。功能合同未收口，SC 未执行。本条收口不表示可上线。记录见 [A／B 剥离](../reviews/2026-11-03-product-close-peel-a-b.md) |
+| 状态 | **v0.3 功能合同已收口（2026-11-04）**。S1–S3 已落地；SC-01–SC-20 关闭；证据见 [实施笔记](../reviews/2026-11-04-access-map-audit-echo-implementation-notes.md)。本条收口不表示可上线。原 Deferred → [`REQ-030-003`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) 已拉出并实施完成。剥离背景见 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md) |
 | 决策来源 | 2026-11-02 对 `http://127.0.0.1:55176/admin/access-map?trust=include_candidate` 的反馈：①筛选器行不对齐；②「问询计入」分段控件突兀。澄清后拍板 **方案 B**：桑基图是访问日志／调用流水的可视化，不得另造核心分类；维度与数量须呼应。Codex 第 1 轮退回（高 3／中 2）→ v0.2；第 2 轮退回（中 2：结构筛选后 meta、deny 集合 D）→ v0.3 闭合 |
 | 需求来源 | 治理台访问关系图应让管理员用与访问日志相同的管理语言筛选访问面；关联质量口径可保留，但不得冒充「问询」主筛选 |
 | 实施主体 | Lucy WebUI：`webui/server/admin/access-map.ts`、`webui/src/pages/admin/AccessMap.tsx` 及相关组件／测试。不修改 KTX |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」 |
 | 与既有 Spec 的关系 | **修订访问层候选调用集合及其默认筛选**（不仅是呈现）。在 Spec 187 原有时间窗、`trust`、Token 条件上**相与**问询种类与访问等级，再按原五元组构建访问路径。路径主键、角色归因、守恒算法、边状态判定顺序不变。权威骨架语义仍以 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md) 为准；实施时同步修订其 §4.2、§5.2、§6.3、§7.4 的有效指针。问询种类／访问等级枚举复用 [`lucy-20261102-audit-inquiry-kind-spec.md`](lucy-20261102-audit-inquiry-kind-spec.md) 与 Spec 194 的 `accessGrade`，**不另起枚举**。图面几何沿用 geometry；页壳弱入口沿用 chart-first |
-| 实施计划 | [`docs/plans/lucy-20261102-access-map-audit-echo-plan.md`](../plans/lucy-20261102-access-map-audit-echo-plan.md) |
+| 实施计划 | [`docs/plans/lucy-20261102-access-map-audit-echo-plan.md`](../plans/lucy-20261102-access-map-audit-echo-plan.md)（**v0.4**） |
 | 审阅 | [`docs/reviews/2026-11-02-codex-review-access-map-audit-echo.md`](../reviews/2026-11-02-codex-review-access-map-audit-echo.md) |
 
 ## 闭口层级
@@ -255,4 +255,4 @@ function buildBandED(f: EchoFilter, db: Db): { B: Set<CallId>; E: Set<CallId>; D
 
 ---
 
-**定稿条件：** Codex 两轮已完成；第 2 轮 R3 残留与 N1 已按可贴句写入 D8／§6／SC-14。定稿不表示开发已授权，也不表示 SC 已执行。本条收口不表示可上线。
+**定稿条件：** Codex 两轮已完成；第 2 轮 R3 残留与 N1 已按可贴句写入 D8／§6／SC-14。**2026-11-04 实施完成并功能合同已收口**（Plan v0.4；S1–S3；SC-01–SC-20 关闭）。本条收口不表示可上线。

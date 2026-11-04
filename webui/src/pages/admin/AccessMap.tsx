@@ -42,10 +42,20 @@ import { AccessMapLegend, AccessMapLegendMeta } from "../../components/admin/Acc
 import { AccessMapSignalNotes } from "../../components/admin/AccessMapSignalNotes";
 import { AccessMapTable } from "../../components/admin/AccessMapTable";
 import {
+  ACCESS_MAP_ACCESS_GRADE_OPTIONS,
+  ACCESS_MAP_DEFAULT_ACCESS_GRADE,
+  ACCESS_MAP_DEFAULT_INQUIRY_KIND,
+  ACCESS_MAP_INQUIRY_KIND_OPTIONS,
   ACCESS_MAP_TOKEN_FILTER_NOTICE_HEAD,
   ACCESS_MAP_TOKEN_FILTER_NOTICE_TAIL,
+  ACCESS_MAP_TRUST_HINT,
+  accessMapAccessGradeLabel,
   accessMapGrantProblemLabel,
+  accessMapInquiryKindLabel,
+  accessMapTrustLabel,
   accessMapWindowLabel,
+  type AccessMapAccessGradeFilter,
+  type AccessMapInquiryKindFilter,
   type AccessMapResponse
 } from "../../components/admin/AccessMapTypes";
 
@@ -58,6 +68,8 @@ const PARAM_KEYS = [
   "window",
   "layer",
   "trust",
+  "inquiryKind",
+  "accessGrade",
   "view",
   "focus"
 ] as const;
@@ -128,7 +140,21 @@ export function AccessMap() {
   const focusNodeId = get("focus");
   const windowValue = get("window") ?? "168h";
   const layerValue = get("layer") ?? "flat";
-  const trustValue = get("trust") ?? "confirmed";
+  const trustValue = (get("trust") ?? "confirmed") as "confirmed" | "include_candidate";
+  const inquiryKindRaw = get("inquiryKind");
+  const inquiryKindValue: AccessMapInquiryKindFilter =
+    (inquiryKindRaw as AccessMapInquiryKindFilter | null) ?? ACCESS_MAP_DEFAULT_INQUIRY_KIND;
+  const accessGradeRaw = get("accessGrade");
+  const accessGradeValue: AccessMapAccessGradeFilter =
+    (accessGradeRaw as AccessMapAccessGradeFilter | null) ?? ACCESS_MAP_DEFAULT_ACCESS_GRADE;
+
+  /** 缺省管理／排除连接不写 URL，交给服务端缺省；其它取值显式写入。 */
+  const setInquiryKind = (next: string): void => {
+    setParam("inquiryKind", !next || next === ACCESS_MAP_DEFAULT_INQUIRY_KIND ? null : next);
+  };
+  const setAccessGrade = (next: string): void => {
+    setParam("accessGrade", !next || next === ACCESS_MAP_DEFAULT_ACCESS_GRADE ? null : next);
+  };
 
   /**
    * 信号筛选本轮**整条删除**（chart-first Spec §5.2）。
@@ -181,8 +207,11 @@ export function AccessMap() {
         description="授权路径与窗口内实际访问对照。"
       />
 
-      {/* 工具条：统计窗口、Schema 层、问询计入、定位、聚焦面包屑。 */}
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+      {/* 工具条：统计窗口 → Schema 层 → 问询种类 → 访问等级 → 定位（audit-echo Spec §5.1）。 */}
+      <div
+        className="flex flex-wrap items-end gap-x-6 gap-y-3"
+        data-testid="access-map-toolbar"
+      >
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-fg-muted">统计窗口</span>
           <div
@@ -235,43 +264,44 @@ export function AccessMap() {
           </select>
         </div>
 
-        <div className="flex max-w-xs flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">问询计入</span>
-          <div
-            className="pl-segmented-control"
-            role="tablist"
-            aria-label="问询计入"
-            data-testid="access-map-trust"
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-fg-muted" htmlFor="access-map-inquiry-kind-select">
+            问询种类
+          </label>
+          <select
+            id="access-map-inquiry-kind-select"
+            className="pl-input"
+            aria-label="问询种类"
+            data-testid="access-map-inquiry-kind"
+            value={inquiryKindValue === ACCESS_MAP_DEFAULT_INQUIRY_KIND ? "" : inquiryKindValue}
+            onChange={(event) => setInquiryKind(event.target.value)}
           >
-            {(
-              [
-                ["confirmed", "已确认关联"],
-                ["include_candidate", "含候选关联"]
-              ] as const
-            ).map(([value, label]) => {
-              const active = trustValue === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  role="tab"
-                  className={
-                    active
-                      ? "pl-segmented-control-item pl-segmented-control-item--active"
-                      : "pl-segmented-control-item"
-                  }
-                  aria-selected={active}
-                  aria-pressed={active}
-                  onClick={() => setParam("trust", value)}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-[11px] leading-snug text-fg-muted" data-testid="access-map-trust-hint">
-            授权连接始终显示。这一项只影响问询：默认只计已确认关联；含候选关联时，推断对上的问询也算一次访问。
-          </p>
+            {ACCESS_MAP_INQUIRY_KIND_OPTIONS.map((option) => (
+              <option key={option.value || "management"} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-fg-muted" htmlFor="access-map-access-grade-select">
+            访问等级
+          </label>
+          <select
+            id="access-map-access-grade-select"
+            className="pl-input"
+            aria-label="访问等级"
+            data-testid="access-map-access-grade"
+            value={accessGradeValue === ACCESS_MAP_DEFAULT_ACCESS_GRADE ? "" : accessGradeValue}
+            onChange={(event) => setAccessGrade(event.target.value)}
+          >
+            {ACCESS_MAP_ACCESS_GRADE_OPTIONS.map((option) => (
+              <option key={option.value || "exclude_connect"} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex flex-col gap-1">
@@ -401,6 +431,21 @@ export function AccessMap() {
             </div>
           ) : null}
 
+          {/*
+            E 空但授权骨架非空：点名当前问询种类／访问等级，禁止写成「无访问日志」
+            或全量无访问（audit-echo Spec §5.2／SC-18）。
+          */}
+          {response.nodes.length > 0 &&
+          response.meta.access.state === "ok" &&
+          response.meta.echo?.enteringAllowCallCount === 0 ? (
+            <div className="pl-notice" data-testid="access-map-empty-access">
+              <p className="text-sm">
+                当前问询种类为「{accessMapInquiryKindLabel(inquiryKindValue)}」、访问等级为「
+                {accessMapAccessGradeLabel(accessGradeValue)}」时，没有进入访问路径的允许调用；授权骨架仍按当前授权显示。可调整筛选后再看。
+              </p>
+            </div>
+          ) : null}
+
           {response.nodes.length === 0 ? (
             <div className="pl-notice" data-testid="access-map-empty">
               {hasScopeFilter ? (
@@ -437,9 +482,8 @@ export function AccessMap() {
           )}
 
           {/*
-            图下弱入口「口径与快照」（chart-first Spec §5.4）。
-            默认关闭：口径全文、覆盖率、调用数、信任/窗口 ISO 与快照 id 都在里面，
-            首屏只剩关系图本身。两个独立宽条（口径说明 / 快照）已合并成这一个。
+            图下弱入口「口径与快照」（chart-first Spec §5.4 + audit-echo Spec §5.2）。
+            关联口径控件与说明、现状行沉在这里；主工具条不再放 trust。
           */}
           <details
             className="rounded-md border border-border-default bg-bg-subtle p-3"
@@ -447,6 +491,33 @@ export function AccessMap() {
           >
             <summary className="cursor-pointer text-sm font-medium text-fg-body">口径与快照</summary>
             <div className="mt-3 flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-xs font-medium text-fg-muted"
+                  htmlFor="access-map-trust-select"
+                >
+                  关联口径
+                </label>
+                <select
+                  id="access-map-trust-select"
+                  className="pl-input max-w-xs"
+                  aria-label="关联口径"
+                  data-testid="access-map-trust"
+                  value={trustValue}
+                  onChange={(event) => setParam("trust", event.target.value)}
+                >
+                  <option value="confirmed">已确认关联</option>
+                  <option value="include_candidate">含候选关联</option>
+                </select>
+                <p className="text-[11px] leading-snug text-fg-muted" data-testid="access-map-trust-hint">
+                  {ACCESS_MAP_TRUST_HINT}
+                </p>
+              </div>
+              <p className="text-xs text-fg-muted" data-testid="access-map-filter-status">
+                关联口径：{accessMapTrustLabel(trustValue)} · 问询种类：
+                {accessMapInquiryKindLabel(inquiryKindValue)} · 访问等级：
+                {accessMapAccessGradeLabel(accessGradeValue)}
+              </p>
               <AccessMapSignalNotes meta={response.meta} />
               <AccessMapLegendMeta meta={response.meta} />
               <span

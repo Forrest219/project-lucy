@@ -413,6 +413,9 @@ function toAccessMapQuery(input: {
     window: "168h",
     layer: "flat",
     trust: input.trust,
+    // 治理快照沿用访问关系图缺省问询种类／访问等级。
+    inquiryKind: "management",
+    accessGrade: "exclude_connect",
     view: "map",
     focus: null
   };
@@ -838,7 +841,9 @@ export async function rebuildGovernanceSnapshotAtomic(
         window: input.window,
         trust: input.trust,
         // Token focus 只影响访问层行集（与 builder 一致）；授权面不受影响。
-        tokenLabel: null
+        tokenLabel: null,
+        inquiryKind: "management",
+        accessGrade: "exclude_connect"
       });
       adoptionAccessRows = accessSide.state === "ok" ? accessSide.rows : [];
     }

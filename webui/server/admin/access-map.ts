@@ -67,6 +67,17 @@ import {
 } from "./counting.js";
 import { buildMetricWindow, type MetricWindow } from "./metric-window.js";
 import { defaultUsageConditionSql } from "../proxy/usage-classification.js";
+import {
+  ACCESS_MAP_DEFAULT_ACCESS_GRADE,
+  ACCESS_MAP_DEFAULT_INQUIRY_KIND,
+  buildBandED,
+  defaultEnsureInquiryRebuild,
+  isAccessGradeFilterParam,
+  isInquiryKindFilterParam,
+  type AccessMapAccessGradeFilter,
+  type AccessMapInquiryKind,
+  type EchoRebuildFn
+} from "./access-map-echo.js";
 
 /** Spec 189 §4.1 — the single Default Usage condition. */
 const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
@@ -77,6 +88,7 @@ export type AccessMapWindow = "24h" | "168h" | "720h";
 export type AccessMapLayer = "flat" | "schema";
 export type AccessMapTrust = "confirmed" | "include_candidate";
 export type AccessMapView = "map" | "table";
+export type { AccessMapInquiryKind, AccessMapAccessGradeFilter, EchoRebuildFn };
 
 /** 统计窗口小时数。默认 168h（与 L25-03「使用概况」同口径）。 */
 export const ACCESS_MAP_WINDOW_HOURS: Record<AccessMapWindow, number> = {
@@ -95,6 +107,10 @@ export type AccessMapQuery = {
   window: AccessMapWindow;
   layer: AccessMapLayer;
   trust: AccessMapTrust;
+  /** Spec 20261102：缺省未出现 → management；非法 → 400（与审计非法回落不同）。 */
+  inquiryKind: AccessMapInquiryKind;
+  /** Spec 20261102：缺省未出现 → exclude_connect；非法 → 400。 */
+  accessGrade: AccessMapAccessGradeFilter;
   view: AccessMapView;
   focus: string | null;
 };
@@ -155,6 +171,21 @@ export function parseAccessMapQuery(
   if (viewRaw !== null && !VIEW_VALUES.has(viewRaw)) {
     return bad("view", "视图参数只能是 map 或 table");
   }
+  // Spec 20261102 D10：非法 inquiryKind／accessGrade → 400（禁止走审计非法回落解析）。
+  const inquiryKindRaw = readParam(input, "inquiryKind");
+  if (inquiryKindRaw !== null && !isInquiryKindFilterParam(inquiryKindRaw)) {
+    return bad(
+      "inquiryKind",
+      "问询种类只能是 management、real、unreported_query、session_visit 或 all"
+    );
+  }
+  const accessGradeRaw = readParam(input, "accessGrade");
+  if (accessGradeRaw !== null && !isAccessGradeFilterParam(accessGradeRaw)) {
+    return bad(
+      "accessGrade",
+      "访问等级只能是 exclude_connect、all、connect、browse、prepare、ask、query、control 或 unclassified"
+    );
+  }
 
   const tableRaw = readParam(input, "table");
   if (tableRaw !== null && splitTableParam(tableRaw) === null) {
@@ -172,6 +203,8 @@ export function parseAccessMapQuery(
       window: (windowRaw as AccessMapWindow | null) ?? ACCESS_MAP_DEFAULT_WINDOW,
       layer: (layerRaw as AccessMapLayer | null) ?? "flat",
       trust: (trustRaw as AccessMapTrust | null) ?? "confirmed",
+      inquiryKind: inquiryKindRaw ?? ACCESS_MAP_DEFAULT_INQUIRY_KIND,
+      accessGrade: accessGradeRaw ?? ACCESS_MAP_DEFAULT_ACCESS_GRADE,
       view: (viewRaw as AccessMapView | null) ?? "map",
       focus: readParam(input, "focus")
     }
@@ -390,6 +423,14 @@ export type AccessMapPermissionSnapshot = {
   capabilityDigest: string | null;
 };
 
+/** Spec 20261102 D8：结构筛选前的投影集合 E 披露。 */
+export type AccessMapEchoMeta = {
+  /** 进入访问路径构建的允许调用数 \|E\|（结构筛选前）。 */
+  enteringAllowCallCount: number;
+  /** 明示属于 scope／focus／layer 折叠之前。 */
+  enteringAllowCallCountBasis: "pre_structure";
+};
+
 export type AccessMapAccessSide =
   | {
       state: "ok";
@@ -398,6 +439,9 @@ export type AccessMapAccessSide =
       tokenCallCounts: Map<string, number>;
       tokenLastUsed: Map<string, string>;
       loadSnapshot: (hash: string) => AccessMapPermissionSnapshot | null;
+      /** 结构筛选前 \|D\|；缺省时由 buildAccessLayer 从 rows 推导。 */
+      deniedCalls?: number;
+      echo?: AccessMapEchoMeta;
     }
   | { state: "unavailable"; reason: string };
 
@@ -417,6 +461,8 @@ export type AccessMapProvider = {
     window: MetricWindow;
     trust: AccessMapTrust;
     tokenLabel: string | null;
+    inquiryKind: AccessMapInquiryKind;
+    accessGrade: AccessMapAccessGradeFilter;
   }) => Promise<AccessMapAccessSide>;
 };
 
@@ -1416,6 +1462,8 @@ export type AccessMapMeta = {
     rawCalls: number;
     reason?: string;
   };
+  /** Spec 20261102：投影集合 E 的结构筛选前计数。 */
+  echo?: AccessMapEchoMeta;
   counts: {
     agents: number;
     roles: number;
@@ -1512,6 +1560,7 @@ export async function buildAccessMap(
   let accessReason = "授权面不可用，未评估访问层";
   let deniedCalls = 0;
   let rawCalls = 0;
+  let echoMeta: AccessMapEchoMeta | undefined;
   let keptGrantRefs: GrantPathRef[] = [];
   let keptAccessRefs: AccessPathRef[] = [];
 
@@ -1527,7 +1576,9 @@ export async function buildAccessMap(
     const access = await provider.loadAccessSide({
       window,
       trust: query.trust,
-      tokenLabel: query.token
+      tokenLabel: query.token,
+      inquiryKind: query.inquiryKind,
+      accessGrade: query.accessGrade
     });
 
     let internalNodes = grant.nodes;
@@ -1537,9 +1588,16 @@ export async function buildAccessMap(
     if (access.state === "ok") {
       accessState = "ok";
       accessReason = "";
+      // Token 已在 loadAccessSide／echo 过滤中相与；此处再传 null 避免双重过滤。
+      // 注入型假 provider 仍可能把未按 token 过滤的 rows 交来，故保留 query.token。
       const layer = buildAccessLayer({ rows: access.rows, tokenLabel: query.token });
-      deniedCalls = layer.deniedCalls;
+      // SC-14：不得因「只返回 E」把拒绝计数归零——优先用 access.deniedCalls（\|D\|）。
+      deniedCalls = access.deniedCalls ?? layer.deniedCalls;
       rawCalls = layer.rawCalls;
+      echoMeta = access.echo ?? {
+        enteringAllowCallCount: rawCalls,
+        enteringAllowCallCountBasis: "pre_structure"
+      };
       accessPathRefs = layer.paths.map((path) => ({
         agentId: path.agentId,
         roleId: path.roleId,
@@ -1555,6 +1613,9 @@ export async function buildAccessMap(
       });
       internalNodes = merged.nodes;
       internalEdges = merged.edges;
+    } else {
+      accessState = "unavailable";
+      accessReason = access.reason;
     }
 
     attachCredentialList({
@@ -1646,6 +1707,7 @@ export async function buildAccessMap(
         rawCalls,
         ...(accessReason ? { reason: accessReason } : {})
       },
+      ...(echoMeta ? { echo: echoMeta } : {}),
       counts,
       signals,
       snapshotCoverage: coverage,
@@ -1668,6 +1730,11 @@ export type AdminAccessMapProviderOptions = {
   compileRole?: (roleId: string, context: AdminPermissionContext) => Promise<PerRoleCompilation>;
   /** 注入用：审计库访问。 */
   openAuditDb?: () => Promise<unknown>;
+  /**
+   * Spec 20261102 D6：与审计问询列表同序的推断重建准备。
+   * 注入 openAuditDb 时默认 no-op（夹具自备 inferred_*）；生产路径走 defaultEnsureInquiryRebuild。
+   */
+  ensureInquiryRebuild?: EchoRebuildFn;
 };
 
 type AuditDatabaseLike = {
@@ -1778,6 +1845,13 @@ export function createAdminAccessMapProvider(
   options: AdminAccessMapProviderOptions = {}
 ): AccessMapProvider {
   const compileRole = options.compileRole ?? compileRoleForAdmin;
+  const ensureInquiryRebuild: EchoRebuildFn =
+    options.ensureInquiryRebuild ??
+    (options.openAuditDb
+      ? async () => {
+          /* Injected audit DB owns inferred_* rows; production uses defaultEnsureInquiryRebuild. */
+        }
+      : defaultEnsureInquiryRebuild);
 
   return {
     async loadGrantSide(): Promise<AccessMapGrantSide> {
@@ -1924,13 +1998,30 @@ export function createAdminAccessMapProvider(
       }
 
       try {
+        // Spec 20261102：先 D6 重建 + buildBandED，得到结构筛选前的 B／E／D。
+        const banded = await buildBandED(
+          {
+            window: { startIso: input.window.startIso, endIso: input.window.endIso },
+            trust: input.trust,
+            inquiryKind: input.inquiryKind,
+            accessGrade: input.accessGrade,
+            tokenLabel: input.tokenLabel
+          },
+          db,
+          { ensureInquiryRebuild }
+        );
+        if (!banded.ok) {
+          return { state: "unavailable", reason: banded.reason };
+        }
+        const { B, E, D } = banded.band;
+
         // 时间条件必须用 metric-window 的半开区间，禁止内联 datetime('now','-7 days')
-        // （Spec 128 HR-5）。
+        // （Spec 128 HR-5）。路径只吃 E；deny 行保留以便 deniedCalls=\|D\| 可复核。
         const rows = db
           .prepare(
             `SELECT al.id AS call_id, al.user_id, al.matched_role_id, al.role_ids,
                     al.token_label, al.outcome, al.ts, al.permission_snapshot_hash,
-                    al.capability_digest, al.eval_mark,
+                    al.capability_digest, al.eval_mark, al.tool, al.lucy_turn_id,
                     als.connection_id, als.schema_name, als.source_name
              FROM access_log al
              JOIN access_log_sources als ON als.access_log_id = al.id
@@ -1945,6 +2036,8 @@ export function createAdminAccessMapProvider(
             input.tokenLabel,
             input.tokenLabel
           );
+
+        const parsed = parseAuditRows(rows).filter((row) => B.has(row.callId));
 
         // 凭证清单的调用数与 token 过滤无关（凭证清单是固定参照物）。
         // Spec 189 §6 — the credential inventory's window call count uses the
@@ -1996,10 +2089,15 @@ export function createAdminAccessMapProvider(
 
         return {
           state: "ok",
-          rows: parseAuditRows(rows),
+          rows: parsed,
           tokenCallCounts,
           tokenLastUsed,
-          loadSnapshot
+          loadSnapshot,
+          deniedCalls: D.size,
+          echo: {
+            enteringAllowCallCount: E.size,
+            enteringAllowCallCountBasis: "pre_structure"
+          }
         };
       } catch {
         return { state: "unavailable", reason: "审计数据不可用" };

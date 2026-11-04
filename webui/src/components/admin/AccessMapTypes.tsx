@@ -96,6 +96,30 @@ export type AccessMapEdge = {
   snapshotCoverage: AccessMapCoverage;
 };
 
+/** Spec 20261102 D8：结构筛选前进入访问路径构建的允许调用披露。 */
+export type AccessMapEchoMeta = {
+  enteringAllowCallCount: number;
+  enteringAllowCallCountBasis: "pre_structure";
+};
+
+export type AccessMapInquiryKindFilter =
+  | "management"
+  | "real"
+  | "unreported_query"
+  | "session_visit"
+  | "all";
+
+export type AccessMapAccessGradeFilter =
+  | "exclude_connect"
+  | "all"
+  | "connect"
+  | "browse"
+  | "prepare"
+  | "ask"
+  | "query"
+  | "control"
+  | "unclassified";
+
 export type AccessMapMeta = {
   window: { startIso: string; endIso: string; asOf: string };
   grant: {
@@ -114,6 +138,8 @@ export type AccessMapMeta = {
     rawCalls: number;
     reason?: string;
   };
+  /** 结构筛选前投影集合 E 披露；缺省参数构图时服务端总会带回。 */
+  echo?: AccessMapEchoMeta;
   counts: {
     agents: number;
     roles: number;
@@ -210,6 +236,82 @@ export function accessMapEdgeStateLabel(state: AccessMapEdgeState): string {
 export function accessMapTrustLabel(trust: "confirmed" | "include_candidate"): string {
   return trust === "include_candidate" ? "含候选关联" : "已确认关联";
 }
+
+/**
+ * 问询种类筛选的中文标签（与访问日志问询记录 Tab 下拉一致）。
+ * URL 技术值不得原样作为可见文案。
+ */
+export function accessMapInquiryKindLabel(kind: AccessMapInquiryKindFilter | string): string {
+  switch (kind) {
+    case "real":
+      return "真实问询";
+    case "unreported_query":
+      return "未上报问询";
+    case "session_visit":
+      return "会话访问";
+    case "all":
+      return "全部种类";
+    case "management":
+    default:
+      return "管理相关";
+  }
+}
+
+/**
+ * 访问等级筛选的中文标签（与访问日志调用流水 Tab 下拉一致）。
+ */
+export function accessMapAccessGradeLabel(grade: AccessMapAccessGradeFilter | string): string {
+  switch (grade) {
+    case "all":
+      return "全部";
+    case "connect":
+      return "连接";
+    case "browse":
+      return "浏览";
+    case "prepare":
+      return "准备";
+    case "ask":
+      return "问询动作";
+    case "query":
+      return "查数";
+    case "control":
+      return "运维操作";
+    case "unclassified":
+      return "未分级";
+    case "exclude_connect":
+    default:
+      return "排除连接";
+  }
+}
+
+/** 主工具条「问询种类」下拉选项；value 空串表示缺省 management（不写 URL）。 */
+export const ACCESS_MAP_INQUIRY_KIND_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "", label: "管理相关" },
+  { value: "real", label: "真实问询" },
+  { value: "unreported_query", label: "未上报问询" },
+  { value: "session_visit", label: "会话访问" },
+  { value: "all", label: "全部种类" }
+];
+
+/** 主工具条「访问等级」下拉选项；value 空串表示缺省 exclude_connect（不写 URL）。 */
+export const ACCESS_MAP_ACCESS_GRADE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "all", label: "全部" },
+  { value: "", label: "排除连接" },
+  { value: "connect", label: "连接" },
+  { value: "browse", label: "浏览" },
+  { value: "prepare", label: "准备" },
+  { value: "ask", label: "问询动作" },
+  { value: "query", label: "查数" },
+  { value: "control", label: "运维操作" },
+  { value: "unclassified", label: "未分级" }
+];
+
+export const ACCESS_MAP_DEFAULT_INQUIRY_KIND: AccessMapInquiryKindFilter = "management";
+export const ACCESS_MAP_DEFAULT_ACCESS_GRADE: AccessMapAccessGradeFilter = "exclude_connect";
+
+/** 弱入口关联口径说明（Spec §5.2）。 */
+export const ACCESS_MAP_TRUST_HINT =
+  "授权连接始终显示。关联口径只影响访问面：默认只计已确认关联；含候选关联时，候选关联上的允许调用也计入访问。";
 
 /** 快照覆盖率的可读表述；低覆盖率不得被读成低越权率（§4.9 / SC-13）。 */
 export function accessMapCoverageText(coverage: AccessMapCoverage): string {

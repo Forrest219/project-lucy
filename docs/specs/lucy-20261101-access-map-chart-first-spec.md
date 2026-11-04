@@ -5,12 +5,12 @@
 | 文档类型 / 版本 | 呈现修订 / **v0.2 功能合同已收口** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号。不升 Spec 187 版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（页壳与图面）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.2 功能合同已收口**（2026-11-01）。方案 A′ 已落地：去掉三张指标卡与双折叠墙；图例短行在图正上方；口径全文与快照沉到图下弱入口；抬高图区、拉开栏距、补可读悬停。SC-01–SC-13 有组件与布局断言并通过。SC-14 术语 lint 于 2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。实施记录见 [`docs/plans/lucy-20261101-access-map-chart-first-plan.md`](../plans/lucy-20261101-access-map-chart-first-plan.md) §9 与 `inbox/2026-11-01-access-map-chart-first-IMPLEMENTATION_NOTES.md`。本条收口不表示可上线 |
+| 状态 | **v0.2 功能合同已收口**（2026-11-01）。方案 A′ 已落地：去掉三张指标卡与双折叠墙；图例短行在图正上方；口径全文与快照沉到图下弱入口；抬高图区、拉开栏距、补可读悬停。SC-01–SC-13 有组件与布局断言并通过。SC-14 术语 lint 于 2026-11-02 拆出，见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。实施记录见 [`docs/plans/lucy-20261101-access-map-chart-first-plan.md`](../plans/lucy-20261101-access-map-chart-first-plan.md) §9 与 `inbox/2026-11-01-access-map-chart-first-IMPLEMENTATION_NOTES.md`。本条收口不表示可上线。**有效呈现指针（2026-11-04）**：主工具条「问询种类／访问等级」两下拉与弱入口「关联口径」以 [`lucy-20261102-access-map-audit-echo-spec.md`](lucy-20261102-access-map-audit-echo-spec.md) 为准；本条页壳骨架（去 KPI、图例短行位置、弱入口位置）仍有效，收口状态不变 |
 | 决策来源 | 2026-11-01 对 `http://127.0.0.1:55176/admin/access-map` 的反馈与拍板：桑基图是打开本页的重点；三 KPI 卡与「口径说明 / 快照」宽条喧宾夺主；partial 提示突兀；图面偏小、四栏挤、悬停不友好。委托人明确选 **方案 A**（去掉 KPI 卡），并要求图相关图例/口径保留但放在不明显位置；图例短行放**正上方** |
 | 需求来源 | 治理台访问关系图以关系图为主视觉；诚实性口径与快照不得消失，但不得抢首屏 |
 | 实施主体 | Lucy WebUI 访问关系图页（`webui/src/pages/admin/AccessMap.tsx` 与 `webui/src/components/admin/AccessMap*.tsx`）。不修改 KTX，不修改 `/api/admin/access-map` |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：仓库级呈现修订落 `docs/specs/` |
-| 与既有 Spec 的关系 | **再修订** [`lucy-20261030-access-map-quiet-reading-spec.md`](lucy-20261030-access-map-quiet-reading-spec.md) 的页壳骨架（§5.1 三指标卡 + 双 `details`），**不撤销**其图面着色（§5.3）、抽屉（§5.5）、数据表与凭证表（§5.6）等已验收呈现。权威语义仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 过滤、两档措辞、URL 参数、降级矩阵沿用 Spec 187。Spec 187 与 quiet-reading 的既有 SC **不在本条出口** |
+| 与既有 Spec 的关系 | **再修订** [`lucy-20261030-access-map-quiet-reading-spec.md`](lucy-20261030-access-map-quiet-reading-spec.md) 的页壳骨架（§5.1 三指标卡 + 双 `details`），**不撤销**其图面着色（§5.3）、抽屉（§5.5）、数据表与凭证表（§5.6）等已验收呈现。权威语义仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 过滤、两档措辞、降级矩阵沿用 Spec 187。**主筛选与关联口径控件**的现行呈现与访问层候选集合以 [`lucy-20261102-access-map-audit-echo-spec.md`](lucy-20261102-access-map-audit-echo-spec.md) 为准（本条不推翻已收口页壳合同）。Spec 187 与 quiet-reading 的既有 SC **不在本条出口** |
 | 实施计划 | [`docs/plans/lucy-20261101-access-map-chart-first-plan.md`](../plans/lucy-20261101-access-map-chart-first-plan.md) |
 
 > v0.2 功能合同已收口（2026-11-01）。D1–D8 按 §4 提议列拍板，未在实施中改写。SC-01–SC-13 有自动化断言并通过。SC-14 已拆出。本条收口不表示可上线。
@@ -143,9 +143,10 @@ Page Header
 
 工具条
   左：统计窗口分段控件
-  中：Schema 层、访问口径
+  中：Schema 层、问询种类、访问等级（两下拉；有效呈现见 audit-echo Spec）
   右：搜索 + 定位
   focus 存在时：面包屑「全图 / {节点名}」
+  （关联口径不在主工具条；沉入下方「口径与快照」弱入口）
 
 降级区（按需）
   partial / access unavailable / grant unavailable — pl-notice
@@ -197,7 +198,8 @@ Page Header
 | `access-map-snapshot-coverage` | 覆盖率句 + 「快照覆盖率低不代表越权率低…」提醒 |
 | `access-map-signal-calls` | 原始调用数 / 被拒绝尝试 |
 | `access-map-orphan-grants` | 若有孤儿授权说明 |
-| `access-map-legend-trust` / `access-map-legend-window` | 访问口径标签与窗口 ISO；从短行挪入此处 |
+| `access-map-legend-trust` / `access-map-legend-window` | **关联口径**标签（禁止「问询计入」）与窗口 ISO；从短行挪入此处。关联口径控件与说明见 [`lucy-20261102-access-map-audit-echo-spec.md`](lucy-20261102-access-map-audit-echo-spec.md) §5.2 |
+| `access-map-trust` | 弱入口内关联口径选择（已确认关联／含候选关联）；主工具条不得再放 |
 | `access-map-snapshot-id` | `config … · policy …` |
 
 弱入口视觉：小字、边框弱于主工作区；**不得**再使用与主图抢权的双行大条并排样式。
@@ -246,7 +248,8 @@ quiet-reading §5.4 的定宽卡片规则已被该 Spec 取代。本条新增/�
 render(response, url):
   view = url.view == "table" ? "table" : "map"
   show header without version hashes
-  show toolbar(window, layer, trust, search, focus breadcrumb)
+  show toolbar(window, layer, inquiryKind, accessGrade, search, focus breadcrumb)
+  // trust／关联口径仅在弱入口「口径与快照」；见 audit-echo Spec
 
   if response.meta.grant.state == "partial":
     show compact partial notice + link to config-audit

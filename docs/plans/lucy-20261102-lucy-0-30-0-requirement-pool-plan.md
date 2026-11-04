@@ -29,7 +29,7 @@
 |---|---|---|---|---|
 | REQ-030-001 | 发布工作台：分文件勾选发布 | 2026-11-02 `/publish/workbench` UAT 反馈 | 待定 | Deferred — 不进 `0.25.0` |
 | REQ-030-002 | 帮助中心体验（L25-12） | Spec `lucy-20261031-help-center-experience` | 待定 | Deferred — 不进 `0.25.0` |
-| REQ-030-003 | 访问关系图与访问日志口径对齐 | Spec `lucy-20261102-access-map-audit-echo` | 待定 | Deferred — 不进 `0.25.0` |
+| REQ-030-003 | 访问关系图与访问日志口径对齐 | Spec `lucy-20261102-access-map-audit-echo` | 待定 | **已拉出；v0.3 功能合同已收口（2026-11-04）** — 不进 `0.25.0`；本条收口不表示可上线 |
 | REQ-030-004 | 运维控制面 W-B（语义发布） | L25-16 W-B；Spec `lucy-20261028-v0p25-lucy-ops-control-plane` | 待定 | Deferred — 不进 `0.25.0` |
 | REQ-030-005 | 客户升级 E2E 自动化（L25-07） | Spec `lucy-20261025-v0p25-upgrade-e2e-automation` | 待定 | Deferred — 发布取证；不进 `0.25.0` 产品分母 |
 | REQ-030-006 | 升级候选验证环境（L25-13） | Spec `lucy-20261025-v0p25-upgrade-candidate-verification` | 待定 | Deferred — 发布取证；不进 `0.25.0` 产品分母 |
@@ -133,16 +133,16 @@ L25-12 帮助中心 Spec／Plan 已落盘为 v0.1-draft；2026-11-02 起本版�
 
 ### 背景
 
-Spec／Plan v0.3 可定稿（Codex 两轮）；定稿不表示开发已授权。2026-11-03 明确本版不开发，迁入池。
+Spec／Plan v0.3 可定稿（Codex 两轮）。2026-11-03 曾迁入池；**2026-11-04 用户批准拉出实施**（Plan 升 v0.4）；同日 **S1–S3 实施完成**，并批准 **v0.3 功能合同已收口**（补齐 SC-12 页序／SC-14 逐边后关闭 SC-01–SC-20）。本条收口不表示可上线。实施笔记：`docs/reviews/2026-11-04-access-map-audit-echo-implementation-notes.md`。
 
 ### 期望方向
 
-访问关系图工具条与访问日志共用问询种类／访问等级；关联口径降为弱入口。细节以既有 Spec 为准。
+访问关系图工具条与访问日志共用问询种类／访问等级；关联口径降为弱入口；投影集合 E 可打假。细节以既有 Spec 为准。
 
 ### 关联
 
 - Spec：`docs/specs/lucy-20261102-access-map-audit-echo-spec.md`
-- Plan：`docs/plans/lucy-20261102-access-map-audit-echo-plan.md`
+- Plan：`docs/plans/lucy-20261102-access-map-audit-echo-plan.md`（v0.4）
 
 ---
 
