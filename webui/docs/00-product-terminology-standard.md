@@ -673,6 +673,11 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Unreported Inquiry | 未上报问询 | — | 未上报查数（作种类主称）、断言发生查数 | 没有已登记原文且不是会话访问的推断问询。摘要仍是「未上报问询原文」。是否查数看访问等级 |
 | Session Visit | 会话访问 | — | 第三种来源 badge、把 User-Agent 写成客户端名 | 问询种类的一值。管理列表以问询种类为准；库存摘要仍可以「会话建立：」开头。来源徽章仍是推断问询。Spec 172／`lucy-20261102-audit-inquiry-kind` |
 | Access Grade | 访问等级 | — | Access Grade（作列头）、把调用来源改叫访问等级 | 调用行七值：连接／浏览／准备／问询动作／查数／运维操作／未分级。复用 Spec 194 `accessGrade` |
+| Call Storyline | 调用链故事线 | — | 第三种问询种类、新的访问等级 | 问询内按时间排序的调用序列可读性呈现，不是新数据实体。见 `docs/specs/lucy-20261104-audit-call-storyline-spec.md` |
+| Call Action | 动作 | — | 把动作写成新工具名 | 由工具名与访问等级派生的中文短标签（问询登记／查数／连接握手等） |
+| Call Intent | 意图 | — | 用 LLM 生成意图作文案承诺 | 由 args／表名确定性派生的一行摘要 |
+| Call Result Summary | 结果摘要 | — | 替代八桶主状态 | 成功带行数、失败人话、拒绝裁决主文；与主状态同单元格可叠放 |
+| Call Step Hint | 相对上步 | — | 跨问询对比提示 | 仅问询内链路；如「缩指标重试」 |
 | Question Budget | 问询预算 | — | turn budget（裸露作主标签）、8 分钟上限 | 同一问询的数据工具次数上限与数据处理时长上限；不含 agent 思考等空闲时间；Spec 162 |
 | Continuable | 可继续 | — | 自动续跑 | 问询预算用尽后，该调用者是否仍有一条可达的继续通道；协议字段 `question_budget_exhausted` 使用 `translate="no"` |
 | Repair Hint | 修复提示 | — | 把角色外的 source 名写进提示 | 只含当前角色可见的来源与连接 |

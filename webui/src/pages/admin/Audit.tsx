@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -38,6 +38,11 @@ import {
   primaryStatusPalette,
   sqlRowsetStatusFrom
 } from "../../lib/auditTrust";
+import {
+  buildCallStoryLine,
+  isConnectGradeTool,
+  type CallStoryInput
+} from "../../lib/audit-call-storyline";
 
 // 202608-01 — Trace / Evidence Kernel read model
 type LucySpanTypeView =
@@ -753,6 +758,28 @@ function TurnSourceBadge({ source }: { source: AuditTurnEntry["source"] }) {
   );
 }
 
+function toCallStoryInput(log: {
+  tool: string;
+  accessGrade?: CallStoryInput["accessGrade"];
+  tables?: string[];
+  argsSummary?: Record<string, unknown>;
+  outcome?: string;
+  decisionReason?: string;
+  errorDetail?: string;
+  responseRowCount?: number;
+}): CallStoryInput {
+  return {
+    tool: log.tool,
+    accessGrade: log.accessGrade,
+    tables: log.tables,
+    argsSummary: log.argsSummary,
+    outcome: log.outcome,
+    decisionReason: log.decisionReason,
+    errorDetail: log.errorDetail,
+    responseRowCount: log.responseRowCount
+  };
+}
+
 function TurnDetailDrawer({
   turnId,
   hours,
@@ -766,6 +793,8 @@ function TurnDetailDrawer({
   onOpenChange: (open: boolean) => void;
   agentNameById: Map<string, string>;
 }) {
+  const [showConnectCalls, setShowConnectCalls] = useState(false);
+  const [expandedCallId, setExpandedCallId] = useState<number | null>(null);
   const query = useQuery({
     queryKey: ["admin", "audit", "turn", turnId, hours],
     queryFn: () => apiGet<AuditTurnDetailResponse>(`/api/admin/audit/turns/${encodeURIComponent(turnId ?? "")}?hours=${hours}`),
@@ -775,6 +804,10 @@ function TurnDetailDrawer({
   const drawerSources = Array.isArray(detail?.sources)
     ? (detail.sources as Array<{ connectionId?: string; physical_table?: string; physicalTable?: string }>)
     : [];
+  const visibleTurnCalls = useMemo(() => {
+    const logs = detail?.accessLogs ?? [];
+    return showConnectCalls ? logs : logs.filter((log) => !isConnectGradeTool(log.tool));
+  }, [detail?.accessLogs, showConnectCalls]);
   // 关联修订（只读）。历史更正**不改写原始账本**，因此这里展示时间线，
   // 最新一条是生效视图，更早的是历史。
   const revisionsQuery = useQuery({
@@ -921,48 +954,117 @@ function TurnDetailDrawer({
               ) : null}
 
               <section className="pl-card grid gap-3" data-testid="audit-turn-calls-card">
-                <h3 className="text-sm font-semibold text-fg-default">调用明细</h3>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-fg-default">调用明细</h3>
+                  <label className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
+                    <input
+                      type="checkbox"
+                      className="pl-checkbox"
+                      checked={showConnectCalls}
+                      onChange={(event) => setShowConnectCalls(event.target.checked)}
+                      data-testid="audit-turn-calls-show-connect"
+                    />
+                    显示连接级
+                  </label>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="pl-data-grid pl-data-table pl-audit-table w-full" data-testid="audit-turn-calls-table">
                     <thead>
                       <tr>
                         <th className="w-14 whitespace-nowrap">序号</th>
                         <th className="whitespace-nowrap">时间</th>
-                        <th className="whitespace-nowrap">数据库连接</th>
-                        <th>涉及数据表</th>
-                        <th className="whitespace-nowrap min-w-[80px]">状态</th>
+                        <th className="whitespace-nowrap">访问等级</th>
+                        <th className="whitespace-nowrap">动作</th>
+                        <th>意图</th>
+                        <th>结果摘要</th>
+                        <th className="whitespace-nowrap">相对上步</th>
                         <th className="whitespace-nowrap min-w-[140px]">耗时</th>
                         <th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {detail.accessLogs.length === 0 ? (
-                        <tr><td colSpan={7} className="px-3 py-4 text-center text-fg-muted">暂无调用记录</td></tr>
+                      {visibleTurnCalls.length === 0 ? (
+                        <tr><td colSpan={9} className="px-3 py-4 text-center text-fg-muted">暂无调用记录</td></tr>
                       ) : (
-                        detail.accessLogs.map((log, index) => (
-                          <tr key={log.id}>
-                            <td className="pl-audit-table-num">{index + 1}</td>
-                            <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(log.ts)}</td>
-                            <td className="notranslate whitespace-nowrap" translate="no">{log.connectionId ?? "—"}</td>
-                            <td className="pl-audit-table-muted notranslate" translate="no">{log.tables?.join(", ") ?? "—"}</td>
-                            <td className="whitespace-nowrap">
-                              <span className={`pl-status-badge ${log.outcome === "ok" ? "pl-status-done" : log.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed"}`}>
-                                {OUTCOME_LABELS[log.outcome as keyof typeof OUTCOME_LABELS] ?? log.outcome}
-                              </span>
-                            </td>
-                            <td className="whitespace-nowrap min-w-[140px]">
-                              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                <span className="tabular-nums font-mono">{log.durationMs} ms</span>
-                                {log.isSlowCall ? (
-                                  <span className="pl-status-badge pl-status-partial text-[11px] px-1.5 whitespace-nowrap">慢于多数请求</span>
-                                ) : null}
-                              </div>
-                            </td>
-                            <td>
-                              {log.traceId ? <TraceLink traceId={log.traceId} /> : null}
-                            </td>
-                          </tr>
-                        ))
+                        visibleTurnCalls.map((log, index) => {
+                          const prev = index > 0 ? visibleTurnCalls[index - 1] : null;
+                          const story = buildCallStoryLine(
+                            toCallStoryInput(log),
+                            prev ? toCallStoryInput(prev) : null
+                          );
+                          const expanded = expandedCallId === log.id;
+                          return (
+                            <Fragment key={log.id}>
+                              <tr
+                                className="pl-audit-row cursor-pointer"
+                                data-testid={`audit-turn-call-row-${log.id}`}
+                                onClick={() => setExpandedCallId(expanded ? null : log.id)}
+                              >
+                                <td className="pl-audit-table-num">{index + 1}</td>
+                                <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(log.ts)}</td>
+                                <td data-testid={`audit-turn-call-grade-${log.id}`}>
+                                  {accessGradeLabel(story.accessGrade)}
+                                </td>
+                                <td data-testid={`audit-turn-call-action-${log.id}`}>{story.action}</td>
+                                <td className="text-xs" data-testid={`audit-turn-call-intent-${log.id}`}>
+                                  <span className="notranslate" translate="no">{story.intent}</span>
+                                </td>
+                                <td className="text-xs" data-testid={`audit-turn-call-result-${log.id}`}>
+                                  {story.resultSummary}
+                                </td>
+                                <td className="text-xs text-fg-muted whitespace-nowrap" data-testid={`audit-turn-call-hint-${log.id}`}>
+                                  {story.stepHint}
+                                </td>
+                                <td className="whitespace-nowrap min-w-[140px]">
+                                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                    <span className="tabular-nums font-mono">{log.durationMs} ms</span>
+                                    {log.isSlowCall ? (
+                                      <span className="pl-status-badge pl-status-partial text-[11px] px-1.5 whitespace-nowrap">慢于多数请求</span>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td onClick={(event) => event.stopPropagation()}>
+                                  {log.traceId ? <TraceLink traceId={log.traceId} /> : null}
+                                </td>
+                              </tr>
+                              {expanded ? (
+                                <tr className="pl-audit-detail" data-testid={`audit-turn-call-expand-${log.id}`}>
+                                  <td colSpan={9} className="px-3 py-3 text-xs">
+                                    <div className="grid gap-2">
+                                      <div>事件 ID <span className="font-mono notranslate" translate="no">{log.id}</span></div>
+                                      <div>工具 <span className="font-mono notranslate" translate="no">{log.tool}</span></div>
+                                      <div>连接 <span className="notranslate" translate="no">{log.connectionId ?? "—"}</span></div>
+                                      <div>涉及数据表 <span className="notranslate" translate="no">{log.tables?.join(", ") ?? "—"}</span></div>
+                                      <div>裁决原因 <span className="notranslate" translate="no">{log.decisionReason ?? "—"}</span></div>
+                                      <div>
+                                        Args{" "}
+                                        <code className="notranslate" translate="no">
+                                          {log.argsSummary ? JSON.stringify(log.argsSummary) : "—"}
+                                        </code>
+                                      </div>
+                                      <div>
+                                        生成 SQL{" "}
+                                        {log.generatedSql ? (
+                                          <code className="block whitespace-pre-wrap break-all font-mono notranslate" translate="no">
+                                            {log.generatedSql}
+                                          </code>
+                                        ) : (
+                                          "—"
+                                        )}
+                                      </div>
+                                      <div>
+                                        错误{" "}
+                                        <span className={log.errorDetail ? "text-danger" : "text-fg-muted"}>
+                                          {log.errorDetail ?? "—"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ) : null}
+                            </Fragment>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -1177,6 +1279,7 @@ function EntryRow({
     entry.responseBytes !== undefined
     || entry.responseRowCount !== undefined
     || entry.responseColumnCount !== undefined;
+  const story = buildCallStoryLine(toCallStoryInput(entry));
 
   return (
     <>
@@ -1246,35 +1349,20 @@ function EntryRow({
             <span className="text-fg-muted">—</span>
           )}
         </td>
-        <td className="notranslate" translate="no" data-testid={`audit-call-agent-${entry.id}`}>
-          {/* 原 Agent 列保留**产品 Agent 含义**；「凭证主体」并列说明，
-              不用 token 备注替换 Agent（20261019 §5）。 */}
-          <div className="flex flex-col items-start gap-1">
-            <span>{formatAgentLabel(entry.userId, agentNameById)}</span>
-            <CredentialPrincipalCell
-              userId={entry.credentialPrincipalId ?? entry.userId}
-              hint={
-                entry.credentialPrincipalId && entry.credentialPrincipalId !== entry.userId
-                  ? "凭证主体"
-                  : "凭证主体（未单独登记，等同 Agent 主体）"
-              }
-            />
+        <td data-testid={`audit-call-grade-${entry.id}`}>{accessGradeLabel(entry.accessGrade)}</td>
+        <td data-testid={`audit-call-action-${entry.id}`}>
+          <div className="flex flex-col items-start gap-0.5">
+            <span>{story.action}</span>
+            <span className="font-mono text-[11px] text-fg-muted notranslate" translate="no">
+              {entry.tool}
+            </span>
           </div>
         </td>
-        <td>
-          <AccessContextCell
-            clientIp={entry.clientIp}
-            userAgent={entry.userAgent}
-            testId={`audit-access-context-${entry.id}`}
-          />
-          <ClientCoveragePill
-            observed={coverageAxisFrom(entry) === "observed"}
-            reason={coverageAxisFrom(entry) === "observed" ? undefined : "no_client_observation"}
-          />
+        <td className="text-xs max-w-xs" data-testid={`audit-call-intent-${entry.id}`}>
+          <span className="notranslate" translate="no">{story.intent}</span>
         </td>
         <td>
           <div className="flex flex-col items-start gap-1" data-testid={`audit-status-cell-${entry.id}`}>
-            {/* 八桶主状态（B27）。旧 outcome 只作 legacy 说明，不是执行状态。 */}
             <span
               className={`pl-status-badge ${primaryStatusPalette(primaryStatus)}`}
               data-testid={`audit-primary-status-${entry.id}`}
@@ -1282,8 +1370,9 @@ function EntryRow({
             >
               {primaryStatusLabel(primaryStatus)}
             </span>
-            {/* 三条独立判断轴：执行 / 关联 / 覆盖互不推导。
-                执行成功**不会**让关联或覆盖变成绿色已完成。 */}
+            <span className="text-[11px] text-fg-muted" data-testid={`audit-call-result-${entry.id}`}>
+              {story.resultSummary}
+            </span>
             <AuditStatusTriad
               execution={executionAxisFrom(entry)}
               association={associationAxisFrom(entry.associationStatus)}
@@ -1304,9 +1393,6 @@ function EntryRow({
             ) : null}
           </span>
         </td>
-        <td data-testid={`audit-call-grade-${entry.id}`}>{accessGradeLabel(entry.accessGrade)}</td>
-        <td className="pl-audit-table-mono">{entry.tool}</td>
-        <td className="pl-audit-table-muted">{entry.tables?.join(", ")}</td>
         <td className="pl-audit-table-muted">
           <DecisionReasonCell code={entry.decisionReason} />
           {entry.outcome === "denied" ? (
@@ -1321,46 +1407,10 @@ function EntryRow({
             </Link>
           ) : null}
         </td>
-        <td>
-          {callOrigin.kind === "playground" ? (
-            <span className="pl-status-badge pl-status-partial" data-testid={`audit-call-source-playground-${entry.id}`}>
-              {callOrigin.label}
-            </span>
-          ) : (
-            <span className="text-fg-muted notranslate" translate="no" data-testid={`audit-call-source-agent-${entry.id}`}>
-              {callOrigin.label}
-            </span>
-          )}
-        </td>
-        <td className="pl-audit-generated-sql max-w-md">
-          {entry.generatedSql ? (
-            <code
-              className="block max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-xs notranslate"
-              translate="no"
-              data-testid={`audit-generated-sql-${entry.id}`}
-            >
-              {entry.generatedSql}
-            </code>
-          ) : (
-            <span className="text-fg-muted">—</span>
-          )}
-          {/* 返回规模：行 / 列 / 字节。缺值按**六值空值原因**展示，
-              未知不得写成 0（20261019 §4.4 / U2）。
-              组件与既有「生成 SQL」入口**并存**，不替换其可发现性。 */}
-          <ReadonlySqlRowset
-            rows={entry.responseRowCount ?? null}
-            cols={entry.responseColumnCount ?? null}
-            bytes={entry.responseBytes ?? null}
-            status={sqlRowsetStatusFrom(
-              entry.responseRowCount !== undefined && entry.responseRowCount !== null,
-              entry.nullReason
-            )}
-          />
-        </td>
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
-          <td colSpan={14} className="px-3 py-3 text-xs">
+          <td colSpan={10} className="px-3 py-3 text-xs">
             <div className="pl-audit-detail-panels" data-testid={`audit-detail-panels-${entry.id}`}>
               <AuditDetailSection title="调用方" testId={`audit-detail-caller-${entry.id}`}>
                 <AuditDetailField
@@ -1370,7 +1420,8 @@ function EntryRow({
                     </>
                   }
                 >
-                  <span className="inline-flex flex-wrap items-center gap-2">
+                  <span className="inline-flex flex-wrap items-center gap-2" data-testid={`audit-call-agent-${entry.id}`}>
+                    <span className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</span>
                     <Link
                       to={agentHref}
                       className="pl-inline-link notranslate"
@@ -1386,6 +1437,38 @@ function EntryRow({
                       </span>
                     ) : null}
                   </span>
+                </AuditDetailField>
+                <AuditDetailField label="凭证主体">
+                  <CredentialPrincipalCell
+                    userId={entry.credentialPrincipalId ?? entry.userId}
+                    hint={
+                      entry.credentialPrincipalId && entry.credentialPrincipalId !== entry.userId
+                        ? "凭证主体"
+                        : "凭证主体（未单独登记，等同 Agent 主体）"
+                    }
+                  />
+                </AuditDetailField>
+                <AuditDetailField label="访问上下文">
+                  <AccessContextCell
+                    clientIp={entry.clientIp}
+                    userAgent={entry.userAgent}
+                    testId={`audit-access-context-${entry.id}`}
+                  />
+                  <ClientCoveragePill
+                    observed={coverageAxisFrom(entry) === "observed"}
+                    reason={coverageAxisFrom(entry) === "observed" ? undefined : "no_client_observation"}
+                  />
+                </AuditDetailField>
+                <AuditDetailField label="调用来源">
+                  {callOrigin.kind === "playground" ? (
+                    <span className="pl-status-badge pl-status-partial" data-testid={`audit-call-source-playground-${entry.id}`}>
+                      {callOrigin.label}
+                    </span>
+                  ) : (
+                    <span className="text-fg-muted notranslate" translate="no" data-testid={`audit-call-source-agent-${entry.id}`}>
+                      {callOrigin.label}
+                    </span>
+                  )}
                 </AuditDetailField>
                 <AuditDetailField
                   label={<span className="notranslate" translate="no">Token</span>}
@@ -1455,12 +1538,37 @@ function EntryRow({
               </AuditDetailSection>
 
               <AuditDetailSection title="请求与结果" testId={`audit-detail-request-${entry.id}`} wide>
+                <AuditDetailField label="涉及数据表">
+                  <span className="notranslate" translate="no">{entry.tables?.join(", ") || "—"}</span>
+                </AuditDetailField>
                 <AuditDetailField label="Args">
                   {redactedArgs !== null ? (
-                    <code>{JSON.stringify(redactedArgs)}</code>
+                    <code data-testid={`audit-detail-args-${entry.id}`}>{JSON.stringify(redactedArgs)}</code>
                   ) : (
                     "—"
                   )}
+                </AuditDetailField>
+                <AuditDetailField label="生成 SQL">
+                  {entry.generatedSql ? (
+                    <code
+                      className="block max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs notranslate"
+                      translate="no"
+                      data-testid={`audit-generated-sql-${entry.id}`}
+                    >
+                      {entry.generatedSql}
+                    </code>
+                  ) : (
+                    <span className="text-fg-muted">—</span>
+                  )}
+                  <ReadonlySqlRowset
+                    rows={entry.responseRowCount ?? null}
+                    cols={entry.responseColumnCount ?? null}
+                    bytes={entry.responseBytes ?? null}
+                    status={sqlRowsetStatusFrom(
+                      entry.responseRowCount !== undefined && entry.responseRowCount !== null,
+                      entry.nullReason
+                    )}
+                  />
                 </AuditDetailField>
                 <AuditDetailField label="错误" labelClassName={entry.errorDetail ? "text-danger" : undefined}>
                   {entry.errorDetail ? (
@@ -2614,21 +2722,17 @@ export function Audit() {
                   <th>时间</th>
                   <th className="whitespace-nowrap">事件 ID</th>
                   <th className="whitespace-nowrap">问询 ID</th>
-                  <th><span className="notranslate" translate="no">Agent</span></th>
-                  <th className="whitespace-nowrap">访问上下文</th>
+                  <th className="whitespace-nowrap">访问等级</th>
+                  <th className="whitespace-nowrap">动作</th>
+                  <th>意图</th>
                   <th>状态</th>
                   <th>耗时</th>
-                  <th className="whitespace-nowrap">访问等级</th>
-                  <th>工具</th>
-                  <th>涉及数据表</th>
                   <th>裁决原因</th>
-                  <th>调用来源</th>
-                  <th>生成 SQL</th>
                 </tr>
               </thead>
               <tbody>
                 {callEntries.length === 0 ? (
-                  <tr><td colSpan={14} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
+                  <tr><td colSpan={10} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
                 ) : (
                   callEntries.map((entry, index) => (
                     <EntryRow

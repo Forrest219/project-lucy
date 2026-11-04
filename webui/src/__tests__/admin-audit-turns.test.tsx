@@ -280,18 +280,23 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
 
     const table = screen.getByTestId("audit-calls-table");
     const headers = Array.from(table.querySelectorAll("thead th")).map((th) => th.textContent?.trim());
-    expect(headers.slice(0, 7)).toEqual([
+    expect(headers).toEqual([
       "序号",
       "时间",
       "事件 ID",
       "问询 ID",
-      "Agent",
-      "访问上下文",
-      "状态"
+      "访问等级",
+      "动作",
+      "意图",
+      "状态",
+      "耗时",
+      "裁决原因"
     ]);
-    expect(headers).toContain("涉及数据表");
-    expect(headers).toContain("访问上下文");
-    expect(screen.getByTestId("audit-access-context-42")).toHaveTextContent("203.0.113.9");
+    expect(headers).not.toContain("访问上下文");
+    expect(headers).not.toContain("生成 SQL");
+    expect(headers).not.toContain("涉及数据表");
+    fireEvent.click(screen.getByTestId("audit-calls-table").querySelector("tbody tr")!);
+    expect(await screen.findByTestId("audit-access-context-42")).toHaveTextContent("203.0.113.9");
   });
 
   it("exports the current tab and keeps the evidence pack as a text action (Spec 140)", async () => {
@@ -565,10 +570,13 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(await screen.findByTestId("audit-turn-drawer")).toBeInTheDocument();
     expect(screen.getByTestId("audit-turn-drawer-close")).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByText("数据库连接")).toBeInTheDocument();
-      expect(screen.getByText("demo-mysql")).toBeInTheDocument();
+      expect(screen.getByRole("columnheader", { name: "动作" })).toBeInTheDocument();
+      expect(screen.getByRole("columnheader", { name: "意图" })).toBeInTheDocument();
+      expect(screen.getByRole("columnheader", { name: "结果摘要" })).toBeInTheDocument();
       expect(screen.getByText("慢于多数请求")).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByTestId("audit-turn-calls-table").querySelector("tbody tr")!);
+    expect(await screen.findByText("demo-mysql")).toBeInTheDocument();
   });
 
   it("uses local datetime-local values and sends UTC ISO on the wire", async () => {

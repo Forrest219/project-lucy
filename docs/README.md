@@ -1,3 +1,4 @@
+| [specs/lucy-20261104-audit-call-storyline-spec.md](specs/lucy-20261104-audit-call-storyline-spec.md) | **v0.1 功能合同已收口（2026-11-04）**。SC-01–SC-16 关闭。本条收口不表示可上线。功能编号无。Plan 见 [lucy-20261104-audit-call-storyline-plan.md](plans/lucy-20261104-audit-call-storyline-plan.md) |
 # docs/ 文档地图
 
 > 本页是 `docs/` 的分类导航索引。自 2026-09-25 二级分类起，平铺文档已归入

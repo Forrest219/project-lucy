@@ -91,15 +91,16 @@ describe("Audit", () => {
     expect(await screen.findByText("tool_denied")).toBeInTheDocument();
     await waitFor(() => expect(String(fetchMock.mock.calls.find((call) => String(call[0]).startsWith("/api/admin/audit?"))?.[0] ?? "")).toContain("includeProtocol=false"));
 
-    expect(screen.getByRole("columnheader", { name: "访问上下文" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "动作" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "意图" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "访问上下文" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "生成 SQL" })).not.toBeInTheDocument();
+
+    // Spec lucy-20261104：Agent / 访问上下文在展开区；点行展开后取证。
+    fireEvent.click(await screen.findByText("tool_denied"));
+    expect(await screen.findByTestId("audit-detail-panels-1")).toBeInTheDocument();
     expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("203.0.113.10");
     expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("Hermes/1.2.3 (test-agent)");
-
-    // 20261019 §5：Agent 列现在并列展示「凭证主体」，同一行会出现两个
-    // "zhangsan"（Agent 主体 + 凭证主体），因此按单元格 testid 定位，
-    // 不用裸文本匹配。
-    fireEvent.click(await screen.findByTestId("audit-call-agent-1"));
-    expect(await screen.findByTestId("audit-detail-panels-1")).toBeInTheDocument();
     expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("调用方");
     expect(screen.getByTestId("audit-detail-decision-1")).toHaveTextContent("裁决与权限");
     expect(screen.getByTestId("audit-detail-request-1")).toHaveTextContent("请求与结果");
@@ -182,8 +183,9 @@ describe("Audit", () => {
       expect(call).toBeTruthy();
       expect(call).toContain("includeProtocol=true");
     });
+    fireEvent.click(await screen.findByText("tools/list"));
     expect(await screen.findByTestId("audit-call-source-playground-9")).toHaveTextContent("受控试调");
-    expect(screen.getByRole("columnheader", { name: "调用来源" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "调用来源" })).not.toBeInTheDocument();
   });
 
   it("keeps an exact Token filter visible and applies it to calls and exports", async () => {

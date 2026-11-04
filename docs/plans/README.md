@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261104-audit-call-storyline-plan.md](lucy-20261104-audit-call-storyline-plan.md) | **v0.1 功能合同已收口（2026-11-04）**。SC-01–SC-16 关闭。本条收口不表示可上线。Spec 见 [lucy-20261104-audit-call-storyline-spec.md](../specs/lucy-20261104-audit-call-storyline-spec.md) |
 | [lucy-20261103-admin-api-agent-discoverability-plan.md](lucy-20261103-admin-api-agent-discoverability-plan.md) | **v0.4 功能合同已收口（2026-11-03）**。SC-01–SC-20 全部关闭，逐条落点见 §4.1，证据见收口记录。本条收口不表示可上线。Spec 见 [lucy-20261103-admin-api-agent-discoverability-spec.md](../specs/lucy-20261103-admin-api-agent-discoverability-spec.md)。审阅见 [codex-review](../reviews/2026-11-03-codex-review-admin-api-agent-discoverability.md)。收口见 [closure](../reviews/2026-11-03-admin-api-agent-discoverability-closure.md) |
 | [lucy-20261102-lucy-0-30-0-requirement-pool-plan.md](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) | **候选需求池 v0.3（不是 Spec，不授权实现）**：`0.30.0` 池；REQ-030-001–011 Deferred。剥离见 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md)、[D](../reviews/2026-11-03-product-close-peel-d.md) |
 | [lucy-20261104-role-create-business-qa-defaults-plan.md](lucy-20261104-role-create-business-qa-defaults-plan.md) | **v0.1 功能合同已收口（2026-11-04）**。新建默认业务问答；SC-01–SC-12 关闭。本条收口不表示可上线。Spec 见 [lucy-20261104-role-create-business-qa-defaults-spec.md](../specs/lucy-20261104-role-create-business-qa-defaults-spec.md)。收口见 [closure](../reviews/2026-11-04-role-create-business-qa-defaults-closure.md) |
