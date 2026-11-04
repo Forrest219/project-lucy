@@ -321,7 +321,8 @@ const tools = [
   "lucy_skill_search",
   "lucy_skill_read",
   "lucy_certified_route",
-  "lucy_report_template"
+  "lucy_report_template",
+  "lucy_continue_question"
 ];
 const roleMarker = /^(\s*)lucy_admin:\s*$/m;
 const match = roleMarker.exec(text);

@@ -472,6 +472,58 @@ test("entrypoint seeds the ops evidence connection before the daemon starts (SC-
   await rm(root, { recursive: true, force: true });
 });
 
+test("entrypoint grants lucy_continue_question to an existing demo lucy_admin role", async () => {
+  const root = await makeRoot("lucy-entrypoint-admin-continue-");
+  const templateRoot = path.join(root, "examples/docker-demo/project-template");
+  const projectRoot = path.join(root, "project");
+  await mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
+  await mkdir(path.join(projectRoot, "webui/config"), { recursive: true });
+  await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n");
+  const accessYaml = `roles:
+  lucy_admin:
+    description: 平台运维数据面
+    permission_model_version: 2
+    allow:
+      connections:
+        - demo-mysql
+      source_scope: catalog_bound
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_begin_question
+        - sl_validate
+        - lucy_skill_search
+        - lucy_skill_read
+        - lucy_certified_route
+        - lucy_report_template
+  chatbi-analyst:
+    description: 业务只读
+    allow:
+      tools:
+        - lucy_begin_question
+`;
+  await writeFile(path.join(projectRoot, "webui/config/access.yaml"), accessYaml);
+
+  const first = runSeedOnly(templateRoot, projectRoot);
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /patched lucy_admin tools \(\+1\)/);
+  const patched = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+  const adminBlock = patched.slice(patched.indexOf("lucy_admin:"), patched.indexOf("chatbi-analyst:"));
+  assert.match(adminBlock, /- lucy_continue_question\n/);
+  assert.equal(adminBlock.split("- lucy_continue_question").length - 1, 1);
+  assert.doesNotMatch(patched.slice(patched.indexOf("chatbi-analyst:")), /lucy_continue_question/);
+  assert.doesNotMatch(patched, /lucy_ops_connection_tables|lucy_ops_source_import/);
+
+  const second = runSeedOnly(templateRoot, projectRoot);
+  assert.equal(second.status, 0, second.stderr);
+  assert.doesNotMatch(second.stdout, /patched lucy_admin tools/);
+  assert.equal(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8"), patched);
+
+  await rm(root, { recursive: true, force: true });
+});
+
 // Spec 191 — supervisor owns the KTX MCP daemon (foreground process, backgrounded
 // with &) so WebUI can request reload after ktx.yaml writes without tearing down
 // the container. Start lives in ktx_start_daemon; lifecycle is supervise_ktx.
