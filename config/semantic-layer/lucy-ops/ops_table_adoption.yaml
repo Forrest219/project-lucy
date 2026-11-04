@@ -1,0 +1,33 @@
+# 可问治理面 W2 — 表采用／近窗未访问／表活跃率（Q5／Q6）。
+name: ops_table_adoption
+
+grain:
+  - snapshot_id
+  - connection_id
+  - schema_name
+  - source_name
+
+measures:
+  - name: table_count
+    expr: count(*)
+    description: 授权面表人口行数。
+
+  - name: unvisited_table_count
+    expr: sum(window_unvisited)
+    description: 近窗未访问表数（D17＝C）。
+
+  - name: active_days
+    expr: sum(active_days)
+    description: 活跃天数合计（通常按表维度下钻后读单行）。
+
+  - name: denom_days
+    expr: max(denom_days)
+    description: 分母天数（窗内 Asia/Shanghai 相交日数）。
+
+  - name: activity_rate
+    expr: avg(activity_rate)
+    description: 表活跃率 active_days/denom_days（D19）。
+
+  - name: days_online_in_window
+    expr: max(days_online_in_window)
+    description: 窗内在线天数披露（本条无上线锚点时等于 denom_days）。

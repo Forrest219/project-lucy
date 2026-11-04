@@ -1,5 +1,6 @@
 /**
  * Spec 149 §5.5 — 内容根资产的**复制**规则。
+ * Spec 20261104 §4.1 — 官方历史版本可自愈升级。
  *
  * 复制规则对语义、Skill、Wiki 完全相同：
  *
@@ -7,8 +8,13 @@
  * placeAsset(template, dest):
  *   if dest is absent:      copy template; return copied
  *   if dest bytes equal:    return unchanged
+ *   if digest(dest) ∈ stock: copy template; return upgraded     # 官方历史版本
  *   else:                   do not write; record OPS_EVIDENCE_ASSET_CONFLICT; return conflict
  * ```
+ *
+ * `stock` 是该资产**曾随版本发布过的标准模板**摘要白名单
+ * （见 `stock-digests.ts`）。命中即认定「旧版本官方资产」，覆盖为当前模板；
+ * 未命中的字节差一律按用户定制处理：不写、不覆盖。
  *
  * 事实源是**解析后的内容根**（`resolveContentPaths`），不是写死的
  * `<projectRoot>/semantic-layer`。复制之后再由 `syncContentToProjectRoot`
@@ -25,6 +31,7 @@ import {
   OPS_EVIDENCE_SKILL_NAME,
   OPS_EVIDENCE_SOURCE_NAMES
 } from "./contract.js";
+import { isOpsEvidenceStockDigest, sha256Hex } from "./stock-digests.js";
 
 /** `webui/` 根目录（`webui/server/ops-evidence/` → 上两级）。 */
 const WEBUI_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -45,7 +52,7 @@ export interface OpsEvidenceAssetSpec {
   contentRelPath: string;
 }
 
-export type OpsEvidenceAssetOutcome = "copied" | "unchanged" | "conflict";
+export type OpsEvidenceAssetOutcome = "copied" | "unchanged" | "upgraded" | "conflict";
 
 export interface OpsEvidenceAssetResult {
   spec: OpsEvidenceAssetSpec;
@@ -100,9 +107,12 @@ export function opsEvidenceAssetSpecs(): OpsEvidenceAssetSpec[] {
 /**
  * 复制一个模板资产到内容根。
  *
- * 目标已存在且字节不同 → **不写**，返回 `conflict`（调用方记
- * `OPS_EVIDENCE_ASSET_CONFLICT`）。草稿、`roles_allowed: ["*"]`、损坏的
- * frontmatter 都属于这一类：它们不是覆盖理由。
+ * 目标已存在且字节不同时，先看内容摘要：
+ * - 命中该资产的官方历史 stock 摘要 → 覆盖为当前模板，返回 `upgraded`
+ *   （旧版本官方资产自愈，不是用户定制）。
+ * - 未命中 → **不写**，返回 `conflict`（调用方记
+ *   `OPS_EVIDENCE_ASSET_CONFLICT`）。草稿、`roles_allowed: ["*"]`、损坏的
+ *   frontmatter 都属于这一类：它们不是覆盖理由。
  */
 export async function placeOpsEvidenceAsset(
   spec: OpsEvidenceAssetSpec,
@@ -132,6 +142,11 @@ export async function placeOpsEvidenceAsset(
 
   if (existing.equals(template)) {
     return { spec, outcome: "unchanged", templatePath, destPath };
+  }
+
+  if (isOpsEvidenceStockDigest(spec.id, sha256Hex(existing))) {
+    await copyFile(templatePath, destPath);
+    return { spec, outcome: "upgraded", templatePath, destPath };
   }
 
   return { spec, outcome: "conflict", templatePath, destPath };

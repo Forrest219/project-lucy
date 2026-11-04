@@ -349,7 +349,7 @@ describe("D22 — enabled_tables expansion；ensure 不改 access Role 字节", 
     vi.resetModules();
   });
 
-  it("仅有 W0 enabled_tables 时 ensure → expanded，并 union 全部冻结表", async () => {
+  it("仅有 W0 enabled_tables 时 ensure → expanded，并按 Manifest 交集补齐冻结表", async () => {
     projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-ops-expand-"));
     const auditDbPath = path.join(projectRoot, "audit.sqlite");
     await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
@@ -390,7 +390,9 @@ users: []
       "../ops-evidence/connection-block"
     );
     const beforeAccess = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"));
-    const state = await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath);
+    const state = await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath, {
+      manifestPhysicalTables: OPS_EVIDENCE_ENABLED_TABLES
+    });
     expect(state.write).toBe("expanded");
     expect(state.addedTables?.length).toBeGreaterThan(0);
     const block = await readOpsEvidenceBlock(projectRoot);

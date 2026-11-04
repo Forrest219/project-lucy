@@ -7,7 +7,7 @@
 | 文档版本 / 日期 | **v0.9.2** / 2026-11-02（功能合同收口） |
 | 优先级 | P0＝W1；P1＝W2；P2 不实施。功能编号无 |
 | 主 Spec | [Spec v0.9.2](../specs/lucy-20261101-ops-evidence-askable-governance-spec.md) |
-| 状态 | **功能合同收口（2026-11-02）**。部署项已拆出。收口 ≠ 上线 |
+| 状态 | **v0.9.3 功能合同已收口（2026-11-04）**。短修订并入 Manifest 升级自愈：官方 stock 可 `upgraded`，ensure 后 `enabled_tables` ⊆ 本地 Manifest。基线收口见 [收口审阅](../reviews/2026-11-02-ops-evidence-askable-governance-closure.md)。本条收口不表示可上线 |
 | 授权边界 | 可改运行代码／语义／Skill／Wiki／测试／文档；不 commit、不出客户包（除非另授） |
 | 验收 | Spec v0.9.2 出口：SC-01–SC-18、SC-20–SC-24（SC-17d／17f／19 已拆出） |
 | 审阅 | [Codex 审阅](../reviews/2026-11-01-codex-review-ops-evidence-askable-governance.md)；[收口](../reviews/2026-11-02-ops-evidence-askable-governance-closure.md) |

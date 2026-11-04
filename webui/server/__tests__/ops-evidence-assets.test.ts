@@ -1,15 +1,23 @@
 /**
  * Spec 149 §5.4 / §5.5 / WO T3 / T6 — 内容根资产复制、Skill 与 Wiki。
+ * Spec 20261104 §4.1 — 官方历史版本自愈升级（stock digest 白名单）。
  *
- * 覆盖：SC-09、SC-14、SC-16、SC-18。
+ * 覆盖：SC-09、SC-14、SC-16、SC-18；H1／H4／H5。
  */
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 import type { Identity } from "../proxy/identity";
+
+/** 历史官方模板夹具（W0 Manifest / 旧 Skill / 旧 Wiki），字节与 stock digest 一致。 */
+const FIXTURE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "ops-evidence");
+const W0_SCHEMA_FIXTURE = path.join(FIXTURE_DIR, "w0-schema-main.yaml");
+const OLD_SKILL_FIXTURE = path.join(FIXTURE_DIR, "old-ops-questioning.skill.md");
+const OLD_WIKI_FIXTURE = path.join(FIXTURE_DIR, "old-ops-questioning.wiki.md");
 
 let projectRoot: string | undefined;
 let contentRoot: string | undefined;
@@ -135,6 +143,103 @@ describe("Spec 149 §5.5 — 复制规则", () => {
       const result = await assets.placeOpsEvidenceAsset(skillSpec!, contentPaths);
       expect(result.outcome, variant.label).toBe("conflict");
       expect(await readFile(destPath), variant.label).toEqual(before);
+    }
+  });
+});
+
+describe("Spec 20261104 §4.1 — 官方历史 stock digest 与自愈升级", () => {
+  it("H5: 识别登记的历史 digest；当前模板 digest ∉ stock（遍历全部资产）", async () => {
+    const stock = await loadModule<typeof import("../ops-evidence/stock-digests")>(
+      "../ops-evidence/stock-digests"
+    );
+    const assets = await loadModule<typeof import("../ops-evidence/assets")>(
+      "../ops-evidence/assets"
+    );
+
+    // 登记在册的历史官方版本。
+    expect(
+      stock.isOpsEvidenceStockDigest(
+        "semantic-layer/_schema",
+        "ed5f9f8b952950366fe563982e5c1ef98b127992195483a82552880cbac43ec4"
+      )
+    ).toBe(true);
+    expect(
+      stock.isOpsEvidenceStockDigest(
+        "skills/ops-questioning",
+        "03c43e7b258a9116cc48e73a60fa3d37d0bf41bff998fd9f5a9c4317d5fbd4a4"
+      )
+    ).toBe(true);
+    expect(
+      stock.isOpsEvidenceStockDigest(
+        "wiki/ops-questioning",
+        "a286bcda4a18f0f4af28691b7e4d75f4d9973d7bb22a86d9001235ecc3fff2fe"
+      )
+    ).toBe(true);
+
+    // 未登记的资产即使摘要相同也不认。
+    expect(
+      stock.isOpsEvidenceStockDigest(
+        "semantic-layer/ops_calls",
+        "ed5f9f8b952950366fe563982e5c1ef98b127992195483a82552880cbac43ec4"
+      )
+    ).toBe(false);
+    expect(stock.isOpsEvidenceStockDigest("semantic-layer/_schema", "not-a-digest")).toBe(false);
+
+    // H5：当前模板 digest 不得落在 stock 里（否则旧模板会被当成「当前版本」）。
+    for (const spec of assets.opsEvidenceAssetSpecs()) {
+      const bytes = await readFile(
+        path.join(assets.OPS_EVIDENCE_TEMPLATE_ROOT, spec.templateRelPath)
+      );
+      const digest = stock.sha256Hex(bytes);
+      expect(stock.isOpsEvidenceStockDigest(spec.id, digest), spec.id).toBe(false);
+    }
+  });
+
+  it("官方历史版本 → upgraded 并覆盖为当前模板；定制版本 → conflict 且不改文件", async () => {
+    const { root, content } = await makeProject();
+    projectRoot = root;
+    contentRoot = content;
+    process.env.KTX_PROJECT_ROOT = root;
+    process.env.LUCY_CONTENT_ROOT = content;
+
+    const assets = await loadModule<typeof import("../ops-evidence/assets")>(
+      "../ops-evidence/assets"
+    );
+    const paths = await loadModule<typeof import("../paths")>("../paths");
+    const contentPaths = await paths.resolveContentPaths(root);
+
+    const cases: Array<{ id: string; fixture: string; contentDir: "semanticLayer" | "skills" | "wiki" }> = [
+      { id: "semantic-layer/_schema", fixture: W0_SCHEMA_FIXTURE, contentDir: "semanticLayer" },
+      { id: "skills/ops-questioning", fixture: OLD_SKILL_FIXTURE, contentDir: "skills" },
+      { id: "wiki/ops-questioning", fixture: OLD_WIKI_FIXTURE, contentDir: "wiki" }
+    ];
+
+    for (const testCase of cases) {
+      const spec = assets.opsEvidenceAssetSpecs().find((item) => item.id === testCase.id);
+      expect(spec, testCase.id).toBeDefined();
+      const destPath = path.join(contentPaths[testCase.contentDir], spec!.contentRelPath);
+      await mkdir(path.dirname(destPath), { recursive: true });
+      await copyFile(testCase.fixture, destPath);
+
+      // 历史官方版本 → upgraded：文件被当前模板覆盖。
+      const upgraded = await assets.placeOpsEvidenceAsset(spec!, contentPaths);
+      expect(upgraded.outcome, testCase.id).toBe("upgraded");
+      expect(
+        (await readFile(destPath)).equals(await readFile(upgraded.templatePath)),
+        testCase.id
+      ).toBe(true);
+
+      // 再放一次 → unchanged（已是当前模板）。
+      const again = await assets.placeOpsEvidenceAsset(spec!, contentPaths);
+      expect(again.outcome, testCase.id).toBe("unchanged");
+
+      // 定制内容 → conflict：文件保持原样。
+      const custom = "---\nname: ops-questioning\nstatus: draft\n---\n\n定制。\n";
+      await writeFile(destPath, custom, "utf8");
+      const before = await readFile(destPath);
+      const conflicted = await assets.placeOpsEvidenceAsset(spec!, contentPaths);
+      expect(conflicted.outcome, testCase.id).toBe("conflict");
+      expect(await readFile(destPath), testCase.id).toEqual(before);
     }
   });
 });

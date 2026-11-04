@@ -2,10 +2,11 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / **v0.9.2**（收口：部署项拆出本条出口） |
-| 日期 / 目标版本 | 2026-11-01；收口 2026-11-02 / 不绑定产品版本号。功能编号无；不进入 v0.25 升级台账 |
+| 文档类型 / 版本 | 功能设计基线 / **v0.9.3**（短修订：SC-17e stock→upgraded；`enabled_tables` ⊆ Manifest） |
+| 日期 / 目标版本 | 2026-11-01；收口 2026-11-02；短修订 2026-11-04 / 不绑定产品版本号。功能编号无；不进入 v0.25 升级台账 |
 | 功能编号 / 优先级 | **无** / **P0**（W1）／**P1**（W2）／**P2**（行级与问询原文，本条不交付） |
-| 状态 | **v0.9.2 功能合同收口（2026-11-02）**。证据见 [收口审阅](../reviews/2026-11-02-ops-evidence-askable-governance-closure.md)。收口 ≠ 上线 |
+| 状态 | **v0.9.3 功能合同已收口（2026-11-04）**。短修订并入 Manifest 升级自愈：官方 stock 可 `upgraded`，ensure 后 `enabled_tables` ⊆ 本地 Manifest。基线收口见 [收口审阅](../reviews/2026-11-02-ops-evidence-askable-governance-closure.md)。本条收口不表示可上线 |
+| 修订记录 | v0.9.3（2026-11-04）SC-17e／D22 短修订：官方历史 stock 资产可自愈升级为当前模板（`upgraded`），仅非 stock 字节差才记冲突；ensure 之后 `lucy-ops.enabled_tables` ⊆ 本地 Manifest 物理表。见 [Manifest 升级自愈 Spec](lucy-20261104-lucy-ops-manifest-upgrade-heal-spec.md) 及其 [实施 Plan](../plans/lucy-20261104-lucy-ops-manifest-upgrade-heal-plan.md) |
 | 决策来源 | 2026-11-01 产品对话；Codex 审阅见 [`docs/reviews/2026-11-01-codex-review-ops-evidence-askable-governance.md`](../reviews/2026-11-01-codex-review-ops-evidence-askable-governance.md)；PM 定夺记录见同文「PM 定夺」 |
 | 需求来源 | 运维问数须支撑经营／治理追问，而非仅调用流水 |
 | 实施主体 | Lucy（`lucy-ops` 投影／语义／Skill／Wiki；复用并**修正** access-map Token 归因键）。不改 KTX；不改运行时裁决语义（授权模型字段不新增） |
@@ -21,7 +22,7 @@
 
 - 层级：功能合同
 - 本条承诺：授权运维问数 Agent 可按本条冻结口径查询配置人口、窗口活动、Agent 级访问分级汇总、与 `/api/admin/access-map` 同源的图事实，以及表采用／近窗未访问与活跃率
-- 本条出口：SC-01–SC-18、SC-20–SC-24（不含已拆出的 SC-17f、SC-19）的本机自动化断言
+- 本条出口：SC-01–SC-18、SC-20–SC-24（不含已拆出的 SC-17f、SC-19）的本机自动化断言；SC-17e 与 `enabled_tables` 上限按 [Manifest 升级自愈 Spec](lucy-20261104-lucy-ops-manifest-upgrade-heal-spec.md) 修订（v0.9.3）
 - 不在本条出口：整库旅程、自然语言 gold、浏览器／窄屏、镜像与客户环境、行级明细、问询原文；**部署拆出**见下
 - 上线关系：本条收口不表示可上线
 
@@ -161,7 +162,7 @@ Protected 标识（回答中保持原文）：`Agent`、`Token`、`MCP`、`lucy-
 | D19 | 表活跃率＝`active_days/denom_days`。`active_days`＝窗内 Asia/Shanghai 日中至少 1 条 access_path 触达日数；`denom_days`＝`[start,end)` 相交上海日历日数（<1 则不可用）；deny 不计；评测跟随 Spec 187；比率>1＝实现错；新表仍用全窗分母并披露 `days_online_in_window` |
 | D20 | §5.4 为可问治理清单；字段名与 builder／投影对齐；**删除**「与图页逐格对等」合同 |
 | D21 | 新源继承 Spec 149 禁列 + 禁快照原文／问询原文 |
-| D22 | **PM 定夺 A（2026-11-01）**：ensure **只**扩 `lucy-ops.enabled_tables`、升级标准语义／Skill／Wiki（冲突保留并 `unready`）；**永不写 `access.yaml`**（不自动改正式 Role／Agent）。参考模板 `lucy_ops_reader` 必须列出本条全部 sourceName（新装／从模板新建才带齐）。**已落盘**的正式 Role 须管理员显式扩表选择器或重建／改绑。不采用自动迁移补表名。升级 runbook 的现场检查不在本条出口（v0.9.2 拆出）。控制面改 Role 另议，不堵本条 |
+| D22 | **PM 定夺 A（2026-11-01）**：ensure **只**扩 `lucy-ops.enabled_tables`、升级标准语义／Skill／Wiki（冲突保留并 `unready`）；**永不写 `access.yaml`**（不自动改正式 Role／Agent）。参考模板 `lucy_ops_reader` 必须列出本条全部 sourceName（新装／从模板新建才带齐）。**已落盘**的正式 Role 须管理员显式扩表选择器或重建／改绑。不采用自动迁移补表名。升级 runbook 的现场检查不在本条出口（v0.9.2 拆出）。控制面改 Role 另议，不堵本条。**v0.9.3 短修订（2026-11-04）**：升级标准语义包含「官方历史 stock 资产 → 覆盖为当前模板」（`upgraded`）；`enabled_tables` 的扩展**以本地 Manifest 物理表为上限**。见 [Manifest 升级自愈 Spec](lucy-20261104-lucy-ops-manifest-upgrade-heal-spec.md) |
 | D23 | **PM 定夺 E（2026-11-01）**：`ops_tokens` 调用量按 `(agent_id, token_label)` 计默认用量。**本条不修改** access-map 图凭证清单聚合。不问数与图凭证数字对账。Wiki 披露两者可能不一致、以问数为准谈 Agent 用量。仍禁止 label 去重当人口；同 Agent 删建同 label 不可区分前后凭证 |
 | D24 | 治理源缺省窗＝`gov.calendar_days=30`（上海）。亦支持 24／168h、`calendar_days` 7／30、或显式 ISO 半开窗。调用活跃名单的日粒可用 UTC `call_day`，须在回答写明 |
 | D25 | **查询键 `query_key`**＝稳定哈希(`startIso,endIso,trust,filtersDigest,accessConfigVersion,policyVersion,sourceMapVersion,capabilityDigest`)。**不等于**物化代次 |
@@ -313,8 +314,8 @@ SC-11：窗内有访问的表不得入选；仅流水出现过、已不在授权
 
 ```text
 ensure / 升级
-  ├─ enabled_tables ∪ 新物理名          ✅
-  ├─ 标准语义／Skill／Wiki 可识别升级    ✅
+  ├─ enabled_tables ∪ 新物理名          ✅（且 ⊆ 本地 Manifest 物理表）
+  ├─ 标准语义／Skill／Wiki 可识别升级    ✅（官方历史 stock → upgraded；定制 → 冲突保留）
   ├─ 自定义资产冲突 → 治理源 unready    ✅（旧两视图仍可用）
   └─ 改 access.yaml 正式 Role           ❌ 禁止
 
@@ -323,7 +324,9 @@ ensure / 升级
      或从更新后模板新建 Role 并改绑 Agent
 ```
 
-SC-17a：`enabled_tables` 含新名。SC-17b：参考模板含全部 sourceName。SC-17c：旧 Role 未扩权 → 新源不在该 Role 允许集（demo 正式 Role 只留 W0；不是静默空结果冒充无能数据）。SC-17e：标准资产冲突沿用 Spec 149，不覆盖、不把冲突文件说成 current。SC-17d／SC-17f 已拆出，见闭口层级。
+SC-17a：`enabled_tables` 含新名。SC-17b：参考模板含全部 sourceName。SC-17c：旧 Role 未扩权 → 新源不在该 Role 允许集（demo 正式 Role 只留 W0；不是静默空结果冒充无能数据）。SC-17e（v0.9.3 修订）：标准资产**官方历史 stock 版本**允许升级为当前模板（`upgraded`）；**仅非 stock 的字节差**才沿用 Spec 149 记冲突，不覆盖、不把冲突文件说成 current。SC-17d／SC-17f 已拆出，见闭口层级。
+
+**新增不变量（v0.9.3，2026-11-04）**：ensure 之后，`lucy-ops.enabled_tables` ⊆ 本地 Manifest 物理表集合；属于冻结集合的表名不得超出当前有效 Manifest。升级后不得再出现冻结表的「已启用 · 本地无 Manifest」。见 [Manifest 升级自愈 Spec](lucy-20261104-lucy-ops-manifest-upgrade-heal-spec.md) §4.2。
 
 ---
 
@@ -393,7 +396,7 @@ Wiki 必含：图≠论述；三套 Agent／Token 人口、§4.2≠189、Q4 MECE
 | 人口只有活跃 Agent | 按源回答 |
 | 两视图默认用量 | 保留；查询分支独立（D13／N01） |
 | SELECT 禁列 | 扩至全部新源 |
-| ensure 不扩展已有连接表集 | **修订**：必须扩展 `enabled_tables` |
+| ensure 不扩展已有连接表集 | **修订**：必须扩展 `enabled_tables`，但**以本地 Manifest 物理表为上限**（v0.9.3） |
 | ensure 不写 access.yaml | **保留**；Role 扩权运营显式（D22） |
 
 ---
@@ -418,7 +421,7 @@ Wiki 必含：图≠论述；三套 Agent／Token 人口、§4.2≠189、Q4 MECE
 | SC-12 | Q6：D19 公式；deny／探针／跨日／同日重复／denom 反例 |
 | SC-13–SC-15 | Skill／Wiki／术语 |
 | SC-16 | 新源禁列 |
-| SC-17a–c／e | 表集／模板／未扩权时新源不在允许集／资产冲突沿用 Spec 149；ensure 后 access.yaml Role 字节不因本条自动变长 |
+| SC-17a–c／e | 表集／模板／未扩权时新源不在允许集／官方历史 stock 资产可升级为当前模板、仅非 stock 字节差才记冲突；ensure 后 `lucy-ops.enabled_tables` ⊆ 本地 Manifest 物理表（冻结表无「已启用 · 本地无 Manifest」）；ensure 后 access.yaml Role 字节不因本条自动变长 |
 | SC-17d／SC-17f | **拆出。** 现场扩权查询与升级 runbook 不在本条出口 |
 | SC-18 | unready／partial 不伪 0；半份物化不发布 |
 | SC-19 | **拆出。** 四门禁与落盘清单记在收口审阅，不是本条用户承诺 |
@@ -442,5 +445,6 @@ Wiki 必含：图≠论述；三套 Agent／Token 人口、§4.2≠189、Q4 MECE
 
 - 审阅：`docs/reviews/2026-11-01-codex-review-ops-evidence-askable-governance.md`
 - 收口：`docs/reviews/2026-11-02-ops-evidence-askable-governance-closure.md`
+- Manifest 升级自愈：[Spec](lucy-20261104-lucy-ops-manifest-upgrade-heal-spec.md) ／ [Plan](../plans/lucy-20261104-lucy-ops-manifest-upgrade-heal-plan.md)
 - Spec 149／187／189／194；名册 Spec
 - `webui/server/admin/access-map.ts`；`webui/server/proxy/audit.ts`；`webui/server/ops-evidence/**`

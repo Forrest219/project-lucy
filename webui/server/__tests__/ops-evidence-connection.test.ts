@@ -8,6 +8,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { OPS_EVIDENCE_ENABLED_TABLES } from "../ops-evidence/contract";
 
 let projectRoot: string | undefined;
 let auditDbPath: string | undefined;
@@ -90,7 +91,9 @@ describe("Spec 149 §7 — 连接块与一致性裁决", () => {
         "../ops-evidence/connection-block"
       );
 
-    const state = await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath);
+    const state = await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath, {
+      manifestPhysicalTables: OPS_EVIDENCE_ENABLED_TABLES
+    });
     expect(state.write).toBe("inserted");
 
     const block = await readOpsEvidenceBlock(projectRoot);
@@ -174,7 +177,9 @@ describe("Spec 149 §7 — 连接块与一致性裁决", () => {
     for (const testCase of cases) {
       await writeFile(path.join(projectRoot, "ktx.yaml"), testCase.yaml, "utf8");
       const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
-      const state = await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath);
+      const state = await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath, {
+        manifestPhysicalTables: OPS_EVIDENCE_ENABLED_TABLES
+      });
       expect(state.write, testCase.label).toBe("conflict");
       const after = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
       expect(after, testCase.label).toBe(before);
@@ -196,9 +201,13 @@ describe("Spec 149 §7 — 连接块与一致性裁决", () => {
       typeof import("../ops-evidence/connection-block")
     >("../ops-evidence/connection-block");
 
-    expect((await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath)).write).toBe("inserted");
+    expect((await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath, {
+      manifestPhysicalTables: OPS_EVIDENCE_ENABLED_TABLES
+    })).write).toBe("inserted");
     const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
-    expect((await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath)).write).toBe("unchanged");
+    expect((await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath, {
+      manifestPhysicalTables: OPS_EVIDENCE_ENABLED_TABLES
+    })).write).toBe("unchanged");
     expect(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).toBe(before);
   });
 });
@@ -223,7 +232,9 @@ describe("Spec 149 §8 — 就绪状态与摘要戳", () => {
     expect(state.readiness).toBe("reload_required");
 
     // daemon 已启动之后才插入 → 仍然是 reload_required（不自动重载）。
-    await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath);
+    await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath, {
+      manifestPhysicalTables: OPS_EVIDENCE_ENABLED_TABLES
+    });
     readiness.recordOpsEvidenceEnsureState({ connectionWrite: "inserted", readiness: "reload_required" });
     state = await readiness.readOpsEvidenceReadiness({ projectRoot, auditDbPath });
     expect(state.readiness).toBe("reload_required");
