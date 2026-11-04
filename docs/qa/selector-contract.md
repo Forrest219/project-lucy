@@ -1493,18 +1493,34 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-folded-badge` | 访问关系图：folded badge | `pages/admin/AccessMap.tsx` |
 | `access-map-grant-unavailable` | 访问关系图：grant unavailable | `pages/admin/AccessMap.tsx` |
 | `access-map-layer` | 访问关系图：layer | `pages/admin/AccessMap.tsx` |
-| `access-map-methodology-snapshot` | 访问关系图：图下弱入口「口径与快照」（chart-first Spec §5.4，默认关） | `pages/admin/AccessMap.tsx` |
+| `access-map-methodology-snapshot` | **已退役**（hourly-detail）：原图下弱入口「口径与快照」；默认页不得再出现 | — |
 | `access-map-partial-notice` | 访问关系图：partial notice | `pages/admin/AccessMap.tsx` |
+| `access-map-resident-line` | 访问关系图：常驻口径行（窗口／覆盖率／哈希） | `pages/admin/AccessMap.tsx` |
 | `access-map-search` | 访问关系图：search | `pages/admin/AccessMap.tsx` |
 | `access-map-search-message` | 访问关系图：search message | `pages/admin/AccessMap.tsx` |
 | `access-map-search-submit` | 访问关系图：search submit | `pages/admin/AccessMap.tsx` |
-| `access-map-snapshot-id` | 访问关系图：snapshot id | `pages/admin/AccessMap.tsx` |
-| `access-map-token-filter-notice` | 访问关系图：token filter notice | `pages/admin/AccessMap.tsx` |
-| `access-map-trust` | 访问关系图：问询计入（已确认关联 / 含候选关联） | `pages/admin/AccessMap.tsx` |
-| `access-map-trust-hint` | 访问关系图：问询计入说明（授权始终显示，只影响问询） | `pages/admin/AccessMap.tsx` |
+| `access-map-snapshot-coverage` | 访问关系图：快照覆盖率压缩句（常驻行） | `pages/admin/AccessMap.tsx` |
+| `access-map-snapshot-id` | 访问关系图：snapshot id（常驻行） | `pages/admin/AccessMap.tsx` |
+| `access-map-token-filter-notice` | **已退役**（hourly-detail）：Token 过滤提示条 | — |
+| `access-map-trust` | 访问关系图：关联口径（已确认关联 / 含候选关联） | `pages/admin/AccessMap.tsx` |
+| `access-map-trust-hint` | 访问关系图：关联口径说明 | `pages/admin/AccessMap.tsx` |
 | `access-map-view-map` | 访问关系图：view map | `pages/admin/AccessMap.tsx` |
 | `access-map-view-table` | 访问关系图：view table | `pages/admin/AccessMap.tsx` |
 | `access-map-window` | 访问关系图：window | `pages/admin/AccessMap.tsx` |
+| `access-map-window-range` | 访问关系图：统计窗口起止（常驻行） | `pages/admin/AccessMap.tsx` |
+| `access-map-table` | 访问关系图：数据表视图容器 | `components/admin/AccessMapTable.tsx` |
+| `access-map-hourly-detail` | 访问关系图：小时明细表 | `components/admin/AccessMapTable.tsx` |
+| `access-map-detail-row-${i}` | 访问关系图：小时明细行 | `components/admin/AccessMapTable.tsx` |
+| `access-map-detail-inquiry-${i}` | 访问关系图：问询种类单元格 | `components/admin/AccessMapTable.tsx` |
+| `access-map-detail-pagination` | 访问关系图：明细翻页区 | `components/admin/AccessMapTable.tsx` |
+| `access-map-detail-page-summary` | 访问关系图：分页摘要 | `components/admin/AccessMapTable.tsx` |
+| `access-map-detail-prev` / `access-map-detail-next` | 访问关系图：上一页／下一页 | `components/admin/AccessMapTable.tsx` |
+| `access-map-detail-has-more` | 访问关系图：hasMore 提示 | `components/admin/AccessMapTable.tsx` |
+| `access-map-access-unavailable` | 访问关系图：审计不可用 notice（图区） | `pages/admin/AccessMap.tsx` |
+| `access-map-table-access-unavailable` | 访问关系图：表视图审计不可用 | `pages/admin/AccessMap.tsx` |
+| `access-map-table-empty` | 访问关系图：真实零行空态 | `pages/admin/AccessMap.tsx` |
+| `access-map-table-page-overflow` | 访问关系图：分页越界空态 | `pages/admin/AccessMap.tsx` |
+| `access-map-table-back-first-page` | 访问关系图：回到第一页 | `pages/admin/AccessMap.tsx` |
 
 ### `webui/src/pages/admin/AgentList.tsx`
 
@@ -1646,9 +1662,9 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 
 | Test ID | 元素 | 出现位置 |
 |---|---|---|
-| `access-map-credential-${agent.id}` | 访问关系图：credential ${agent.id} | `components/admin/AccessMapCredentialList.tsx` |
-| `access-map-credential-empty` | 访问关系图：credential empty | `components/admin/AccessMapCredentialList.tsx` |
-| `access-map-credential-list` | 访问关系图：credential list | `components/admin/AccessMapCredentialList.tsx` |
+| `access-map-credential-${agent.id}` | **已退役**（hourly-detail）：凭证清单行 | — |
+| `access-map-credential-empty` | **已退役**（hourly-detail） | — |
+| `access-map-credential-list` | **已退役**（hourly-detail）：默认页不得再出现 | — |
 | `access-map-token-${token.id}` | 访问关系图：token ${token.id} | `components/admin/AccessMapCredentialList.tsx` |
 
 ### `webui/src/components/admin/AccessMapLegend.tsx`
@@ -1671,7 +1687,7 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-signal-calls` | 访问关系图：signal calls | `components/admin/AccessMapSignalNotes.tsx` |
 | `access-map-signal-confirmed-source` | 访问关系图：signal confirmed source（确凿越权档的来源标注，SC-10） | `components/admin/AccessMapSignalNotes.tsx` |
 | `access-map-signal-needs-review-note` | 访问关系图：signal needs review note（需复核档的档位说明，禁称「越权」，SC-10） | `components/admin/AccessMapSignalNotes.tsx` |
-| `access-map-snapshot-coverage` | 访问关系图：snapshot coverage | `components/admin/AccessMapSignalNotes.tsx` |
+| `access-map-snapshot-coverage` | 访问关系图：snapshot coverage（现常驻行；原 SignalNotes） | `pages/admin/AccessMap.tsx` |
 
 ### `webui/src/components/admin/AccessMapTable.tsx`
 

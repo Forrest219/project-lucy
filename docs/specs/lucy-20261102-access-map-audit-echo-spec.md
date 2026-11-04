@@ -10,7 +10,7 @@
 | 需求来源 | 治理台访问关系图应让管理员用与访问日志相同的管理语言筛选访问面；关联质量口径可保留，但不得冒充「问询」主筛选 |
 | 实施主体 | Lucy WebUI：`webui/server/admin/access-map.ts`、`webui/src/pages/admin/AccessMap.tsx` 及相关组件／测试。不修改 KTX |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」 |
-| 与既有 Spec 的关系 | **修订访问层候选调用集合及其默认筛选**（不仅是呈现）。在 Spec 187 原有时间窗、`trust`、Token 条件上**相与**问询种类与访问等级，再按原五元组构建访问路径。路径主键、角色归因、守恒算法、边状态判定顺序不变。权威骨架语义仍以 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md) 为准；实施时同步修订其 §4.2、§5.2、§6.3、§7.4 的有效指针。问询种类／访问等级枚举复用 [`lucy-20261102-audit-inquiry-kind-spec.md`](lucy-20261102-audit-inquiry-kind-spec.md) 与 Spec 194 的 `accessGrade`，**不另起枚举**。图面几何沿用 geometry；页壳弱入口沿用 chart-first |
+| 与既有 Spec 的关系 | **修订访问层候选调用集合及其默认筛选**（不仅是呈现）。在 Spec 187 原有时间窗、`trust`、Token 条件上**相与**问询种类与访问等级，再按原五元组构建访问路径。路径主键、角色归因、守恒算法、边状态判定顺序不变。权威骨架语义仍以 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md) 为准；实施时同步修订其 §4.2、§5.2、§6.3、§7.4 的有效指针。问询种类／访问等级枚举复用 [`lucy-20261102-audit-inquiry-kind-spec.md`](lucy-20261102-audit-inquiry-kind-spec.md) 与 Spec 194 的 `accessGrade`，**不另起枚举**。图面几何沿用 geometry；页壳弱入口沿用 chart-first。**Token 条件取消与数据表／口径常驻行**的有效呈现以 [`lucy-20261104-access-map-hourly-detail-spec.md`](lucy-20261104-access-map-hourly-detail-spec.md) 为准（D8 除 Token 外其余候选规则仍有效） |
 | 实施计划 | [`docs/plans/lucy-20261102-access-map-audit-echo-plan.md`](../plans/lucy-20261102-access-map-audit-echo-plan.md)（**v0.4**） |
 | 审阅 | [`docs/reviews/2026-11-02-codex-review-access-map-audit-echo.md`](../reviews/2026-11-02-codex-review-access-map-audit-echo.md) |
 

@@ -74,10 +74,30 @@ import {
   defaultEnsureInquiryRebuild,
   isAccessGradeFilterParam,
   isInquiryKindFilterParam,
+  resolveTurn,
   type AccessMapAccessGradeFilter,
   type AccessMapInquiryKind,
   type EchoRebuildFn
 } from "./access-map-echo.js";
+import { inquiryKindOfTurn, type InquiryKind } from "./audit-inquiry-kind.js";
+import {
+  ACCESS_MAP_DETAIL_DEFAULT_LIMIT,
+  buildAccessMapHourlyDetail,
+  parseDetailPagination,
+  type AccessMapHourlyDetail,
+  type DetailFocusContext,
+  type DetailFocusEntity
+} from "./access-map-hourly-detail.js";
+
+export type { AccessMapHourlyDetail, AccessMapHourlyDetailRow } from "./access-map-hourly-detail.js";
+export {
+  buildHourlyDetailBuckets,
+  packHourlyDetailKey,
+  shanghaiHourFloor,
+  parseDetailPagination,
+  groupAuditRowsToHourlyCalls,
+  bandSetsFromAuditRows
+} from "./access-map-hourly-detail.js";
 
 /** Spec 189 §4.1 — the single Default Usage condition. */
 const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
@@ -101,6 +121,10 @@ export const ACCESS_MAP_DEFAULT_WINDOW: AccessMapWindow = "168h";
 export type AccessMapQuery = {
   agent: string | null;
   role: string | null;
+  /**
+   * Parsed for URL round-trip only. Spec 20261104 D5：取消 Token 条件 —
+   * ignored at load／band／detail（不筛选、不因出现而 400）.
+   */
   token: string | null;
   table: string | null;
   connection: string | null;
@@ -113,6 +137,9 @@ export type AccessMapQuery = {
   accessGrade: AccessMapAccessGradeFilter;
   view: AccessMapView;
   focus: string | null;
+  /** Spec 20261104：明细分页；缺省由 parseAccessMapQuery 填 200／0。 */
+  detailLimit?: number;
+  detailOffset?: number;
 };
 
 export type AccessMapQueryError = {
@@ -192,6 +219,11 @@ export function parseAccessMapQuery(
     return bad("table", "表定位参数必须是 conn::schema::table");
   }
 
+  const detailPaging = parseDetailPagination(input);
+  if (!detailPaging.ok) {
+    return bad(detailPaging.param, detailPaging.message);
+  }
+
   return {
     ok: true,
     query: {
@@ -206,7 +238,9 @@ export function parseAccessMapQuery(
       inquiryKind: inquiryKindRaw ?? ACCESS_MAP_DEFAULT_INQUIRY_KIND,
       accessGrade: accessGradeRaw ?? ACCESS_MAP_DEFAULT_ACCESS_GRADE,
       view: (viewRaw as AccessMapView | null) ?? "map",
-      focus: readParam(input, "focus")
+      focus: readParam(input, "focus"),
+      detailLimit: detailPaging.detailLimit,
+      detailOffset: detailPaging.detailOffset
     }
   };
 }
@@ -414,6 +448,12 @@ export type AccessMapAuditRow = {
   sourceName: string;
   /** Spec 162／189 eval_mark；缺省视为非探针。 */
   evalMark?: boolean | null;
+  /** Tool name for accessGrade；小时明细与 echo 共用。 */
+  tool?: string | null;
+  /** Explicit turn id for inquiryKind resolution. */
+  lucyTurnId?: string | null;
+  /** Pre-resolved inquiry kind（provider 或测试夹具）。 */
+  inquiryKind?: InquiryKind | null;
 };
 
 export type AccessMapPermissionSnapshot = {
@@ -1508,6 +1548,11 @@ export type AccessMapResponse = {
     grant: GrantPathRef[];
     access: AccessPathRef[];
   };
+  /**
+   * Spec 20261104：仅 `view=table` 计算。access unavailable → `null`
+   *（禁止用空成功表冒充）；`view=map` 可省略。
+   */
+  detail?: AccessMapHourlyDetail | null;
 };
 
 /**
@@ -1521,6 +1566,49 @@ export type AccessMapResponse = {
  * 降级**不得**用空图或零值图冒充正常结果，所以 `meta.grant.state` 与
  * `meta.access.state` 永远如实发布。
  */
+function decodeFocusEntity(node: InternalNode | undefined): DetailFocusEntity | null {
+  if (!node) return null;
+  switch (node.kind) {
+    case "agent":
+      return { kind: "agent", agentId: node.id.slice("agent:".length) };
+    case "role":
+      return { kind: "role", roleId: node.id.slice("role:".length) };
+    case "connection":
+      return { kind: "connection", connectionId: node.id.slice("conn:".length) };
+    case "schema": {
+      const rest = node.id.slice("schema:".length);
+      const sep = rest.indexOf("::");
+      if (sep < 0) return { kind: "schema", connectionId: rest, schema: "" };
+      return {
+        kind: "schema",
+        connectionId: rest.slice(0, sep),
+        schema: rest.slice(sep + 2)
+      };
+    }
+    case "table": {
+      const rest = node.id.slice("table:".length);
+      const parts = rest.split("::");
+      if (parts.length !== 3) return { kind: "table" };
+      return {
+        kind: "table",
+        connectionId: parts[0],
+        schema: parts[1],
+        table: parts[2]
+      };
+    }
+    default:
+      return { kind: node.kind };
+  }
+}
+
+function collectAccessCallIds(edges: Map<string, InternalEdge>): Set<string> {
+  const ids = new Set<string>();
+  for (const edge of edges.values()) {
+    for (const callId of edge.accessCallIds) ids.add(callId);
+  }
+  return ids;
+}
+
 export async function buildAccessMap(
   provider: AccessMapProvider,
   query: AccessMapQuery,
@@ -1563,6 +1651,9 @@ export async function buildAccessMap(
   let echoMeta: AccessMapEchoMeta | undefined;
   let keptGrantRefs: GrantPathRef[] = [];
   let keptAccessRefs: AccessPathRef[] = [];
+  let detail: AccessMapHourlyDetail | null | undefined;
+  let accessRowsForDetail: AccessMapAuditRow[] | null = null;
+  let detailFocus: DetailFocusContext | null = null;
 
   if (grantSide.state !== "unavailable") {
     const grant = buildGrantLayer({ side: grantSide, withSchema: query.layer === "schema" });
@@ -1573,10 +1664,11 @@ export async function buildAccessMap(
       throw new Error(`access_map_flow_conservation_violated:${violations.join(";")}`);
     }
 
+    // Spec 20261104 D5／D12：取消 Token 条件；每次请求只经 loadAccessSide 调一次 buildBandED。
     const access = await provider.loadAccessSide({
       window,
       trust: query.trust,
-      tokenLabel: query.token,
+      tokenLabel: null,
       inquiryKind: query.inquiryKind,
       accessGrade: query.accessGrade
     });
@@ -1588,9 +1680,9 @@ export async function buildAccessMap(
     if (access.state === "ok") {
       accessState = "ok";
       accessReason = "";
-      // Token 已在 loadAccessSide／echo 过滤中相与；此处再传 null 避免双重过滤。
-      // 注入型假 provider 仍可能把未按 token 过滤的 rows 交来，故保留 query.token。
-      const layer = buildAccessLayer({ rows: access.rows, tokenLabel: query.token });
+      accessRowsForDetail = access.rows;
+      // D5：token 忽略；不再按 query.token 过滤访问层。
+      const layer = buildAccessLayer({ rows: access.rows, tokenLabel: null });
       // SC-14：不得因「只返回 E」把拒绝计数归零——优先用 access.deniedCalls（\|D\|）。
       deniedCalls = access.deniedCalls ?? layer.deniedCalls;
       rawCalls = layer.rawCalls;
@@ -1627,6 +1719,19 @@ export async function buildAccessMap(
 
     const scoped = applyScopeFilters({ nodes: internalNodes, edges: internalEdges, query });
     const focused = focusSubgraph({ nodes: scoped.nodes, edges: scoped.edges, focus: query.focus });
+
+    // Detail focus: invalid focus ignored（与图一致回退全量，不施加 focus 投影）。
+    if (query.focus && scoped.nodes.has(query.focus)) {
+      const focusGraph = focusSubgraph({
+        nodes: scoped.nodes,
+        edges: scoped.edges,
+        focus: query.focus
+      });
+      detailFocus = {
+        accessCallIds: collectAccessCallIds(focusGraph.edges),
+        entity: decodeFocusEntity(focusGraph.nodes.get(query.focus))
+      };
+    }
 
     nodes = [...focused.nodes.values()].map(serializeNode);
     edges = [...focused.edges.values()].map(serializeEdge);
@@ -1688,6 +1793,21 @@ export async function buildAccessMap(
     });
   }
 
+  if (query.view === "table") {
+    if (accessState !== "ok" || accessRowsForDetail === null) {
+      // §5.5：access unavailable → detail null，禁止空成功表冒充。
+      detail = null;
+    } else {
+      detail = buildAccessMapHourlyDetail({
+        rows: accessRowsForDetail,
+        query,
+        focus: detailFocus,
+        detailLimit: query.detailLimit ?? ACCESS_MAP_DETAIL_DEFAULT_LIMIT,
+        detailOffset: query.detailOffset ?? 0
+      });
+    }
+  }
+
   return {
     meta: {
       window: { startIso: window.startIso, endIso: window.endIso, asOf: window.asOf },
@@ -1718,7 +1838,8 @@ export async function buildAccessMap(
     nodes,
     edges,
     render: { nodes: renderNodes, edges: renderEdges, folded },
-    pathRefs: { grant: keptGrantRefs, access: keptAccessRefs }
+    pathRefs: { grant: keptGrantRefs, access: keptAccessRefs },
+    ...(query.view === "table" ? { detail } : {})
   };
 }
 
@@ -1780,7 +1901,12 @@ function parseAuditRows(raw: unknown): AccessMapAuditRow[] {
           ? true
           : row.eval_mark === 0 || row.eval_mark === false
             ? false
-            : null
+            : null,
+      tool: typeof row.tool === "string" ? row.tool : null,
+      lucyTurnId:
+        typeof row.lucy_turn_id === "string" && row.lucy_turn_id.trim()
+          ? row.lucy_turn_id.trim()
+          : null
     });
   }
   return rows;
@@ -2038,6 +2164,19 @@ export function createAdminAccessMapProvider(
           );
 
         const parsed = parseAuditRows(rows).filter((row) => B.has(row.callId));
+
+        // Spec 20261104：为小时明细预解析 inquiryKind（与 echo 同 D6 resolveTurn）。
+        const inquiryCache = new Map<string, InquiryKind | null>();
+        for (const row of parsed) {
+          if (inquiryCache.has(row.callId)) {
+            row.inquiryKind = inquiryCache.get(row.callId) ?? null;
+            continue;
+          }
+          const turn = resolveTurn({ id: row.callId, lucyTurnId: row.lucyTurnId ?? null }, db);
+          const kind = turn ? inquiryKindOfTurn(turn) : null;
+          inquiryCache.set(row.callId, kind);
+          row.inquiryKind = kind;
+        }
 
         // 凭证清单的调用数与 token 过滤无关（凭证清单是固定参照物）。
         // Spec 189 §6 — the credential inventory's window call count uses the

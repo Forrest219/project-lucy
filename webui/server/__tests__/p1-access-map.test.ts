@@ -298,13 +298,13 @@ describe("P1-3 访问关系图 · 四口径与全局调用数（A3）", () => {
 });
 
 describe("P1-3 访问关系图 · Token 凭证清单（A4）", () => {
-  it("Token 只过滤访问层，授权骨架完全不变", async () => {
+  it("Token 参数忽略：授权骨架与访问层均不变（Spec 20261104 D5）", async () => {
     const rows = [
       auditRow({ tokenLabel: "p0-demo", sourceName: "orders" }),
       auditRow({ tokenLabel: "p1-other", sourceName: "returns" })
     ];
     const unfiltered = await buildAccessMap(provider(grantSide(), accessSide(rows)), DEFAULT_QUERY);
-    const filtered = await buildAccessMap(provider(grantSide(), accessSide(rows)), {
+    const withToken = await buildAccessMap(provider(grantSide(), accessSide(rows)), {
       ...DEFAULT_QUERY,
       token: "p0-demo"
     });
@@ -315,12 +315,12 @@ describe("P1-3 访问关系图 · Token 凭证清单（A4）", () => {
         grantPaths: edge.grantPaths,
         grantUsers: edge.grantUsers
       }));
-    expect(grantEdges(filtered)).toEqual(grantEdges(unfiltered));
+    expect(grantEdges(withToken)).toEqual(grantEdges(unfiltered));
 
-    // 访问层变了：只剩 p0-demo 产生的访问路径。
+    // D5：token 忽略，访问路径与调用数不变。
     expect(unfiltered.meta.counts.accessPaths).toBe(2);
-    expect(filtered.meta.counts.accessPaths).toBe(1);
-    expect(filtered.meta.access.rawCalls).toBe(1);
+    expect(withToken.meta.counts.accessPaths).toBe(2);
+    expect(withToken.meta.access.rawCalls).toBe(unfiltered.meta.access.rawCalls);
   });
 
   it("Token 不进流主干、不参与守恒", async () => {
@@ -661,7 +661,9 @@ describe("P1-3 访问关系图 · URL 参数（§6.3）", () => {
       inquiryKind: "session_visit",
       accessGrade: "query",
       view: "table",
-      focus: "agent:agent_a"
+      focus: "agent:agent_a",
+      detailLimit: 200,
+      detailOffset: 0
     });
   });
 
@@ -1017,14 +1019,14 @@ describe("P1-3 §10 — SC-03 访问内核宽度与僵尸授权", () => {
 });
 
 describe("P1-3 §10 — SC-04 Token 凭证清单", () => {
-  it("SC-04 — Token 挂在 Agent 下并显示 label／状态／调用次数；按 Token 过滤只动访问层", async () => {
+  it("SC-04 — Token 挂在 Agent 下并显示 label／状态／调用次数；token 参数忽略不改访问层（D5）", async () => {
     const rows = [
       auditRow({ tokenLabel: "p0-demo", sourceName: "orders" }),
       auditRow({ tokenLabel: "p1-other", sourceName: "returns" })
     ];
     const access = accessSideWithTokens(rows, { "p0-demo": 3, "p1-other": 1 });
     const unfiltered = await buildAccessMap(provider(grantSide(), access), DEFAULT_QUERY);
-    const filtered = await buildAccessMap(provider(grantSide(), access), {
+    const withToken = await buildAccessMap(provider(grantSide(), access), {
       ...DEFAULT_QUERY,
       token: "p0-demo"
     });
@@ -1037,17 +1039,17 @@ describe("P1-3 §10 — SC-04 Token 凭证清单", () => {
     expect(tokenNode?.meta.status).toBe("active");
     expect(tokenNode?.meta.callCount).toBe(3);
 
-    // 点击 Token → 访问层内核变化；授权骨架的边与 grantPaths 一字不变。
+    // Spec 20261104 D5：token 忽略；授权骨架与访问层均不变。
     const skeleton = (response: typeof unfiltered) =>
       response.edges.map((edge) => ({
         id: edge.id,
         grantPaths: edge.grantPaths,
         grantUsers: edge.grantUsers
       }));
-    expect(skeleton(filtered)).toEqual(skeleton(unfiltered));
+    expect(skeleton(withToken)).toEqual(skeleton(unfiltered));
     expect(unfiltered.meta.counts.accessPaths).toBe(2);
-    expect(filtered.meta.counts.accessPaths).toBe(1);
-    expect(filtered.meta.access.rawCalls).toBe(1);
+    expect(withToken.meta.counts.accessPaths).toBe(2);
+    expect(withToken.meta.access.rawCalls).toBe(unfiltered.meta.access.rawCalls);
   });
 });
 

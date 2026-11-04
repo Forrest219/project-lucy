@@ -26,6 +26,8 @@
 > **几何语言修订（2026-11-01）**：本文的**语义与权威性不变**（授权面、访问面、边状态判定、路径守恒、API、URL、两档措辞）。**图面几何**（节点形状、计量刻度、流带画法、标签排版、槽位分配、命中区）已由 [`docs/specs/lucy-20261101-access-map-geometry-spec.md`](../../docs/specs/lucy-20261101-access-map-geometry-spec.md) **v0.2 功能合同已收口**规定并实施：节点为**细柱**（不再是定宽卡片），计量厚度 = 权重 × 刻度且**无最小厚度地板**，刻度按 `MAX_PX_PER_PATH` 封顶，流带为**填充面积**，四态各自有明确的面积 / 内核 / 轮廓几何，计量与命中解耦。本文 §4.4 的状态判定顺序与 §9 登记的着色 token（`series/grant`、`series/access`、`warning`、`danger`；禁止裸 hex；状态不得只靠颜色区分）**保持不变**，只是载体从描边改为填充面。
 >
 > **访问层筛选修订（有效指针，2026-11-04）**：路径主键、角色归因、守恒算法、边状态判定顺序**不变**。进入访问路径构建的允许调用候选集合在时间窗、`trust`、Token 条件上**相与**问询种类（`inquiryKind`）与访问等级（`accessGrade`）；主工具条两下拉、弱入口「关联口径」（原「问询计入」／`trust` UI 标签）与缺省／非法 URL 行为以 [`docs/specs/lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) 为准。本文 §4.2／§5.2／§6.3／§7.4 仅作交叉指针，不在此重写算法正文。
+>
+> **小时明细与页壳再修订（有效指针，2026-11-04；已落地）**：授权面、边状态、路径守恒**不变**。「数据表」视图、凭证清单 UI、Token 过滤 UI、图下口径折叠的**有效呈现**以 [`docs/specs/lucy-20261104-access-map-hourly-detail-spec.md`](../../docs/specs/lucy-20261104-access-map-hourly-detail-spec.md) 为准：数据表为小时审计明细；不再展示凭证清单；**取消 Token 条件**（`token` 忽略）；口径常驻一行（窗口起止＋覆盖率压缩句＋快照哈希）。§7.5「全部边／节点可读」主表义务按该 Spec **D11 能力收缩**（小时明细 + Canvas 非 normal 边键盘入口）。本文 §4.5／§7.3／§7.5 作历史语义与交叉指针，不以旧边级表／凭证清单 UI 为现行呈现合同。
 
 ---
 
@@ -628,7 +630,7 @@ GET /api/admin/access-map
 |---|---|---|
 | `agent` | userId | 只看该 Agent 的子图 |
 | `role` | roleId | 只看该角色的子图 |
-| `token` | token label | **只过滤访问层**，授权层不变（§4.5） |
+| `token` | token label | **历史**：曾只过滤访问层（§4.5）。**现行**：hourly-detail Spec **忽略**该参数（不筛选、不因出现而 400） |
 | `table` | `conn::schema::table` | 定位到该表 |
 | `connection` | connectionId | 只看该连接的子图 |
 | `window` | `24h` / `168h` / `720h` | 默认 `168h`（与 L25-03 使用概况一致） |
@@ -636,7 +638,7 @@ GET /api/admin/access-map
 | `trust` | `confirmed` / `include_candidate` | 默认 `confirmed`（§4.9）；UI 标签为「关联口径」，见 audit-echo Spec |
 | `inquiryKind` | `management` / `real` / `unreported_query` / `session_visit` / `all` | **参数缺席**默认 `management`；非法 → 400。主筛选呈现见 [`lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) §5 |
 | `accessGrade` | `exclude_connect` / `all` / `connect` / `browse` / `prepare` / `ask` / `query` / `control` / `unclassified` | **参数缺席**默认 `exclude_connect`；非法 → 400。同上 |
-| `view` | `map` / `table` | 默认 `map`；`table` 为无障碍等价视图（§7.5） |
+| `view` | `map` / `table` | 默认 `map`；`table` 现行为小时明细（hourly-detail）；§7.5 全边等价主表义务已按 D11 收缩 |
 | `focus` | node id | 下钻聚焦的节点 |
 
 参数组合必须全部生效且可分享；非法参数值返回 400（用户可见错误按术语标准措辞）。`inquiryKind`／`accessGrade` 的缺省与非法行为细节（含与访问日志「非法回落缺省」的有意差异）以 audit-echo Spec 为准。
@@ -680,10 +682,13 @@ GET /api/admin/access-map
 
 ### 7.5 无障碍等价视图（SC-09）
 
-SVG 桑基图对屏幕阅读器不友好，**必须**提供表格视图作为等价物：
+> **有效呈现（2026-11-04）**：数据表改为小时审计明细；不再承诺列出全部授权边／dormant／边状态（hourly-detail **D11 能力收缩**）。Canvas 既有非 normal 边键盘入口保留。下文边级表描述为历史合同。
+
+SVG 桑基图对屏幕阅读器不友好，**必须**提供表格视图作为可读承接：
 
 - 切换按钮在页面头部：「关系图 / 数据表」。
-- 数据表视图复用 `webui/docs/design-system/11-components-data-grid.md` 的 Base Contract，列出每一行一条边：起点、终点、授权路径数、去重 Agent 数、访问路径数、调用次数、状态。
+- **现行**：数据表为同筛选小时明细（见 hourly-detail Spec）；复用 `pl-data-grid`。
+- **历史**：曾要求列出每一行一条边：起点、终点、授权路径数、去重 Agent 数、访问路径数、调用次数、状态。
 - 图区本身提供 `aria-label` 摘要（节点数、边数、信号计数）+ 节点列表的可聚焦跳转。
 - 键盘：`Tab` 聚焦节点列表项，`Enter` 下钻，`Esc` 返回全图。
 

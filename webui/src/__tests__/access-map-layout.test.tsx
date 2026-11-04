@@ -446,6 +446,50 @@ describe("访问关系图源码的色值约束（SC-14）", () => {
   });
 });
 
+/**
+ * Spec 20261104 页壳源码合同（SC-01–SC-03、SC-16）：不挂载凭证清单／折叠口径／SignalNotes；
+ * 无「桑基图」页标题；表组件换成小时明细列。
+ */
+describe("访问关系图小时明细页壳源码（Spec 20261104）", () => {
+  const pageFile = fileURLToPath(new URL("../pages/admin/AccessMap.tsx", import.meta.url));
+  const tableFile = fileURLToPath(new URL("../components/admin/AccessMapTable.tsx", import.meta.url));
+  const typesFile = fileURLToPath(new URL("../components/admin/AccessMapTypes.tsx", import.meta.url));
+
+  it("SC-01／SC-02／SC-03 — AccessMap 页不挂载 CredentialList／SignalNotes／methodology details", () => {
+    const source = readFileSync(pageFile, "utf-8");
+    expect(source).not.toMatch(/AccessMapCredentialList/);
+    expect(source).not.toMatch(/AccessMapSignalNotes/);
+    expect(source).not.toMatch(/access-map-methodology-snapshot/);
+    expect(source).not.toMatch(/<details/);
+    expect(source).toMatch(/access-map-window-range/);
+    expect(source).toMatch(/access-map-snapshot-coverage/);
+    expect(source).toMatch(/access-map-resident-line/);
+  });
+
+  it("SC-05／SC-06 — AccessMapTable 为小时明细列，inquiryKind null → 无关联", () => {
+    const source = readFileSync(tableFile, "utf-8");
+    expect(source).toMatch(/access-map-hourly-detail/);
+    expect(source).toMatch(/小时/);
+    expect(source).toMatch(/允许调用/);
+    expect(source).toMatch(/拒绝调用/);
+    expect(source).not.toMatch(/access-map-table-nodes/);
+    expect(source).not.toMatch(/>节点</);
+    expect(source).not.toMatch(/>关系</);
+    expect(source).toMatch(/无关联/);
+  });
+
+  it("SC-16 — 页标题不含桑基图；类型含 detail／hasMore／inquiryKind null", () => {
+    const page = readFileSync(pageFile, "utf-8");
+    const types = readFileSync(typesFile, "utf-8");
+    expect(page).toMatch(/title="访问关系图"/);
+    expect(page).not.toMatch(/桑基图/);
+    expect(types).toMatch(/AccessMapHourlyDetail/);
+    expect(types).toMatch(/hasMore/);
+    expect(types).toMatch(/inquiryKind: AccessMapDetailInquiryKind \| null/);
+  });
+});
+
+
 describe("文字宽度估算与省略（既有能力，保持）", () => {
   it("超长名称的省略不吞掉整个名字", () => {
     expect(truncateLabel("orders", 148, 12)).toBe("orders");

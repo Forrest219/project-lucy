@@ -164,6 +164,40 @@ export type AccessMapMeta = {
   countingNotes: string[];
 };
 
+/** 小时明细行问询种类：InquiryKind 或无关联（null）。不是筛选「全部／管理相关」。 */
+export type AccessMapDetailInquiryKind = "real" | "unreported_query" | "session_visit";
+
+export type AccessMapDetailAccessGrade =
+  | "connect"
+  | "browse"
+  | "prepare"
+  | "ask"
+  | "query"
+  | "control"
+  | "unclassified";
+
+/** Spec 20261104 §6.1：同投影小时明细行（公共响应不暴露调用 ID 列表）。 */
+export type AccessMapHourlyDetailRow = {
+  hour: string;
+  agentId: string;
+  roleId: string;
+  connectionId: string;
+  schema: string;
+  table: string;
+  inquiryKind: AccessMapDetailInquiryKind | null;
+  accessGrade: AccessMapDetailAccessGrade;
+  allowCalls: number;
+  denyCalls: number;
+};
+
+export type AccessMapHourlyDetail = {
+  rows: AccessMapHourlyDetailRow[];
+  hasMore: boolean;
+  totalRowCount: number;
+  limit: number;
+  offset: number;
+};
+
 export type AccessMapResponse = {
   meta: AccessMapMeta;
   nodes: AccessMapNode[];
@@ -173,6 +207,8 @@ export type AccessMapResponse = {
     edges: AccessMapEdge[];
     folded: { nodes: number; edges: number };
   };
+  /** 仅 `view=table` 时由服务端计算；access unavailable 时可为 null。 */
+  detail?: AccessMapHourlyDetail | null;
 };
 
 /**
@@ -317,6 +353,29 @@ export const ACCESS_MAP_TRUST_HINT =
 export function accessMapCoverageText(coverage: AccessMapCoverage): string {
   const percent = Math.round(coverage.ratio * 100);
   return `需复核记录 ${coverage.reviewPaths} 条 · 可关联快照 ${coverage.matched} 条 · 缺失或无效 ${coverage.missingOrInvalid} 条 · 覆盖率 ${percent}%`;
+}
+
+/**
+ * 常驻行覆盖率压缩句（Spec 20261104 §5.3／术语表）。
+ * 低覆盖率不得读成低越权率（SC-18）。
+ */
+export function accessMapCoverageCompressedText(coverage: AccessMapCoverage): string {
+  return `快照：可关联 ${coverage.matched}／需复核 ${coverage.reviewPaths} · 缺失 ${coverage.missingOrInvalid}`;
+}
+
+/** 小时明细「问询种类」单元格；null →「无关联」（D13）。 */
+export function accessMapDetailInquiryKindLabel(
+  kind: AccessMapDetailInquiryKind | string | null
+): string {
+  if (kind === null) return "无关联";
+  return accessMapInquiryKindLabel(kind);
+}
+
+/** 小时明细「访问等级」单元格。 */
+export function accessMapDetailAccessGradeLabel(
+  grade: AccessMapDetailAccessGrade | string
+): string {
+  return accessMapAccessGradeLabel(grade);
 }
 
 /**
