@@ -99,6 +99,7 @@
     "smoke:p1:publish-regression": "node scripts/smoke/p1-publish-regression-smoke.mjs",
     "smoke:p1:observability": "node scripts/smoke/p1-observability-smoke.mjs",
     "e2e:real:prepare": "node scripts/e2e/prepare-environment.mjs",
+    "e2e:row-policy-b": "node scripts/e2e/run-row-policy-b.mjs",
     "e2e:product": "node scripts/e2e/select-product-target.mjs",
     "e2e:real:management": "npm --prefix webui run e2e:real:management --",
     "e2e:real:security": "node scripts/e2e/run-security.mjs",

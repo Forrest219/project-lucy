@@ -1,0 +1,175 @@
+# Template: rendered into <runDir>/project/webui/config/access.yaml by prepare-environment.mjs.
+# Token hashes are sha256 of per-run random tokens whose plaintext stays in <runDir>/checker/secrets (0600).
+# Predicates use Chinese regions 华东 / 西南 only. Union is two Roles on one Agent — never a
+# single Role with two tableSelectors.
+row_policy_templates:
+  tpl_eq_east:
+    description: Region eq 华东
+    predicates:
+      - field: region
+        op: eq
+        value: 华东
+  tpl_in_regions:
+    description: Region in scrambled 西南／华东 set (order must not change digest)
+    predicates:
+      - field: region
+        op: in
+        values: [西南, 华东]
+  tpl_unknown_field:
+    description: Negative fixture — unknown field (management / compile)
+    predicates:
+      - field: ghost_column
+        op: eq
+        value: x
+  tpl_measure_field:
+    description: Negative fixture — measure is not a row field
+    predicates:
+      - field: total_sales
+        op: eq
+        value: 0
+  tpl_illegal_op:
+    description: Negative fixture — op outside eq/in
+    predicates:
+      - field: region
+        op: like
+        value: 华
+
+roles:
+  rp_east:
+    description: Superstore reader scoped to 华东 via tpl_eq_east
+    permission_model_version: 2
+    allow:
+      connections: [mysql-aliyun]
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names: [superstore_orders]
+          row_access: scoped
+          row_policy:
+            template: tpl_eq_east
+      tools: &full_context_tools
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+        - wiki_search
+        - wiki_read
+        - lucy_skill_search
+        - lucy_skill_read
+        - connection_list
+  rp_west:
+    description: Superstore reader scoped to 西南 (inline predicate)
+    permission_model_version: 2
+    allow:
+      connections: [mysql-aliyun]
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names: [superstore_orders]
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: 西南
+      tools: *full_context_tools
+  rp_all:
+    description: Superstore all-rows reader (six regions; contrast for empty-table false positive)
+    permission_model_version: 2
+    allow:
+      connections: [mysql-aliyun]
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names: [superstore_orders]
+          row_access: all
+      tools: *full_context_tools
+  rp_east_plus_inline:
+    description: Template 华东 AND inline is_deleted eq 0
+    permission_model_version: 2
+    allow:
+      connections: [mysql-aliyun]
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names: [superstore_orders]
+          row_access: scoped
+          row_policy:
+            template: tpl_eq_east
+            predicates:
+              - field: is_deleted
+                op: eq
+                value: 0
+      tools: *full_context_tools
+
+users:
+  - id: ag_east
+    name: Row-policy 华东 Agent
+    enabled: true
+    role: rp_east
+    tokens:
+      - hash: "{{TOKEN_HASH_EAST}}"
+        label: rp-east
+        created: 2026-11-04
+  - id: ag_east_west
+    name: Row-policy 华东∪西南 Agent
+    enabled: true
+    roles: [rp_east, rp_west]
+    tokens:
+      - hash: "{{TOKEN_HASH_EAST_WEST}}"
+        label: rp-huadong-xinan
+        created: 2026-11-04
+  - id: ag_all
+    name: Row-policy all-rows Agent
+    enabled: true
+    role: rp_all
+    tokens:
+      - hash: "{{TOKEN_HASH_ALL}}"
+        label: rp-all
+        created: 2026-11-04
+  - id: ag_east_constrained
+    name: Row-policy 华东 Agent with intersecting personal constraint
+    enabled: true
+    role: rp_east
+    constraints:
+      sources:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names: [superstore_orders]
+          predicates:
+            - field: region
+              op: eq
+              value: 华东
+    tokens:
+      - hash: "{{TOKEN_HASH_EAST_CONSTRAINED}}"
+        label: rp-east-constrained
+        created: 2026-11-04
+
+defaults:
+  deny_tools:
+    - sql_execution
+    - sql_dialect_notes
+    - memory_ingest
+    - memory_ingest_status
+    - sl_query
+    - sl_read_source
+  known_tools:
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_catalog
+    - lucy_freshness
+    - lucy_begin_question
+    - lucy_skill_search
+    - lucy_skill_read
+    - wiki_search
+    - wiki_read
+    - entity_details
+    - dictionary_search
+    - discover_data
+    - connection_list
+    - sl_query
+    - sl_read_source
+    - sl_validate
+    - sql_execution

@@ -15,7 +15,14 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { catalogDigest, checkLock, loadCatalog, readLock } from "./lib/catalog.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv, sha256Text } from "./lib/common.mjs";
-import { appliedDatabaseCapability } from "./lib/db-capability.mjs";
+import {
+  appliedDatabaseCapability,
+  capabilitySatisfied,
+  RDS_MYSQL_READONLY_DATAPLANE
+} from "./lib/db-capability.mjs";
+import { sec11AllowedOnRun } from "./lib/rds-dataplane-policy.mjs";
+import { markRunReadonlyProven } from "./lib/rds-readonly-prove.mjs";
+import { AGENTS, CONNECTION_ID, REGIONS, TABLES } from "./lib/row-policy-pack.mjs";
 import { ExternalInstance, LucyProcess } from "./lib/instance.mjs";
 import { startKtxUpstream } from "./lib/ktx-upstream.mjs";
 import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identity.mjs";
@@ -42,8 +49,8 @@ export function executionOrder(cases) {
   return [...cases].sort((a, b) => rank(a.id) - rank(b.id));
 }
 
-export function missingCapabilities(testCase, capabilities) {
-  return testCase.requires.filter((cap) => !capabilities[cap]);
+export function missingCapabilities(testCase, capabilities, run = null) {
+  return testCase.requires.filter((cap) => !capabilitySatisfied(cap, capabilities, run));
 }
 
 async function detectCapabilities(run, lucyStarted, external, upstream) {
@@ -60,7 +67,10 @@ async function detectCapabilities(run, lucyStarted, external, upstream) {
     "fault-control": lucyStarted && !external && run.instance.startedBy === "runner",
     "ktx-upstream": external ? declared.has("ktx-upstream") : upstream?.ok === true,
     postgres: appliedDatabaseCapability(run.db) === "postgres" || declared.has("postgres"),
-    mysql: appliedDatabaseCapability(run.db) === "mysql" || declared.has("mysql"),
+    mysql:
+      appliedDatabaseCapability(run.db) === "mysql" ||
+      (run.db?.dataPlane === RDS_MYSQL_READONLY_DATAPLANE && run.db?.readonlyProven === true) ||
+      declared.has("mysql"),
     browser: false,
     "agent-client": false,
     "k8s-amd64": external && declared.has("k8s-amd64"),
@@ -216,23 +226,43 @@ export async function proveUpstreamObservation({ ctx, run, observerPath }) {
     return proof;
   }
   proof.required = true;
-  const token = ctx.tokens?.e2e_finance ?? null;
+  const rdsPlane = run?.db?.dataPlane === RDS_MYSQL_READONLY_DATAPLANE;
+  const token = rdsPlane
+    ? (ctx.tokens?.[AGENTS.all] ?? ctx.tokens?.[AGENTS.east] ?? null)
+    : (ctx.tokens?.e2e_finance ?? null);
+  const agentId = rdsPlane
+    ? (ctx.tokens?.[AGENTS.all] ? AGENTS.all : AGENTS.east)
+    : "e2e_finance";
   if (!token) {
-    proof.reason = "no entitled agent token is available for the positive control";
+    proof.reason = rdsPlane
+      ? `no entitled row-policy agent token (${AGENTS.all}/${AGENTS.east}) for the positive control`
+      : "no entitled agent token is available for the positive control";
     return proof;
   }
   const fingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
-  // Two shapes, because the allow-branch cases use two different sources and the
-  // per-request upstream cost is measured, not assumed.
-  const probes = [
-    { label: "orders_masked", args: { connectionId: "fin-db", source: "analytics.orders_masked", measures: ["order_count"], dimensions: [], filters: [{ field: "orders_masked.region", op: "eq", value: "East" }] } },
-    { label: "marketing_daily", args: { connectionId: "fin-db", source: "analytics.marketing_daily", measures: ["cac_cents"], dimensions: [], filters: [{ field: "marketing_daily.region", op: "eq", value: "East" }] } }
-  ];
+  // Two shapes for security-e2e (fin-db). Row-policy pack probes RDS superstore only.
+  const probes = rdsPlane
+    ? [
+        {
+          label: "superstore_orders",
+          args: {
+            connectionId: CONNECTION_ID,
+            source: `${TABLES.fact.schema}.${TABLES.fact.name}`,
+            measures: ["total_sales"],
+            dimensions: [{ field: `${TABLES.fact.name}.${TABLES.fact.field}` }],
+            filters: [{ field: `${TABLES.fact.name}.${TABLES.fact.field}`, op: "eq", value: REGIONS.A }]
+          }
+        }
+      ]
+    : [
+        { label: "orders_masked", args: { connectionId: "fin-db", source: "analytics.orders_masked", measures: ["order_count"], dimensions: [], filters: [{ field: "orders_masked.region", op: "eq", value: "East" }] } },
+        { label: "marketing_daily", args: { connectionId: "fin-db", source: "analytics.marketing_daily", measures: ["cac_cents"], dimensions: [], filters: [{ field: "marketing_daily.region", op: "eq", value: "East" }] } }
+      ];
   let baseline = 0;
   for (const probe of probes) {
     const since = new Date(Date.now() - 5_000).toISOString();
     const until = new Date(Date.now() + 120_000).toISOString();
-    const before = await ctx.observeUpstream({ since, until, agentId: "e2e_finance", tokenFingerprint: fingerprint });
+    const before = await ctx.observeUpstream({ since, until, agentId, tokenFingerprint: fingerprint });
     let response = null;
     let error = null;
     try {
@@ -240,7 +270,7 @@ export async function proveUpstreamObservation({ ctx, run, observerPath }) {
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
     }
-    const after = await ctx.observeUpstream({ since, until, agentId: "e2e_finance", tokenFingerprint: fingerprint });
+    const after = await ctx.observeUpstream({ since, until, agentId, tokenFingerprint: fingerprint });
     const delta = typeof ctx.upstreamDelta === "function" ? ctx.upstreamDelta(before, after) : null;
     proof.probes.push({
       label: probe.label,
@@ -385,6 +415,18 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
         lucy = new LucyProcess(run, { extraEnv });
         await lucy.start();
       }
+      if (run.db?.dataPlane === RDS_MYSQL_READONLY_DATAPLANE && run.db.readonlyProven !== true) {
+        const rdsProof = markRunReadonlyProven(run);
+        progressLog(
+          run,
+          `rds-mysql-readonly probe: ${rdsProof.ok ? "PROVEN" : "NOT PROVEN"} (${rdsProof.ok ? `regions=${Object.keys(rdsProof.regions ?? {}).join(",")}` : rdsProof.reason})`
+        );
+        try {
+          writeFileSync(path.join(run.paths.runDir, "run.json"), `${JSON.stringify(run, null, 2)}\n`);
+        } catch {
+          /* best-effort persist */
+        }
+      }
       capabilities = await detectCapabilities(run, true, external, upstream);
       ctx = ctxFactory
         ? ctxFactory({ run, lucy, capabilities, observerFactory: factory })
@@ -414,10 +456,23 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
         finish({ status: "dry_run", policyVersion: "n/a", contextPolicyVersion: "n/a", detail: "dry run: nothing executed" });
         continue;
       }
-      const missing = missingCapabilities(testCase, capabilities);
+      const missing = missingCapabilities(testCase, capabilities, run);
       if (missing.length > 0) {
         finish({ status: "blocked", policyVersion: "n/a", contextPolicyVersion: "n/a", detail: `missing capability: ${missing.join(", ")}`, blockedBy: missing });
         continue;
+      }
+      if (typeof testCase?.id === "string" && testCase.id.startsWith("SEC-11-")) {
+        const sec11Gate = sec11AllowedOnRun(run);
+        if (!sec11Gate.ok) {
+          finish({
+            status: "blocked",
+            policyVersion: "n/a",
+            contextPolicyVersion: "n/a",
+            detail: sec11Gate.detail,
+            blockedBy: [sec11Gate.blockedReason]
+          });
+          continue;
+        }
       }
       // FAIL CLOSED: when the independent observation channel is not proven, the cases
       // that MEASURE the upstream cannot be scored — a "zero upstream executions" claim

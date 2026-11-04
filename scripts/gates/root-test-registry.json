@@ -404,6 +404,66 @@
       "reason": null
     },
     {
+      "path": "scripts/e2e/__tests__/row-policy-pack.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/row-policy-pack.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/row-policy-phase.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/row-policy-phase.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/rds-dataplane-gates.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/rds-dataplane-gates.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/rds-dataplane-policy.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/rds-dataplane-policy.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/run-security-sec11-dataplane.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/run-security-sec11-dataplane.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/row-policy-readonly-gold.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/row-policy-readonly-gold.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
       "path": "scripts/e2e/__tests__/run-management-capture-policy.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",

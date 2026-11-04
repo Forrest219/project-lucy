@@ -707,4 +707,16 @@ describe("prepare-environment: --apply-db contract (B3)", () => {
     assert.equal(appliedDatabaseCapability({ applied: true, engine: "postgres" }), "postgres");
     assert.equal(appliedDatabaseCapability({ applied: true }), "postgres");
   });
+
+  it("grants mysql for rds-mysql-readonly when readonlyProven without applied seed", () => {
+    assert.equal(
+      appliedDatabaseCapability({
+        applied: false,
+        engine: "mysql",
+        dataPlane: "rds-mysql-readonly",
+        readonlyProven: true
+      }),
+      "mysql"
+    );
+  });
 });
