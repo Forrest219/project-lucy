@@ -39,14 +39,16 @@ function makeNode(
   label: string,
   depth: number,
   grantPaths: number,
-  accessPaths = 0
+  accessPaths?: number
 ): AccessMapNode {
+  // usage-first：几何夹具默认访问路径=授权路径，否则画布不进使用节点。
+  const access = accessPaths ?? grantPaths;
   return {
     id,
     kind,
     label,
     depth,
-    meta: { grantPaths, grantUsers: 1, accessPaths, accessUsers: accessPaths > 0 ? 1 : 0 }
+    meta: { grantPaths, grantUsers: 1, accessPaths: access, accessUsers: access > 0 ? 1 : 0 }
   };
 }
 
@@ -56,16 +58,17 @@ function makeEdge(
   grantPaths: number,
   overrides: Partial<AccessMapEdge> = {}
 ): AccessMapEdge {
+  const accessPaths = overrides.accessPaths ?? grantPaths;
   return {
     id: `e|${source}|${target}`,
     source,
     target,
     grantPaths,
     grantUsers: 1,
-    accessPaths: 0,
-    accessUsers: 0,
-    accessCalls: 0,
-    state: "dormant" as AccessMapEdgeState,
+    accessPaths,
+    accessUsers: accessPaths > 0 ? 1 : 0,
+    accessCalls: accessPaths,
+    state: (accessPaths === 0 ? "dormant" : "normal") as AccessMapEdgeState,
     confirmedUnauthorized: false,
     reviewEvaluations: [],
     snapshotCoverage: { reviewPaths: 0, matched: 0, missingOrInvalid: 0, ratio: 0 },
@@ -171,7 +174,7 @@ describe("访问关系图几何语言（geometry Spec §5）", () => {
 
     // 名称、副标题、状态行都存在。
     expect(first!.labelBlock.name).toBe("Agent A");
-    expect(first!.labelBlock.subtitle).toContain("条路径");
+    expect(first!.labelBlock.subtitle).toMatch(/路径/);
     expect(first!.labelBlock.status).toBeNull();
 
     // 有异常边的节点带状态行。
@@ -225,19 +228,19 @@ describe("访问关系图几何语言（geometry Spec §5）", () => {
     expect(band!.lower.length).toBeGreaterThan(4);
   });
 
-  it("SC-06 — 计量厚度 = weight × unitPx；grantPaths 加倍则厚度加倍（无命中地板介入）", () => {
+  it("SC-06 — 计量厚度 = accessPaths × unitPx；访问路径加倍则厚度加倍（无命中地板介入）", () => {
     const nodes = [
-      makeNode("agent:a", "agent", "Agent A", 0, 4),
-      makeNode("role:r", "role", "role_reader", 1, 4),
-      makeNode("conn:c", "connection", "mysql_main", 2, 4),
-      makeNode("table:t1", "table", "orders", 3, 4),
-      makeNode("table:t2", "table", "payments", 3, 2)
+      makeNode("agent:a", "agent", "Agent A", 0, 4, 4),
+      makeNode("role:r", "role", "role_reader", 1, 4, 4),
+      makeNode("conn:c", "connection", "mysql_main", 2, 4, 4),
+      makeNode("table:t1", "table", "orders", 3, 4, 4),
+      makeNode("table:t2", "table", "payments", 3, 2, 2)
     ];
     const edges = [
-      makeEdge("agent:a", "role:r", 4, { state: "normal" }),
-      makeEdge("role:r", "conn:c", 4, { state: "normal" }),
-      makeEdge("conn:c", "table:t1", 4, { state: "normal" }),
-      makeEdge("conn:c", "table:t2", 2, { state: "normal" })
+      makeEdge("agent:a", "role:r", 4, { state: "normal", accessPaths: 4 }),
+      makeEdge("role:r", "conn:c", 4, { state: "normal", accessPaths: 4 }),
+      makeEdge("conn:c", "table:t1", 4, { state: "normal", accessPaths: 4 }),
+      makeEdge("conn:c", "table:t2", 2, { state: "normal", accessPaths: 2 })
     ];
     const layout = layoutAccessMap(nodes, edges);
     const thick = mainBand(layout, "e|conn:c|table:t1");
@@ -251,23 +254,20 @@ describe("访问关系图几何语言（geometry Spec §5）", () => {
     expect(thin!.thickness).toBeCloseTo(2 * layout.unitPx, 5);
   });
 
-  it("SC-07 — 四态几何：normal 内核顶对齐且不厚于授权；dormant 无内核；needs_review 无授权面积且有虚线中线；overflow 内核夹紧为授权且有 danger 轮廓", () => {
+  it("SC-07 — usage-first 四态：normal／overflow／needs_review 主厚度=accessPaths；dormant 不进流带；无深色内核", () => {
     const nodes = [
-      makeNode("agent:a", "agent", "Agent A", 0, 4),
-      makeNode("role:r", "role", "role_reader", 1, 4),
-      makeNode("conn:c", "connection", "mysql_main", 2, 4),
-      makeNode("table:t1", "table", "orders", 3, 4),
-      makeNode("table:t2", "table", "payments", 3, 4),
-      makeNode("table:t3", "table", "ledger", 3, 4)
+      makeNode("agent:a", "agent", "Agent A", 0, 4, 4),
+      makeNode("role:r", "role", "role_reader", 1, 4, 4),
+      makeNode("conn:c", "connection", "mysql_main", 2, 4, 4),
+      makeNode("table:t1", "table", "orders", 3, 4, 2),
+      makeNode("table:t2", "table", "payments", 3, 4, 0),
+      makeNode("table:t3", "table", "ledger", 3, 0, 2)
     ];
     const edges = [
-      makeEdge("agent:a", "role:r", 4, { state: "normal" }),
-      makeEdge("role:r", "conn:c", 4, { state: "normal" }),
-      // normal：授权 4 条、访问 2 条 → 内核顶对齐，厚度 2×unit。
+      makeEdge("agent:a", "role:r", 4, { state: "normal", accessPaths: 4 }),
+      makeEdge("role:r", "conn:c", 4, { state: "normal", accessPaths: 4 }),
       makeEdge("conn:c", "table:t1", 4, { state: "normal", accessPaths: 2, accessUsers: 1, accessCalls: 5 }),
-      // dormant：授权 4 条、访问 0 条 → 无内核。
-      makeEdge("conn:c", "table:t2", 4, { state: "dormant" }),
-      // needs_review：授权 0 条、访问 2 条 → 无授权面积，独立警示面积 + 虚线中线。
+      makeEdge("conn:c", "table:t2", 4, { state: "dormant", accessPaths: 0 }),
       makeEdge("conn:c", "table:t3", 0, {
         state: "needs_review",
         accessPaths: 2,
@@ -279,33 +279,27 @@ describe("访问关系图几何语言（geometry Spec §5）", () => {
 
     const normal = layout.links.find((link) => link.edge.id === "e|conn:c|table:t1");
     expect(normal?.band?.kind).toBe("grant");
-    expect(normal?.kernel).not.toBeNull();
-    expect(normal!.kernel!.thickness).toBeCloseTo(2 * layout.unitPx, 5);
-    expect(normal!.kernel!.thickness).toBeLessThanOrEqual(normal!.band!.thickness);
-    // 顶对齐：内核上缘与授权上缘同高。
-    expect(normal!.kernel!.topAligned).toBe(true);
-    expect(normal!.kernel!.sourceSlot.top).toBe(normal!.band!.sourceSlot.top);
+    expect(normal?.kernel).toBeNull();
+    expect(normal!.band!.thickness).toBeCloseTo(2 * layout.unitPx, 5);
 
     const dormant = layout.links.find((link) => link.edge.id === "e|conn:c|table:t2");
-    expect(dormant?.band?.kind).toBe("grant");
-    expect(dormant?.kernel).toBeNull();
+    expect(dormant).toBeUndefined();
+    expect(layout.idleStubs.length).toBeGreaterThan(0);
 
     const review = layout.links.find((link) => link.edge.id === "e|conn:c|table:t3");
     expect(review?.band?.kind).toBe("review");
-    expect(review?.grantArea).toBeNull();
     expect(review?.midlinePath).toBeTruthy();
     expect(review!.band!.thickness).toBeCloseTo(2 * layout.unitPx, 5);
 
-    // overflow：授权 2 条、访问 4 条 → 内核厚度夹紧为授权厚度，且有 danger 实线轮廓。
     const overflowNodes = [
-      makeNode("agent:a", "agent", "Agent A", 0, 2),
-      makeNode("role:r", "role", "role_reader", 1, 2),
-      makeNode("conn:c", "connection", "mysql_main", 2, 2),
-      makeNode("table:t1", "table", "orders", 3, 2)
+      makeNode("agent:a", "agent", "Agent A", 0, 2, 4),
+      makeNode("role:r", "role", "role_reader", 1, 2, 4),
+      makeNode("conn:c", "connection", "mysql_main", 2, 2, 4),
+      makeNode("table:t1", "table", "orders", 3, 2, 4)
     ];
     const overflowLayout = layoutAccessMap(overflowNodes, [
-      makeEdge("agent:a", "role:r", 2, { state: "normal" }),
-      makeEdge("role:r", "conn:c", 2, { state: "normal" }),
+      makeEdge("agent:a", "role:r", 2, { state: "normal", accessPaths: 4 }),
+      makeEdge("role:r", "conn:c", 2, { state: "normal", accessPaths: 4 }),
       makeEdge("conn:c", "table:t1", 2, {
         state: "overflow",
         accessPaths: 4,
@@ -314,8 +308,8 @@ describe("访问关系图几何语言（geometry Spec §5）", () => {
       })
     ]);
     const overflow = overflowLayout.links.find((link) => link.edge.id === "e|conn:c|table:t1");
-    expect(overflow?.kernel).not.toBeNull();
-    expect(overflow!.kernel!.thickness).toBeCloseTo(overflow!.band!.thickness, 5);
+    expect(overflow?.kernel).toBeNull();
+    expect(overflow!.band!.thickness).toBeCloseTo(4 * overflowLayout.unitPx, 5);
     expect(overflow?.outlinePath).toBeTruthy();
   });
 

@@ -360,4 +360,64 @@ describe("Audit", () => {
     expect(within(source).getByRole("option", { name: "系统推断问询" })).toBeInTheDocument();
     expect(screen.getByTestId("audit-advanced-filters")).not.toContainElement(kindSelect);
   });
+
+  it("SC-29 — 深链 view=calls 解析后列表请求带上 inquiryKind／accessGrade／user", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/admin/agents")) {
+        return new Response(JSON.stringify({ ok: true, data: { agents: [] } }));
+      }
+      if (url.startsWith("/api/admin/audit?")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              total: 0,
+              entries: [],
+              summary: {
+                businessCalls: 0,
+                protocolCalls: 0,
+                deniedCalls: 0,
+                dataBearingCalls: 0
+              }
+            }
+          })
+        );
+      }
+      if (url.includes("/api/admin/audit/turns")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              total: 0,
+              entries: [],
+              summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
+              kindCounts: { real: 0, unreportedQuery: 0, sessionVisit: 0 },
+              referenceLatency: {
+                windowHours: 24,
+                p95Ms: 0,
+                totalCallsInWindow: 0,
+                slowCallsInFilter: 0
+              }
+            }
+          })
+        );
+      }
+      return new Response(JSON.stringify({ ok: false }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAudit(
+      "/admin/audit?view=calls&hours=24&inquiryKind=real&accessGrade=all&user=hehe"
+    );
+    await waitFor(() => {
+      const callUrl = fetchMock.mock.calls
+        .map((entry) => String(entry[0]))
+        .find((url) => url.startsWith("/api/admin/audit?"));
+      expect(callUrl).toBeTruthy();
+      expect(callUrl).toContain("inquiryKind=real");
+      expect(callUrl).toContain("accessGrade=all");
+      expect(callUrl).toContain("user=hehe");
+    });
+  });
 });

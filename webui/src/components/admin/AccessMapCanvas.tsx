@@ -81,6 +81,11 @@ export const NODE_GAP = 16;
 /** 透明命中区的最小厚度（**只用于命中**，不参与计量）。 */
 export const MIN_HIT_PX = 8;
 /**
+ * 闲置授权端点示意厚度（usage-first Spec §5.4）。
+ * 不进柱高／不进列密度；锁定稿值 ∈[2,4]。
+ */
+export const IDLE_GRANT_PX = 3;
+/**
  * 列间距必须大于卡片宽度，否则流带通道会压到下一列的卡片上。
  *
  * chart-first Spec §5.6：列间距加大，让四栏流带的弧度可读。
@@ -222,9 +227,21 @@ export type AccessMapLayoutLink = {
   hitPaths: string[];
 };
 
+/** 闲置授权端点细空心示意（不撑柱）。 */
+export type AccessMapIdleStub = {
+  nodeId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  idleEdges: AccessMapEdge[];
+};
+
 export type AccessMapLayout = {
   nodes: AccessMapLayoutNode[];
   links: AccessMapLayoutLink[];
+  /** 闲置端点示意（fill=none；不进 pillarHeight）。 */
+  idleStubs: AccessMapIdleStub[];
   columns: AccessMapLayoutColumn[];
   width: number;
   /** SVG 高度（= contentHeight）。 */
@@ -239,33 +256,61 @@ export type AccessMapLayout = {
   slotReferenceHeight: number;
 };
 
+/** usage-first：节点流量 = 访问路径数。 */
 function flowOf(node: AccessMapNode): number {
-  return Math.max(node.meta.grantPaths ?? 0, node.meta.accessPaths ?? 0);
+  return node.meta.accessPaths ?? 0;
 }
 
-/** 边的计量权重：授权优先，没有授权时（需复核）退回访问路径数。 */
+/** usage-first：边计量权重 = 访问路径数（闲置边不进流带，走 stub）。 */
 function edgeWeight(edge: AccessMapEdge): number {
-  return edge.grantPaths > 0 ? edge.grantPaths : edge.accessPaths;
+  return edge.accessPaths;
 }
 
-function lerpPoint(a: Point, b: Point, t: number): Point {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+function isIdleGrantEdge(edge: AccessMapEdge): boolean {
+  return edge.grantPaths > 0 && edge.accessPaths === 0;
+}
+
+function isUsageEdge(edge: AccessMapEdge): boolean {
+  return edge.accessPaths > 0;
 }
 
 /**
- * 三次贝塞尔按参数 t 截断（De Casteljau）。
- *
- * 访问内核必须**起点对齐**地画在流带里，所以不能用「另一条更短的连线」近似，
- * 得真的把同一条曲线截断 —— 否则内核会飘在流带外侧，读者会以为它是另一条边。
+ * 画布节点集（Spec §5.1）：使用活跃 ∪ 闲置端点；闲置表永不进列。
  */
-function truncateCubic(points: [Point, Point, Point, Point], t: number): [Point, Point, Point, Point] {
-  const a = lerpPoint(points[0], points[1], t);
-  const b = lerpPoint(points[1], points[2], t);
-  const c = lerpPoint(points[2], points[3], t);
-  const d = lerpPoint(a, b, t);
-  const e = lerpPoint(b, c, t);
-  const f = lerpPoint(d, e, t);
-  return [points[0], a, d, f];
+export function selectAccessMapCanvasNodes(
+  nodes: AccessMapNode[],
+  edges: AccessMapEdge[],
+  accessOk: boolean
+): AccessMapNode[] {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const usageNodes = nodes.filter(
+    (node) => node.kind !== "token" && (node.meta.accessPaths ?? 0) > 0
+  );
+
+  if (!accessOk) {
+    // §5.6：访问面不可用时按闲置端点示意；仍禁止闲置表进列。
+    return nodes.filter((node) => {
+      if (node.kind === "token" || node.kind === "table") return false;
+      return (node.meta.grantPaths ?? 0) > 0;
+    });
+  }
+
+  const idleEndpointIds = new Set<string>();
+  for (const edge of edges) {
+    if (!isIdleGrantEdge(edge)) continue;
+    const source = byId.get(edge.source);
+    if (!source) continue;
+    if (source.kind === "table" || source.kind === "token") continue;
+    if ((source.meta.accessPaths ?? 0) > 0) continue;
+    idleEndpointIds.add(source.id);
+  }
+
+  const seen = new Set(usageNodes.map((node) => node.id));
+  const idleEndpoints = [...idleEndpointIds]
+    .map((id) => byId.get(id))
+    .filter((node): node is AccessMapNode => Boolean(node));
+  for (const node of idleEndpoints) seen.add(node.id);
+  return [...usageNodes, ...idleEndpoints];
 }
 
 function cubicAt(points: [Point, Point, Point, Point], t: number): Point {
@@ -381,6 +426,8 @@ function measureLabel(node: AccessMapNode, statusState: AccessMapEdgeState | nul
 /** 布局可选项。`maxPxPerPath` 只用于「刻度封顶」的对照实验与测试。 */
 export type AccessMapLayoutOptions = {
   maxPxPerPath?: number;
+  /** 访问面是否可用；false 时仅闲置示意（§5.6）。 */
+  accessOk?: boolean;
 };
 
 type NodeBox = {
@@ -411,14 +458,24 @@ export function layoutAccessMap(
   options?: AccessMapLayoutOptions
 ): AccessMapLayout {
   const maxPxPerPath = options?.maxPxPerPath ?? MAX_PX_PER_PATH;
-  const flowNodes = nodes.filter((node) => node.kind !== "token");
+  const accessOk = options?.accessOk ?? true;
+  const flowNodes = selectAccessMapCanvasNodes(nodes, edges, accessOk);
+  const usageNodeIds = new Set(
+    flowNodes.filter((node) => (node.meta.accessPaths ?? 0) > 0).map((node) => node.id)
+  );
   const depths = [...new Set(flowNodes.map((node) => node.depth))].sort((a, b) => a - b);
 
-  const columns = depths.map((depth) =>
-    flowNodes
-      .filter((node) => node.depth === depth)
-      .sort((a, b) => flowOf(b) - flowOf(a) || a.id.localeCompare(b.id))
-  );
+  // S7：列内 usageNodes 按 accessPaths 降序；闲置端点置列底。
+  const columns = depths.map((depth) => {
+    const column = flowNodes.filter((node) => node.depth === depth);
+    const usage = column
+      .filter((node) => usageNodeIds.has(node.id))
+      .sort((a, b) => flowOf(b) - flowOf(a) || a.id.localeCompare(b.id));
+    const idle = column
+      .filter((node) => !usageNodeIds.has(node.id))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    return [...usage, ...idle];
+  });
 
   const contentTop = PADDING + COLUMN_HEADER_HEIGHT;
   const usableForUnit = DENSE_BUDGET_H - PADDING * 2 - COLUMN_HEADER_HEIGHT;
@@ -443,25 +500,31 @@ export function layoutAccessMap(
     measures.set(node.id, measureLabel(node, statusState));
   }
 
-  // 只保留两端都落在图上的边。
+  // 只保留两端都落在图上的边；使用流带仅 accessPaths>0（且 accessOk）。
   const placedIds = new Set(flowNodes.map((node) => node.id));
   const activeEdges = edges.filter(
     (edge) => placedIds.has(edge.source) && placedIds.has(edge.target)
   );
+  const usageEdges = accessOk ? activeEdges.filter(isUsageEdge) : [];
 
-  // 节点的流量：元数据流量与进出槽位总量取大者，保证槽位不越柱。
+  // 柱高 = max(入槽, 出槽) 使用厚度；闲置 stub 不进。
   const outSum = new Map<string, number>();
   const inSum = new Map<string, number>();
-  for (const edge of activeEdges) {
+  for (const edge of usageEdges) {
     const weight = edgeWeight(edge);
     outSum.set(edge.source, (outSum.get(edge.source) ?? 0) + weight);
     inSum.set(edge.target, (inSum.get(edge.target) ?? 0) + weight);
   }
-  const flowOfNode = (node: AccessMapNode): number =>
-    Math.max(flowOf(node), outSum.get(node.id) ?? 0, inSum.get(node.id) ?? 0);
+  const flowOfNode = (node: AccessMapNode): number => {
+    if (!accessOk) return 0;
+    return Math.max(outSum.get(node.id) ?? 0, inSum.get(node.id) ?? 0);
+  };
 
+  // 密度只计使用节点（闲置端点不进 NODE_GAP 分母）。
   const columnFlow = columns.map((column) =>
-    column.reduce((sum, node) => sum + flowOfNode(node), 0)
+    column
+      .filter((node) => usageNodeIds.has(node.id))
+      .reduce((sum, node) => sum + flowOfNode(node), 0)
   );
 
   // 左右留白：首列标签在柱左、末列标签在柱右，都得在 SVG 里放得下。
@@ -482,8 +545,9 @@ export function layoutAccessMap(
   const columnX = columns.map((_, index) => PADDING + leftGutter + index * ACCESS_MAP_COLUMN_GAP);
 
   // 刻度：先按密度预算反推，再被 `MAX_PX_PER_PATH` 封顶。
+  // gapReserve 只计使用节点（§5.1）。
   const reserveOf = (index: number): number => {
-    const column = columns[index];
+    const column = columns[index].filter((node) => usageNodeIds.has(node.id));
     const gaps = Math.max(0, column.length - 1) * NODE_GAP;
     const isMiddle = index > 0 && index < columns.length - 1;
     const labels = isMiddle
@@ -529,7 +593,8 @@ export function layoutAccessMap(
         let cursor = contentTop;
         column.forEach((node, nodeIndex) => {
           const measure = measures.get(node.id) as LabelMeasure;
-          const pillarHeight = flowOfNode(node) * currentUnit;
+          let pillarHeight = flowOfNode(node) * currentUnit;
+          if (!accessOk) pillarHeight = Math.min(IDLE_GRANT_PX, Math.max(pillarHeight, IDLE_GRANT_PX));
           cursor += extra[columnIndex][nodeIndex] ?? 0;
           let y: number;
           if (isMiddle) {
@@ -555,8 +620,8 @@ export function layoutAccessMap(
         heights.push(cursor - contentTop - NODE_GAP);
       });
 
-      // ② 槽位与面积流带。
-      const built = buildBands(boxes, currentUnit, activeEdges);
+      // ② 槽位与面积流带（仅使用边）。
+      const built = buildBands(boxes, currentUnit, usageEdges);
       links = built.links;
 
       // ③ 标签避碰：中间列的标签块必须整块落在流带上下缘之上。
@@ -664,9 +729,37 @@ export function layoutAccessMap(
     contentTop + PADDING
   );
 
+  // §5.4：闲置出边的目标表可能不进列；stub 只要求源端点在画布上。
+  const idleBySource = new Map<string, AccessMapEdge[]>();
+  for (const edge of edges) {
+    if (!placedIds.has(edge.source)) continue;
+    if (accessOk) {
+      if (!isIdleGrantEdge(edge)) continue;
+    } else if (edge.grantPaths <= 0) {
+      continue;
+    }
+    const list = idleBySource.get(edge.source) ?? [];
+    list.push(edge);
+    idleBySource.set(edge.source, list);
+  }
+  const idleStubs: AccessMapIdleStub[] = [];
+  for (const [nodeId, idleEdges] of idleBySource) {
+    const box = boxes.get(nodeId);
+    if (!box) continue;
+    idleStubs.push({
+      nodeId,
+      x: box.x + PILLAR_WIDTH,
+      y: box.y + Math.max(0, box.pillarHeight - IDLE_GRANT_PX),
+      width: Math.max(12, ACCESS_MAP_COLUMN_GAP * 0.08),
+      height: IDLE_GRANT_PX,
+      idleEdges
+    });
+  }
+
   return {
     nodes: placed,
     links,
+    idleStubs,
     columns: columns.map((column, index) => ({
       depth: depths[index] as number,
       kind: column[0]?.kind ?? "table",
@@ -757,9 +850,8 @@ export function layoutAccessMap(
       const x1 = target.x;
       const gap = x1 - x0;
       const isReview = edge.state === "needs_review";
-      const bandThickness = isReview
-        ? edge.accessPaths * currentUnit
-        : (edge.grantPaths > 0 ? edge.grantPaths : edge.accessPaths) * currentUnit;
+      // usage-first §5.3：主厚度 = accessPaths × unitPx；无授权外带／深色内核双层。
+      const bandThickness = edge.accessPaths * currentUnit;
       const y0 = source.y + srcSlot.top + bandThickness / 2;
       const y1 = target.y + tgtSlot.top + bandThickness / 2;
       const curve: [Point, Point, Point, Point] = [
@@ -791,52 +883,30 @@ export function layoutAccessMap(
         };
       };
 
-      // 主面积：授权面积（normal / dormant / overflow）或需复核的独立警示面积。
       const band = makeBand(isReview ? "review" : "grant", curve, bandThickness);
-
-      // 内核：访问路径数，顶对齐；overflow 夹紧为授权厚度；dormant / needs_review 无内核。
-      let kernel: AccessMapBandGeometry | null = null;
-      let kernelRatio = 1;
-      if (!isReview && edge.state !== "dormant" && edge.accessPaths > 0) {
-        const grantThickness = bandThickness;
-        const accessThickness = Math.min(edge.accessPaths * currentUnit, grantThickness);
-        kernelRatio = grantThickness > 0 ? accessThickness / grantThickness : 1;
-        const kernelCurve: [Point, Point, Point, Point] = [
-          { x: x0, y: source.y + srcSlot.top + accessThickness / 2 },
-          { x: x0 + gap / 3, y: source.y + srcSlot.top + accessThickness / 2 },
-          { x: x1 - gap / 3, y: target.y + tgtSlot.top + accessThickness / 2 },
-          { x: x1, y: target.y + tgtSlot.top + accessThickness / 2 }
-        ];
-        const truncated: [Point, Point, Point, Point] =
-          kernelRatio >= 1 ? kernelCurve : truncateCubic(kernelCurve, kernelRatio);
-        kernel = makeBand("grant", truncated, accessThickness);
-      }
-
       const midlinePath = isReview ? cubicPath(curve) : null;
-      const outlinePath = edge.state === "overflow" ? band.path : null;
+      const outlinePath =
+        edge.state === "overflow" || edge.confirmedUnauthorized ? band.path : null;
 
       const hitPaths: string[] = [];
-      for (const element of [band, kernel]) {
-        if (!element) continue;
-        const hitThickness = Math.max(element.thickness, MIN_HIT_PX);
-        const half = hitThickness / 2;
-        const upperCurve = offsetCurve(element.curve, -half);
-        const lowerCurve = offsetCurve(element.curve, half);
-        hitPaths.push(areaPath(upperCurve, lowerCurve));
-      }
+      const hitThickness = Math.max(band.thickness, MIN_HIT_PX);
+      const half = hitThickness / 2;
+      hitPaths.push(
+        areaPath(offsetCurve(band.curve, -half), offsetCurve(band.curve, half))
+      );
 
       links.push({
         edge,
         path: band.path,
         width: bandThickness,
-        kernelPath: kernel?.path ?? null,
-        kernelWidth: kernel?.thickness ?? 0,
-        kernelRatio,
+        kernelPath: null,
+        kernelWidth: 0,
+        kernelRatio: 1,
         points: curve,
         band,
         grantArea: isReview ? null : band,
         reviewArea: isReview ? band : null,
-        kernel,
+        kernel: null,
         midlinePath,
         outlinePath,
         sourceSlot: srcSlot,
@@ -906,24 +976,23 @@ function nodeFillClass(node: AccessMapNode): string {
 }
 
 /**
- * 面积流带的填充色（quiet-reading §5.3，geometry Spec §5.7 保持不变）。
- *
- * 僵尸授权与正常授权**同色**（`brand`）：警告色只留给需复核与确凿越权，
- * 否则「全部为僵尸授权」的图会被涂成一片警告色，读者读不出别的信息。
- * 僵尸授权的状态由外标块上的「僵尸授权」文字承担。
+ * usage-first §5.3 四态主填充：使用带（无授权外带）。
+ * 确凿越权 danger；需复核 warning；overflow／normal 用 access（accent）。
  */
 function bandFillClass(edge: AccessMapEdge): string {
+  if (edge.confirmedUnauthorized) return "fill-danger-strong";
   if (edge.state === "needs_review") return "fill-warning";
-  if (edge.state === "overflow") return "fill-danger-soft";
-  return "fill-brand";
+  if (edge.state === "overflow") return "fill-accent";
+  return "fill-accent";
 }
 
-/** 访问内核的填充色：确凿越权与越权用 danger，正常访问用 accent。 */
+/** @deprecated usage-first 不再画深色内核；保留供旧测试引用。 */
 function kernelFillClass(edge: AccessMapEdge): string {
   if (edge.confirmedUnauthorized) return "fill-danger-strong";
   if (edge.state === "overflow") return "fill-danger-strong";
   return "fill-accent";
 }
+void kernelFillClass;
 
 /**
  * 状态文字的着色。
@@ -1171,6 +1240,11 @@ export type AccessMapCanvasProps = {
    * 有链路高亮时，第一次 Esc 只取消高亮，图保持全图。
    */
   onClearFocus?: () => void;
+  /**
+   * 持久筛选：点击 Agent → 写 `agent=`（S8）；点击连接 → 写 `focus=`（S6）。
+   * 悬停预览不得调用本回调。
+   */
+  onPersistStructureFilter?: (node: AccessMapNode) => void;
   /** 无障碍摘要：节点数、边数、信号计数。 */
   summary: string;
   /**
@@ -1189,7 +1263,15 @@ export type AccessMapCanvasProps = {
  */
 type AccessMapHoverTip =
   | { kind: "node"; node: AccessMapNode; x: number; y: number }
-  | { kind: "edge"; edge: AccessMapEdge; x: number; y: number };
+  | { kind: "edge"; edge: AccessMapEdge; x: number; y: number }
+  | {
+      kind: "idle-stub";
+      nodeLabel: string;
+      idleCount: number;
+      grantPaths: number;
+      x: number;
+      y: number;
+    };
 
 export function AccessMapCanvas({
   nodes,
@@ -1198,10 +1280,14 @@ export function AccessMapCanvas({
   censusEdges,
   focusNodeId,
   onClearFocus,
+  onPersistStructureFilter,
   summary,
   accessOk = true
 }: AccessMapCanvasProps) {
-  const layout = useMemo(() => layoutAccessMap(nodes, edges), [nodes, edges]);
+  const layout = useMemo(
+    () => layoutAccessMap(nodes, edges, { accessOk }),
+    [nodes, edges, accessOk]
+  );
   const populationNodes = censusNodes ?? nodes;
   const populationEdges = censusEdges ?? edges;
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -1210,6 +1296,10 @@ export function AccessMapCanvas({
   const [hoverSuppressed, setHoverSuppressed] = useState(false);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [hoverTip, setHoverTip] = useState<AccessMapHoverTip | null>(null);
+  const [idleList, setIdleList] = useState<{
+    nodeLabel: string;
+    edges: AccessMapEdge[];
+  } | null>(null);
 
   /** 边的两端用**节点名**呈现；找不到就退回原始 id，不出现空白。 */
   const labelOfNode = useMemo(() => {
@@ -1261,6 +1351,10 @@ export function AccessMapCanvas({
 
   const pinNode = (nodeId: string): void => {
     setPinnedNodeId((current) => (current === nodeId ? null : nodeId));
+    const node = nodes.find((item) => item.id === nodeId);
+    if (node && onPersistStructureFilter) {
+      onPersistStructureFilter(node);
+    }
   };
   const previewNode = (nodeId: string): void => {
     if (!hoverSuppressed) setHoveredNodeId(nodeId);
@@ -1271,7 +1365,10 @@ export function AccessMapCanvas({
     setHoverTip(null);
   };
 
-  const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
+  const selectedEdge =
+    edges.find((edge) => edge.id === selectedEdgeId) ??
+    populationEdges.find((edge) => edge.id === selectedEdgeId) ??
+    null;
 
   /**
    * 浮层定位：把鼠标的**视口坐标**换算成浮层所在容器（根节点，`position: relative`）内的坐标。
@@ -1439,17 +1536,6 @@ export function AccessMapCanvas({
                     <title>{accessMapEdgeTitleText(link.edge, accessOk, labelOfNode)}</title>
                   </path>
                 ) : null}
-                {link.kernel ? (
-                  <path
-                    d={link.kernel.path}
-                    className={`${kernelFillClass(link.edge)} ${faded ? "opacity-15" : onChain ? "opacity-100" : "opacity-90"}`}
-                    data-testid={`access-map-kernel-${link.edge.id}`}
-                    onClick={() => setSelectedEdgeId(link.edge.id)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <title>{accessMapEdgeTitleText(link.edge, accessOk, labelOfNode)}</title>
-                  </path>
-                ) : null}
                 {/* 需复核：虚线中线（状态不只靠颜色区分）。 */}
                 {link.midlinePath ? (
                   <path
@@ -1488,6 +1574,49 @@ export function AccessMapCanvas({
                     style={{ cursor: "pointer" }}
                   />
                 ))}
+              </g>
+            );
+          })}
+          {layout.idleStubs.map((stub) => {
+            const sourceNode = nodes.find((node) => node.id === stub.nodeId);
+            const grantSum = stub.idleEdges.reduce((sum, edge) => sum + edge.grantPaths, 0);
+            return (
+              <g
+                key={`idle-stub-${stub.nodeId}`}
+                data-testid={`access-map-idle-stub-${stub.nodeId}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIdleList({
+                    nodeLabel: sourceNode?.label ?? stub.nodeId,
+                    edges: stub.idleEdges
+                  });
+                }}
+                onMouseEnter={(event) =>
+                  setHoverTip({
+                    kind: "idle-stub",
+                    nodeLabel: sourceNode?.label ?? stub.nodeId,
+                    idleCount: stub.idleEdges.length,
+                    grantPaths: grantSum,
+                    ...tipPosition(event.clientX, event.clientY)
+                  })
+                }
+                onMouseLeave={() => setHoverTip(null)}
+                style={{ cursor: "pointer" }}
+              >
+                <title>
+                  {`${sourceNode?.label ?? stub.nodeId} → 闲置授权 ${stub.idleEdges.length} 条`}
+                </title>
+                <rect
+                  x={stub.x}
+                  y={stub.y}
+                  width={stub.width}
+                  height={stub.height}
+                  fill="none"
+                  className="stroke-fg-muted"
+                  strokeWidth={1}
+                  data-testid={`access-map-idle-stub-shape-${stub.nodeId}`}
+                  data-grant-sum={grantSum}
+                />
               </g>
             );
           })}
@@ -1583,6 +1712,19 @@ export function AccessMapCanvas({
               <div className="text-fg-muted">{accessMapNodeSubtitle(hoverTip.node)}</div>
               <div className="text-fg-muted">类型：{accessMapNodeKindLabel(hoverTip.node.kind)}</div>
             </>
+          ) : hoverTip.kind === "idle-stub" ? (
+            <>
+              <div className="font-medium notranslate" translate="no">
+                {hoverTip.nodeLabel} → 闲置授权 {hoverTip.idleCount} 条
+              </div>
+              <div className="text-fg-muted">
+                {accessOk ? "有授权，窗口内未调用" : ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CONCLUSION}
+              </div>
+              <div className="text-fg-muted">
+                授权路径 {hoverTip.grantPaths} 条 ·{" "}
+                {accessOk ? "调用 0 次" : ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CALLS}
+              </div>
+            </>
           ) : (
             <>
               <div className="font-medium notranslate" translate="no">
@@ -1596,6 +1738,44 @@ export function AccessMapCanvas({
               </div>
             </>
           )}
+        </div>
+      ) : null}
+
+      {idleList ? (
+        <div
+          className="absolute right-3 top-3 z-40 w-72 rounded-md border border-border-default bg-bg-elevated p-3 shadow-lg"
+          data-testid="access-map-idle-grant-list"
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-medium text-fg-body notranslate" translate="no">
+              {idleList.nodeLabel} · 闲置授权 {idleList.edges.length} 条
+            </h3>
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost text-xs"
+              onClick={() => setIdleList(null)}
+            >
+              关闭
+            </button>
+          </div>
+          <ul className="flex max-h-64 flex-col gap-1 overflow-auto text-xs">
+            {idleList.edges.map((edge) => (
+              <li key={edge.id}>
+                <button
+                  type="button"
+                  className="w-full rounded px-2 py-1 text-left text-fg-muted hover:bg-bg-subtle notranslate"
+                  translate="no"
+                  data-testid={`access-map-idle-grant-row-${edge.id}`}
+                  onClick={() => {
+                    setSelectedEdgeId(edge.id);
+                    setIdleList(null);
+                  }}
+                >
+                  {labelOfNode(edge.target)} · 授权路径 {edge.grantPaths} 条
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 
@@ -1636,30 +1816,43 @@ export function AccessMapCanvas({
         按钮：徽标列表本身就是逐边说明，把它变成按钮即可打开同一个明细面板，
         不需要第二套 UI。
       */}
-      {layout.links.some((link) => link.edge.state !== "normal") ? (
-        <ul
-          className="sr-only focus-within:not-sr-only flex flex-wrap gap-3 text-xs text-fg-muted"
-          data-testid="access-map-edge-badges"
-        >
-          {layout.links
-            .filter((link) => link.edge.state !== "normal")
-            .map((link) => (
-              <li key={`badge-${link.edge.id}`} data-testid={`access-map-edge-badge-${link.edge.id}`}>
+      {(() => {
+        const badgeEdges = [
+          ...layout.links.filter((link) => link.edge.state !== "normal").map((link) => link.edge),
+          ...layout.idleStubs.flatMap((stub) => stub.idleEdges)
+        ];
+        const seen = new Set<string>();
+        const unique = badgeEdges.filter((edge) => {
+          if (seen.has(edge.id)) return false;
+          seen.add(edge.id);
+          return true;
+        });
+        if (unique.length === 0) return null;
+        return (
+          <ul
+            className="sr-only focus-within:not-sr-only flex flex-wrap gap-3 text-xs text-fg-muted"
+            data-testid="access-map-edge-badges"
+          >
+            {unique.map((edge) => (
+              <li key={`badge-${edge.id}`} data-testid={`access-map-edge-badge-${edge.id}`}>
                 <button
                   type="button"
                   className="underline notranslate"
                   translate="no"
-                  onClick={() => setSelectedEdgeId(link.edge.id)}
-                  aria-expanded={selectedEdgeId === link.edge.id}
-                  data-testid={`access-map-edge-badge-button-${link.edge.id}`}
+                  onClick={() => setSelectedEdgeId(edge.id)}
+                  aria-expanded={selectedEdgeId === edge.id}
+                  data-testid={`access-map-edge-badge-button-${edge.id}`}
                 >
-                  {link.edge.source} → {link.edge.target}：{accessMapEdgeStateLabel(link.edge.state)}
-                  {link.edge.confirmedUnauthorized ? "（确凿越权：调用当时授权亦不覆盖）" : ""}
+                  {edge.source} → {edge.target}：{accessMapEdgeStateLabel(edge.state)}
+                  {edge.confirmedUnauthorized && accessOk
+                    ? "（确凿越权：调用当时授权亦不覆盖）"
+                    : ""}
                 </button>
               </li>
             ))}
-        </ul>
-      ) : null}
+          </ul>
+        );
+      })()}
 
       {/*
         边明细进右侧抽屉（呈现修订 D6）：明细内容不变，只是不再占据图下方的文档流。
@@ -1705,29 +1898,39 @@ export function AccessMapCanvas({
                       授权路径 {selectedEdge.grantPaths} 条 · 去重 Agent {selectedEdge.grantUsers} 个
                     </li>
                     <li className="notranslate" translate="no">
-                      访问路径 {selectedEdge.accessPaths} 条 · 去重 Agent {selectedEdge.accessUsers} 个 · 调用{" "}
-                      {selectedEdge.accessCalls} 次
+                      {accessOk ? (
+                        <>
+                          访问路径 {selectedEdge.accessPaths} 条 · 去重 Agent {selectedEdge.accessUsers}{" "}
+                          个 · 调用 {selectedEdge.accessCalls} 次
+                        </>
+                      ) : (
+                        ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CALLS
+                      )}
                     </li>
                     <li className="notranslate" translate="no">
                       状态：{accessMapEdgeStateLabel(selectedEdge.state)}
-                      {selectedEdge.confirmedUnauthorized ? "（确凿越权：调用当时授权亦不覆盖）" : ""}
+                      {accessOk && selectedEdge.confirmedUnauthorized
+                        ? "（确凿越权：调用当时授权亦不覆盖）"
+                        : ""}
                     </li>
-                    {selectedEdge.reviewEvaluations.map((evaluation) => (
-                      <li
-                        key={evaluation.pathKey}
-                        className="notranslate"
-                        translate="no"
-                        data-testid={`access-map-edge-detail-path-${evaluation.pathKey}`}
-                      >
-                        {evaluation.agentId} / {evaluation.roleId} / {evaluation.schema}.{evaluation.sourceName}
-                        ：{evaluation.calls} 次调用 ·{" "}
-                        {evaluation.result === "confirmed_unauthorized"
-                          ? "确凿越权（调用当时授权亦不覆盖）"
-                          : evaluation.result === "covered_at_call_time"
-                            ? "调用当时授权已覆盖"
-                            : `需复核（${evaluation.reason ?? "证据不足"}）`}
-                      </li>
-                    ))}
+                    {accessOk
+                      ? selectedEdge.reviewEvaluations.map((evaluation) => (
+                          <li
+                            key={evaluation.pathKey}
+                            className="notranslate"
+                            translate="no"
+                            data-testid={`access-map-edge-detail-path-${evaluation.pathKey}`}
+                          >
+                            {evaluation.agentId} / {evaluation.roleId} / {evaluation.schema}.
+                            {evaluation.sourceName}：{evaluation.calls} 次调用 ·{" "}
+                            {evaluation.result === "confirmed_unauthorized"
+                              ? "确凿越权（调用当时授权亦不覆盖）"
+                              : evaluation.result === "covered_at_call_time"
+                                ? "调用当时授权已覆盖"
+                                : `需复核（${evaluation.reason ?? "证据不足"}）`}
+                          </li>
+                        ))
+                      : null}
                   </ul>
                 </section>
               ) : null}

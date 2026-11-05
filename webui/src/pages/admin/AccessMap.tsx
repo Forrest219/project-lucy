@@ -73,6 +73,7 @@ function useAccessMapParams(): {
   queryString: string;
   get: (key: string) => string | null;
   setParam: (key: string, value: string | null) => void;
+  clearParams: (keys: readonly string[]) => void;
 } {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryString = useMemo(() => {
@@ -104,6 +105,13 @@ function useAccessMapParams(): {
         // Spec D13：用户主动改其它筛选时省略 trust（不再掩盖首屏 400 的地址栏）。
         next.delete("trust");
       }
+      setSearchParams(next, { replace: false });
+    },
+    clearParams: (keys: readonly string[]) => {
+      const next = new URLSearchParams(searchParams);
+      for (const key of keys) next.delete(key);
+      next.delete("detailOffset");
+      next.delete("trust");
       setSearchParams(next, { replace: false });
     }
   };
@@ -223,7 +231,7 @@ function TableViewBody({
 }
 
 export function AccessMap() {
-  const { queryString, get, setParam } = useAccessMapParams();
+  const { queryString, get, setParam, clearParams } = useAccessMapParams();
   const [searchText, setSearchText] = useState("");
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
 
@@ -233,7 +241,9 @@ export function AccessMap() {
       apiGet<AccessMapResponse>(
         `/api/admin/access-map${queryString ? `?${queryString}` : ""}`
       ),
-    retry: false
+    retry: false,
+    // 持久筛选改 URL 时保留上一帧图，避免点 Agent／连接瞬间空白。
+    placeholderData: (previous) => previous
   });
 
   const response = query.data;
@@ -274,6 +284,18 @@ export function AccessMap() {
       return;
     }
     setSearchMessage(null);
+    // S8：Agent 定位写 agent=；连接写 focus=；其它节点写 focus=。
+    if (hit.kind === "agent") {
+      const agentId = hit.id.startsWith("agent:") ? hit.id.slice("agent:".length) : hit.id;
+      setParam("focus", null);
+      setParam("agent", agentId);
+      return;
+    }
+    if (hit.kind === "connection") {
+      setParam("agent", null);
+      setParam("focus", hit.id);
+      return;
+    }
     setParam("focus", hit.id);
   };
 
@@ -290,6 +312,48 @@ export function AccessMap() {
   const clearFocus = useCallback(() => {
     if (focusNodeId) setParam("focus", null);
   }, [focusNodeId, setParam]);
+
+  const clearStructureFilters = useCallback(() => {
+    clearParams(["agent", "role", "connection", "table", "focus"]);
+  }, [clearParams]);
+
+  const persistStructureFromNode = useCallback(
+    (node: { id: string; kind: string }) => {
+      if (node.kind === "agent") {
+        const agentId = node.id.startsWith("agent:") ? node.id.slice("agent:".length) : node.id;
+        setParam("focus", null);
+        setParam("agent", agentId);
+        return;
+      }
+      if (node.kind === "connection") {
+        setParam("agent", null);
+        setParam("focus", node.id);
+      }
+    },
+    [setParam]
+  );
+
+  const agentFilter = get("agent");
+  const connectionFilter = get("connection");
+  const hasPersistentStructure = Boolean(
+    agentFilter || get("role") || connectionFilter || get("table") || focusNodeId
+  );
+
+  /** SC-29：深链到访问日志调用流水；window→hours；agent→user。 */
+  const auditCallsHref = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("view", "calls");
+    const hours =
+      windowValue === "24h" ? "24" : windowValue === "720h" ? "720" : "168";
+    params.set("hours", hours);
+    if (inquiryKindRaw) params.set("inquiryKind", inquiryKindRaw);
+    else params.set("inquiryKind", ACCESS_MAP_DEFAULT_INQUIRY_KIND);
+    if (accessGradeRaw) params.set("accessGrade", accessGradeRaw);
+    else params.set("accessGrade", ACCESS_MAP_DEFAULT_ACCESS_GRADE);
+    if (agentFilter) params.set("user", agentFilter);
+    // 与 map 默认 E 一致：排除 protocol（不设 includeProtocol）。
+    return `/admin/audit?${params.toString()}`;
+  }, [windowValue, inquiryKindRaw, accessGradeRaw, agentFilter]);
 
   const residentLine =
     response && !grantUnavailable ? (
@@ -404,6 +468,49 @@ export function AccessMap() {
         </div>
 
         <div className="flex flex-col gap-1">
+          <label
+            className="text-xs font-medium text-fg-muted notranslate"
+            translate="no"
+            htmlFor="access-map-agent-filter"
+          >
+            Agent
+          </label>
+          <input
+            id="access-map-agent-filter"
+            className="pl-input w-40 notranslate"
+            translate="no"
+            placeholder="写入 agent="
+            aria-label="按 Agent 筛选行为轨迹"
+            data-testid="access-map-agent-filter"
+            value={agentFilter ?? ""}
+            onChange={(event) => {
+              const next = event.target.value.trim();
+              setParam("focus", null);
+              setParam("agent", next.length > 0 ? next : null);
+            }}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-fg-muted" htmlFor="access-map-connection-filter">
+            连接
+          </label>
+          <input
+            id="access-map-connection-filter"
+            className="pl-input w-40 notranslate"
+            translate="no"
+            placeholder="写入 connection="
+            aria-label="按连接筛选"
+            data-testid="access-map-connection-filter"
+            value={connectionFilter ?? ""}
+            onChange={(event) => {
+              const next = event.target.value.trim();
+              setParam("connection", next.length > 0 ? next : null);
+            }}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-fg-muted">定位</span>
           <div className="flex items-center gap-1">
             <input
@@ -429,6 +536,25 @@ export function AccessMap() {
             </button>
           </div>
         </div>
+
+        {hasPersistentStructure ? (
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost text-xs"
+            data-testid="access-map-clear-structure"
+            onClick={clearStructureFilters}
+          >
+            清除筛选（回全图）
+          </button>
+        ) : null}
+
+        <Link
+          to={auditCallsHref}
+          className="pl-btn pl-btn--ghost text-xs underline"
+          data-testid="access-map-audit-deeplink"
+        >
+          对照访问日志
+        </Link>
 
         {searchMessage ? (
           <span className="text-xs text-fg-muted" data-testid="access-map-search-message">
@@ -521,6 +647,23 @@ export function AccessMap() {
             </div>
           ) : null}
 
+          {response.meta.echo ? (
+            <div
+              className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted"
+              data-testid="access-map-echo-allow-calls"
+            >
+              <span data-testid="access-map-entering-allow-calls">
+                进入允许调用 {response.meta.echo.enteringAllowCallCount}
+              </span>
+              {hasPersistentStructure &&
+              typeof response.meta.echo.projectedAllowCallCount === "number" ? (
+                <span data-testid="access-map-projected-allow-calls">
+                  当前投影允许调用 {response.meta.echo.projectedAllowCallCount}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
           {response.nodes.length > 0 &&
           response.meta.access.state === "ok" &&
           response.meta.echo?.enteringAllowCallCount === 0 ? (
@@ -571,6 +714,7 @@ export function AccessMap() {
                 accessOk={response.meta.access.state === "ok"}
                 summary={`访问关系图：${response.render.nodes.length} 个节点，${response.render.edges.length} 条边，需复核 ${response.meta.signals.needsReviewEdges} 条，确凿越权 ${response.meta.signals.confirmedUnauthorizedEdges} 条。`}
                 onClearFocus={clearFocus}
+                onPersistStructureFilter={persistStructureFromNode}
               />
               {residentLine}
             </>

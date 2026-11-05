@@ -34,6 +34,10 @@ function makeNode(
   meta: Record<string, unknown> = {},
   parentId?: string
 ): AccessMapResponse["nodes"][number] {
+  const grantPaths = typeof meta.grantPaths === "number" ? meta.grantPaths : 0;
+  // usage-first：未显式给 accessPaths 时，跟随 grantPaths，避免画布空节点。
+  const accessPaths =
+    typeof meta.accessPaths === "number" ? meta.accessPaths : grantPaths;
   return {
     id,
     kind,
@@ -41,11 +45,13 @@ function makeNode(
     depth,
     ...(parentId ? { parentId } : {}),
     meta: {
-      grantPaths: 0,
+      grantPaths,
       grantUsers: 0,
-      accessPaths: 0,
-      accessUsers: 0,
-      ...meta
+      accessPaths,
+      accessUsers: accessPaths > 0 ? 1 : 0,
+      ...meta,
+      accessPaths,
+      grantPaths
     }
   };
 }
@@ -55,20 +61,26 @@ function makeEdge(
   target: string,
   overrides: Partial<AccessMapResponse["edges"][number]> = {}
 ): AccessMapResponse["edges"][number] {
+  const grantPaths = overrides.grantPaths ?? 0;
+  const accessPaths =
+    overrides.accessPaths ??
+    (overrides.state === "dormant" ? 0 : grantPaths > 0 ? grantPaths : 0);
   return {
     id: `e|${source}|${target}`,
     source,
     target,
-    grantPaths: 0,
+    grantPaths,
     grantUsers: 0,
-    accessPaths: 0,
-    accessUsers: 0,
-    accessCalls: 0,
-    state: "normal",
+    accessPaths,
+    accessUsers: accessPaths > 0 ? 1 : 0,
+    accessCalls: accessPaths,
+    state: overrides.state ?? (accessPaths === 0 && grantPaths > 0 ? "dormant" : "normal"),
     confirmedUnauthorized: false,
     reviewEvaluations: [],
     snapshotCoverage: { reviewPaths: 0, matched: 0, missingOrInvalid: 0, ratio: 0 },
-    ...overrides
+    ...overrides,
+    accessPaths: overrides.accessPaths ?? accessPaths,
+    grantPaths: overrides.grantPaths ?? grantPaths
   };
 }
 
@@ -649,11 +661,10 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-svg")).toBeInTheDocument());
 
-    // 僵尸授权（dormant）与正常授权同色：授权面积不含 warning。
-    const dormant = screen.getByTestId("access-map-ribbon-e|agent:agent_a|role:role_reader");
-    expect(dormant.getAttribute("class")).toContain("fill-brand");
+    // 闲置授权 → stub（空心），不含 warning。
+    const dormant = screen.getByTestId("access-map-idle-stub-shape-agent:agent_a");
+    expect(dormant.getAttribute("fill")).toBe("none");
     expect(dormant.getAttribute("class")).not.toContain("warning");
-    expect(dormant.getAttribute("stroke-dasharray")).toBeNull();
 
     // 需复核：warning 面积 + 虚线中线（状态不只靠颜色区分）。
     const needsReview = screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main");
@@ -662,7 +673,7 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     expect(midline.getAttribute("stroke-dasharray")).toBeTruthy();
     expect(midline.getAttribute("class")).toContain("stroke-warning-strong");
 
-    // 确凿越权：danger 实线轮廓 + danger 内核，都不带虚线。
+    // 确凿越权：danger 填充使用带 + danger 实线轮廓；无深色内核。
     const overflow = screen.getByTestId(
       "access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders"
     );
@@ -673,11 +684,9 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     );
     expect(outline.getAttribute("class")).toContain("stroke-danger-strong");
     expect(outline.getAttribute("stroke-dasharray")).toBeNull();
-    const kernel = screen.getByTestId(
-      "access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::orders"
-    );
-    expect(kernel.getAttribute("class")).toContain("fill-danger-strong");
-    expect(kernel.getAttribute("stroke-dasharray")).toBeNull();
+    expect(
+      screen.queryByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::orders")
+    ).not.toBeInTheDocument();
   });
 
   it("SC-09 — 图下清单视觉隐藏、不占布局高度，但按钮仍可聚焦，test id 仍在", async () => {
@@ -934,8 +943,8 @@ describe("访问关系图 audit-echo 工具条与弱入口（Spec §7 组件侧�
     const columns = [...toolbar.children].filter((child) =>
       (child as HTMLElement).classList.contains("flex-col")
     ) as HTMLElement[];
-    // 统计窗口 / Schema 层 / 问询种类 / 访问等级 / 定位
-    expect(columns).toHaveLength(5);
+    // 统计窗口 / Schema 层 / 问询种类 / 访问等级 / Agent / 连接 / 定位
+    expect(columns).toHaveLength(7);
     for (const column of columns.slice(0, 4)) {
       // 标签 + 单控件根（分段或下拉）；禁止旧 trust-hint 那种列内多行说明。
       const controlRoots = column.querySelectorAll("select, .pl-segmented-control");
@@ -1090,7 +1099,9 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
     expect(legend.children).toHaveLength(4);
     const text = legend.textContent ?? "";
     expect(text).toContain("流带宽度");
-    expect(text).toContain("深色内核");
+    expect(text).toContain("访问路径数");
+    expect(text).not.toContain("深色内核");
+    expect(text).toContain("闲置授权");
     expect(text).toContain("虚线 = 需复核");
     expect(text).toContain("实线 = 确凿越权");
 
@@ -1373,28 +1384,28 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     expect(ribbon.getAttribute("class")).toMatch(/fill-/);
     // 没有拿描边宽度当厚度。
     expect(ribbon.getAttribute("stroke-width")).toBeNull();
-    // 主视觉不是「只有一条 path」：面积 + 内核是两层。
-    const kernel = screen.getByTestId("access-map-kernel-e|agent:agent_a|role:role_reader");
-    expect(kernel).toBeInTheDocument();
-    expect(kernel.getAttribute("d")).not.toBe(ribbon.getAttribute("d"));
+    // usage-first：主视觉是单层使用填充带，无深色内核。
+    expect(
+      screen.queryByTestId("access-map-kernel-e|agent:agent_a|role:role_reader")
+    ).not.toBeInTheDocument();
   });
 
-  it("SC-07 — 四态几何：normal 有授权面积与内核；dormant 只有授权面积；needs_review 是独立警示面积 + 虚线中线；overflow 内核夹紧为授权厚度", async () => {
+  it("SC-07 — usage-first 四态：normal／overflow 使用带；dormant→stub；needs_review 虚线；无深色内核", async () => {
     await renderFourState();
 
-    // normal：授权面积 + 内核（内核沿曲线截短到访问/授权比例）。
     const normalRibbon = screen.getByTestId("access-map-ribbon-e|agent:agent_a|role:role_reader");
-    const normalKernel = screen.getByTestId("access-map-kernel-e|agent:agent_a|role:role_reader");
     expect(normalRibbon).toBeInTheDocument();
-    expect(normalKernel).toBeInTheDocument();
-
-    // dormant：只有授权面积，没有内核。
-    expect(screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders")).toBeInTheDocument();
     expect(
-      screen.queryByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::orders")
+      screen.queryByTestId("access-map-kernel-e|agent:agent_a|role:role_reader")
     ).not.toBeInTheDocument();
 
-    // needs_review：独立警示面积（不是授权面积）+ 虚线中线，没有内核。
+    // dormant：不进流带，走闲置 stub。
+    expect(
+      screen.queryByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders")
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("access-map-idle-stub-conn:mysql_main")).toBeInTheDocument();
+
+    // needs_review：警示面积 + 虚线中线，没有内核。
     expect(screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main")).toBeInTheDocument();
     expect(
       screen.queryByTestId("access-map-kernel-e|role:role_reader|conn:mysql_main")
@@ -1403,21 +1414,24 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
       screen.getByTestId("access-map-midline-e|role:role_reader|conn:mysql_main")
     ).toBeInTheDocument();
 
-    // overflow：内核存在（厚度夹紧为授权），并有 danger 实线轮廓。
+    // overflow：使用带 + danger 实线轮廓；无内核。
     expect(
-      screen.getByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::customers")
+      screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::customers")
     ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::customers")
+    ).not.toBeInTheDocument();
     expect(
       screen.getByTestId("access-map-outline-e|conn:mysql_main|table:mysql_main::finance::customers")
     ).toBeInTheDocument();
   });
 
-  it("SC-11 — 状态不只靠颜色：dormant 不带 warning；needs_review 虚线；overflow / 确凿越权 danger 实线", async () => {
+  it("SC-11 — 状态不只靠颜色：dormant stub 不带 warning；needs_review 虚线；overflow / 确凿越权 danger 实线", async () => {
     await renderFourState();
 
-    const dormant = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
-    expect(dormant.getAttribute("class")).not.toContain("warning");
-    expect(dormant.getAttribute("stroke-dasharray")).toBeNull();
+    const dormantStub = screen.getByTestId("access-map-idle-stub-shape-conn:mysql_main");
+    expect(dormantStub.getAttribute("class")).not.toContain("warning");
+    expect(dormantStub.getAttribute("fill")).toBe("none");
 
     const midline = screen.getByTestId("access-map-midline-e|role:role_reader|conn:mysql_main");
     expect(midline.getAttribute("stroke-dasharray")).toBeTruthy();
@@ -1428,18 +1442,17 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     expect(outline.getAttribute("class")).toContain("stroke-danger-strong");
     expect(outline.getAttribute("stroke-dasharray")).toBeNull();
 
-    const kernel = screen.getByTestId(
-      "access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::customers"
+    const overflowRibbon = screen.getByTestId(
+      "access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::customers"
     );
-    expect(kernel.getAttribute("class")).toContain("danger");
-    expect(kernel.getAttribute("stroke-dasharray")).toBeNull();
+    expect(overflowRibbon.getAttribute("class")).toMatch(/danger|accent/);
   });
 
-  it("SC-12 — 悬停**可见面积**就出浮层（含无内核的 dormant 与 normal），浮层含从→到与三段式结论", async () => {
+  it("SC-12 — 悬停可见使用带／闲置 stub 出浮层，浮层含从→到与三段式结论", async () => {
     await renderFourState();
 
-    // dormant 没有内核，可见入口只有授权面积 —— 悬停它必须出浮层。
-    const dormant = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
+    // dormant → stub；悬停 stub 出闲置授权浮层。
+    const dormant = screen.getByTestId("access-map-idle-stub-conn:mysql_main");
     fireEvent.mouseOver(dormant);
     const dormantTip = await screen.findByTestId("access-map-hover-tip");
     expect(dormantTip).toHaveTextContent("→");
@@ -1464,11 +1477,16 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     expect(normalTip).toHaveTextContent("调用 2 次");
   });
 
-  it("SC-13 — 点击**可见面积**打开边明细抽屉（dormant 授权面积、needs_review 独立带），不只靠隐藏按钮", async () => {
+  it("SC-13 — 点击闲置 stub→清单→边抽屉；点击 needs_review 带直接开抽屉", async () => {
     await renderFourState();
 
-    const dormant = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
-    fireEvent.click(dormant);
+    fireEvent.click(screen.getByTestId("access-map-idle-stub-conn:mysql_main"));
+    const list = await screen.findByTestId("access-map-idle-grant-list");
+    expect(list).toBeInTheDocument();
+    const row = screen.getByTestId(
+      "access-map-idle-grant-row-e|conn:mysql_main|table:mysql_main::finance::orders"
+    );
+    fireEvent.click(row);
     const drawer = await screen.findByTestId("access-map-edge-drawer");
     expect(drawer).toBeInTheDocument();
     expect(screen.getByTestId("access-map-edge-detail")).toHaveTextContent("闲置授权");
@@ -1522,8 +1540,8 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-svg")).toBeInTheDocument());
 
-    const ribbon = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
-    fireEvent.mouseOver(ribbon);
+    const stub = screen.getByTestId("access-map-idle-stub-conn:mysql_main");
+    fireEvent.mouseOver(stub);
     const tip = await screen.findByTestId("access-map-hover-tip");
     expect(tip).toHaveTextContent("授权面可读，调用情况暂不可用");
     expect(tip).toHaveTextContent("调用情况暂不可用");
@@ -1531,7 +1549,7 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     expect(tip).not.toHaveTextContent("有授权，窗口内未调用");
     expect(tip).not.toHaveTextContent("（确凿越权：调用当时授权亦不覆盖）");
 
-    const title = ribbon.querySelector("title");
+    const title = stub.querySelector("title");
     expect(title?.textContent ?? "").not.toMatch(/调用 \d+ 次/);
     expect(title?.textContent ?? "").not.toContain("僵尸授权");
   });
@@ -1596,6 +1614,8 @@ describe("链路高亮与列头 KPI", () => {
 
     fireEvent.click(screen.getByTestId("access-map-node-agent:agent_a"));
 
+    // usage-first S8：点击 Agent 持久写入 agent=（可与链路高亮并存）。
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("agent=agent_a"));
     expect(screen.getByTestId("access-map-node-agent:agent_a")).toHaveAttribute("data-chain", "on");
     expect(screen.getByTestId("access-map-node-role:role_reader")).toHaveAttribute("data-chain", "on");
     expect(screen.getByTestId("access-map-node-conn:mysql_main")).toHaveAttribute("data-chain", "on");
@@ -1610,7 +1630,6 @@ describe("链路高亮与列头 KPI", () => {
       "on"
     );
     expect(screen.getByTestId("access-map-link-e|agent:other|role:other")).toHaveAttribute("data-chain", "off");
-    expect(lastRequestUrl(fetchMock)).not.toContain("focus=");
     expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("1");
     expect(screen.getByTestId("access-map-chain-caption")).toHaveTextContent("AGENT A");
 
@@ -1654,7 +1673,12 @@ describe("链路高亮与列头 KPI", () => {
         makeNode("table:shared", "table", "shared", 3, shared)
       ],
       edges: [
-        makeEdge("agent:agent_a", "role:shared", { grantPaths: 1, grantUsers: 1 }),
+        makeEdge("agent:agent_a", "role:shared", {
+          grantPaths: 1,
+          grantUsers: 1,
+          accessPaths: 0,
+          state: "dormant"
+        }),
         makeEdge("agent:agent_b", "role:shared", { grantPaths: 1, grantUsers: 1, accessPaths: 1 }),
         makeEdge("role:shared", "conn:shared", { grantPaths: 2, grantUsers: 2, accessPaths: 1 }),
         makeEdge("conn:shared", "table:shared", { grantPaths: 2, grantUsers: 2, accessPaths: 1 })
@@ -1721,7 +1745,14 @@ describe("链路高亮与列头 KPI", () => {
     response.nodes = [...kept, ...tables];
     response.edges = [
       ...keptEdges,
-      ...tables.map((table) => makeEdge("conn:mysql_main", table.id, { grantPaths: 1, grantUsers: 1 }))
+      ...tables.map((table) =>
+        makeEdge("conn:mysql_main", table.id, {
+          grantPaths: 1,
+          grantUsers: 1,
+          accessPaths: (table.meta.accessPaths as number) ?? 0,
+          state: ((table.meta.accessPaths as number) ?? 0) > 0 ? "normal" : "dormant"
+        })
+      )
     ];
     response.render = {
       nodes: [
@@ -1732,7 +1763,10 @@ describe("链路高亮与列头 KPI", () => {
           foldedMemberIds: tables.map((table) => table.id)
         })
       ],
-      edges: [...keptEdges, makeEdge("conn:mysql_main", "other:table:3", { grantPaths: 5, accessPaths: 1 })],
+      edges: [
+        ...keptEdges,
+        makeEdge("conn:mysql_main", "other:table:3", { grantPaths: 5, accessPaths: 1 })
+      ],
       folded: { nodes: 4, edges: 4 }
     };
     stubAccessMap(response);
@@ -1754,41 +1788,56 @@ describe("链路高亮与列头 KPI", () => {
   it("共用连接时，别人的专属表不算进当前链路，点表也不会把对方算进主体", async () => {
     const response = makeResponse({
       nodes: [
-        makeNode("agent:agent_a", "agent", "AGENT A", 0, { grantPaths: 1, grantUsers: 1 }),
-        makeNode("agent:agent_b", "agent", "AGENT B", 0, { grantPaths: 1, grantUsers: 1 }),
+        makeNode("agent:agent_a", "agent", "AGENT A", 0, {
+          grantPaths: 1,
+          grantUsers: 1,
+          accessPaths: 1,
+          accessAgentIds: ["agent_a"]
+        }),
+        makeNode("agent:agent_b", "agent", "AGENT B", 0, {
+          grantPaths: 1,
+          grantUsers: 1,
+          accessPaths: 1,
+          accessAgentIds: ["agent_b"]
+        }),
         makeNode("role:ra", "role", "RA", 1, {
           grantPaths: 1,
+          accessPaths: 1,
           grantAgentIds: ["agent_a"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_a"]
         }),
         makeNode("role:rb", "role", "RB", 1, {
           grantPaths: 1,
+          accessPaths: 1,
           grantAgentIds: ["agent_b"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_b"]
         }),
         makeNode("conn:c", "connection", "C", 2, {
           grantPaths: 2,
+          accessPaths: 2,
           grantAgentIds: ["agent_a", "agent_b"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_a", "agent_b"]
         }),
         makeNode("table:ta", "table", "TA", 3, {
           grantPaths: 1,
+          accessPaths: 1,
           grantAgentIds: ["agent_a"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_a"]
         }),
         makeNode("table:tb", "table", "TB", 3, {
           grantPaths: 1,
+          accessPaths: 1,
           grantAgentIds: ["agent_b"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_b"]
         })
       ],
       edges: [
-        makeEdge("agent:agent_a", "role:ra", { grantPaths: 1 }),
-        makeEdge("agent:agent_b", "role:rb", { grantPaths: 1 }),
-        makeEdge("role:ra", "conn:c", { grantPaths: 1 }),
-        makeEdge("role:rb", "conn:c", { grantPaths: 1 }),
-        makeEdge("conn:c", "table:ta", { grantPaths: 1 }),
-        makeEdge("conn:c", "table:tb", { grantPaths: 1 })
+        makeEdge("agent:agent_a", "role:ra", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("agent:agent_b", "role:rb", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("role:ra", "conn:c", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("role:rb", "conn:c", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("conn:c", "table:ta", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("conn:c", "table:tb", { grantPaths: 1, accessPaths: 1 })
       ]
     });
     response.render = { nodes: response.nodes, edges: response.edges, folded: { nodes: 0, edges: 0 } };

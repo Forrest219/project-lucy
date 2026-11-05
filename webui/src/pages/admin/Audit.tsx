@@ -2057,6 +2057,8 @@ export function Audit() {
     eventId: eventId.trim() || undefined,
     platform: platform || undefined,
     callSource: callSource || undefined,
+    // SC-29：深链 inquiryKind／accessGrade／user 须进调用流水列表请求。
+    inquiryKind: inquiryKind && inquiryKind !== "management" ? inquiryKind : undefined,
     accessGrade: accessGrade && accessGrade !== "exclude_connect" ? accessGrade : undefined,
     includeProtocol,
     limit: PAGE_SIZE,

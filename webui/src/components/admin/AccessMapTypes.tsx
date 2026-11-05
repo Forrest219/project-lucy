@@ -100,6 +100,8 @@ export type AccessMapEdge = {
 export type AccessMapEchoMeta = {
   enteringAllowCallCount: number;
   enteringAllowCallCountBasis: "pre_structure";
+  /** 当前投影允许调用 \|P\|（结构筛选／focus 后）；无筛选时等于 \|E\|。 */
+  projectedAllowCallCount?: number;
 };
 
 export type AccessMapInquiryKindFilter =
@@ -252,8 +254,13 @@ export function accessMapWindowLabel(value: string): string {
 /** 节点副行：「N 个 Agent · M 条路径」。路径数绝不能显示成 Agent 数（§4.2）。 */
 export function accessMapNodeSubtitle(node: AccessMapNode): string {
   const agents = node.meta.grantUsers ?? 0;
-  const paths = node.meta.grantPaths ?? 0;
-  return `${agents} 个 Agent · ${paths} 条路径`;
+  const grantPaths = node.meta.grantPaths ?? 0;
+  const accessPaths = node.meta.accessPaths ?? 0;
+  // usage-first SC-14：使用活跃节点副标须含使用向数字。
+  if (accessPaths > 0) {
+    return `${agents} 个 Agent · 访问路径 ${accessPaths} 条`;
+  }
+  return `${agents} 个 Agent · ${grantPaths} 条路径`;
 }
 
 export function accessMapEdgeStateLabel(state: AccessMapEdgeState): string {

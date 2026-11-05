@@ -503,6 +503,11 @@ export type AccessMapEchoMeta = {
   enteringAllowCallCount: number;
   /** 明示属于 scope／focus／layer 折叠之前。 */
   enteringAllowCallCountBasis: "pre_structure";
+  /**
+   * 当前结构筛选／focus 投影后的允许调用数 \|P\|（只读披露）。
+   * 无结构筛选且无 focus 时 \|P\|=\|E\|；有筛选时仍保持 enteringAllowCallCount=\|E\|。
+   */
+  projectedAllowCallCount?: number;
 };
 
 export type AccessMapAccessSide =
@@ -1237,8 +1242,12 @@ export type FoldResult = {
   folded: { nodes: number; edges: number };
 };
 
-function nodeWeight(node: InternalNode): number {
-  return node.grantPaths + node.accessPaths;
+/**
+ * 折叠受害权重（usage-first Spec §5.8 / D24）：仅 accessPaths。
+ * 闲置表 accessPaths=0，优先被折；高使用实体保留到最后。
+ */
+function foldVictimWeight(node: InternalNode): number {
+  return node.accessPaths;
 }
 
 /**
@@ -1246,6 +1255,8 @@ function nodeWeight(node: InternalNode): number {
  *
  * 折叠**只影响渲染**：被折叠的节点并入同层的「其他（N）」节点，
  * 计数口径一个字都不改；表格等价视图读的是全量图。
+ *
+ * 受害序（usage-first）：最深 → 最小 accessPaths → grantPaths 升序 → id。
  */
 export function foldAccessMapGraph(
   graph: AccessMapGraph,
@@ -1268,11 +1279,15 @@ export function foldAccessMapGraph(
   let foldedNodes = 0;
   let foldedEdges = 0;
   while (kept.size > budgets.nodeBudget || countEdges() > budgets.edgeBudget) {
-    // 先删最深的、最轻的节点，保证剩下的主干仍然可读。
+    // 先删最深的、使用最少的节点（闲置优先），保证高使用表名留在 render。
     const candidates = [...kept.values()]
       .filter((node) => node.kind !== "token" && node.kind !== "agent")
       .sort(
-        (a, b) => b.depth - a.depth || nodeWeight(a) - nodeWeight(b) || b.id.localeCompare(a.id)
+        (a, b) =>
+          b.depth - a.depth ||
+          foldVictimWeight(a) - foldVictimWeight(b) ||
+          a.grantPaths - b.grantPaths ||
+          a.id.localeCompare(b.id)
       );
     const victim = candidates[0];
     if (!victim) break;
@@ -1439,18 +1454,26 @@ function restrictToSubgraph(
 function reachableFrom(
   edges: Map<string, InternalEdge>,
   seeds: string[],
-  direction: "forward" | "both"
+  direction: "forward" | "backward" | "both"
 ): Set<string> {
   const reached = new Set<string>(seeds);
   let changed = true;
   while (changed) {
     changed = false;
     for (const edge of edges.values()) {
-      if (reached.has(edge.source) && !reached.has(edge.target)) {
+      if (
+        (direction === "forward" || direction === "both") &&
+        reached.has(edge.source) &&
+        !reached.has(edge.target)
+      ) {
         reached.add(edge.target);
         changed = true;
       }
-      if (direction === "both" && reached.has(edge.target) && !reached.has(edge.source)) {
+      if (
+        (direction === "backward" || direction === "both") &&
+        reached.has(edge.target) &&
+        !reached.has(edge.source)
+      ) {
         reached.add(edge.source);
         changed = true;
       }
@@ -1459,47 +1482,108 @@ function reachableFrom(
   return reached;
 }
 
+/** 结构筛选字段（与 hourly-detail 精确维一致）。 */
+export type StructureScopeFields = {
+  agentId: string;
+  roleId: string;
+  connectionId: string;
+  schema: string;
+  sourceName: string;
+};
+
+export type StructureScopeQuery = Pick<
+  AccessMapQuery,
+  "agent" | "role" | "connection" | "table"
+>;
+
+export function hasStructureScope(query: StructureScopeQuery): boolean {
+  return Boolean(query.agent || query.role || query.connection || query.table);
+}
+
 /**
- * 按 `agent` / `role` / `connection` / `table` 过滤子图。
- *
- * Agent 过滤保留该 Agent 的全链路；Role / Connection / Table 过滤保留该节点的
- * 上下游（它们是「关系」的另一半，只保留下游会丢掉「谁在用」）。
+ * D26：路径字段精确匹配（禁止双向连通分量）。
+ * 与 `applyScopeToDetailBuckets` 同口径。
+ */
+export function pathMatchesStructureScope(
+  path: StructureScopeFields,
+  query: StructureScopeQuery
+): boolean {
+  if (query.agent !== null && path.agentId !== query.agent) return false;
+  if (query.role !== null && path.roleId !== query.role) return false;
+  if (query.connection !== null && path.connectionId !== query.connection) return false;
+  if (query.table !== null) {
+    const parsed = splitTableParam(query.table);
+    if (!parsed) return false;
+    if (
+      path.connectionId !== parsed.connectionId ||
+      path.schema !== parsed.schema ||
+      path.sourceName !== parsed.sourceName
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** 按结构筛选裁剪授权侧 contributions（逐 source 过滤后重算）。 */
+export function filterGrantSideByStructureScope(
+  side: AccessMapGrantSide,
+  query: StructureScopeQuery
+): AccessMapGrantSide {
+  if (!hasStructureScope(query)) return side;
+  const contributions: AccessMapRoleContribution[] = [];
+  for (const contribution of side.contributions) {
+    const sources = contribution.sources.filter((source) =>
+      pathMatchesStructureScope(
+        {
+          agentId: contribution.agentId,
+          roleId: contribution.roleId,
+          connectionId: source.connectionId,
+          schema: source.schema,
+          sourceName: source.sourceName
+        },
+        query
+      )
+    );
+    if (sources.length === 0) continue;
+    contributions.push({ ...contribution, sources });
+  }
+  const agentIds = new Set(contributions.map((item) => item.agentId));
+  const agents = side.agents.filter((agent) => agentIds.has(agent.id));
+  return { ...side, contributions, agents };
+}
+
+/** 按结构筛选裁剪访问路径（含 callIds）；不匹配的路径整条丢弃。 */
+export function filterAccessPathsByStructureScope(
+  paths: AccessPathAggregate[],
+  query: StructureScopeQuery
+): AccessPathAggregate[] {
+  if (!hasStructureScope(query)) return paths;
+  return paths.filter((path) =>
+    pathMatchesStructureScope(
+      {
+        agentId: path.agentId,
+        roleId: path.roleId,
+        connectionId: path.connectionId,
+        schema: path.schema,
+        sourceName: path.sourceName
+      },
+      query
+    )
+  );
+}
+
+/**
+ * @deprecated 连通分量 scope 已废止（D26）。保留导出名以免旧测试导入崩；
+ * 实现改为恒等（由 buildAccessMap 在 merge 前做路径投影）。
  */
 export function applyScopeFilters(input: {
   nodes: Map<string, InternalNode>;
   edges: Map<string, InternalEdge>;
   query: AccessMapQuery;
 }): { nodes: Map<string, InternalNode>; edges: Map<string, InternalEdge> } {
-  const { query } = input;
-  let current: { nodes: Map<string, InternalNode>; edges: Map<string, InternalEdge> } = {
-    nodes: input.nodes,
-    edges: input.edges
-  };
-
-  if (query.agent) {
-    const reached = reachableFrom(current.edges, [nodeId("agent", query.agent)], "forward");
-    current = restrictToSubgraph(current, (node) => reached.has(node.id));
-  }
-  if (query.role) {
-    const reached = reachableFrom(current.edges, [nodeId("role", query.role)], "both");
-    current = restrictToSubgraph(current, (node) => reached.has(node.id));
-  }
-  if (query.connection) {
-    const reached = reachableFrom(current.edges, [nodeId("connection", query.connection)], "both");
-    current = restrictToSubgraph(current, (node) => reached.has(node.id));
-  }
-  if (query.table) {
-    const parsed = splitTableParam(query.table);
-    if (parsed) {
-      const tableId = nodeId(
-        "table",
-        `${parsed.connectionId}::${parsed.schema}::${parsed.sourceName}`
-      );
-      const reached = reachableFrom(current.edges, [tableId], "both");
-      current = restrictToSubgraph(current, (node) => reached.has(node.id));
-    }
-  }
-  return current;
+  void input.query;
+  return { nodes: input.nodes, edges: input.edges };
 }
 
 /** 下钻聚焦：只渲染该节点的连通子图（§7.2）。 */
@@ -1512,7 +1596,12 @@ export function focusSubgraph(input: {
   // 分享链接里的 focus 可能已经失效（节点被删除 / 筛选变了）。
   // 失效时回到全图，而不是渲染一张空图 —— 空图会被误读成「这个 Agent 没有授权」。
   if (!input.nodes.has(input.focus)) return input;
-  const reached = reachableFrom(input.edges, [input.focus], "both");
+  const focusNode = input.nodes.get(input.focus);
+  // 表／Schema 为叶：只沿入边取上游。若用双向连通，共享连接会扇出兄弟表，
+  // 使 keptAccessRefs／counts.accessPaths／|P| 混入 focus 外表路径。
+  const direction =
+    focusNode?.kind === "table" || focusNode?.kind === "schema" ? "backward" : "both";
+  const reached = reachableFrom(input.edges, [input.focus], direction);
   return restrictToSubgraph(input, (node) => reached.has(node.id));
 }
 
@@ -1635,10 +1724,22 @@ function decodeFocusEntity(node: InternalNode | undefined): DetailFocusEntity | 
   }
 }
 
-function collectAccessCallIds(edges: Map<string, InternalEdge>): Set<string> {
+/** 边上允许调用 ID 并集（投影集合 P 的图侧真源）。 */
+export function collectAccessCallIds(edges: Map<string, InternalEdge>): Set<string> {
   const ids = new Set<string>();
   for (const edge of edges.values()) {
     for (const callId of edge.accessCallIds) ids.add(callId);
+  }
+  return ids;
+}
+
+/** 从已序列化边无法取 ID；测试用：由访问路径聚合推导允许调用集合。 */
+export function allowCallIdsFromAccessPaths(
+  paths: Array<{ calls: Array<{ callId: string }> }>
+): Set<string> {
+  const ids = new Set<string>();
+  for (const path of paths) {
+    for (const call of path.calls) ids.add(call.callId);
   }
   return ids;
 }
@@ -1707,9 +1808,17 @@ export async function buildAccessMap(
       accessGrade: query.accessGrade
     });
 
-    let internalNodes = grant.nodes;
-    let internalEdges = grant.edges;
-    let accessPathRefs: AccessPathRef[] = [];
+    // D26：结构筛选 = 路径字段过滤后重算图；先裁剪再 merge，禁止连通分量冒充。
+    const withSchema = query.layer === "schema";
+    const scopedGrantSide = filterGrantSideByStructureScope(grantSide, query);
+    const scopedGrant = hasStructureScope(query)
+      ? buildGrantLayer({ side: scopedGrantSide, withSchema })
+      : grant;
+
+    let internalNodes = scopedGrant.nodes;
+    let internalEdges = scopedGrant.edges;
+    let scopedAccessPaths: AccessPathAggregate[] = [];
+    let loadSnapshot: (hash: string) => AccessMapPermissionSnapshot | null = () => null;
 
     if (access.state === "ok") {
       accessState = "ok";
@@ -1724,18 +1833,13 @@ export async function buildAccessMap(
         enteringAllowCallCount: rawCalls,
         enteringAllowCallCountBasis: "pre_structure"
       };
-      accessPathRefs = layer.paths.map((path) => ({
-        agentId: path.agentId,
-        roleId: path.roleId,
-        connectionId: path.connectionId,
-        schema: path.schema,
-        sourceName: path.sourceName
-      }));
+      loadSnapshot = access.loadSnapshot;
+      scopedAccessPaths = filterAccessPathsByStructureScope(layer.paths, query);
       const merged = mergeLayers({
-        grant,
-        paths: layer.paths,
-        loadSnapshot: access.loadSnapshot,
-        withSchema: query.layer === "schema"
+        grant: scopedGrant,
+        paths: scopedAccessPaths,
+        loadSnapshot,
+        withSchema
       });
       internalNodes = merged.nodes;
       internalEdges = merged.edges;
@@ -1751,19 +1855,48 @@ export async function buildAccessMap(
       tokenLastUsed: access.state === "ok" ? access.tokenLastUsed : new Map()
     });
 
-    const scoped = applyScopeFilters({ nodes: internalNodes, edges: internalEdges, query });
-    const focused = focusSubgraph({ nodes: scoped.nodes, edges: scoped.edges, focus: query.focus });
+    // D27：focus = 连通子图；图与 detail 共用同一 focus→P 定义。
+    const focused = focusSubgraph({
+      nodes: internalNodes,
+      edges: internalEdges,
+      focus: query.focus
+    });
 
-    // Detail focus: invalid focus ignored（与图一致回退全量，不施加 focus 投影）。
-    if (query.focus && scoped.nodes.has(query.focus)) {
-      const focusGraph = focusSubgraph({
-        nodes: scoped.nodes,
-        edges: scoped.edges,
-        focus: query.focus
-      });
+    // |P|／accessPaths 必须按「子图内路径」计，不能对中间边 accessCallIds 取并集——
+    // 共享 role→conn 边会残留兄弟表 callId。
+    let projectedAccessPaths = scopedAccessPaths;
+    keptGrantRefs = scopedGrant.pathRefs;
+    if (query.focus) {
+      const keptNodeIds = new Set(focused.nodes.keys());
+      const refInFocusedSubgraph = (ref: {
+        agentId: string;
+        roleId: string;
+        connectionId: string;
+        schema: string;
+        sourceName: string;
+      }): boolean => {
+        if (!keptNodeIds.has(nodeId("agent", ref.agentId))) return false;
+        if (!keptNodeIds.has(nodeId("role", ref.roleId))) return false;
+        if (!keptNodeIds.has(nodeId("connection", ref.connectionId))) return false;
+        const tableKey = `${ref.connectionId}::${ref.schema}::${ref.sourceName}`;
+        return keptNodeIds.has(nodeId("table", tableKey));
+      };
+      projectedAccessPaths = scopedAccessPaths.filter(refInFocusedSubgraph);
+      keptGrantRefs = keptGrantRefs.filter(refInFocusedSubgraph);
+    }
+
+    const projectedAllowIds = allowCallIdsFromAccessPaths(projectedAccessPaths);
+    if (query.focus && internalNodes.has(query.focus)) {
       detailFocus = {
-        accessCallIds: collectAccessCallIds(focusGraph.edges),
-        entity: decodeFocusEntity(focusGraph.nodes.get(query.focus))
+        accessCallIds: projectedAllowIds,
+        entity: decodeFocusEntity(focused.nodes.get(query.focus))
+      };
+    }
+
+    if (echoMeta) {
+      echoMeta = {
+        ...echoMeta,
+        projectedAllowCallCount: projectedAllowIds.size
       };
     }
 
@@ -1794,18 +1927,14 @@ export async function buildAccessMap(
     for (const evaluation of allEvaluations) distinct.set(evaluation.pathKey, evaluation);
     coverage = summarizeSnapshotCoverage([...distinct.values()]);
 
-    // 计数口径统一走共享词汇（`counting.ts`），不另写一套。
-    const keptNodeIds = new Set(focused.nodes.keys());
-    keptGrantRefs = grant.pathRefs.filter((ref) =>
-      keptNodeIds.has(nodeId("agent", ref.agentId)) &&
-      keptNodeIds.has(nodeId("role", ref.roleId)) &&
-      keptNodeIds.has(nodeId("connection", ref.connectionId))
-    );
-    keptAccessRefs = accessPathRefs.filter((ref) =>
-      keptNodeIds.has(nodeId("agent", ref.agentId)) &&
-      keptNodeIds.has(nodeId("role", ref.roleId)) &&
-      keptNodeIds.has(nodeId("connection", ref.connectionId))
-    );
+    // 计数口径统一走共享词汇（`counting.ts`）；路径投影后 refs 已是 P 侧。
+    keptAccessRefs = projectedAccessPaths.map((path) => ({
+      agentId: path.agentId,
+      roleId: path.roleId,
+      connectionId: path.connectionId,
+      schema: path.schema,
+      sourceName: path.sourceName
+    }));
     const tableRefs: CanonicalSourceRef[] = nodes
       .filter((node) => node.kind === "table")
       .map((node) => ({
