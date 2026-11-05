@@ -21,7 +21,7 @@
 ## 闭口层级
 
 - 层级：功能合同
-- 本条承诺：升级后官方历史版本的 `lucy-ops` Manifest／Skill／Wiki 自动升到当前模板；真定制资产仍保留并记冲突；ensure 之后 `lucy-ops.enabled_tables` ⊆ 本地 Manifest 物理表，冻结表不再出现「已启用 · 本地无 Manifest」；**永不写 `access.yaml`**
+- 本条承诺：升级后官方历史版本的 `lucy-ops` Manifest／Skill／Wiki 自动升到当前模板；真定制资产仍保留并记冲突；ensure 之后 `lucy-ops.enabled_tables` ⊆ 本地 Manifest 物理表，冻结表不再出现「已启用 · 本地无 Manifest」；本条**不**改 `access.yaml` 资产／连接逻辑。正式 Role `lucy_ops_reader` 缺则写入的例外口径以 [`lucy-20261105-customer-default-system-roles-spec.md`](lucy-20261105-customer-default-system-roles-spec.md) 为准（旧「永不写 access.yaml」对该例外**已作废，不得当作现值**）
 - 本条出口：H1–H5 的本机自动化断言（`webui/server/__tests__/ops-evidence-assets.test.ts`、`ops-evidence-connection.test.ts`、`ops-evidence-ensure-enabled-cap.test.ts`）
 - 不在本条出口：H6（本机 demo 平滑升级冒烟，属基础设施操作，需人工／后续会话）；正式 Role 的 `tableSelectors` 扩权（SC-17c／D22，运营显式）；镜像与客户环境验收
 - 上线关系：本条收口不表示可上线
@@ -39,7 +39,7 @@
 1. **官方旧版资产可自动升级**到当前模板，不要求运营手工改文件。
 2. **真正被改过的资产**仍保留，记冲突，治理面可 `unready`（旧合同保留）。
 3. **不变量**：`lucy-ops.enabled_tables` 中属于冻结集合的表名 ⊆ 当前有效 Manifest 物理表集合。升级后不得再出现冻结表的「已启用 · 本地无 Manifest」。
-4. **仍不写 `access.yaml`**（D22 不变）。
+4. **本条仍不写 `access.yaml` 的资产／连接逻辑**（D22）。缺失正式 `lucy_ops_reader` 的缺则写入见 [`lucy-20261105-customer-default-system-roles-spec.md`](lucy-20261105-customer-default-system-roles-spec.md)。
 
 ## 3. 非目标
 
