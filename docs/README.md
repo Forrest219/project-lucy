@@ -16,6 +16,7 @@
 | `specs/` | 功能/交付的 spec、plan、contract、register（`lucy-*`、CEO 一眼报系列等） |
 | `runbooks/` | 部署/运维 runbook、客户交付指南、管理与安全指南、SOP |
 | `reviews/` | 已实现代码的审查报告 |
+| `prompts/` | 交付提示词：给 coder／审阅者的任务提示词。**不是 Plan**，不进 Plan 形态门禁 |
 | `uat/` | 人工验收用例 |
 | `webui/` | WebUI 功能地图 / 实现状态 / 模块指南（仓库级视角） |
 
@@ -116,6 +117,7 @@
 | `runbooks/runbook-lucy-agent-chat-a3.md` | A3 手工联调 / 排障 Runbook（compose profile `agent-chat`） |
 | `design/access-governance-design.md` | **跳转桩** → `access-control/design-governance-baseline.md` |
 | `design/design-semantic-platform-ontology-proposal.md` | ⚠️ **提案稿·挂起中** 语义平台本体化架构（四层架构 + 4 个 MCP 端点）。**与 2026-10-14 已裁定的「不建议现在碰本体图引擎」及 `concept-dictionary-spec` Non-goals 冲突，重新裁定前不得实施** |
+| `design/design-row-policy-real-e2e-pack.md` | 行权限真实 e2e 审判包（强度 B）技术设计：双包边界、RDS 只读数据面、两阶段编排与注册表守恒。实施 Plan 见 [plans/lucy-20261022-row-permission-management-plan.md](plans/lucy-20261022-row-permission-management-plan.md) 与 [plans/lucy-20261104-minimal-rds-dataplane-plan.md](plans/lucy-20261104-minimal-rds-dataplane-plan.md) |
 
 ## 3. 复核（Review — 已实现代码的审查报告）→ `reviews/`
 
@@ -249,3 +251,12 @@
 | `plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md` | Eval 优化方案：准确率闭环 + Publish 变更触发 smoke 回归（产品/架构，不含实现 WO） |
 | `plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md` | Lucy Enterprise Governance & Observability 三层实施计划，不包含 Dynamic RLS / CLS POC |
 | `plans/wo-202608-06-governance-review-release-evidence.md` | 202608-GOV-06 MiniMax Code 交付提示词：风险复核候选项与发布证据包 |
+
+## 10. 交付提示词 → `prompts/`
+
+提示词是交付工件，**不是 Plan**：不受 `lint:spec-docs` 的 Plan 形态门禁约束。放在 `docs/plans/` 会被按 Plan 判形态违规，因此独立成目录。
+
+| 文档 | 用途 |
+|---|---|
+| [prompts/lucy-20261101-access-map-chart-first-coder-prompt.md](prompts/lucy-20261101-access-map-chart-first-coder-prompt.md) | 访问关系图图优先呈现的 coder 交付提示词 |
+| [prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md](prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md) | Agent 管理台高权限呈现的审阅者交付提示词 |
