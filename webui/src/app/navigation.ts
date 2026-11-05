@@ -150,8 +150,9 @@ export const navGroups: Array<{
         description: "配置各连接进入语义层的表范围，并审阅保存前变更。",
         keywords: ["白名单", "Whitelist", "Schema", "Table"]
       }
-      // v1.9.0: 连通测试（兼容）从主导航移除；连接卡内测试 Drawer（M25）成为唯一入口。
-      // /connections/test 路由继续保留为兼容跳转页（见下方 <Route>），保留外链与历史书签。
+      // v1.9.0: 连通测试（兼容）从主导航移除；连接卡内测试 Drawer（M25）成为主推入口。
+      // /connections/test 路由继续保留为兼容页（见下方 <Route>）：它仍是可交互的完整页面，
+      // 不是跳转页——保留外链与历史书签。
     ]
   },
   {

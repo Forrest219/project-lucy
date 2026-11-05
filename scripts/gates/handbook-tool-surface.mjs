@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * 本地门禁：`docs/SYSTEM_HANDBOOK.md` §4.4「可用工具面」的**工具全集**必须与
+ * 本地门禁：`docs/SYSTEM_HANDBOOK.md` 的「可用工具面」节的**工具全集**必须与
  * 运行时**实际可授予的工具全集完全相等**。
  *
  * 背景（为什么需要这道门禁）：
  *
- *   §4.4 是**接入侧**章节——接入方按它配置角色的 MCP 工具勾选。此前它只写了
+ *   「可用工具面」是**接入侧**章节——接入方按它配置角色的 MCP 工具勾选。此前它只写了
  *   「6 个 `lucy_*` 核心工具」+「兼容/辅助工具**可能包括** …等」，而运行时
- *   实际可授予 21 个。两处口径不一致时，接入方照 §4.4 建角色会漏配
+ *   实际可授予 21 个。两处口径不一致时，接入方照它建角色会漏配
  *   `lucy_skill_search` / `lucy_skill_read`（业务 Skill 读取通道）、
  *   `lucy_continue_question`、`lucy_ops_*`（运维控制面）等工具。
  *
@@ -18,7 +18,7 @@
  *   - `webui/server/proxy/acl.ts` → `DATA_PLANE_TOOLS` / `META_TOOLS` / `CONTEXT_TOOLS`
  *   - `webui/server/ops/control-plane.ts` → `CONTROL_PLANE_TOOLS`（`name` 字段）
  *
- * 手册侧：`docs/SYSTEM_HANDBOOK.md` §4.4 区间内的 markdown 表格**第一格**里
+ * 手册侧：`docs/SYSTEM_HANDBOOK.md` 该节区间内的 markdown 表格**第一格**里
  * 被反引号包裹的小写 snake_case token。每个工具一行（允许一格多个，如
  * `` `wiki_search` / `wiki_read` ``）。
  *
@@ -42,7 +42,7 @@ const ACL_PATH = "webui/server/proxy/acl.ts";
 const CONTROL_PLANE_PATH = "webui/server/ops/control-plane.ts";
 
 /**
- * Thrown when the handbook's §4.4 tool list and the runtime tool registry
+ * Thrown when the handbook's 可用工具面 tool list and the runtime tool registry
  * disagree. Carries a stable `name` so callers can `instanceof` it and log
  * scrapers can grep for a stable prefix.
  */
@@ -225,22 +225,22 @@ export function readRuntimeToolNames(root = ROOT) {
 }
 
 /* ------------------------------------------------------------------ *
- * Handbook side — §4.4 可用工具面
+ * Handbook side — §可用工具面
  * ------------------------------------------------------------------ */
 
 /** Tool names are lowercase snake_case; uppercase names are env vars. */
 const TOOL_NAME_RE = /^[a-z][a-z0-9_]*$/;
 
 /**
- * Read the tool names the handbook's §4.4 declares.
+ * Read the tool names the handbook's 可用工具面 section declares.
  *
- * §4.4 must contain exactly one **canonical tool table** — the one whose
+ * 该节必须包含恰好一个 **canonical tool table** — the one whose
  * header cell reads 「工具」. Every row of that table lists one grantable
  * tool in its first cell (a cell may hold several, e.g.
  * `` `wiki_search` / `wiki_read` ``).
  *
  * Anchoring on the header (rather than "any table in the section") keeps
- * unrelated tables out of the comparison by construction: the §4.4 参数规则
+ * unrelated tables out of the comparison by construction: the 参数规则
  * table has 「规则」 as its first header cell, so parameter names such as
  * `` `limit` `` / `` `order_by` `` never enter the comparison. Prose mentions
  * (e.g. the `sl_query` / `sl_read_source` absolute-deny note) are ignored
@@ -250,20 +250,23 @@ export function readHandbookToolNames(markdown) {
   const lines = markdown.split("\n");
   let start = -1;
   for (let i = 0; i < lines.length; i += 1) {
-    if (/^###\s+4\.4\s/.test(lines[i])) {
+    // Locate by **title**, not by number: §4 was renumbered while this gate
+    // was being written, and a hard-coded `### 4.4` would silently stop
+    // finding the section.
+    if (/^###\s+\d+(?:\.\d+)*\s+可用工具面/.test(lines[i])) {
       start = i;
       break;
     }
   }
   if (start === -1) {
     throw new ToolSurfaceError(
-      `§4.4 可用工具面 section not found in ${HANDBOOK_PATH}; ` +
-        `either the heading was renamed or the section was removed — ` +
-        `update \`scripts/gates/handbook-tool-surface.mjs\` to match.`
+      `§可用工具面 section not found in ${HANDBOOK_PATH}; ` +
+        `expected a heading like "### 4.x 可用工具面" — either the heading was renamed ` +
+        `or the section was removed — update \`scripts/gates/handbook-tool-surface.mjs\` to match.`
     );
   }
 
-  // Collect the §4.4 line range. The next H2 ends the section; `### ` and
+  // Collect the section's line range. The next H2 ends the section; `### ` and
   // `#### ` do NOT match `^## ` (third character is `#`, not a space), so
   // nested subsections stay inside.
   const sectionLines = [];
@@ -306,7 +309,7 @@ export function readHandbookToolNames(markdown) {
 
   if (names === null) {
     throw new ToolSurfaceError(
-      `no canonical tool table found in §4.4 可用工具面 of ${HANDBOOK_PATH}; ` +
+      `no canonical tool table found in §可用工具面 of ${HANDBOOK_PATH}; ` +
         `expected a markdown table whose first header cell is 「工具」 and whose rows ` +
         `list one grantable tool per row.`
     );
@@ -319,7 +322,7 @@ export function readHandbookToolNames(markdown) {
  * ------------------------------------------------------------------ */
 
 /**
- * Assert that the handbook's §4.4 tool list and the runtime registry are the
+ * Assert that the handbook's 可用工具面 tool list and the runtime registry are the
  * **same set**. Throws `ToolSurfaceError` listing both directions of drift.
  */
 export function assertToolSurfaceParity(runtimeNames, handbookNames) {
@@ -332,19 +335,19 @@ export function assertToolSurfaceParity(runtimeNames, handbookNames) {
   if (missing.length > 0) {
     lines.push(
       `missing-in-handbook: ${missing.length} tool(s) are grantable at runtime but absent ` +
-        `from §4.4 可用工具面 — add one row per tool to that section's tool table: ` +
+        `from §可用工具面 — add one row per tool to that section's tool table: ` +
         missing.join(", ")
     );
   }
   if (extra.length > 0) {
     lines.push(
-      `unknown-in-runtime: ${extra.length} tool(s) are documented in §4.4 but not registered ` +
+      `unknown-in-runtime: ${extra.length} tool(s) are documented in 可用工具面 but not registered ` +
         `in the runtime tool registry — either fix the handbook row or register the tool: ` +
         extra.join(", ")
     );
   }
   throw new ToolSurfaceError(
-    `${HANDBOOK_PATH} §4.4 tool list does not match the runtime tool registry:\n` +
+    `${HANDBOOK_PATH} 可用工具面 tool list does not match the runtime tool registry:\n` +
       lines.map((l) => `  - ${l}`).join("\n") +
       `\nRuntime truth lives in ${ACL_PATH} (DATA_PLANE_TOOLS / META_TOOLS / CONTEXT_TOOLS) ` +
       `and ${CONTROL_PLANE_PATH} (CONTROL_PLANE_TOOLS).`
@@ -383,7 +386,7 @@ function isMainModule() {
 if (isMainModule()) {
   try {
     const result = runToolSurfaceCheck();
-    console.log(`[handbook-tool-surface] OK ${result.count} tools match §4.4 可用工具面`);
+    console.log(`[handbook-tool-surface] OK ${result.count} tools match §可用工具面`);
   } catch (error) {
     console.error("[handbook-tool-surface] FAIL");
     console.error(error.message);
