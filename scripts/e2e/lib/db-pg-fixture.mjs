@@ -212,3 +212,24 @@ function runCommand(command, args, options = {}) {
 async function safeRm(bin, containerId) {
   try { await runCommand(bin, ["rm", "-f", containerId], { capture: true }); } catch { /* best-effort */ }
 }
+
+/**
+ * Stop and remove EXACTLY the container this run started.
+ *
+ * The container is addressed by its id, never by a name pattern: a pattern could
+ * match another run's container, or somebody's unrelated postgres. Returns what it
+ * did so a caller can report it honestly instead of claiming a clean teardown.
+ *
+ * @param {Object} args
+ * @param {string} args.containerId  the id recorded in run.db.disposable.containerId
+ * @param {string} [args.dockerBin]
+ * @returns {Promise<{removed: boolean, reason: string|null}>}
+ */
+export async function stopDisposablePostgres({ containerId, dockerBin = "docker" } = {}) {
+  if (!containerId) return { removed: false, reason: "no container id recorded" };
+  const res = await runCommand(dockerBin, ["rm", "-f", containerId], { capture: true });
+  if (res.status !== 0) {
+    return { removed: false, reason: `docker rm failed (status=${res.status}): ${res.stderr || res.stdout}` };
+  }
+  return { removed: true, reason: null };
+}

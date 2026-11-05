@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { loadCatalog } from "./lib/catalog.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv } from "./lib/common.mjs";
 import { annotationsOf, iterTests, testStatus } from "./lib/playwright-report.mjs";
-import { appliedDatabaseCapability } from "./lib/db-capability.mjs";
+import { appliedDatabaseCapability, capabilitySatisfied } from "./lib/db-capability.mjs";
 import { statusFromAssertions } from "./run-security.mjs";
 
 export function managementCapabilities(run, env = process.env) {
@@ -71,7 +71,7 @@ export function collectManagementResults({ run, report, cases, capabilities }) {
   for (const testCase of cases.filter((c) => c.runner === "management")) {
     const tests = covering.get(testCase.id) ?? [];
     const base = { id: testCase.id, runner: "management", scenario: testCase.scenario, startedAt, finishedAt: new Date().toISOString(), serverTraceIds: [], queryEventIds: [], policyVersion: "unavailable", contextPolicyVersion: "unavailable", assertions: [], artifacts: [] };
-    const missing = testCase.requires.filter((cap) => !capabilities.has(cap));
+    const missing = testCase.requires.filter((cap) => !capabilitySatisfied(cap, capabilities, run));
     let entry;
     if (tests.length === 0) {
       entry = { ...base, status: "blocked", detail: missing.length > 0 ? `missing capability: ${missing.join(", ")}; no spec covers this case yet` : "spec_not_implemented", blockedBy: missing.length > 0 ? missing : ["spec_not_implemented"] };

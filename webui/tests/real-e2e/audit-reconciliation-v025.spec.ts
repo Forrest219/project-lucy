@@ -30,7 +30,7 @@
 
 import type { TestInfo } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
+import { assertion, blockUnless, covers } from "./helpers/blocked";
 import { fixtureAgentTokens, ownerContext, parseCsv, runContext } from "./helpers/run-context";
 import { vault } from "./helpers/secret-capture";
 
@@ -40,6 +40,20 @@ const rpc = (id: number, name: string, args: Record<string, unknown>) => ({
   method: "tools/call",
   params: { name, arguments: args }
 });
+
+/**
+ * The formal reconciliation reads refuse with 409 when the ledger's as-of S cannot be
+ * proven (webui/server/admin/audit-reconciliation-routes.ts). That refusal is the
+ * designed fail-closed behaviour — it means "this run has no reconciled event to
+ * project", NOT "the product is broken". The declared live-evidence tokens are then
+ * never evaluated, so the affected cases are recorded BLOCKED with a reason instead of
+ * being failed for "tokens never evaluated".
+ */
+const UNPROVABLE_RECONCILIATION_CODES = new Set([
+  "RECONCILIATION_AS_OF_S_UNPROVABLE",
+  "RECONCILIATION_PROJECTION_NOT_COVERED",
+  "RECONCILIATION_LEDGER_SEQ_UNAVAILABLE"
+]);
 
 type ReconciliationContext = {
   watermarkSeq?: number;
@@ -76,12 +90,13 @@ test.describe.configure({ mode: "serial" });
 
 test("the reconciliation detail agrees with this run's audit events and keeps full table identities", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-18-V06", "SEC-20-V01");
-  // 2026-10-28（D2 路径 A）：ARV25 已并入冻结 catalog，因此**同时**用 `covers`
-  // 声明给冻结 collector（`case` 命名空间），否则这些 variant 在
-  // evidence.cases 里根本不会出现，`passedIds` 也就永远填不上。
-  // `coversV025` 保留：v0.25 影子清单的维度证据仍按自己的命名空间采集。
+  // 2026-10-28（D2 路径 A）：ARV25 已并入冻结 catalog，因此用 `covers` 声明给冻结
+  // collector（`case` 命名空间），否则这些 variant 在 evidence.cases 里根本不会出现，
+  // `passedIds` 也就永远填不上。
+  // 不再同时声明 `coversV025`：ARV25 属 existingCatalogMappings，不在 v0.25 覆盖清单的
+  // newScenarios 里，v0.25 collector 永远不会为它产出结果（collectV025Evidence 只遍历
+  // newScenarios）。留着它只会让 OBSERVE 分支的判定分母要求一份永远不存在的证据。
   covers(testInfo, "ARV25-V01", "ARV25-V02", "ARV25-V03", "ARV25-V05", "ARV25-V06");
-  coversV025(testInfo, "ARV25-V01", "ARV25-V02", "ARV25-V03", "ARV25-V05", "ARV25-V06");
   // The reconciliation detail is reconciled against a REAL Agent turn of this run, so the
   // agent client is a declared dependency of this spec (the runtime check below still blocks
   // when the capability exists but no turn actually happened).
@@ -273,7 +288,6 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
 test("the usage view, the token reconciliation and the CSV export close over the same snapshot", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-20-V01", "SEC-20-V02");
   covers(testInfo, "ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11");
-  coversV025(testInfo, "ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11");
   blockUnless(testInfo, "lucy-http", "browser");
 
   const since = new Date(Date.now() - 120_000).toISOString();
@@ -302,6 +316,24 @@ test("the usage view, the token reconciliation and the CSV export close over the
     };
     if (!usagePayload.ok) {
       assertion(testInfo, "deny", usageResponse.status() >= 400, `usage refused with ${usageResponse.status()} ${usagePayload.error?.code ?? ""}`);
+      // The formal reconciliation read is fail-closed BY DESIGN: when the ledger's as-of
+      // S cannot be proven (this run produced no reconciled audit event), the endpoint
+      // refuses with 409 instead of serving a partial view
+      // (webui/server/admin/audit-reconciliation-routes.ts：RECONCILIATION_AS_OF_S_UNPROVABLE
+      // / RECONCILIATION_PROJECTION_NOT_COVERED / RECONCILIATION_LEDGER_SEQ_UNAVAILABLE).
+      // The refusal itself is the evidence the product produced; the declared live-evidence
+      // tokens (audit_event / consistency / no_leak) were NEVER EVALUATED because the
+      // evidence does not exist in this run. That is a missing precondition, not a product
+      // defect — so the cases are BLOCKED with a reason, not reported as failed for
+      // "tokens never evaluated". Any OTHER refusal code stays a real failure.
+      const refusalCode = usagePayload.error?.code ?? "";
+      if (usageResponse.status() === 409 && UNPROVABLE_RECONCILIATION_CODES.has(refusalCode)) {
+        testInfo.annotations.push({
+          type: "blocked",
+          description: `the reconciliation evidence does not exist in this run: the usage read refused with ${usageResponse.status()} ${refusalCode}; the declared live evidence was never evaluated`
+        });
+        test.skip(true, `BLOCKED: ${refusalCode}`);
+      }
       return;
     }
 
@@ -385,6 +417,16 @@ test("the usage view, the token reconciliation and the CSV export close over the
     if (!exportPayload.ok) {
       // ARV25-V10: an un-covered projection must fail the formal export, not degrade it.
       assertion(testInfo, "deny", exportResponse.status() >= 400, `the formal export refused with ${exportResponse.status()} ${exportPayload.error?.code ?? ""}`);
+      // Same rule as the usage read above: an evidence-unprovable refusal means the
+      // declared live evidence was never produced in this run → BLOCKED with a reason.
+      const exportCode = exportPayload.error?.code ?? "";
+      if (exportResponse.status() === 409 && UNPROVABLE_RECONCILIATION_CODES.has(exportCode)) {
+        testInfo.annotations.push({
+          type: "blocked",
+          description: `the reconciliation evidence does not exist in this run: the formal export refused with ${exportResponse.status()} ${exportCode}; the declared live evidence was never evaluated`
+        });
+        test.skip(true, `BLOCKED: ${exportCode}`);
+      }
       return;
     }
 
@@ -483,7 +525,6 @@ test("the usage view, the token reconciliation and the CSV export close over the
 test("a reconciliation read without the admin identity is refused, leaves a meta-audit trace and leaks nothing", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-18-V01");
   covers(testInfo, "ARV25-V11");
-  coversV025(testInfo, "ARV25-V11");
   blockUnless(testInfo, "lucy-http", "browser");
 
   const since = new Date(Date.now() - 120_000).toISOString();

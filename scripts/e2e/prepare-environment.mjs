@@ -32,6 +32,7 @@ import {
   resolveRowPolicyDbContract
 } from "./lib/row-policy-pack.mjs";
 import { proveRdsMysqlReadonly } from "./lib/rds-readonly-prove.mjs";
+import { startDisposablePostgres } from "./lib/db-pg-fixture.mjs";
 import {
   buildGoldFromCounts,
   REGION_ASSERT_SHAPE
@@ -279,8 +280,26 @@ export async function prepareEnvironment(options) {
   const fixtureDigest = treeDigest(FIXTURE_ROOT);
   const logicalInstanceId = randomUUID();
   const markerKey = "shared/e2e-instance-marker";
-  const dbHost = rowPolicyDb?.host ?? options.dbHost ?? "127.0.0.1";
-  const dbPort = Number(rowPolicyDb?.port ?? options.dbPort ?? (dbEngine === "postgres" ? 5432 : 3306));
+
+  // ── 本地 postgres：自带一次性数据源 ──────────────────────────────────────
+  // 以前 prepare 只把 run.db 指向 127.0.0.1:5432，却没有任何步骤真把数据库起起来：
+  // 于是 apply-db.mjs 连不上，`run.db.applied` 永远 false，postgres 能力永远 false，
+  // 所有需要 postgres 的执行项全部 blocked。数据源必须先备好，E2E 才谈得上"能跑"。
+  //
+  // 规则：
+  //   * 只有 local 模式 + engine=postgres + 没有显式 --db-host/--db-port 时才自带；
+  //     显式给了地址 = 调用方自己管这台库，prepare 不得覆盖。
+  //   * 容器只服务本次运行，句柄写进 run.db.disposable，跑完可按 id 精确回收。
+  //   * owner 密码文件必须是容器自己的那份（容器用 POSTGRES_PASSWORD_FILE 设的超级用户密码）。
+  let disposablePostgres = null;
+  if (mode === "local" && dbEngine === "postgres" && !options.dbHost && !options.dbPort) {
+    disposablePostgres = await startDisposablePostgres({ baseDir: secretsDir, label: runId });
+    if (!disposablePostgres.ok) {
+      throw new PrepareError(`disposable postgres failed to start: ${disposablePostgres.reason}`);
+    }
+  }
+  const dbHost = rowPolicyDb?.host ?? disposablePostgres?.host ?? options.dbHost ?? "127.0.0.1";
+  const dbPort = Number(rowPolicyDb?.port ?? disposablePostgres?.port ?? options.dbPort ?? (dbEngine === "postgres" ? 5432 : 3306));
   // Per-run isolation id flows from the run id (a long random hex) so every
   // disposable database / role is owned by THIS run; a leftover from a prior
   // run cannot satisfy a check. The same string is used in runOwnerIsolationId
@@ -293,7 +312,7 @@ export async function prepareEnvironment(options) {
   const dbFinName = `lucy_e2e_fin_${safeIso}`;
   const dbSalesName = `lucy_e2e_sales_${safeIso}`;
   const dbReaderRole = rowPolicyDb?.readerRole ?? `lucy_e2e_reader_${safeIso}`;
-  const dbOwnerRole = options.dbOwnerRole ?? (dbEngine === "postgres" ? "postgres" : "root");
+  const dbOwnerRole = options.dbOwnerRole ?? disposablePostgres?.ownerRole ?? (dbEngine === "postgres" ? "postgres" : "root");
   let secretFilePath = path.join(secretsDir, "db-reader.password");
   // Where the reader password must be READABLE.
   //
@@ -317,7 +336,10 @@ export async function prepareEnvironment(options) {
     mkdirSync(secretMountPath, { recursive: true, mode: 0o700 });
     secretFile(containerPasswordPath, readerPassword);
   }
-  const ownerPasswordFile = path.join(secretsDir, "db-owner.password");
+  // The owner password file MUST be the disposable container's own password file:
+  // the container sets its superuser password from POSTGRES_PASSWORD_FILE, so the
+  // seed producer has to authenticate with exactly that password.
+  const ownerPasswordFile = disposablePostgres?.ownerPasswordFile ?? path.join(secretsDir, "db-owner.password");
   const templateValues = {
     ...hashes,
     DB_DRIVER: dbEngine,
@@ -474,6 +496,20 @@ export async function prepareEnvironment(options) {
           applied: false,
           applyRequested: applyDb,
           readonlyRoles,
+          // The disposable container this run owns. Recorded so the run can be
+          // torn down by container id — never by a name pattern that could hit
+          // somebody else's container.
+          ...(disposablePostgres
+            ? {
+              disposable: {
+                containerId: disposablePostgres.containerId,
+                containerName: disposablePostgres.containerName,
+                host: disposablePostgres.host,
+                port: disposablePostgres.port,
+                image: "postgres:16-alpine"
+              }
+            }
+            : {}),
           // Password files are mode 0600 on disk. They reach the WebUI container
           // through a Kubernetes Secret (the deploy script mounts them at
           // `containerPasswordPath`); the DB host is reached directly by the runner.

@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import { REPO_ROOT } from "../lib/common.mjs";
 import { collectManagementResults } from "../collect-management-results.mjs";
 import { loadCatalog } from "../lib/catalog.mjs";
+import { loadCoverage } from "../lib/v025-coverage.mjs";
 import { forbiddenBrowserCalls } from "../lib/real-browser-source-guard.mjs";
 
 const REAL_DIR = path.join(REPO_ROOT, "webui", "tests", "real-e2e");
@@ -47,13 +48,36 @@ describe("real-user browser E2E guarantees (Spec §6.4, Plan T11)", () => {
     }
   });
 
-  it("every spec links itself to catalog management/security cases through covers()", () => {
-    const ids = new Set(loadCatalog().cases.map((c) => c.id));
+  it("every spec links itself to a known case id, in the namespace that owns it", () => {
+    // Two namespaces, two owners (see webui/tests/real-e2e/helpers/blocked.ts):
+    //   `covers()`     -> the FROZEN release catalog (case-catalog.yaml). A frozen
+    //                     variant MUST NOT be declared here if it is not a frozen
+    //                     case id, and a v0.25 execution item MUST NOT be pushed
+    //                     into this namespace.
+    //   `coversV025()` -> the v0.25 coverage manifest's newScenarios. A spec that
+    //                     only exercises v0.25 execution items has NO frozen case to
+    //                     point at, and forcing one would pollute the frozen
+    //                     denominator.
+    // So the guard is: every spec must declare at least one id, every declared id
+    // must exist, and every id must be declared in the namespace that owns it.
+    // That is STRICTLY stronger than "must declare a frozen case": a v0.25-only
+    // spec now has to declare its v0.25 items, and a frozen id declared through
+    // `coversV025` is rejected instead of silently accepted.
+    const frozen = new Set(loadCatalog().cases.map((c) => c.id));
+    const v025 = new Set(loadCoverage().newScenarios.map((s) => s.executionId));
     for (const file of specFiles.filter((f) => f.endsWith(".spec.ts"))) {
       const text = readFileSync(file, "utf8");
       const covered = [...text.matchAll(/covers\(testInfo,\s*([^)]*)\)/g)].flatMap((m) => [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]));
-      assert.ok(covered.length > 0, `${path.relative(REPO_ROOT, file)} covers no case`);
-      for (const id of covered) assert.ok(ids.has(id), `${path.relative(REPO_ROOT, file)} covers unknown case ${id}`);
+      const coveredV025 = [...text.matchAll(/coversV025\(testInfo,\s*([^)]*)\)/g)].flatMap((m) => [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]));
+      assert.ok(covered.length + coveredV025.length > 0, `${path.relative(REPO_ROOT, file)} links no case`);
+      for (const id of covered) {
+        assert.ok(frozen.has(id), `${path.relative(REPO_ROOT, file)} covers unknown frozen case ${id}`);
+        assert.ok(!v025.has(id), `${path.relative(REPO_ROOT, file)} covers v0.25 item ${id} through the frozen namespace`);
+      }
+      for (const id of coveredV025) {
+        assert.ok(v025.has(id), `${path.relative(REPO_ROOT, file)} covers unknown v0.25 item ${id}`);
+        assert.ok(!frozen.has(id), `${path.relative(REPO_ROOT, file)} covers frozen case ${id} through the v0.25 namespace`);
+      }
     }
   });
 

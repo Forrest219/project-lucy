@@ -1,7 +1,7 @@
 // RTP25-01..10 and RTV25-01..08 — real template writes and per-table reverse lookup.
 //
 // Authority: docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md §8
-//   and docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md §1 / §3.
+//   and docs/design/design-row-policy-real-e2e-pack.md §1 / §3.
 // Each test title is RTP_RTV_OWNER_SYMBOLS so `run-row-policy-b --grep` selects one id.
 // coversV025 lists only the id that test's assertions evaluate.
 // Table identity is mysql-aliyun / dataforai / superstore_orders.
@@ -160,6 +160,22 @@ function previewReason(body: Json): string {
   return [table?.error?.reason, table?.error?.message, table?.error?.code, table?.catalog?.reason]
     .filter((part) => typeof part === "string" && part.length > 0)
     .join(" ");
+}
+
+/**
+ * Did the preview REFUSE the draft? Two legitimate shapes, and the contract does
+ * not pick one:
+ *   * a REQUEST-level rejection — HTTP 4xx with the top-level `{ ok:false, error }`
+ *     envelope (the draft cannot be normalized, so no table is previewed at all);
+ *   * a TABLE-level diagnostic — HTTP 200 with `data.ok === false` and the reason
+ *     on `data.tables[].error`.
+ *
+ * It only answers "was it refused"; the reason code, the no-leak check and the
+ * "no saveable confirmation" check stay separate assertions.
+ */
+function previewRefused(body: Json, status: number): boolean {
+  if (status >= 400) return body?.ok === false || body?.error !== undefined;
+  return body?.data?.ok === false;
 }
 
 function agentGrant(body: Json, agentId: string): Json | undefined {
@@ -466,7 +482,7 @@ test(RTP_RTV_OWNER_SYMBOLS["RTP25-03"], async ({ browser }, testInfo) => {
     assertion(
       testInfo,
       "allow_control",
-      empty.status >= 400 && empty.body?.data?.written !== true && measure.body?.data?.ok === false && illegal.body?.data?.ok !== true,
+      empty.status >= 400 && empty.body?.data?.written !== true && previewRefused(measure.body, measure.status) && illegal.body?.data?.ok !== true,
       `RTP25-03 empty=${empty.status} measureOk=${measure.body?.data?.ok} illegalOk=${illegal.body?.data?.ok}`
     );
     const afterNames = templateNames((await templateCatalog(page)).body);
@@ -530,7 +546,7 @@ test(RTP_RTV_OWNER_SYMBOLS["RTP25-04"], async ({ browser }, testInfo) => {
     assertion(
       testInfo,
       "consistency",
-      `${previewReason(external.body)} ${external.text}`.includes("row_policy_template_unresolved") && external.body?.data?.ok === false,
+      `${previewReason(external.body)} ${external.text}`.includes("row_policy_template_unresolved") && previewRefused(external.body, external.status),
       `RTP25-04 external missing template was accepted: ${previewReason(external.body).slice(0, 180)}`
     );
     const afterNames = templateNames((await templateCatalog(page)).body);

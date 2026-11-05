@@ -81,7 +81,8 @@ export function writeV025Evidence(run, { coverage, report = null, capabilities =
     capabilities: [...capabilities],
     dimensionEvidence,
     verifierPassed,
-    capabilityReasons: run.capabilityReasons ?? {}
+    capabilityReasons: run.capabilityReasons ?? {},
+    run
   });
 
   const dir = outDir ?? path.join(run.paths?.runDir ?? path.join("inbox", "e2e", run.runId), "v025");

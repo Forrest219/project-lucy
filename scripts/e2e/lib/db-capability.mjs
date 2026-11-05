@@ -24,16 +24,28 @@ export function appliedDatabaseCapability(db) {
  * Whether a catalog `requires` entry is met.
  * For `rds-mysql-readonly` packs, a proven `mysql` capability satisfies a
  * historical `postgres` data-plane require (same 一推一 sync RDS).
+ *
+ * The capability container may be a plain object (the security leg's
+ * `detectCapabilities` shape) or a Set (the management / v0.25 legs' shape).
+ * Both are accepted so ONE rule decides the same run's capabilities in every
+ * leg — a run must not be "postgres-capable" in one leg and "not" in another.
  */
 export function capabilitySatisfied(cap, capabilities, run = null) {
-  if (capabilities?.[cap]) return true;
+  if (hasCapability(capabilities, cap)) return true;
   if (
     cap === "postgres" &&
-    capabilities?.mysql &&
+    hasCapability(capabilities, "mysql") &&
     run?.db?.dataPlane === RDS_MYSQL_READONLY_DATAPLANE &&
     run?.db?.readonlyProven === true
   ) {
     return true;
   }
   return false;
+}
+
+/** Capability membership for both container shapes. */
+function hasCapability(capabilities, cap) {
+  if (!capabilities) return false;
+  if (typeof capabilities.has === "function") return capabilities.has(cap);
+  return Boolean(capabilities[cap]);
 }

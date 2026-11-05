@@ -109,6 +109,8 @@
     "e2e:real:verify": "node scripts/e2e/verify-evidence.mjs",
     "e2e:real:project-checklists": "node scripts/e2e/project-checklists.mjs",
     "e2e:real:archive": "node scripts/e2e/archive-evidence.mjs",
+    "e2e:real:cleanup": "node scripts/e2e/cleanup-run.mjs",
+    "e2e:real:apply-db": "node scripts/e2e/apply-db.mjs",
     "e2e:real:gates": "node scripts/gates/collect-gate-results.mjs",
     "e2e:real:record-gate": "node scripts/gates/record-gate-result.mjs",
     "gate:customer-release": "node scripts/gates/customer-release-readiness.mjs",

@@ -1,7 +1,7 @@
 // ROW25 — real preview + MCP for the row-policy pack (RDS mysql-aliyun / superstore_orders).
 //
 // Authority: docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md §9
-//   and docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md §3.
+//   and docs/design/design-row-policy-real-e2e-pack.md §3.
 // Each test title is ROW25_OWNER_SYMBOLS so `run-row-policy-b --grep` selects one id.
 // coversV025 lists only the id that test's assertions evaluate.
 // V04/V05 are compile-failure previews. V09 is the rp_all union. V10 is the
@@ -186,6 +186,27 @@ function previewReason(body: Json): string {
   return [table?.error?.reason, table?.error?.message, table?.error?.code, table?.catalog?.reason]
     .filter((part) => typeof part === "string" && part.length > 0)
     .join(" ");
+}
+
+/**
+ * Did the preview REFUSE the draft?
+ *
+ * A refusal has two legitimate shapes and the contract does not pick one:
+ *   * a REQUEST-level rejection — HTTP 4xx with the top-level `{ ok:false, error }`
+ *     envelope. A draft that cannot even be normalized (unknown field, unresolved
+ *     measure, missing template) is rejected before any table is previewed, and
+ *     the save path rejects the very same draft the same way (Spec §14.2.1: the
+ *     preview and the save build the SAME candidate).
+ *   * a TABLE-level diagnostic — HTTP 200 with `data.ok === false` and the reason on
+ *     `data.tables[].error`. The draft was fine; that table could not be previewed.
+ *
+ * This helper only answers "was it refused". It never answers "is it good": the
+ * reason code, the no-leak check and the "no saveable confirmation" check stay
+ * separate assertions, so accepting either shape does NOT weaken them.
+ */
+function previewRefused(body: Json, status: number): boolean {
+  if (status >= 400) return body?.ok === false || body?.error !== undefined;
+  return body?.data?.ok === false;
 }
 
 function agentGrant(body: Json, agentId: string): Json | undefined {
@@ -495,7 +516,7 @@ test(ROW25_OWNER_SYMBOLS["ROW25-V04"], async ({ browser }, testInfo) => {
     assertion(
       testInfo,
       "deny",
-      missing.body?.data?.ok === false && reason.includes("row_policy_template_unresolved") && !reason.includes("\"kind\":\"all\""),
+      previewRefused(missing.body, missing.status) && reason.includes("row_policy_template_unresolved") && !reason.includes("\"kind\":\"all\""),
       `status=${missing.status} reason=${reason.slice(0, 240)}`
     );
     assertion(testInfo, "allow_control", missing.body?.data?.confirmation === undefined, "a failed compile must not mint a save confirmation");
@@ -520,7 +541,7 @@ test(ROW25_OWNER_SYMBOLS["ROW25-V05"], async ({ browser }, testInfo) => {
     assertion(
       testInfo,
       "deny",
-      unknown.body?.data?.ok === false && reason.includes("code=row_policy_field_unknown") && !reason.includes("row_policy_catalog_unavailable"),
+      previewRefused(unknown.body, unknown.status) && reason.includes("code=row_policy_field_unknown") && !reason.includes("row_policy_catalog_unavailable"),
       `status=${unknown.status} reason=${reason.slice(0, 280)}`
     );
     assertion(
@@ -550,7 +571,7 @@ test(ROW25_OWNER_SYMBOLS["ROW25-V06"], async ({ browser }, testInfo) => {
     assertion(
       testInfo,
       "deny",
-      measure.body?.data?.ok === false && reason.includes("row_policy_field_unresolved:measure") && !reason.includes("row_policy_field_unknown"),
+      previewRefused(measure.body, measure.status) && reason.includes("row_policy_field_unresolved:measure") && !reason.includes("row_policy_field_unknown"),
       `status=${measure.status} reason=${reason.slice(0, 280)}`
     );
     assertion(testInfo, "allow_control", measure.body?.data?.confirmation === undefined, "measure binding must not confirm a save");
@@ -763,7 +784,7 @@ test(ROW25_OWNER_SYMBOLS["ROW25-V13"], async ({ browser }, testInfo) => {
     assertion(
       testInfo,
       "deny",
-      failed.body?.data?.ok === false && failed.body?.data?.confirmation === undefined,
+      previewRefused(failed.body, failed.status) && failed.body?.data?.confirmation === undefined,
       `failed preview ok=${failed.body?.data?.ok} confirmation=${failed.body?.data?.confirmation !== undefined}`
     );
     const ready = await previewRole(page, { roleId: ROLES.east, tables: [FACT] });
@@ -1006,7 +1027,7 @@ test(ROW25_OWNER_SYMBOLS["ROW25-V20"], async ({ browser }, testInfo) => {
       );
       return;
     }
-    assertion(testInfo, "deny", missingManifest.body?.data?.ok === false, `catalog fault did not fail closed: ${reason.slice(0, 240)}`);
+    assertion(testInfo, "deny", previewRefused(missingManifest.body, missingManifest.status), `catalog fault did not fail closed: ${reason.slice(0, 240)}`);
     assertion(
       testInfo,
       "consistency",
@@ -1033,7 +1054,7 @@ test(ROW25_OWNER_SYMBOLS["ROW25-V21"], async ({ browser }, testInfo) => {
     assertion(
       testInfo,
       "deny",
-      unknown.body?.data?.ok === false && reason.includes("code=row_policy_field_unknown") && !reason.includes("row_policy_catalog_unavailable") && !reason.includes("row_policy_catalog_capability_unknown"),
+      previewRefused(unknown.body, unknown.status) && reason.includes("code=row_policy_field_unknown") && !reason.includes("row_policy_catalog_unavailable") && !reason.includes("row_policy_catalog_capability_unknown"),
       `status=${unknown.status} reason=${reason.slice(0, 280)}`
     );
     assertion(
