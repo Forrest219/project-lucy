@@ -136,10 +136,16 @@ export type DetailPaginationParseResult =
  * Non-integer → fail; limit > 2000 → clamp; offset < 0 → 0.
  */
 export function parseDetailPagination(
-  input: URLSearchParams | Record<string, string | undefined>
+  input: URLSearchParams | Record<string, string | string[] | undefined>
 ): DetailPaginationParseResult {
   const read = (key: string): string | null => {
-    const raw = input instanceof URLSearchParams ? input.get(key) : input[key];
+    if (input instanceof URLSearchParams) {
+      const raw = input.get(key);
+      if (typeof raw !== "string") return null;
+      const trimmed = raw.trim();
+      return trimmed.length === 0 ? null : trimmed;
+    }
+    const raw = input[key];
     if (typeof raw !== "string") return null;
     const trimmed = raw.trim();
     return trimmed.length === 0 ? null : trimmed;

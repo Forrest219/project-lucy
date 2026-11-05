@@ -25,7 +25,7 @@
 >
 > **几何语言修订（2026-11-01）**：本文的**语义与权威性不变**（授权面、访问面、边状态判定、路径守恒、API、URL、两档措辞）。**图面几何**（节点形状、计量刻度、流带画法、标签排版、槽位分配、命中区）已由 [`docs/specs/lucy-20261101-access-map-geometry-spec.md`](../../docs/specs/lucy-20261101-access-map-geometry-spec.md) **v0.2 功能合同已收口**规定并实施：节点为**细柱**（不再是定宽卡片），计量厚度 = 权重 × 刻度且**无最小厚度地板**，刻度按 `MAX_PX_PER_PATH` 封顶，流带为**填充面积**，四态各自有明确的面积 / 内核 / 轮廓几何，计量与命中解耦。本文 §4.4 的状态判定顺序与 §9 登记的着色 token（`series/grant`、`series/access`、`warning`、`danger`；禁止裸 hex；状态不得只靠颜色区分）**保持不变**，只是载体从描边改为填充面。
 >
-> **访问层筛选修订（有效指针，2026-11-04）**：路径主键、角色归因、守恒算法、边状态判定顺序**不变**。进入访问路径构建的允许调用候选集合在时间窗、`trust`、Token 条件上**相与**问询种类（`inquiryKind`）与访问等级（`accessGrade`）；主工具条两下拉、弱入口「关联口径」（原「问询计入」／`trust` UI 标签）与缺省／非法 URL 行为以 [`docs/specs/lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) 为准。本文 §4.2／§5.2／§6.3／§7.4 仅作交叉指针，不在此重写算法正文。
+> **访问层筛选修订（有效指针，2026-11-04；trust 硬锁 2026-11-05）**：路径主键、角色归因、守恒算法、边状态判定顺序**不变**。进入访问路径构建的允许调用候选集合在时间窗、`trust`、Token 条件上**相与**问询种类（`inquiryKind`）与访问等级（`accessGrade`）；主工具条两下拉与问询／等级缺省非法行为以 [`docs/specs/lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) 为准。**`trust` 固定已确认关联、取消关联口径下拉与 `include_candidate`** 以 [`docs/specs/lucy-20261105-access-map-confirmed-only-spec.md`](../../docs/specs/lucy-20261105-access-map-confirmed-only-spec.md) 为准。本文 §4.2／§5.2／§6.3／§7.4 仅作交叉指针，不在此重写算法正文。
 >
 > **小时明细与页壳再修订（有效指针，2026-11-04；已落地）**：授权面、边状态、路径守恒**不变**。「数据表」视图、凭证清单 UI、Token 过滤 UI、图下口径折叠的**有效呈现**以 [`docs/specs/lucy-20261104-access-map-hourly-detail-spec.md`](../../docs/specs/lucy-20261104-access-map-hourly-detail-spec.md) 为准：数据表为小时审计明细；不再展示凭证清单；**取消 Token 条件**（`token` 忽略）；口径常驻一行（窗口起止＋覆盖率压缩句＋快照哈希）。§7.5「全部边／节点可读」主表义务按该 Spec **D11 能力收缩**（小时明细 + Canvas 非 normal 边键盘入口）。本文 §4.5／§7.3／§7.5 作历史语义与交叉指针，不以旧边级表／凭证清单 UI 为现行呈现合同。
 
@@ -91,7 +91,7 @@ v0.25 提案 L25-01 的验收标准是「不打开 YAML，能说出这个 Agent 
 | SC-02 | 流带宽度严格满足守恒：对任一非凭证节点，入流授权路径数 = 出流授权路径数（误差 0） |
 | SC-03 | 每条流带内叠加访问内核，宽度 = 访问路径数；访问数为 0 的边呈「僵尸授权」态且可被筛出 |
 | SC-04 | Token 以凭证清单形式挂在 Agent 下，显示 label、状态、统计期调用次数；点击只过滤访问层，不改变授权骨架 |
-| SC-05 | 访问层默认只统计 `association_status = 'confirmed'` 的记录，图例标明当前口径；可切到含候选口径 |
+| SC-05 | 访问层只统计 `association_status = 'confirmed'` 的记录，图例标明「关联口径：已确认关联」。**「可切到含候选口径」已废止**（见 confirmed-only Spec） |
 | SC-06 | Agent 详情页与角色详情页各有一个深链入口，携带过滤参数跳转独立页并正确预置过滤 |
 | SC-07 | 授权面不可用（`access.yaml` 缺失/非法/路径不一致）时，页面显示与角色权限页口径一致的三态降级提示，不渲染空白图 |
 | SC-08 | 节点数 / 边数超过渲染预算时自动折叠，折叠数量显式可见且可展开 |
@@ -464,7 +464,7 @@ type AccessRow = {
 
 function buildAccessLayer(
   window: MetricWindow,        // 复用 metric-window.ts 的 buildMetricWindow
-  trust: "confirmed_only" | "include_candidate",
+  trust: "confirmed", // include_candidate / confirmed_only 作可切换取值已废止；见 confirmed-only Spec
   tokenLabel: string | null,   // 只过滤访问层；不参与路径主键或授权骨架
   // inquiryKind / accessGrade：相与进候选集合；解析与缺省见 audit-echo Spec §5.3
 ): { state: "ok" | "unavailable"; rows: AccessRow[]; denied: number } {
@@ -481,7 +481,7 @@ function buildAccessLayer(
     FROM access_log al
     JOIN access_log_sources als ON als.access_log_id = al.id
     WHERE al.ts >= :startIso AND al.ts < :endIso
-      AND (:trust = 'include_candidate' OR al.association_status = 'confirmed')
+      AND al.association_status = 'confirmed'
       AND (:tokenLabel IS NULL OR al.token_label = :tokenLabel)
   `).all({ startIso: window.startIso, endIso: window.endIso, trust, tokenLabel });
   // A2b. 对 rows 再相与 inquiryKind／accessGrade（及 D6 关联）；见 audit-echo Spec §6
@@ -599,7 +599,7 @@ GET /api/admin/access-map
   "meta": {
     "window": { "startIso": "2026-10-13T...", "endIso": "2026-10-20T...", "asOf": "2026-10-20T..." },
     "grant": { "state": "ok", "accessConfigVersion": "1712...-a3f9...", "policyVersion": "...", "sourceMapVersion": "...", "capabilityDigest": "..." },
-    "access": { "state": "ok", "trust": "confirmed_only", "deniedCalls": 12, "rawCalls": 12 },
+    "access": { "state": "ok", "trust": "confirmed", "deniedCalls": 12, "rawCalls": 12 },
     "counts": { "agents": 3, "roles": 2, "connections": 1, "schemas": 1, "tables": 13, "tokens": 4, "edges": 28 },
     "signals": { "dormantEdges": 5, "needsReviewEdges": 1, "confirmedUnauthorizedEdges": 0 },
     "snapshotCoverage": { "reviewPaths": 1, "matched": 0, "missingOrInvalid": 1, "ratio": 0 },
@@ -635,7 +635,7 @@ GET /api/admin/access-map
 | `connection` | connectionId | 只看该连接的子图 |
 | `window` | `24h` / `168h` / `720h` | 默认 `168h`（与 L25-03 使用概况一致） |
 | `layer` | `flat` / `schema` | 默认 `flat`（折叠 Schema，§4.6） |
-| `trust` | `confirmed` / `include_candidate` | 默认 `confirmed`（§4.9）；UI 标签为「关联口径」，见 audit-echo Spec |
+| `trust` | 仅 `confirmed`（缺省等价）；`include_candidate` → 400 | 见 [`lucy-20261105-access-map-confirmed-only-spec.md`](../../docs/specs/lucy-20261105-access-map-confirmed-only-spec.md) |
 | `inquiryKind` | `management` / `real` / `unreported_query` / `session_visit` / `all` | **参数缺席**默认 `management`；非法 → 400。主筛选呈现见 [`lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) §5 |
 | `accessGrade` | `exclude_connect` / `all` / `connect` / `browse` / `prepare` / `ask` / `query` / `control` / `unclassified` | **参数缺席**默认 `exclude_connect`；非法 → 400。同上 |
 | `view` | `map` / `table` | 默认 `map`；`table` 现行为小时明细（hourly-detail）；§7.5 全边等价主表义务已按 D11 收缩 |
@@ -676,8 +676,8 @@ GET /api/admin/access-map
 ### 7.4 图例与信号
 
 - 图例固定在图区上方，说明：流带宽度 = 授权路径数；深色内核 = 访问路径数；虚线 = 凭证清单；警示描边 = 需复核 / 确凿越权。
-- 图例／弱入口须标明当前**关联口径**（已确认关联／含候选关联；对应 `trust=confirmed|include_candidate`），禁止再用「问询计入」作标签或前缀；统计窗口起止仍须可见（chart-first 起可沉入「口径与快照」）。
-- **主筛选呈现**（问询种类、访问等级下拉；关联口径弱入口；筛选行对齐）改指 [`lucy-20261102-access-map-audit-echo-spec.md`](../../docs/specs/lucy-20261102-access-map-audit-echo-spec.md) §5；本条不另定工具条控件布局。
+- 图例须标明**关联口径：已确认关联**（静态；禁止「含候选」可切换标签；禁止「问询计入」）；统计窗口起止仍须可见。
+- **主筛选呈现**（问询种类、访问等级下拉；筛选行对齐）改指 audit-echo §5；**关联口径硬锁**改指 confirmed-only Spec；本条不另定工具条控件布局。
 - 顶部信号条：「僵尸授权 N 条 · 需复核 M 条 · 确凿越权 K 条」，点击可筛选（chart-first 起默认首屏不再提供该筛选入口，见该呈现 Spec）。
 
 ### 7.5 无障碍等价视图（SC-09）
@@ -771,7 +771,7 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 | SC-02 | **单元测试：守恒自检** | 对随机权限配置，遍历所有非凭证节点，断言入流 `grantPaths` == 出流 `grantPaths`（误差 0） |
 | SC-03 | 组件测试 | 构造「授权有 / 访问无」的 fixture，断言该边 `state === "dormant"` 且内核宽度为 0 |
 | SC-04 | 组件测试 | 点击 Token 后断言：访问层内核变化，授权骨架边数与 `grantPaths` 不变；顶部提示条出现 |
-| SC-05 | 单元测试 | 注入 `association_status = 'candidate'` 记录，断言默认口径下不计入内核；切到含候选口径后计入 |
+| SC-05 | 单元测试 | 注入 `association_status = 'candidate'` 记录，断言**不计入**内核；**不再**要求「切到含候选后计入」（废止见 confirmed-only Spec） |
 | SC-06 | E2E | 从 Agent 详情页点击深链 → 独立页 URL 含 `agent=<id>` 且图已聚焦该 Agent |
 | SC-07 | 单元测试 | 分别构造 `access_unreadable` / `access_invalid` / `access_config_path_mismatch`，断言渲染对应降级提示而非空图 |
 | SC-08 | 单元测试 | 注入 200 节点配置，断言 `meta.folded.nodes > 0` 且图上有可见折叠徽标 |

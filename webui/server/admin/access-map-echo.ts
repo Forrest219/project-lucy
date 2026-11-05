@@ -86,7 +86,8 @@ export type EchoCandidateRow = {
 
 export type EchoFilter = {
   window: { startIso: string; endIso: string };
-  trust: "confirmed" | "include_candidate";
+  /** Spec 20261105：硬锁已确认关联。 */
+  trust: "confirmed";
   inquiryKind: InquiryKindFilter;
   accessGrade: string;
   tokenLabel: string | null;
@@ -98,10 +99,16 @@ export type BandED = {
   D: Set<string>;
 };
 
+// A structural duck type on purpose: the production code must not depend on
+// better-sqlite3's generic types. The methods are declared in METHOD syntax on
+// purpose — method parameters are compared bivariantly, so a better-sqlite3
+// `Statement` (whose `all`/`get` carry their own bind-parameter generics) is
+// still assignable here. A property-style signature would reject the real
+// `Database` and push the cast onto every caller.
 type EchoDb = {
-  prepare: (sql: string) => {
-    all: (...params: unknown[]) => unknown[];
-    get: (...params: unknown[]) => unknown;
+  prepare(sql: string): {
+    all(...params: unknown[]): unknown[];
+    get(...params: unknown[]): unknown;
   };
 };
 
@@ -190,10 +197,10 @@ export function loadCandidateRowsWithSources(f: EchoFilter, db: EchoDb): EchoCan
        FROM access_log al
        JOIN access_log_sources als ON als.access_log_id = al.id
        WHERE al.ts >= ? AND al.ts < ?
-         AND (? = 'include_candidate' OR al.association_status = 'confirmed')
+         AND al.association_status = 'confirmed'
          AND (? IS NULL OR al.token_label = ?)`
     )
-    .all(f.window.startIso, f.window.endIso, f.trust, f.tokenLabel, f.tokenLabel) as Array<
+    .all(f.window.startIso, f.window.endIso, f.tokenLabel, f.tokenLabel) as Array<
     Record<string, unknown>
   >;
 

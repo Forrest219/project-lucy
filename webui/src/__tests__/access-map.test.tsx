@@ -412,7 +412,7 @@ describe("AccessMap 页面", () => {
     expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument();
   });
 
-  it("URL 参数全部透传到接口（可分享）", async () => {
+  it("URL 参数全部透传到接口（可分享）；非法 trust 首屏原样发出", async () => {
     const fetchMock = stubAccessMap(makeResponse());
     renderPage(
       "/admin/access-map?agent=agent_a&role=role_reader&table=mysql_main%3A%3Afinance%3A%3Aorders&connection=mysql_main&window=24h&layer=schema&trust=include_candidate&view=table"
@@ -423,6 +423,7 @@ describe("AccessMap 页面", () => {
     expect(url).toContain("role=role_reader");
     expect(url).toContain("window=24h");
     expect(url).toContain("layer=schema");
+    // Spec 20261105 SC-05：非法 trust 不得先删改再请求
     expect(url).toContain("trust=include_candidate");
     expect(url).toContain("view=table");
     expect(url).toContain("connection=mysql_main");
@@ -793,13 +794,15 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
       "access-map-layer",
       "access-map-inquiry-kind",
       "access-map-access-grade",
-      "access-map-trust",
       "access-map-search",
       "access-map-search-submit"
     ];
     for (const id of alwaysPresent) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
+    // Spec 20261105 SC-01：无关联口径下拉／hint
+    expect(screen.queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
     expect(screen.queryByTestId("access-map-credential-list")).not.toBeInTheDocument();
     expect(screen.queryByTestId("access-map-methodology-snapshot")).not.toBeInTheDocument();
   });
@@ -861,21 +864,14 @@ describe("访问关系图 audit-echo 工具条与弱入口（Spec §7 组件侧�
     expect(url).not.toContain("accessGrade=");
   });
 
-  it("SC-04 — 常驻行有关联口径控件与「只影响访问面」说明", async () => {
+  it("SC-04 — 常驻行无关联口径下拉；现状静态「关联口径：已确认关联」", async () => {
     stubAccessMap(makeResponse());
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-resident-line")).toBeInTheDocument());
 
     const resident = screen.getByTestId("access-map-resident-line");
-    const trust = within(resident).getByTestId("access-map-trust");
-    expect(trust.tagName).toBe("SELECT");
-    expect(trust).toHaveTextContent("已确认关联");
-    expect(trust).toHaveTextContent("含候选关联");
-
-    const hint = within(resident).getByTestId("access-map-trust-hint");
-    expect(hint).toHaveTextContent("授权连接始终显示");
-    expect(hint).toHaveTextContent("只影响访问面");
-    expect(hint).toHaveTextContent("候选关联上的允许调用也计入访问");
+    expect(within(resident).queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(within(resident).queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
 
     const status = within(resident).getByTestId("access-map-filter-status");
     expect(status).toHaveTextContent("关联口径：已确认关联");
@@ -917,17 +913,16 @@ describe("访问关系图 audit-echo 工具条与弱入口（Spec §7 组件侧�
     await waitFor(() => expect(lastRequestUrl(fetchMock)).not.toContain("accessGrade="));
   });
 
-  it("SC-09 — 关联口径写 trust；默认 confirmed；可切 include_candidate", async () => {
+  it("SC-09 — 默认请求不写 trust；切换其它筛选后仍无 include_candidate", async () => {
     const fetchMock = stubAccessMap(makeResponse());
     renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-trust")).toBeInTheDocument());
-
-    const trust = screen.getByTestId("access-map-trust");
-    expect(trust).toHaveValue("confirmed");
+    await waitFor(() => expect(screen.getByTestId("access-map-inquiry-kind")).toBeInTheDocument());
+    expect(screen.queryByTestId("access-map-trust")).not.toBeInTheDocument();
     expect(String(fetchMock.mock.calls[0][0])).not.toContain("trust=");
 
-    fireEvent.change(trust, { target: { value: "include_candidate" } });
-    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("trust=include_candidate"));
+    fireEvent.change(screen.getByTestId("access-map-inquiry-kind"), { target: { value: "all" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("inquiryKind=all"));
+    expect(lastRequestUrl(fetchMock)).not.toContain("trust=");
   });
 
   it("SC-17 — 工具条各列仅标签+单控件（定位列除外）", async () => {
@@ -1122,11 +1117,14 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
       "access-map-snapshot-id",
       "access-map-snapshot-coverage",
       "access-map-window-range",
-      "access-map-filter-status",
-      "access-map-trust"
+      "access-map-filter-status"
     ]) {
       expect(within(resident).getByTestId(id)).toBeInTheDocument();
     }
+    expect(within(resident).queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(within(resident).getByTestId("access-map-filter-status")).toHaveTextContent(
+      "关联口径：已确认关联"
+    );
 
     expect(screen.queryByTestId("access-map-signal-needs-review-note")).not.toBeInTheDocument();
     expect(screen.queryByTestId("access-map-signal-calls")).not.toBeInTheDocument();
@@ -1621,19 +1619,14 @@ describe("链路高亮与列头 KPI", () => {
     expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("2");
   });
 
-  it("弱入口关联口径说明只影响访问面，并可切换含候选关联", async () => {
-    const fetchMock = stubAccessMap(makeResponse());
+  it("confirmed-only — 图例与现状静态「关联口径：已确认关联」；无下拉", async () => {
+    stubAccessMap(makeResponse());
     renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-trust")).toBeInTheDocument());
-
-    const control = screen.getByTestId("access-map-trust");
-    expect(control).toHaveTextContent("已确认关联");
-    expect(control).toHaveTextContent("含候选关联");
-    expect(screen.getByTestId("access-map-trust-hint")).toHaveTextContent("授权连接始终显示");
-    expect(screen.getByTestId("access-map-trust-hint")).toHaveTextContent("只影响访问面");
-
-    fireEvent.change(control, { target: { value: "include_candidate" } });
-    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("trust=include_candidate"));
+    await waitFor(() => expect(screen.getByTestId("access-map-legend-trust")).toBeInTheDocument());
+    expect(screen.getByTestId("access-map-legend-trust")).toHaveTextContent("关联口径：已确认关联");
+    expect(screen.getByTestId("access-map-filter-status")).toHaveTextContent("关联口径：已确认关联");
+    expect(screen.queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
   });
 
   it("环上的节点不会挡住侧面接进来的上游", () => {

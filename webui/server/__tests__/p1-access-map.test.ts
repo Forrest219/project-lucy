@@ -641,7 +641,7 @@ describe("P1-3 访问关系图 · URL 参数（§6.3）", () => {
       connection: "mysql_main",
       window: "24h",
       layer: "schema",
-      trust: "include_candidate",
+      trust: "confirmed",
       inquiryKind: "session_visit",
       accessGrade: "query",
       view: "table",
@@ -657,7 +657,7 @@ describe("P1-3 访问关系图 · URL 参数（§6.3）", () => {
       connection: "mysql_main",
       window: "24h",
       layer: "schema",
-      trust: "include_candidate",
+      trust: "confirmed",
       inquiryKind: "session_visit",
       accessGrade: "query",
       view: "table",
@@ -665,6 +665,8 @@ describe("P1-3 访问关系图 · URL 参数（§6.3）", () => {
       detailLimit: 200,
       detailOffset: 0
     });
+    // Spec 20261105：include_candidate 硬锁 400
+    expect(parseAccessMapQuery({ trust: "include_candidate" }).ok).toBe(false);
   });
 
   it("失效的 focus 深链回到全图，不渲染空图", async () => {
@@ -797,12 +799,12 @@ describe("P1-3 访问关系图 · HTTP 端点（§6.1/§6.3）", () => {
     registerAccessMapRoutes(app, provider(grantSide(), accessSide([auditRow()])));
     const res = await app.inject({
       method: "GET",
-      url: "/api/admin/access-map?window=24h&layer=schema&trust=include_candidate&view=table"
+      url: "/api/admin/access-map?window=24h&layer=schema&trust=confirmed&view=table"
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.ok).toBe(true);
-    expect(body.data.meta.access.trust).toBe("include_candidate");
+    expect(body.data.meta.access.trust).toBe("confirmed");
     expect(body.data.nodes.length).toBeGreaterThan(0);
     expect(body.data.render.nodes.length).toBeGreaterThan(0);
     await app.close();
@@ -910,15 +912,8 @@ describe("P1-3 访问关系图 · 真实 provider 的审计读取（SQL 口径�
     // 候选口径与窗口外记录都不进来。
     expect(confirmedTables).toEqual(["orders", "orders"]);
 
-    const withCandidate = await mapProvider.loadAccessSide({
-      window,
-      trust: "include_candidate",
-      tokenLabel: null,
-      ...echoAll
-    });
-    expect(withCandidate.state).toBe("ok");
-    if (withCandidate.state !== "ok") return;
-    expect(withCandidate.rows.map((row) => row.sourceName).sort()).toEqual(["orders", "orders", "returns"]);
+    // Spec 20261105：含候选不再是合法口径；候选行不得进入 confirmed 加载。
+    expect(confirmedTables).not.toContain("returns");
 
     const tokenScoped = await mapProvider.loadAccessSide({
       window,
@@ -1139,13 +1134,9 @@ describe("P1-3 §10 — SC-05 访问层信任口径", () => {
     expect(confirmed.meta.access.trust).toBe("confirmed");
     expect(confirmed.meta.counts.accessPaths).toBe(1);
 
-    // 切到含候选口径后计入。
-    const withCandidate = await buildAccessMap(hybrid, {
-      ...ALL_ECHO_QUERY,
-      trust: "include_candidate"
-    });
-    expect(withCandidate.meta.access.trust).toBe("include_candidate");
-    expect(withCandidate.meta.counts.accessPaths).toBe(2);
+    // Spec 20261105：含候选口径废止；候选行不得抬高访问路径数。
+    expect(confirmed.meta.counts.accessPaths).toBe(1);
+    expect(parseAccessMapQuery({ trust: "include_candidate" }).ok).toBe(false);
 
     db.close();
   });
@@ -1452,7 +1443,7 @@ function insertInferredTurn(
 }
 
 function echoFilter(overrides: Partial<{
-  trust: "confirmed" | "include_candidate";
+  trust: "confirmed";
   inquiryKind: AccessMapQuery["inquiryKind"];
   accessGrade: AccessMapQuery["accessGrade"];
   tokenLabel: string | null;

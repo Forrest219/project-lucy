@@ -91,7 +91,7 @@ chart-first 把桑基推到主视觉后，「数据表」仍是路径汇总边�
 
 1. **数据表 = 小时明细**：粒度含小时桶、Agent、角色、连接、Schema、表、问询种类、访问等级、允许调用、拒绝调用。
 2. **去掉凭证清单**与 **Token 过滤**（取消 Token 条件）。
-3. **口径常驻简化**：一行现状＋窗口起止＋快照覆盖率压缩句＋config／policy 哈希＋关联口径短控件；删除折叠与长口径段落。
+3. **口径常驻简化**：一行现状＋窗口起止＋快照覆盖率压缩句＋config／policy 哈希＋关联口径**静态披露**（固定已确认关联）；删除折叠与长口径段落。**关联口径下拉控件**自 [`lucy-20261105-access-map-confirmed-only-spec.md`](lucy-20261105-access-map-confirmed-only-spec.md) 定稿起废止（本条原「短控件」句不再现行）。
 4. **同 API 挂载 `detail`**：一次准备 E／D 后，`view=table` 返回明细；桑基汇总算法不变。
 
 ## 3. 非目标
@@ -99,7 +99,7 @@ chart-first 把桑基推到主视觉后，「数据表」仍是路径汇总边�
 | 不做 | 原因 |
 |---|---|
 | 改授权构图、边状态、几何、折叠预算 | Spec 187／geometry 不变 |
-| 改 inquiryKind／accessGrade／trust 缺省与非法 400 | audit-echo 不变（Token 除外） |
+| 改 inquiryKind／accessGrade 缺省与非法 400 | audit-echo 不变（Token 除外）。**`trust` 硬锁已确认关联**见 [`lucy-20261105-access-map-confirmed-only-spec.md`](lucy-20261105-access-map-confirmed-only-spec.md)，不再保留 `include_candidate` |
 | 明细行与桑基边一一对宽 | 汇总 vs 明细职责分离 |
 | 把有权未用的授权骨架行写入明细 | 明细只反映发生过的调用尝试（E∪D） |
 | CSV 导出、浏览器走查出口 | 另议／不在本条 |
@@ -160,7 +160,7 @@ pl-admin-tabbar：关系图 | 数据表
 ### 5.3 常驻口径行
 
 - 不使用默认关闭的 `<details>`。
-- 须保留：`access-map-trust`、`access-map-filter-status`（或等价现状行）、`access-map-snapshot-id`。
+- 须保留：`access-map-filter-status`（或等价现状行，含静态「关联口径：已确认关联」）、`access-map-snapshot-id`。**不再**要求 `access-map-trust` 下拉控件（废止见 [`lucy-20261105-access-map-confirmed-only-spec.md`](lucy-20261105-access-map-confirmed-only-spec.md) D11）。
 - **须新增或迁入常驻可见**：统计窗口起止（承接 Spec 187 §7.4）；快照覆盖率压缩句（承接 §4.9.2：可关联／需复核／缺失；禁止把低覆盖率读成低越权率）。test id 可新建 `access-map-window-range`、`access-map-snapshot-coverage`（若旧 id 仍在弱入口，迁到常驻行即可）。
 - 长 note 的旧 test id（如 `access-map-signal-needs-review-note`）不再要求出现在默认 DOM。
 
@@ -221,7 +221,7 @@ detail?: {
 | `detailOffset` | ≥0 整数 | 0 | 非整数 → 400；&lt;0 → 0 |
 | `token` | 任意 | — | **忽略**，不筛选、不 400 |
 
-既有 `window`／`layer`／`trust`／`inquiryKind`／`accessGrade`／`view`／scope／`focus` 参数不变（Token 条件取消除外）。
+既有 `window`／`layer`／`inquiryKind`／`accessGrade`／`view`／scope／`focus` 参数不变（Token 条件取消除外）。`trust` 仅缺省或 `confirmed`；`include_candidate` → 400，见 confirmed-only Spec。
 
 ### 6.3 守恒（可打假）
 

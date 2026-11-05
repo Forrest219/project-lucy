@@ -10,7 +10,7 @@
 | 需求来源 | 治理台访问关系图以关系图为主视觉；诚实性口径与快照不得消失，但不得抢首屏 |
 | 实施主体 | Lucy WebUI 访问关系图页（`webui/src/pages/admin/AccessMap.tsx` 与 `webui/src/components/admin/AccessMap*.tsx`）。不修改 KTX，不修改 `/api/admin/access-map` |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：仓库级呈现修订落 `docs/specs/` |
-| 与既有 Spec 的关系 | **再修订** [`lucy-20261030-access-map-quiet-reading-spec.md`](lucy-20261030-access-map-quiet-reading-spec.md) 的页壳骨架（§5.1 三指标卡 + 双 `details`），**不撤销**其图面着色（§5.3）、抽屉（§5.5）、数据表与凭证表（§5.6）等已验收呈现。权威语义仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 过滤、两档措辞、降级矩阵沿用 Spec 187。**主筛选与关联口径控件**的现行呈现与访问层候选集合以 [`lucy-20261102-access-map-audit-echo-spec.md`](lucy-20261102-access-map-audit-echo-spec.md) 为准（本条不推翻已收口页壳合同）。Spec 187 与 quiet-reading 的既有 SC **不在本条出口**。**可见术语「闲置授权」与边悬停**改指 [`lucy-20261105-access-map-idle-grant-copy-spec.md`](lucy-20261105-access-map-idle-grant-copy-spec.md) |
+| 与既有 Spec 的关系 | **再修订** [`lucy-20261030-access-map-quiet-reading-spec.md`](lucy-20261030-access-map-quiet-reading-spec.md) 的页壳骨架（§5.1 三指标卡 + 双 `details`），**不撤销**其图面着色（§5.3）、抽屉（§5.5）、数据表与凭证表（§5.6）等已验收呈现。权威语义仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 过滤、两档措辞、降级矩阵沿用 Spec 187。**主筛选**以 [`lucy-20261102-access-map-audit-echo-spec.md`](lucy-20261102-access-map-audit-echo-spec.md) 为准；**关联口径下拉已废止、固定已确认关联**以 [`lucy-20261105-access-map-confirmed-only-spec.md`](lucy-20261105-access-map-confirmed-only-spec.md) 为准（本条不推翻已收口页壳合同的其余部分）。Spec 187 与 quiet-reading 的既有 SC **不在本条出口** |
 | 实施计划 | [`docs/plans/lucy-20261101-access-map-chart-first-plan.md`](../plans/lucy-20261101-access-map-chart-first-plan.md) |
 
 > v0.2 功能合同已收口（2026-11-01）。D1–D8 按 §4 提议列拍板，未在实施中改写。SC-01–SC-13 有自动化断言并通过。SC-14 已拆出。本条收口不表示可上线。
@@ -146,7 +146,7 @@ Page Header
   中：Schema 层、问询种类、访问等级（两下拉；有效呈现见 audit-echo Spec）
   右：搜索 + 定位
   focus 存在时：面包屑「全图 / {节点名}」
-  （关联口径不在主工具条；沉入下方「口径与快照」弱入口）
+  （关联口径不在主工具条；常驻行静态披露「已确认关联」——下拉已废止，见 confirmed-only Spec）
 
 降级区（按需）
   partial / access unavailable / grant unavailable — pl-notice
@@ -198,8 +198,8 @@ Page Header
 | `access-map-snapshot-coverage` | 覆盖率句 + 「快照覆盖率低不代表越权率低…」提醒 |
 | `access-map-signal-calls` | 原始调用数 / 被拒绝尝试 |
 | `access-map-orphan-grants` | 若有孤儿授权说明 |
-| `access-map-legend-trust` / `access-map-legend-window` | **关联口径**标签（禁止「问询计入」）与窗口 ISO；从短行挪入此处。关联口径控件与说明见 [`lucy-20261102-access-map-audit-echo-spec.md`](lucy-20261102-access-map-audit-echo-spec.md) §5.2 |
-| `access-map-trust` | 弱入口内关联口径选择（已确认关联／含候选关联）；主工具条不得再放 |
+| `access-map-legend-trust` / `access-map-legend-window` | **关联口径：已确认关联**（静态字面量；禁止「问询计入」）与窗口 ISO。下拉控件废止见 confirmed-only Spec |
+| `access-map-trust` | **废止**：不得再作为可操作下拉出现于默认 DOM |
 | `access-map-snapshot-id` | `config … · policy …` |
 
 弱入口视觉：小字、边框弱于主工作区；**不得**再使用与主图抢权的双行大条并排样式。
@@ -249,7 +249,7 @@ render(response, url):
   view = url.view == "table" ? "table" : "map"
   show header without version hashes
   show toolbar(window, layer, inquiryKind, accessGrade, search, focus breadcrumb)
-  // trust／关联口径仅在弱入口「口径与快照」；见 audit-echo Spec
+  // 关联口径：无下拉；常驻／图例静态「已确认关联」；见 confirmed-only Spec
 
   if response.meta.grant.state == "partial":
     show compact partial notice + link to config-audit

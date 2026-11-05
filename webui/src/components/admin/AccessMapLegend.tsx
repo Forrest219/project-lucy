@@ -20,7 +20,7 @@
  * 僵尸授权的流带与正常授权同色，状态由卡片上的「僵尸授权」文字承担，
  * 所以图例里**不再**有「警示描边 = 需复核 / 确凿越权」这种合并项。
  */
-import { accessMapTrustLabel, type AccessMapMeta } from "./AccessMapTypes";
+import type { AccessMapMeta } from "./AccessMapTypes";
 
 export type AccessMapLegendMetaProps = {
   meta: AccessMapMeta;
@@ -70,9 +70,7 @@ export function AccessMapLegend() {
 export function AccessMapLegendMeta({ meta }: AccessMapLegendMetaProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
-      <span data-testid="access-map-legend-trust">
-        关联口径：{accessMapTrustLabel(meta.access.trust)}
-      </span>
+      <span data-testid="access-map-legend-trust">关联口径：已确认关联</span>
       <span className="notranslate" translate="no" data-testid="access-map-legend-window">
         统计窗口：{meta.window.startIso} ~ {meta.window.endIso}
       </span>

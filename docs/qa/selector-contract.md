@@ -1502,8 +1502,9 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-snapshot-coverage` | 访问关系图：快照覆盖率压缩句（常驻行） | `pages/admin/AccessMap.tsx` |
 | `access-map-snapshot-id` | 访问关系图：snapshot id（常驻行） | `pages/admin/AccessMap.tsx` |
 | `access-map-token-filter-notice` | **已退役**（hourly-detail）：Token 过滤提示条 | — |
-| `access-map-trust` | 访问关系图：关联口径（已确认关联 / 含候选关联） | `pages/admin/AccessMap.tsx` |
-| `access-map-trust-hint` | 访问关系图：关联口径说明 | `pages/admin/AccessMap.tsx` |
+| `access-map-trust` | **废止**（不得再作可操作下拉）。关联口径改为静态披露，见 `lucy-20261105-access-map-confirmed-only-spec` | — |
+| `access-map-trust-hint` | **废止** | — |
+| `access-map-legend-trust` / `access-map-filter-status` | 访问关系图：静态「关联口径：已确认关联」披露（非筛选控件） | `pages/admin/AccessMap.tsx`／Legend |
 | `access-map-view-map` | 访问关系图：view map | `pages/admin/AccessMap.tsx` |
 | `access-map-view-table` | 访问关系图：view table | `pages/admin/AccessMap.tsx` |
 | `access-map-window` | 访问关系图：window | `pages/admin/AccessMap.tsx` |
@@ -1647,7 +1648,7 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-hover-tip` | 访问关系图：节点／边悬停浮层（chart-first Spec §5.6，非 SVG `<title>`） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-hit-${link.edge.id}-${index}` | 访问关系图：命中层 ${link.edge.id}（透明命中扩展，厚度 ≥ `MIN_HIT_PX`，不参与计量；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-kernel-${link.edge.id}` | 访问关系图：kernel ${link.edge.id}（访问内核填充面积） | `components/admin/AccessMapCanvas.tsx` |
-| `access-map-label-${node.id}` | 访问关系图：外标块 ${node.id}（只显示名称；路径数与僵尸授权在列头 KPI） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-label-${node.id}` | 访问关系图：外标块 ${node.id}（只显示名称；路径数与闲置授权在列头 KPI） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-link-${link.edge.id}` | 访问关系图：link ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-midline-${link.edge.id}` | 访问关系图：虚线中线 ${link.edge.id}（需复核；geometry Spec §5.4） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-node-${node.id}` | 访问关系图：node ${node.id} | `components/admin/AccessMapCanvas.tsx` |

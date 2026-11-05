@@ -856,7 +856,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Dormant Grant | 闲置授权 | 有权未用 | 僵尸授权；未使用权限；闲置资源 | 授权路径数 > 0 且访问路径数 = 0 |
 | Needs-review Signal | 需复核信号 | 需复核 | 越权（无调用当时快照证据时） | 当前授权无对应路径但历史有允许访问；快照缺失不得升级结论 |
 | Credential List | 凭证清单 | Token 清单 | 权限节点、凭证流 | 挂在 Agent 下的 Token 附属区，不承载授权、不参与流守恒 |
-| Association Scope | 关联口径 | 已确认关联／含候选关联（选项） | **问询计入**（作主工具条标签、分段控件标题或图例前缀） | 访问关系图对 `trust`／`association_status` 的弱入口筛选标签；只影响访问面。主筛选为问询种类／访问等级。见 `docs/specs/lucy-20261102-access-map-audit-echo-spec.md` |
+| Association Scope | 关联口径 | 关联口径：已确认关联（静态披露） | **问询计入**；把「含候选关联」当作访问关系图可切换筛选项 | 访问关系图对 `trust`／`association_status` 的口径披露；固定已确认关联，只影响访问面。主筛选为问询种类／访问等级。见 `docs/specs/lucy-20261105-access-map-confirmed-only-spec.md`（废止可切换含候选） |
 
 以上 v0.25 P1 条目仅登记设计术语（2026-10-25 需求审查已签核通过，设计口径），不表示对应页面、API 或验收已交付。
 

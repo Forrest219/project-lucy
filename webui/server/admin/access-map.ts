@@ -106,7 +106,8 @@ const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
 
 export type AccessMapWindow = "24h" | "168h" | "720h";
 export type AccessMapLayer = "flat" | "schema";
-export type AccessMapTrust = "confirmed" | "include_candidate";
+/** Spec 20261105：关联口径硬锁已确认关联；不再接受 include_candidate。 */
+export type AccessMapTrust = "confirmed";
 export type AccessMapView = "map" | "table";
 export type { AccessMapInquiryKind, AccessMapAccessGradeFilter, EchoRebuildFn };
 
@@ -155,17 +156,49 @@ export type AccessMapQueryParseResult =
 
 const WINDOW_VALUES = new Set<string>(["24h", "168h", "720h"]);
 const LAYER_VALUES = new Set<string>(["flat", "schema"]);
-const TRUST_VALUES = new Set<string>(["confirmed", "include_candidate"]);
 const VIEW_VALUES = new Set<string>(["map", "table"]);
 
-function readParam(
-  input: URLSearchParams | Record<string, string | undefined>,
-  key: string
-): string | null {
-  const raw = input instanceof URLSearchParams ? input.get(key) : input[key];
+type AccessMapQueryInput =
+  | URLSearchParams
+  | Record<string, string | string[] | undefined>;
+
+function readParam(input: AccessMapQueryInput, key: string): string | null {
+  if (input instanceof URLSearchParams) {
+    const raw = input.get(key);
+    if (typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  }
+  const raw = input[key];
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
   return trimmed.length === 0 ? null : trimmed;
+}
+
+/**
+ * Spec 20261105 D12：trust 专用解析。
+ * 仅「键未出现」缺省 confirmed；键出现则 trim 后必须 === "confirmed"。
+ * 禁止走通用 readParam 的空串→null 归并。
+ */
+function parseTrustParam(
+  input: AccessMapQueryInput
+): { ok: true; trust: AccessMapTrust } | { ok: false; message: string } {
+  let values: string[];
+  if (input instanceof URLSearchParams) {
+    if (!input.has("trust")) return { ok: true, trust: "confirmed" };
+    values = input.getAll("trust");
+  } else if (!Object.prototype.hasOwnProperty.call(input, "trust") || input.trust === undefined) {
+    return { ok: true, trust: "confirmed" };
+  } else {
+    const raw = input.trust;
+    values = Array.isArray(raw) ? raw.map(String) : [String(raw)];
+  }
+  for (const value of values) {
+    if (value.trim() !== "confirmed") {
+      return { ok: false, message: "关联口径只接受已确认关联" };
+    }
+  }
+  return { ok: true, trust: "confirmed" };
 }
 
 /**
@@ -173,10 +206,11 @@ function readParam(
  *
  * 非法值一律返回 400（`ok: false`），不做静默纠正 —— 一个被悄悄改写成默认值的
  * 分享链接，会让用户以为「这个 Agent 没有授权路径」，而真相只是拼错了一个参数。
+ *
+ * 路由须传入原始查询串构造的 URLSearchParams（见 routes/access-map.ts），
+ * 不得用 Fastify 折叠后的 request.query 判断 trust 键是否出现。
  */
-export function parseAccessMapQuery(
-  input: URLSearchParams | Record<string, string | undefined>
-): AccessMapQueryParseResult {
+export function parseAccessMapQuery(input: AccessMapQueryInput): AccessMapQueryParseResult {
   const bad = (param: string, message: string): AccessMapQueryParseResult => ({
     ok: false,
     error: { code: "INVALID_ACCESS_MAP_PARAMETER", message, param }
@@ -190,9 +224,9 @@ export function parseAccessMapQuery(
   if (layerRaw !== null && !LAYER_VALUES.has(layerRaw)) {
     return bad("layer", "层级参数只能是 flat 或 schema");
   }
-  const trustRaw = readParam(input, "trust");
-  if (trustRaw !== null && !TRUST_VALUES.has(trustRaw)) {
-    return bad("trust", "访问口径参数只能是 confirmed 或 include_candidate");
+  const trustParsed = parseTrustParam(input);
+  if (!trustParsed.ok) {
+    return bad("trust", trustParsed.message);
   }
   const viewRaw = readParam(input, "view");
   if (viewRaw !== null && !VIEW_VALUES.has(viewRaw)) {
@@ -234,7 +268,7 @@ export function parseAccessMapQuery(
       connection: readParam(input, "connection"),
       window: (windowRaw as AccessMapWindow | null) ?? ACCESS_MAP_DEFAULT_WINDOW,
       layer: (layerRaw as AccessMapLayer | null) ?? "flat",
-      trust: (trustRaw as AccessMapTrust | null) ?? "confirmed",
+      trust: trustParsed.trust,
       inquiryKind: inquiryKindRaw ?? ACCESS_MAP_DEFAULT_INQUIRY_KIND,
       accessGrade: accessGradeRaw ?? ACCESS_MAP_DEFAULT_ACCESS_GRADE,
       view: (viewRaw as AccessMapView | null) ?? "map",
@@ -2152,13 +2186,12 @@ export function createAdminAccessMapProvider(
              FROM access_log al
              JOIN access_log_sources als ON als.access_log_id = al.id
              WHERE al.ts >= ? AND al.ts < ?
-               AND (? = 'include_candidate' OR al.association_status = 'confirmed')
+               AND al.association_status = 'confirmed'
                AND (? IS NULL OR al.token_label = ?)`
           )
           .all(
             input.window.startIso,
             input.window.endIso,
-            input.trust,
             input.tokenLabel,
             input.tokenLabel
           );
@@ -2188,12 +2221,12 @@ export function createAdminAccessMapProvider(
             `SELECT token_label, COUNT(DISTINCT id) AS calls, MAX(ts) AS last_used
              FROM access_log
              WHERE ts >= ? AND ts < ?
-               AND (? = 'include_candidate' OR association_status = 'confirmed')
+               AND association_status = 'confirmed'
                AND token_label IS NOT NULL
                AND ${DEFAULT_USAGE_CONDITION}
              GROUP BY token_label`
           )
-          .all(input.window.startIso, input.window.endIso, input.trust);
+          .all(input.window.startIso, input.window.endIso);
 
         const tokenCallCounts = new Map<string, number>();
         const tokenLastUsed = new Map<string, string>();

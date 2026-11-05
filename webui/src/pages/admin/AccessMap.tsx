@@ -15,19 +15,17 @@ import { Search } from "lucide-react";
 import { apiGet } from "../../lib/apiClient";
 import { PageHeader } from "../../components/PageHeader";
 import { AccessMapCanvas } from "../../components/admin/AccessMapCanvas";
-import { AccessMapLegend } from "../../components/admin/AccessMapLegend";
+import { AccessMapLegend, AccessMapLegendMeta } from "../../components/admin/AccessMapLegend";
 import { AccessMapTable } from "../../components/admin/AccessMapTable";
 import {
   ACCESS_MAP_ACCESS_GRADE_OPTIONS,
   ACCESS_MAP_DEFAULT_ACCESS_GRADE,
   ACCESS_MAP_DEFAULT_INQUIRY_KIND,
   ACCESS_MAP_INQUIRY_KIND_OPTIONS,
-  ACCESS_MAP_TRUST_HINT,
   accessMapAccessGradeLabel,
   accessMapCoverageCompressedText,
   accessMapGrantProblemLabel,
   accessMapInquiryKindLabel,
-  accessMapTrustLabel,
   accessMapWindowLabel,
   type AccessMapAccessGradeFilter,
   type AccessMapHourlyDetail,
@@ -60,7 +58,6 @@ const FILTER_RESET_OFFSET_KEYS = new Set([
   "connection",
   "window",
   "layer",
-  "trust",
   "inquiryKind",
   "accessGrade",
   "view",
@@ -81,6 +78,14 @@ function useAccessMapParams(): {
   const queryString = useMemo(() => {
     const next = new URLSearchParams();
     for (const key of PARAM_KEYS) {
+      // Spec 20261105 D13：首屏非法 trust（含空串／重复键）原样发给 API，不得先删改。
+      if (key === "trust") {
+        if (!searchParams.has("trust")) continue;
+        for (const value of searchParams.getAll("trust")) {
+          next.append("trust", value);
+        }
+        continue;
+      }
       const value = searchParams.get(key);
       if (value) next.set(key, value);
     }
@@ -96,6 +101,8 @@ function useAccessMapParams(): {
       else next.set(key, value);
       if (FILTER_RESET_OFFSET_KEYS.has(key) && key !== "detailOffset") {
         next.delete("detailOffset");
+        // Spec D13：用户主动改其它筛选时省略 trust（不再掩盖首屏 400 的地址栏）。
+        next.delete("trust");
       }
       setSearchParams(next, { replace: false });
     }
@@ -112,48 +119,23 @@ function errorMessageOf(error: unknown): string {
 
 type ResidentLineProps = {
   meta: AccessMapMeta;
-  trustValue: "confirmed" | "include_candidate";
   inquiryKindValue: AccessMapInquiryKindFilter;
   accessGradeValue: AccessMapAccessGradeFilter;
-  onTrustChange: (next: string) => void;
 };
 
-/** 图下／表上常驻口径行：现状 + 窗口起止 + 覆盖率压缩句 + 快照哈希 + 关联口径控件。 */
+/** 图下／表上常驻口径行：现状 + 窗口起止 + 覆盖率压缩句 + 快照哈希（关联口径为静态披露）。 */
 function AccessMapResidentLine({
   meta,
-  trustValue,
   inquiryKindValue,
-  accessGradeValue,
-  onTrustChange
+  accessGradeValue
 }: ResidentLineProps) {
   return (
     <div
       className="flex flex-col gap-2 rounded-md border border-border-default bg-bg-subtle px-3 py-2 text-xs text-fg-muted"
       data-testid="access-map-resident-line"
     >
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-fg-muted" htmlFor="access-map-trust-select">
-            关联口径
-          </label>
-          <select
-            id="access-map-trust-select"
-            className="pl-input max-w-xs"
-            aria-label="关联口径"
-            data-testid="access-map-trust"
-            value={trustValue}
-            onChange={(event) => onTrustChange(event.target.value)}
-          >
-            <option value="confirmed">已确认关联</option>
-            <option value="include_candidate">含候选关联</option>
-          </select>
-        </div>
-        <p className="max-w-xl text-[11px] leading-snug" data-testid="access-map-trust-hint">
-          {ACCESS_MAP_TRUST_HINT}
-        </p>
-      </div>
       <p data-testid="access-map-filter-status">
-        关联口径：{accessMapTrustLabel(trustValue)} · 问询种类：
+        关联口径：已确认关联 · 问询种类：
         {accessMapInquiryKindLabel(inquiryKindValue)} · 访问等级：
         {accessMapAccessGradeLabel(accessGradeValue)}
       </p>
@@ -259,7 +241,6 @@ export function AccessMap() {
   const focusNodeId = get("focus");
   const windowValue = get("window") ?? "168h";
   const layerValue = get("layer") ?? "flat";
-  const trustValue = (get("trust") ?? "confirmed") as "confirmed" | "include_candidate";
   const inquiryKindRaw = get("inquiryKind");
   const inquiryKindValue: AccessMapInquiryKindFilter =
     (inquiryKindRaw as AccessMapInquiryKindFilter | null) ?? ACCESS_MAP_DEFAULT_INQUIRY_KIND;
@@ -314,10 +295,8 @@ export function AccessMap() {
     response && !grantUnavailable ? (
       <AccessMapResidentLine
         meta={response.meta}
-        trustValue={trustValue}
         inquiryKindValue={inquiryKindValue}
         accessGradeValue={accessGradeValue}
-        onTrustChange={(next) => setParam("trust", next)}
       />
     ) : null;
 
@@ -582,6 +561,7 @@ export function AccessMap() {
           ) : (
             <>
               <AccessMapLegend />
+              <AccessMapLegendMeta meta={response.meta} />
               <AccessMapCanvas
                 nodes={response.render.nodes}
                 edges={response.render.edges}

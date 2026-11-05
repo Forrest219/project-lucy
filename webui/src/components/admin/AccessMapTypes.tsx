@@ -133,7 +133,7 @@ export type AccessMapMeta = {
   };
   access: {
     state: "ok" | "unavailable";
-    trust: "confirmed" | "include_candidate";
+    trust: "confirmed";
     deniedCalls: number;
     rawCalls: number;
     reason?: string;
@@ -295,8 +295,10 @@ export const ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CALLS = "调用情况暂不可�
 export const ACCESS_MAP_CONFIRMED_UNAUTHORIZED_HOVER_NOTE =
   "（确凿越权：调用当时授权亦不覆盖）";
 
-export function accessMapTrustLabel(trust: "confirmed" | "include_candidate"): string {
-  return trust === "include_candidate" ? "含候选关联" : "已确认关联";
+
+/** Spec 20261105：固定已确认关联；保留函数供旧测试／文案辅助，不再映射含候选。 */
+export function accessMapTrustLabel(_trust: "confirmed" | string = "confirmed"): string {
+  return "已确认关联";
 }
 
 /**
@@ -370,10 +372,6 @@ export const ACCESS_MAP_ACCESS_GRADE_OPTIONS: ReadonlyArray<{ value: string; lab
 
 export const ACCESS_MAP_DEFAULT_INQUIRY_KIND: AccessMapInquiryKindFilter = "management";
 export const ACCESS_MAP_DEFAULT_ACCESS_GRADE: AccessMapAccessGradeFilter = "exclude_connect";
-
-/** 弱入口关联口径说明（Spec §5.2）。 */
-export const ACCESS_MAP_TRUST_HINT =
-  "授权连接始终显示。关联口径只影响访问面：默认只计已确认关联；含候选关联时，候选关联上的允许调用也计入访问。";
 
 /** 快照覆盖率的可读表述；低覆盖率不得被读成低越权率（§4.9 / SC-13）。 */
 export function accessMapCoverageText(coverage: AccessMapCoverage): string {
