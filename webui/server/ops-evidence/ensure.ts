@@ -4,7 +4,10 @@
  * Spec 20261104 §4.2 — 重排：先落资产并镜像，再按 Manifest 收敛 enabled_tables。
  *
  * 幂等：块已一致且戳与摘要相同 → `readiness = current`；否则 `reload_required`。
- * **不**启动 KTX，**不**提交 Spec 191 的重载请求，**不**写 `access.yaml`。
+ * **不**启动 KTX，**不**提交 Spec 191 的重载请求。
+ * `access.yaml` 仅在成功返回前缺则创建正式 Role `lucy_ops_reader`
+ * （`docs/specs/lucy-20261105-customer-default-system-roles-spec.md` §3.2.1）。
+ * conflict / not_ready 提前返回不写。已存在的 Role 不覆盖。
  *
  * 执行顺序（Spec 20261104 §4.2）：
  *
@@ -14,6 +17,7 @@
  * 4. 镜像到项目根 —— 失败则 `not_ready`
  * 5. 按项目根 Manifest 收敛 `enabled_tables`
  * 6. 就绪判定
+ * 7. 状态表允许时缺则写入 `lucy_ops_reader`
  */
 
 import {
@@ -42,6 +46,7 @@ import {
   type OpsEvidenceAssetResult
 } from "./assets.js";
 import { recordOpsEvidenceEnsureState } from "./readiness.js";
+import { ensureLucyOpsReaderFormalRole } from "../admin/ensure-system-formal-roles.js";
 
 export interface OpsEvidenceEnsureResult {
   projectRoot: string;
@@ -204,6 +209,13 @@ export async function ensureOpsEvidence(
     readiness: readinessState.readiness,
     detail: readinessState.detail
   });
+
+  if (
+    (blockState.write === "inserted" || blockState.write === "expanded" || blockState.write === "unchanged") &&
+    (readinessState.readiness === "current" || readinessState.readiness === "reload_required")
+  ) {
+    await ensureLucyOpsReaderFormalRole({ projectRoot });
+  }
 
   return {
     projectRoot,

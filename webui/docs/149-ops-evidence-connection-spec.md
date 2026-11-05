@@ -94,7 +94,7 @@ Protected DOM：`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`
 - 不自动把 `lucy-ops` 加入业务 Role、`demo_readonly` 或 `lucy_admin`。
 - 不灌审计历史，不加第四张示例表，不改三张 Superstore 表的数据、语义和 Wiki。
 - 不修改 `examples/postgres-demo/`、`examples/executive-poc/`、`customer-config.example/`。
-- 确保逻辑不写 `access.yaml`。平滑升级不补写 `demo_ops`。
+- 确保逻辑默认不写 `access.yaml`。**例外**（缺则创建正式 `lucy_ops_reader`）见 [`docs/specs/lucy-20261105-customer-default-system-roles-spec.md`](../../docs/specs/lucy-20261105-customer-default-system-roles-spec.md)；旧句「确保逻辑不写 access.yaml」作为**绝对值已作废，不得当作现值**。平滑升级不补写 `demo_ops`。
 - 不把两拍放进 `smoke:p0:demo` 的数值 gold，不做自然语言评测 gold。
 - 不把四个通道工具收成「只能读这一篇」。其他 `roles_allowed: ["*"]` 的已发布对象仍按 Spec 151 可读。本 Spec 不修改那些对象的 ACL。
 
@@ -294,9 +294,11 @@ connectionVisible(role, "lucy-ops"):
 
 ## 7. 连接配置
 
-确保写入的块：`driver: sqlite`，`readonly: true`，`database` 为当前审计库绝对路径，`schemas: [main]`，`enabled_tables` 为冻结后的 physicalTable **全集**（含可问治理面新增物理名）。禁止调用 `createConnection`。不改 `database_connection_ids`，不改其他连接，**永不写 `access.yaml`**。
+确保写入的块：`driver: sqlite`，`readonly: true`，`database` 为当前审计库绝对路径，`schemas: [main]`，`enabled_tables` 为冻结后的 physicalTable **全集**（含可问治理面新增物理名）。禁止调用 `createConnection`。不改 `database_connection_ids`，不改其他连接。
 
-**已有 `lucy-ops` 且 driver／路径／readonly 一致时（可问治理面修订）**：必须把 `enabled_tables` **并集扩展**为当前冻结全集（幂等；不删用户额外表名）。不得因「块已存在」跳过表集扩展。正式 Role 表选择器仍须运营显式扩权（ensure 不改 Role 字节）。
+**`access.yaml` 写盘：** 连接 ensure **默认**不改 `access.yaml`。**例外**见 [`docs/specs/lucy-20261105-customer-default-system-roles-spec.md`](../../docs/specs/lucy-20261105-customer-default-system-roles-spec.md)：连接 ensure **成功**且缺正式 Role `lucy_ops_reader` 时，缺则写入规范定义；已存在不覆盖。旧句「ensure 永不写 `access.yaml`」在**该例外范围内已作废，不得当作现值**；对连接块以外的其它 ACL、以及对**已存在** `lucy_ops_reader` 的表选择器扩权，仍不得由 ensure 改写。
+
+**已有 `lucy-ops` 且 driver／路径／readonly 一致时（可问治理面修订）**：必须把 `enabled_tables` **并集扩展**为当前冻结全集（幂等；不删用户额外表名）。不得因「块已存在」跳过表集扩展。已存在正式 Role 的表选择器仍须运营显式扩权（ensure 不改已存在 Role 字节）。
 
 不一致：已存在的 `lucy-ops` 其 `driver` 不是 `sqlite`，或 `database` 不是当前审计库绝对路径，或 `readonly` 不是 `true`。不覆盖原块。状态为 `conflict`。目录不列出该连接。`lucy_query` 返回 `OPS_EVIDENCE_CONNECTION_CONFLICT`。警告文案仍是「运维问数连接配置不一致，未改写」。三种不一致都拒绝查询，不只记录日志。
 
@@ -351,7 +353,11 @@ ensureOpsEvidence():
     readiness = not_ready
     return
 
-  do not write access.yaml, wiki/global, or data-qa-instructions.md
+  # access.yaml: default do not write; exception = ensure missing formal
+  # lucy_ops_reader per lucy-20261105-customer-default-system-roles-spec
+  # (only when connectionWrite∈{inserted,expanded,unchanged} ∧
+  #  readiness∈{current,reload_required}). Never write wiki/global or
+  # data-qa-instructions.md.
 
 readinessAfterEnsure(connectionWrite):
   if readiness is already conflict or not_ready:
@@ -470,7 +476,7 @@ WHERE <defaultUsageConditionSql('access_log')>
 | SC-08 | 已有块的 driver、路径、`readonly` 分别错误 | 原块保留；目录无该连接；查询返回 `OPS_EVIDENCE_CONNECTION_CONFLICT` |
 | SC-09 | 目标与模板字节相同；或目标是草稿、`roles_allowed: ["*"]`、损坏的 frontmatter | 字节相同则不改写。其余三类字节也不变，并记 `OPS_EVIDENCE_ASSET_CONFLICT`。不宣称 SC-16 对冲突文件成立 |
 | SC-10 | `lucy_admin` 与 Docker demo 的星号 Role | 编译后的连接集不含 `lucy-ops` |
-| SC-11 | 确保前后 | `access.yaml` 整文件字节不变 |
+| SC-11 | 确保前后与 `access.yaml` | **有效口径见** [`lucy-20261105-customer-default-system-roles-spec.md`](../../docs/specs/lucy-20261105-customer-default-system-roles-spec.md) SC-03／SC-05：缺 `lucy_ops_reader` 时可仅新增该 Role 块；已存在则该块与其它 ACL 不变。旧句「整文件字节不变」**已作废，不得当作现值** |
 | SC-12 | 协议调用，以及 `eval_mark` 为真且参数含 `demo-mysql` 的调用 | 都不在视图中 |
 | SC-13 | `eval_mark` 为空、连接 `demo-mysql`、表为订单表的 `ok` 调用 | 出现在 `ops_call_tables` |
 | SC-14 | 模板 Skill 与 Wiki | ACL 只有 `lucy_ops_reader`。正文含：只回答活跃 Agent、不把 `token_label` 去重称为业务活跃 Token、访问账户不在本连接、`call_day` 是 UTC、生成 SQL 不作为默认分组 |

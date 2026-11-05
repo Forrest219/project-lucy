@@ -195,7 +195,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Role Table Selector | 可访问的表范围 | 表授权范围 | Table Selectors（裸露）、selector（主按钮文案） | `allow.tableSelectors` |
 | Confirm Permission Changes | 确认权限变更 | 权限变更确认 | 变更预览（作为一级页签）、权限审批 | Role dryRun 成功后、正式写入前的结构化确认 Drawer（Spec 150） |
 | Catalog Bound Scope | 启用目录绑定 | catalog_bound、目录通配 | `tables: ["*"]`、静默 prefix 扩权、全连接 `*` | Spec 131：`allow.source_scope: catalog_bound`；仅已声明 connections ∩ enabled_tables |
-| Lucy Admin Role | Lucy 运维数据面角色 | lucy_admin | WebUI 所有者、登录管理员、超管（作本 Role 主称） | Spec 131 预置 MCP 数据面 Role / 参考模板；与 WebUI Admin 正交 |
+| Lucy Admin Role | Lucy 运维数据面角色 | lucy_admin | WebUI 所有者、登录管理员、超管（作本 Role 主称） | Spec 131 参考模板 + [`lucy-20261105-customer-default-system-roles-spec.md`](../../docs/specs/lucy-20261105-customer-default-system-roles-spec.md) 客户种子／ensure 可落盘正式 Role；与 WebUI Admin 正交 |
 | Exact Table Names | 指定表名 | 精确授权这些表 | names（裸露 radio） | selector `names` |
 | Table Name Prefix | 按前缀匹配 | 前缀批量授权 | prefix（裸露 radio） | selector `prefix`；UI 标为高级 |
 | Role Capability Filter | 按能力筛选 | 按连接 / 工具 / 表筛选 | 功能筛选（与状态筛选混淆） | `/admin/roles` 次级筛选维 |
@@ -703,7 +703,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | View Query Artifact | 查看查询原文 | — | 作为生成 SQL 的唯一入口 | Spec 124 legacy；Spec 125 改为列表直展 |
 | Generated SQL | 生成 SQL | compiled SQL | 热库 SQL 原文（过宽）、raw SQL | Spec 125：`lucy_query` 编译结果；热库 `generated_sql`；调用流水列 / CSV |
 | Ops Evidence Connection | 运维问数连接 | 连接 ID `lucy-ops` | 管理员连接、默认业务连接、审计库连接（作卡片主称） | Spec 149：指向审计热库只读视图的系统连接；不进入 `database_connection_ids` |
-| Ops Evidence Role | 运维问数角色 | `lucy_ops_reader` | Lucy 运维数据面角色、WebUI 所有者、登录管理员（作本 Role 主称） | Spec 149 + 可问治理面：参考模板须列出全部运维问数 sourceName；与 `lucy_admin` 正交。ensure 永不写 `access.yaml` |
+| Ops Evidence Role | 运维问数角色 | `lucy_ops_reader` | Lucy 运维数据面角色、WebUI 所有者、登录管理员（作本 Role 主称） | Spec 149 + 可问治理面：参考模板须列出全部运维问数 sourceName；与 `lucy_admin` 正交。ensure **不改已存在**正式 Role；缺失时缺则创建见 [`lucy-20261105-customer-default-system-roles-spec.md`](../../docs/specs/lucy-20261105-customer-default-system-roles-spec.md)。旧句「ensure 永不写 access.yaml」作为**绝对值已作废，不得当作现值** |
 | Ops Evidence Skill | 运维问数 Skill | Skill 名 `ops-questioning` | 业务 Skill（作本篇主称）、全局 Skill | Spec 149 v1.2 + 可问治理面：只授权给运维问数角色的已发布 Skill；口径不进全局 Wiki。禁止 `token_label` 去重称为业务活跃 Token 或可用 Token 人口 |
 | Demo Ops Agent | 演示运维问数 Agent | 用户 ID `demo_ops` | 把 `demo_readonly` 或 `lucy_admin` 当作本 Agent | Spec 149 v1.2：只存在于 Docker demo 模板；不在启动时创建 |
 

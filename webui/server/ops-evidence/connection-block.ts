@@ -14,7 +14,11 @@
  * **没有 Manifest 约束就不写 enabled_tables**：本模块不再提供无约束的
  * 盲目 union（Spec 20261104 §1 的根因）。
  *
- * **永不写 `access.yaml`**（正式 Role 扩权由运营显式完成）。
+ * **本模块不写 `access.yaml`。** 正式 Role `lucy_ops_reader` 的缺则创建例外
+ * 在 `ensureOpsEvidence` 成功返回前，见
+ * `docs/specs/lucy-20261105-customer-default-system-roles-spec.md` §3.2。
+ * 旧句「永不写 access.yaml」作为绝对值已作废，不得当作现值。
+ * 已存在的正式 Role 仍不由连接块或 ensure 扩权。
  */
 
 import { readFile } from "node:fs/promises";

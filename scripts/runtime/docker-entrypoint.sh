@@ -196,7 +196,8 @@ seed_project() {
   fi
   sync_context_from_template
   patch_demo_skill_tools
-  patch_lucy_admin_tools
+  # 客户与 demo 都在对外服务前补齐正式 lucy_admin。已存在只追加缺失工具名。
+  ensure_system_formal_role lucy_admin
   mkdir -p "${PROJECT_ROOT}/.ktx/secrets" "${PROJECT_ROOT}/.ktx-ui" "${SEED_STATE_DIR}"
   printf "%s\n" "${LUCY_BUNDLED_KTX_VERSION:-unknown}" > "${SEED_STATE_DIR}/bundled-ktx-version"
 }
@@ -303,53 +304,24 @@ console.log(`[lucy] patched demo_readonly tools (+${inserted}) in ${path}`);
 JS
 }
 
-# Existing volumes keep access.yaml. Idempotently grant lucy_admin every
-# non-denied MCP tool added after the role was first seeded.
-patch_lucy_admin_tools() {
-  case "${TEMPLATE_ROOT}" in
-    */examples/docker-demo/project-template) ;;
-    *) return 0 ;;
-  esac
-  local access_yaml="${PROJECT_ROOT}/webui/config/access.yaml"
-  [[ -f "${access_yaml}" ]] || return 0
-  node - "${access_yaml}" <<'JS'
-const fs = require("fs");
-const path = process.argv[2];
-let text = fs.readFileSync(path, "utf8");
-const tools = [
-  "sl_validate",
-  "lucy_skill_search",
-  "lucy_skill_read",
-  "lucy_certified_route",
-  "lucy_report_template",
-  "lucy_continue_question"
-];
-const roleMarker = /^(\s*)lucy_admin:\s*$/m;
-const match = roleMarker.exec(text);
-if (!match) process.exit(0);
-const roleIndent = match[1] ?? "";
-const roleStart = match.index;
-const afterRole = text.slice(roleStart + match[0].length);
-const nextRole = afterRole.search(new RegExp(`^${roleIndent}\\S`, "m"));
-const roleBlockEnd = nextRole === -1 ? text.length : roleStart + match[0].length + nextRole;
-let roleBlock = text.slice(roleStart, roleBlockEnd);
-const toolsMatch = roleBlock.match(/^(\s*)tools:\s*$/m);
-if (!toolsMatch) process.exit(0);
-const listIndent = `${toolsMatch[1]}  `;
-let inserted = 0;
-for (const tool of tools) {
-  if (roleBlock.includes(`- ${tool}`)) continue;
-  roleBlock = roleBlock.replace(
-    /^(\s*tools:\s*\n(?:[ \t]*-[ \t]+\S+[ \t]*\n)*)/m,
-    `$1${listIndent}- ${tool}\n`
-  );
-  inserted += 1;
-}
-if (inserted === 0) process.exit(0);
-const out = text.slice(0, roleStart) + roleBlock + text.slice(roleBlockEnd);
-fs.writeFileSync(path, out);
-console.log(`[lucy] patched lucy_admin tools (+${inserted}) in ${path}`);
-JS
+# 正式 lucy_admin：全模板路径。缺则按规范块创建；已存在只追加缺失工具。
+# 闸拒绝或写失败只告警，不阻断启动。lucy_ops_reader 不在这里写。
+ensure_system_formal_role() {
+  local which="$1"
+  local cli="${WEBUI_ROOT}/server/admin/ensure-system-formal-roles-cli.ts"
+  local tsx_bin="${WEBUI_ROOT}/node_modules/.bin/tsx"
+  if [[ ! -f "${cli}" ]]; then
+    echo "[lucy] warning: system formal role CLI not found; ${which} was not ensured" >&2
+    return 0
+  fi
+  if [[ ! -x "${tsx_bin}" ]]; then
+    echo "[lucy] warning: tsx is not available; ${which} was not ensured" >&2
+    return 0
+  fi
+  if ! "${tsx_bin}" "${cli}" "${which}"; then
+    echo "[lucy] warning: ${which} formal role ensure failed" >&2
+  fi
+  return 0
 }
 
 count_files() {

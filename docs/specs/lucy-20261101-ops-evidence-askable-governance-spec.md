@@ -33,7 +33,7 @@
 | 原项 | 处置 |
 |---|---|
 | SC-17f 升级 runbook「检查正式 Role 表选择器」 | 不在本条出口。Wiki 仍写明已落盘 Role 须显式扩表；客户升级说明归交付，不进功能合同 |
-| SC-17d 扩权后的现场查询 | 不单开旅程。扩权后能否查由 Spec 149 表选择器决定；本条只锁模板列全名、ensure 不写 `access.yaml`、未列入名的源不在该 Role 允许集 |
+| SC-17d 扩权后的现场查询 | 不单开旅程。扩权后能否查由 Spec 149 表选择器决定；本条只锁模板列全名、ensure **不改已存在** Role 表选择器（D22）、未列入名的源不在该 Role 允许集；缺失 Role 缺则创建见客户默认系统正式 Role Spec |
 | SC-19 四门禁 + 落盘清单 11 项 | 收口过程记录，写在收口审阅，不是用户可观察承诺 |
 | v0.25 升级台账、镜像、Helm、客户环境 | 继续不进入本条；不因收口而视为可部署到客户 |
 
@@ -162,7 +162,7 @@ Protected 标识（回答中保持原文）：`Agent`、`Token`、`MCP`、`lucy-
 | D19 | 表活跃率＝`active_days/denom_days`。`active_days`＝窗内 Asia/Shanghai 日中至少 1 条 access_path 触达日数；`denom_days`＝`[start,end)` 相交上海日历日数（<1 则不可用）；deny 不计；评测跟随 Spec 187；比率>1＝实现错；新表仍用全窗分母并披露 `days_online_in_window` |
 | D20 | §5.4 为可问治理清单；字段名与 builder／投影对齐；**删除**「与图页逐格对等」合同 |
 | D21 | 新源继承 Spec 149 禁列 + 禁快照原文／问询原文 |
-| D22 | **PM 定夺 A（2026-11-01）**：ensure **只**扩 `lucy-ops.enabled_tables`、升级标准语义／Skill／Wiki（冲突保留并 `unready`）；**永不写 `access.yaml`**（不自动改正式 Role／Agent）。参考模板 `lucy_ops_reader` 必须列出本条全部 sourceName（新装／从模板新建才带齐）。**已落盘**的正式 Role 须管理员显式扩表选择器或重建／改绑。不采用自动迁移补表名。升级 runbook 的现场检查不在本条出口（v0.9.2 拆出）。控制面改 Role 另议，不堵本条。**v0.9.3 短修订（2026-11-04）**：升级标准语义包含「官方历史 stock 资产 → 覆盖为当前模板」（`upgraded`）；`enabled_tables` 的扩展**以本地 Manifest 物理表为上限**。见 [Manifest 升级自愈 Spec](lucy-20261104-lucy-ops-manifest-upgrade-heal-spec.md) |
+| D22 | **PM 定夺 A（2026-11-01）**：ensure **只**扩 `lucy-ops.enabled_tables`、升级标准语义／Skill／Wiki（冲突保留并 `unready`）；**不**自动改**已存在**正式 Role／Agent 的 `access.yaml` 字节。参考模板 `lucy_ops_reader` 必须列出本条全部 sourceName（新装／从模板新建才带齐）。**已落盘**的正式 Role 须管理员显式扩表选择器或重建／改绑。不采用自动迁移补表名。升级 runbook 的现场检查不在本条出口（v0.9.2 拆出）。控制面改 Role 另议，不堵本条。**v0.9.3 短修订（2026-11-04）**：升级标准语义包含「官方历史 stock 资产 → 覆盖为当前模板」（`upgraded`）；`enabled_tables` 的扩展**以本地 Manifest 物理表为上限**。见 [Manifest 升级自愈 Spec](lucy-20261104-lucy-ops-manifest-upgrade-heal-spec.md)。**v0.9.4 指针（2026-11-05）**：缺失正式 `lucy_ops_reader` 的缺则创建例外见 [`lucy-20261105-customer-default-system-roles-spec.md`](lucy-20261105-customer-default-system-roles-spec.md)；旧句「永不写 access.yaml」作为**绝对值已作废，不得当作现值** |
 | D23 | **PM 定夺 E（2026-11-01）**：`ops_tokens` 调用量按 `(agent_id, token_label)` 计默认用量。**本条不修改** access-map 图凭证清单聚合。不问数与图凭证数字对账。Wiki 披露两者可能不一致、以问数为准谈 Agent 用量。仍禁止 label 去重当人口；同 Agent 删建同 label 不可区分前后凭证 |
 | D24 | 治理源缺省窗＝`gov.calendar_days=30`（上海）。亦支持 24／168h、`calendar_days` 7／30、或显式 ISO 半开窗。调用活跃名单的日粒可用 UTC `call_day`，须在回答写明 |
 | D25 | **查询键 `query_key`**＝稳定哈希(`startIso,endIso,trust,filtersDigest,accessConfigVersion,policyVersion,sourceMapVersion,capabilityDigest`)。**不等于**物化代次 |
@@ -317,7 +317,7 @@ ensure / 升级
   ├─ enabled_tables ∪ 新物理名          ✅（且 ⊆ 本地 Manifest 物理表）
   ├─ 标准语义／Skill／Wiki 可识别升级    ✅（官方历史 stock → upgraded；定制 → 冲突保留）
   ├─ 自定义资产冲突 → 治理源 unready    ✅（旧两视图仍可用）
-  └─ 改 access.yaml 正式 Role           ❌ 禁止
+  └─ 改已存在 access.yaml 正式 Role     ❌ 禁止（缺失 lucy_ops_reader 缺则创建见客户默认系统正式 Role Spec）
 
 运营（显式）
   └─ 编辑已有 lucy_ops_reader（或等价）表选择器
@@ -397,7 +397,7 @@ Wiki 必含：图≠论述；三套 Agent／Token 人口、§4.2≠189、Q4 MECE
 | 两视图默认用量 | 保留；查询分支独立（D13／N01） |
 | SELECT 禁列 | 扩至全部新源 |
 | ensure 不扩展已有连接表集 | **修订**：必须扩展 `enabled_tables`，但**以本地 Manifest 物理表为上限**（v0.9.3） |
-| ensure 不写 access.yaml | **保留**；Role 扩权运营显式（D22） |
+| ensure 不写已存在 Role／不自动扩表 | **保留**（D22）；缺失 `lucy_ops_reader` 缺则创建见 [`lucy-20261105-customer-default-system-roles-spec.md`](lucy-20261105-customer-default-system-roles-spec.md) |
 
 ---
 

@@ -2,19 +2,23 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
+const require = createRequire(path.join(repoRoot, "webui/package.json"));
+const { parse: parseYaml } = require("yaml");
+
 const entrypoint = path.join(repoRoot, "scripts/runtime/docker-entrypoint.sh");
 
 async function makeRoot(prefix) {
   return await mkdtemp(path.join(tmpdir(), prefix));
 }
 
-function runSeedOnly(templateRoot, projectRoot) {
+function runSeedOnly(templateRoot, projectRoot, extraEnv = {}) {
   return spawnSync("bash", [entrypoint], {
     cwd: repoRoot,
     env: {
@@ -23,7 +27,8 @@ function runSeedOnly(templateRoot, projectRoot) {
       LUCY_TEMPLATE_ROOT: templateRoot,
       KTX_PROJECT_ROOT: projectRoot,
       LUCY_BUNDLED_KTX_VERSION: "test-version",
-      LUCY_ENTRYPOINT_SEED_ONLY: "1"
+      LUCY_ENTRYPOINT_SEED_ONLY: "1",
+      ...extraEnv
     },
     encoding: "utf8"
   });
@@ -239,7 +244,12 @@ test("entrypoint keeps historical access.yaml tokens when ktx.yaml is missing", 
 
   const result = runSeedOnly(templateRoot, projectRoot);
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8"), historical);
+  const doc = parseYaml(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8"));
+  assert.equal(doc.users.length, 1);
+  assert.equal(doc.users[0].id, "alice");
+  assert.deepEqual(doc.users[0].tokens, [{ hash: "sha256:historical", label: "laptop" }]);
+  assert.equal(doc.users.some((user) => user.id === "demo"), false);
+  assert.equal(doc.roles.lucy_admin.allow.source_scope, "catalog_bound");
 
   await rm(root, { recursive: true, force: true });
 });
@@ -472,7 +482,14 @@ test("entrypoint seeds the ops evidence connection before the daemon starts (SC-
   await rm(root, { recursive: true, force: true });
 });
 
-test("entrypoint grants lucy_continue_question to an existing demo lucy_admin role", async () => {
+test("entrypoint ensures lucy_admin for every template instead of the demo-only patch", async () => {
+  const source = await readFile(entrypoint, "utf8");
+  assert.match(source, /ensure_system_formal_role lucy_admin/);
+  assert.match(source, /patch_demo_skill_tools/);
+  assert.doesNotMatch(source, /patch_lucy_admin_tools/);
+});
+
+test("entrypoint appends missing lucy_admin tools without rewriting an existing role", async () => {
   const root = await makeRoot("lucy-entrypoint-admin-continue-");
   const templateRoot = path.join(root, "examples/docker-demo/project-template");
   const projectRoot = path.join(root, "project");
@@ -503,22 +520,92 @@ test("entrypoint grants lucy_continue_question to an existing demo lucy_admin ro
     allow:
       tools:
         - lucy_begin_question
+users:
+  - id: customer_agent
+    name: Customer Agent
+    enabled: true
+    note: keep
+    role: chatbi-analyst
+    tokens: []
 `;
   await writeFile(path.join(projectRoot, "webui/config/access.yaml"), accessYaml);
+  const auditDb = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
 
-  const first = runSeedOnly(templateRoot, projectRoot);
+  const first = runSeedOnly(templateRoot, projectRoot, { LUCY_AUDIT_DB: auditDb });
   assert.equal(first.status, 0, first.stderr);
-  assert.match(first.stdout, /patched lucy_admin tools \(\+1\)/);
+  assert.match(first.stdout, /lucy_admin wrote=true branch=B/);
   const patched = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
-  const adminBlock = patched.slice(patched.indexOf("lucy_admin:"), patched.indexOf("chatbi-analyst:"));
-  assert.match(adminBlock, /- lucy_continue_question\n/);
-  assert.equal(adminBlock.split("- lucy_continue_question").length - 1, 1);
-  assert.doesNotMatch(patched.slice(patched.indexOf("chatbi-analyst:")), /lucy_continue_question/);
+  const doc = parseYaml(patched);
+  assert.equal(doc.roles.lucy_admin.description, "平台运维数据面");
+  assert.deepEqual(doc.roles.lucy_admin.allow.connections, ["demo-mysql"]);
+  assert.equal(doc.roles.lucy_admin.allow.source_scope, "catalog_bound");
+  assert.deepEqual(doc.roles.lucy_admin.allow.tools.slice(0, 8), [
+    "lucy_catalog",
+    "lucy_query",
+    "lucy_begin_question",
+    "sl_validate",
+    "lucy_skill_search",
+    "lucy_skill_read",
+    "lucy_certified_route",
+    "lucy_report_template"
+  ]);
+  assert.equal(doc.roles.lucy_admin.allow.tools.filter((tool) => tool === "lucy_continue_question").length, 1);
+  assert.ok(doc.roles.lucy_admin.allow.tools.includes("lucy_read_source"));
+  assert.deepEqual(doc.roles["chatbi-analyst"].allow.tools, ["lucy_begin_question"]);
+  assert.equal(doc.users.length, 1);
+  assert.equal(doc.users[0].id, "customer_agent");
+  assert.equal(doc.users[0].role, "chatbi-analyst");
+  assert.equal(doc.users.some((user) => user.id === "demo_ops"), false);
   assert.doesNotMatch(patched, /lucy_ops_connection_tables|lucy_ops_source_import/);
 
-  const second = runSeedOnly(templateRoot, projectRoot);
+  const second = runSeedOnly(templateRoot, projectRoot, { LUCY_AUDIT_DB: auditDb });
   assert.equal(second.status, 0, second.stderr);
-  assert.doesNotMatch(second.stdout, /patched lucy_admin tools/);
+  assert.match(second.stdout, /lucy_admin wrote=false/);
+  assert.equal(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8"), patched);
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("entrypoint creates a missing lucy_admin on a non-demo template", async () => {
+  const root = await makeRoot("lucy-entrypoint-admin-create-");
+  const templateRoot = path.join(root, "template");
+  const projectRoot = path.join(root, "project");
+  await mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
+  await mkdir(path.join(projectRoot, "webui/config"), { recursive: true });
+  await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n");
+  const accessYaml = `roles:
+  customer_readonly:
+    description: example
+    allow:
+      tools:
+        - lucy_query
+users:
+  - id: customer_agent
+    name: Customer Agent
+    enabled: true
+    note: keep
+    role: customer_readonly
+    tokens: []
+`;
+  await writeFile(path.join(projectRoot, "webui/config/access.yaml"), accessYaml);
+  const auditDb = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+
+  const first = runSeedOnly(templateRoot, projectRoot, { LUCY_AUDIT_DB: auditDb });
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /lucy_admin wrote=true branch=A/);
+  const patched = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+  const doc = parseYaml(patched);
+  assert.equal(doc.roles.lucy_admin.permission_model_version, 2);
+  assert.equal(doc.roles.lucy_admin.allow.source_scope, "catalog_bound");
+  assert.deepEqual(doc.roles.lucy_admin.allow.connections, ["*"]);
+  assert.equal(doc.users.length, 1);
+  assert.equal(doc.users[0].role, "customer_readonly");
+  assert.equal(doc.users.some((user) => user.id === "demo_ops"), false);
+
+  const second = runSeedOnly(templateRoot, projectRoot, { LUCY_AUDIT_DB: auditDb });
+  assert.equal(second.status, 0, second.stderr);
   assert.equal(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8"), patched);
 
   await rm(root, { recursive: true, force: true });

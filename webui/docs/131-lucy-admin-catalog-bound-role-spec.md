@@ -131,11 +131,11 @@ Demo 模板 `examples/docker-demo/project-template/webui/config/access.yaml` 已
 
 | 形态 | 行为 |
 |---|---|
-| Reference Role Template `lucy_admin` | 恒存在于 `role-templates.ts`；工具集 = 代码分类表并集 `DATA_PLANE_TOOLS ∪ META_TOOLS`（排除 AbsoluteDeny）；不直接写入客户 `access.yaml` |
-| Demo / docker 项目模板 | 可种子化正式 Role `lucy_admin`（带 demo connection） |
-| 客户包 | 默认不自动落盘；运维从参考模板「复制为正式 Role」并填 connections；**允许**以模板同名 id `lucy_admin` 提升为正式 yaml Role（仅禁止与已存在 yaml Role 撞名） |
+| Reference Role Template `lucy_admin` | 恒存在于 `role-templates.ts`；工具集 = 代码分类表并集 `DATA_PLANE_TOOLS ∪ META_TOOLS`（排除 AbsoluteDeny）；模板本身不是可绑定事实源 |
+| Demo / docker 项目模板 | 种子化正式 Role `lucy_admin` |
+| 客户包 | **有效口径见** [`docs/specs/lucy-20261105-customer-default-system-roles-spec.md`](../../docs/specs/lucy-20261105-customer-default-system-roles-spec.md)：新装种子与缺则 ensure **必须**落盘正式 `lucy_admin`（`connections: ["*"]` + `catalog_bound`）；已存在不覆盖；**仍不**强制预置 Agent。旧句「客户包默认不自动落盘」**已作废，不得当作现值**。仍**允许**以模板同名 id 提升为正式 yaml Role（仅禁止与已存在 yaml Role 撞名） |
 
-模板展开时 `connections` 可为占位空列表；保存前必须填入至少一个合法 connection，否则 dryRun/保存失败。
+模板展开时 `connections` 可为占位空列表；保存前必须填入至少一个合法 connection，否则 dryRun/保存失败。`lucy_admin` 规范正式 Role 使用 `["*"]`，不走占位空列表。
 
 ---
 

@@ -2,13 +2,17 @@
  * Spec 149 §7 / §8 / WO T2 — 运维问数连接块与就绪状态。
  *
  * 覆盖：SC-05、SC-08、SC-11、SC-20。
+ * SC-11 的有效口径见客户默认系统正式 Role：缺 lucy_ops_reader 可创建；
+ * 已存在、conflict、not_ready 时 access.yaml 字节不变。
  */
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OPS_EVIDENCE_ENABLED_TABLES } from "../ops-evidence/contract";
+import { parse, stringify } from "yaml";
+import { expandTemplate } from "../admin/role-templates";
+import { OPS_EVIDENCE_ENABLED_TABLES, OPS_EVIDENCE_ROLE_ID } from "../ops-evidence/contract";
 
 let projectRoot: string | undefined;
 let auditDbPath: string | undefined;
@@ -267,8 +271,91 @@ describe("Spec 149 §8 — 就绪状态与摘要戳", () => {
     expect(state.readiness).toBe("conflict");
   });
 
-  it("SC-11: 确保前后 access.yaml 整文件字节不变", async () => {
+  it("SC-11: 缺 lucy_ops_reader 且状态表允许时创建正式 Role，非目标内容语义不变", async () => {
     projectRoot = await makeProject();
+    auditDbPath = path.join(projectRoot, "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const accessPath = path.join(projectRoot, "webui", "config", "access.yaml");
+    const before = parse(await readFile(accessPath, "utf8")) as {
+      roles?: Record<string, unknown>;
+      users?: unknown;
+      defaults?: unknown;
+    };
+
+    const { ensureOpsEvidence } = await loadModule<typeof import("../ops-evidence/ensure")>(
+      "../ops-evidence/ensure"
+    );
+    const first = await ensureOpsEvidence({ projectRoot, recreateViews: false });
+    expect(["inserted", "expanded", "unchanged"]).toContain(first.connectionWrite);
+    expect(["current", "reload_required"]).toContain(first.readiness);
+
+    const createdRaw = await readFile(accessPath, "utf8");
+    const created = parse(createdRaw) as {
+      roles?: Record<string, unknown>;
+      users?: unknown;
+      defaults?: unknown;
+    };
+    expect(created.roles?.[OPS_EVIDENCE_ROLE_ID]).toEqual(expandTemplate(OPS_EVIDENCE_ROLE_ID));
+    expect(created.users).toEqual(before.users);
+    expect(created.defaults).toEqual(before.defaults);
+    const { [OPS_EVIDENCE_ROLE_ID]: _createdReader, ...createdOtherRoles } = created.roles ?? {};
+    const { [OPS_EVIDENCE_ROLE_ID]: _beforeReader, ...beforeOtherRoles } = before.roles ?? {};
+    expect(createdOtherRoles).toEqual(beforeOtherRoles);
+
+    const second = await ensureOpsEvidence({ projectRoot, recreateViews: false });
+    expect(["inserted", "expanded", "unchanged"]).toContain(second.connectionWrite);
+    expect(["current", "reload_required"]).toContain(second.readiness);
+    expect(await readFile(accessPath, "utf8")).toBe(createdRaw);
+  });
+
+  it("SC-11: 已有 lucy_ops_reader 时 access.yaml 字节不变", async () => {
+    projectRoot = await makeProject();
+    auditDbPath = path.join(projectRoot, "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const accessPath = path.join(projectRoot, "webui", "config", "access.yaml");
+    const doc = parse(ACCESS_YAML) as { roles: Record<string, unknown> };
+    doc.roles.lucy_ops_reader = {
+      description: "narrow on purpose",
+      allow: {
+        connections: ["lucy-ops"],
+        tableSelectors: [
+          {
+            connection: "lucy-ops",
+            schema: "main",
+            names: ["ops_calls"],
+            row_access: "all"
+          }
+        ],
+        tools: ["lucy_query"]
+      }
+    };
+    await writeFile(accessPath, stringify(doc), "utf8");
+    const before = await readFile(accessPath);
+
+    const { ensureOpsEvidence } = await loadModule<typeof import("../ops-evidence/ensure")>(
+      "../ops-evidence/ensure"
+    );
+    const result = await ensureOpsEvidence({ projectRoot, recreateViews: false });
+    expect(["inserted", "expanded", "unchanged"]).toContain(result.connectionWrite);
+    expect(["current", "reload_required"]).toContain(result.readiness);
+    expect(await readFile(accessPath)).toEqual(before);
+  });
+
+  it("SC-11: conflict 不写 access.yaml", async () => {
+    projectRoot = await makeProject(
+      `connections:
+  lucy-ops:
+    driver: mysql
+    readonly: true
+    path: /tmp/other.sqlite
+`
+    );
     auditDbPath = path.join(projectRoot, "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_CONTENT_ROOT = ".";
@@ -280,8 +367,36 @@ describe("Spec 149 §8 — 就绪状态与摘要戳", () => {
     const { ensureOpsEvidence } = await loadModule<typeof import("../ops-evidence/ensure")>(
       "../ops-evidence/ensure"
     );
-    await ensureOpsEvidence({ projectRoot });
-
+    const result = await ensureOpsEvidence({ projectRoot, recreateViews: false });
+    expect(result.connectionWrite).toBe("conflict");
+    expect(result.readiness).toBe("conflict");
     expect(await readFile(accessPath)).toEqual(before);
+    const doc = parse((await readFile(accessPath)).toString("utf8")) as { roles?: Record<string, unknown> };
+    expect(doc.roles?.[OPS_EVIDENCE_ROLE_ID]).toBeUndefined();
+  });
+
+  it("SC-11: not_ready 不写 access.yaml", async () => {
+    projectRoot = await makeProject();
+    auditDbPath = path.join(projectRoot, "audit.sqlite");
+    const contentRoot = path.join(projectRoot, "content-src");
+    await mkdir(path.join(contentRoot, "semantic-layer"), { recursive: true });
+    await writeFile(path.join(contentRoot, "semantic-layer", "note.yaml"), "x: 1\n", "utf8");
+    await writeFile(path.join(projectRoot, "semantic-layer"), "not-a-directory\n", "utf8");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = contentRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const accessPath = path.join(projectRoot, "webui", "config", "access.yaml");
+    const before = await readFile(accessPath);
+
+    const { ensureOpsEvidence } = await loadModule<typeof import("../ops-evidence/ensure")>(
+      "../ops-evidence/ensure"
+    );
+    const result = await ensureOpsEvidence({ projectRoot, recreateViews: false });
+    expect(result.connectionWrite).toBe("unchanged");
+    expect(result.readiness).toBe("not_ready");
+    expect(await readFile(accessPath)).toEqual(before);
+    const doc = parse((await readFile(accessPath)).toString("utf8")) as { roles?: Record<string, unknown> };
+    expect(doc.roles?.[OPS_EVIDENCE_ROLE_ID]).toBeUndefined();
   });
 });
