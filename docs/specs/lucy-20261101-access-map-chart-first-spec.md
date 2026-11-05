@@ -10,7 +10,7 @@
 | 需求来源 | 治理台访问关系图以关系图为主视觉；诚实性口径与快照不得消失，但不得抢首屏 |
 | 实施主体 | Lucy WebUI 访问关系图页（`webui/src/pages/admin/AccessMap.tsx` 与 `webui/src/components/admin/AccessMap*.tsx`）。不修改 KTX，不修改 `/api/admin/access-map` |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：仓库级呈现修订落 `docs/specs/` |
-| 与既有 Spec 的关系 | **再修订** [`lucy-20261030-access-map-quiet-reading-spec.md`](lucy-20261030-access-map-quiet-reading-spec.md) 的页壳骨架（§5.1 三指标卡 + 双 `details`），**不撤销**其图面着色（§5.3）、抽屉（§5.5）、数据表与凭证表（§5.6）等已验收呈现。权威语义仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 过滤、两档措辞、降级矩阵沿用 Spec 187。**主筛选与关联口径控件**的现行呈现与访问层候选集合以 [`lucy-20261102-access-map-audit-echo-spec.md`](lucy-20261102-access-map-audit-echo-spec.md) 为准（本条不推翻已收口页壳合同）。Spec 187 与 quiet-reading 的既有 SC **不在本条出口** |
+| 与既有 Spec 的关系 | **再修订** [`lucy-20261030-access-map-quiet-reading-spec.md`](lucy-20261030-access-map-quiet-reading-spec.md) 的页壳骨架（§5.1 三指标卡 + 双 `details`），**不撤销**其图面着色（§5.3）、抽屉（§5.5）、数据表与凭证表（§5.6）等已验收呈现。权威语义仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 过滤、两档措辞、降级矩阵沿用 Spec 187。**主筛选与关联口径控件**的现行呈现与访问层候选集合以 [`lucy-20261102-access-map-audit-echo-spec.md`](lucy-20261102-access-map-audit-echo-spec.md) 为准（本条不推翻已收口页壳合同）。Spec 187 与 quiet-reading 的既有 SC **不在本条出口**。**可见术语「闲置授权」与边悬停**改指 [`lucy-20261105-access-map-idle-grant-copy-spec.md`](lucy-20261105-access-map-idle-grant-copy-spec.md) |
 | 实施计划 | [`docs/plans/lucy-20261101-access-map-chart-first-plan.md`](../plans/lucy-20261101-access-map-chart-first-plan.md) |
 
 > v0.2 功能合同已收口（2026-11-01）。D1–D8 按 §4 提议列拍板，未在实施中改写。SC-01–SC-13 有自动化断言并通过。SC-14 已拆出。本条收口不表示可上线。
@@ -222,7 +222,7 @@ quiet-reading §5.4 的定宽卡片规则已被该 Spec 取代。本条新增/�
 |---|---|
 | 高度 | 关系图主容器须有明确的最小高度策略（例如基于视口剩余高度的 `min-height`），使默认桌面视口下图区显著高于工具条+图例占用 |
 | 列间距 | 布局常量加大列间隙，使四栏流带弧度可读；放不下时横向滚动 |
-| 悬停浮层 | 节点：显示 `label`（全名）、副标题计数要点、类型中文名。边：显示 `from → to`、授权/访问路径相关计数、状态（正常 / 僵尸授权 / 需复核 / 确凿越权）。不得把原生 SVG `<title>` 当作唯一用户可读提示 |
+| 悬停浮层 | 节点：显示 `label`（全名）、副标题计数要点、类型中文名。边悬停**有效呈现**改指 [`lucy-20261105-access-map-idle-grant-copy-spec.md`](lucy-20261105-access-map-idle-grant-copy-spec.md)（三段式结论优先、突出调用次数、主术语「闲置授权」、访问面不可用时降级）。不得把原生 SVG `<title>` 当作唯一用户可读提示 |
 | 点击 | 节点写 `focus`；边开既有抽屉。Esc 规则沿用 quiet-reading §5.5 |
 
 ### 5.7 数据表与凭证表

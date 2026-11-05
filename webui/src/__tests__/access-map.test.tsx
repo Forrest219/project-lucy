@@ -18,10 +18,12 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccessMap } from "../pages/admin/AccessMap";
 import { traceAccessMapChain, traceAccessMapSubjectChain } from "../components/admin/AccessMapCanvas";
-import type {
-  AccessMapHourlyDetail,
-  AccessMapHourlyDetailRow,
-  AccessMapResponse
+import {
+  accessMapEdgeHoverConclusion,
+  accessMapEdgeStateLabel,
+  type AccessMapHourlyDetail,
+  type AccessMapHourlyDetailRow,
+  type AccessMapResponse
 } from "../components/admin/AccessMapTypes";
 
 function makeNode(
@@ -253,6 +255,53 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe("闲置授权文案与悬停结论（lucy-20261105 Spec SC-01／SC-02）", () => {
+  it("SC-01 — dormant 短标签为闲置授权", () => {
+    expect(accessMapEdgeStateLabel("dormant")).toBe("闲置授权");
+  });
+
+  it("SC-02 — 术语标准 Dormant Grant 主术语为闲置授权，禁止列含僵尸授权", () => {
+    const terminology = readFileSync(
+      resolve(process.cwd(), "docs/00-product-terminology-standard.md"),
+      "utf8"
+    );
+    const dormantRow = terminology
+      .split("\n")
+      .find((line) => line.includes("Dormant Grant"));
+    expect(dormantRow).toBeTruthy();
+    const cells = (dormantRow as string).split("|").map((cell) => cell.trim());
+    // | Canonical | UI 主术语 | 允许补充 | 禁止文案 | 说明 |
+    expect(cells[2]).toBe("闲置授权");
+    expect(cells[4]).toContain("僵尸授权");
+  });
+
+  it("四态悬停结论句逐字固定", () => {
+    expect(accessMapEdgeHoverConclusion("dormant")).toBe("有授权，窗口内未调用");
+    expect(accessMapEdgeHoverConclusion("normal")).toBe("有授权，窗口内有调用");
+    expect(accessMapEdgeHoverConclusion("needs_review")).toBe(
+      "窗口内有调用，当前授权对不上（需复核）"
+    );
+    expect(accessMapEdgeHoverConclusion("overflow")).toBe("窗口内有调用，且超出当前授权");
+  });
+
+  it("SC-14 — ops 四份触发词无僵尸授权且含闲置授权", () => {
+    const roots = [
+      resolve(process.cwd(), "../skills/lucy-ops/ops-questioning.md"),
+      resolve(process.cwd(), "../config/skills/lucy-ops/ops-questioning.md"),
+      resolve(
+        process.cwd(),
+        "../examples/docker-demo/project-template/skills/lucy-ops/ops-questioning.md"
+      ),
+      resolve(process.cwd(), "config/ops-evidence/skills/lucy-ops/ops-questioning.md")
+    ];
+    for (const path of roots) {
+      const text = readFileSync(path, "utf8");
+      expect(text, path).toContain("闲置授权");
+      expect(text, path).not.toContain("僵尸授权");
+    }
+  });
 });
 
 describe("AccessMap 页面", () => {
@@ -1196,8 +1245,10 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
     expect(tip).toHaveTextContent("→");
     expect(tip).toHaveTextContent("role_reader");
     expect(tip).toHaveTextContent("mysql_main");
-    expect(tip).toHaveTextContent("访问路径 1 条");
-    expect(tip).toHaveTextContent("需复核");
+    expect(tip).toHaveTextContent("窗口内有调用，当前授权对不上（需复核）");
+    expect(tip).toHaveTextContent("调用 3 次");
+    expect(tip).not.toHaveTextContent("访问路径");
+    expect(tip).not.toHaveTextContent("状态：");
     expect(tip.closest("svg")).toBeNull();
   });
 
@@ -1386,7 +1437,7 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     expect(kernel.getAttribute("stroke-dasharray")).toBeNull();
   });
 
-  it("SC-12 — 悬停**可见面积**就出浮层（含无内核的 dormant 与 normal），浮层含从→到与状态", async () => {
+  it("SC-12 — 悬停**可见面积**就出浮层（含无内核的 dormant 与 normal），浮层含从→到与三段式结论", async () => {
     await renderFourState();
 
     // dormant 没有内核，可见入口只有授权面积 —— 悬停它必须出浮层。
@@ -1394,7 +1445,11 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     fireEvent.mouseOver(dormant);
     const dormantTip = await screen.findByTestId("access-map-hover-tip");
     expect(dormantTip).toHaveTextContent("→");
-    expect(dormantTip).toHaveTextContent("僵尸授权");
+    expect(dormantTip).toHaveTextContent("有授权，窗口内未调用");
+    expect(dormantTip).toHaveTextContent("调用 0 次");
+    expect(dormantTip).not.toHaveTextContent("访问路径");
+    expect(dormantTip).not.toHaveTextContent("状态：");
+    expect(dormantTip).not.toHaveTextContent("僵尸授权");
     expect(dormantTip.closest("svg")).toBeNull();
     fireEvent.mouseOut(dormant);
 
@@ -1407,6 +1462,8 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     const normalTip = await screen.findByTestId("access-map-hover-tip");
     expect(normalTip).toHaveTextContent("AGENT A");
     expect(normalTip).toHaveTextContent("role_reader");
+    expect(normalTip).toHaveTextContent("有授权，窗口内有调用");
+    expect(normalTip).toHaveTextContent("调用 2 次");
   });
 
   it("SC-13 — 点击**可见面积**打开边明细抽屉（dormant 授权面积、needs_review 独立带），不只靠隐藏按钮", async () => {
@@ -1416,7 +1473,7 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     fireEvent.click(dormant);
     const drawer = await screen.findByTestId("access-map-edge-drawer");
     expect(drawer).toBeInTheDocument();
-    expect(screen.getByTestId("access-map-edge-detail")).toHaveTextContent("僵尸授权");
+    expect(screen.getByTestId("access-map-edge-detail")).toHaveTextContent("闲置授权");
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>
       expect(screen.queryByTestId("access-map-edge-drawer")).not.toBeInTheDocument()
@@ -1426,6 +1483,64 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     fireEvent.click(review);
     expect(await screen.findByTestId("access-map-edge-drawer")).toBeInTheDocument();
     expect(screen.getByTestId("access-map-edge-detail")).toHaveTextContent("需复核");
+  });
+
+  it("闲置授权悬停 — needs_review／overflow 结论与确凿越权括注", async () => {
+    await renderFourState();
+
+    fireEvent.mouseOver(screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main"));
+    const reviewTip = await screen.findByTestId("access-map-hover-tip");
+    expect(reviewTip).toHaveTextContent("窗口内有调用，当前授权对不上（需复核）");
+    expect(reviewTip).toHaveTextContent("调用 3 次");
+    expect(reviewTip).not.toHaveTextContent("访问路径");
+    expect(reviewTip).not.toHaveTextContent("（确凿越权：调用当时授权亦不覆盖）");
+    fireEvent.mouseOut(screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main"));
+    await waitFor(() => expect(screen.queryByTestId("access-map-hover-tip")).not.toBeInTheDocument());
+
+    fireEvent.mouseOver(
+      screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::customers")
+    );
+    const overflowTip = await screen.findByTestId("access-map-hover-tip");
+    expect(overflowTip).toHaveTextContent("窗口内有调用，且超出当前授权");
+    expect(overflowTip).toHaveTextContent("调用 5 次");
+    expect(overflowTip).toHaveTextContent("（确凿越权：调用当时授权亦不覆盖）");
+  });
+
+  it("闲置授权悬停 — 访问面不可用时降级，不以调用 0 次冒充", async () => {
+    const response = fourStateResponse();
+    response.meta.access = {
+      ...response.meta.access,
+      state: "unavailable",
+      reason: "audit_db_unavailable",
+      rawCalls: 0,
+      deniedCalls: 0
+    };
+    // 夹具故意带 confirmedUnauthorized，降级时仍不得出括注。
+    response.edges = response.edges.map((edge) =>
+      edge.state === "dormant" ? { ...edge, confirmedUnauthorized: true } : edge
+    );
+    response.render = { nodes: response.nodes, edges: response.edges, folded: { nodes: 0, edges: 0 } };
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-svg")).toBeInTheDocument());
+
+    const ribbon = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
+    fireEvent.mouseOver(ribbon);
+    const tip = await screen.findByTestId("access-map-hover-tip");
+    expect(tip).toHaveTextContent("授权面可读，调用情况暂不可用");
+    expect(tip).toHaveTextContent("调用情况暂不可用");
+    expect(tip.textContent ?? "").not.toMatch(/调用 \d+ 次/);
+    expect(tip).not.toHaveTextContent("有授权，窗口内未调用");
+    expect(tip).not.toHaveTextContent("（确凿越权：调用当时授权亦不覆盖）");
+
+    const title = ribbon.querySelector("title");
+    expect(title?.textContent ?? "").not.toMatch(/调用 \d+ 次/);
+    expect(title?.textContent ?? "").not.toContain("僵尸授权");
+  });
+
+  it("SC-15 — AccessMap 向 Canvas 传入 accessOk（源码合同）", () => {
+    const pageSource = readFileSync(resolve(process.cwd(), "src/pages/admin/AccessMap.tsx"), "utf-8");
+    expect(pageSource).toMatch(/accessOk=\{response\.meta\.access\.state === "ok"\}/);
   });
 
   it("SC-14 — 没有新增运行时依赖，也没有裸十六进制颜色", async () => {
@@ -1476,7 +1591,7 @@ describe("链路高亮与列头 KPI", () => {
 
     const agentLabel = screen.getByTestId("access-map-label-agent:agent_a");
     expect(agentLabel.textContent).not.toContain("条路径");
-    expect(agentLabel.textContent).not.toContain("僵尸授权");
+    expect(agentLabel.textContent).not.toContain("闲置授权");
     expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("2");
     expect(screen.getByTestId("access-map-column-card-0")).toHaveTextContent("有授权");
     expect(screen.getByTestId("access-map-column-card-0")).toHaveTextContent("有问询");
@@ -1562,7 +1677,7 @@ describe("链路高亮与列头 KPI", () => {
     expect(screen.getByTestId("access-map-node-agent:agent_b")).toHaveAttribute("data-chain", "off");
     expect(screen.getByTestId("access-map-node-role:shared")).toHaveAttribute("data-chain", "on");
     expect(screen.getByTestId("access-map-column-card-1")).toHaveTextContent("有问询 0");
-    expect(screen.getByTestId("access-map-column-card-1")).toHaveTextContent("僵尸授权 1");
+    expect(screen.getByTestId("access-map-column-card-1")).toHaveTextContent("闲置授权 1");
     expect(screen.getByTestId("access-map-chain-caption")).toHaveTextContent("AGENT A");
 
     fireEvent.mouseEnter(screen.getByTestId("access-map-node-agent:agent_b"));
@@ -1633,7 +1748,7 @@ describe("链路高亮与列头 KPI", () => {
 
     expect(screen.getByTestId("access-map-column-card-value-3")).toHaveTextContent("5");
     expect(screen.getByTestId("access-map-column-card-3")).toHaveTextContent("有问询 1");
-    expect(screen.getByTestId("access-map-column-card-3")).toHaveTextContent("僵尸授权 4");
+    expect(screen.getByTestId("access-map-column-card-3")).toHaveTextContent("闲置授权 4");
     expect(
       screen.getByTestId("access-map-plot-scroll").contains(screen.getByTestId("access-map-column-cards"))
     ).toBe(false);

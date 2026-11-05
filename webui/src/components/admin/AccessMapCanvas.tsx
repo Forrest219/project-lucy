@@ -33,6 +33,10 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useRef, useState, type SVGProps } from "react";
 import {
+  ACCESS_MAP_CONFIRMED_UNAUTHORIZED_HOVER_NOTE,
+  ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CALLS,
+  ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CONCLUSION,
+  accessMapEdgeHoverConclusion,
   accessMapEdgeStateLabel,
   accessMapNodeKindLabel,
   accessMapNodeSubtitle,
@@ -41,6 +45,32 @@ import {
   type AccessMapNode,
   type AccessMapNodeKind
 } from "./AccessMapTypes";
+
+/** 边悬停／title 的调用段：访问面可用才写真实次数。 */
+function accessMapEdgeHoverCallsText(edge: AccessMapEdge, accessOk: boolean): string {
+  if (!accessOk) return ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CALLS;
+  return `调用 ${edge.accessCalls} 次`;
+}
+
+function accessMapEdgeHoverConclusionText(edge: AccessMapEdge, accessOk: boolean): string {
+  if (!accessOk) return ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CONCLUSION;
+  const base = accessMapEdgeHoverConclusion(edge.state);
+  if (edge.confirmedUnauthorized) {
+    return `${base}${ACCESS_MAP_CONFIRMED_UNAUTHORIZED_HOVER_NOTE}`;
+  }
+  return base;
+}
+
+function accessMapEdgeTitleText(
+  edge: AccessMapEdge,
+  accessOk: boolean,
+  labelOf: (id: string) => string
+): string {
+  const relation = `${labelOf(edge.source)} → ${labelOf(edge.target)}`;
+  const state = accessMapEdgeStateLabel(edge.state);
+  const calls = accessMapEdgeHoverCallsText(edge, accessOk);
+  return `${relation}：授权路径 ${edge.grantPaths} 条 · ${calls} · ${state}`;
+}
 
 /** 细柱宽度：取代旧的 168px 定宽卡片。 */
 export const PILLAR_WIDTH = 16;
@@ -1143,6 +1173,11 @@ export type AccessMapCanvasProps = {
   onClearFocus?: () => void;
   /** 无障碍摘要：节点数、边数、信号计数。 */
   summary: string;
+  /**
+   * 访问面是否可用（`meta.access.state === "ok"`）。
+   * false 时悬停不得用「有／未调用」或「调用 0 次」冒充真实结果。
+   */
+  accessOk?: boolean;
 };
 
 /**
@@ -1163,7 +1198,8 @@ export function AccessMapCanvas({
   censusEdges,
   focusNodeId,
   onClearFocus,
-  summary
+  summary,
+  accessOk = true
 }: AccessMapCanvasProps) {
   const layout = useMemo(() => layoutAccessMap(nodes, edges), [nodes, edges]);
   const populationNodes = censusNodes ?? nodes;
@@ -1348,7 +1384,7 @@ export function AccessMapCanvas({
                   有授权 {summaryCard.granted} · 有问询 {summaryCard.queried}
                 </div>
                 <div className="text-[11px] leading-snug text-fg-muted">
-                  僵尸授权 {summaryCard.dormant}
+                  闲置授权 {summaryCard.dormant}
                 </div>
             </div>
           );
@@ -1400,9 +1436,7 @@ export function AccessMapCanvas({
                     onClick={() => setSelectedEdgeId(link.edge.id)}
                     style={{ cursor: "pointer" }}
                   >
-                    <title>
-                      {`${link.edge.source} → ${link.edge.target}：授权路径 ${link.edge.grantPaths} 条 · 访问路径 ${link.edge.accessPaths} 条 · ${accessMapEdgeStateLabel(link.edge.state)}`}
-                    </title>
+                    <title>{accessMapEdgeTitleText(link.edge, accessOk, labelOfNode)}</title>
                   </path>
                 ) : null}
                 {link.kernel ? (
@@ -1413,9 +1447,7 @@ export function AccessMapCanvas({
                     onClick={() => setSelectedEdgeId(link.edge.id)}
                     style={{ cursor: "pointer" }}
                   >
-                    <title>
-                      {`访问路径 ${link.edge.accessPaths} 条 · 调用 ${link.edge.accessCalls} 次 · ${accessMapEdgeStateLabel(link.edge.state)}`}
-                    </title>
+                    <title>{accessMapEdgeTitleText(link.edge, accessOk, labelOfNode)}</title>
                   </path>
                 ) : null}
                 {/* 需复核：虚线中线（状态不只靠颜色区分）。 */}
@@ -1557,12 +1589,10 @@ export function AccessMapCanvas({
                 {labelOfNode(hoverTip.edge.source)} → {labelOfNode(hoverTip.edge.target)}
               </div>
               <div className="text-fg-muted">
-                授权路径 {hoverTip.edge.grantPaths} 条 · 访问路径 {hoverTip.edge.accessPaths} 条 · 调用{" "}
-                {hoverTip.edge.accessCalls} 次
+                {accessMapEdgeHoverConclusionText(hoverTip.edge, accessOk)}
               </div>
               <div className="text-fg-muted">
-                状态：{accessMapEdgeStateLabel(hoverTip.edge.state)}
-                {hoverTip.edge.confirmedUnauthorized ? "（确凿越权：调用当时授权亦不覆盖）" : ""}
+                授权路径 {hoverTip.edge.grantPaths} 条 · {accessMapEdgeHoverCallsText(hoverTip.edge, accessOk)}
               </div>
             </>
           )}

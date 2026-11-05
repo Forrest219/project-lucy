@@ -51,11 +51,11 @@ export function AccessMapSignalNotes({ meta }: AccessMapSignalNotesProps) {
   return (
     <div className="flex flex-col gap-2 text-xs text-fg-muted">
       {/*
-        僵尸授权档的口径句（原来挂在指标卡 ⓘ 上）。
+        闲置授权档的口径句（原来挂在指标卡 ⓘ 上）。
         卡片整排卸下后，这句话跟着搬进弱入口正文 —— 判据本身不能跟着卡片一起消失。
-        「僵尸授权」是配置事实（有权未用），不是行为指控，所以不含任何越权字样。
+        「闲置授权」是配置事实（有权未用），不是行为指控，所以不含任何越权字样。
       */}
-      <p>僵尸授权口径：{ACCESS_MAP_DORMANT_TIER_NOTE}</p>
+      <p data-testid="access-map-dormant-tier-note">闲置授权口径：{ACCESS_MAP_DORMANT_TIER_NOTE}</p>
       {/*
         第一档的档位说明（§4.9.2）：**不含「越权」二字**。
         「访问了但当前无授权路径」首先意味着需要复核，不必然等于越权。

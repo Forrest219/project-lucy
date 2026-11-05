@@ -588,6 +588,7 @@ export function AccessMap() {
                 censusNodes={response.nodes}
                 censusEdges={response.edges}
                 focusNodeId={focusNodeId}
+                accessOk={response.meta.access.state === "ok"}
                 summary={`访问关系图：${response.render.nodes.length} 个节点，${response.render.edges.length} 条边，需复核 ${response.meta.signals.needsReviewEdges} 条，确凿越权 ${response.meta.signals.confirmedUnauthorizedEdges} 条。`}
                 onClearFocus={clearFocus}
               />

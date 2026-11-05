@@ -1948,14 +1948,14 @@ curl -fsS -b "$CK" -X POST "$BASE/api/admin/agents/<agentId>/tokens" \
 
 #### 访问关系图（/admin/access-map）
 
-入口：`/admin/access-map`。这个页面把「谁被授权了什么」与「谁实际访问了什么」画在同一张图上，用来发现**僵尸授权**、**需复核**与**确凿越权**。
+入口：`/admin/access-map`。这个页面把「谁被授权了什么」与「谁实际访问了什么」画在同一张图上，用来发现**闲置授权**、**需复核**与**确凿越权**。
 
 图有六类节点（`Agent` / 角色 / 连接 / Schema / 表 / `Token`），按 depth 0→4 分层。边表示两条路径的对照：
 
 | 边状态 | 含义 |
 | --- | --- |
 | `normal` | 授权与访问一致 |
-| `dormant` | 僵尸授权——有授权但窗口内无访问 |
+| `dormant` | 闲置授权——有授权但窗口内无访问 |
 | `needs_review` | 需复核——证据不足，不判越权 |
 | `overflow` | 访问超出授权（确凿越权） |
 
@@ -3412,7 +3412,7 @@ export LUCY_AGENT_TOKEN="$(cat <PROJECT_ROOT>/.ktx/secrets/lucy-agent-token)"
 | `ops_question_kpi_agents` | 问询 KPI 口径下的 `Agent` 分档 |
 | `ops_grant_paths` | 授权路径 |
 | `ops_access_paths` | 实际访问路径 |
-| `ops_edge_signals` | 边的状态信号（僵尸授权、需复核、溢出等） |
+| `ops_edge_signals` | 边的状态信号（闲置授权、需复核、溢出等） |
 | `ops_map_nodes` | 图节点计数 |
 | `ops_map_meta` | 图元数据与覆盖率 |
 | `ops_table_adoption` | 表采用率与近窗未访问 |

@@ -853,7 +853,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Access Map | 访问关系图 | — | 拓扑图、权限流向图、桑基图（作产品名） | v0.25 P1 规划；授权面与实际访问面的只读关系图 |
 | Grant Path | 授权路径 | — | 权限、授权项、访问路径 | 去重 `(Agent, Role, Connection, Schema, Table)` 存在性实例 |
 | Access Path | 访问路径 | — | 调用次数、请求数 | 窗口内至少一次允许调用的去重 `(Agent, Role, Connection, Schema, Table)` 路径 |
-| Dormant Grant | 僵尸授权 | 有权未用 | 未使用权限、闲置资源 | 授权路径数 > 0 且访问路径数 = 0 |
+| Dormant Grant | 闲置授权 | 有权未用 | 僵尸授权；未使用权限；闲置资源 | 授权路径数 > 0 且访问路径数 = 0 |
 | Needs-review Signal | 需复核信号 | 需复核 | 越权（无调用当时快照证据时） | 当前授权无对应路径但历史有允许访问；快照缺失不得升级结论 |
 | Credential List | 凭证清单 | Token 清单 | 权限节点、凭证流 | 挂在 Agent 下的 Token 附属区，不承载授权、不参与流守恒 |
 | Association Scope | 关联口径 | 已确认关联／含候选关联（选项） | **问询计入**（作主工具条标签、分段控件标题或图例前缀） | 访问关系图对 `trust`／`association_status` 的弱入口筛选标签；只影响访问面。主筛选为问询种类／访问等级。见 `docs/specs/lucy-20261102-access-map-audit-echo-spec.md` |

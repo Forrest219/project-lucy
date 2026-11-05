@@ -42,7 +42,7 @@
 | Access Map | 访问关系图 | 展示 Agent 授权面与实际访问面的关系图 | 拓扑图、权限流向图、桑基图（桑基是图形形式，不是产品名） |
 | Grant Path | 授权路径 | 一个 `(Agent, Role, Connection, Schema, Table)` 的存在性实例 | 权限、授权项、访问路径 |
 | Access Path | 访问路径 | 统计窗口内至少有一次允许调用的去重 `(Agent, Role, Connection, Schema, Table)` 存在性路径 | 调用次数、请求数 |
-| Dormant Grant | 僵尸授权 | 授权路径数 > 0 且访问路径数 = 0 的边 | 未使用权限、闲置资源 |
+| Dormant Grant | 闲置授权 | 授权路径数 > 0 且访问路径数 = 0 的边 | 僵尸授权；未使用权限；闲置资源 |
 | Needs-review Signal | 需复核信号 | 访问路径数 > 0 但当前授权无对应授权路径的边 | 越权（见 §4.9.3，二者不等价） |
 | Credential List | 凭证清单 | 挂在 Agent 下的 Token 附属区，不承载授权 | 权限节点、凭证流 |
 
@@ -246,7 +246,7 @@ AccessPath = (AgentId, RoleId, ConnectionId, Schema, TableName)
 | 条件 | 边状态 | UI 表现 | 含义 |
 |---|---|---|---|
 | `grantPaths > 0` 且 `accessPaths > 0` | `normal` | 内核填充，无描边 | 正常 |
-| `grantPaths > 0` 且 `accessPaths == 0` | `dormant` | 内核缺失，节点徽标「僵尸授权 N」；**流带本体的 UI 表现见 [呈现修订 Spec §5.3](../../docs/specs/lucy-20261030-access-map-quiet-reading-spec.md)**（判定条件与状态名不变） | 有权未用（僵尸授权） |
+| `grantPaths > 0` 且 `accessPaths == 0` | `dormant` | 内核缺失；可见短标签「闲置授权」（见 [`lucy-20261105-access-map-idle-grant-copy-spec.md`](../../docs/specs/lucy-20261105-access-map-idle-grant-copy-spec.md)）；**流带本体的 UI 表现见 [呈现修订 Spec §5.3](../../docs/specs/lucy-20261030-access-map-quiet-reading-spec.md)**（判定条件与状态名不变） | 有权未用（闲置授权） |
 | `grantPaths == 0` 且 `accessPaths > 0` | `needs_review` | 警示描边 + 计数 | 需复核信号（§4.9） |
 | `grantPaths > 0` 且 `accessPaths > grantPaths` | `overflow` | 警示描边 | 当前授权口径下访问路径多于授权路径 |
 
@@ -847,7 +847,7 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 | Access Map | 访问关系图 | 展示 Agent 授权面与实际访问面的关系图 | 拓扑图、权限流向图、桑基图 |
 | Grant Path | 授权路径 | `(Agent, Role, Connection, Schema, Table)` 的存在性实例 | 权限、授权项、访问路径 |
 | Access Path | 访问路径 | 统计窗口内至少有一次允许调用的去重 `(Agent, Role, Connection, Schema, Table)` 存在性路径 | 调用次数、请求数 |
-| Dormant Grant | 僵尸授权 | 授权路径数 > 0 且访问路径数 = 0 的边 | 未使用权限、闲置资源 |
+| Dormant Grant | 闲置授权 | 授权路径数 > 0 且访问路径数 = 0 的边 | 僵尸授权；未使用权限；闲置资源 |
 | Needs-review Signal | 需复核信号 | 访问路径数 > 0 但当前授权无对应授权路径的边 | 越权 |
 | Credential List | 凭证清单 | 挂在 Agent 下的 Token 附属区，不承载授权 | 权限节点、凭证流 |
 

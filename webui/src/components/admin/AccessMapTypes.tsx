@@ -259,7 +259,7 @@ export function accessMapNodeSubtitle(node: AccessMapNode): string {
 export function accessMapEdgeStateLabel(state: AccessMapEdgeState): string {
   switch (state) {
     case "dormant":
-      return "僵尸授权";
+      return "闲置授权";
     case "needs_review":
       return "需复核";
     case "overflow":
@@ -268,6 +268,32 @@ export function accessMapEdgeStateLabel(state: AccessMapEdgeState): string {
       return "正常";
   }
 }
+
+/**
+ * 访问面可用时边悬停结论句（lucy-20261105 §5.2）。
+ * 确凿越权括注由 Canvas 拼接，不进入本函数。
+ */
+export function accessMapEdgeHoverConclusion(state: AccessMapEdgeState): string {
+  switch (state) {
+    case "dormant":
+      return "有授权，窗口内未调用";
+    case "needs_review":
+      return "窗口内有调用，当前授权对不上（需复核）";
+    case "overflow":
+      return "窗口内有调用，且超出当前授权";
+    default:
+      return "有授权，窗口内有调用";
+  }
+}
+
+/** 访问面不可用时悬停结论（§5.3，逐字）。 */
+export const ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CONCLUSION = "授权面可读，调用情况暂不可用";
+
+/** 访问面不可用时数字行调用段（§5.3，逐字）；禁止写成「调用 0 次」。 */
+export const ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CALLS = "调用情况暂不可用";
+
+export const ACCESS_MAP_CONFIRMED_UNAUTHORIZED_HOVER_NOTE =
+  "（确凿越权：调用当时授权亦不覆盖）";
 
 export function accessMapTrustLabel(trust: "confirmed" | "include_candidate"): string {
   return trust === "include_candidate" ? "含候选关联" : "已确认关联";
@@ -399,9 +425,9 @@ export const ACCESS_MAP_CONFIRMED_TIER_SOURCE =
   "确凿越权判定来源：调用当时授权亦不覆盖（取自调用当时的授权快照）";
 
 /**
- * 僵尸授权档的口径说明（呈现修订 Spec §5.2 指标卡 ⓘ 内容）。
+ * 闲置授权档的口径说明（呈现修订 Spec §5.2 指标卡 ⓘ 内容）。
  *
- * 这是「有权未用」的判据，**不含任何越权字样**：僵尸授权是配置事实，
+ * 这是「有权未用」的判据，**不含任何越权字样**：闲置授权是配置事实，
  * 不是行为指控。
  */
 export const ACCESS_MAP_DORMANT_TIER_NOTE =

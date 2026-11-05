@@ -183,7 +183,7 @@ describe("访问关系图几何语言（geometry Spec §5）", () => {
       [makeEdge("agent:a", "table:t", 2, { state: "dormant" })]
     );
     const stateful = withDormant.nodes.find((item) => item.labelBlock.status !== null);
-    expect(stateful?.labelBlock.status).toBe("僵尸授权");
+    expect(stateful?.labelBlock.status).toBe("闲置授权");
     expect(stateful?.labelBlock.statusState).toBe("dormant");
   });
 
