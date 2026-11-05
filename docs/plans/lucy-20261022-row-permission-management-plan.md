@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | Plan（实施计划） |
 | 版本 / 日期 | v1.1 / 2026-11-05（2026-11-05 归位为合规文件名并补形态；同日 Task 9 实跑登记） |
-| 状态 | **Task 9 已执行（2026-11-05），强度 B 判定 failed（如实，未写成通过）**。两阶段实跑完成、逐 id 证据齐（验收 A1–A6 全过）；5 项安全腿失败（BY-05/06/17/18/19）与 7 项浏览器维度软断言失败已归因，结构性不可达（agent 腿/fault-control/V18 口径/V19-V22）按四类 action 登记于 `inbox/row-policy-b-run-notes.md`。本条不表示可上线，也不表示强度 B 通过 |
+| 状态 | **Task 9 已执行（2026-11-05），强度 B 判定 failed（如实，未写成通过）**。两阶段实跑完成、逐 id 证据齐（验收 A1–A6 全过）；5 项安全腿失败（BY-05/06/17/18/19；BY-05 经复核属 harness 口径争议——Spec 99 §6 strip-then-inject 合规——归 debug 不入池）与 7 项浏览器维度软断言失败已归因，结构性不可达（agent 腿/fault-control/V18 口径/V19-V22）按四类 action 登记于 `inbox/row-policy-b-run-notes.md`。本条不表示可上线，也不表示强度 B 通过 |
 | 授权边界 | 仅本机执行；数据面只读 RDS（`mysql-aliyun`／`cw_rds_bot`）；禁止写库／seed／假 `coversV025`；Doris／StarRocks 不在本条范围；不自动 `git commit` |
 | 验收 | 见「验收」小节：强度 B 通过线＝每个 execution id 唯一断言所有者 + 两阶段证据齐全 + 无假覆盖 + 无密钥泄漏 |
 | 权威 Spec | [行权限管理 Spec](../specs/lucy-20261022-v2p5-row-permission-management-spec.md) §9（V01–V22）；[行策略模板与视图 Spec](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md)；[企业安全与真实用户 E2E Spec](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md)（SEC-11／BY） |

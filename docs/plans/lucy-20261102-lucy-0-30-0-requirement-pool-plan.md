@@ -3,13 +3,13 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 候选需求池。**不是**功能 Spec，**不授权**实现 |
-| 版本 / 日期 | v0.5 / 2026-11-05 |
-| 状态 | **候选需求池（2026-11-05）**。REQ-030-001–015 登记在池；除已注明拉出收口者外均为 Deferred，不进入 `0.25.0`。本条不表示任何功能已获授权实现，也不表示可上线 |
+| 版本 / 日期 | v0.6 / 2026-11-05 |
+| 状态 | **候选需求池（2026-11-05）**。REQ-030-001–017 登记在池；除已注明拉出收口者外均为 Deferred，不进入 `0.25.0`。本条不表示任何功能已获授权实现，也不表示可上线 |
 | 授权边界 | **只登记、不实现**。条目进入实施前须：需求澄清 → 独立 Spec → Plan → 开发授权；本池自身不构成其中任一步 |
 | 验收 | 本池自身的验收＝条目结构完整（ID／标题／来源／优先级／状态齐备）＋ 来源可追。**不构成任何功能验收** |
 | 目标版本 | 候选产品线 **`0.30.0`**（尚未开线；当前产品线仍是 `0.25.0`） |
 | 维护规则 | 只追加条目；开工前须另立 Spec／Plan 并获授权。不得把本文件当作本版（`0.25.0`）实施依据 |
-| 变更 | v0.5（2026-11-05）：按 row-policy 强度 B 实跑归因（`inbox/row-policy-b-run-notes.md`）追加 REQ-030-013–015，只登记缺陷/能力缺口，不授权实现。v0.4（2026-11-05）：追加 REQ-030-012（语义层宽表字段暴露裁剪；澄清结论已写入条目，仍不授权实现）。v0.3（2026-11-03）：按 [D 剥离记录](../reviews/2026-11-03-product-close-peel-d.md) 追加 REQ-030-008–011。v0.2：按 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md) 追加 REQ-030-002–007 |
+| 变更 | v0.6（2026-11-05）：复核实跑归因——REQ-030-013 五合一拆分为编译门禁单条（BY-19），新增 REQ-030-016（各面拒绝码统一）/017（explain E5 形状）；BY-05 改判口径争议（Spec 99 §6 strip-then-inject 合规、harness 更严）移出池归 debug，确认收紧后再入池。v0.5（2026-11-05）：按 row-policy 强度 B 实跑归因（`inbox/row-policy-b-run-notes.md`）追加 REQ-030-013–015，只登记缺陷/能力缺口，不授权实现。v0.4（2026-11-05）：追加 REQ-030-012（语义层宽表字段暴露裁剪；澄清结论已写入条目，仍不授权实现）。v0.3（2026-11-03）：按 [D 剥离记录](../reviews/2026-11-03-product-close-peel-d.md) 追加 REQ-030-008–011。v0.2：按 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md) 追加 REQ-030-002–007 |
 
 ## 目标
 
@@ -39,7 +39,9 @@
 | REQ-030-010 | 语义整批恢复 SRR 验收（L25-15） | Spec `lucy-20261027-v0p25-semantic-release-restore` SRR | 待定 | Deferred — 代码已落；验收不进 `0.25.0` 产品分母 |
 | REQ-030-011 | 运维控制面 W-A VOPS 验收 | L25-16 W-A；VOPS（除已拆出） | 待定 | Deferred — 已授权实现；验收不进 `0.25.0` 产品分母 |
 | REQ-030-012 | 语义层宽表字段暴露裁剪 | 2026-11-05 产品澄清（对话登记） | 待定 | Deferred — 不进 `0.25.0`；未开 Spec |
-| REQ-030-013 | 行权限 forced 谓词注入门禁加固与工具面拒绝码统一 | 2026-11-05 row-policy 强度 B 实跑（BY-05/06/17/18/19） | 高 | Deferred — BY-05/19 为已实锤 debug（fail-open）；未开 Spec |
+| REQ-030-013 | 行权限行策略编译门禁（度量/派生列作谓词字段零上游执行） | 2026-11-05 row-policy 强度 B 实跑（BY-19） | 高 | Deferred — debug 实锤 fail-open；未开 Spec |
+| REQ-030-016 | 行权限各面拒绝码统一（row_policy_requires_wrapped_tool） | 2026-11-05 row-policy 强度 B 实跑（BY-06/17） | 待定 | Deferred — 单元期望与实跑不一致；未开 Spec |
+| REQ-030-017 | lucy_explain_query 诊断形状补全（E5 summary） | 2026-11-05 row-policy 强度 B 实跑（BY-18） | 低 | Deferred — 未开 Spec |
 | REQ-030-014 | 行权限模板展开保留 templateRefs | 2026-11-05 row-policy 强度 B 实跑（ROW25-V01/V03、RTP25-02） | 待定 | Deferred — 归口行权限视图 Spec SC-10 功能闭口；未开 Spec |
 | REQ-030-015 | 语义层孤儿路径治理（lucy-ops 反查孤儿） | 2026-11-05 row-policy 强度 B 实跑（RTV25-06） | 待定 | Deferred — 未开 Spec |
 
@@ -294,28 +296,63 @@ W-A 已授权实现；W-B 已是 REQ-030-004。VOPS-27／30 已拆出；其余 V
 
 ---
 
-## REQ-030-013：行权限 forced 谓词注入门禁加固与工具面拒绝码统一
+## REQ-030-013：行权限行策略编译门禁（度量/派生列作谓词字段）
 
 ### 背景
 
-2026-11-05 row-policy 强度 B 两阶段实跑（`inbox/e2e/final-rds-20261105`，证据 `evidence/phase-on/security.json`）实锤：
-
-- **BY-05（高危，debug 实锤）**：请求携带伪造 `forced_filters`/`forcedFilters` 时期望硬拒绝；实测响应 `mcp_result_ok` 且上游执行 1 次（unauthorized=1）。伪造内容未被回显（strip 发生），但「strip 后照常执行」违反 SEC-11 fail-closed 口径——携带注入材料的请求应整体拒绝。疑似 proven=1 时门禁过度信任（`webui/server/proxy/acl.ts` grant 构造注入路径未拒识客户端自带 forced 材料）。
-- **BY-19（高危，debug 实锤）**：无效度量谓词（`total_sales` 作谓词字段）应编译期拒绝且零上游执行；实测上游执行 1 次。
-- BY-06／BY-17（中）：entity_details／sl_validate／freshness 在 scoped source 的拒绝码为 `tool_forbidden`，浏览器面同场景为 `row_policy_requires_wrapped_tool`，面间不一致。
-- BY-18（低）：`lucy_explain_query` forced 谓词诊断 E1..E4 可用但 E5 summary=undefined，envelope 不被识别。
+2026-11-05 row-policy 强度 B 两阶段实跑（`inbox/e2e/final-rds-20261105`，证据
+`evidence/phase-on/security.json` 的 SEC-11-BY19）实锤：行策略谓词引用语义度量名
+（`total_sales` 作谓词字段，语义编译失败类输入）时，门禁未在编译期拦截，实测上游
+执行 1 次。合同口径：编译期拒绝且零上游执行（fail-closed）。
 
 ### 期望方向（池内草案；不授权实现）
 
-- forged forced 材料在请求入口硬拒绝（deny + 专属 reason code），与上游 proven 状态解耦。
-- 行策略编译校验覆盖「度量/派生列作谓词字段」类输入，失败零上游执行。
-- 同一拒绝语义在各 MCP 工具面与浏览器面使用同一 reason code 命名空间。
-- explain 诊断形状补齐 E5 summary 并固化为合同测试。
+- 行策略编译校验覆盖「度量/派生列作谓词字段」类输入，拒绝发生在任何上游执行之前。
+- 拒绝原因码进入行策略专属命名空间，与 REQ-030-016（各面拒绝码统一）一并设计。
 
 ### 非目标（本条目当前）
 
 - 不改冻结 catalog 合同字面量；不动 `--pack row-policy` 的只读边界。
+- 不涵盖 forged forced 处理口径（BY-05 归 debug，见收工笔记）；本版（`0.25.0`）不修复。
+
+---
+
+## REQ-030-016：行权限各面拒绝码统一
+
+### 背景
+
+同一实跑 BY-06／BY-17：entity_details／sl_validate／lucy_freshness 在 scoped source
+上的拒绝码实测为 `tool_forbidden`，而浏览器面同场景（ROW25-V17 通过）与单元期望
+（row-policy-ac-p1.test.ts「BY-06/07/17」用例）均为 `row_policy_requires_wrapped_tool`。
+同一拒绝语义在不同执行面使用不同 reason code，排障与合同断言都会分叉。
+
+### 期望方向（池内草案；不授权实现）
+
+- 同一拒绝语义在各 MCP 工具面与浏览器面使用同一 reason code 命名空间。
+- 以单元合同测试固化各面一致；实跑 BY-06/17 作为验收。
+
+### 非目标（本条目当前）
+
+- 不改变拒绝本身的行为（拒绝已发生，只是码不一致）。
 - 本版（`0.25.0`）不修复；修复须另立 Spec／Plan 并获授权。
+
+---
+
+## REQ-030-017：lucy_explain_query 诊断形状补全（E5 summary）
+
+### 背景
+
+同一实跑 BY-18：`lucy_explain_query` 的 forced 谓词本地诊断 E1..E4 可用，但 E5
+summary=undefined，响应 envelope 不被实跑识别。诊断形状合同不完整。
+
+### 期望方向（池内草案；不授权实现）
+
+- 补齐 E5 summary 字段并固化形状合同测试；诊断保持本地-only、零上游转发。
+
+### 非目标（本条目当前）
+
+- 不改变 explain 的本地诊断定位；不新增数据返回路径。
+- 本版（`0.25.0`）不修复；未开 Spec。
 
 ---
 
