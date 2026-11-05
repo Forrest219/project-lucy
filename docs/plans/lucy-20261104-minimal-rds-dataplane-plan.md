@@ -1,10 +1,40 @@
 # Minimal RDS Data-Plane Gate Implementation Plan
 
+| 元数据 | 内容 |
+|---|---|
+| 文档类型 | Plan（实施计划） |
+| 版本 / 日期 | v1.0 / 2026-11-04（2026-11-05 归位为合规文件名并补形态） |
+| 状态 | **已执行（2026-11-04）**。Task 1–5 全部勾销，并有自动化测试兜住；双包边界、错包拒绝与执行前硬断言均已落地。本条不表示可上线，也不构成 Strength B 全量冲绿 |
+| 授权边界 | 仅本仓代码与文档；RDS 只读（禁止 seed／DDL／DML）；不改冻结 catalog 的 `requires` 字面量；不迁 SEC-09／10／12／16、UX、ARV25、AUD25、mainline；不重建 Docker demo 栈；不自动 `git commit` |
+| 验收 | 见「验收」小节：双包边界写清 + 错包跑 SEC-11 被拒 + 无 RDS 证明时 `--execute` 拒绝 + 三组门禁测试通过 |
+| 权威 Spec | [企业安全整改与真实用户 E2E Spec](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md)（SEC-11 场景与双包边界） |
+| 设计权威 | [行权限真实 e2e 审判包设计](../design/design-row-policy-real-e2e-pack.md) §8 决策表与 §8.1 台账 |
+| 台账号 | 无（本条是 E2E 数据面门禁，不挂功能登记册） |
+
 **Goal:** 把已批准的「最小化 RDS 迁移」收成可执行门禁：一推一／Strength B 只认 `row-policy` + `rds-mysql-readonly`；`security-e2e` 合成库明确不迁；禁止用错误 pack 跑 SEC-11 当证据。
 
 **Architecture:** 双包并存。`examples/row-policy-e2e` 是唯一 RDS 同步面（只读 `mysql-aliyun`／`cw_rds_bot`）。`examples/security-e2e` 继续 `fin-db` + 可选 `--apply-db`，服务非行权限 SEC／UX／fault。本计划不重绑 SEC-09／10／12／16／UX／ARV／AUD。只补：设计台账、SEC-11 错包拒绝、一推一入口硬校验、回归测试。
 
 **Tech Stack:** Node.js ESM（`scripts/e2e/*`）、`node --test`、既有 `db-capability.mjs`／`row-policy-pack.mjs`／`run-security.mjs`／`run-row-policy-b.mjs`。
+
+## 目标
+
+把「最小化 RDS 迁移」的批准口径收成**可执行门禁**，而不是文档承诺：
+
+- 一推一与 Strength B 只认 `row-policy` 包 + `rds-mysql-readonly` 数据面 + `readonlyProven=true`。
+- `examples/security-e2e` 的 `fin-db` 合成面明确**不迁**，不得冒充 RDS 证据。
+- 用错 pack 跑 SEC-11 时判 `blocked`，不判 `passed`。
+- 双包边界与台账写进设计文档，判定逻辑由自动化测试锁住。
+
+## 开工前置
+
+1. **分支与基线**：`lucy-v0.25`；`npm run test:e2e-harness` 绿。
+2. **RDS 只读可达**：`mysql-aliyun`（`cw_rds_bot`）`SELECT` 探针通过；密码只走文件，不入仓、不入证。
+3. **合成面可用**：`examples/security-e2e` 夹具与 `fin-db` 合成库可用（服务 SEC／UX／fault，不服务行权限一推一）。
+4. **冻结边界**：catalog 里 SEC-11 的 `requires: postgres` 字面量不改；满足与否由 `capabilitySatisfied` + `readonlyProven` 判定。
+5. **环境隔离**：本机执行，不重建 Docker demo 栈，不连客户 K8s。
+
+开工裁决：改用「门禁拒绝」而不是「改 catalog 合同」。后者属冻结资产变更，未获授权。
 
 ## Global Constraints
 
@@ -28,7 +58,7 @@
 
 | File | Responsibility |
 |---|---|
-| `docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md` §8.1 | 台账：已切／不迁／门禁 |
+| `docs/design/design-row-policy-real-e2e-pack.md` §8.1 | 台账：已切／不迁／门禁 |
 | `scripts/e2e/lib/rds-dataplane-policy.mjs` | 纯函数：一推一／SEC-11 是否允许在当前 run 上执行 |
 | `scripts/e2e/__tests__/rds-dataplane-policy.test.mjs` | 上列策略的单测 |
 | `scripts/e2e/run-security.mjs` | 选中 SEC-11 时调用策略；非 RDS pack → blocked |
@@ -42,7 +72,7 @@
 ### Task 1: 设计台账收口（最小化批准）
 
 **Files:**
-- Modify: `docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md`（§8 决策表 + §8.1）
+- Modify: `docs/design/design-row-policy-real-e2e-pack.md`（§8 决策表 + §8.1）
 - Modify: `examples/row-policy-e2e/README.md`（边界段）
 
 - [x] **Step 1: 在决策表追加一行**
@@ -325,7 +355,7 @@ Expected: pass
 ### Task 5: 收口自检与证据说明
 
 **Files:**
-- Modify: `docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md` §8.1（勾选「SEC-11 错包防护」为已落地，若 Task 3 完成）
+- Modify: `docs/design/design-row-policy-real-e2e-pack.md` §8.1（勾选「SEC-11 错包防护」为已落地，若 Task 3 完成）
 
 - [x] **Step 1: 跑门禁相关测**
 
@@ -361,6 +391,38 @@ rds-mysql-readonly + readonlyProven for Strength B execute.
 
 ---
 
+## 验收
+
+| # | 验收项 | 判据 |
+|---|---|---|
+| A1 | 双包边界写清 | 设计文档 §8 决策表与 §8.1 台账写明「已切／不迁／门禁」；`examples/row-policy-e2e/README.md` 有证据边界段 |
+| A2 | 错包拒绝 | `run.pack !== "row-policy"` 或 `dataPlane !== rds-mysql-readonly` 或 `readonlyProven !== true` 时，SEC-11 判 `blocked` 且带 `blockedBy` 原因码，不进 handler |
+| A3 | 执行前硬断言 | `run-row-policy-b --execute` 在无 RDS 证明时抛错退出，不写假绿 `evidence/phase-*` |
+| A4 | 骨架放行 | `--execute` 之外（离线编排 plan／not_run 表）不强制活探成功 |
+| A5 | 回归测试 | `rds-dataplane-policy.test.mjs`、`rds-dataplane-gates.test.mjs`、`row-policy-pack.test.mjs` 三组全 pass |
+| A6 | 合同字面量未动 | 冻结 catalog 的 SEC-11 `requires` 未被改写 |
+
+## 完成定义
+
+本条收口 = 同时满足：
+
+1. 文档：双包 + 不迁范围 + 证据边界写清。
+2. `sec11AllowedOnRun`：security pack → SEC-11 判 `blocked`。
+3. `run-row-policy-b --execute`：无 RDS 证明即拒绝。
+4. **不**改 SEC-09／10／12／UX handlers 去打 `mysql-aliyun`。
+5. **不**宣称 Strength B 全量已绿（V15／V19／V22／RTP25-07 等仍可判 `blocked`）。
+
+## 风险
+
+| 风险 | 影响 | 处置 |
+|---|---|---|
+| 把门禁做成改合同 | 冻结 catalog 被改写，证据口径失真 | 只在 `capabilitySatisfied` + `readonlyProven` 判定层实现，不碰 `requires` 字面量 |
+| 合成库结果被当成 RDS 证据 | 强度 B 假绿 | 错包判 `blocked` + 原因码；台账写明证据边界 |
+| 探针抖动误杀一推一 | 判定被无谓打断 | 探针失败判 `blocked` 并写明原因，不放宽判定口径 |
+| 范围外项目被夹带 | 迁移面失控 | SEC-09／10／12／16、UX、ARV25、AUD25、mainline 显式列在「Out of Scope」 |
+
+回滚：改动限于仓内代码、测试与文档；回滚方式是还原对应提交，不涉及客户环境与出包。
+
 ## Self-Review
 
 1. **Spec coverage:** 批准的最小化口径 → Task 1 文档；错包防护 → Task 2–3；B execute 硬门 → Task 4；不做 B 层 SEC-09 → 无对应任务。  
@@ -378,7 +440,7 @@ rds-mysql-readonly + readonlyProven for Strength B execute.
 
 ## Execution Handoff
 
-Plan saved to `docs/plans/2026-11-04-minimal-rds-dataplane-plan.md`.
+Plan saved to `docs/plans/lucy-20261104-minimal-rds-dataplane-plan.md`（原 `2026-11-04-minimal-rds-dataplane-plan.md`；2026-11-05 归位为 `lucy-YYYYMMDD-<slug>-plan.md` 合规名并补齐形态）。
 
 **执行方式二选一：**
 

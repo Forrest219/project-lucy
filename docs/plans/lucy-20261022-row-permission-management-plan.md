@@ -1,12 +1,30 @@
 # 行权限真实 e2e 审判包（强度 B）Implementation Plan
 
+| 元数据 | 内容 |
+|---|---|
+| 文档类型 | Plan（实施计划） |
+| 版本 / 日期 | v1.1 / 2026-11-05（2026-11-05 归位为合规文件名并补形态；同日 Task 9 实跑登记） |
+| 状态 | **Task 9 已执行（2026-11-05），强度 B 判定 failed（如实，未写成通过）**。两阶段实跑完成、逐 id 证据齐（验收 A1–A6 全过）；5 项安全腿失败（BY-05/06/17/18/19）与 7 项浏览器维度软断言失败已归因，结构性不可达（agent 腿/fault-control/V18 口径/V19-V22）按四类 action 登记于 `inbox/row-policy-b-run-notes.md`。本条不表示可上线，也不表示强度 B 通过 |
+| 授权边界 | 仅本机执行；数据面只读 RDS（`mysql-aliyun`／`cw_rds_bot`）；禁止写库／seed／假 `coversV025`；Doris／StarRocks 不在本条范围；不自动 `git commit` |
+| 验收 | 见「验收」小节：强度 B 通过线＝每个 execution id 唯一断言所有者 + 两阶段证据齐全 + 无假覆盖 + 无密钥泄漏 |
+| 权威 Spec | [行权限管理 Spec](../specs/lucy-20261022-v2p5-row-permission-management-spec.md) §9（V01–V22）；[行策略模板与视图 Spec](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md)；[企业安全与真实用户 E2E Spec](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md)（SEC-11／BY） |
+| 设计权威 | [行权限真实 e2e 审判包设计](../design/design-row-policy-real-e2e-pack.md) |
+| 台账号 | 无（本条是 E2E 基础设施，不挂功能登记册） |
+
 **Goal:** 本机一次两阶段 run，对 ROW25-V01…V22 + RTP25-01…10 + RTV25-01…08 + BY-01…19 做真实一推一；数据面绑阿里云 RDS 只读 `mysql-aliyun`／`dataforai.superstore_orders`（华东／西南），禁止假 `coversV025` 与写库 seed。
 
 **Architecture:** 新建 `examples/row-policy-e2e` 审判包；`row-policy-pack.mjs` 持有 id→owner 注册表与区划常量；`prepare-environment --pack row-policy` 渲染包并挂载 RDS 密码文件；`run-row-policy-b.mjs` 串 Gate-Off→Gate-On；重写 `row-policy-v025`／`row-policy-templates-v025` 与改绑 BY handlers。
 
 **Tech Stack:** Node ESM（`scripts/e2e`）、Playwright real-e2e、MySQL RDS 只读、现有 `v025-coverage.yaml`／`access-v025.mjs` 描述符。
 
-**Design authority:** [`docs/plans/2026-11-04-row-policy-real-e2e-pack-design.md`](./2026-11-04-row-policy-real-e2e-pack-design.md)
+## 目标
+
+在本机做一次**两阶段**真实 run，对 ROW25-V01…V22 + RTP25-01…10 + RTV25-01…08 + BY-01…19 逐项真实一推一：
+
+- 数据面固定为阿里云 RDS 只读 `mysql-aliyun`／`dataforai.superstore_orders`（区划值 `华东`／`西南`）。
+- 每个 execution id 有且只有一个断言所有者；`blocked`／`skip` 不计入强度 B 通过。
+- 禁止假 `coversV025`（把没断言的 id 挂到别的用例上）与写库 seed。
+- 产物是 `evidence/phase-off/` 与 `evidence/phase-on/` 两份可复核证据，不是「文件级 passed」。
 
 ## Global Constraints
 
@@ -16,6 +34,16 @@
 - 每个 execution id 唯一断言所有者；`blocked`／`skip` 不算 B 通过。
 - **不要自动 git commit**；仅当用户明确要求时再提交（本仓库用户规则优先于本 plan 模板里的 Commit 步）。
 - 本条实施不表示可上线；不改功能 Spec 头部状态。
+
+## 开工前置
+
+1. **分支与基线**：`lucy-v0.25`；`npm run test:e2e-harness` 与 `npm run lint:spec-docs` 绿。
+2. **数据面可达**：RDS `:3306` 可连且只读探针通过（`run.db.readonlyProven=true`）；密码只走 `.ktx/secrets/mysql-aliyun-password` 或 runDir 副本，不入仓、不入证。
+3. **区划字面量**：谓词值是 `华东`／`西南`，不是 `East`／`West`。
+4. **工具链**：Node ESM、Playwright（chromium）、`ktx` CLI、`node --test`。
+5. **环境隔离**：本机执行，不连客户 K8s；不重建 Docker demo 栈。
+
+开工裁决：`--pack row-policy` 是唯一入口。不带该 pack 的 run 不得用作 SEC-11 证据。
 
 ## File map
 
@@ -420,7 +448,7 @@ BY-01：华东可查；BY-10：华东∪西南。typed_gold 若仍绑旧 Q-CAC-E
 **Files:**
 - Create: `inbox/row-policy-b-run-notes.md`（过程笔记；可删）
 
-- [ ] **Step 1: 预检 RDS**
+- [x] **Step 1: 预检 RDS**（2026-11-05：探针区划计数与 run.json 一致，含 华东／西南）
 
 ```bash
 docker run --rm mysql:8 mysql -h rm-bp1q2ui29c6268t8wro.mysql.rds.aliyuncs.com -P 3306 \
@@ -430,9 +458,11 @@ docker run --rm mysql:8 mysql -h rm-bp1q2ui29c6268t8wro.mysql.rds.aliyuncs.com -
 
 Expected: 含 华东／西南。
 
-- [ ] **Step 2: 跑 `npm run e2e:row-policy-b`（或 node 入口）**
+- [x] **Step 2: 跑 `npm run e2e:row-policy-b`（或 node 入口）**（2026-11-05：`--run inbox/e2e/final-rds-20261105/run.json --execute`）
 
-- [ ] **Step 3: 核对报告**
+- [x] **Step 3: 核对报告**（2026-11-05：判定 failed 如实落盘；A1–A6 见 `inbox/row-policy-b-run-notes.md`）
+
+- **运行记录（2026-11-05）**：run=`inbox/e2e/final-rds-20261105`（pack=row-policy，RDS 只读 proven）；phase-off（ROW25-V18 拒绝断言 passed、BY-09 passed）／phase-on（management 34 passed／5 skipped、security 13 passed／5 failed）；两阶段证据在 `inbox/e2e/final-rds-20261105/evidence/phase-off|on/`（inbox 不入库）；逐 id 归因与 action 清单见 `inbox/row-policy-b-run-notes.md`。强度 B **未通过**：5 项安全腿失败 + 结构性不可达，均未折叠成 passed。
 
 - 每 id 有结果；无「文件级 passed」冒充
 - phase-off／phase-on 目录都有证据
@@ -440,6 +470,41 @@ Expected: 含 华东／西南。
 - 密码未出现在 evidence 文本（`rg` 密码文件内容于 evidence → 0 命中）
 
 ---
+
+## 验收
+
+| # | 验收项 | 判据 |
+|---|---|---|
+| A1 | 注册表守恒 | `ROW25_EXECUTION_IDS` 的每个 id 在 `REGISTRY` 中恰好出现一次；缺 id 或重复 id 抛错 |
+| A2 | 无假覆盖 | 每条 `test()` 只声明自己真正断言的 id；`covers()`（冻结目录）与 `coversV025()`（v0.25 清单）两个命名空间不得混用 |
+| A3 | 无写库入口 | row-policy pack 下 `apply-db` 直接拒绝；准备流程不产生 INSERT／DDL |
+| A4 | 两阶段证据 | `evidence/phase-off/` 与 `evidence/phase-on/` 都存在，且逐 id 有状态与落点 |
+| A5 | 强度 B 判定 | 任一 id 为 `blocked` 或 `failed` 时，整体不得写「强度 B 通过」 |
+| A6 | 密钥不出库 | 证据目录检索不到 RDS 密码明文 |
+
+自动化落点：`scripts/e2e/__tests__/row-policy-pack.test.mjs`、`scripts/e2e/__tests__/row-policy-phase.test.mjs`、`scripts/e2e/__tests__/rds-dataplane-policy.test.mjs`；浏览器落点见 `webui/tests/real-e2e/row-policy-v025.spec.ts` 等。
+
+## 完成定义
+
+本条收口需同时满足：
+
+1. Task 1–4 的注册表、审判包、`--pack row-policy`、两阶段编排与策略门禁全部在仓，且有自动化测试兜住。
+2. Task 5–7 的 spec 重写与 Security BY 改绑落地，每个 id 的断言所有者唯一。
+3. Task 9 的本机实跑产出两阶段证据，报告里逐 id 有状态。
+4. **不**宣称强度 B 全量已绿：结构性不可达项在缺口清单里登记为显式缺口，而不是记成通过。
+5. 本条不表示可上线；功能现行状态只读 Spec 头部。
+
+## 风险
+
+| 风险 | 影响 | 处置 |
+|---|---|---|
+| RDS 只读探针失败或网络抖动 | A5 判定被误杀 | 探针失败则该 id 记 `blocked` 并写明原因，不改判定口径 |
+| 大小写敏感文件系统假设 | V19／V22 在 macOS APFS 上结构性不可达 | 记为显式缺口；换 Linux 大小写敏感环境再跑 |
+| 假 `covers` 复活 | 分母不全导致假绿 | `covers()` 守卫与覆盖可达性门禁双重拦截 |
+| 模板已展开导致 `templateRefs` 为空 | ROW25-V01／V03、RTP25-V02 断言失败 | 属产品缺陷（行权限视图 Spec SC-10），本条只报告不掩盖，修复归行权限视图功能闭口 |
+| 密码泄漏进证据 | 违反密钥红线 | 密码只走文件；按 A6 检索证据目录 |
+
+回滚：全部改动为仓内文件与测试；回滚方式是还原对应提交，不涉及客户环境与出包。
 
 ## Spec coverage check
 
