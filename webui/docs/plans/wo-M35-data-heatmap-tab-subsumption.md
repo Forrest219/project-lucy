@@ -1,7 +1,5 @@
 # M35 Data Heatmap Tab Subsumption Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Demote `/admin/audit-sources` (Data Heatmap) from a top-level sidebar item into a `?tab=heatmap` tab inside `/admin/audit` (Access Log), keeping the existing API, server implementation, and smoke tests untouched.
 
 **Architecture:** Frontend-only change. `Audit.tsx` grows a URL-driven tab switcher; the `HeatRow` rendering moves into the `heatmap` branch; `AuditSources.tsx` becomes a 2-line `<Navigate replace />` shim; `App.tsx` removes the sidebar entry. No backend or API change.

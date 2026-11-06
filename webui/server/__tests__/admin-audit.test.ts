@@ -604,7 +604,10 @@ describe("GET /api/admin/audit/turns", () => {
         expect.arrayContaining([
           expect.objectContaining({ name: "ts", trigger: expect.stringContaining("每条") }),
           expect.objectContaining({ name: "ts_local", format: "YYYY-MM-DD HH:mm:ss" }),
-          expect.objectContaining({ name: "generated_sql", trigger: expect.stringContaining("lucy_query") })
+          expect.objectContaining({ name: "generated_sql", trigger: expect.stringContaining("lucy_query") }),
+          expect.objectContaining({ name: "call_action", label: "动作" }),
+          expect.objectContaining({ name: "call_intent", label: "意图" }),
+          expect.objectContaining({ name: "call_result_summary", label: "结果摘要" })
         ])
       );
 
@@ -748,7 +751,18 @@ describe("GET /api/admin/audit/turns", () => {
         "lucy_begin_question",
         "sl_query"
       ]);
-      expect(reportedDetail.body.data.accessLogs[1].connectionId).toBe("demo-mysql");
+      expect(reportedDetail.body.data.accessLogs[0]).toMatchObject({
+        tool: "lucy_begin_question",
+        accessGrade: "ask"
+      });
+      expect(reportedDetail.body.data.accessLogs[1]).toMatchObject({
+        connectionId: "demo-mysql",
+        accessGrade: expect.any(String)
+      });
+      // Storyline payload keys are always mapped; empty values may be omitted as undefined.
+      expect(Object.keys(reportedDetail.body.data.accessLogs[1])).toEqual(
+        expect.arrayContaining(["accessGrade", "tool", "outcome", "durationMs"])
+      );
 
       await request(app.server).get("/api/admin/audit/turns/inf_does_not_exist").expect(404);
       await request(app.server).get("/api/admin/audit/turns/lucy_does_not_exist").expect(404);

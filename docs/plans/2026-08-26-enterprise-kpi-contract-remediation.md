@@ -1,7 +1,5 @@
 # Enterprise KPI Contract Remediation Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make every Lucy KPI name, value, formula, source, time window, data-quality state, and help annotation mutually consistent, with no fabricated zeroes or cross-page population drift.
 
 **Architecture:** Introduce one typed KPI contract registry in `webui/src/lib/kpiContracts.ts` for stable metric identity and explanatory metadata, while keeping numeric aggregation in the authoritative server/domain module. Every dynamic API metric returns an explicit `ok | no_data | unavailable | partial` state plus `asOf`, window, and formula version; the shared card renders only `ok` values as numbers. Formula contract tests pin boundary conditions and cross-page equivalence before UI copy is updated.

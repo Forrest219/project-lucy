@@ -1,0 +1,15 @@
+# 可问治理面 W1 — Q4 MECE 五档。
+name: ops_question_kpi_agents
+
+grain:
+  - snapshot_id
+  - agent_id
+
+measures:
+  - name: agent_count
+    expr: count(*)
+    description: 该结果集内的配置 Agent 数。
+
+  - name: real_question_count
+    expr: sum(real_question_count)
+    description: 真实问询合计。

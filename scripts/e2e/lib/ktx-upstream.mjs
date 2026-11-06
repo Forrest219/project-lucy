@@ -22,6 +22,22 @@ import path from "node:path";
 import process from "node:process";
 import { portOpen } from "./instance.mjs";
 
+/**
+ * KTX refuses process env that injects git config via GIT_CONFIG_COUNT /
+ * GIT_CONFIG_KEY_* / GIT_CONFIG_VALUE_* (allowUnsafeConfigEnvCount). Cursor
+ * agent sessions often inherit GIT_CONFIG_COUNT=1; strip those keys so the
+ * upstream can start without requiring a clean outer shell.
+ */
+export function sanitizeKtxChildEnv(env) {
+  const out = { ...env };
+  for (const key of Object.keys(out)) {
+    if (key === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(key)) {
+      delete out[key];
+    }
+  }
+  return out;
+}
+
 /** Reserves a free ephemeral TCP port on the loopback interface. */
 export function freePort() {
   return new Promise((resolve, reject) => {
@@ -51,7 +67,7 @@ export async function startKtxUpstream(run, { ktxBin = "ktx", timeoutMs = 30_000
     return { ok: false, reason: `no free port for the KTX upstream: ${error instanceof Error ? error.message : String(error)}` };
   }
 
-  const childEnv = { ...process.env, ...run.instance.env, ...env };
+  const childEnv = sanitizeKtxChildEnv({ ...process.env, ...run.instance.env, ...env });
   // An absolute `--ktx-bin` still needs its own directory on PATH: the CLI
   // shells out to helpers it expects to find next to itself.
   if (path.isAbsolute(ktxBin)) {

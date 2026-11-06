@@ -10,6 +10,7 @@ import { computeGold, generateDataset, makeCanaries } from "../../../examples/se
 import { REPO_ROOT, fileDigest } from "../lib/common.mjs";
 import { applyDbToRun } from "../apply-db.mjs";
 import { appliedDatabaseCapability } from "../lib/db-capability.mjs";
+import { stopDisposablePostgres } from "../lib/db-pg-fixture.mjs";
 import { AGENT_TOKENS, PrepareError, prepareEnvironment } from "../prepare-environment.mjs";
 import { ExternalInstance, LucyHttp } from "../lib/instance.mjs";
 import { reconcileExternalFlag } from "../lib/target-identity.mjs";
@@ -660,11 +661,15 @@ describe("prepare-environment: --apply-db contract (B3)", () => {
 
   it("selects PostgreSQL only when --db-engine postgres is set", async () => {
     const root = tmp();
+    // An explicit host/port keeps this case hermetic: it asserts the ENGINE
+    // selection, not the disposable data plane (that is the next case).
     const { run } = await prepareEnvironment({
       runId: "local-test-db-pg-0001",
       mode: "local",
       runRoot: root,
-      dbEngine: "postgres"
+      dbEngine: "postgres",
+      dbHost: "127.0.0.1",
+      dbPort: 5432
     });
     assert.equal(run.db.engine, "postgres");
     assert.equal(run.db.port, 5432);
@@ -672,6 +677,36 @@ describe("prepare-environment: --apply-db contract (B3)", () => {
     const ktx = parse(readFileSync(path.join(run.paths.project, "ktx.yaml"), "utf8"));
     assert.equal(ktx.connections["fin-db"].driver, "postgres");
     assert.equal(ktx.connections["fin-db"].port, 5432);
+  });
+
+  it("brings its own disposable PostgreSQL data plane in local mode", async () => {
+    const root = tmp();
+    // The data source must actually EXIST for a run to be able to seed it. A
+    // local postgres run therefore starts its own disposable container and
+    // records its handle, so the run can be torn down by container id.
+    let fixture;
+    try {
+      const { run } = await prepareEnvironment({
+        runId: "local-test-db-pg-disposable-0001",
+        mode: "local",
+        runRoot: root,
+        dbEngine: "postgres"
+      });
+      fixture = run.db.disposable;
+      assert.ok(fixture, "a local postgres run must record its disposable data plane");
+      assert.equal(fixture.image, "postgres:16-alpine");
+      assert.ok(Number.isInteger(fixture.port) && fixture.port > 0, "the disposable data plane has a port");
+      assert.equal(run.db.host, fixture.host);
+      assert.equal(run.db.port, fixture.port);
+      assert.equal(run.db.ownerRole, "postgres");
+      // The seed producer must authenticate with the CONTAINER's own owner
+      // password file, not a freshly generated one.
+      assert.equal(run.db.ownerPasswordFile, path.join(run.paths.checker, "secrets", "owner.password"));
+      const ktx = parse(readFileSync(path.join(run.paths.project, "ktx.yaml"), "utf8"));
+      assert.equal(ktx.connections["fin-db"].port, fixture.port);
+    } finally {
+      if (fixture?.containerId) await stopDisposablePostgres({ containerId: fixture.containerId });
+    }
   });
 
   it("keeps an explicit port and refuses an unknown engine", async () => {
@@ -706,5 +741,17 @@ describe("prepare-environment: --apply-db contract (B3)", () => {
     assert.equal(appliedDatabaseCapability({ applied: true, engine: "mysql" }), "mysql");
     assert.equal(appliedDatabaseCapability({ applied: true, engine: "postgres" }), "postgres");
     assert.equal(appliedDatabaseCapability({ applied: true }), "postgres");
+  });
+
+  it("grants mysql for rds-mysql-readonly when readonlyProven without applied seed", () => {
+    assert.equal(
+      appliedDatabaseCapability({
+        applied: false,
+        engine: "mysql",
+        dataPlane: "rds-mysql-readonly",
+        readonlyProven: true
+      }),
+      "mysql"
+    );
   });
 });

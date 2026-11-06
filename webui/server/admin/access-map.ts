@@ -67,6 +67,37 @@ import {
 } from "./counting.js";
 import { buildMetricWindow, type MetricWindow } from "./metric-window.js";
 import { defaultUsageConditionSql } from "../proxy/usage-classification.js";
+import {
+  ACCESS_MAP_DEFAULT_ACCESS_GRADE,
+  ACCESS_MAP_DEFAULT_INQUIRY_KIND,
+  buildBandED,
+  defaultEnsureInquiryRebuild,
+  isAccessGradeFilterParam,
+  isInquiryKindFilterParam,
+  resolveTurn,
+  type AccessMapAccessGradeFilter,
+  type AccessMapInquiryKind,
+  type EchoRebuildFn
+} from "./access-map-echo.js";
+import { inquiryKindOfTurn, type InquiryKind } from "./audit-inquiry-kind.js";
+import {
+  ACCESS_MAP_DETAIL_DEFAULT_LIMIT,
+  buildAccessMapHourlyDetail,
+  parseDetailPagination,
+  type AccessMapHourlyDetail,
+  type DetailFocusContext,
+  type DetailFocusEntity
+} from "./access-map-hourly-detail.js";
+
+export type { AccessMapHourlyDetail, AccessMapHourlyDetailRow } from "./access-map-hourly-detail.js";
+export {
+  buildHourlyDetailBuckets,
+  packHourlyDetailKey,
+  shanghaiHourFloor,
+  parseDetailPagination,
+  groupAuditRowsToHourlyCalls,
+  bandSetsFromAuditRows
+} from "./access-map-hourly-detail.js";
 
 /** Spec 189 §4.1 — the single Default Usage condition. */
 const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
@@ -75,8 +106,10 @@ const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
 
 export type AccessMapWindow = "24h" | "168h" | "720h";
 export type AccessMapLayer = "flat" | "schema";
-export type AccessMapTrust = "confirmed" | "include_candidate";
+/** Spec 20261105：关联口径硬锁已确认关联；不再接受 include_candidate。 */
+export type AccessMapTrust = "confirmed";
 export type AccessMapView = "map" | "table";
+export type { AccessMapInquiryKind, AccessMapAccessGradeFilter, EchoRebuildFn };
 
 /** 统计窗口小时数。默认 168h（与 L25-03「使用概况」同口径）。 */
 export const ACCESS_MAP_WINDOW_HOURS: Record<AccessMapWindow, number> = {
@@ -89,14 +122,25 @@ export const ACCESS_MAP_DEFAULT_WINDOW: AccessMapWindow = "168h";
 export type AccessMapQuery = {
   agent: string | null;
   role: string | null;
+  /**
+   * Parsed for URL round-trip only. Spec 20261104 D5：取消 Token 条件 —
+   * ignored at load／band／detail（不筛选、不因出现而 400）.
+   */
   token: string | null;
   table: string | null;
   connection: string | null;
   window: AccessMapWindow;
   layer: AccessMapLayer;
   trust: AccessMapTrust;
+  /** Spec 20261102：缺省未出现 → management；非法 → 400（与审计非法回落不同）。 */
+  inquiryKind: AccessMapInquiryKind;
+  /** Spec 20261102：缺省未出现 → exclude_connect；非法 → 400。 */
+  accessGrade: AccessMapAccessGradeFilter;
   view: AccessMapView;
   focus: string | null;
+  /** Spec 20261104：明细分页；缺省由 parseAccessMapQuery 填 200／0。 */
+  detailLimit?: number;
+  detailOffset?: number;
 };
 
 export type AccessMapQueryError = {
@@ -112,17 +156,49 @@ export type AccessMapQueryParseResult =
 
 const WINDOW_VALUES = new Set<string>(["24h", "168h", "720h"]);
 const LAYER_VALUES = new Set<string>(["flat", "schema"]);
-const TRUST_VALUES = new Set<string>(["confirmed", "include_candidate"]);
 const VIEW_VALUES = new Set<string>(["map", "table"]);
 
-function readParam(
-  input: URLSearchParams | Record<string, string | undefined>,
-  key: string
-): string | null {
-  const raw = input instanceof URLSearchParams ? input.get(key) : input[key];
+type AccessMapQueryInput =
+  | URLSearchParams
+  | Record<string, string | string[] | undefined>;
+
+function readParam(input: AccessMapQueryInput, key: string): string | null {
+  if (input instanceof URLSearchParams) {
+    const raw = input.get(key);
+    if (typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  }
+  const raw = input[key];
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
   return trimmed.length === 0 ? null : trimmed;
+}
+
+/**
+ * Spec 20261105 D12：trust 专用解析。
+ * 仅「键未出现」缺省 confirmed；键出现则 trim 后必须 === "confirmed"。
+ * 禁止走通用 readParam 的空串→null 归并。
+ */
+function parseTrustParam(
+  input: AccessMapQueryInput
+): { ok: true; trust: AccessMapTrust } | { ok: false; message: string } {
+  let values: string[];
+  if (input instanceof URLSearchParams) {
+    if (!input.has("trust")) return { ok: true, trust: "confirmed" };
+    values = input.getAll("trust");
+  } else if (!Object.prototype.hasOwnProperty.call(input, "trust") || input.trust === undefined) {
+    return { ok: true, trust: "confirmed" };
+  } else {
+    const raw = input.trust;
+    values = Array.isArray(raw) ? raw.map(String) : [String(raw)];
+  }
+  for (const value of values) {
+    if (value.trim() !== "confirmed") {
+      return { ok: false, message: "关联口径只接受已确认关联" };
+    }
+  }
+  return { ok: true, trust: "confirmed" };
 }
 
 /**
@@ -130,10 +206,11 @@ function readParam(
  *
  * 非法值一律返回 400（`ok: false`），不做静默纠正 —— 一个被悄悄改写成默认值的
  * 分享链接，会让用户以为「这个 Agent 没有授权路径」，而真相只是拼错了一个参数。
+ *
+ * 路由须传入原始查询串构造的 URLSearchParams（见 routes/access-map.ts），
+ * 不得用 Fastify 折叠后的 request.query 判断 trust 键是否出现。
  */
-export function parseAccessMapQuery(
-  input: URLSearchParams | Record<string, string | undefined>
-): AccessMapQueryParseResult {
+export function parseAccessMapQuery(input: AccessMapQueryInput): AccessMapQueryParseResult {
   const bad = (param: string, message: string): AccessMapQueryParseResult => ({
     ok: false,
     error: { code: "INVALID_ACCESS_MAP_PARAMETER", message, param }
@@ -147,18 +224,38 @@ export function parseAccessMapQuery(
   if (layerRaw !== null && !LAYER_VALUES.has(layerRaw)) {
     return bad("layer", "层级参数只能是 flat 或 schema");
   }
-  const trustRaw = readParam(input, "trust");
-  if (trustRaw !== null && !TRUST_VALUES.has(trustRaw)) {
-    return bad("trust", "访问口径参数只能是 confirmed 或 include_candidate");
+  const trustParsed = parseTrustParam(input);
+  if (!trustParsed.ok) {
+    return bad("trust", trustParsed.message);
   }
   const viewRaw = readParam(input, "view");
   if (viewRaw !== null && !VIEW_VALUES.has(viewRaw)) {
     return bad("view", "视图参数只能是 map 或 table");
   }
+  // Spec 20261102 D10：非法 inquiryKind／accessGrade → 400（禁止走审计非法回落解析）。
+  const inquiryKindRaw = readParam(input, "inquiryKind");
+  if (inquiryKindRaw !== null && !isInquiryKindFilterParam(inquiryKindRaw)) {
+    return bad(
+      "inquiryKind",
+      "问询种类只能是 management、real、unreported_query、session_visit 或 all"
+    );
+  }
+  const accessGradeRaw = readParam(input, "accessGrade");
+  if (accessGradeRaw !== null && !isAccessGradeFilterParam(accessGradeRaw)) {
+    return bad(
+      "accessGrade",
+      "访问等级只能是 exclude_connect、all、connect、browse、prepare、ask、query、control 或 unclassified"
+    );
+  }
 
   const tableRaw = readParam(input, "table");
   if (tableRaw !== null && splitTableParam(tableRaw) === null) {
     return bad("table", "表定位参数必须是 conn::schema::table");
+  }
+
+  const detailPaging = parseDetailPagination(input);
+  if (!detailPaging.ok) {
+    return bad(detailPaging.param, detailPaging.message);
   }
 
   return {
@@ -171,9 +268,13 @@ export function parseAccessMapQuery(
       connection: readParam(input, "connection"),
       window: (windowRaw as AccessMapWindow | null) ?? ACCESS_MAP_DEFAULT_WINDOW,
       layer: (layerRaw as AccessMapLayer | null) ?? "flat",
-      trust: (trustRaw as AccessMapTrust | null) ?? "confirmed",
+      trust: trustParsed.trust,
+      inquiryKind: inquiryKindRaw ?? ACCESS_MAP_DEFAULT_INQUIRY_KIND,
+      accessGrade: accessGradeRaw ?? ACCESS_MAP_DEFAULT_ACCESS_GRADE,
       view: (viewRaw as AccessMapView | null) ?? "map",
-      focus: readParam(input, "focus")
+      focus: readParam(input, "focus"),
+      detailLimit: detailPaging.detailLimit,
+      detailOffset: detailPaging.detailOffset
     }
   };
 }
@@ -381,6 +482,12 @@ export type AccessMapAuditRow = {
   sourceName: string;
   /** Spec 162／189 eval_mark；缺省视为非探针。 */
   evalMark?: boolean | null;
+  /** Tool name for accessGrade；小时明细与 echo 共用。 */
+  tool?: string | null;
+  /** Explicit turn id for inquiryKind resolution. */
+  lucyTurnId?: string | null;
+  /** Pre-resolved inquiry kind（provider 或测试夹具）。 */
+  inquiryKind?: InquiryKind | null;
 };
 
 export type AccessMapPermissionSnapshot = {
@@ -388,6 +495,19 @@ export type AccessMapPermissionSnapshot = {
   rolesJson: unknown;
   resolvedJson: unknown;
   capabilityDigest: string | null;
+};
+
+/** Spec 20261102 D8：结构筛选前的投影集合 E 披露。 */
+export type AccessMapEchoMeta = {
+  /** 进入访问路径构建的允许调用数 \|E\|（结构筛选前）。 */
+  enteringAllowCallCount: number;
+  /** 明示属于 scope／focus／layer 折叠之前。 */
+  enteringAllowCallCountBasis: "pre_structure";
+  /**
+   * 当前结构筛选／focus 投影后的允许调用数 \|P\|（只读披露）。
+   * 无结构筛选且无 focus 时 \|P\|=\|E\|；有筛选时仍保持 enteringAllowCallCount=\|E\|。
+   */
+  projectedAllowCallCount?: number;
 };
 
 export type AccessMapAccessSide =
@@ -398,6 +518,9 @@ export type AccessMapAccessSide =
       tokenCallCounts: Map<string, number>;
       tokenLastUsed: Map<string, string>;
       loadSnapshot: (hash: string) => AccessMapPermissionSnapshot | null;
+      /** 结构筛选前 \|D\|；缺省时由 buildAccessLayer 从 rows 推导。 */
+      deniedCalls?: number;
+      echo?: AccessMapEchoMeta;
     }
   | { state: "unavailable"; reason: string };
 
@@ -417,6 +540,8 @@ export type AccessMapProvider = {
     window: MetricWindow;
     trust: AccessMapTrust;
     tokenLabel: string | null;
+    inquiryKind: AccessMapInquiryKind;
+    accessGrade: AccessMapAccessGradeFilter;
   }) => Promise<AccessMapAccessSide>;
 };
 
@@ -1117,8 +1242,12 @@ export type FoldResult = {
   folded: { nodes: number; edges: number };
 };
 
-function nodeWeight(node: InternalNode): number {
-  return node.grantPaths + node.accessPaths;
+/**
+ * 折叠受害权重（usage-first Spec §5.8 / D24）：仅 accessPaths。
+ * 闲置表 accessPaths=0，优先被折；高使用实体保留到最后。
+ */
+function foldVictimWeight(node: InternalNode): number {
+  return node.accessPaths;
 }
 
 /**
@@ -1126,6 +1255,8 @@ function nodeWeight(node: InternalNode): number {
  *
  * 折叠**只影响渲染**：被折叠的节点并入同层的「其他（N）」节点，
  * 计数口径一个字都不改；表格等价视图读的是全量图。
+ *
+ * 受害序（usage-first）：最深 → 最小 accessPaths → grantPaths 升序 → id。
  */
 export function foldAccessMapGraph(
   graph: AccessMapGraph,
@@ -1148,11 +1279,15 @@ export function foldAccessMapGraph(
   let foldedNodes = 0;
   let foldedEdges = 0;
   while (kept.size > budgets.nodeBudget || countEdges() > budgets.edgeBudget) {
-    // 先删最深的、最轻的节点，保证剩下的主干仍然可读。
+    // 先删最深的、使用最少的节点（闲置优先），保证高使用表名留在 render。
     const candidates = [...kept.values()]
       .filter((node) => node.kind !== "token" && node.kind !== "agent")
       .sort(
-        (a, b) => b.depth - a.depth || nodeWeight(a) - nodeWeight(b) || b.id.localeCompare(a.id)
+        (a, b) =>
+          b.depth - a.depth ||
+          foldVictimWeight(a) - foldVictimWeight(b) ||
+          a.grantPaths - b.grantPaths ||
+          a.id.localeCompare(b.id)
       );
     const victim = candidates[0];
     if (!victim) break;
@@ -1319,18 +1454,26 @@ function restrictToSubgraph(
 function reachableFrom(
   edges: Map<string, InternalEdge>,
   seeds: string[],
-  direction: "forward" | "both"
+  direction: "forward" | "backward" | "both"
 ): Set<string> {
   const reached = new Set<string>(seeds);
   let changed = true;
   while (changed) {
     changed = false;
     for (const edge of edges.values()) {
-      if (reached.has(edge.source) && !reached.has(edge.target)) {
+      if (
+        (direction === "forward" || direction === "both") &&
+        reached.has(edge.source) &&
+        !reached.has(edge.target)
+      ) {
         reached.add(edge.target);
         changed = true;
       }
-      if (direction === "both" && reached.has(edge.target) && !reached.has(edge.source)) {
+      if (
+        (direction === "backward" || direction === "both") &&
+        reached.has(edge.target) &&
+        !reached.has(edge.source)
+      ) {
         reached.add(edge.source);
         changed = true;
       }
@@ -1339,47 +1482,108 @@ function reachableFrom(
   return reached;
 }
 
+/** 结构筛选字段（与 hourly-detail 精确维一致）。 */
+export type StructureScopeFields = {
+  agentId: string;
+  roleId: string;
+  connectionId: string;
+  schema: string;
+  sourceName: string;
+};
+
+export type StructureScopeQuery = Pick<
+  AccessMapQuery,
+  "agent" | "role" | "connection" | "table"
+>;
+
+export function hasStructureScope(query: StructureScopeQuery): boolean {
+  return Boolean(query.agent || query.role || query.connection || query.table);
+}
+
 /**
- * 按 `agent` / `role` / `connection` / `table` 过滤子图。
- *
- * Agent 过滤保留该 Agent 的全链路；Role / Connection / Table 过滤保留该节点的
- * 上下游（它们是「关系」的另一半，只保留下游会丢掉「谁在用」）。
+ * D26：路径字段精确匹配（禁止双向连通分量）。
+ * 与 `applyScopeToDetailBuckets` 同口径。
+ */
+export function pathMatchesStructureScope(
+  path: StructureScopeFields,
+  query: StructureScopeQuery
+): boolean {
+  if (query.agent !== null && path.agentId !== query.agent) return false;
+  if (query.role !== null && path.roleId !== query.role) return false;
+  if (query.connection !== null && path.connectionId !== query.connection) return false;
+  if (query.table !== null) {
+    const parsed = splitTableParam(query.table);
+    if (!parsed) return false;
+    if (
+      path.connectionId !== parsed.connectionId ||
+      path.schema !== parsed.schema ||
+      path.sourceName !== parsed.sourceName
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** 按结构筛选裁剪授权侧 contributions（逐 source 过滤后重算）。 */
+export function filterGrantSideByStructureScope(
+  side: AccessMapGrantSide,
+  query: StructureScopeQuery
+): AccessMapGrantSide {
+  if (!hasStructureScope(query)) return side;
+  const contributions: AccessMapRoleContribution[] = [];
+  for (const contribution of side.contributions) {
+    const sources = contribution.sources.filter((source) =>
+      pathMatchesStructureScope(
+        {
+          agentId: contribution.agentId,
+          roleId: contribution.roleId,
+          connectionId: source.connectionId,
+          schema: source.schema,
+          sourceName: source.sourceName
+        },
+        query
+      )
+    );
+    if (sources.length === 0) continue;
+    contributions.push({ ...contribution, sources });
+  }
+  const agentIds = new Set(contributions.map((item) => item.agentId));
+  const agents = side.agents.filter((agent) => agentIds.has(agent.id));
+  return { ...side, contributions, agents };
+}
+
+/** 按结构筛选裁剪访问路径（含 callIds）；不匹配的路径整条丢弃。 */
+export function filterAccessPathsByStructureScope(
+  paths: AccessPathAggregate[],
+  query: StructureScopeQuery
+): AccessPathAggregate[] {
+  if (!hasStructureScope(query)) return paths;
+  return paths.filter((path) =>
+    pathMatchesStructureScope(
+      {
+        agentId: path.agentId,
+        roleId: path.roleId,
+        connectionId: path.connectionId,
+        schema: path.schema,
+        sourceName: path.sourceName
+      },
+      query
+    )
+  );
+}
+
+/**
+ * @deprecated 连通分量 scope 已废止（D26）。保留导出名以免旧测试导入崩；
+ * 实现改为恒等（由 buildAccessMap 在 merge 前做路径投影）。
  */
 export function applyScopeFilters(input: {
   nodes: Map<string, InternalNode>;
   edges: Map<string, InternalEdge>;
   query: AccessMapQuery;
 }): { nodes: Map<string, InternalNode>; edges: Map<string, InternalEdge> } {
-  const { query } = input;
-  let current: { nodes: Map<string, InternalNode>; edges: Map<string, InternalEdge> } = {
-    nodes: input.nodes,
-    edges: input.edges
-  };
-
-  if (query.agent) {
-    const reached = reachableFrom(current.edges, [nodeId("agent", query.agent)], "forward");
-    current = restrictToSubgraph(current, (node) => reached.has(node.id));
-  }
-  if (query.role) {
-    const reached = reachableFrom(current.edges, [nodeId("role", query.role)], "both");
-    current = restrictToSubgraph(current, (node) => reached.has(node.id));
-  }
-  if (query.connection) {
-    const reached = reachableFrom(current.edges, [nodeId("connection", query.connection)], "both");
-    current = restrictToSubgraph(current, (node) => reached.has(node.id));
-  }
-  if (query.table) {
-    const parsed = splitTableParam(query.table);
-    if (parsed) {
-      const tableId = nodeId(
-        "table",
-        `${parsed.connectionId}::${parsed.schema}::${parsed.sourceName}`
-      );
-      const reached = reachableFrom(current.edges, [tableId], "both");
-      current = restrictToSubgraph(current, (node) => reached.has(node.id));
-    }
-  }
-  return current;
+  void input.query;
+  return { nodes: input.nodes, edges: input.edges };
 }
 
 /** 下钻聚焦：只渲染该节点的连通子图（§7.2）。 */
@@ -1392,7 +1596,12 @@ export function focusSubgraph(input: {
   // 分享链接里的 focus 可能已经失效（节点被删除 / 筛选变了）。
   // 失效时回到全图，而不是渲染一张空图 —— 空图会被误读成「这个 Agent 没有授权」。
   if (!input.nodes.has(input.focus)) return input;
-  const reached = reachableFrom(input.edges, [input.focus], "both");
+  const focusNode = input.nodes.get(input.focus);
+  // 表／Schema 为叶：只沿入边取上游。若用双向连通，共享连接会扇出兄弟表，
+  // 使 keptAccessRefs／counts.accessPaths／|P| 混入 focus 外表路径。
+  const direction =
+    focusNode?.kind === "table" || focusNode?.kind === "schema" ? "backward" : "both";
+  const reached = reachableFrom(input.edges, [input.focus], direction);
   return restrictToSubgraph(input, (node) => reached.has(node.id));
 }
 
@@ -1416,6 +1625,8 @@ export type AccessMapMeta = {
     rawCalls: number;
     reason?: string;
   };
+  /** Spec 20261102：投影集合 E 的结构筛选前计数。 */
+  echo?: AccessMapEchoMeta;
   counts: {
     agents: number;
     roles: number;
@@ -1460,6 +1671,11 @@ export type AccessMapResponse = {
     grant: GrantPathRef[];
     access: AccessPathRef[];
   };
+  /**
+   * Spec 20261104：仅 `view=table` 计算。access unavailable → `null`
+   *（禁止用空成功表冒充）；`view=map` 可省略。
+   */
+  detail?: AccessMapHourlyDetail | null;
 };
 
 /**
@@ -1473,6 +1689,61 @@ export type AccessMapResponse = {
  * 降级**不得**用空图或零值图冒充正常结果，所以 `meta.grant.state` 与
  * `meta.access.state` 永远如实发布。
  */
+function decodeFocusEntity(node: InternalNode | undefined): DetailFocusEntity | null {
+  if (!node) return null;
+  switch (node.kind) {
+    case "agent":
+      return { kind: "agent", agentId: node.id.slice("agent:".length) };
+    case "role":
+      return { kind: "role", roleId: node.id.slice("role:".length) };
+    case "connection":
+      return { kind: "connection", connectionId: node.id.slice("conn:".length) };
+    case "schema": {
+      const rest = node.id.slice("schema:".length);
+      const sep = rest.indexOf("::");
+      if (sep < 0) return { kind: "schema", connectionId: rest, schema: "" };
+      return {
+        kind: "schema",
+        connectionId: rest.slice(0, sep),
+        schema: rest.slice(sep + 2)
+      };
+    }
+    case "table": {
+      const rest = node.id.slice("table:".length);
+      const parts = rest.split("::");
+      if (parts.length !== 3) return { kind: "table" };
+      return {
+        kind: "table",
+        connectionId: parts[0],
+        schema: parts[1],
+        table: parts[2]
+      };
+    }
+    default:
+      return { kind: node.kind };
+  }
+}
+
+/** 边上允许调用 ID 并集（投影集合 P 的图侧真源）。 */
+export function collectAccessCallIds(edges: Map<string, InternalEdge>): Set<string> {
+  const ids = new Set<string>();
+  for (const edge of edges.values()) {
+    for (const callId of edge.accessCallIds) ids.add(callId);
+  }
+  return ids;
+}
+
+/** 从已序列化边无法取 ID；测试用：由访问路径聚合推导允许调用集合。 */
+export function allowCallIdsFromAccessPaths(
+  paths: Array<{ calls: Array<{ callId: string }> }>
+): Set<string> {
+  const ids = new Set<string>();
+  for (const path of paths) {
+    for (const call of path.calls) ids.add(call.callId);
+  }
+  return ids;
+}
+
 export async function buildAccessMap(
   provider: AccessMapProvider,
   query: AccessMapQuery,
@@ -1512,8 +1783,12 @@ export async function buildAccessMap(
   let accessReason = "授权面不可用，未评估访问层";
   let deniedCalls = 0;
   let rawCalls = 0;
+  let echoMeta: AccessMapEchoMeta | undefined;
   let keptGrantRefs: GrantPathRef[] = [];
   let keptAccessRefs: AccessPathRef[] = [];
+  let detail: AccessMapHourlyDetail | null | undefined;
+  let accessRowsForDetail: AccessMapAuditRow[] | null = null;
+  let detailFocus: DetailFocusContext | null = null;
 
   if (grantSide.state !== "unavailable") {
     const grant = buildGrantLayer({ side: grantSide, withSchema: query.layer === "schema" });
@@ -1524,37 +1799,53 @@ export async function buildAccessMap(
       throw new Error(`access_map_flow_conservation_violated:${violations.join(";")}`);
     }
 
+    // Spec 20261104 D5／D12：取消 Token 条件；每次请求只经 loadAccessSide 调一次 buildBandED。
     const access = await provider.loadAccessSide({
       window,
       trust: query.trust,
-      tokenLabel: query.token
+      tokenLabel: null,
+      inquiryKind: query.inquiryKind,
+      accessGrade: query.accessGrade
     });
 
-    let internalNodes = grant.nodes;
-    let internalEdges = grant.edges;
-    let accessPathRefs: AccessPathRef[] = [];
+    // D26：结构筛选 = 路径字段过滤后重算图；先裁剪再 merge，禁止连通分量冒充。
+    const withSchema = query.layer === "schema";
+    const scopedGrantSide = filterGrantSideByStructureScope(grantSide, query);
+    const scopedGrant = hasStructureScope(query)
+      ? buildGrantLayer({ side: scopedGrantSide, withSchema })
+      : grant;
+
+    let internalNodes = scopedGrant.nodes;
+    let internalEdges = scopedGrant.edges;
+    let scopedAccessPaths: AccessPathAggregate[] = [];
+    let loadSnapshot: (hash: string) => AccessMapPermissionSnapshot | null = () => null;
 
     if (access.state === "ok") {
       accessState = "ok";
       accessReason = "";
-      const layer = buildAccessLayer({ rows: access.rows, tokenLabel: query.token });
-      deniedCalls = layer.deniedCalls;
+      accessRowsForDetail = access.rows;
+      // D5：token 忽略；不再按 query.token 过滤访问层。
+      const layer = buildAccessLayer({ rows: access.rows, tokenLabel: null });
+      // SC-14：不得因「只返回 E」把拒绝计数归零——优先用 access.deniedCalls（\|D\|）。
+      deniedCalls = access.deniedCalls ?? layer.deniedCalls;
       rawCalls = layer.rawCalls;
-      accessPathRefs = layer.paths.map((path) => ({
-        agentId: path.agentId,
-        roleId: path.roleId,
-        connectionId: path.connectionId,
-        schema: path.schema,
-        sourceName: path.sourceName
-      }));
+      echoMeta = access.echo ?? {
+        enteringAllowCallCount: rawCalls,
+        enteringAllowCallCountBasis: "pre_structure"
+      };
+      loadSnapshot = access.loadSnapshot;
+      scopedAccessPaths = filterAccessPathsByStructureScope(layer.paths, query);
       const merged = mergeLayers({
-        grant,
-        paths: layer.paths,
-        loadSnapshot: access.loadSnapshot,
-        withSchema: query.layer === "schema"
+        grant: scopedGrant,
+        paths: scopedAccessPaths,
+        loadSnapshot,
+        withSchema
       });
       internalNodes = merged.nodes;
       internalEdges = merged.edges;
+    } else {
+      accessState = "unavailable";
+      accessReason = access.reason;
     }
 
     attachCredentialList({
@@ -1564,8 +1855,50 @@ export async function buildAccessMap(
       tokenLastUsed: access.state === "ok" ? access.tokenLastUsed : new Map()
     });
 
-    const scoped = applyScopeFilters({ nodes: internalNodes, edges: internalEdges, query });
-    const focused = focusSubgraph({ nodes: scoped.nodes, edges: scoped.edges, focus: query.focus });
+    // D27：focus = 连通子图；图与 detail 共用同一 focus→P 定义。
+    const focused = focusSubgraph({
+      nodes: internalNodes,
+      edges: internalEdges,
+      focus: query.focus
+    });
+
+    // |P|／accessPaths 必须按「子图内路径」计，不能对中间边 accessCallIds 取并集——
+    // 共享 role→conn 边会残留兄弟表 callId。
+    let projectedAccessPaths = scopedAccessPaths;
+    keptGrantRefs = scopedGrant.pathRefs;
+    if (query.focus) {
+      const keptNodeIds = new Set(focused.nodes.keys());
+      const refInFocusedSubgraph = (ref: {
+        agentId: string;
+        roleId: string;
+        connectionId: string;
+        schema: string;
+        sourceName: string;
+      }): boolean => {
+        if (!keptNodeIds.has(nodeId("agent", ref.agentId))) return false;
+        if (!keptNodeIds.has(nodeId("role", ref.roleId))) return false;
+        if (!keptNodeIds.has(nodeId("connection", ref.connectionId))) return false;
+        const tableKey = `${ref.connectionId}::${ref.schema}::${ref.sourceName}`;
+        return keptNodeIds.has(nodeId("table", tableKey));
+      };
+      projectedAccessPaths = scopedAccessPaths.filter(refInFocusedSubgraph);
+      keptGrantRefs = keptGrantRefs.filter(refInFocusedSubgraph);
+    }
+
+    const projectedAllowIds = allowCallIdsFromAccessPaths(projectedAccessPaths);
+    if (query.focus && internalNodes.has(query.focus)) {
+      detailFocus = {
+        accessCallIds: projectedAllowIds,
+        entity: decodeFocusEntity(focused.nodes.get(query.focus))
+      };
+    }
+
+    if (echoMeta) {
+      echoMeta = {
+        ...echoMeta,
+        projectedAllowCallCount: projectedAllowIds.size
+      };
+    }
 
     nodes = [...focused.nodes.values()].map(serializeNode);
     edges = [...focused.edges.values()].map(serializeEdge);
@@ -1594,18 +1927,14 @@ export async function buildAccessMap(
     for (const evaluation of allEvaluations) distinct.set(evaluation.pathKey, evaluation);
     coverage = summarizeSnapshotCoverage([...distinct.values()]);
 
-    // 计数口径统一走共享词汇（`counting.ts`），不另写一套。
-    const keptNodeIds = new Set(focused.nodes.keys());
-    keptGrantRefs = grant.pathRefs.filter((ref) =>
-      keptNodeIds.has(nodeId("agent", ref.agentId)) &&
-      keptNodeIds.has(nodeId("role", ref.roleId)) &&
-      keptNodeIds.has(nodeId("connection", ref.connectionId))
-    );
-    keptAccessRefs = accessPathRefs.filter((ref) =>
-      keptNodeIds.has(nodeId("agent", ref.agentId)) &&
-      keptNodeIds.has(nodeId("role", ref.roleId)) &&
-      keptNodeIds.has(nodeId("connection", ref.connectionId))
-    );
+    // 计数口径统一走共享词汇（`counting.ts`）；路径投影后 refs 已是 P 侧。
+    keptAccessRefs = projectedAccessPaths.map((path) => ({
+      agentId: path.agentId,
+      roleId: path.roleId,
+      connectionId: path.connectionId,
+      schema: path.schema,
+      sourceName: path.sourceName
+    }));
     const tableRefs: CanonicalSourceRef[] = nodes
       .filter((node) => node.kind === "table")
       .map((node) => ({
@@ -1627,6 +1956,21 @@ export async function buildAccessMap(
     });
   }
 
+  if (query.view === "table") {
+    if (accessState !== "ok" || accessRowsForDetail === null) {
+      // §5.5：access unavailable → detail null，禁止空成功表冒充。
+      detail = null;
+    } else {
+      detail = buildAccessMapHourlyDetail({
+        rows: accessRowsForDetail,
+        query,
+        focus: detailFocus,
+        detailLimit: query.detailLimit ?? ACCESS_MAP_DETAIL_DEFAULT_LIMIT,
+        detailOffset: query.detailOffset ?? 0
+      });
+    }
+  }
+
   return {
     meta: {
       window: { startIso: window.startIso, endIso: window.endIso, asOf: window.asOf },
@@ -1646,6 +1990,7 @@ export async function buildAccessMap(
         rawCalls,
         ...(accessReason ? { reason: accessReason } : {})
       },
+      ...(echoMeta ? { echo: echoMeta } : {}),
       counts,
       signals,
       snapshotCoverage: coverage,
@@ -1656,7 +2001,8 @@ export async function buildAccessMap(
     nodes,
     edges,
     render: { nodes: renderNodes, edges: renderEdges, folded },
-    pathRefs: { grant: keptGrantRefs, access: keptAccessRefs }
+    pathRefs: { grant: keptGrantRefs, access: keptAccessRefs },
+    ...(query.view === "table" ? { detail } : {})
   };
 }
 
@@ -1668,6 +2014,11 @@ export type AdminAccessMapProviderOptions = {
   compileRole?: (roleId: string, context: AdminPermissionContext) => Promise<PerRoleCompilation>;
   /** 注入用：审计库访问。 */
   openAuditDb?: () => Promise<unknown>;
+  /**
+   * Spec 20261102 D6：与审计问询列表同序的推断重建准备。
+   * 注入 openAuditDb 时默认 no-op（夹具自备 inferred_*）；生产路径走 defaultEnsureInquiryRebuild。
+   */
+  ensureInquiryRebuild?: EchoRebuildFn;
 };
 
 type AuditDatabaseLike = {
@@ -1713,7 +2064,12 @@ function parseAuditRows(raw: unknown): AccessMapAuditRow[] {
           ? true
           : row.eval_mark === 0 || row.eval_mark === false
             ? false
-            : null
+            : null,
+      tool: typeof row.tool === "string" ? row.tool : null,
+      lucyTurnId:
+        typeof row.lucy_turn_id === "string" && row.lucy_turn_id.trim()
+          ? row.lucy_turn_id.trim()
+          : null
     });
   }
   return rows;
@@ -1778,6 +2134,13 @@ export function createAdminAccessMapProvider(
   options: AdminAccessMapProviderOptions = {}
 ): AccessMapProvider {
   const compileRole = options.compileRole ?? compileRoleForAdmin;
+  const ensureInquiryRebuild: EchoRebuildFn =
+    options.ensureInquiryRebuild ??
+    (options.openAuditDb
+      ? async () => {
+          /* Injected audit DB owns inferred_* rows; production uses defaultEnsureInquiryRebuild. */
+        }
+      : defaultEnsureInquiryRebuild);
 
   return {
     async loadGrantSide(): Promise<AccessMapGrantSide> {
@@ -1924,27 +2287,58 @@ export function createAdminAccessMapProvider(
       }
 
       try {
+        // Spec 20261102：先 D6 重建 + buildBandED，得到结构筛选前的 B／E／D。
+        const banded = await buildBandED(
+          {
+            window: { startIso: input.window.startIso, endIso: input.window.endIso },
+            trust: input.trust,
+            inquiryKind: input.inquiryKind,
+            accessGrade: input.accessGrade,
+            tokenLabel: input.tokenLabel
+          },
+          db,
+          { ensureInquiryRebuild }
+        );
+        if (!banded.ok) {
+          return { state: "unavailable", reason: banded.reason };
+        }
+        const { B, E, D } = banded.band;
+
         // 时间条件必须用 metric-window 的半开区间，禁止内联 datetime('now','-7 days')
-        // （Spec 128 HR-5）。
+        // （Spec 128 HR-5）。路径只吃 E；deny 行保留以便 deniedCalls=\|D\| 可复核。
         const rows = db
           .prepare(
             `SELECT al.id AS call_id, al.user_id, al.matched_role_id, al.role_ids,
                     al.token_label, al.outcome, al.ts, al.permission_snapshot_hash,
-                    al.capability_digest, al.eval_mark,
+                    al.capability_digest, al.eval_mark, al.tool, al.lucy_turn_id,
                     als.connection_id, als.schema_name, als.source_name
              FROM access_log al
              JOIN access_log_sources als ON als.access_log_id = al.id
              WHERE al.ts >= ? AND al.ts < ?
-               AND (? = 'include_candidate' OR al.association_status = 'confirmed')
+               AND al.association_status = 'confirmed'
                AND (? IS NULL OR al.token_label = ?)`
           )
           .all(
             input.window.startIso,
             input.window.endIso,
-            input.trust,
             input.tokenLabel,
             input.tokenLabel
           );
+
+        const parsed = parseAuditRows(rows).filter((row) => B.has(row.callId));
+
+        // Spec 20261104：为小时明细预解析 inquiryKind（与 echo 同 D6 resolveTurn）。
+        const inquiryCache = new Map<string, InquiryKind | null>();
+        for (const row of parsed) {
+          if (inquiryCache.has(row.callId)) {
+            row.inquiryKind = inquiryCache.get(row.callId) ?? null;
+            continue;
+          }
+          const turn = resolveTurn({ id: row.callId, lucyTurnId: row.lucyTurnId ?? null }, db);
+          const kind = turn ? inquiryKindOfTurn(turn) : null;
+          inquiryCache.set(row.callId, kind);
+          row.inquiryKind = kind;
+        }
 
         // 凭证清单的调用数与 token 过滤无关（凭证清单是固定参照物）。
         // Spec 189 §6 — the credential inventory's window call count uses the
@@ -1956,12 +2350,12 @@ export function createAdminAccessMapProvider(
             `SELECT token_label, COUNT(DISTINCT id) AS calls, MAX(ts) AS last_used
              FROM access_log
              WHERE ts >= ? AND ts < ?
-               AND (? = 'include_candidate' OR association_status = 'confirmed')
+               AND association_status = 'confirmed'
                AND token_label IS NOT NULL
                AND ${DEFAULT_USAGE_CONDITION}
              GROUP BY token_label`
           )
-          .all(input.window.startIso, input.window.endIso, input.trust);
+          .all(input.window.startIso, input.window.endIso);
 
         const tokenCallCounts = new Map<string, number>();
         const tokenLastUsed = new Map<string, string>();
@@ -1996,10 +2390,15 @@ export function createAdminAccessMapProvider(
 
         return {
           state: "ok",
-          rows: parseAuditRows(rows),
+          rows: parsed,
           tokenCallCounts,
           tokenLastUsed,
-          loadSnapshot
+          loadSnapshot,
+          deniedCalls: D.size,
+          echo: {
+            enteringAllowCallCount: E.size,
+            enteringAllowCallCountBasis: "pre_structure"
+          }
         };
       } catch {
         return { state: "unavailable", reason: "审计数据不可用" };

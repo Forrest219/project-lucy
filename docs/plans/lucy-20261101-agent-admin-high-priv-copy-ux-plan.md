@@ -11,7 +11,7 @@
 | 验收 | 以主 Spec §7 SC-01–SC-11 为准；证据为组件测试。SC-12 术语 lint 已拆出 |
 | 实施主体 | Lucy WebUI `webui/src` |
 | 待拍板 | **已关闭**（2026-11-01）：讨论认可后 D1–D8 按 Spec §4 提议列冻结 |
-| 审阅者定稿提示词 | `lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md`（委托方下发的提示词，**未入库**、保持 untracked；Kimi／审阅者；讨论冻结 ≠ 审阅定稿） |
+| 审阅者定稿提示词 | [`docs/prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md`](../prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md)（委托方下发的提示词、**不是 Plan**；2026-11-05 从 `docs/plans/` 归位到 `docs/prompts/`，避免被 Plan 形态门禁误判；Kimi／审阅者；讨论冻结 ≠ 审阅定稿） |
 
 ---
 

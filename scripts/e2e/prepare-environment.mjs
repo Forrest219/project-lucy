@@ -2,11 +2,14 @@
 // Prepares one isolated, synthetic E2E run directory (Spec §6.2, §6.4).
 //
 //   node scripts/e2e/prepare-environment.mjs --run-id <id> --mode local
+//   node scripts/e2e/prepare-environment.mjs --run-id <id> --mode local --pack row-policy
 //   node scripts/e2e/prepare-environment.mjs --run-id <id> --mode release \
 //        --candidate <identity.json> --profile scripts/e2e/profiles/customer-release.yaml
 //
 // Output lives under inbox/e2e/<runId>/ only. Real private project directories are refused, there is no
-// option to point the run at an existing project, and nothing here talks to a running service.
+// option to point the run at an existing project. The default security pack does not contact a
+// service; `--pack row-policy` may SELECT Region counts from shared Aliyun RDS (read-only) to
+// write checker/gold.json and set run.db.readonlyProven.
 // Exit codes: 0 prepared, 1 refused/invalid, 2 blocked (reserved for missing infrastructure checks).
 
 import { randomBytes, randomUUID } from "node:crypto";
@@ -21,9 +24,34 @@ import { catalogDigest, loadCatalog } from "./lib/catalog.mjs";
 import {
   DEFAULT_RUN_ROOT, REPO_ROOT, RUN_ID_RE, fail, fileDigest, isInside, parseArgv, sha256Text, treeDigest
 } from "./lib/common.mjs";
+import {
+  PACK_ID,
+  ROW_POLICY_AGENT_TOKENS,
+  ROW_POLICY_DB_DEFAULTS,
+  resolveFixtureRoot,
+  resolveRowPolicyDbContract
+} from "./lib/row-policy-pack.mjs";
+import { proveRdsMysqlReadonly } from "./lib/rds-readonly-prove.mjs";
+import { startDisposablePostgres } from "./lib/db-pg-fixture.mjs";
+import {
+  buildGoldFromCounts,
+  REGION_ASSERT_SHAPE
+} from "../../examples/row-policy-e2e/gold/compute-readonly-gold.mjs";
 
-const FIXTURE_ROOT = path.join(REPO_ROOT, "examples", "security-e2e");
+/** Minimal gold.json for SecurityContext when pack=row-policy (no synthetic seed canaries). */
+function buildRowPolicyGoldDoc(regions) {
+  const counts = regions && Object.keys(regions).length > 0 ? regions : { [REGION_ASSERT_SHAPE.eastOnly[0]]: 0, [REGION_ASSERT_SHAPE.union[1]]: 0 };
+  const gold = buildGoldFromCounts(counts);
+  return {
+    ...gold,
+    canaries: {},
+    questions: {},
+    rowPolicy: { assertShape: gold.assertShape }
+  };
+}
+
 const PROFILE_DIR = path.join(REPO_ROOT, "scripts", "e2e", "profiles");
+const ROW_POLICY_PASSWORD_SOURCE = path.join(REPO_ROOT, ROW_POLICY_DB_DEFAULTS.passwordRelPath);
 const DB_ENGINES = new Set(["mysql", "postgres"]);
 
 /** MySQL is the floor. PostgreSQL is selected only with --db-engine postgres. */
@@ -114,11 +142,11 @@ function renderTemplates(srcRoot, destRoot, values) {
   walk(destRoot);
 }
 
-function makeSecrets(secretsDir) {
+function makeSecrets(secretsDir, agentTokens = AGENT_TOKENS) {
   const tokens = {};
   const hashes = {};
   const fingerprints = {};
-  for (const [agentId, key] of AGENT_TOKENS) {
+  for (const [agentId, key] of agentTokens) {
     const token = `lucy_e2e_${randomBytes(24).toString("hex")}`;
     tokens[agentId] = token;
     hashes[`TOKEN_HASH_${key}`] = `sha256:${sha256Text(token)}`;
@@ -149,6 +177,36 @@ function makeSecrets(secretsDir) {
  */
 export async function prepareEnvironment(options) {
   const { runId, mode = "local", candidatePath, profilePath, runRoot = DEFAULT_RUN_ROOT, reset = false } = options;
+  const pack = options.pack ?? "security";
+  let FIXTURE_ROOT;
+  try {
+    FIXTURE_ROOT = resolveFixtureRoot(pack);
+  } catch (error) {
+    throw new PrepareError(error instanceof Error ? error.message : String(error));
+  }
+  const isRowPolicy = pack === PACK_ID;
+  // Tests may inject a missing path so harness stays offline; live B runs omit the option.
+  const rowPolicyPasswordSource =
+    typeof options.rowPolicyPasswordSource === "string"
+      ? options.rowPolicyPasswordSource
+      : ROW_POLICY_PASSWORD_SOURCE;
+  let rowPolicyDb = null;
+  if (isRowPolicy) {
+    try {
+      rowPolicyDb = resolveRowPolicyDbContract({
+        dbHost: options.dbHost,
+        dbPort: options.dbPort,
+        dbReaderRole: options.dbReaderRole,
+        applyDb: options.applyDb
+      });
+    } catch (error) {
+      throw new PrepareError(error instanceof Error ? error.message : String(error));
+    }
+    // Missing private RDS password is not a hard prepare refuse: CI harness and
+    // machines without `.ktx/secrets/mysql-aliyun-password` still get structural
+    // gold.json with readonlyProven=false (probe fails closed). Live B runs that
+    // need proven counts must stage the secret first.
+  }
   if (options.projectDir) {
     throw new PrepareError("拒绝真实私有项目目录：本脚本只生成 inbox/e2e/<runId>/project，不接受外部项目路径");
   }
@@ -175,8 +233,18 @@ export async function prepareEnvironment(options) {
   }
 
   const seed = options.seed ?? randomBytes(16).toString("hex");
-  const { generateDataset, computeGold, renderSeedSql, computeDatasetDigest } = await import(path.join(FIXTURE_ROOT, "gold", "compute-gold.mjs"));
-  const dataset = generateDataset(seed);
+  let dataset = null;
+  let seedDataSql = "";
+  let seedSqlDigest = null;
+  let datasetDigest = null;
+  if (!isRowPolicy) {
+    const { generateDataset, computeGold, renderSeedSql, computeDatasetDigest } = await import(path.join(FIXTURE_ROOT, "gold", "compute-gold.mjs"));
+    dataset = generateDataset(seed);
+    seedDataSql = renderSeedSql(dataset);
+    seedSqlDigest = `sha256:${sha256Text(seedDataSql)}`;
+    datasetDigest = computeDatasetDigest(dataset);
+    dataset.goldDoc = { ...computeGold(dataset), canaries: dataset.canaries };
+  }
 
   const runDir = resolveRunDir(runRoot, runId, reset);
   const paths = Object.fromEntries(
@@ -187,20 +255,72 @@ export async function prepareEnvironment(options) {
   const secretsDir = path.join(paths.checker, "secrets");
   mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
 
-  const goldDoc = { ...computeGold(dataset), canaries: dataset.canaries };
-  const seedDataSql = renderSeedSql(dataset);
-  const seedSqlDigest = `sha256:${sha256Text(seedDataSql)}`;
-  const datasetDigest = computeDatasetDigest(dataset);
-  secretFile(path.join(paths.checker, "gold.json"), `${JSON.stringify(goldDoc, null, 2)}\n`);
-  secretFile(path.join(paths.checker, "seed-data.sql"), seedDataSql);
-  writeFileSync(path.join(paths.outside, "canary.txt"), `${dataset.canaries.outsideFile}\n`);
+  if (!isRowPolicy) {
+    secretFile(path.join(paths.checker, "gold.json"), `${JSON.stringify(dataset.goldDoc, null, 2)}\n`);
+    secretFile(path.join(paths.checker, "seed-data.sql"), seedDataSql);
+    writeFileSync(path.join(paths.outside, "canary.txt"), `${dataset.canaries.outsideFile}\n`);
+  }
 
-  const { hashes, fingerprints, readerPassword } = makeSecrets(secretsDir);
+  // Row-policy: live RDS Region counts → gold.json (SELECT only). Probe failure leaves
+  // readonlyProven false but still writes a structural gold so SecurityContext can load.
+  let rowPolicyReadonlyProof = null;
+  if (isRowPolicy) {
+    const rdsPasswordCopyEarly = path.join(secretsDir, "mysql-aliyun-password");
+    const hasPrivatePassword = existsSync(rowPolicyPasswordSource);
+    if (!existsSync(rdsPasswordCopyEarly)) {
+      if (hasPrivatePassword) {
+        cpSync(rowPolicyPasswordSource, rdsPasswordCopyEarly);
+        chmodSync(rdsPasswordCopyEarly, 0o600);
+      } else {
+        // Placeholder only — never a real credential. Missing secret ⇒ structural
+        // gold only (`readonlyProven=false`); not delivery / live-B evidence.
+        // Do not probe RDS without the private source.
+        secretFile(rdsPasswordCopyEarly, "ci-harness-missing-rds-password\n");
+      }
+    }
+    if (hasPrivatePassword) {
+      rowPolicyReadonlyProof = proveRdsMysqlReadonly({
+        host: rowPolicyDb.host,
+        port: rowPolicyDb.port,
+        user: rowPolicyDb.readerRole,
+        passwordFile: rdsPasswordCopyEarly,
+        database: "dataforai"
+      });
+    } else {
+      rowPolicyReadonlyProof = {
+        ok: false,
+        reason: "row-policy pack password source missing (.ktx/secrets/mysql-aliyun-password)"
+      };
+    }
+    const goldDoc = buildRowPolicyGoldDoc(rowPolicyReadonlyProof.ok ? rowPolicyReadonlyProof.regions : null);
+    secretFile(path.join(paths.checker, "gold.json"), `${JSON.stringify(goldDoc, null, 2)}\n`);
+  }
+
+  const agentTokens = isRowPolicy ? ROW_POLICY_AGENT_TOKENS : AGENT_TOKENS;
+  const { hashes, fingerprints, readerPassword } = makeSecrets(secretsDir, agentTokens);
   const fixtureDigest = treeDigest(FIXTURE_ROOT);
   const logicalInstanceId = randomUUID();
   const markerKey = "shared/e2e-instance-marker";
-  const dbHost = options.dbHost ?? "127.0.0.1";
-  const dbPort = Number(options.dbPort ?? (dbEngine === "postgres" ? 5432 : 3306));
+
+  // ── 本地 postgres：自带一次性数据源 ──────────────────────────────────────
+  // 以前 prepare 只把 run.db 指向 127.0.0.1:5432，却没有任何步骤真把数据库起起来：
+  // 于是 apply-db.mjs 连不上，`run.db.applied` 永远 false，postgres 能力永远 false，
+  // 所有需要 postgres 的执行项全部 blocked。数据源必须先备好，E2E 才谈得上"能跑"。
+  //
+  // 规则：
+  //   * 只有 local 模式 + engine=postgres + 没有显式 --db-host/--db-port 时才自带；
+  //     显式给了地址 = 调用方自己管这台库，prepare 不得覆盖。
+  //   * 容器只服务本次运行，句柄写进 run.db.disposable，跑完可按 id 精确回收。
+  //   * owner 密码文件必须是容器自己的那份（容器用 POSTGRES_PASSWORD_FILE 设的超级用户密码）。
+  let disposablePostgres = null;
+  if (mode === "local" && dbEngine === "postgres" && !options.dbHost && !options.dbPort) {
+    disposablePostgres = await startDisposablePostgres({ baseDir: secretsDir, label: runId });
+    if (!disposablePostgres.ok) {
+      throw new PrepareError(`disposable postgres failed to start: ${disposablePostgres.reason}`);
+    }
+  }
+  const dbHost = rowPolicyDb?.host ?? disposablePostgres?.host ?? options.dbHost ?? "127.0.0.1";
+  const dbPort = Number(rowPolicyDb?.port ?? disposablePostgres?.port ?? options.dbPort ?? (dbEngine === "postgres" ? 5432 : 3306));
   // Per-run isolation id flows from the run id (a long random hex) so every
   // disposable database / role is owned by THIS run; a leftover from a prior
   // run cannot satisfy a check. The same string is used in runOwnerIsolationId
@@ -212,9 +332,9 @@ export async function prepareEnvironment(options) {
   const safeIso = runOwnerIsolationId.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 32);
   const dbFinName = `lucy_e2e_fin_${safeIso}`;
   const dbSalesName = `lucy_e2e_sales_${safeIso}`;
-  const dbReaderRole = `lucy_e2e_reader_${safeIso}`;
-  const dbOwnerRole = options.dbOwnerRole ?? (dbEngine === "postgres" ? "postgres" : "root");
-  const secretFilePath = path.join(secretsDir, "db-reader.password");
+  const dbReaderRole = rowPolicyDb?.readerRole ?? `lucy_e2e_reader_${safeIso}`;
+  const dbOwnerRole = options.dbOwnerRole ?? disposablePostgres?.ownerRole ?? (dbEngine === "postgres" ? "postgres" : "root");
+  let secretFilePath = path.join(secretsDir, "db-reader.password");
   // Where the reader password must be READABLE.
   //
   // In a customer deployment the WebUI and the KTX upstream run inside the pod
@@ -225,13 +345,29 @@ export async function prepareEnvironment(options) {
   // unreachable and every data-plane call answers empty.
   const defaultSecretMount = mode === "local" ? path.join(secretsDir, "db") : "/var/run/secrets/lucy/db";
   const secretMountPath = options.dbSecretMountPath ?? defaultSecretMount;
-  const containerPasswordPath = path.join(secretMountPath, "password");
-  if (mode === "local" && options.dbSecretMountPath === undefined) {
+  let containerPasswordPath = path.join(secretMountPath, "password");
+  if (isRowPolicy) {
+    // Reuse the early-staged 0600 replica (real secret or CI placeholder). Never print it.
+    const rdsPasswordCopy = path.join(secretsDir, "mysql-aliyun-password");
+    if (!existsSync(rdsPasswordCopy)) {
+      if (existsSync(rowPolicyPasswordSource)) {
+        cpSync(rowPolicyPasswordSource, rdsPasswordCopy);
+        chmodSync(rdsPasswordCopy, 0o600);
+      } else {
+        secretFile(rdsPasswordCopy, "ci-harness-missing-rds-password\n");
+      }
+    }
+    secretFilePath = rdsPasswordCopy;
+    containerPasswordPath = rdsPasswordCopy;
+  } else if (mode === "local" && options.dbSecretMountPath === undefined) {
     mkdirSync(secretMountPath, { recursive: true, mode: 0o700 });
     secretFile(containerPasswordPath, readerPassword);
   }
-  const ownerPasswordFile = path.join(secretsDir, "db-owner.password");
-  renderTemplates(path.join(FIXTURE_ROOT, "project-template"), paths.project, {
+  // The owner password file MUST be the disposable container's own password file:
+  // the container sets its superuser password from POSTGRES_PASSWORD_FILE, so the
+  // seed producer has to authenticate with exactly that password.
+  const ownerPasswordFile = disposablePostgres?.ownerPasswordFile ?? path.join(secretsDir, "db-owner.password");
+  const templateValues = {
     ...hashes,
     DB_DRIVER: dbEngine,
     DB_HOST: dbHost,
@@ -242,17 +378,22 @@ export async function prepareEnvironment(options) {
     DB_PASSWORD_FILE: containerPasswordPath,
     RUN_ID: runId,
     INSTANCE_ID: logicalInstanceId,
-    FIXTURE_DIGEST: fixtureDigest,
-    CANARY_FIN_WIKI: dataset.canaries.financeWiki,
-    CANARY_SALES_WIKI: dataset.canaries.salesWiki,
-    CANARY_SHARED_WIKI: dataset.canaries.sharedWiki,
-    CANARY_SPLIT_WIKI: dataset.canaries.splitWiki,
-    CANARY_RESTRICTED_WIKI: dataset.canaries.restrictedWiki,
-    CANARY_PUBLISHED_SKILL: dataset.canaries.publishedSkill,
-    CANARY_DRAFT_SKILL: dataset.canaries.draftSkill,
-    CANARY_DEPRECATED_SKILL: dataset.canaries.deprecatedSkill,
-    CANARY_INJECTION: dataset.canaries.injection
-  });
+    FIXTURE_DIGEST: fixtureDigest
+  };
+  if (!isRowPolicy) {
+    Object.assign(templateValues, {
+      CANARY_FIN_WIKI: dataset.canaries.financeWiki,
+      CANARY_SALES_WIKI: dataset.canaries.salesWiki,
+      CANARY_SHARED_WIKI: dataset.canaries.sharedWiki,
+      CANARY_SPLIT_WIKI: dataset.canaries.splitWiki,
+      CANARY_RESTRICTED_WIKI: dataset.canaries.restrictedWiki,
+      CANARY_PUBLISHED_SKILL: dataset.canaries.publishedSkill,
+      CANARY_DRAFT_SKILL: dataset.canaries.draftSkill,
+      CANARY_DEPRECATED_SKILL: dataset.canaries.deprecatedSkill,
+      CANARY_INJECTION: dataset.canaries.injection
+    });
+  }
+  renderTemplates(path.join(FIXTURE_ROOT, "project-template"), paths.project, templateValues);
 
   const webuiPort = Number(options.webuiPort ?? 15174);
   const proxyPort = Number(options.proxyPort ?? 17879);
@@ -271,13 +412,14 @@ export async function prepareEnvironment(options) {
   // (scripts/e2e/apply-db.mjs). The producer writes `run.db.applied = true`
   // only after applySyntheticDbSeed returns applied=true. Until that step runs,
   // `run.db.applied` is false and the harness records `applyRequested: true`.
-  const applyDb = options.applyDb === true;
-  const seededDbName = options.dbName ?? dbFinName; // legacy alias kept for back-compat
+  const applyDb = isRowPolicy ? false : options.applyDb === true;
+  const seededDbName = options.dbName ?? (isRowPolicy ? "dataforai" : dbFinName); // legacy alias kept for back-compat
   const readonlyRoles = options.dbReadonlyRoles?.split(",").map((s) => s.trim()).filter(Boolean) ?? [dbReaderRole];
   const { cases } = loadCatalog();
   const run = {
     contract: "lucy-e2e-run-v1",
     runId,
+    pack,
     mode,
     executionMode: mode === "release" ? "release" : "local",
     releaseEligible: mode === "release",
@@ -331,43 +473,83 @@ export async function prepareEnvironment(options) {
         LUCY_DB_PASSWORD_FILE: containerPasswordPath
       }
     },
-    db: {
-      engine: dbEngine,
-      host: dbHost,
-      port: dbPort,
-      name: seededDbName,
-      // Per-run disposable DB and reader role names. The producer (apply-db.mjs)
-      // creates databases named `${finName}` and `${salesName}` and a single role
-      // `${readerRole}`; the rendered ktx.yaml uses the same names so the WebUI
-      // connects to the right targets without any host-side renaming.
-      finName: dbFinName,
-      salesName: dbSalesName,
-      readerRole: dbReaderRole,
-      ownerRole: dbOwnerRole,
-      runOwnerIsolationId,
-      seedSql: path.join(paths.checker, "seed-data.sql"),
-      seedSqlDigest,
-      datasetDigest,
-      // `applied` is the contract; it stays false until the producer
-      // (applySyntheticDbSeed) actually seeds the disposable DB. `applyRequested`
-      // records that the user opted into the seed step; the harness treats it as
-      // a signal to call apply-db.mjs before deploy, NOT as a readiness claim.
-      applied: false,
-      applyRequested: applyDb,
-      readonlyRoles,
-      // Password files are mode 0600 on disk. They reach the WebUI container
-      // through a Kubernetes Secret (the deploy script mounts them at
-      // `containerPasswordPath`); the DB host is reached directly by the runner.
-      passwordFile: secretFilePath,
-      ownerPasswordFile,
-      secretMount: secretMountPath,
-      containerPasswordPath,
-      // The Secret name is the contract the harness uses when applying the seed and
-      // when mounting it into the WebUI container. It is generated deterministically from the
-      // run id so re-running the same id reuses the same Secret.
-      secretName: `lucy-e2e-db-${runId}`
-    },
-    agents: AGENT_TOKENS.map(([id]) => ({ id, tokenFingerprint: fingerprints[id] })),
+    db: isRowPolicy
+      ? {
+          // 一推一 sync plane: shared Aliyun RDS (read-only). No disposable seed DBs.
+          engine: "mysql",
+          dataPlane: "rds-mysql-readonly",
+          host: dbHost,
+          port: dbPort,
+          name: seededDbName,
+          readerRole: dbReaderRole,
+          applied: false,
+          applyRequested: false,
+          readonlyProven: Boolean(rowPolicyReadonlyProof?.ok),
+          ...(rowPolicyReadonlyProof?.ok
+            ? {
+                readonlyProvenAt: new Date().toISOString(),
+                readonlyRegionCounts: rowPolicyReadonlyProof.regions
+              }
+            : rowPolicyReadonlyProof?.reason
+              ? { readonlyProvenReason: rowPolicyReadonlyProof.reason }
+              : {}),
+          passwordFile: path.join(secretsDir, "mysql-aliyun-password"),
+          ownerPasswordFile,
+          secretMount: secretMountPath,
+          containerPasswordPath,
+          secretName: `lucy-e2e-db-${runId}`
+        }
+      : {
+          engine: dbEngine,
+          host: dbHost,
+          port: dbPort,
+          name: seededDbName,
+          // Per-run disposable DB and reader role names. The producer (apply-db.mjs)
+          // creates databases named `${finName}` and `${salesName}` and a single role
+          // `${readerRole}`; the rendered ktx.yaml uses the same names so the WebUI
+          // connects to the right targets without any host-side renaming.
+          finName: dbFinName,
+          salesName: dbSalesName,
+          readerRole: dbReaderRole,
+          ownerRole: dbOwnerRole,
+          runOwnerIsolationId,
+          seedSql: path.join(paths.checker, "seed-data.sql"),
+          seedSqlDigest,
+          datasetDigest,
+          // `applied` is the contract; it stays false until the producer
+          // (applySyntheticDbSeed) actually seeds the disposable DB. `applyRequested`
+          // records that the user opted into the seed step; the harness treats it as
+          // a signal to call apply-db.mjs before deploy, NOT as a readiness claim.
+          applied: false,
+          applyRequested: applyDb,
+          readonlyRoles,
+          // The disposable container this run owns. Recorded so the run can be
+          // torn down by container id — never by a name pattern that could hit
+          // somebody else's container.
+          ...(disposablePostgres
+            ? {
+              disposable: {
+                containerId: disposablePostgres.containerId,
+                containerName: disposablePostgres.containerName,
+                host: disposablePostgres.host,
+                port: disposablePostgres.port,
+                image: "postgres:16-alpine"
+              }
+            }
+            : {}),
+          // Password files are mode 0600 on disk. They reach the WebUI container
+          // through a Kubernetes Secret (the deploy script mounts them at
+          // `containerPasswordPath`); the DB host is reached directly by the runner.
+          passwordFile: secretFilePath,
+          ownerPasswordFile,
+          secretMount: secretMountPath,
+          containerPasswordPath,
+          // The Secret name is the contract the harness uses when applying the seed and
+          // when mounting it into the WebUI container. It is generated deterministically from the
+          // run id so re-running the same id reuses the same Secret.
+          secretName: `lucy-e2e-db-${runId}`
+        },
+    agents: agentTokens.map(([id]) => ({ id, tokenFingerprint: fingerprints[id] })),
     secretsDir
   };
   writeFileSync(path.join(runDir, "run.json"), `${JSON.stringify(run, null, 2)}\n`);
@@ -381,7 +563,7 @@ if (invokedDirectly) {
       "run-id": "value", mode: "value", candidate: "value", profile: "value", "run-root": "value", seed: "value",
       "db-host": "value", "db-port": "value", "db-engine": "value", "webui-port": "value", "proxy-port": "value", "project-dir": "value", "base-url": "value", "mcp-url": "value", reset: "boolean",
       "apply-db": "boolean", "db-name": "value", "db-readonly-roles": "value", "db-secret-mount-path": "value",
-      "db-owner-role": "value"
+      "db-owner-role": "value", pack: "value"
     });
     const { run, runJsonPath } = await prepareEnvironment({
       runId: args["run-id"],
@@ -403,7 +585,8 @@ if (invokedDirectly) {
       dbName: args["db-name"],
       dbReadonlyRoles: args["db-readonly-roles"],
       dbSecretMountPath: args["db-secret-mount-path"],
-      dbOwnerRole: args["db-owner-role"]
+      dbOwnerRole: args["db-owner-role"],
+      pack: args.pack
     });
     // Secrets stay in checker/secrets; only the location of run.json and public identity is printed.
     process.stdout.write(`${JSON.stringify({ runJson: runJsonPath, runId: run.runId, executionMode: run.executionMode, instanceId: run.instanceId, fixtureDigest: run.fixtureDigest })}\n`);

@@ -1,13 +1,23 @@
 // Claude Code CLI adapter (Spec R4 v4: automated required product; transport=cli).
 // Binary: `claude`. Native config: mcp.json passed via `--mcp-config` (Authorization interpolates env var name).
-// Auth: ANTHROPIC_API_KEY, or a successful `claude auth status` after `claude login`.
+// Auth: ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN, or a successful `claude auth status` after `claude login`.
+// Both credential names are supported because Claude Code itself accepts either one, and a
+// deployment that authenticates with `ANTHROPIC_AUTH_TOKEN` (a custom / gateway endpoint)
+// must not be reported as "credential missing" by the E2E probe.
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { TOKEN_ENV, assertNoSecretInArgv, locateBinary, probeCli } from "./_contract.mjs";
 
 export const product = "claude-code";
 export const transport = "cli";
-export const credentialEnv = ["ANTHROPIC_API_KEY"];
+export const credentialEnv = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"];
+
+/** The credential the client will actually authenticate with, if the operator provided one. */
+function credentialOf(env = {}) {
+  if (env.ANTHROPIC_API_KEY) return { name: "ANTHROPIC_API_KEY", value: env.ANTHROPIC_API_KEY };
+  if (env.ANTHROPIC_AUTH_TOKEN) return { name: "ANTHROPIC_AUTH_TOKEN", value: env.ANTHROPIC_AUTH_TOKEN };
+  return null;
+}
 
 export function probe({ env, spawnSync, locate = locateBinary }) {
   const base = probeCli({
@@ -19,11 +29,11 @@ export function probe({ env, spawnSync, locate = locateBinary }) {
     accept: /claude|anthropic/i
   });
   const reasons = [...base.reasons];
-  if (!env.ANTHROPIC_API_KEY && base.binaryPath) {
+  if (!credentialOf(env) && base.binaryPath) {
     const auth = spawnSync(base.binaryPath, ["auth", "status"], { encoding: "utf8", env, timeout: 20_000 });
     const text = `${auth.stdout ?? ""}${auth.stderr ?? ""}`;
     if (auth.status !== 0 || !/logged.?in|apiProvider|anthropic|ok/i.test(text)) {
-      reasons.push("credential_missing: ANTHROPIC_API_KEY | claude login");
+      reasons.push("credential_missing: ANTHROPIC_API_KEY | ANTHROPIC_AUTH_TOKEN | claude login");
     }
   }
   return {
@@ -65,12 +75,27 @@ export function buildInvocation({ binaryPath, question, workDir, prepared, env, 
     "--permission-mode",
     "bypassPermissions"
   ];
+  // The model this run talks to. It is a model NAME, not a credential, so it belongs
+  // in argv where it stays visible in the transcript (the env allowlist would strip
+  // it, and a stripped model means the client silently falls back to its own default
+  // — a default a non-Anthropic gateway usually does not serve).
+  const model = env.LUCY_E2E_CLAUDE_MODEL || env.ANTHROPIC_MODEL || "";
+  if (model) args.push("--model", model);
   assertNoSecretInArgv(args, secrets);
+  // The credential travels in the ENV, never in argv. Both credential names Claude Code
+  // accepts are forwarded (whichever the operator provided); an empty value is passed
+  // through so the client's own `claude auth status` path stays usable when the run
+  // relies on a pre-authenticated home.
+  const credential = credentialOf(env);
   return {
     command: binaryPath,
     args,
     cwd: workDir,
-    env: { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY ?? "" }
+    env: {
+      ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY ?? "",
+      ANTHROPIC_AUTH_TOKEN: env.ANTHROPIC_AUTH_TOKEN ?? "",
+      ...(credential ? { [credential.name]: credential.value } : {})
+    }
   };
 }
 

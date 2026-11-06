@@ -204,17 +204,17 @@ test.describe("Spec 150 Role permission structure", () => {
     await installRoleApi(page);
     await page.goto("/admin/roles/new?tab=tables");
     await page.getByRole("checkbox", { name: "superstore_orders" }).check();
-    await page.getByText("高级设置").click();
-    await page.getByRole("checkbox", { name: "启用目录绑定" }).click();
+    await page.getByRole("checkbox", { name: /跟随此连接的启用表/ }).first().click();
     const confirmation = page.getByRole("alertdialog");
     await expect(confirmation).toBeVisible();
+    await expect(confirmation.getByText("确认切换为跟随启用表？")).toBeVisible();
     await confirmation.getByRole("button", { name: "确认切换" }).click();
 
     await expect(page.getByText(/已声明连接上，后续新启用的表自动进入/)).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "superstore_orders" })).toHaveCount(0);
     await page.getByRole("tab", { name: /行级策略/ }).click();
     await expect(page.getByTestId("row-policy-catalog-bound-disabled")).toBeVisible();
     await page.getByRole("tab", { name: /可访问的表/ }).click();
-    await page.getByRole("checkbox", { name: "允许的连接 demo-mysql" }).check();
     await expect(page.getByTestId("role-boundary-summary")).toContainText("目录绑定");
   });
 

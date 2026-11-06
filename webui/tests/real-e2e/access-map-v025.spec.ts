@@ -5,14 +5,15 @@
 //   * docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md §6.2
 //   * scripts/e2e/contracts/v025-coverage.yaml (the coverage manifest — the contract)
 //
-// ─── NOT EXECUTED IN THIS REPOSITORY STATE ────────────────────────────────────────────
+// ─── RUN STATE ─────────────────────────────────────────────────────────────────────────
 // This spec needs a PREPARED RUN INSTANCE (`LUCY_REAL_E2E_RUN` → <runDir>/run.json) of a
-// customer-mode, auth-required Lucy. No such instance exists here, so NOTHING in this file
-// has been executed or verified.
+// customer-mode, auth-required Lucy. The last real run against this file was 2026-11-05
+// (`inbox/e2e/final-rds-20261105`): the page-level items below are closed by that run, and
+// the items that need a real Agent turn in the same run are recorded as BLOCKED with a
+// reason — never as passes.
 //
-//   node scripts/e2e/prepare-environment.mjs --run <runId>
-//   cd webui && npx playwright test --config playwright.real.config.ts \
-//       tests/real-e2e/access-map-v025.spec.ts
+//   node scripts/e2e/prepare-environment.mjs --run <runId> --mode local --pack row-policy
+//   node scripts/e2e/select-product-target.mjs --target OBSERVE --run inbox/e2e/<runId>/run.json
 //
 // The compile-side / algebra-side SC items (SC-02 守恒、SC-03／04／05 交互、SC-07 降级、
 // SC-08 折叠、SC-10／11 文案与术语、SC-12 回归、SC-13 覆盖率) are closed by the P1 unit and
@@ -20,6 +21,17 @@
 // webui/src/__tests__/access-map.test.tsx). This browser spec closes the page-level ones
 // (SC-01 四层主干、SC-06 深链、SC-09 表格视图与可访问性) and the cross-module counting
 // (SC-14). It does NOT replace the unit layers.
+//
+// ─── CONTRACT NOTE (2026-11-05) ───────────────────────────────────────────────────────
+// The 数据表 tab was rewritten by the hourly-detail closure
+// (docs/specs/lucy-20261104-access-map-hourly-detail-spec.md §5.1–§5.4):
+//   * the old 「节点」「关系」summary tables are replaced by the 小时明细表 — the testids
+//     `access-map-table-nodes` / `access-map-table-edges` no longer exist in the product
+//     and must not be asserted;
+//   * the two-tier wording moved into the 常驻口径行 — `access-map-methodology-snapshot`
+//     and the `AccessMapSignalNotes` paragraphs are no longer in the default DOM, so the
+//     需复核／确凿越权 wording is read from the resident line instead.
+// The assertions below follow the CURRENT contract; the retired testids are gone.
 //
 // ─── GUARANTEES ───────────────────────────────────────────────────────────────────────
 //   * No API mock and no KTX shim; every assertion reads the REAL response.
@@ -66,7 +78,7 @@ test("访问关系图的四层主干、表格视图与审计事件同源，且�
           counts?: { tables?: number; agents?: number; roles?: number; edges?: number };
           signals?: { dormantEdges?: number; needsReviewEdges?: number; confirmedUnauthorizedEdges?: number };
           folded?: { nodes?: number; edges?: number };
-          snapshotCoverage?: { matched?: number; missing?: number; invalid?: number; unknown?: number };
+          snapshotCoverage?: { matched?: number; reviewPaths?: number; missingOrInvalid?: number; ratio?: number };
         };
       };
     };
@@ -131,24 +143,52 @@ test("访问关系图的四层主干、表格视图与审计事件同源，且�
       `the graph region has an aria-label summary (${String(canvasLabel).slice(0, 80)})`);
 
     await page.getByTestId("access-map-view-table").click();
-    await expect(page.getByTestId("access-map-table")).toBeVisible();
-    await expect(page.getByTestId("access-map-table-nodes")).toBeVisible();
-    await expect(page.getByTestId("access-map-table-edges")).toBeVisible();
+    // The switch is real: the graph region is unmounted in the table view.
+    await expect(page.getByTestId("access-map-canvas")).toHaveCount(0);
+    // The table view must land in ONE of the terminal states the hourly-detail contract
+    // declares (hourly-detail Spec §5.1／§5.4；状态矩阵 §5.5):
+    //   有明细 → access-map-table（内含 access-map-hourly-detail）
+    //   真实零行 → access-map-table-empty
+    //   审计不可用 → access-map-table-access-unavailable
+    //   分页越界 → access-map-table-page-overflow
+    // 「正在加载…」是过渡态，不算终态，所以不在这张表里。断言的是「落在声明的终态之一」，
+    // 不是「一定有明细」——本 run 没有真实 Agent 调用时，真实零行就是正确呈现，
+    // 写成必须有明细会把环境事实记成产品缺陷。
+    const tableState = page
+      .locator(
+        '[data-testid="access-map-table"], [data-testid="access-map-table-empty"], ' +
+        '[data-testid="access-map-table-access-unavailable"], [data-testid="access-map-table-page-overflow"]'
+      )
+      .first();
+    await expect(tableState).toBeVisible({ timeout: 15_000 });
+    const tableStateId = (await tableState.getAttribute("data-testid")) ?? "";
+    assertion(testInfo, "consistency",
+      ["access-map-table", "access-map-table-empty", "access-map-table-access-unavailable", "access-map-table-page-overflow"].includes(tableStateId),
+      `the table view lands in a declared terminal state (${tableStateId})`);
+    // 有明细时，明细表必须真的在 DOM 里——不能只挂一个空容器。
+    if (tableStateId === "access-map-table") {
+      await expect(page.getByTestId("access-map-hourly-detail")).toBeVisible();
+    }
 
-    // ── SC-10：两档措辞不混用（需复核不含「越权」；确凿越权含规定文案） ────────────────
-    // The two tier notes now live in the collapsed 「口径与快照」 weak entry
-    // (chart-first Spec §5.4), so the entry is expanded first. The wording must be
-    // read from the two notes' own elements, not from a split of the whole entry:
-    // the confirmed tier's own source note starts with 「确凿越权」, so a naive split
-    // cuts the tier count away from its source note and the assertion would look at
-    // the wrong text.
-    await page.getByTestId("access-map-methodology-snapshot").locator("summary").click();
-    const needsReviewNote = await page.getByTestId("access-map-signal-needs-review-note").innerText();
-    const confirmedSource = await page.getByTestId("access-map-signal-confirmed-source").innerText();
-    assertion(testInfo, "consistency", !needsReviewNote.includes("越权"),
-      `the 需复核 tier does not borrow the 越权 wording (${needsReviewNote.slice(0, 40)})`);
-    assertion(testInfo, "consistency", confirmedSource.includes("调用当时授权亦不覆盖"),
-      `the 确凿越权 tier keeps its declared wording (${confirmedSource.slice(0, 60)})`);
+    // ── SC-10：两档措辞不混用 ───────────────────────────────────────────────────────
+    // 两档口径已随 hourly-detail 收口（§5.2／§5.3）搬到**常驻口径行**：旧的
+    // `access-map-methodology-snapshot` 折叠与 `AccessMapSignalNotes` 长段落已从默认页删除
+    // （`access-map-signal-needs-review-note` / `access-map-signal-confirmed-source`
+    // 不再出现在默认 DOM），所以两档措辞改从常驻行读：
+    //   需复核档的压缩句（可关联／需复核／缺失）不得借用「越权」措辞；
+    //   常驻行必须保留「低覆盖率不代表低越权率 · 缺失快照不判确凿越权」的档位区分句。
+    const coverageSnapshot = map?.meta?.snapshotCoverage;
+    const expectedCompressed = coverageSnapshot
+      ? `快照：可关联 ${coverageSnapshot.matched}／需复核 ${coverageSnapshot.reviewPaths} · 缺失 ${coverageSnapshot.missingOrInvalid}`
+      : "";
+    const coverageText = await page.getByTestId("access-map-snapshot-coverage").innerText();
+    assertion(testInfo, "consistency", expectedCompressed.length > 0 && coverageText.includes(expectedCompressed),
+      `the resident coverage sentence agrees with the response (${coverageText.slice(0, 80)})`);
+    assertion(testInfo, "consistency", !expectedCompressed.includes("越权"),
+      `the 需复核 tier wording does not borrow 越权 (${expectedCompressed})`);
+    assertion(testInfo, "consistency",
+      coverageText.includes("低覆盖率不代表低越权率") && coverageText.includes("不判确凿越权"),
+      `the resident line keeps the two tiers distinguishable (${coverageText.slice(0, 100)})`);
 
     // ── SEC-18-V06：审计事件与图按 run 对账（audit_event + consistency） ────────────────
     const auditRes = await page.request.get(new URL("/api/admin/audit?limit=50", baseUrl).toString());

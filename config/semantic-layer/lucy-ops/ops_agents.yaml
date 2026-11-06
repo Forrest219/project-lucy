@@ -1,0 +1,19 @@
+# 可问治理面 W1 — 配置 Agent 人口。
+name: ops_agents
+
+grain:
+  - snapshot_id
+  - agent_id
+
+measures:
+  - name: agent_count
+    expr: count(*)
+    description: 配置 Agent 人口（含未启用）。
+
+  - name: available_token_count
+    expr: sum(available_token_count)
+    description: 可用 Token 人口（名册 availableTokenCount 合计）。
+
+  - name: configured_token_count
+    expr: sum(configured_token_count)
+    description: 配置 Token 条目合计（非可用人口）。

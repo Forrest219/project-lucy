@@ -2,10 +2,12 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { extractSectionIdContract } from "./handbook-anchor-gate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const NAV_PATH = "webui/src/app/navigation.ts";
 const HANDBOOK_PATH = "docs/SYSTEM_HANDBOOK.md";
+const HELP_SERVER_PATH = "webui/server/help.ts";
 
 /**
  * Thrown when at least one sidebar entry has no corresponding section / FAQ line /
@@ -81,8 +83,14 @@ function indexNavItemDeclarations(text) {
     const idM = body.match(/(^|\s)id:\s*"([^"]+)"/);
     const labelM = body.match(/(^|\s)label:\s*"([^"]+)"/);
     const toM = body.match(/(^|\s)to:\s*"([^"]+)"/);
+    const sectionM = body.match(/(^|\s)handbookSection:\s*"([^"]+)"/);
     if (idM && labelM && toM) {
-      byIdent.set(ident, { id: idM[2], label: labelM[2], to: toM[2] });
+      byIdent.set(ident, {
+        id: idM[2],
+        label: labelM[2],
+        to: toM[2],
+        handbookSection: sectionM ? sectionM[2] : undefined
+      });
     }
   }
   return byIdent;
@@ -140,8 +148,14 @@ function walkItemsArray(itemsInner, byIdent, sourceLabel) {
       const idM = objText.match(/(^|\s)id:\s*"([^"]+)"/);
       const labelM = objText.match(/(^|\s)label:\s*"([^"]+)"/);
       const toM = objText.match(/(^|\s)to:\s*"([^"]+)"/);
+      const sectionM = objText.match(/(^|\s)handbookSection:\s*"([^"]+)"/);
       if (idM && labelM && toM) {
-        items.push({ id: idM[2], label: labelM[2], to: toM[2] });
+        items.push({
+          id: idM[2],
+          label: labelM[2],
+          to: toM[2],
+          handbookSection: sectionM ? sectionM[2] : undefined
+        });
       } else {
         throw new Error(
           `inline object in ${sourceLabel} items array is missing one of id/label/to; cannot lint coverage. ` +
@@ -237,6 +251,7 @@ export function readNavEntries(filePath) {
         id: item.id,
         label: item.label,
         to: item.to,
+        handbookSection: item.handbookSection,
         groupId: g.id,
         groupTitle: g.title
       });
@@ -401,14 +416,135 @@ export function assertCoverage(navEntries, section15Paths, faqPaths, handbookPat
   return navEntries.length;
 }
 
+/* ------------------------------------------------------------------ *
+ * Criterion D — every sidebar entry must be anchored to a real section
+ * ------------------------------------------------------------------ */
+
 /**
- * Top-level entry point: read the real repo files, run all four phases, and
+ * Strip a leading section number (`3.10 `, `6 `) from a heading title.
+ * Mirrors `webui/server/help.ts` → `cleanSectionTitle()`, which is what the
+ * `SECTION_ID_CONTRACT` keys are written against.
+ */
+export function cleanSectionTitle(title) {
+  return title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim();
+}
+
+/**
+ * Locate the handbook section whose heading title matches `title` and return
+ * its span: the heading line plus everything up to the next heading at the
+ * **same or shallower** level.
+ *
+ * Shallower-only cut-off is deliberate: an H3 chapter owns its H4
+ * subsections, so a chapter that documents several pages keeps them in its
+ * span. Code fences are skipped so a `#` inside a fence is not a heading.
+ */
+export function findSectionSpan(markdown, title) {
+  const lines = markdown.split("\n");
+  let headingIndex = -1;
+  let level = 0;
+  let inFence = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.trim().startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const m = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (!m) continue;
+    if (cleanSectionTitle(m[2]) !== title) continue;
+    headingIndex = i;
+    level = m[1].length;
+    break;
+  }
+  if (headingIndex === -1) return null;
+  let end = lines.length;
+  inFence = false;
+  for (let i = headingIndex + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.trim().startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const m = line.match(/^(#{1,6})\s+/);
+    if (m && m[1].length <= level) {
+      end = i;
+      break;
+    }
+  }
+  return { headingIndex, level, end, text: lines.slice(headingIndex, end).join("\n") };
+}
+
+/**
+ * Criterion D: every sidebar entry declares a `handbookSection` id, that id is
+ * registered in `SECTION_ID_CONTRACT`, the registered section actually exists
+ * in the handbook, and the section's text mentions the entry's route.
+ *
+ * Criteria A–C only prove the route string is *mentioned* somewhere — a single
+ * row in the §1.5 sidebar map is enough. Criterion D is the one that requires
+ * a real, dedicated piece of handbook content.
+ */
+export function assertSectionAnchored(navEntries, contract, markdown, handbookPath = HANDBOOK_PATH) {
+  const titleById = new Map();
+  for (const [title, id] of contract) titleById.set(id, title);
+
+  const problems = [];
+  for (const entry of navEntries) {
+    const sectionId = entry.handbookSection;
+    if (!sectionId) {
+      problems.push(
+        `missing-handbook-section: navigation entry "${entry.label}" (${entry.to}) (group: ${entry.groupTitle}) ` +
+          `does not declare a \`handbookSection\` id. Add one to \`${NAV_PATH}\` pointing at the ` +
+          `handbook section that documents this page.`
+      );
+      continue;
+    }
+    const title = titleById.get(sectionId);
+    if (!title) {
+      problems.push(
+        `unknown-handbook-section: navigation entry "${entry.label}" (${entry.to}) declares ` +
+          `handbookSection "${sectionId}", which is not registered in SECTION_ID_CONTRACT ` +
+          `(\`${HELP_SERVER_PATH}\`).`
+      );
+      continue;
+    }
+    const span = findSectionSpan(markdown, title);
+    if (!span) {
+      problems.push(
+        `absent-handbook-section: navigation entry "${entry.label}" (${entry.to}) maps to section ` +
+          `"${sectionId}" (title "${title}"), but no heading with that title exists in ${handbookPath}.`
+      );
+      continue;
+    }
+    if (!span.text.includes(entry.to)) {
+      problems.push(
+        `unmentioned-route: navigation entry "${entry.label}" (${entry.to}) maps to section ` +
+          `"${sectionId}" (title "${title}"), but that section never mentions ${entry.to}. ` +
+          `Add the route to the section body.`
+      );
+    }
+  }
+  if (problems.length > 0) {
+    throw new CoverageError(
+      `${problems.length} sidebar entr${problems.length === 1 ? "y" : "ies"} lack a dedicated ` +
+        `handbook section in ${handbookPath}:\n` +
+        problems.map((p) => `  - ${p}`).join("\n") +
+        `\nEach entry must point at a registered section that actually documents its page.`
+    );
+  }
+  return navEntries.length;
+}
+
+/**
+ * Top-level entry point: read the real repo files, run all five phases, and
  * return `{ covered, navEntries }`. Throws on any parse / coverage failure so
  * the executable entry below can convert errors into a non-zero exit code.
  */
 export function runHandbookCoverage(root = ROOT) {
   const navPath = path.join(root, NAV_PATH);
   const handbookPath = path.join(root, HANDBOOK_PATH);
+  const helpServerPath = path.join(root, HELP_SERVER_PATH);
   if (!existsSync(handbookPath)) {
     throw new Error(
       `handbook not found at ${handbookPath}; expected \`${HANDBOOK_PATH}\` at repo root.`
@@ -422,6 +558,8 @@ export function runHandbookCoverage(root = ROOT) {
   const faqPaths = findFaqSectionReferences(handbookMd, toKeys);
   const handbookPathHits = findHandbookSectionReferences(handbookMd, toKeys);
   const covered = assertCoverage(navEntries, section15Paths, faqPaths, handbookPathHits);
+  const contract = extractSectionIdContract(readFileSync(helpServerPath, "utf8"));
+  assertSectionAnchored(navEntries, contract, handbookMd);
   return { covered, navEntries };
 }
 

@@ -79,7 +79,7 @@ New terms:
 - v2 新建与编辑不渲染 prefix 控件，序列化不得产生 prefix selector。
 - 旧 prefix Role 使用当前 `effectivePermissions.sources` 展开；任何 selector 无法完整映射时进入迁移阻断，只读展示原因且禁止保存。
 - 移除表时同步移除其行级策略，并在保存确认中列为权限收缩。
-- 「启用目录绑定」位于本编辑面的高级设置。开启前确认清空明确表和行级策略；必须显式选择至少一个连接；关闭后回到空的明确表模式。
+- 「启用目录绑定」的**语义**不变（`catalog_bound`；开启前确认清空明确表和行级策略；必须显式选择至少一个连接；关闭后回到空的明确表模式）。**入口呈现**以 [`docs/specs/lucy-20261104-role-catalog-bound-connection-card-ux-spec.md`](../../docs/specs/lucy-20261104-role-catalog-bound-connection-card-ux-spec.md) 为准：连接卡「跟随此连接的启用表」，不再使用页底「高级设置」入口。
 
 ### 5.2 允许的 MCP 工具
 

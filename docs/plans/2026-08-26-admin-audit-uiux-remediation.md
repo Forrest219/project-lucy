@@ -1,7 +1,5 @@
 # Admin Audit UI/UX Remediation Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** 修复 `/admin/audit` 浏览器核查中确认的时区、URL 上下文、键盘可达性、复制反馈、问询表格列宽与时间排版、空 Trace 抽屉和宽表滚动问题，使问询记录、调用流水及其二级 Drawer 在桌面端可理解、可操作、可回退。
 
 **Architecture:** 保留现有 React Router URL 驱动筛选和 Radix Dialog 架构；在 `Audit.tsx` 内分离“本地时间输入值”和“API UTC ISO 值”，用已有的 query merge helper 保留审计页面上下文，并为列表引入统一的有界滚动容器。跨页面对象 Drawer 只增加审计事件的上下文感知行为，不改变其他对象类型。

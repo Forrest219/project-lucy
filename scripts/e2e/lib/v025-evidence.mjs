@@ -16,6 +16,7 @@
 // Pure module: no I/O, no clock, no network. The collector writes the result.
 
 import { EXECUTOR_LETTERS } from "./catalog.mjs";
+import { capabilitySatisfied } from "./db-capability.mjs";
 import { journeyStatus } from "./j01-state.mjs";
 import { annotationsOf, iterTests, testStatus } from "./playwright-report.mjs";
 import { isImageCapability, statusFromDimensions } from "./v025-result.mjs";
@@ -243,14 +244,18 @@ function imageVerdict(scenario, have, capabilityReasons) {
   return { imageStatus: "not_run", imageBlockedReason: null, missingImageCapabilities: [] };
 }
 
-export function evaluateV025Case({ scenario, dimensions = {}, capabilities = [], verifierPassed, capabilityReasons = {} }) {
+export function evaluateV025Case({ scenario, dimensions = {}, capabilities = [], verifierPassed, capabilityReasons = {}, run = null }) {
   const executionId = scenario.executionId;
   const completionTrack = scenario.completionTrack ?? "product";
   const required = [...(scenario.executors ?? [])].filter((l) => EXECUTOR_LETTERS.includes(l));
   const have = new Set(capabilities);
   const image = imageVerdict(scenario, have, capabilityReasons);
   const productCaps = (scenario.requires ?? []).filter((cap) => !isImageCapability(cap));
-  const missing = productCaps.filter((cap) => !have.has(cap));
+  // ONE capability rule for every leg: a proven `rds-mysql-readonly` plane
+  // satisfies a historical `postgres` data-plane require (db-capability.mjs).
+  // Without this the same run reads as postgres-capable in the security leg and
+  // as "missing postgres" in the v0.25 leg.
+  const missing = productCaps.filter((cap) => !capabilitySatisfied(cap, have, run));
   if (completionTrack === "image") {
     return {
       executionId,
@@ -336,7 +341,8 @@ export function collectV025Evidence({
   capabilities = [],
   dimensionEvidence = {},
   verifierPassed,
-  capabilityReasons = {}
+  capabilityReasons = {},
+  run = null
 }) {
   const browser = report
     ? browserDimensionsFromReport(report, {
@@ -365,7 +371,8 @@ export function collectV025Evidence({
       dimensions,
       capabilities,
       verifierPassed,
-      capabilityReasons
+      capabilityReasons,
+      run
     });
     results.push({
       ...verdict,

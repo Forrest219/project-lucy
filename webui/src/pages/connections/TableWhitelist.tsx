@@ -28,6 +28,19 @@ function missingManifestSummaryCopy(items: Array<{ schema: string }>): string {
   return `${items.length} 个 Schema 缺少 Manifest，暂不可配置表范围。`;
 }
 
+/** Shared column widths for main + invalid-enabled tables (P0 fixed layout). */
+function WhitelistColgroup() {
+  return (
+    <colgroup>
+      <col className="pl-whitelist-col-select" />
+      <col className="pl-whitelist-col-table" />
+      <col className="pl-whitelist-col-columns" />
+      <col className="pl-whitelist-col-status" />
+      <col className="pl-whitelist-col-action" />
+    </colgroup>
+  );
+}
+
 type WhitelistTableRow = {
   connectionId: string;
   schema: string;
@@ -1006,12 +1019,13 @@ export function TableWhitelist() {
 
       {visibleGroups.length > 0 && (
         <div className="pl-table-wrapper mt-4">
-          <table className="pl-data-grid pl-data-table" data-testid="pl-whitelist-table">
+          <table className="pl-data-grid pl-data-table pl-whitelist-table" data-testid="pl-whitelist-table">
+            <WhitelistColgroup />
             <thead>
               <tr>
                 <th>选择</th>
                 <th className="notranslate" translate="no">表名 (Table)</th>
-                <th>字段数</th>
+                <th className="pl-whitelist-table-num-head">字段数</th>
                 <th>状态</th>
                 <th>操作</th>
               </tr>
@@ -1085,15 +1099,21 @@ export function TableWhitelist() {
                         />
                       </td>
                       <td>
-                        <span className="font-medium notranslate" translate="no">{row.table}</span>
+                        <span
+                          className="pl-whitelist-table-name font-medium notranslate"
+                          translate="no"
+                          title={row.table}
+                        >
+                          {row.table}
+                        </span>
                       </td>
-                      <td>
+                      <td className="pl-whitelist-table-num notranslate" translate="no">
                         {row.columnCount !== undefined ? `${row.columnCount} 个` : "-"}
                       </td>
                       <td>
                         <span className={STATUS_CLASS[status]}>{STATUS_LABELS[status]}</span>
                       </td>
-                      <td>
+                      <td className="pl-whitelist-table-action">
                         {renderActionCell(status, row)}
                       </td>
                     </tr>
@@ -1116,12 +1136,13 @@ export function TableWhitelist() {
 
       {visibleInvalidGroups.length > 0 ? (
         <div className="pl-table-wrapper mt-4" data-testid="whitelist-invalid-enabled-section">
-          <table className="pl-data-grid pl-data-table">
+          <table className="pl-data-grid pl-data-table pl-whitelist-table">
+            <WhitelistColgroup />
             <thead>
               <tr>
                 <th>选择</th>
                 <th className="notranslate" translate="no">表名 (Table)</th>
-                <th>字段数</th>
+                <th className="pl-whitelist-table-num-head">字段数</th>
                 <th>状态</th>
                 <th>操作</th>
               </tr>
@@ -1157,15 +1178,21 @@ export function TableWhitelist() {
                         />
                       </td>
                       <td>
-                        <span className="font-medium notranslate" translate="no">
+                        <span
+                          className="pl-whitelist-table-name font-medium notranslate"
+                          translate="no"
+                          title={row.qualifiedName}
+                        >
                           {row.qualifiedName}
                         </span>
                       </td>
-                      <td>-</td>
+                      <td className="pl-whitelist-table-num notranslate" translate="no">
+                        -
+                      </td>
                       <td>
                         <span className={STATUS_CLASS[status]}>{STATUS_LABELS[status]}</span>
                       </td>
-                      <td>{renderActionCell(status, row)}</td>
+                      <td className="pl-whitelist-table-action">{renderActionCell(status, row)}</td>
                     </tr>
                   );
                 })}

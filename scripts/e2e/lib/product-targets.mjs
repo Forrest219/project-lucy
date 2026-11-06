@@ -43,17 +43,24 @@ export const SELECTED_IDS = Object.freeze({
   mainline: Object.freeze(["J25-01"]),
   CONN: Object.freeze(numbered("CON25-", 12)),
   SEM: Object.freeze(["SEM25-V17", "SEM25-V09", "SEM25-V20", "SEM25-V16", "SEM25-V05", "SEM25-V06"]),
+  // ACCESS owns 54 execution items in the coverage manifest and all 54 are covered
+  // by a browser spec in this branch. The array MUST be the full set: it is the
+  // branch's VERDICT DENOMINATOR (see productExitCode), not the set of tests to
+  // execute. A short array silently drops items from the denominator and lets the
+  // branch report "passed" while owned items never ran.
   ACCESS: Object.freeze([
-    "ROW25-V08", "ROW25-V12", "ROW25-V09", "ROW25-V10", "ROW25-V04", "ROW25-V05",
+    ...numbered("ROW25-V", 22),
     ...numbered("RTP25-", 10),
     ...numbered("RTV25-", 8),
     ...numbered("ASV25-", 14)
   ]),
-  OBSERVE: Object.freeze([
-    "ARV25-V01", "ARV25-V02", "ARV25-V03", "ARV25-V05", "ARV25-V06",
-    "ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11",
-    ...numbered("ACM25-SC-", 14)
-  ])
+  // OBSERVE owns 15 execution items in the coverage manifest. ARV25-* are FROZEN
+  // catalog cases (existingCatalogMappings), not v0.25 execution items: their
+  // evidence comes from the frozen collector, so they must not sit in a v0.25
+  // branch denominator. LOG25-01 has no browser leg (executors P/A/V) and is
+  // therefore not reachable from the browser branch either — it is registered in
+  // the known-gap list instead of being silently dropped here.
+  OBSERVE: Object.freeze([...numbered("ACM25-SC-", 14)])
 });
 
 const TARGETS = Object.freeze({

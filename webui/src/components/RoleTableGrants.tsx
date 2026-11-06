@@ -21,6 +21,17 @@ function hasTable(tables: TableGrant[], connection: string, schema: string, name
   return tables.some((table) => table.connection === connection && table.schema === schema && table.name === name);
 }
 
+function enabledTableCountForConnection(
+  connection: ConnectionSchema,
+  candidateTablesByKey: Record<string, string[]>
+): number {
+  let total = 0;
+  for (const schema of connection.schemas) {
+    total += candidateTablesByKey[`${connection.id}\0${schema}`]?.length ?? 0;
+  }
+  return total;
+}
+
 export function RoleTableGrants({
   value,
   connections,
@@ -32,6 +43,7 @@ export function RoleTableGrants({
 }: RoleTableGrantsProps) {
   const [search, setSearch] = useState("");
   const [confirmMode, setConfirmMode] = useState<"enable" | "disable" | null>(null);
+  const [pendingSeedConnection, setPendingSeedConnection] = useState<string | null>(null);
   const tables = value.mode === "names" ? value.tables : [];
   const selectedKeys = useMemo(() => new Set(tables.map(permissionTableKey)), [tables]);
 
@@ -87,21 +99,71 @@ export function RoleTableGrants({
     [staleTables]
   );
 
-  function confirmScopeChange() {
-    if (confirmMode === "enable") onChange({ mode: "catalog_bound", connections: grantAllConnections ? ["*"] : [] });
-    if (confirmMode === "disable") onChange({ mode: "names", tables: [] });
+  function clearConfirm() {
     setConfirmMode(null);
+    setPendingSeedConnection(null);
   }
 
-  function toggleCatalogConnection(connection: string, checked: boolean) {
-    if (disabled || value.mode !== "catalog_bound") return;
-    const next = checked
-      ? value.connections.includes(connection) ? value.connections : [...value.connections, connection]
-      : value.connections.filter((item) => item !== connection);
+  function confirmScopeChange() {
+    if (confirmMode === "enable") {
+      onChange({
+        mode: "catalog_bound",
+        connections: grantAllConnections ? ["*"] : pendingSeedConnection ? [pendingSeedConnection] : [],
+      });
+    }
+    if (confirmMode === "disable") {
+      onChange({ mode: "names", tables: [] });
+    }
+    clearConfirm();
+  }
+
+  function requestFollowToggle(connectionId: string, wantOn: boolean) {
+    if (disabled || grantAllConnections) return;
+
+    if (value.mode === "names") {
+      if (!wantOn) return;
+      setPendingSeedConnection(connectionId);
+      setConfirmMode("enable");
+      return;
+    }
+
+    if (wantOn) {
+      const next = value.connections.includes(connectionId)
+        ? value.connections
+        : [...value.connections, connectionId];
+      onChange({ mode: "catalog_bound", connections: next });
+      return;
+    }
+
+    const next = value.connections.filter((item) => item !== connectionId);
+    if (next.length === 0) {
+      setConfirmMode("disable");
+      return;
+    }
     onChange({ mode: "catalog_bound", connections: next });
   }
 
+  function isFollowChecked(connectionId: string): boolean {
+    if (grantAllConnections && value.mode === "catalog_bound") return true;
+    if (value.mode !== "catalog_bound") return false;
+    return value.connections.includes(connectionId);
+  }
+
   const normalizedSearch = search.trim().toLowerCase();
+
+  function connectionMatchesSearch(connection: ConnectionSchema): boolean {
+    if (!normalizedSearch) return true;
+    if (connection.id.toLowerCase().includes(normalizedSearch)) return true;
+    return connection.schemas.some((schema) => {
+      const candidates = candidateTablesByKey[`${connection.id}\0${schema}`] ?? [];
+      return schema.toLowerCase().includes(normalizedSearch)
+        || candidates.some((table) => table.toLowerCase().includes(normalizedSearch));
+    });
+  }
+
+  const visibleConnections = value.mode === "catalog_bound"
+    ? connections
+    : connections.filter(connectionMatchesSearch);
 
   return (
     <div data-testid="role-table-grants" className="grid gap-4">
@@ -121,40 +183,58 @@ export function RoleTableGrants({
       ) : (
         <p className="text-sm text-fg-muted" data-testid="catalog-bound-scope-note">
           {grantAllConnections
-            ? "全部连接上的已启用表都会进入。新连接自动生效。"
+            ? "跟随全部已配置连接（含日后新增）。全部连接上的已启用表都会进入。"
             : <>已允许 {value.connections.length} 个连接。{expansionNotice("catalog_bound")}。{value.connections.length === 0 ? "必须显式选择至少一个连接。" : null}</>}
         </p>
       )}
 
-      {value.mode === "catalog_bound" ? (
-        <div className="grid gap-2" data-testid="table-grants-manual-connections">
-          {connections.map((connection) => (
-            <label key={connection.id} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={grantAllConnections || value.connections.includes(connection.id)}
-                onChange={(event) => toggleCatalogConnection(connection.id, event.target.checked)}
-                disabled={disabled || grantAllConnections}
-                aria-label={`允许的连接 ${connection.id}`}
-              />
-              <span className="notranslate font-mono" translate="no">{connection.id}</span>
-            </label>
-          ))}
-        </div>
-      ) : (
-        <div data-testid="table-grants-tree" className="grid gap-3">
-          {connections.map((connection) => {
-            const matchingSchemas = connection.schemas.filter((schema) => {
-              if (!normalizedSearch) return true;
-              const candidates = candidateTablesByKey[`${connection.id}\0${schema}`] ?? [];
-              return connection.id.toLowerCase().includes(normalizedSearch)
-                || schema.toLowerCase().includes(normalizedSearch)
-                || candidates.some((table) => table.toLowerCase().includes(normalizedSearch));
-            });
-            if (matchingSchemas.length === 0) return null;
-            return (
-              <section key={connection.id} className="rounded-lg border border-border-default p-3">
+      <div
+        className="grid gap-3"
+        data-testid={value.mode === "catalog_bound" ? "table-grants-manual-connections" : "table-grants-tree"}
+      >
+        {visibleConnections.map((connection) => {
+          const followChecked = isFollowChecked(connection.id);
+          const enabledCount = candidatesLoaded
+            ? enabledTableCountForConnection(connection, candidateTablesByKey)
+            : null;
+          const matchingSchemas = connection.schemas.filter((schema) => {
+            if (!normalizedSearch || value.mode === "catalog_bound") return true;
+            const candidates = candidateTablesByKey[`${connection.id}\0${schema}`] ?? [];
+            return connection.id.toLowerCase().includes(normalizedSearch)
+              || schema.toLowerCase().includes(normalizedSearch)
+              || candidates.some((table) => table.toLowerCase().includes(normalizedSearch));
+          });
+
+          return (
+            <section
+              key={connection.id}
+              className="rounded-lg border border-border-default p-3"
+              data-testid={`table-grants-connection-card-${connection.id}`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <h3 className="notranslate text-sm font-semibold" translate="no">{connection.id}</h3>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    data-testid={`table-grants-follow-enabled-${connection.id}`}
+                    aria-label={`跟随此连接的启用表 ${connection.id}`}
+                    checked={followChecked}
+                    disabled={disabled || grantAllConnections}
+                    onChange={(event) => requestFollowToggle(connection.id, event.target.checked)}
+                  />
+                  <span>跟随此连接的启用表</span>
+                </label>
+              </div>
+
+              {value.mode === "catalog_bound" ? (
+                <p className="mt-2 text-xs text-fg-muted">
+                  {grantAllConnections || followChecked
+                    ? (enabledCount === null
+                      ? "将覆盖该连接当前启用表"
+                      : `将覆盖该连接当前启用表（约 ${enabledCount} 张）`)
+                    : "未纳入目录绑定"}
+                </p>
+              ) : (
                 <div className="mt-3 grid gap-3">
                   {matchingSchemas.map((schema) => {
                     const allCandidates = candidateTablesByKey[`${connection.id}\0${schema}`] ?? [];
@@ -188,11 +268,11 @@ export function RoleTableGrants({
                     );
                   })}
                 </div>
-              </section>
-            );
-          })}
-        </div>
-      )}
+              )}
+            </section>
+          );
+        })}
+      </div>
 
       {value.mode === "names" && staleTables.length > 0 ? (
         <section
@@ -272,22 +352,19 @@ export function RoleTableGrants({
         </details>
       ) : null}
 
-      <details data-testid="table-grants-advanced">
-        <summary className="cursor-pointer text-sm font-medium">高级设置</summary>
-        <div className="mt-2 rounded-md border border-border-default p-3">
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" aria-label="启用目录绑定" checked={value.mode === "catalog_bound"} onChange={(event) => setConfirmMode(event.target.checked ? "enable" : "disable")} disabled={disabled} />
-            <span>启用目录绑定</span>
-          </label>
-        </div>
-      </details>
-
       {confirmMode ? (
-        <div className="rounded-md border border-warning-strong bg-warning-soft p-3" role="alertdialog" aria-label="确认切换表范围模式">
-          <p className="text-sm font-medium text-warning-strong">{confirmMode === "enable" ? "确认启用目录绑定？" : "确认关闭目录绑定？"}</p>
+        <div
+          className="rounded-md border border-warning-strong bg-warning-soft p-3"
+          role="alertdialog"
+          aria-label="确认切换表范围模式"
+          data-testid="table-grants-scope-confirm"
+        >
+          <p className="text-sm font-medium text-warning-strong">
+            {confirmMode === "enable" ? "确认切换为跟随启用表？" : "确认改回指定表？"}
+          </p>
           <p className="mt-1 text-xs text-warning-strong">切换后将从空范围开始，当前明确表和行级策略不会保留。</p>
           <div className="mt-3 flex justify-end gap-2">
-            <button type="button" className="pl-btn pl-btn--ghost text-xs" onClick={() => setConfirmMode(null)}>取消</button>
+            <button type="button" className="pl-btn pl-btn--ghost text-xs" onClick={clearConfirm}>取消</button>
             <button type="button" className="pl-btn pl-btn--primary text-xs" onClick={confirmScopeChange}>确认切换</button>
           </div>
         </div>

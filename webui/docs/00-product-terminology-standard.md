@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
-| 版本 | v0.2；2026-10-19 v0.2-draft：增补 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语（凭证主体 / 已确认关联 / 候选关联 / 归属待核验 / 客户端采集范围 / 工具调用数 / 原文登记分组占比 / 证据校验），登记于 §4.7.1，与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/` 同批生效；2026-10-25 增补 §4.11 OIDC 单点登录术语；同日增补 §4.10 Skill 负责人和 §4.12 SMTP 通知术语；2026-10-30 增补发布工作台三栏术语（最近发布 / 涉及的表 / 影响原因 / 变更来源 / Schema 级变更 / 关联与校验范围 / 影响范围待核对 / 首次核对 / 待核对 / 生效状态待核验），并把「待发布变更」由禁止文案改为左栏主术语（§4.3 与 §3） |
+| 版本 | v0.2；2026-10-19 v0.2-draft：增补 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语（凭证主体 / 已确认关联 / 候选关联 / 归属待核验 / 客户端采集范围 / 工具调用数 / 原文登记分组占比 / 证据校验），登记于 §4.7.1，与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/` 同批生效；2026-10-25 增补 §4.11 OIDC 单点登录术语；同日增补 §4.10 Skill 负责人和 §4.12 SMTP 通知术语；2026-10-30 增补发布工作台三栏术语（最近发布 / 涉及的表 / 影响原因 / 变更来源 / Schema 级变更 / 关联与校验范围 / 影响范围待核对 / 首次核对 / 待核对 / 生效状态待核验），并把「待发布变更」由禁止文案改为左栏主术语（§4.3 与 §3）；2026-11-04 §4.8 增补「关联口径」，退役「问询计入」作访问关系图产品句（指向 `lucy-20261102-access-map-audit-echo`） |
 | 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语；2026-10-19 Spec 99 v1.3 明确调试台裁决卡与访问日志双行分工；同日 v1.5 连上检查只回答能连上或不能连上；2026-10-30 访问日志「统计时间」改为上下文条内只出现一次；同日名册 Spec 登记仅连接、闲置、无可用 Token 与 Agent 列表 Token 列；2026-10-30 发布工作台三栏 Spec 登记待发布变更 / 最近发布 / 涉及的表 / 影响原因 / 变更来源 / Schema 级变更 / 关联与校验范围 / 影响范围待核对 / 首次核对 / 待核对 / 生效状态待核验；2026-11-01 名册 Spec v1.4 增补顶卡「暂时不能查数」，并下调名册顶卡与「可用 Token」的绑定；2026-11-02 增补 Token Display Hint／Token 核对提示（`lucy-20261102-token-display-hint`） |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
@@ -195,7 +195,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Role Table Selector | 可访问的表范围 | 表授权范围 | Table Selectors（裸露）、selector（主按钮文案） | `allow.tableSelectors` |
 | Confirm Permission Changes | 确认权限变更 | 权限变更确认 | 变更预览（作为一级页签）、权限审批 | Role dryRun 成功后、正式写入前的结构化确认 Drawer（Spec 150） |
 | Catalog Bound Scope | 启用目录绑定 | catalog_bound、目录通配 | `tables: ["*"]`、静默 prefix 扩权、全连接 `*` | Spec 131：`allow.source_scope: catalog_bound`；仅已声明 connections ∩ enabled_tables |
-| Lucy Admin Role | Lucy 运维数据面角色 | lucy_admin | WebUI 所有者、登录管理员、超管（作本 Role 主称） | Spec 131 预置 MCP 数据面 Role / 参考模板；与 WebUI Admin 正交 |
+| Lucy Admin Role | Lucy 运维数据面角色 | lucy_admin | WebUI 所有者、登录管理员、超管（作本 Role 主称） | Spec 131 参考模板 + [`lucy-20261105-customer-default-system-roles-spec.md`](../../docs/specs/lucy-20261105-customer-default-system-roles-spec.md) 客户种子／ensure 可落盘正式 Role；与 WebUI Admin 正交 |
 | Exact Table Names | 指定表名 | 精确授权这些表 | names（裸露 radio） | selector `names` |
 | Table Name Prefix | 按前缀匹配 | 前缀批量授权 | prefix（裸露 radio） | selector `prefix`；UI 标为高级 |
 | Role Capability Filter | 按能力筛选 | 按连接 / 工具 / 表筛选 | 功能筛选（与状态筛选混淆） | `/admin/roles` 次级筛选维 |
@@ -269,12 +269,15 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Policy Scope Expanded | 授权范围扩大 | `policy_scope_expanded`、前缀扩权记录 | 静默扩权、无审计扩权 | legacy v1 `prefix` 因语义层变化扩权时的可观测事件 |
 | Policy Degraded | 策略降级 | 权限降级态、DataPlane 整体拒绝 | 服务不可用、完全健康（降级时） | 编译失败导致受影响 Agent 或整体 DataPlane deny |
 | Table & Row Policy Access | 可访问的表与行策略 | 表授权与行策略 | 资产边界、数据范围 | Role 详情中展示可访问表范围及行级策略配置的区域；对应 `allow.tableSelectors` + `row_policy` |
-| Read-only QA Preset | 只读问答 | 问答预设 | 纯只读、Viewer | 预设工具集是**只读问答工具全集**，清单以 `webui/src/lib/rolePermissionDraft.ts` 的 `READONLY_QA_PRESET` 常量为唯一事实源，不在此写死个数；不含 `sl_validate`。新建角色默认预选该全集（Spec 194） |
-| Read-only QA + Wiki Preset | 只读问答 + 知识库 | 问答 + Wiki 预设 | 查数+Wiki | Spec 170 起从角色页撤回。`wiki_search`、`wiki_read`、`lucy_skill_search`、`lucy_skill_read` 对已解析角色始终可用，不再作为预设差集 |
+| Read-only QA Preset | 只读问答 | 问答预设 | 纯只读、Viewer | 预设工具集是**只读问答查数全集**，清单以 `webui/src/lib/rolePermissionDraft.ts` 的 `READONLY_QA_PRESET` 为唯一事实源，不在此写死个数；不含 `sl_validate` 与 Wiki / Skill 通道。用作收窄戳印；**不再**作为新建角色默认（已被业务问答取代，见 Spec lucy-20261104） |
+| Business QA Preset | 业务问答 | 业务问答预设 | 查数+Wiki、只读问答 + 知识库（作本按钮主术语） | 预设 = `READONLY_QA_PRESET` ∪ `CONTEXT_TOOL_NAMES`（常量 `BUSINESS_QA_PRESET`）；新建角色默认预选该全集；不含 `sl_validate` / `lucy_ops_*`（Spec lucy-20261104） |
+| Role Tool Grant Matrix | 角色工具勾选速查 | 工具×角色矩阵 | MCP 权限矩阵（作帮助 H4 主标题） | 帮助 H4；深链 `role-tool-grant-matrix` |
+| Modeling Config Role | 建模配置 | 语义建模（允许同义说明） | 数据建模、DBA（作本列主术语） | 角色工具勾选速查矩阵列：含 `sl_validate` 的语义配置职责；不是数据库物理建模 |
+| Read-only QA + Wiki Preset | 只读问答 + 知识库 | 问答 + Wiki 预设 | 查数+Wiki | **弃用别名**：角色页主按钮现为「业务问答」。通道工具须由角色显式列举；新建默认经 `BUSINESS_QA_PRESET` 写入 |
 | Matches Preset | 当前与{预设名}一致 | 与预设匹配 | 已绑定预设、跟随预设 | 当前工具集合与某预设完全相等时的界面提示文案；集合比较与顺序无关 |
 | Row Access: All Rows | 行权限：全部行 | 不限制行 | 全部行 all、row_access 作界面主文案 | 表未配置 `row_policy` 时的显示文案；`row_access` 字段只作存储，不作为界面主文案 |
 | Equals / In | 等于 / 属于 | 等于、属于（单独使用） | eq / in / op 作界面主文案（存储仍为 eq / in） | 行级策略条件的界面展示；存储用 `op: eq` 或 `op: in`，界面主文案用「等于」「属于」 |
-| System Denied | 系统禁止 | 系统不可授予 | 全局禁止作该行主标题（单项禁用态仍可用既有「全局禁止」） | AbsoluteDeny 工具集说明文案；页底固定句为「原始 SQL、旧版 sl_query / sl_read_source、记忆注入由系统禁止，不能授予。」 |
+| System Denied | 系统禁止 | 系统不可授予 | 全局禁止作该行主标题（单项禁用态仍可用既有「全局禁止」） | AbsoluteDeny 工具集说明文案；页底固定句为「角色只能授予受控查数与知识能力；不能授予直接执行 SQL，也不能绕过 Lucy 的权限与审计通道。」 |
 | Published Measures | 已发布指标 | 已发布的指标 | 可授权指标、指标组 | 已通过发布工作台激活的 Measure 集合；权限摘要中用「对应 N 个已发布指标」；非授权对象，不新增指标授权字段 |
 | Pending Changes | 待发布变更 | 本次将同步的变更（作栏标题） | 当前作者内容与最近有可靠同步证据的内容版本之间的差异；用于发布工作台左栏与系统概览的待办统计（Spec 20261030 三栏） |
 
@@ -670,6 +673,11 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Unreported Inquiry | 未上报问询 | — | 未上报查数（作种类主称）、断言发生查数 | 没有已登记原文且不是会话访问的推断问询。摘要仍是「未上报问询原文」。是否查数看访问等级 |
 | Session Visit | 会话访问 | — | 第三种来源 badge、把 User-Agent 写成客户端名 | 问询种类的一值。管理列表以问询种类为准；库存摘要仍可以「会话建立：」开头。来源徽章仍是推断问询。Spec 172／`lucy-20261102-audit-inquiry-kind` |
 | Access Grade | 访问等级 | — | Access Grade（作列头）、把调用来源改叫访问等级 | 调用行七值：连接／浏览／准备／问询动作／查数／运维操作／未分级。复用 Spec 194 `accessGrade` |
+| Call Storyline | 调用链故事线 | — | 第三种问询种类、新的访问等级 | 问询内按时间排序的调用序列可读性呈现，不是新数据实体。见 `docs/specs/lucy-20261104-audit-call-storyline-spec.md` |
+| Call Action | 动作 | — | 把动作写成新工具名 | 由工具名与访问等级派生的中文短标签（问询登记／查数／连接握手等） |
+| Call Intent | 意图 | — | 用 LLM 生成意图作文案承诺 | 由 args／表名确定性派生的一行摘要 |
+| Call Result Summary | 结果摘要 | — | 替代八桶主状态 | 成功带行数、失败人话、拒绝裁决主文；与主状态同单元格可叠放 |
+| Call Step Hint | 相对上步 | — | 跨问询对比提示 | 仅问询内链路；如「缩指标重试」 |
 | Question Budget | 问询预算 | — | turn budget（裸露作主标签）、8 分钟上限 | 同一问询的数据工具次数上限与数据处理时长上限；不含 agent 思考等空闲时间；Spec 162 |
 | Continuable | 可继续 | — | 自动续跑 | 问询预算用尽后，该调用者是否仍有一条可达的继续通道；协议字段 `question_budget_exhausted` 使用 `translate="no"` |
 | Repair Hint | 修复提示 | — | 把角色外的 source 名写进提示 | 只含当前角色可见的来源与连接 |
@@ -695,7 +703,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | View Query Artifact | 查看查询原文 | — | 作为生成 SQL 的唯一入口 | Spec 124 legacy；Spec 125 改为列表直展 |
 | Generated SQL | 生成 SQL | compiled SQL | 热库 SQL 原文（过宽）、raw SQL | Spec 125：`lucy_query` 编译结果；热库 `generated_sql`；调用流水列 / CSV |
 | Ops Evidence Connection | 运维问数连接 | 连接 ID `lucy-ops` | 管理员连接、默认业务连接、审计库连接（作卡片主称） | Spec 149：指向审计热库只读视图的系统连接；不进入 `database_connection_ids` |
-| Ops Evidence Role | 运维问数角色 | `lucy_ops_reader` | Lucy 运维数据面角色、WebUI 所有者、登录管理员（作本 Role 主称） | Spec 149 + 可问治理面：参考模板须列出全部运维问数 sourceName；与 `lucy_admin` 正交。ensure 永不写 `access.yaml` |
+| Ops Evidence Role | 运维问数角色 | `lucy_ops_reader` | Lucy 运维数据面角色、WebUI 所有者、登录管理员（作本 Role 主称） | Spec 149 + 可问治理面：参考模板须列出全部运维问数 sourceName；与 `lucy_admin` 正交。ensure **不改已存在**正式 Role；缺失时缺则创建见 [`lucy-20261105-customer-default-system-roles-spec.md`](../../docs/specs/lucy-20261105-customer-default-system-roles-spec.md)。旧句「ensure 永不写 access.yaml」作为**绝对值已作废，不得当作现值** |
 | Ops Evidence Skill | 运维问数 Skill | Skill 名 `ops-questioning` | 业务 Skill（作本篇主称）、全局 Skill | Spec 149 v1.2 + 可问治理面：只授权给运维问数角色的已发布 Skill；口径不进全局 Wiki。禁止 `token_label` 去重称为业务活跃 Token 或可用 Token 人口 |
 | Demo Ops Agent | 演示运维问数 Agent | 用户 ID `demo_ops` | 把 `demo_readonly` 或 `lucy_admin` 当作本 Agent | Spec 149 v1.2：只存在于 Docker demo 模板；不在启动时创建 |
 
@@ -845,9 +853,10 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Access Map | 访问关系图 | — | 拓扑图、权限流向图、桑基图（作产品名） | v0.25 P1 规划；授权面与实际访问面的只读关系图 |
 | Grant Path | 授权路径 | — | 权限、授权项、访问路径 | 去重 `(Agent, Role, Connection, Schema, Table)` 存在性实例 |
 | Access Path | 访问路径 | — | 调用次数、请求数 | 窗口内至少一次允许调用的去重 `(Agent, Role, Connection, Schema, Table)` 路径 |
-| Dormant Grant | 僵尸授权 | 有权未用 | 未使用权限、闲置资源 | 授权路径数 > 0 且访问路径数 = 0 |
+| Dormant Grant | 闲置授权 | 有权未用 | 僵尸授权；未使用权限；闲置资源 | 授权路径数 > 0 且访问路径数 = 0 |
 | Needs-review Signal | 需复核信号 | 需复核 | 越权（无调用当时快照证据时） | 当前授权无对应路径但历史有允许访问；快照缺失不得升级结论 |
 | Credential List | 凭证清单 | Token 清单 | 权限节点、凭证流 | 挂在 Agent 下的 Token 附属区，不承载授权、不参与流守恒 |
+| Association Scope | 关联口径 | 关联口径：已确认关联（静态披露） | **问询计入**；把「含候选关联」当作访问关系图可切换筛选项 | 访问关系图对 `trust`／`association_status` 的口径披露；固定已确认关联，只影响访问面。主筛选为问询种类／访问等级。见 `docs/specs/lucy-20261105-access-map-confirmed-only-spec.md`（废止可切换含候选） |
 
 以上 v0.25 P1 条目仅登记设计术语（2026-10-25 需求审查已签核通过，设计口径），不表示对应页面、API 或验收已交付。
 

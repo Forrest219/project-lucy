@@ -1,7 +1,5 @@
 # M21 Connection Module Terminology And IA Refresh Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Fix database connection module terminology, remove machine-translation artifacts, consolidate connection-centric workflows, and clean up upload / reload UX so the module meets enterprise SaaS delivery quality.
 
 **Architecture:** Keep M14/M17 static Catalog architecture unchanged. This work is a frontend/product IA refresh: centralize terminology, move connection-specific testing into connection context, remove system-level package export from `/connections`, and simplify reload result presentation. Backend work should be limited to existing API reuse unless tests reveal missing data needed by the new drawer.

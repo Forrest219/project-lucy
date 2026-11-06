@@ -23,6 +23,13 @@ examples/docker-demo/project-template/skills/
 # Secrets — never commit; ktx.yaml references via file: URI
 .ktx/secrets/
 secrets/
+# Live E2E: local env / credential copies must stay off git (use paths outside the repo)
+webui/tests/live-e2e/.env
+webui/tests/live-e2e/.env.*
+webui/tests/live-e2e/**/*.local.*
+**/*mysql-aliyun*.txt
+**/lucywebui*logi*.txt
+**/lucy-cloud-login.txt
 customer-config/
 !customer-config.example/.ktx/
 !customer-config.example/.ktx/secrets/

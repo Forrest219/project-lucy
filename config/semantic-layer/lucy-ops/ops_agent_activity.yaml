@@ -1,0 +1,16 @@
+# 可问治理面 W1 — 窗口活跃（UTC call_day）。
+name: ops_agent_activity
+
+grain:
+  - snapshot_id
+  - agent_id
+  - call_day
+
+measures:
+  - name: call_count
+    expr: sum(call_count)
+    description: 默认用量调用次数。
+
+  - name: active_agent_count
+    expr: count(distinct agent_id)
+    description: 窗口活跃 Agent 数（§4.2 事件集）。

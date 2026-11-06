@@ -1,7 +1,5 @@
 # M20 YAML Delivery Runbook And Self-Check Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make Lucy Help Center capable of long-term self-service YAML operations by adding a complete YAML file specification, delivery checklist, common error guide, and Agent self-check protocol to the system handbook.
 
 **Architecture:** This is a documentation-first safety gate. The single user-facing fact source remains `docs/SYSTEM_HANDBOOK.md`, served by the existing Help API. M20 adds structured runbook content and targeted tests so humans and Agent tools can perform consistent GO / NO-GO checks before YAML reaches customer runtime.

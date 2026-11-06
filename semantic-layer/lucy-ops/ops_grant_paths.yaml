@@ -1,0 +1,11 @@
+# 可问治理面 W2 — 授权路径（同源 buildAccessMap）。
+name: ops_grant_paths
+
+grain:
+  - snapshot_id
+  - path_key
+
+measures:
+  - name: grant_path_count
+    expr: count(*)
+    description: 授权路径行数（应对齐 ops_map_meta.grant_paths／builder meta.counts.grantPaths）。

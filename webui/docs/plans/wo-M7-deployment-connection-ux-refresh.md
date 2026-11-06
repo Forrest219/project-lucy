@@ -1,7 +1,5 @@
 # WebUI Deployment And Connection UX Refresh Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Upgrade the WebUI deployment wizard and connection overview so Minimax can deliver the PM-approved readiness, copy, connection-card, and Add Schema slide-over experience with focused tests.
 
 **Architecture:** This is a frontend-first refinement over existing WebUI contracts. Reuse `GET /api/project`, `GET /api/sources`, `GET /api/diff`, `GET /api/admin/agents`, `POST /api/connections/:connId/test`, and the existing Add Schema endpoints; do not add backend fields or fake live connection status.

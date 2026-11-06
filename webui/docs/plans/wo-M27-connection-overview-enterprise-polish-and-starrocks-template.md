@@ -1,7 +1,5 @@
 # M27 Connection Overview Enterprise Polish And StarRocks Template Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Polish `/connections` into an enterprise-grade operations surface and include StarRocks in template / fixture coverage without promoting it to live-certified support.
 
 **Architecture:** Frontend-first cleanup over the existing Connection Overview and Catalog Reload flows. Keep `ktx.yaml`, `semantic-layer/**`, static Catalog reload, Add Schema, and controlled Manifest upload on their current backends; adjust presentation, copy, fixtures, and regression tests so connection state, source-of-truth metadata, read-only intent, and missing Manifest diagnostics are explicit and low-noise.

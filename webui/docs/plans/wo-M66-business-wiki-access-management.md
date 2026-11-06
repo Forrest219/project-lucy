@@ -1,7 +1,5 @@
 # M66 Business Wiki Access Management Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Let administrators assign Wiki access during upload, inspect and edit one document's access without editing Markdown, and safely update up to 100 explicitly selected Wiki documents in one recoverable batch.
 
 **Architecture:** Keep `allowed_roles` in each Markdown file as the only authorization source. Add a shared in-process Wiki write queue with non-reentrant unlocked helpers, preview-bound ACL mutation services, durable widening holds, and recoverable per-file batch journals in `security.sqlite`. Route every ACL-changing write—including the existing combined Markdown editor—through one audited mutation coordinator. Reuse the current `authorizeContext` decision and expose a Wiki-to-Role effect projection for UI explanations.

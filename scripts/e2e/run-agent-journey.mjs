@@ -264,6 +264,20 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
   const startedAt = new Date().toISOString();
   const agentCases = cases.filter((c) => c.runner === "agent");
   const requiredClients = automatedRequiredClients(clientsDoc.clients);
+  // The identity the isolation probe authenticates with. It is the agent of the FIRST
+  // planned ask in this run — a real, enabled identity of the same family the official
+  // asks use. The probe drives the same client against the same MCP endpoint, so it must
+  // carry a real token: with an empty one the MCP handshake is refused and the client
+  // exits before it can attempt a forbidden resource.
+  const probeIdentity = (() => {
+    for (const testCase of agentCases) {
+      const plan = expectedAskPlan(testCase);
+      if (!plan || plan.length === 0) continue;
+      const token = tokens[plan[0].agentId];
+      if (token) return { agentId: plan[0].agentId, token };
+    }
+    return null;
+  })();
   const entries = [];
   const clientInfo = [];
   const serverEvidenceCases = [];
@@ -288,7 +302,15 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
     mkdirSync(workDir, { recursive: true });
 
     // Isolation proof with the real client before any official question (Spec §6.2).
-    const isolation = await deps.isolationProbe({ adapter, probeInfo, workDir, run, secrets });
+    const isolation = await deps.isolationProbe({
+      adapter,
+      probeInfo,
+      workDir,
+      run,
+      secrets,
+      probeToken: probeIdentity?.token ?? null,
+      probeAgentId: probeIdentity?.agentId ?? null
+    });
     // The per-resource probe outcomes travel with the evidence: an auditor must be able to
     // re-derive WHY the boundary was (or was not) established, and the three verdicts
     // (denied / leaked / inconclusive) must not be collapsed into one boolean.
@@ -297,7 +319,10 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
       attemptCompleted: isolation.attemptCompleted ?? false,
       attempts: isolation.attempts ?? [],
       leaked: isolation.leaked ?? [],
-      inconclusive: isolation.inconclusive ?? []
+      inconclusive: isolation.inconclusive ?? [],
+      // The positive control travels with the evidence: when the probe cannot conclude,
+      // the reason WHY (the client could not even read an ALLOWED file) must be visible.
+      control: isolation.control ?? null
     };
     if (!isolation.attemptCompleted) {
       progressLog(run, `isolation ${client.product} did not complete: ${isolation.detail}`);
@@ -523,7 +548,7 @@ export function applyCrossRunRules(entries, agentCases, products) {
  * for release. `release` executionMode disables it entirely (the orchestrator refuses to
  * pass `allowUnisolated: true` when the run is a release run).
  */
-export async function realIsolationProbe({ adapter, probeInfo, workDir, run, secrets, deps }) {
+export async function realIsolationProbe({ adapter, probeInfo, workDir, run, secrets, deps, probeToken = null, probeAgentId = null }) {
   if (deps.allowUnisolated) {
     return {
       isolated: false,
@@ -599,6 +624,11 @@ export async function realIsolationProbe({ adapter, probeInfo, workDir, run, sec
     provider: bundle.provider,
     profileString: bundle.profileString,
     canaries,
+    // The MCP identity the probe's client authenticates with. It must be a REAL agent
+    // token: with an empty one the MCP handshake is refused and a client started with
+    // `--strict-mcp-config` exits before it can attempt the forbidden resource, so every
+    // probe would be inconclusive for a reason that has nothing to do with the boundary.
+    token: probeToken ?? null,
     // Propagate the deps.boundaryRun so the probe uses the SAME native runner the official
     // asks use. In production this is the sandbox-exec wrapper; in tests it's a stub. Without
     // this, the probe would call runUnderBoundary directly and the official asks would call
@@ -612,11 +642,18 @@ export async function realIsolationProbe({ adapter, probeInfo, workDir, run, sec
     canaries,
     allow: bundle.allow,
     deny: bundle.deny,
+    metadataLiterals: bundle.metadataLiterals,
+    denyLiterals: bundle.denyLiterals,
     mcpPorts: bundle.mcpPorts,
     sidecarPort: bundle.sidecarPort,
     mcpHost: bundle.mcpHost,
     mcpHostIsLocal: bundle.mcpHostIsLocal,
-    networkEgressGap: bundle.networkEgressGap
+    networkEgressGap: bundle.networkEgressGap,
+    // Which identity the probe authenticated with (fingerprint only — never the token).
+    probeIdentity: {
+      agentId: probeAgentId ?? null,
+      tokenFingerprint: probeToken ? tokenFingerprintOf(probeToken) : null
+    }
   });
   return { ...probe, receipt };
 }
@@ -697,7 +734,9 @@ async function main() {
       });
       // The boundary runner is the only native runner the agent journey uses in production.
       const sanitized = sanitizeEnv(input.env, deps.envAllowMatcher, { token: input.env?.[TOKEN_ENV], clientHome: input.cwd, clientWork: input.cwd });
-      const env = deps.modelSidecarPort ? { ...sanitized, ...modelClientEnv(deps.modelSidecarPort) } : sanitized;
+      const env = deps.modelSidecarPort
+        ? { ...sanitized, ...modelClientEnv(deps.modelSidecarPort, deps.modelApiBasePath ?? "") }
+        : sanitized;
       return runUnderBoundaryLocal({ provider, profileString: bundle.profileString, command: input.command, args: input.args, cwd: input.cwd, env, timeoutMs: input.timeoutMs, bounds: input.bounds });
     }
   };
@@ -724,6 +763,9 @@ async function main() {
   if (modelApi) {
     modelSidecar = await startModelEgressSidecar(modelApi);
     deps.modelSidecarPort = modelSidecar.sidecarPort;
+    // The upstream's PATH PREFIX (e.g. "/anthropic") must survive the sidecar hop, or
+    // every model call lands on the wrong path and comes back as an api_error.
+    deps.modelApiBasePath = modelApi.basePath ?? "";
   }
   try {
     mkdirSync(run.paths.logs, { recursive: true });

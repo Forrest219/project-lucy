@@ -38,9 +38,10 @@ async function main(): Promise<number> {
 
   const result = await ensureOpsEvidence({ projectRoot });
   const conflicts = result.assetConflicts.length;
+  const upgrades = result.assetUpgrades.length;
   console.log(
     `[ops-evidence] connection=${result.connectionWrite} readiness=${result.readiness}` +
-      ` assets=${result.assets.length} conflicts=${conflicts}` +
+      ` assets=${result.assets.length} upgrades=${upgrades} conflicts=${conflicts}` +
       ` mirror(copied=${result.mirror.copied},skipped=${result.mirror.skipped},failed=${result.mirror.failed})`
   );
   if (result.detail) console.warn(`[ops-evidence] ${result.detail}`);

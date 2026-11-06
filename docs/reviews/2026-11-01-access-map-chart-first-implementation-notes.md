@@ -203,7 +203,7 @@ $ cd webui && npx vitest run src/__tests__/access-map.test.tsx src/__tests__/acc
 1. **浏览器走查未做**（Spec §7 明写「浏览器走查不在本条出口」）。视觉层面的两点只能靠读代码判断、未经人眼确认：① 图区 `min-height` 用 `clamp(420px, 58vh, 720px)`，在超宽/超高视口下图区下方会留白（SVG 高度固定 640，容器可到 720）；② 悬停浮层以**根容器**为绝对定位基准、按鼠标坐标偏移 12px 定位：横向滚动时图形移动而浮层不动（浮层始终贴鼠标），浮层在靠近图区右缘时可能溢出根容器右缘。
 2. **弱入口在数据表视图也渲染**（Spec §5.1 的骨架图把弱入口画在【关系图】分支下）。本轮把它放在视图分支**之后**，两个视图都能读到口径全文；若要求只在关系图视图出现，请说一声，改动是一行。
 3. **`access-map-dormant` 这类无 test id 的口径句**没进选择器契约表（按 Spec §5.4「否则写在同一折叠正文」处理）。若希望它可被 E2E 直接断言，需要新增 test id + 契约行。
-4. **`docs/plans/lucy-20261101-access-map-chart-first-coder-prompt.md` 未入库（保持 untracked）**。它是委托方下发的提示词、不是 Plan：形状门禁只扫 `docs/specs` 与 `docs/plans`，一旦 `git add` 就会从 7 条 WARN 变成 7 条**阻塞项**。Plan 元数据表里的引用已改成纯文本说明（不再是指向未入库文件的链接）。该文件留在工作树里未跟踪，**提交时不要 `git add` 它**。
+4. **`docs/plans/lucy-20261101-access-map-chart-first-coder-prompt.md` 未入库（保持 untracked）**。它是委托方下发的提示词、不是 Plan：形状门禁只扫 `docs/specs` 与 `docs/plans`，一旦 `git add` 就会从 7 条 WARN 变成 7 条**阻塞项**。Plan 元数据表里的引用已改成纯文本说明（不再是指向未入库文件的链接）。该文件留在工作树里未跟踪，**提交时不要 `git add` 它**。（**2026-11-05 现状更正**：该提示词已由另一工作线入库，现位于 `docs/prompts/lucy-20261101-access-map-chart-first-coder-prompt.md`——归位到 `docs/prompts/` 正是为了不再被 Plan 形态门禁扫到；本条原始观察「它是提示词、不是 Plan」仍然成立。）
 5. **`git` 状态提醒**：本条全部改动都是**工作树未暂存**状态（索引为空，`git diff --cached` 无输出）。`AccessMapSignalBar.tsx` 是工作树删除（未暂存），新增的 `AccessMapSignalNotes.tsx` 是 untracked —— **若他人执行 `git commit -a`，删除会被提交而新文件不会**，import 会断在 `AccessMap.tsx` 的新 import 上。需要一并 `git add webui/src/components/admin/AccessMapSignalNotes.tsx`（以及本条的 spec/plan / reviews 等 untracked 文件）。本轮按指令**未执行任何 commit / push**。
 6. **`npm run lint:spec-docs` 仍红**，需另一条工作线把 `本条承诺（v1.1）：` 改回 `本条承诺：`（或按门禁提示写进 baseline 并说明理由）。本条**没有**代改他人文件。
 

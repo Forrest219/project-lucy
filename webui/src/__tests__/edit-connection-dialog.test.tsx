@@ -112,6 +112,28 @@ describe("EditConnectionDialog", () => {
     expect(document.activeElement && panel.contains(document.activeElement)).toBe(true);
   });
 
+  it("form fields use stacked connection-field + pl-input layout (not bare pl-field)", () => {
+    renderDialog();
+    const panel = screen.getByTestId("edit-connection-dialog-panel");
+    const fieldIds = [
+      "edit-connection-id",
+      "edit-connection-host",
+      "edit-connection-port",
+      "edit-connection-username",
+      "edit-connection-password"
+    ] as const;
+    for (const id of fieldIds) {
+      const input = screen.getByTestId(id);
+      expect(input).toHaveClass("pl-input");
+      const field = input.closest("label");
+      expect(field).toHaveClass("pl-connection-field");
+      expect(field).not.toHaveClass("pl-field");
+      expect(field?.querySelector(".pl-connection-field-control")).not.toBeNull();
+      expect(panel.contains(field)).toBe(true);
+    }
+    expect(panel.querySelectorAll("label.pl-field")).toHaveLength(0);
+  });
+
   it("SC-13 dialog action group has a single primary labeled 预览变更 then 保存", async () => {
     apiPost
       .mockResolvedValueOnce({

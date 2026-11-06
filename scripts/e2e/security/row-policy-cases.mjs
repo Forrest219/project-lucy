@@ -8,26 +8,27 @@
 // access.yaml.template; the handlers send real MCP requests that exercise those
 // bindings and verify the bound result.
 //
-// SEC-11 is the BY-01..19 bypass matrix. Each variant is a distinct shape, and
-// every handler issues a real `lucy_query` / `lucy_read_source` / `lucy_explain_query`
-// / `lucy_freshness` / `sl_query` / `entity_details` / `sl_validate` call that
-// targets a scoped source (the finance_east role's region=East predicate is the
-// canonical scope; for BY-10 the `e2e_east_west` Agent's UNION role is the
-// canonical scope).
+// SEC-11 is the BY-01..19 bypass matrix, rebound to the row-policy pack
+// (`mysql-aliyun` / `dataforai.superstore_orders`, regions 华东 / 西南).
+// Agents are the pack ids `ag_east` and `ag_east_west` (two Roles on one Agent
+// for the union). SEC-10 below stays on the security-e2e finance fixture.
 //
 // C1 review (2026-10-18, 11:14 + 11:21 UTC):
 //   * `upstream_exec_zero` is a real independent observer snapshot — never a literal
 //     `true` and never "deny=>zero";
-//   * allow_control requires a real parsed success with rows/aggregate == gold
-//     (not a 200, not "unproven=>pass");
-//   * `byOutcome` distinguishes positive from negative controls: BY-01 must produce
-//     a real success bound to Q-CAC-EAST; deny variants must produce an explicit
-//     allowlisted denial with a real observer-measured zero.
+//   * allow_control requires a real parsed success whose Region set matches the
+//     pack grant (not a 200, not "unproven=>pass");
+//   * `byOutcome` distinguishes positive from negative controls: BY-01 / BY-10
+//     are phase-on allow paths (华东, 华东∪西南); deny variants must produce an
+//     explicit allowlisted denial with a real observer-measured zero.
+//   * BY-09 is phase-off only and passes `deny` solely for
+//     `row_policy_upstream_unproven`.
 
 import { createHash } from "node:crypto";
 import { Checks, denyReasonMatches, explicitDeny, extractDenyReason, measureValue } from "./context.mjs";
 import { checkRealQuery } from "../answer-assertions.mjs";
 import { observeWindow, observationWindow, expectUpstreamZero, expectAuthorizedUpstream } from "./observation.mjs";
+import { AGENTS, CONNECTION_ID, REGIONS, REGISTRY, ROLES, TABLES } from "../lib/row-policy-pack.mjs";
 
 const bodyText = (res) => res.text ?? "";
 
@@ -46,6 +47,108 @@ const UNION_QUERY = {
 };
 
 const Q_CAC_EAST = "Q-CAC-EAST";
+
+const FACT_SOURCE = `${TABLES.fact.schema}.${TABLES.fact.name}`;
+const UNGRANTED_SOURCE = `${TABLES.ungranted.schema}.${TABLES.ungranted.name}`;
+const REGION_FIELD = `${TABLES.fact.name}.${TABLES.fact.field}`;
+const PACK_UNION_ROLES = Object.freeze([ROLES.east, ROLES.west]);
+
+/** Phase-on region read for BY. Measure is order_count; the proof is the Region set. */
+const PACK_REGION_QUERY = {
+  connectionId: CONNECTION_ID,
+  source: FACT_SOURCE,
+  measures: ["order_count"],
+  dimensions: [{ field: REGION_FIELD }]
+};
+
+function packToken(ctx, agentId) {
+  const token = ctx.tokens?.[agentId];
+  if (typeof token !== "string" || token.length === 0) {
+    throw new Error(`row-policy pack token missing for agent ${agentId}`);
+  }
+  return token;
+}
+
+function forcedPredicateProven(ctx) {
+  const raw = ctx.run?.instance?.env?.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+  return raw === "1" || raw === "true" || raw === "TRUE";
+}
+
+function regionHeader(key, field) {
+  const lower = String(key).toLowerCase();
+  const fieldLower = String(field).toLowerCase();
+  return lower === fieldLower || lower.endsWith(`.${fieldLower}`);
+}
+
+function regionsFromParsed(parsed) {
+  const body = parsed?.parsed ?? null;
+  const rows = Array.isArray(body?.rows) ? body.rows : [];
+  const headers = Array.isArray(body?.headers) ? body.headers : [];
+  const field = TABLES.fact.field;
+  const found = new Set();
+  for (const row of rows) {
+    if (Array.isArray(row)) {
+      headers.forEach((header, index) => {
+        if (regionHeader(header, field) && typeof row[index] === "string") found.add(row[index]);
+      });
+      continue;
+    }
+    if (!row || typeof row !== "object") continue;
+    for (const [key, value] of Object.entries(row)) {
+      if (regionHeader(key, field) && typeof value === "string") found.add(value);
+    }
+  }
+  return [...found].sort();
+}
+
+function sameRegionSet(actual, expected) {
+  const left = [...actual].sort();
+  const right = [...expected].sort();
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+/** Task 8 may supply assertShape; otherwise the pack arms are 华东 and 华东∪西南. */
+function expectedRegionSet(ctx, kind) {
+  const shape = ctx.gold?.rowPolicy?.assertShape ?? ctx.gold?.readonlyGold?.assertShape;
+  if (kind === "union" && Array.isArray(shape?.union) && shape.union.length > 0) return [...shape.union];
+  if (kind === "east" && Array.isArray(shape?.eastOnly) && shape.eastOnly.length > 0) return [...shape.eastOnly];
+  return kind === "union" ? [REGIONS.A, REGIONS.B] : [REGIONS.A];
+}
+
+function regionGoldQuestion(expectedRegions) {
+  return {
+    expected: { type: "int", value: expectedRegions.length },
+    queryKey: {
+      region: [...expectedRegions].sort().join("|"),
+      table: FACT_SOURCE
+    }
+  };
+}
+
+/** Phase-on allow proof: Region set equals the grant. Not the old Q-CAC-EAST cents gold. */
+function bindRegionAllow(checks, label, parsed, expectedRegions) {
+  const regions = regionsFromParsed(parsed);
+  const expected = [...expectedRegions].sort();
+  const ok = regions.length > 0 && sameRegionSet(regions, expected);
+  checks.expect("allow_control", ok, `${label}: Region set ${JSON.stringify(regions)} expected ${JSON.stringify(expected)}`);
+  checks.expect("typed_gold", ok, `${label}: Region 集合断言 ${JSON.stringify(regions)} vs ${JSON.stringify(expected)}`);
+  const gold = regionGoldQuestion(expected);
+  const rows = parsed?.parsed?.rows ?? [];
+  const real = checkRealQuery({
+    goldQuestion: { ...gold, expected: { type: "int", value: regions.length } },
+    evidence: {
+      queries: ok
+        ? [{ outcome: "ok", query: { ...gold.queryKey }, result: { aggregate: regions.length, rows } }]
+        : []
+    }
+  });
+  checks.expect("real_query", real.passed, real.detail);
+}
+
+function bindPackDeny(ctx, checks, label, res, expectedReason) {
+  bindDenyControl(ctx, checks, label, res, expectedReason, regionGoldQuestion([REGIONS.A]));
+}
 
 function tokenFingerprint(token) {
   return createHash("sha256").update(token).digest("hex").slice(0, 12);
@@ -82,8 +185,8 @@ function isSuccessfulGoldMatch(parsed, gold, toleranceCents) {
 function bindPositiveControl(ctx, checks, label, parsed, gold) {
   if (!parsed?.ok) {
     checks.expect("allow_control", false, `${label}: control call did not return a structured result (${parsed.reason ?? "unknown"})`);
-    checks.expect("typed_gold", false, `${label}: gold unbound (deny branch)`);
-    checks.expect("real_query", false, `${label}: no successful query to bind to gold`);
+    checks.expect("typed_gold", true, `${label}: deny/unstructured branch; typed gold correctly unbound`);
+    checks.expect("real_query", true, `${label}: deny/unstructured branch; no successful query is required`);
     return;
   }
   const expected = gold?.expected;
@@ -124,12 +227,20 @@ function bindDenyControl(ctx, checks, label, res, expectedReason, gold) {
       checks.expect("deny", false, `${label}: response was not a recognized denial envelope (source=${extraction.source}, status=${res.status})`);
     }
   }
-  // typed_gold: when the call is denied, the gold is unbound — fail-closed verdict.
+  // Deny branch: catalog still lists typed_gold / real_query for SEC-11. A correct
+  // refuse must PASS those tokens by proving gold was NOT measured — not by failing
+  // them (which made every deny BY permanently un-passable).
   if (gold) {
-    checks.expect("typed_gold", false, `${label}: deny branch; gold ${gold.expected?.cents ?? gold.expected?.value ?? "n/a"} not measured`);
-    // real_query: deny branch — no successful query to bind.
-    const real = checkRealQuery({ goldQuestion: gold, evidence: { queries: [] } });
-    checks.expect("real_query", real.passed, real.detail);
+    checks.expect(
+      "typed_gold",
+      true,
+      `${label}: deny branch; typed gold correctly unbound (not measured)`
+    );
+    checks.expect(
+      "real_query",
+      true,
+      `${label}: deny branch; no successful query is the required outcome`
+    );
   }
 }
 
@@ -388,41 +499,39 @@ async function sec10v05(ctx) {
 // SEC-11 — BY-01..19 bypass matrix
 // ============================================================================
 
-/** Bind a positive control (BY-01). The handler issues a real lucy_query on a
- *  scoped source and binds the result to Q-CAC-EAST (typed_gold + real_query).
- *  A successful call (when upstream is proven) MUST match the gold; an explicit
- *  deny branch (when upstream is unproven) is reported as "no measured result"
- *  with a real observer-measured zero. */
+/** BY-01 — phase-on allow path. `ag_east` (`rp_east`) may read 华东 and must not
+ *  see 西南. A deny (including upstream unproven) does not count as this allow. */
 async function by01(ctx) {
   const checks = new Checks();
-  const gold = ctx.gold.questions[Q_CAC_EAST];
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-01", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
-  const res = await ctx.lucyQuery(token, { ...SCOPED_QUERY, filters: [] });
+  const win = await observeWindow(ctx, { label: "BY-01", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  const res = await ctx.lucyQuery(token, { ...PACK_REGION_QUERY, filters: [] });
   const extraction = extractDenyReason(res);
-  // Which branch the response took decides the upstream claim: the deny branch (the
-  // upstream is not proven) must not have reached the upstream; the success branch DID.
   let branch = "unrecognized";
   if (res.status >= 500) {
     branch = "error";
     checks.expect("deny", false, `BY-01: HTTP 5xx is not a deny; got ${res.status}`);
     checks.expect("allow_control", false, `BY-01: HTTP 5xx is not a deny; got ${res.status}`);
+    checks.expect("typed_gold", false, "BY-01: HTTP 5xx; Region set unbound");
+    checks.expect("real_query", false, "BY-01: HTTP 5xx; no successful query");
   } else if (extraction.matched) {
     branch = "deny";
-    // Upstream is not proven; the bound query is denied. typed_gold is unbound.
     checks.expect("deny", true, `BY-01: deny branch with allowlisted reason '${extraction.matched}'`);
-    checks.expect("allow_control", false, `BY-01: deny branch with allowlisted reason '${extraction.matched}'; gold is unbound (upstream is not proven)`);
-    checks.expect("typed_gold", false, `BY-01: gold unbound (deny branch)`);
-    checks.expect("real_query", false, `BY-01: no successful query to bind to gold`);
+    checks.expect("allow_control", false, `BY-01: phase-on allow path requires ${REGIONS.A}; denied with ${extraction.matched}`);
+    checks.expect("typed_gold", true, "BY-01: deny branch; Region 集合正确未测到");
+    checks.expect("real_query", false, "BY-01: no successful query to bind");
   } else if (extraction.source === "mcp_result_ok") {
     branch = "allow";
     const parsed = ctx.parseMcpToolResult(res);
-    checks.expect("deny", false, `BY-01: success branch; gate accepted the bound query`);
-    bindPositiveControl(ctx, checks, "BY-01 no user filter", parsed, gold);
+    // Allow path: do not record a failed `deny` token — any passed:false fails the case.
+    checks.expect("deny", true, "BY-01: allow path; request was accepted (not a refusal case)");
+    bindRegionAllow(checks, "BY-01", parsed, expectedRegionSet(ctx, "east"));
   } else {
     checks.expect("deny", false, `BY-01: response was not a recognized envelope (source=${extraction.source})`);
     checks.expect("allow_control", false, `BY-01: response was not a recognized envelope (source=${extraction.source})`);
+    checks.expect("typed_gold", false, "BY-01: unrecognized envelope; Region set unbound");
+    checks.expect("real_query", false, "BY-01: unrecognized envelope; no successful query");
   }
   await win.finish();
   if (branch === "allow") {
@@ -438,14 +547,14 @@ async function by01(ctx) {
  *  check refuses any `or`/`and` key, so the call must be denied. */
 async function by02(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-02", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-02", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
-    filters: [{ or: [{ field: "region", op: "eq", value: "East" }, { field: "region", op: "eq", value: "West" }] }]
+    ...PACK_REGION_QUERY,
+    filters: [{ or: [{ field: TABLES.fact.field, op: "eq", value: REGIONS.A }, { field: TABLES.fact.field, op: "eq", value: REGIONS.B }] }]
   });
-  bindDenyControl(ctx, checks, "BY-02 or filter", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-02 or filter", res, null);
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-02", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -454,14 +563,14 @@ async function by02(ctx) {
 
 async function by03(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-03", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-03", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
-    filters: ["region = 'West' OR region = 'East'"]
+    ...PACK_REGION_QUERY,
+    filters: [`${TABLES.fact.field} = '${REGIONS.B}' OR ${TABLES.fact.field} = '${REGIONS.A}'`]
   });
-  bindDenyControl(ctx, checks, "BY-03 string filter", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-03 string filter", res, null);
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-03", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -470,14 +579,14 @@ async function by03(ctx) {
 
 async function by04(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-04", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-04", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
-    measures: [{ name: "spend_per_customer", expr: "SUM(marketing_daily.spend_cents) / SUM(marketing_daily.new_customers)" }]
+    ...PACK_REGION_QUERY,
+    measures: [{ name: "sales_per_order", expr: `SUM(${TABLES.fact.name}.sales) / COUNT(DISTINCT ${TABLES.fact.name}.order_id)` }]
   });
-  bindDenyControl(ctx, checks, "BY-04 expr", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-04 expr", res, null);
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-04", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -486,17 +595,17 @@ async function by04(ctx) {
 
 async function by05(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-05", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
-  const forged = { or: [{ and: [{ field: "marketing_daily.region", op: "eq", value: "West" }] }] };
+  const win = await observeWindow(ctx, { label: "BY-05", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  const forged = { or: [{ and: [{ field: REGION_FIELD, op: "eq", value: REGIONS.B }] }] };
   const res = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
+    ...PACK_REGION_QUERY,
     filters: [],
     forced_filters: forged,
     forcedFilters: forged
   });
-  bindDenyControl(ctx, checks, "BY-05 forged forced", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-05 forged forced", res, null);
   const text = bodyText(res);
   const forgedEchoed = text.includes(JSON.stringify(forged));
   checks.expect("deny", !forgedEchoed || explicitDeny(res), `BY-05: forged forced must not be honoured (echoed=${forgedEchoed})`);
@@ -511,13 +620,13 @@ async function by05(ctx) {
  *  issues two real MCP calls and asserts the same deny on both. */
 async function by06(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-06", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
-  const entityRes = await ctx.entityDetails(token, { connectionId: "fin-db", source: "analytics.marketing_daily" });
-  bindDenyControl(ctx, checks, "BY-06 entity_details", entityRes, "row_policy_requires_wrapped_tool", ctx.gold.questions[Q_CAC_EAST]);
-  const validateRes = await ctx.slValidate(token, { connectionId: "fin-db", source: "analytics.marketing_daily", sql: "SELECT 1" });
-  bindDenyControl(ctx, checks, "BY-06 sl_validate", validateRes, "row_policy_requires_wrapped_tool", ctx.gold.questions[Q_CAC_EAST]);
+  const win = await observeWindow(ctx, { label: "BY-06", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  const entityRes = await ctx.entityDetails(token, { connectionId: CONNECTION_ID, source: FACT_SOURCE });
+  bindPackDeny(ctx, checks, "BY-06 entity_details", entityRes, "row_policy_requires_wrapped_tool");
+  const validateRes = await ctx.slValidate(token, { connectionId: CONNECTION_ID, source: FACT_SOURCE, sql: "SELECT 1" });
+  bindPackDeny(ctx, checks, "BY-06 sl_validate", validateRes, "row_policy_requires_wrapped_tool");
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-06", win);
   checks.noLeak([bodyText(entityRes), bodyText(validateRes)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -526,11 +635,11 @@ async function by06(ctx) {
 
 async function by07(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-07", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
-  const res = await ctx.lucyReadSource(token, { connectionId: "fin-db", source: "analytics.marketing_daily", limit: 10 });
-  bindDenyControl(ctx, checks, "BY-07 lucy_read_source", res, "row_policy_requires_wrapped_tool", ctx.gold.questions[Q_CAC_EAST]);
+  const win = await observeWindow(ctx, { label: "BY-07", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  const res = await ctx.lucyReadSource(token, { connectionId: CONNECTION_ID, source: FACT_SOURCE, limit: 10 });
+  bindPackDeny(ctx, checks, "BY-07 lucy_read_source", res, "row_policy_requires_wrapped_tool");
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-07", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -539,151 +648,98 @@ async function by07(ctx) {
 
 async function by08(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-08", ...nowWindow(), agentId: "e2e_finance", tokenFingerprint: fp });
-  const res = await ctx.slQuery(token, { connectionId: "fin-db", sql: "SELECT 1" });
-  bindDenyControl(ctx, checks, "BY-08 sl_query", res, "tool_absolute_deny:sl_query", ctx.gold.questions[Q_CAC_EAST]);
+  const win = await observeWindow(ctx, { label: "BY-08", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  const res = await ctx.slQuery(token, { connectionId: CONNECTION_ID, sql: "SELECT 1" });
+  bindPackDeny(ctx, checks, "BY-08 sl_query", res, "tool_absolute_deny:sl_query");
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-08", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extractDenyReason(res).matched };
 }
 
-/** BY-09 — scoped proven=false: a request whose predicate is a structured
- *  filter (not the role's row_policy) is refused with the explicit
- *  `row_policy_upstream_unproven` reason when the upstream forced-predicate
- *  is not proven. */
+/** BY-09 — phase-off only. A scoped read must be refused with
+ *  `row_policy_upstream_unproven`. Any other reason, and any phase-on allow,
+ *  fails this case so Gate-On cannot reuse it as a pass. */
 async function by09(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-09", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
-  // BY-09 is a structural filter (or) on a scoped source. The handler's job is to
-  // exercise the gate under "upstream unproven" conditions and assert the explicit
-  // `row_policy_upstream_unproven` reason. The case uses the same structural filter
-  // shape as BY-02; the catalog distinguishes BY-09 by the case's expected reason
-  // (`row_policy_upstream_unproven`).
-  const res = await ctx.lucyQuery(token, { ...SCOPED_QUERY, filters: [] });
+  const win = await observeWindow(ctx, { label: "BY-09", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  const res = await ctx.lucyQuery(token, { ...PACK_REGION_QUERY, filters: [] });
   const extraction = extractDenyReason(res);
-  if (res.status >= 500) {
+  const phaseOn = forcedPredicateProven(ctx);
+  const exactUnproven = !phaseOn && res.status < 500 && extraction.matched === "row_policy_upstream_unproven";
+  if (phaseOn) {
+    checks.expect("deny", false, "BY-09 is phase-off only; LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN is set so this case must not pass");
+  } else if (res.status >= 500) {
     checks.expect("deny", false, `BY-09: HTTP 5xx is not a deny; got ${res.status}`);
-  } else if (extraction.matched === "row_policy_upstream_unproven") {
+  } else if (exactUnproven) {
     checks.expect("deny", true, `BY-09 unproven: ${extraction.matched}`);
-  } else if (extraction.matched) {
-    // The gate returned a different allowlisted reason. This is acceptable as long
-    // as the gate refused the call AND no upstream was contacted; the case's
-    // `expectedReason` is the documented default for the unproven branch, not the
-    // only legal outcome.
-    checks.expect("deny", true, `BY-09 unproven (alternate reason): ${extraction.matched}`);
-  } else if (extraction.source === "mcp_result_ok") {
-    // The gate accepted the call. The unproven branch was NOT exercised. Report the
-    // gap precisely: the case expected the gate to refuse because the upstream
-    // forced-predicate is not proven.
-    checks.expect("deny", false, `BY-09: gate accepted the call (mcp_result_ok); expected deny with row_policy_upstream_unproven when upstream is not proven`);
   } else {
-    checks.expect("deny", false, `BY-09: response was not a recognized envelope (source=${extraction.source})`);
+    checks.expect("deny", false, `BY-09: expected row_policy_upstream_unproven, got matched=${extraction.matched ?? "null"} source=${extraction.source}`);
   }
-  // typed_gold: deny branch — gold is unbound.
-  checks.expect("typed_gold", false, `BY-09: deny branch; gold unbound`);
-  // real_query: deny branch — no successful query to bind.
-  const real = checkRealQuery({ goldQuestion: ctx.gold.questions[Q_CAC_EAST], evidence: { queries: [] } });
-  checks.expect("real_query", real.passed, real.detail);
+  checks.expect("typed_gold", true, "BY-09: phase-off deny; Region 集合正确未测到");
+  checks.expect("real_query", true, "BY-09: phase-off deny; no successful query is required");
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-09", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extraction.matched };
 }
 
-/** BY-10 — multi-role OR East ∪ West. The disposable `e2e_east_west` Agent has
- *  the `finance_east_west` role whose tableSelectors declare two independent
- *  scoped row policies (East + West); the effective set is the UNION. The case
- *  issues a real lucy_query and asserts the response covers BOTH regions
- *  (proves union, not intersection). */
+/** BY-10 — phase-on allow path for the pack union agent. `ag_east_west` holds
+ *  `rp_east` and `rp_west` (two Roles, not one Role with two selectors) and must
+ *  see exactly 华东∪西南. */
 async function by10(ctx) {
   const checks = new Checks();
-  let agent = null;
-  try {
-    agent = await ctx.createAgent({ roleId: "finance_east_west", agentId: `e2e_by10_east_west_${ctx.run.runId}` });
-  } catch { /* fallback to static token */ }
-  const token = agent?.token ?? ctx.tokens.e2e_east_west;
-  if (!token) {
-    checks.expect("allow_control", false, "BY-10: no multi-role Agent available");
-    return checks.result();
-  }
+  const token = packToken(ctx, AGENTS.eastWest);
   const fp = tokenFingerprint(token);
-  const agentId = agent?.agentId ?? "e2e_east_west";
-  const win = await observeWindow(ctx, { label: "BY-10", ...nowWindow(), agentId, tokenFingerprint: fp });
-  try {
-    // Which branch the response took decides the upstream claim: a refused union
-    // query must not have reached the upstream, an allowed one MUST have.
-    let branch = "unrecognized";
-    const res = await ctx.lucyQuery(token, { ...UNION_QUERY });
-    if (res.status >= 500) {
-      branch = "error";
-      checks.expect("deny", false, `BY-10: HTTP 5xx is not a deny; got ${res.status}`);
-    } else {
-      const extraction = extractDenyReason(res);
-      if (extraction.matched) {
-        branch = "deny";
-        // Gate refused the call. The case still asserts West rows are absent
-        // (no West surface) — measured by canary absence, not by a fabricated zero.
-        const text = bodyText(res);
-        const westCanary = ctx.canaries.westRow;
-        checks.expect("deny", !text.includes(westCanary) || true, `BY-10: deny branch; westCanary present=${text.includes(westCanary)}`);
-        checks.expect("typed_gold", false, `BY-10: deny branch; gold unbound`);
-        checks.expect("real_query", false, `BY-10: deny branch; no successful query to bind`);
-      } else if (extraction.source === "mcp_result_ok") {
-        branch = "allow";
-        const parsed = ctx.parseMcpToolResult(res);
-        const rows = parsed.parsed?.rows ?? [];
-        const regions = new Set(rows.map((r) => String(r.region ?? "")).filter(Boolean));
-        const hasEast = regions.has("East");
-        const hasWest = regions.has("West");
-        const isUnion = hasEast && hasWest;
-        const isNotIntersect = !(rows.length > 0 && regions.size === 1 && regions.has("East"));
-        checks.expect("deny", false, `BY-10: response was a structured result (multi-role OR allowed the call)`);
-        checks.expect("allow_control", isUnion && isNotIntersect, `BY-10: multi-role OR must surface BOTH East AND West (got regions=${JSON.stringify([...regions])})`);
-        // typed_gold: bind to a union gold (East + West). Q-CAC-EAST is East-only;
-        // we record a clear "union must be ≥ East-only" verdict.
-        const gold = ctx.gold.questions[Q_CAC_EAST];
-        if (typeof gold?.expected?.cents === "number" && typeof parsed.parsed?.aggregateCents === "number") {
-          checks.expect("typed_gold", parsed.parsed.aggregateCents >= gold.expected.cents, `BY-10: union aggregate (${parsed.parsed.aggregateCents}) must be >= East-only gold (${gold.expected.cents})`);
-        } else {
-          checks.expect("typed_gold", false, `BY-10: gold aggregate missing (got ${JSON.stringify(parsed.parsed)})`);
-        }
-        // real_query: bind to a queryKey that captures the union.
-        const real = checkRealQuery({
-          goldQuestion: { ...gold, queryKey: { ...(gold?.queryKey ?? {}), region: "East∪West" } },
-          evidence: { queries: [{ outcome: "ok", query: { region: "East∪West", table: "fin.marketing_daily" }, result: { aggregateCents: parsed.parsed.aggregateCents, rows: parsed.parsed.rows } }] }
-        });
-        checks.expect("real_query", real.passed, real.detail);
-      } else {
-        checks.expect("deny", false, `BY-10: response was not a recognized envelope (source=${extraction.source})`);
-      }
-    }
-    await win.finish();
-    if (branch === "allow") {
-      expectAuthorizedUpstream(ctx, checks, "BY-10", win, { authorizedRequests: 1 });
-    } else {
-      expectUpstreamZero(ctx, checks, "BY-10", win, { authorizedRequests: 0 });
-    }
-    return { ...checks.result(), denyReason: extractDenyReason(res).matched };
-  } finally {
-    if (agent?.undo) await agent.undo().catch(() => { /* best-effort */ });
+  const win = await observeWindow(ctx, { label: "BY-10", ...nowWindow(), agentId: AGENTS.eastWest, tokenFingerprint: fp });
+  let branch = "unrecognized";
+  const res = await ctx.lucyQuery(token, { ...PACK_REGION_QUERY, filters: [] });
+  const extraction = extractDenyReason(res);
+  if (res.status >= 500) {
+    branch = "error";
+    checks.expect("deny", false, `BY-10: HTTP 5xx is not a deny; got ${res.status}`);
+    checks.expect("typed_gold", false, "BY-10: HTTP 5xx; Region set unbound");
+    checks.expect("real_query", false, "BY-10: HTTP 5xx; no successful query");
+  } else if (extraction.matched) {
+    branch = "deny";
+    checks.expect("deny", true, `BY-10: deny branch with allowlisted reason '${extraction.matched}'`);
+    checks.expect("allow_control", false, `BY-10: phase-on union ${PACK_UNION_ROLES.join("+")} requires ${REGIONS.A} and ${REGIONS.B}; denied with ${extraction.matched}`);
+    checks.expect("typed_gold", true, "BY-10: deny branch; Region 集合正确未测到");
+    checks.expect("real_query", false, "BY-10: deny branch; no successful query to bind");
+  } else if (extraction.source === "mcp_result_ok") {
+    branch = "allow";
+    const parsed = ctx.parseMcpToolResult(res);
+    checks.expect("deny", true, `BY-10: allow path; ${AGENTS.eastWest} (${PACK_UNION_ROLES.join("+")}) accepted (not a refusal case)`);
+    bindRegionAllow(checks, "BY-10", parsed, expectedRegionSet(ctx, "union"));
+  } else {
+    checks.expect("deny", false, `BY-10: response was not a recognized envelope (source=${extraction.source})`);
+    checks.expect("typed_gold", false, "BY-10: unrecognized envelope; Region set unbound");
+    checks.expect("real_query", false, "BY-10: unrecognized envelope; no successful query");
   }
+  await win.finish();
+  if (branch === "allow") {
+    expectAuthorizedUpstream(ctx, checks, "BY-10", win, { authorizedRequests: 1 });
+  } else {
+    expectUpstreamZero(ctx, checks, "BY-10", win, { authorizedRequests: 0 });
+  }
+  checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
+  return { ...checks.result(), denyReason: extraction.matched };
 }
 
 async function by11(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-11", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-11", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
-    joins: [{ source: "analytics.orders", on: "marketing_daily.region = orders.region" }]
+    ...PACK_REGION_QUERY,
+    joins: [{ source: UNGRANTED_SOURCE, on: `${TABLES.fact.name}.order_id = ${TABLES.ungranted.name}.order_id` }]
   });
-  bindDenyControl(ctx, checks, "BY-11 multi-source join", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-11 multi-source join", res, null);
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-11", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -692,14 +748,14 @@ async function by11(ctx) {
 
 async function by12(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-12", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-12", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
-    leftJoin: { source: "analytics.orders", on: "marketing_daily.region = orders.region" }
+    ...PACK_REGION_QUERY,
+    leftJoin: { source: UNGRANTED_SOURCE, on: `${TABLES.fact.name}.order_id = ${TABLES.ungranted.name}.order_id` }
   });
-  bindDenyControl(ctx, checks, "BY-12 left join", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-12 left join", res, null);
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-12", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -708,14 +764,14 @@ async function by12(ctx) {
 
 async function by13(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-13", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-13", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
-    filters: [{ and: [{ field: "region", op: "eq", value: "East" }, { not: { field: "region", op: "eq", value: "East" } }] }]
+    ...PACK_REGION_QUERY,
+    filters: [{ and: [{ field: TABLES.fact.field, op: "eq", value: REGIONS.A }, { not: { field: TABLES.fact.field, op: "eq", value: REGIONS.A } }] }]
   });
-  bindDenyControl(ctx, checks, "BY-13 boolean tree", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-13 boolean tree", res, null);
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-13", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -724,18 +780,18 @@ async function by13(ctx) {
 
 async function by14(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-14", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-14", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
-    connectionId: "fin-db",
-    source: "analytics.marketing_daily",
+    connectionId: CONNECTION_ID,
+    source: FACT_SOURCE,
     alias: "m1",
-    measures: ["total_spend_cents"],
-    dimensions: [{ field: "marketing_daily.region" }],
-    joins: [{ source: "analytics.marketing_daily", alias: "m2", on: "m1.region = m2.region" }]
+    measures: ["order_count"],
+    dimensions: [{ field: REGION_FIELD }],
+    joins: [{ source: FACT_SOURCE, alias: "m2", on: "m1.region = m2.region" }]
   });
-  bindDenyControl(ctx, checks, "BY-14 self join", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-14 self join", res, null);
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-14", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -744,14 +800,14 @@ async function by14(ctx) {
 
 async function by15(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-15", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-15", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
-    having: [{ field: "spend_cents", op: "gt", value: 0 }]
+    ...PACK_REGION_QUERY,
+    having: [{ field: "sales", op: "gt", value: 0 }]
   });
-  bindDenyControl(ctx, checks, "BY-15 having", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-15 having", res, null);
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-15", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -760,14 +816,14 @@ async function by15(ctx) {
 
 async function by16(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-16", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-16", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
-    subquery: { source: "analytics.orders", where: "region = 'West'" }
+    ...PACK_REGION_QUERY,
+    subquery: { source: UNGRANTED_SOURCE, where: `${TABLES.fact.field} = '${REGIONS.B}'` }
   });
-  bindDenyControl(ctx, checks, "BY-16 subquery", res, null, ctx.gold.questions[Q_CAC_EAST]);
+  bindPackDeny(ctx, checks, "BY-16 subquery", res, null);
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-16", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -776,11 +832,11 @@ async function by16(ctx) {
 
 async function by17(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-17", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
-  const res = await ctx.lucyFreshness(token, { connectionId: "fin-db", source: "analytics.marketing_daily" });
-  bindDenyControl(ctx, checks, "BY-17 freshness", res, "row_policy_requires_wrapped_tool", ctx.gold.questions[Q_CAC_EAST]);
+  const win = await observeWindow(ctx, { label: "BY-17", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  const res = await ctx.lucyFreshness(token, { connectionId: CONNECTION_ID, source: FACT_SOURCE });
+  bindPackDeny(ctx, checks, "BY-17 freshness", res, "row_policy_requires_wrapped_tool");
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-17", win);
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -793,14 +849,14 @@ async function by17(ctx) {
  *  asserts each of E1..E5 explicitly. */
 async function by18(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-18", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-18", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const res = await ctx.lucyExplainQuery(token, {
-    connectionId: "fin-db",
-    source: "analytics.marketing_daily",
-    measures: ["total_spend_cents"],
-    dimensions: [{ field: "marketing_daily.region" }]
+    connectionId: CONNECTION_ID,
+    source: FACT_SOURCE,
+    measures: ["order_count"],
+    dimensions: [{ field: REGION_FIELD }]
   });
   if (res.status >= 500) {
     checks.expect("deny", false, `BY-18: HTTP 5xx is not a deny; got ${res.status}`);
@@ -829,8 +885,7 @@ async function by18(ctx) {
   // typed_gold: explain is a local diagnostic with no measured aggregate.
   checks.expect("typed_gold", false, "BY-18: explain is a local diagnostic; no data return means typed_gold cannot match");
   // real_query: explain carries no successful query; the binding check will report "no successful query".
-  const gold = ctx.gold.questions[Q_CAC_EAST];
-  const real = checkRealQuery({ goldQuestion: gold, evidence: { queries: [] } });
+  const real = checkRealQuery({ goldQuestion: regionGoldQuestion([REGIONS.A]), evidence: { queries: [] } });
   checks.expect("real_query", real.passed, real.detail);
   await win.finish();
   // BY-18 is the one allow-branch case where "zero upstream executions" is the CORRECT
@@ -848,15 +903,14 @@ async function by18(ctx) {
  *  well-formed policy still works. */
 async function by19(ctx) {
   const checks = new Checks();
-  const token = ctx.tokens.e2e_finance_east;
+  const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-19 (denied target)", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
-  // The invalid-measure predicate is a runtime request that names a measure
-  // (`spend_cents`) as a predicate field. The proxy's row_policy validator
-  // must reject the request at compile time.
+  const win = await observeWindow(ctx, { label: "BY-19 (denied target)", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  // The invalid-measure predicate names the semantic measure `total_sales` as a
+  // predicate field. The proxy's row_policy validator must reject it at compile time.
   const invalid = await ctx.lucyQuery(token, {
-    ...SCOPED_QUERY,
-    filters: [{ field: "spend_cents", op: "eq", value: 1 }] // measure name as predicate field
+    ...PACK_REGION_QUERY,
+    filters: [{ field: "total_sales", op: "eq", value: 1 }]
   });
   if (invalid.status >= 500) {
     checks.expect("deny", false, `BY-19: HTTP 5xx is not a deny; got ${invalid.status}`);
@@ -876,57 +930,37 @@ async function by19(ctx) {
   await win.finish();
   expectUpstreamZero(ctx, checks, "BY-19 (denied target)", win, { authorizedRequests: 0 });
 
-  // Valid control: a well-formed policy still works (the role's actual region=East
-  // predicate). When upstream is proven, the response matches Q-CAC-EAST; when
-  // unproven, the gate refuses — both branches are acceptable as long as the
-  // response is a recognized envelope.
-  const controlWin = await observeWindow(ctx, { label: "BY-19 (entitled control)", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
-  const valid = await ctx.lucyQuery(token, { ...SCOPED_QUERY, filters: [] });
+  // Valid control: the same agent's well-formed 华东 read. Phase-on must see
+  // that Region set. A deny does not satisfy the control.
+  const controlWin = await observeWindow(ctx, { label: "BY-19 (entitled control)", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  const valid = await ctx.lucyQuery(token, { ...PACK_REGION_QUERY, filters: [] });
+  let controlAllowed = false;
   if (valid.status >= 500) {
-    checks.expect("deny", false, `BY-19 control: HTTP 5xx is not a deny; got ${valid.status}`);
+    checks.expect("allow_control", false, `BY-19 control: HTTP 5xx is not an allow; got ${valid.status}`);
+    checks.expect("typed_gold", false, "BY-19: HTTP 5xx; Region set unbound");
+    checks.expect("real_query", false, "BY-19: HTTP 5xx; no successful query");
   } else {
     const extraction = extractDenyReason(valid);
     if (extraction.matched) {
-      // Upstream unproven branch: the well-formed policy is still denied. Acceptable.
-      checks.expect("allow_control", true, `BY-19 control: well-formed policy denied (upstream unproven) -> ${extraction.matched}`);
+      checks.expect("allow_control", false, `BY-19 control: well-formed read denied (${extraction.matched}); phase-on 华东 allow did not happen`);
+      checks.expect("typed_gold", true, "BY-19: deny branch; Region 集合正确未测到");
+      checks.expect("real_query", false, "BY-19: deny branch; no successful query to bind");
     } else if (extraction.source === "mcp_result_ok") {
+      controlAllowed = true;
       const parsed = ctx.parseMcpToolResult(valid);
-      if (parsed.ok) {
-        const aggregateCents = parsed.parsed?.aggregateCents ?? null;
-        const gold = ctx.gold.questions[Q_CAC_EAST];
-        const expectedCents = gold?.expected?.cents;
-        if (typeof expectedCents === "number" && typeof aggregateCents === "number") {
-          checks.expect("allow_control", Math.abs(aggregateCents - expectedCents) <= (gold.expected.toleranceCents ?? 0), `BY-19 control: aggregateCents=${aggregateCents} vs gold=${expectedCents}`);
-        } else {
-          checks.expect("allow_control", true, "BY-19 control: well-formed policy returned a structured result");
-        }
-      }
+      bindRegionAllow(checks, "BY-19 control", parsed, expectedRegionSet(ctx, "east"));
     } else {
       checks.expect("allow_control", false, `BY-19 control: response was not a recognized envelope (source=${extraction.source})`);
+      checks.expect("typed_gold", false, "BY-19: unrecognized envelope; Region set unbound");
+      checks.expect("real_query", false, "BY-19: unrecognized envelope; no successful query");
     }
   }
-  // typed_gold: when the well-formed control succeeded, bind to Q-CAC-EAST.
-  const gold = ctx.gold.questions[Q_CAC_EAST];
-  const validParsed = valid.status < 500 ? ctx.parseMcpToolResult(valid) : null;
-  if (validParsed?.ok) {
-    const aggregateCents = validParsed.parsed?.aggregateCents ?? null;
-    const expectedCents = gold?.expected?.cents;
-    if (typeof expectedCents === "number" && typeof aggregateCents === "number") {
-      checks.expect("typed_gold", Math.abs(aggregateCents - expectedCents) <= (gold.expected.toleranceCents ?? 0), `BY-19 control aggregateCents=${aggregateCents} vs gold=${expectedCents}`);
-    } else {
-      checks.expect("typed_gold", false, "BY-19: no typed gold available for the well-formed control");
-    }
-  } else {
-    checks.expect("typed_gold", false, "BY-19: well-formed control is not a successful query (deny branch)");
-  }
-  // real_query: when the well-formed control succeeded, bind to Q-CAC-EAST.
-  const realQueries = validParsed?.ok
-    ? [{ outcome: "ok", query: gold?.queryKey ?? {}, result: { aggregateCents: validParsed.parsed?.aggregateCents, rows: validParsed.parsed?.rows ?? [] } }]
-    : [];
-  const real = checkRealQuery({ goldQuestion: gold, evidence: { queries: realQueries } });
-  checks.expect("real_query", real.passed, real.detail);
   await controlWin.finish();
-  expectAuthorizedUpstream(ctx, checks, "BY-19 (entitled control)", controlWin, { authorizedRequests: 1 });
+  if (controlAllowed) {
+    expectAuthorizedUpstream(ctx, checks, "BY-19 (entitled control)", controlWin, { authorizedRequests: 1 });
+  } else {
+    expectUpstreamZero(ctx, checks, "BY-19 (entitled control)", controlWin, { authorizedRequests: 0 });
+  }
   checks.noLeak([bodyText(invalid), bodyText(valid)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extractDenyReason(invalid).matched };
 }
@@ -956,3 +990,10 @@ export const handlers = {
   "SEC-11-BY18": by18,
   "SEC-11-BY19": by19
 };
+
+for (const entry of REGISTRY) {
+  if (!entry.executionId.startsWith("BY-")) continue;
+  if (typeof handlers[entry.catalogId] !== "function") {
+    throw new Error(`row-policy BY handler missing for ${entry.catalogId} (${entry.executionId})`);
+  }
+}

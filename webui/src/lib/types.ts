@@ -1881,6 +1881,14 @@ export type AuditTurnCallLog = {
   traceId?: string;
   tables?: string[];
   connectionId?: string;
+  /** Spec lucy-20261104-audit-call-storyline */
+  accessGrade?: AuditLogEntry["accessGrade"];
+  argsSummary?: Record<string, unknown>;
+  errorDetail?: string;
+  generatedSql?: string;
+  responseRowCount?: number;
+  responseColumnCount?: number;
+  responseBytes?: number;
 };
 
 export type AuditTurnDetailResponse = {

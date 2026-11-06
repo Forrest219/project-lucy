@@ -1,7 +1,5 @@
 # 连接服务器地址编辑 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 | 元数据 | 内容 |
 |---|---|
 | 状态 | **v0.4.3 功能合同已收口（2026-11-03）**。服务端见 [`docs/reviews/2026-11-01-connection-endpoint-edit-closure.md`](../reviews/2026-11-01-connection-endpoint-edit-closure.md)；UX 见 [`docs/reviews/2026-11-03-connection-endpoint-edit-ux-closure.md`](../reviews/2026-11-03-connection-endpoint-edit-ux-closure.md)。本条收口不表示可上线 |

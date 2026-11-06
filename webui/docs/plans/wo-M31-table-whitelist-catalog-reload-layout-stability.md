@@ -1,7 +1,5 @@
 # M31 Table Whitelist Catalog Reload Layout Stability Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Stabilize `/connections/whitelist` after `刷新本地目录` by moving transient reload feedback to Toast, anchoring missing Manifest diagnostics in the related Schema group, removing the duplicate Schema Manifest supplement entry from the whitelist page, and cleaning up toolbar and row action affordance.
 
 **Architecture:** This is a frontend-only UX refinement over the existing `TableWhitelist` and shared Catalog reload components. Keep the Catalog reload API and whitelist save semantics unchanged; update component props, page layout, CSS and focused tests so the toolbar remains stable and Schema diagnostics remain persistent.

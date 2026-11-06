@@ -1,7 +1,5 @@
 # Audit P0 and Data Grid Convergence Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use @executing-plans to implement this plan task-by-task.
-
 **Goal:** 修复访问日志页面级横向溢出和按钮语义问题，并在最后一个批次完成指定页面的 Data Grid 视觉与结构收口。
 
 **Architecture:** 先在共享样式层修复 Data Grid 容器的 grid/flex 最小宽度约束，再在页面层收敛按钮和选择控件语义；跨页面表格迁移保持为独立末批，统一使用 `pl-data-grid-frame -> pl-data-grid-scroll -> pl-data-grid pl-data-table`。所有改动测试先行，保持现有 API、查询参数、导出链接、权限和行交互不变。

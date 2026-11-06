@@ -1,0 +1,4 @@
+name: superstore_people
+
+grain:
+  - region

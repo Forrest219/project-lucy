@@ -412,7 +412,12 @@ function toAccessMapQuery(input: {
     connection: null,
     window: "168h",
     layer: "flat",
-    trust: input.trust,
+    // Spec 20261105：访问关系图数据面硬锁已确认关联；gov trust 枚举仍可含
+    // include_candidate，但不再扩宽 access-map SQL／路径集合。
+    trust: "confirmed",
+    // 治理快照沿用访问关系图缺省问询种类／访问等级。
+    inquiryKind: "management",
+    accessGrade: "exclude_connect",
     view: "map",
     focus: null
   };
@@ -836,9 +841,11 @@ export async function rebuildGovernanceSnapshotAtomic(
     } else {
       const accessSide = await provider.loadAccessSide({
         window: input.window,
-        trust: input.trust,
+        trust: "confirmed",
         // Token focus 只影响访问层行集（与 builder 一致）；授权面不受影响。
-        tokenLabel: null
+        tokenLabel: null,
+        inquiryKind: "management",
+        accessGrade: "exclude_connect"
       });
       adoptionAccessRows = accessSide.state === "ok" ? accessSide.rows : [];
     }

@@ -16,9 +16,16 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFirstExistingTextFile } from "../../scripts/lib/readFirstExistingTextFile";
 import { AccessMap } from "../pages/admin/AccessMap";
 import { traceAccessMapChain, traceAccessMapSubjectChain } from "../components/admin/AccessMapCanvas";
-import type { AccessMapResponse } from "../components/admin/AccessMapTypes";
+import {
+  accessMapEdgeHoverConclusion,
+  accessMapEdgeStateLabel,
+  type AccessMapHourlyDetail,
+  type AccessMapHourlyDetailRow,
+  type AccessMapResponse
+} from "../components/admin/AccessMapTypes";
 
 function makeNode(
   id: string,
@@ -28,6 +35,10 @@ function makeNode(
   meta: Record<string, unknown> = {},
   parentId?: string
 ): AccessMapResponse["nodes"][number] {
+  const grantPaths = typeof meta.grantPaths === "number" ? meta.grantPaths : 0;
+  // usage-first：未显式给 accessPaths 时，跟随 grantPaths，避免画布空节点。
+  const accessPaths =
+    typeof meta.accessPaths === "number" ? meta.accessPaths : grantPaths;
   return {
     id,
     kind,
@@ -35,11 +46,12 @@ function makeNode(
     depth,
     ...(parentId ? { parentId } : {}),
     meta: {
-      grantPaths: 0,
       grantUsers: 0,
-      accessPaths: 0,
-      accessUsers: 0,
-      ...meta
+      accessUsers: accessPaths > 0 ? 1 : 0,
+      ...meta,
+      // Force computed path counts after `...meta` without duplicate keys.
+      accessPaths,
+      grantPaths
     }
   };
 }
@@ -49,20 +61,55 @@ function makeEdge(
   target: string,
   overrides: Partial<AccessMapResponse["edges"][number]> = {}
 ): AccessMapResponse["edges"][number] {
+  const grantPaths = overrides.grantPaths ?? 0;
+  const accessPaths =
+    overrides.accessPaths ??
+    (overrides.state === "dormant" ? 0 : grantPaths > 0 ? grantPaths : 0);
   return {
     id: `e|${source}|${target}`,
     source,
     target,
-    grantPaths: 0,
     grantUsers: 0,
-    accessPaths: 0,
-    accessUsers: 0,
-    accessCalls: 0,
-    state: "normal",
+    accessUsers: accessPaths > 0 ? 1 : 0,
+    accessCalls: accessPaths,
+    state: overrides.state ?? (accessPaths === 0 && grantPaths > 0 ? "dormant" : "normal"),
     confirmedUnauthorized: false,
     reviewEvaluations: [],
     snapshotCoverage: { reviewPaths: 0, matched: 0, missingOrInvalid: 0, ratio: 0 },
+    ...overrides,
+    // Force path counts after `...overrides` without duplicate keys.
+    accessPaths: overrides.accessPaths ?? accessPaths,
+    grantPaths: overrides.grantPaths ?? grantPaths
+  };
+}
+
+function makeDetailRow(
+  overrides: Partial<AccessMapHourlyDetailRow> = {}
+): AccessMapHourlyDetailRow {
+  return {
+    hour: "2026-10-24T10:00:00+08:00",
+    agentId: "agent_a",
+    roleId: "role_reader",
+    connectionId: "mysql_main",
+    schema: "finance",
+    table: "orders",
+    inquiryKind: "real",
+    accessGrade: "query",
+    allowCalls: 2,
+    denyCalls: 0,
     ...overrides
+  };
+}
+
+function makeDetail(overrides: Partial<AccessMapHourlyDetail> = {}): AccessMapHourlyDetail {
+  const rows = overrides.rows ?? [makeDetailRow()];
+  return {
+    hasMore: false,
+    totalRowCount: rows.length,
+    limit: 200,
+    offset: 0,
+    ...overrides,
+    rows
   };
 }
 
@@ -131,6 +178,10 @@ function makeResponse(overrides: Partial<AccessMapResponse> = {}): AccessMapResp
         deniedCalls: 3,
         rawCalls: 11
       },
+      echo: {
+        enteringAllowCallCount: 11,
+        enteringAllowCallCountBasis: "pre_structure"
+      },
       counts: {
         agents: 1,
         roles: 1,
@@ -162,6 +213,7 @@ function makeResponse(overrides: Partial<AccessMapResponse> = {}): AccessMapResp
       edges,
       folded: { nodes: 0, edges: 0 }
     },
+    detail: makeDetail(),
     ...overrides
   };
 }
@@ -216,80 +268,120 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("闲置授权文案与悬停结论（lucy-20261105 Spec SC-01／SC-02）", () => {
+  it("SC-01 — dormant 短标签为闲置授权", () => {
+    expect(accessMapEdgeStateLabel("dormant")).toBe("闲置授权");
+  });
+
+  it("SC-02 — 术语标准 Dormant Grant 主术语为闲置授权，禁止列含僵尸授权", () => {
+    const terminology = readFileSync(
+      resolve(process.cwd(), "docs/00-product-terminology-standard.md"),
+      "utf8"
+    );
+    const dormantRow = terminology
+      .split("\n")
+      .find((line) => line.includes("Dormant Grant"));
+    expect(dormantRow).toBeTruthy();
+    const cells = (dormantRow as string).split("|").map((cell) => cell.trim());
+    // | Canonical | UI 主术语 | 允许补充 | 禁止文案 | 说明 |
+    expect(cells[2]).toBe("闲置授权");
+    expect(cells[4]).toContain("僵尸授权");
+  });
+
+  it("四态悬停结论句逐字固定", () => {
+    expect(accessMapEdgeHoverConclusion("dormant")).toBe("有授权，窗口内未调用");
+    expect(accessMapEdgeHoverConclusion("normal")).toBe("有授权，窗口内有调用");
+    expect(accessMapEdgeHoverConclusion("needs_review")).toBe(
+      "窗口内有调用，当前授权对不上（需复核）"
+    );
+    expect(accessMapEdgeHoverConclusion("overflow")).toBe("窗口内有调用，且超出当前授权");
+  });
+
+  it("SC-14 — ops 触发词无僵尸授权且含闲置授权", () => {
+    // Demo template skills/ is gitignored — omit. Prefer skills/ over wiki/ so the
+    // first existing path is the skill asset that carries 闲置授权 trigger words.
+    const candidates = [
+      resolve(process.cwd(), "../skills/lucy-ops/ops-questioning.md"),
+      resolve(process.cwd(), "../config/skills/lucy-ops/ops-questioning.md"),
+      resolve(process.cwd(), "config/ops-evidence/skills/lucy-ops/ops-questioning.md"),
+      resolve(process.cwd(), "../wiki/lucy-ops/ops-questioning.md"),
+      resolve(process.cwd(), "../config/wiki/lucy-ops/ops-questioning.md"),
+      resolve(process.cwd(), "config/ops-evidence/wiki/lucy-ops/ops-questioning.md")
+    ];
+    const { path, text } = readFirstExistingTextFile(candidates);
+    expect(text, path).toContain("闲置授权");
+    expect(text, path).not.toContain("僵尸授权");
+  });
+
+  it("SC-14 — 缺文件时失败信息含全部候选", () => {
+    const candidates = [
+      resolve(process.cwd(), "__missing__/ops-questioning-a.md"),
+      resolve(process.cwd(), "__missing__/ops-questioning-b.md")
+    ];
+    expect(() => readFirstExistingTextFile(candidates)).toThrowError(
+      /none of the candidate files exist; candidates:/
+    );
+    try {
+      readFirstExistingTextFile(candidates);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toContain(candidates[0]);
+      expect(message).toContain(candidates[1]);
+    }
+  });
+});
+
 describe("AccessMap 页面", () => {
-  it("渲染关系图；信号不再占首屏大卡，覆盖率口径仍在弱入口里披露", async () => {
+  it("渲染关系图；信号不再占首屏大卡，覆盖率在常驻行披露", async () => {
     stubAccessMap(makeResponse());
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    // 图优先（chart-first D2）：默认首屏不再有信号卡。
     expect(screen.queryByTestId("access-map-signal-bar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-methodology-snapshot")).not.toBeInTheDocument();
 
-    // 覆盖率披露没有消失，只是沉到弱入口。
     const coverage = screen.getByTestId("access-map-snapshot-coverage");
-    expect(coverage).toHaveTextContent("需复核记录 1 条");
-    expect(coverage).toHaveTextContent("可关联快照 0 条");
-    expect(coverage).toHaveTextContent("覆盖率 0%");
-    expect(coverage).toHaveTextContent("快照覆盖率低不代表越权率低");
+    expect(coverage).toHaveTextContent("快照：可关联 0／需复核 1 · 缺失 1");
+    expect(coverage).toHaveTextContent("低覆盖率不代表低越权率");
   });
 
-  /**
-   * 两档措辞（webui/docs/187-access-relation-sankey-spec.md §10）：
-   * 「需复核档的 UI 文案不含「越权」二字；确凿越权档文案含「调用当时授权亦不覆盖」」。
-   *
-   * 断言按**档位**逐个取证，不能拿整个弱入口来断言 —— 弱入口里还有覆盖率提示，
-   * 它必须提到「越权率」（SC-13），那是另一句话。
-   *
-   * chart-first 之后这两段档位说明仍在 DOM 里，只是搬进了图下弱入口。
-   */
-  it("两档措辞：需复核档不含「越权」；确凿越权档单独标注来源为调用当时的授权快照", async () => {
+  it("图例短行保留需复核／确凿越权分项；长口径 note 不再挂默认 DOM", async () => {
     stubAccessMap(makeResponse());
     renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("access-map-legend")).toBeInTheDocument());
 
-    // ① 第一档：档位说明不得出现「越权」二字。
-    const needsReviewNote = screen.getByTestId("access-map-signal-needs-review-note");
-    expect(needsReviewNote.textContent).not.toContain("越权");
-    expect(needsReviewNote).toHaveTextContent("需复核");
-    expect(needsReviewNote).toHaveTextContent("当前授权无对应路径");
-
-    // ② 第二档：必须写明判定来源是**调用当时**的授权快照。
-    const confirmedSource = screen.getByTestId("access-map-signal-confirmed-source");
-    expect(confirmedSource).toHaveTextContent("确凿越权");
-    expect(confirmedSource).toHaveTextContent("调用当时授权亦不覆盖");
-    expect(confirmedSource).toHaveTextContent("调用当时的授权快照");
-
-    // ③ 两档的来源标注必须各自独立：第一档说明里没有「越权」，第二档说明里才有。
-    expect(needsReviewNote.textContent).not.toBe(confirmedSource.textContent);
-    expect(confirmedSource.textContent).toContain("越权");
+    const legend = screen.getByTestId("access-map-legend");
+    expect(legend).toHaveTextContent("虚线 = 需复核");
+    expect(legend).toHaveTextContent("实线 = 确凿越权");
+    expect(screen.queryByTestId("access-map-signal-needs-review-note")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-signal-confirmed-source")).not.toBeInTheDocument();
   });
 
-  it("点击 Token 只过滤访问层，并显式提示授权层不受影响", async () => {
-    const response = makeResponse();
-    const fetchMock = stubAccessMap(response);
+  it("默认页无凭证清单与 Token 过滤入口；切换筛选不写 token", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    const firstRequest = String(fetchMock.mock.calls[0][0]);
-    expect(firstRequest).not.toContain("token=");
+    expect(screen.queryByTestId("access-map-credential-list")).not.toBeInTheDocument();
+    expect(screen.queryByText("凭证清单")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-token-filter-notice")).not.toBeInTheDocument();
 
-    const credential = screen.getByTestId("access-map-credential-list");
-    const tokenButton = within(credential).getByTestId("access-map-token-token:agent_a::p0-demo");
-    tokenButton.click();
-
-    await waitFor(() => {
-      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
-      expect(urls.some((url) => url.includes("token=p0-demo"))).toBe(true);
-    });
-
-    const notice = await screen.findByTestId("access-map-token-filter-notice");
-    expect(notice).toHaveTextContent("已按 Token");
-    expect(notice).toHaveTextContent("p0-demo");
-    expect(notice).toHaveTextContent("过滤访问层，授权层不受影响");
+    fireEvent.click(
+      within(screen.getByTestId("access-map-window")).getByRole("tab", { name: "近 24 小时" })
+    );
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("window=24h"));
+    expect(lastRequestUrl(fetchMock)).not.toContain("token=");
   });
 
-  it("表格视图展示全量边（折叠只影响渲染）", async () => {
-    const response = makeResponse();
+  it("数据表展示小时明细列，不再用节点／关系汇总表", async () => {
+    const response = makeResponse({
+      detail: makeDetail({
+        rows: [
+          makeDetailRow({ inquiryKind: null, denyCalls: 1, allowCalls: 0 }),
+          makeDetailRow({ hour: "2026-10-24T11:00:00+08:00", table: "customers", allowCalls: 3 })
+        ]
+      })
+    });
     response.render = {
       nodes: response.nodes.slice(0, 2),
       edges: response.edges.slice(0, 1),
@@ -297,19 +389,20 @@ describe("AccessMap 页面", () => {
     };
     response.meta.folded = { nodes: 3, edges: 2 };
     stubAccessMap(response);
-    renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+    renderPage("/admin/access-map?view=table");
+    await waitFor(() => expect(screen.getByTestId("access-map-table")).toBeInTheDocument());
 
     expect(screen.getByTestId("access-map-folded-badge")).toHaveTextContent("已折叠 3 个节点");
+    expect(screen.queryByTestId("access-map-table-nodes")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-table-edges")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "节点" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "关系" })).not.toBeInTheDocument();
 
-    screen.getByTestId("access-map-view-table").click();
-    await waitFor(() => expect(screen.getByTestId("access-map-table")).toBeInTheDocument());
-    const edgeTable = screen.getByTestId("access-map-table-edges");
-    expect(within(edgeTable).getAllByRole("row")).toHaveLength(response.edges.length + 1);
-    // SC-09：屏幕阅读器要能读出全部节点与边 —— 节点清单也必须在表格视图里。
-    const nodeTable = screen.getByTestId("access-map-table-nodes");
-    const flowNodeCount = response.nodes.filter((node) => node.kind !== "token").length;
-    expect(within(nodeTable).getAllByRole("row")).toHaveLength(flowNodeCount + 1);
+    const table = screen.getByTestId("access-map-hourly-detail");
+    for (const header of ["小时", "Agent", "角色", "连接", "Schema", "表", "问询种类", "访问等级", "允许调用", "拒绝调用"]) {
+      expect(within(table).getByRole("columnheader", { name: header })).toBeInTheDocument();
+    }
+    expect(screen.getByTestId("access-map-detail-inquiry-0")).toHaveTextContent("无关联");
   });
 
   it("授权面不可用：不渲染图，给出三态原因与配置审计入口", async () => {
@@ -346,7 +439,7 @@ describe("AccessMap 页面", () => {
     expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument();
   });
 
-  it("URL 参数全部透传到接口（可分享）", async () => {
+  it("URL 参数全部透传到接口（可分享）；非法 trust 首屏原样发出", async () => {
     const fetchMock = stubAccessMap(makeResponse());
     renderPage(
       "/admin/access-map?agent=agent_a&role=role_reader&table=mysql_main%3A%3Afinance%3A%3Aorders&connection=mysql_main&window=24h&layer=schema&trust=include_candidate&view=table"
@@ -357,6 +450,7 @@ describe("AccessMap 页面", () => {
     expect(url).toContain("role=role_reader");
     expect(url).toContain("window=24h");
     expect(url).toContain("layer=schema");
+    // Spec 20261105 SC-05：非法 trust 不得先删改再请求
     expect(url).toContain("trust=include_candidate");
     expect(url).toContain("view=table");
     expect(url).toContain("connection=mysql_main");
@@ -385,33 +479,32 @@ describe("AccessMap 页面", () => {
 });
 
 /**
- * P1-4：访问面不可用时，口径说明**不得用 0 冒充真实计数**（P1-3 §5.5 / SC-07）。
- *
- * 服务端只在 `access.state === "ok"` 分支里赋值 `rawCalls` / `deniedCalls`，
- * 不可用时它们停在 0。
+ * P1-4／Spec 20261104 §5.5：访问面不可用时表区不得用空成功明细冒充。
  */
-describe("访问面不可用时的口径说明（P1-4）", () => {
-  it("不显示「0 次」，改写「暂不可用」", async () => {
+describe("访问面不可用时的表区说明（P1-4／hourly-detail）", () => {
+  it("表视图给出审计不可用 notice，而不是「无调用」空表", async () => {
     const response = makeResponse();
     response.meta.access.state = "unavailable";
     response.meta.access.reason = "审计数据不可用";
+    response.detail = null;
     stubAccessMap(response);
-    renderPage();
+    renderPage("/admin/access-map?view=table");
 
-    await waitFor(() => expect(screen.getByTestId("access-map-signal-calls")).toBeInTheDocument());
-    const calls = screen.getByTestId("access-map-signal-calls");
-    expect(calls).not.toHaveTextContent("0 次");
-    expect(calls).toHaveTextContent("原始调用数暂不可用");
-    expect(calls).toHaveTextContent("被拒绝的访问尝试暂不可用");
+    await waitFor(() =>
+      expect(screen.getByTestId("access-map-table-access-unavailable")).toBeInTheDocument()
+    );
+    expect(screen.getByTestId("access-map-table-access-unavailable")).toHaveTextContent(
+      "审计数据不可用"
+    );
+    expect(screen.queryByTestId("access-map-table-empty")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-hourly-detail")).not.toBeInTheDocument();
   });
 
-  it("访问面可用时照常显示真实计数", async () => {
+  it("访问面可用时表视图展示小时明细", async () => {
     stubAccessMap(makeResponse());
-    renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-signal-calls")).toBeInTheDocument());
-    const calls = screen.getByTestId("access-map-signal-calls");
-    expect(calls).toHaveTextContent("原始调用数 11 次");
-    expect(calls).toHaveTextContent("被拒绝的访问尝试 3 次");
+    renderPage("/admin/access-map?view=table");
+    await waitFor(() => expect(screen.getByTestId("access-map-hourly-detail")).toBeInTheDocument());
+    expect(screen.getByTestId("access-map-detail-row-0")).toHaveTextContent("orders");
   });
 });
 
@@ -583,11 +676,10 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-svg")).toBeInTheDocument());
 
-    // 僵尸授权（dormant）与正常授权同色：授权面积不含 warning。
-    const dormant = screen.getByTestId("access-map-ribbon-e|agent:agent_a|role:role_reader");
-    expect(dormant.getAttribute("class")).toContain("fill-brand");
+    // 闲置授权 → stub（空心），不含 warning。
+    const dormant = screen.getByTestId("access-map-idle-stub-shape-agent:agent_a");
+    expect(dormant.getAttribute("fill")).toBe("none");
     expect(dormant.getAttribute("class")).not.toContain("warning");
-    expect(dormant.getAttribute("stroke-dasharray")).toBeNull();
 
     // 需复核：warning 面积 + 虚线中线（状态不只靠颜色区分）。
     const needsReview = screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main");
@@ -596,7 +688,7 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     expect(midline.getAttribute("stroke-dasharray")).toBeTruthy();
     expect(midline.getAttribute("class")).toContain("stroke-warning-strong");
 
-    // 确凿越权：danger 实线轮廓 + danger 内核，都不带虚线。
+    // 确凿越权：danger 填充使用带 + danger 实线轮廓；无深色内核。
     const overflow = screen.getByTestId(
       "access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders"
     );
@@ -607,11 +699,9 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     );
     expect(outline.getAttribute("class")).toContain("stroke-danger-strong");
     expect(outline.getAttribute("stroke-dasharray")).toBeNull();
-    const kernel = screen.getByTestId(
-      "access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::orders"
-    );
-    expect(kernel.getAttribute("class")).toContain("fill-danger-strong");
-    expect(kernel.getAttribute("stroke-dasharray")).toBeNull();
+    expect(
+      screen.queryByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::orders")
+    ).not.toBeInTheDocument();
   });
 
   it("SC-09 — 图下清单视觉隐藏、不占布局高度，但按钮仍可聚焦，test id 仍在", async () => {
@@ -674,58 +764,40 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     await waitFor(() => expect(lastRequestUrl(fetchMock)).not.toContain("focus="));
   });
 
-  it("SC-12 — 数据表类型列是中文层名，两张表都有可见标题", async () => {
-    stubAccessMap(makeResponse());
-    renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-view-table")).toBeInTheDocument());
-
-    screen.getByTestId("access-map-view-table").click();
-    await waitFor(() => expect(screen.getByTestId("access-map-table")).toBeInTheDocument());
-
-    const nodeSection = screen.getByTestId("access-map-table-nodes");
-    expect(within(nodeSection).getByRole("heading", { name: "节点" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "关系" })).toBeInTheDocument();
-
-    const kinds = [...nodeSection.querySelectorAll("tbody tr td:nth-child(2)")].map(
-      (cell) => cell.textContent
+  it("SC-12 — 数据表为小时明细，标识列带 notranslate", async () => {
+    stubAccessMap(
+      makeResponse({
+        detail: makeDetail({ rows: [makeDetailRow({ inquiryKind: null })] })
+      })
     );
-    expect(kinds).toEqual(["Agent", "角色", "连接", "表"]);
+    renderPage("/admin/access-map?view=table");
+    await waitFor(() => expect(screen.getByTestId("access-map-hourly-detail")).toBeInTheDocument());
+
+    const table = screen.getByTestId("access-map-hourly-detail");
+    expect(within(table).getByRole("columnheader", { name: "小时" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "节点" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("access-map-detail-inquiry-0")).toHaveTextContent("无关联");
+
+    const agentHeader = within(table).getByRole("columnheader", { name: "Agent" });
+    expect(agentHeader.className).toContain("notranslate");
+    expect(agentHeader).toHaveAttribute("translate", "no");
   });
 
-  it("SC-13 — 凭证区是表；Token 提示句逐字固定；再次点击清除过滤", async () => {
+  it("SC-13 — 默认页无凭证清单；切换窗口不写 token", async () => {
     const fetchMock = stubAccessMap(makeResponse());
     renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-credential-list")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    const credential = screen.getByTestId("access-map-credential-list");
-    expect(credential.querySelector("table")).not.toBeNull();
-    expect(within(credential).getByRole("columnheader", { name: "窗口内调用" })).toBeInTheDocument();
-    expect(within(credential).getByRole("columnheader", { name: "Agent" })).toBeInTheDocument();
-    // 表头 + 该 Agent 的 2 个 Token。
-    expect(within(credential).getAllByRole("row")).toHaveLength(3);
-    // Agent 分组在 DOM 里保留（每个 Agent 一个 tbody）。
-    expect(credential.querySelectorAll("tbody")).toHaveLength(1);
+    expect(screen.queryByTestId("access-map-credential-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-token-filter-notice")).not.toBeInTheDocument();
 
-    const tokenButton = within(credential).getByTestId("access-map-token-token:agent_a::p0-demo");
-    tokenButton.click();
-
-    const notice = await screen.findByTestId("access-map-token-filter-notice");
-    expect(notice.textContent).toBe("已按 Token p0-demo 过滤访问层，授权层不受影响。");
-    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("token=p0-demo"));
-
-    within(screen.getByTestId("access-map-credential-list"))
-      .getByTestId("access-map-token-token:agent_a::p0-demo")
-      .click();
-    await waitFor(() =>
-      expect(screen.queryByTestId("access-map-token-filter-notice")).not.toBeInTheDocument()
-    );
-    await waitFor(() => expect(lastRequestUrl(fetchMock)).not.toContain("token="));
+    fireEvent.click(within(screen.getByTestId("access-map-window")).getByRole("tab", { name: "近 24 小时" }));
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("window=24h"));
+    expect(lastRequestUrl(fetchMock)).not.toContain("token=");
   });
 
-  it("SC-14 — 既有 access-map test id 仍然可找到", async () => {
-    const response = makeResponse();
-    response.meta.orphanGrants = 3;
-    stubAccessMap(response);
+  it("SC-14 — 常驻行与主工具条关键 test id 仍可找到", async () => {
+    stubAccessMap(makeResponse());
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
@@ -735,26 +807,187 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
       "access-map-node-list",
       "access-map-edge-badges",
       "access-map-legend",
-      "access-map-legend-trust",
-      "access-map-legend-window",
+      "access-map-resident-line",
+      "access-map-window-range",
       "access-map-snapshot-coverage",
-      "access-map-signal-calls",
-      "access-map-signal-needs-review-note",
-      "access-map-signal-confirmed-source",
-      "access-map-orphan-grants",
       "access-map-snapshot-id",
-      "access-map-credential-list",
+      "access-map-filter-status",
       "access-map-view-map",
       "access-map-view-table",
       "access-map-window",
       "access-map-layer",
-      "access-map-trust",
+      "access-map-inquiry-kind",
+      "access-map-access-grade",
       "access-map-search",
       "access-map-search-submit"
     ];
     for (const id of alwaysPresent) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
+    // Spec 20261105 SC-01：无关联口径下拉／hint
+    expect(screen.queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-credential-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-methodology-snapshot")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 访问关系图 ↔ 访问日志口径对齐（audit-echo Spec §7 组件侧）。
+ *
+ * Authority: `docs/specs/lucy-20261102-access-map-audit-echo-spec.md`
+ *   SC-01–SC-09、SC-17–SC-18
+ */
+describe("访问关系图 audit-echo 工具条与弱入口（Spec §7 组件侧）", () => {
+  it("SC-01／SC-06 — 主工具条无「问询计入」分段与 trust-hint", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-toolbar")).toBeInTheDocument());
+
+    const toolbar = screen.getByTestId("access-map-toolbar");
+    expect(toolbar.textContent ?? "").not.toContain("问询计入");
+    expect(within(toolbar).queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(within(toolbar).queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
+    expect(within(toolbar).queryByRole("tablist", { name: "问询计入" })).not.toBeInTheDocument();
+  });
+
+  it("SC-02 — 问询种类／访问等级下拉选项文案与审计一致", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-inquiry-kind")).toBeInTheDocument());
+
+    const kind = screen.getByTestId("access-map-inquiry-kind");
+    expect([...kind.querySelectorAll("option")].map((el) => el.textContent)).toEqual([
+      "管理相关",
+      "真实问询",
+      "未上报问询",
+      "会话访问",
+      "全部种类"
+    ]);
+
+    const grade = screen.getByTestId("access-map-access-grade");
+    expect([...grade.querySelectorAll("option")].map((el) => el.textContent)).toEqual([
+      "全部",
+      "排除连接",
+      "连接",
+      "浏览",
+      "准备",
+      "问询动作",
+      "查数",
+      "运维操作",
+      "未分级"
+    ]);
+  });
+
+  it("SC-03 — 缺省请求不写 inquiryKind／accessGrade，交给服务端缺省", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).not.toContain("inquiryKind=");
+    expect(url).not.toContain("accessGrade=");
+  });
+
+  it("SC-04 — 常驻行无关联口径下拉；现状静态「关联口径：已确认关联」", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-resident-line")).toBeInTheDocument());
+
+    const resident = screen.getByTestId("access-map-resident-line");
+    expect(within(resident).queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(within(resident).queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
+
+    const status = within(resident).getByTestId("access-map-filter-status");
+    expect(status).toHaveTextContent("关联口径：已确认关联");
+    expect(status).toHaveTextContent("问询种类：管理相关");
+    expect(status).toHaveTextContent("访问等级：排除连接");
+  });
+
+  it("SC-05 — 常驻现状行为「关联口径：…」，无「问询计入」", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-filter-status")).toBeInTheDocument());
+
+    const status = screen.getByTestId("access-map-filter-status");
+    expect(status).toHaveTextContent("关联口径：已确认关联");
+    expect(status.textContent ?? "").not.toContain("问询计入");
+  });
+
+  it("SC-07 — 切换问询种类写 URL 并重请求", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-inquiry-kind")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId("access-map-inquiry-kind"), { target: { value: "all" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("inquiryKind=all"));
+
+    fireEvent.change(screen.getByTestId("access-map-inquiry-kind"), { target: { value: "" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).not.toContain("inquiryKind="));
+  });
+
+  it("SC-08 — 切换访问等级写 URL 并重请求", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-access-grade")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId("access-map-access-grade"), { target: { value: "connect" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("accessGrade=connect"));
+
+    fireEvent.change(screen.getByTestId("access-map-access-grade"), { target: { value: "" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).not.toContain("accessGrade="));
+  });
+
+  it("SC-09 — 默认请求不写 trust；切换其它筛选后仍无 include_candidate", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-inquiry-kind")).toBeInTheDocument());
+    expect(screen.queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("trust=");
+
+    fireEvent.change(screen.getByTestId("access-map-inquiry-kind"), { target: { value: "all" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("inquiryKind=all"));
+    expect(lastRequestUrl(fetchMock)).not.toContain("trust=");
+  });
+
+  it("SC-17 — 工具条各列仅标签+单控件（定位列除外）", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-toolbar")).toBeInTheDocument());
+
+    const toolbar = screen.getByTestId("access-map-toolbar");
+    const columns = [...toolbar.children].filter((child) =>
+      (child as HTMLElement).classList.contains("flex-col")
+    ) as HTMLElement[];
+    // 统计窗口 / Schema 层 / 问询种类 / 访问等级 / Agent / 连接 / 定位
+    expect(columns).toHaveLength(7);
+    for (const column of columns.slice(0, 4)) {
+      // 标签 + 单控件根（分段或下拉）；禁止旧 trust-hint 那种列内多行说明。
+      const controlRoots = column.querySelectorAll("select, .pl-segmented-control");
+      expect(controlRoots).toHaveLength(1);
+      expect(column.querySelectorAll("p")).toHaveLength(0);
+      expect(within(column).queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
+    }
+  });
+
+  it("SC-18 — 可见文案无「问询计入」；E 空时提示点名筛选，不声称全量无访问", async () => {
+    const response = makeResponse();
+    response.meta.echo = {
+      enteringAllowCallCount: 0,
+      enteringAllowCallCountBasis: "pre_structure"
+    };
+    response.meta.counts.accessPaths = 0;
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-empty-access")).toBeInTheDocument());
+
+    expect(document.body.textContent ?? "").not.toContain("问询计入");
+    const notice = screen.getByTestId("access-map-empty-access");
+    expect(notice).toHaveTextContent("问询种类");
+    expect(notice).toHaveTextContent("管理相关");
+    expect(notice).toHaveTextContent("访问等级");
+    expect(notice).toHaveTextContent("排除连接");
+    expect(notice.textContent ?? "").not.toContain("无访问日志");
+    expect(notice.textContent ?? "").not.toContain("系统无访问");
   });
 });
 
@@ -790,20 +1023,16 @@ describe("Esc 的两段语义（呈现修订 §5.5）", () => {
 });
 
 /**
- * 呈现修订 §5.1 的阅读顺序。
- *
- * 首屏阅读顺序固定为：页头 → 工具条 → 三张指标卡 → 折叠区 → 主工作区 → 凭证清单。
- * 这条顺序是本次修订的主要目的，所以单独断言一次，而不是靠「元素都在」顺带覆盖。
+ * 呈现修订 §5.1 + Spec 20261104：页头 → 工具条 → Tab → 图例 → 图区 → 常驻行（无凭证清单）。
  */
-describe("页面阅读顺序（呈现修订 §5.1）", () => {
-  it("页头 → 工具条 → 视图切换 → 图例短行 → 图区 → 弱入口 → 凭证清单", async () => {
+describe("页面阅读顺序（呈现修订 §5.1／hourly-detail）", () => {
+  it("页头 → 工具条 → 视图切换 → 图例短行 → 图区 → 常驻行；无凭证清单", async () => {
     stubAccessMap(makeResponse());
     const { container } = renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
     const root = container.firstElementChild as HTMLElement;
     const children = [...root.children] as HTMLElement[];
-    // 注意：test id 可能就落在这一层元素自己身上，所以要 `getAttribute` + `querySelector` 两条都查。
     const has = (element: HTMLElement, testId: string): boolean =>
       element.getAttribute("data-testid") === testId ||
       element.querySelector(`[data-testid="${testId}"]`) !== null;
@@ -814,17 +1043,15 @@ describe("页面阅读顺序（呈现修订 §5.1）", () => {
     const tabbar = indexOf((element) => has(element, "access-map-view-map"));
     const legend = indexOf((element) => has(element, "access-map-legend"));
     const workspace = indexOf((element) => has(element, "access-map-canvas"));
-    const weakEntry = indexOf((element) => has(element, "access-map-methodology-snapshot"));
-    const credentials = indexOf((element) => has(element, "access-map-credential-list"));
+    const resident = indexOf((element) => has(element, "access-map-resident-line"));
 
     expect(header).toBe(0);
     expect(tabbar).toBeGreaterThan(header);
-    // 图例短行贴在图正上方。
     expect(legend).toBeGreaterThan(tabbar);
     expect(legend).toBeLessThan(workspace);
-    // 弱入口在图下方。
-    expect(weakEntry).toBeGreaterThan(workspace);
-    expect(credentials).toBeGreaterThan(weakEntry);
+    expect(resident).toBeGreaterThan(workspace);
+    expect(screen.queryByTestId("access-map-credential-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-methodology-snapshot")).not.toBeInTheDocument();
   });
 });
 
@@ -861,18 +1088,15 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
     expect(container.querySelector(".pl-metric-card")).toBeNull();
   });
 
-  it("SC-02 — 两个独立宽条消失，只剩一个「口径与快照」弱入口（默认关）", async () => {
+  it("SC-02 — 无折叠「口径与快照」；常驻口径行始终可见", async () => {
     stubAccessMap(makeResponse());
     const { container } = renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
     expect(container.querySelector("#access-map-methodology")).toBeNull();
     expect(container.querySelector("#access-map-snapshot")).toBeNull();
-
-    const weak = screen.getByTestId("access-map-methodology-snapshot");
-    expect(weak.tagName).toBe("DETAILS");
-    expect(weak).not.toHaveAttribute("open");
-    expect(within(weak).getByText("口径与快照")).toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-methodology-snapshot")).not.toBeInTheDocument();
+    expect(screen.getByTestId("access-map-resident-line")).toBeInTheDocument();
   });
 
   it("SC-03 — 图例短行在图正上方，只有四项线型释义，不含窗口 ISO", async () => {
@@ -890,7 +1114,9 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
     expect(legend.children).toHaveLength(4);
     const text = legend.textContent ?? "";
     expect(text).toContain("流带宽度");
-    expect(text).toContain("深色内核");
+    expect(text).toContain("访问路径数");
+    expect(text).not.toContain("深色内核");
+    expect(text).toContain("闲置授权");
     expect(text).toContain("虚线 = 需复核");
     expect(text).toContain("实线 = 确凿越权");
 
@@ -907,35 +1133,36 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
     expect(needsReviewItem?.textContent).not.toContain("越权");
   });
 
-  it("SC-04 — 弱入口里能找到口径全文、覆盖率、调用数与快照 id", async () => {
-    const response = makeResponse();
-    response.meta.orphanGrants = 3;
-    stubAccessMap(response);
+  it("SC-04 — 常驻行有窗口起止、覆盖率压缩句与快照 id；无长口径 note", async () => {
+    stubAccessMap(makeResponse());
     renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("access-map-resident-line")).toBeInTheDocument());
 
-    const weak = screen.getByTestId("access-map-methodology-snapshot");
+    const resident = screen.getByTestId("access-map-resident-line");
     for (const id of [
       "access-map-snapshot-id",
       "access-map-snapshot-coverage",
-      "access-map-signal-needs-review-note",
-      "access-map-signal-confirmed-source",
-      "access-map-signal-calls",
-      "access-map-orphan-grants",
-      "access-map-legend-trust",
-      "access-map-legend-window"
+      "access-map-window-range",
+      "access-map-filter-status"
     ]) {
-      expect(within(weak).getByTestId(id)).toBeInTheDocument();
+      expect(within(resident).getByTestId(id)).toBeInTheDocument();
     }
+    expect(within(resident).queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(within(resident).getByTestId("access-map-filter-status")).toHaveTextContent(
+      "关联口径：已确认关联"
+    );
 
-    // 需复核档的说明不含「越权」；覆盖率提醒仍保留。
-    const note = within(weak).getByTestId("access-map-signal-needs-review-note");
-    expect(note.textContent).not.toContain("越权");
-    const coverage = within(weak).getByTestId("access-map-snapshot-coverage");
-    expect(coverage).toHaveTextContent("快照覆盖率低不代表越权率低");
-    // 快照 id 文案逐字固定。
-    expect(within(weak).getByTestId("access-map-snapshot-id")).toHaveTextContent(
+    expect(screen.queryByTestId("access-map-signal-needs-review-note")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-signal-calls")).not.toBeInTheDocument();
+
+    const coverage = within(resident).getByTestId("access-map-snapshot-coverage");
+    expect(coverage).toHaveTextContent("快照：可关联 0／需复核 1 · 缺失 1");
+    expect(coverage).toHaveTextContent("低覆盖率不代表低越权率");
+    expect(within(resident).getByTestId("access-map-snapshot-id")).toHaveTextContent(
       "config cfg-1 · policy pol-1"
+    );
+    expect(within(resident).getByTestId("access-map-window-range")).toHaveTextContent(
+      "2026-10-18T00:00:00.000Z"
     );
   });
 
@@ -1042,8 +1269,10 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
     expect(tip).toHaveTextContent("→");
     expect(tip).toHaveTextContent("role_reader");
     expect(tip).toHaveTextContent("mysql_main");
-    expect(tip).toHaveTextContent("访问路径 1 条");
-    expect(tip).toHaveTextContent("需复核");
+    expect(tip).toHaveTextContent("窗口内有调用，当前授权对不上（需复核）");
+    expect(tip).toHaveTextContent("调用 3 次");
+    expect(tip).not.toHaveTextContent("访问路径");
+    expect(tip).not.toHaveTextContent("状态：");
     expect(tip.closest("svg")).toBeNull();
   });
 
@@ -1062,22 +1291,17 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
     expect(drawer.contains(screen.getByTestId("access-map-edge-detail"))).toBe(true);
   });
 
-  it("SC-11 — Token 过滤提示句逐字不变", async () => {
+  it("SC-11 — 无凭证清单与 Token 过滤 UI", async () => {
     stubAccessMap(makeResponse());
     renderPage();
-    await waitFor(() =>
-      expect(screen.getByTestId("access-map-credential-list")).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    const credential = screen.getByTestId("access-map-credential-list");
-    within(credential).getByTestId("access-map-token-token:agent_a::p0-demo").click();
-
-    const notice = await screen.findByTestId("access-map-token-filter-notice");
-    expect(notice.textContent).toBe("已按 Token p0-demo 过滤访问层，授权层不受影响。");
+    expect(screen.queryByTestId("access-map-credential-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-token-filter-notice")).not.toBeInTheDocument();
+    expect(screen.queryByText("凭证清单")).not.toBeInTheDocument();
   });
 
-  it("SC-12 — 迁入弱入口的 test id 仍可找到；页面不出现「桑基图」", async () => {
-    // partial 降级态：让 `access-map-partial-notice` 也在场（它按需渲染）。
+  it("SC-12 — 常驻行关键 test id 可找到；页面不出现「桑基图」", async () => {
     const response = makeResponse();
     response.meta.grant.state = "partial";
     response.meta.grant.failures = [{ subjectId: "agent_x", reason: "access_config_missing" }];
@@ -1085,32 +1309,21 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    // 仍在页面上的关键 test id。
     for (const id of [
       "access-map-canvas",
       "access-map-legend",
       "access-map-partial-notice",
       "access-map-view-map",
       "access-map-view-table",
-      "access-map-credential-list"
+      "access-map-resident-line",
+      "access-map-snapshot-id",
+      "access-map-snapshot-coverage",
+      "access-map-window-range"
     ]) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
 
-    // 迁进弱入口的也在。
-    const weak = screen.getByTestId("access-map-methodology-snapshot");
-    for (const id of [
-      "access-map-snapshot-id",
-      "access-map-snapshot-coverage",
-      "access-map-signal-needs-review-note",
-      "access-map-signal-confirmed-source",
-      "access-map-legend-trust",
-      "access-map-legend-window"
-    ]) {
-      expect(within(weak).getByTestId(id)).toBeInTheDocument();
-    }
-
-    // 页面标题与正文都不使用「桑基图」。
+    expect(screen.queryByTestId("access-map-credential-list")).not.toBeInTheDocument();
     expect(document.body.textContent ?? "").not.toContain("桑基");
   });
 });
@@ -1186,28 +1399,28 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     expect(ribbon.getAttribute("class")).toMatch(/fill-/);
     // 没有拿描边宽度当厚度。
     expect(ribbon.getAttribute("stroke-width")).toBeNull();
-    // 主视觉不是「只有一条 path」：面积 + 内核是两层。
-    const kernel = screen.getByTestId("access-map-kernel-e|agent:agent_a|role:role_reader");
-    expect(kernel).toBeInTheDocument();
-    expect(kernel.getAttribute("d")).not.toBe(ribbon.getAttribute("d"));
+    // usage-first：主视觉是单层使用填充带，无深色内核。
+    expect(
+      screen.queryByTestId("access-map-kernel-e|agent:agent_a|role:role_reader")
+    ).not.toBeInTheDocument();
   });
 
-  it("SC-07 — 四态几何：normal 有授权面积与内核；dormant 只有授权面积；needs_review 是独立警示面积 + 虚线中线；overflow 内核夹紧为授权厚度", async () => {
+  it("SC-07 — usage-first 四态：normal／overflow 使用带；dormant→stub；needs_review 虚线；无深色内核", async () => {
     await renderFourState();
 
-    // normal：授权面积 + 内核（内核沿曲线截短到访问/授权比例）。
     const normalRibbon = screen.getByTestId("access-map-ribbon-e|agent:agent_a|role:role_reader");
-    const normalKernel = screen.getByTestId("access-map-kernel-e|agent:agent_a|role:role_reader");
     expect(normalRibbon).toBeInTheDocument();
-    expect(normalKernel).toBeInTheDocument();
-
-    // dormant：只有授权面积，没有内核。
-    expect(screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders")).toBeInTheDocument();
     expect(
-      screen.queryByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::orders")
+      screen.queryByTestId("access-map-kernel-e|agent:agent_a|role:role_reader")
     ).not.toBeInTheDocument();
 
-    // needs_review：独立警示面积（不是授权面积）+ 虚线中线，没有内核。
+    // dormant：不进流带，走闲置 stub。
+    expect(
+      screen.queryByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders")
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("access-map-idle-stub-conn:mysql_main")).toBeInTheDocument();
+
+    // needs_review：警示面积 + 虚线中线，没有内核。
     expect(screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main")).toBeInTheDocument();
     expect(
       screen.queryByTestId("access-map-kernel-e|role:role_reader|conn:mysql_main")
@@ -1216,21 +1429,24 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
       screen.getByTestId("access-map-midline-e|role:role_reader|conn:mysql_main")
     ).toBeInTheDocument();
 
-    // overflow：内核存在（厚度夹紧为授权），并有 danger 实线轮廓。
+    // overflow：使用带 + danger 实线轮廓；无内核。
     expect(
-      screen.getByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::customers")
+      screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::customers")
     ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::customers")
+    ).not.toBeInTheDocument();
     expect(
       screen.getByTestId("access-map-outline-e|conn:mysql_main|table:mysql_main::finance::customers")
     ).toBeInTheDocument();
   });
 
-  it("SC-11 — 状态不只靠颜色：dormant 不带 warning；needs_review 虚线；overflow / 确凿越权 danger 实线", async () => {
+  it("SC-11 — 状态不只靠颜色：dormant stub 不带 warning；needs_review 虚线；overflow / 确凿越权 danger 实线", async () => {
     await renderFourState();
 
-    const dormant = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
-    expect(dormant.getAttribute("class")).not.toContain("warning");
-    expect(dormant.getAttribute("stroke-dasharray")).toBeNull();
+    const dormantStub = screen.getByTestId("access-map-idle-stub-shape-conn:mysql_main");
+    expect(dormantStub.getAttribute("class")).not.toContain("warning");
+    expect(dormantStub.getAttribute("fill")).toBe("none");
 
     const midline = screen.getByTestId("access-map-midline-e|role:role_reader|conn:mysql_main");
     expect(midline.getAttribute("stroke-dasharray")).toBeTruthy();
@@ -1241,22 +1457,25 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     expect(outline.getAttribute("class")).toContain("stroke-danger-strong");
     expect(outline.getAttribute("stroke-dasharray")).toBeNull();
 
-    const kernel = screen.getByTestId(
-      "access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::customers"
+    const overflowRibbon = screen.getByTestId(
+      "access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::customers"
     );
-    expect(kernel.getAttribute("class")).toContain("danger");
-    expect(kernel.getAttribute("stroke-dasharray")).toBeNull();
+    expect(overflowRibbon.getAttribute("class")).toMatch(/danger|accent/);
   });
 
-  it("SC-12 — 悬停**可见面积**就出浮层（含无内核的 dormant 与 normal），浮层含从→到与状态", async () => {
+  it("SC-12 — 悬停可见使用带／闲置 stub 出浮层，浮层含从→到与三段式结论", async () => {
     await renderFourState();
 
-    // dormant 没有内核，可见入口只有授权面积 —— 悬停它必须出浮层。
-    const dormant = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
+    // dormant → stub；悬停 stub 出闲置授权浮层。
+    const dormant = screen.getByTestId("access-map-idle-stub-conn:mysql_main");
     fireEvent.mouseOver(dormant);
     const dormantTip = await screen.findByTestId("access-map-hover-tip");
     expect(dormantTip).toHaveTextContent("→");
-    expect(dormantTip).toHaveTextContent("僵尸授权");
+    expect(dormantTip).toHaveTextContent("有授权，窗口内未调用");
+    expect(dormantTip).toHaveTextContent("调用 0 次");
+    expect(dormantTip).not.toHaveTextContent("访问路径");
+    expect(dormantTip).not.toHaveTextContent("状态：");
+    expect(dormantTip).not.toHaveTextContent("僵尸授权");
     expect(dormantTip.closest("svg")).toBeNull();
     fireEvent.mouseOut(dormant);
 
@@ -1269,16 +1488,23 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     const normalTip = await screen.findByTestId("access-map-hover-tip");
     expect(normalTip).toHaveTextContent("AGENT A");
     expect(normalTip).toHaveTextContent("role_reader");
+    expect(normalTip).toHaveTextContent("有授权，窗口内有调用");
+    expect(normalTip).toHaveTextContent("调用 2 次");
   });
 
-  it("SC-13 — 点击**可见面积**打开边明细抽屉（dormant 授权面积、needs_review 独立带），不只靠隐藏按钮", async () => {
+  it("SC-13 — 点击闲置 stub→清单→边抽屉；点击 needs_review 带直接开抽屉", async () => {
     await renderFourState();
 
-    const dormant = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
-    fireEvent.click(dormant);
+    fireEvent.click(screen.getByTestId("access-map-idle-stub-conn:mysql_main"));
+    const list = await screen.findByTestId("access-map-idle-grant-list");
+    expect(list).toBeInTheDocument();
+    const row = screen.getByTestId(
+      "access-map-idle-grant-row-e|conn:mysql_main|table:mysql_main::finance::orders"
+    );
+    fireEvent.click(row);
     const drawer = await screen.findByTestId("access-map-edge-drawer");
     expect(drawer).toBeInTheDocument();
-    expect(screen.getByTestId("access-map-edge-detail")).toHaveTextContent("僵尸授权");
+    expect(screen.getByTestId("access-map-edge-detail")).toHaveTextContent("闲置授权");
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>
       expect(screen.queryByTestId("access-map-edge-drawer")).not.toBeInTheDocument()
@@ -1288,6 +1514,64 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     fireEvent.click(review);
     expect(await screen.findByTestId("access-map-edge-drawer")).toBeInTheDocument();
     expect(screen.getByTestId("access-map-edge-detail")).toHaveTextContent("需复核");
+  });
+
+  it("闲置授权悬停 — needs_review／overflow 结论与确凿越权括注", async () => {
+    await renderFourState();
+
+    fireEvent.mouseOver(screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main"));
+    const reviewTip = await screen.findByTestId("access-map-hover-tip");
+    expect(reviewTip).toHaveTextContent("窗口内有调用，当前授权对不上（需复核）");
+    expect(reviewTip).toHaveTextContent("调用 3 次");
+    expect(reviewTip).not.toHaveTextContent("访问路径");
+    expect(reviewTip).not.toHaveTextContent("（确凿越权：调用当时授权亦不覆盖）");
+    fireEvent.mouseOut(screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main"));
+    await waitFor(() => expect(screen.queryByTestId("access-map-hover-tip")).not.toBeInTheDocument());
+
+    fireEvent.mouseOver(
+      screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::customers")
+    );
+    const overflowTip = await screen.findByTestId("access-map-hover-tip");
+    expect(overflowTip).toHaveTextContent("窗口内有调用，且超出当前授权");
+    expect(overflowTip).toHaveTextContent("调用 5 次");
+    expect(overflowTip).toHaveTextContent("（确凿越权：调用当时授权亦不覆盖）");
+  });
+
+  it("闲置授权悬停 — 访问面不可用时降级，不以调用 0 次冒充", async () => {
+    const response = fourStateResponse();
+    response.meta.access = {
+      ...response.meta.access,
+      state: "unavailable",
+      reason: "audit_db_unavailable",
+      rawCalls: 0,
+      deniedCalls: 0
+    };
+    // 夹具故意带 confirmedUnauthorized，降级时仍不得出括注。
+    response.edges = response.edges.map((edge) =>
+      edge.state === "dormant" ? { ...edge, confirmedUnauthorized: true } : edge
+    );
+    response.render = { nodes: response.nodes, edges: response.edges, folded: { nodes: 0, edges: 0 } };
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-svg")).toBeInTheDocument());
+
+    const stub = screen.getByTestId("access-map-idle-stub-conn:mysql_main");
+    fireEvent.mouseOver(stub);
+    const tip = await screen.findByTestId("access-map-hover-tip");
+    expect(tip).toHaveTextContent("授权面可读，调用情况暂不可用");
+    expect(tip).toHaveTextContent("调用情况暂不可用");
+    expect(tip.textContent ?? "").not.toMatch(/调用 \d+ 次/);
+    expect(tip).not.toHaveTextContent("有授权，窗口内未调用");
+    expect(tip).not.toHaveTextContent("（确凿越权：调用当时授权亦不覆盖）");
+
+    const title = stub.querySelector("title");
+    expect(title?.textContent ?? "").not.toMatch(/调用 \d+ 次/);
+    expect(title?.textContent ?? "").not.toContain("僵尸授权");
+  });
+
+  it("SC-15 — AccessMap 向 Canvas 传入 accessOk（源码合同）", () => {
+    const pageSource = readFileSync(resolve(process.cwd(), "src/pages/admin/AccessMap.tsx"), "utf-8");
+    expect(pageSource).toMatch(/accessOk=\{response\.meta\.access\.state === "ok"\}/);
   });
 
   it("SC-14 — 没有新增运行时依赖，也没有裸十六进制颜色", async () => {
@@ -1338,13 +1622,15 @@ describe("链路高亮与列头 KPI", () => {
 
     const agentLabel = screen.getByTestId("access-map-label-agent:agent_a");
     expect(agentLabel.textContent).not.toContain("条路径");
-    expect(agentLabel.textContent).not.toContain("僵尸授权");
+    expect(agentLabel.textContent).not.toContain("闲置授权");
     expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("2");
     expect(screen.getByTestId("access-map-column-card-0")).toHaveTextContent("有授权");
     expect(screen.getByTestId("access-map-column-card-0")).toHaveTextContent("有问询");
 
     fireEvent.click(screen.getByTestId("access-map-node-agent:agent_a"));
 
+    // usage-first S8：点击 Agent 持久写入 agent=（可与链路高亮并存）。
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("agent=agent_a"));
     expect(screen.getByTestId("access-map-node-agent:agent_a")).toHaveAttribute("data-chain", "on");
     expect(screen.getByTestId("access-map-node-role:role_reader")).toHaveAttribute("data-chain", "on");
     expect(screen.getByTestId("access-map-node-conn:mysql_main")).toHaveAttribute("data-chain", "on");
@@ -1359,7 +1645,6 @@ describe("链路高亮与列头 KPI", () => {
       "on"
     );
     expect(screen.getByTestId("access-map-link-e|agent:other|role:other")).toHaveAttribute("data-chain", "off");
-    expect(lastRequestUrl(fetchMock)).not.toContain("focus=");
     expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("1");
     expect(screen.getByTestId("access-map-chain-caption")).toHaveTextContent("AGENT A");
 
@@ -1368,19 +1653,14 @@ describe("链路高亮与列头 KPI", () => {
     expect(screen.getByTestId("access-map-column-card-value-0")).toHaveTextContent("2");
   });
 
-  it("问询计入说明授权始终显示，并区分已确认关联与含候选关联", async () => {
-    const fetchMock = stubAccessMap(makeResponse());
+  it("confirmed-only — 图例与现状静态「关联口径：已确认关联」；无下拉", async () => {
+    stubAccessMap(makeResponse());
     renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-trust")).toBeInTheDocument());
-
-    const control = screen.getByTestId("access-map-trust");
-    expect(control).toHaveTextContent("已确认关联");
-    expect(control).toHaveTextContent("含候选关联");
-    expect(screen.getByTestId("access-map-trust-hint")).toHaveTextContent("授权连接始终显示");
-    expect(screen.getByTestId("access-map-trust-hint")).toHaveTextContent("推断对上的问询");
-
-    within(control).getByRole("tab", { name: "含候选关联" }).click();
-    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("trust=include_candidate"));
+    await waitFor(() => expect(screen.getByTestId("access-map-legend-trust")).toBeInTheDocument());
+    expect(screen.getByTestId("access-map-legend-trust")).toHaveTextContent("关联口径：已确认关联");
+    expect(screen.getByTestId("access-map-filter-status")).toHaveTextContent("关联口径：已确认关联");
+    expect(screen.queryByTestId("access-map-trust")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-trust-hint")).not.toBeInTheDocument();
   });
 
   it("环上的节点不会挡住侧面接进来的上游", () => {
@@ -1408,7 +1688,12 @@ describe("链路高亮与列头 KPI", () => {
         makeNode("table:shared", "table", "shared", 3, shared)
       ],
       edges: [
-        makeEdge("agent:agent_a", "role:shared", { grantPaths: 1, grantUsers: 1 }),
+        makeEdge("agent:agent_a", "role:shared", {
+          grantPaths: 1,
+          grantUsers: 1,
+          accessPaths: 0,
+          state: "dormant"
+        }),
         makeEdge("agent:agent_b", "role:shared", { grantPaths: 1, grantUsers: 1, accessPaths: 1 }),
         makeEdge("role:shared", "conn:shared", { grantPaths: 2, grantUsers: 2, accessPaths: 1 }),
         makeEdge("conn:shared", "table:shared", { grantPaths: 2, grantUsers: 2, accessPaths: 1 })
@@ -1424,7 +1709,7 @@ describe("链路高亮与列头 KPI", () => {
     expect(screen.getByTestId("access-map-node-agent:agent_b")).toHaveAttribute("data-chain", "off");
     expect(screen.getByTestId("access-map-node-role:shared")).toHaveAttribute("data-chain", "on");
     expect(screen.getByTestId("access-map-column-card-1")).toHaveTextContent("有问询 0");
-    expect(screen.getByTestId("access-map-column-card-1")).toHaveTextContent("僵尸授权 1");
+    expect(screen.getByTestId("access-map-column-card-1")).toHaveTextContent("闲置授权 1");
     expect(screen.getByTestId("access-map-chain-caption")).toHaveTextContent("AGENT A");
 
     fireEvent.mouseEnter(screen.getByTestId("access-map-node-agent:agent_b"));
@@ -1475,7 +1760,14 @@ describe("链路高亮与列头 KPI", () => {
     response.nodes = [...kept, ...tables];
     response.edges = [
       ...keptEdges,
-      ...tables.map((table) => makeEdge("conn:mysql_main", table.id, { grantPaths: 1, grantUsers: 1 }))
+      ...tables.map((table) =>
+        makeEdge("conn:mysql_main", table.id, {
+          grantPaths: 1,
+          grantUsers: 1,
+          accessPaths: (table.meta.accessPaths as number) ?? 0,
+          state: ((table.meta.accessPaths as number) ?? 0) > 0 ? "normal" : "dormant"
+        })
+      )
     ];
     response.render = {
       nodes: [
@@ -1486,7 +1778,10 @@ describe("链路高亮与列头 KPI", () => {
           foldedMemberIds: tables.map((table) => table.id)
         })
       ],
-      edges: [...keptEdges, makeEdge("conn:mysql_main", "other:table:3", { grantPaths: 5, accessPaths: 1 })],
+      edges: [
+        ...keptEdges,
+        makeEdge("conn:mysql_main", "other:table:3", { grantPaths: 5, accessPaths: 1 })
+      ],
       folded: { nodes: 4, edges: 4 }
     };
     stubAccessMap(response);
@@ -1495,7 +1790,7 @@ describe("链路高亮与列头 KPI", () => {
 
     expect(screen.getByTestId("access-map-column-card-value-3")).toHaveTextContent("5");
     expect(screen.getByTestId("access-map-column-card-3")).toHaveTextContent("有问询 1");
-    expect(screen.getByTestId("access-map-column-card-3")).toHaveTextContent("僵尸授权 4");
+    expect(screen.getByTestId("access-map-column-card-3")).toHaveTextContent("闲置授权 4");
     expect(
       screen.getByTestId("access-map-plot-scroll").contains(screen.getByTestId("access-map-column-cards"))
     ).toBe(false);
@@ -1508,41 +1803,56 @@ describe("链路高亮与列头 KPI", () => {
   it("共用连接时，别人的专属表不算进当前链路，点表也不会把对方算进主体", async () => {
     const response = makeResponse({
       nodes: [
-        makeNode("agent:agent_a", "agent", "AGENT A", 0, { grantPaths: 1, grantUsers: 1 }),
-        makeNode("agent:agent_b", "agent", "AGENT B", 0, { grantPaths: 1, grantUsers: 1 }),
+        makeNode("agent:agent_a", "agent", "AGENT A", 0, {
+          grantPaths: 1,
+          grantUsers: 1,
+          accessPaths: 1,
+          accessAgentIds: ["agent_a"]
+        }),
+        makeNode("agent:agent_b", "agent", "AGENT B", 0, {
+          grantPaths: 1,
+          grantUsers: 1,
+          accessPaths: 1,
+          accessAgentIds: ["agent_b"]
+        }),
         makeNode("role:ra", "role", "RA", 1, {
           grantPaths: 1,
+          accessPaths: 1,
           grantAgentIds: ["agent_a"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_a"]
         }),
         makeNode("role:rb", "role", "RB", 1, {
           grantPaths: 1,
+          accessPaths: 1,
           grantAgentIds: ["agent_b"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_b"]
         }),
         makeNode("conn:c", "connection", "C", 2, {
           grantPaths: 2,
+          accessPaths: 2,
           grantAgentIds: ["agent_a", "agent_b"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_a", "agent_b"]
         }),
         makeNode("table:ta", "table", "TA", 3, {
           grantPaths: 1,
+          accessPaths: 1,
           grantAgentIds: ["agent_a"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_a"]
         }),
         makeNode("table:tb", "table", "TB", 3, {
           grantPaths: 1,
+          accessPaths: 1,
           grantAgentIds: ["agent_b"],
-          accessAgentIds: []
+          accessAgentIds: ["agent_b"]
         })
       ],
       edges: [
-        makeEdge("agent:agent_a", "role:ra", { grantPaths: 1 }),
-        makeEdge("agent:agent_b", "role:rb", { grantPaths: 1 }),
-        makeEdge("role:ra", "conn:c", { grantPaths: 1 }),
-        makeEdge("role:rb", "conn:c", { grantPaths: 1 }),
-        makeEdge("conn:c", "table:ta", { grantPaths: 1 }),
-        makeEdge("conn:c", "table:tb", { grantPaths: 1 })
+        makeEdge("agent:agent_a", "role:ra", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("agent:agent_b", "role:rb", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("role:ra", "conn:c", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("role:rb", "conn:c", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("conn:c", "table:ta", { grantPaths: 1, accessPaths: 1 }),
+        makeEdge("conn:c", "table:tb", { grantPaths: 1, accessPaths: 1 })
       ]
     });
     response.render = { nodes: response.nodes, edges: response.edges, folded: { nodes: 0, edges: 0 } };
@@ -1618,5 +1928,234 @@ describe("链路高亮与列头 KPI", () => {
     );
     expect(chain.nodes.has("table:tb")).toBe(false);
     expect(chain.nodes.has("conn:c")).toBe(true);
+  });
+});
+
+/**
+ * Spec 20261104 访问关系图小时明细表 — 页壳／表列／§5.5（SC-01–SC-06、SC-15、SC-16、SC-18）。
+ */
+describe("访问关系图小时明细页壳（Spec 20261104 §8 组件）", () => {
+  it("SC-01 — 默认页无凭证清单、无 access-map-credential-list", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+    expect(screen.queryByTestId("access-map-credential-list")).not.toBeInTheDocument();
+    expect(screen.queryByText("凭证清单")).not.toBeInTheDocument();
+  });
+
+  it("SC-02 — 无 Token 过滤控件；切换筛选不写 token", async () => {
+    const fetchMock = stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-inquiry-kind")).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId("access-map-inquiry-kind"), { target: { value: "real" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("inquiryKind=real"));
+    expect(lastRequestUrl(fetchMock)).not.toContain("token=");
+    expect(screen.queryByTestId("access-map-token-filter-notice")).not.toBeInTheDocument();
+  });
+
+  it("SC-03 — 无折叠口径 details；有常驻现状／窗口／覆盖率／快照哈希", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-resident-line")).toBeInTheDocument());
+    expect(screen.queryByTestId("access-map-methodology-snapshot")).not.toBeInTheDocument();
+    expect(screen.getByTestId("access-map-filter-status")).toBeInTheDocument();
+    expect(screen.getByTestId("access-map-window-range")).toBeInTheDocument();
+    expect(screen.getByTestId("access-map-snapshot-coverage")).toBeInTheDocument();
+    expect(screen.getByTestId("access-map-snapshot-id")).toHaveTextContent("config cfg-1 · policy pol-1");
+  });
+
+  it("SC-04 — 长口径 note test id 不在默认 DOM", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-resident-line")).toBeInTheDocument());
+    expect(screen.queryByTestId("access-map-signal-needs-review-note")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-signal-confirmed-source")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-signal-calls")).not.toBeInTheDocument();
+  });
+
+  it("SC-05／SC-06 — 数据表为小时列；inquiryKind=null 显示「无关联」", async () => {
+    stubAccessMap(
+      makeResponse({
+        detail: makeDetail({
+          rows: [makeDetailRow({ inquiryKind: null, allowCalls: 0, denyCalls: 2 })]
+        })
+      })
+    );
+    renderPage("/admin/access-map?view=table");
+    await waitFor(() => expect(screen.getByTestId("access-map-hourly-detail")).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: "节点" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "关系" })).not.toBeInTheDocument();
+    const table = screen.getByTestId("access-map-hourly-detail");
+    expect(within(table).getByRole("columnheader", { name: "小时" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "允许调用" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "拒绝调用" })).toBeInTheDocument();
+    expect(screen.getByTestId("access-map-detail-inquiry-0")).toHaveTextContent("无关联");
+  });
+
+  it("SC-16 — 标识列 notranslate；无「桑基图」标题", async () => {
+    stubAccessMap(makeResponse());
+    renderPage("/admin/access-map?view=table");
+    await waitFor(() => expect(screen.getByTestId("access-map-hourly-detail")).toBeInTheDocument());
+    const table = screen.getByTestId("access-map-hourly-detail");
+    for (const name of ["Agent", "角色", "连接", "Schema", "表"]) {
+      const header = within(table).getByRole("columnheader", { name });
+      expect(header.className).toContain("notranslate");
+      expect(header).toHaveAttribute("translate", "no");
+    }
+    expect(screen.getByTestId("page-header").textContent ?? "").not.toContain("桑基");
+    expect(document.body.textContent ?? "").not.toContain("桑基图");
+  });
+
+  it("SC-18 — 常驻行可见窗口起止与覆盖率压缩句；不暗示低越权率", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-window-range")).toBeInTheDocument());
+    expect(screen.getByTestId("access-map-window-range")).toHaveTextContent(
+      "窗口起止：2026-10-18T00:00:00.000Z ~ 2026-10-25T00:00:00.000Z"
+    );
+    const coverage = screen.getByTestId("access-map-snapshot-coverage");
+    expect(coverage).toHaveTextContent("快照：可关联 0／需复核 1 · 缺失 1");
+    expect(coverage).toHaveTextContent("低覆盖率不代表低越权率");
+  });
+
+  describe("SC-15 — §5.5 表视图状态矩阵", () => {
+    it("grant unavailable：授权 notice；禁止空明细冒充", async () => {
+      const response = makeResponse();
+      response.meta.grant.state = "unavailable";
+      response.meta.grant.problem = "access_unreadable";
+      response.nodes = [];
+      response.edges = [];
+      response.render = { nodes: [], edges: [], folded: { nodes: 0, edges: 0 } };
+      response.detail = undefined;
+      stubAccessMap(response);
+      renderPage("/admin/access-map?view=table");
+      await waitFor(() =>
+        expect(screen.getByTestId("access-map-grant-unavailable")).toBeInTheDocument()
+      );
+      expect(screen.queryByTestId("access-map-hourly-detail")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("access-map-table-empty")).not.toBeInTheDocument();
+      expect(document.body.textContent ?? "").not.toMatch(/无调用/);
+    });
+
+    it("access unavailable：表区 notice，禁止无说明空表", async () => {
+      const response = makeResponse();
+      response.meta.access.state = "unavailable";
+      response.meta.access.reason = "重建失败";
+      response.detail = null;
+      stubAccessMap(response);
+      renderPage("/admin/access-map?view=table");
+      await waitFor(() =>
+        expect(screen.getByTestId("access-map-table-access-unavailable")).toBeInTheDocument()
+      );
+      expect(screen.queryByTestId("access-map-table-empty")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("access-map-hourly-detail")).not.toBeInTheDocument();
+    });
+
+    it("真实零行：空态可调筛选；不用「尚无 Agent 授权关系」", async () => {
+      stubAccessMap(
+        makeResponse({
+          detail: makeDetail({ rows: [], totalRowCount: 0, hasMore: false })
+        })
+      );
+      renderPage("/admin/access-map?view=table");
+      await waitFor(() => expect(screen.getByTestId("access-map-table-empty")).toBeInTheDocument());
+      expect(screen.getByTestId("access-map-table-empty")).toHaveTextContent("没有调用明细");
+      expect(screen.getByTestId("access-map-table-empty").textContent ?? "").not.toContain(
+        "尚无 Agent 授权关系"
+      );
+    });
+
+    it("deny-only：拒绝行必须展示", async () => {
+      stubAccessMap(
+        makeResponse({
+          detail: makeDetail({
+            rows: [makeDetailRow({ allowCalls: 0, denyCalls: 4, inquiryKind: null })]
+          })
+        })
+      );
+      renderPage("/admin/access-map?view=table");
+      await waitFor(() => expect(screen.getByTestId("access-map-detail-row-0")).toBeInTheDocument());
+      expect(screen.getByTestId("access-map-detail-row-0")).toHaveTextContent("4");
+      expect(screen.getByTestId("access-map-detail-inquiry-0")).toHaveTextContent("无关联");
+    });
+
+    it("分页越界：提示回到第一页，不得声称无调用", async () => {
+      stubAccessMap(
+        makeResponse({
+          detail: makeDetail({
+            rows: [],
+            totalRowCount: 12,
+            hasMore: false,
+            limit: 200,
+            offset: 500
+          })
+        })
+      );
+      renderPage("/admin/access-map?view=table&detailOffset=500");
+      await waitFor(() =>
+        expect(screen.getByTestId("access-map-table-page-overflow")).toBeInTheDocument()
+      );
+      expect(screen.getByTestId("access-map-table-page-overflow")).toHaveTextContent("本页没有数据");
+      expect(screen.getByTestId("access-map-table-page-overflow").textContent ?? "").not.toContain(
+        "无调用"
+      );
+      expect(screen.getByTestId("access-map-table-back-first-page")).toBeInTheDocument();
+    });
+
+    it("partial：保留 notice，且已读明细仍可见", async () => {
+      const response = makeResponse({
+        detail: makeDetail({ rows: [makeDetailRow({ table: "orders", allowCalls: 1 })] })
+      });
+      response.meta.grant.state = "partial";
+      response.meta.grant.failures = [{ subjectId: "agent_x", reason: "access_config_missing" }];
+      stubAccessMap(response);
+      renderPage("/admin/access-map?view=table");
+      await waitFor(() =>
+        expect(screen.getByTestId("access-map-partial-notice")).toBeInTheDocument()
+      );
+      expect(screen.getByTestId("access-map-detail-row-0")).toHaveTextContent("orders");
+    });
+
+    it("grant 空 + access ok：不挡表视图", async () => {
+      stubAccessMap(
+        makeResponse({
+          nodes: [],
+          edges: [],
+          render: { nodes: [], edges: [], folded: { nodes: 0, edges: 0 } },
+          detail: makeDetail({
+            rows: [makeDetailRow({ allowCalls: 0, denyCalls: 2 })]
+          })
+        })
+      );
+      renderPage("/admin/access-map?view=table");
+      await waitFor(() => expect(screen.getByTestId("access-map-hourly-detail")).toBeInTheDocument());
+      expect(screen.queryByTestId("access-map-empty")).not.toBeInTheDocument();
+      expect(document.body.textContent ?? "").not.toContain("尚无 Agent 授权关系");
+      expect(screen.getByTestId("access-map-detail-row-0")).toHaveTextContent("2");
+    });
+  });
+
+  it("分页：URL 读写 detailOffset；筛选变更重置 offset；展示 hasMore", async () => {
+    const fetchMock = stubAccessMap(
+      makeResponse({
+        detail: makeDetail({
+          rows: [makeDetailRow()],
+          hasMore: true,
+          totalRowCount: 40,
+          limit: 200,
+          offset: 0
+        })
+      })
+    );
+    renderPage("/admin/access-map?view=table");
+    await waitFor(() => expect(screen.getByTestId("access-map-detail-has-more")).toBeInTheDocument());
+    expect(screen.getByTestId("access-map-detail-page-summary")).toHaveTextContent("还有更多");
+
+    fireEvent.click(screen.getByTestId("access-map-detail-next"));
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("detailOffset=200"));
+
+    fireEvent.change(screen.getByTestId("access-map-inquiry-kind"), { target: { value: "all" } });
+    await waitFor(() => expect(lastRequestUrl(fetchMock)).toContain("inquiryKind=all"));
+    expect(lastRequestUrl(fetchMock)).not.toContain("detailOffset=");
   });
 });

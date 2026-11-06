@@ -1,7 +1,5 @@
 # Catalog and Business Wiki Visual Clarity Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Implement M64: reduce Catalog table-name visual weight, simplify Business Wiki typography and homepage IA, remove Wiki triangle glyphs, and clarify the upload Markdown preflight.
 
 **Architecture:** This is a frontend-only polish pass. Keep existing Wiki data APIs, routing, upload commit flow, and directory tree model; change rendering, CSS, and component tests around Catalog, WikiTree, WikiLibraryHome, and WikiUploadPreflight.

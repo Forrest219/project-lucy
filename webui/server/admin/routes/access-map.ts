@@ -33,9 +33,11 @@ export function registerAccessMapRoutes(
   provider: AccessMapProvider = createAdminAccessMapProvider()
 ): void {
   app.get("/api/admin/access-map", async (request, reply) => {
-    const parsed = parseAccessMapQuery(
-      (request.query ?? {}) as Record<string, string | undefined>
-    );
+    // Spec 20261105 D12：用原始查询串保留 trust 键存在性与全部重复值；
+    // 禁止用 Fastify 折叠后的 request.query 判断「键是否出现」。
+    const qIndex = request.url.indexOf("?");
+    const search = qIndex >= 0 ? request.url.slice(qIndex + 1) : "";
+    const parsed = parseAccessMapQuery(new URLSearchParams(search));
     if (!parsed.ok) {
       // 非法参数值 → 400，且**不**静默纠正成默认值：被悄悄改写的分享链接
       // 会让用户以为「这个 Agent 没有授权路径」，而真相只是拼错了一个参数。

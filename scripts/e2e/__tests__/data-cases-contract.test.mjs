@@ -10,8 +10,8 @@
 //   1. `upstream_exec_zero` cannot be a fabricated `true`;
 //   2. `allow_control` cannot accept a deny with `row_policy_upstream_unproven` or a
 //      status 200 with the wrong rows/aggregate;
-//   3. multi-role fixture (East ∪ West) for SEC-10-V04 / BY-10 must be a real
-//      disposable Agent creation (not a static East-only token);
+//   3. SEC-10-V04 still creates a disposable multi-role fixture. BY-10 uses the
+//      prepared pack agent ag_east_west (rp_east + rp_west), not that disposable role.
 //   4. byOutcome must accept positive controls (BY-01) without forcing a deny;
 //   5. SEC-09-V01/V04 must use the actual request + parsed response (no
 //      `{region, table}` substitution);
@@ -29,6 +29,7 @@ import { handlers as dataHandlers } from "../security/data-cases.mjs";
 import { handlers as rowPolicyHandlers } from "../security/row-policy-cases.mjs";
 import { handlers as faultHandlers } from "../security/fault-cases.mjs";
 import { extractDenyReason, explicitDeny, denyReasonMatches } from "../security/context.mjs";
+import { AGENTS, CONNECTION_ID, REGIONS, TABLES } from "../lib/row-policy-pack.mjs";
 
 const { cases } = loadCatalog();
 
@@ -189,7 +190,7 @@ describe("C1 review #2: allow_control cannot accept deny + status200 (must be a 
   });
 });
 
-describe("C1 review #3: multi-role fixture (East ∪ West) for SEC-10-V04 / BY-10", () => {
+describe("C1 review #3: multi-role fixture for SEC-10-V04; BY-10 uses the pack union agent", () => {
   it("SEC-10-V04 must call createAgent to set up a disposable multi-role fixture (not just a static East-only token)", async () => {
     let createAgentCalled = 0;
     const ctx = fakeRefusingCtx();
@@ -202,25 +203,26 @@ describe("C1 review #3: multi-role fixture (East ∪ West) for SEC-10-V04 / BY-1
     assert.ok(createAgentCalled >= 1, "SEC-10-V04 must call createAgent to set up a disposable multi-role fixture");
   });
 
-  it("BY-10 must call createAgent to set up a disposable multi-role fixture", async () => {
+  it("BY-10 uses static ag_east_west and does not create a disposable finance role", async () => {
     let createAgentCalled = 0;
-    const ctx = fakeRefusingCtx();
-    ctx.createAgent = async ({ roleId, agentId }) => {
+    let seenToken = null;
+    let seenArgs = null;
+    const ctx = fakeAllowingCtx();
+    ctx.createAgent = async () => {
       createAgentCalled += 1;
-      return { agentId, token: "tok-east-west", undo: async () => {} };
+      return { agentId: "disposable", token: "tok-disposable", undo: async () => {} };
+    };
+    const original = ctx.lucyQuery;
+    ctx.lucyQuery = async (token, args) => {
+      seenToken = token;
+      seenArgs = args;
+      return original(token, args);
     };
     await rowPolicyHandlers["SEC-11-BY10"](ctx);
-    assert.ok(createAgentCalled >= 1, "BY-10 must call createAgent to set up a disposable multi-role fixture");
-  });
-
-  it("the multi-role agent must be restored in a try/finally (undo called even on success or failure)", async () => {
-    let undoCalled = 0;
-    const ctx = fakeRefusingCtx();
-    ctx.createAgent = async ({ roleId, agentId }) => {
-      return { agentId, token: "tok-east-west", undo: async () => { undoCalled += 1; } };
-    };
-    await rowPolicyHandlers["SEC-11-BY10"](ctx);
-    assert.equal(undoCalled, 1, "BY-10 must call agent.undo() in a try/finally so the run leaves the fixture intact");
+    assert.equal(createAgentCalled, 0, "BY-10 union is the prepared ag_east_west agent, not a disposable role");
+    assert.equal(seenToken, ctx.tokens[AGENTS.eastWest]);
+    assert.equal(seenArgs.connectionId, CONNECTION_ID);
+    assert.equal(seenArgs.source, `${TABLES.fact.schema}.${TABLES.fact.name}`);
   });
 
   it("SEC-10-V05 must call createAgent to set up a disposable constrained fixture", async () => {
@@ -251,6 +253,81 @@ describe("C1 review #4: byOutcome must accept positive controls (BY-01) without 
     const evaluated = new Set(result.assertions.map((a) => a.token));
     assert.ok(evaluated.has("deny"), "BY-01 must evaluate deny when the call is refused");
     assert.ok(evaluated.has("upstream_exec_zero"), "BY-01 must evaluate upstream_exec_zero when the call is refused");
+  });
+
+  it("BY-01 queries the pack fact table as ag_east", async () => {
+    let seenToken = null;
+    let seenArgs = null;
+    const ctx = fakeAllowingCtx();
+    const original = ctx.lucyQuery;
+    ctx.lucyQuery = async (token, args) => {
+      seenToken = token;
+      seenArgs = args;
+      return original(token, args);
+    };
+    await rowPolicyHandlers["SEC-11-BY01"](ctx);
+    assert.equal(seenToken, ctx.tokens[AGENTS.east]);
+    assert.equal(seenArgs.connectionId, CONNECTION_ID);
+    assert.equal(seenArgs.source, `${TABLES.fact.schema}.${TABLES.fact.name}`);
+    assert.deepEqual(seenArgs.dimensions, [{ field: `${TABLES.fact.name}.${TABLES.fact.field}` }]);
+  });
+
+  it("BY-01 allow path passes typed_gold only for the 华东 region set", async () => {
+    const ctx = fakeAllowingCtx();
+    ctx.lucyQuery = async () => regionQueryResponse([[REGIONS.A, 4]]);
+    const pass = await rowPolicyHandlers["SEC-11-BY01"](ctx);
+    assert.equal(assertionPassed(pass, "typed_gold"), true);
+
+    ctx.lucyQuery = async () => regionQueryResponse([[REGIONS.A, 4], [REGIONS.B, 2]]);
+    const widened = await rowPolicyHandlers["SEC-11-BY01"](ctx);
+    assert.equal(assertionPassed(widened, "typed_gold"), false);
+  });
+
+  it("BY-10 allow path passes typed_gold only for 华东∪西南", async () => {
+    const ctx = fakeAllowingCtx();
+    ctx.lucyQuery = async () => regionQueryResponse([[REGIONS.A, 4], [REGIONS.B, 2]]);
+    const pass = await rowPolicyHandlers["SEC-11-BY10"](ctx);
+    assert.equal(assertionPassed(pass, "typed_gold"), true);
+
+    ctx.lucyQuery = async () => regionQueryResponse([[REGIONS.A, 4]]);
+    const intersect = await rowPolicyHandlers["SEC-11-BY10"](ctx);
+    assert.equal(assertionPassed(intersect, "typed_gold"), false);
+  });
+});
+
+describe("BY-09 is phase-off and only accepts row_policy_upstream_unproven", () => {
+  it("phase-off unproven deny passes the deny assertion", async () => {
+    const ctx = fakeRefusingCtx();
+    const result = await rowPolicyHandlers["SEC-11-BY09"](ctx);
+    assert.equal(assertionPassed(result, "deny"), true);
+    assert.equal(result.denyReason, "row_policy_upstream_unproven");
+  });
+
+  it("an allowed query does not pass BY-09", async () => {
+    const ctx = fakeAllowingCtx();
+    const result = await rowPolicyHandlers["SEC-11-BY09"](ctx);
+    assert.equal(assertionPassed(result, "deny"), false);
+  });
+
+  it("a different allowlisted reason does not pass BY-09", async () => {
+    const ctx = fakeRefusingCtx();
+    ctx.lucyQuery = async () => ({
+      status: 200,
+      headers: {},
+      setCookies: [],
+      cookie: null,
+      json: { jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "Access denied: row_policy_requires_wrapped_tool" }], isError: true } },
+      text: "Access denied: row_policy_requires_wrapped_tool"
+    });
+    const result = await rowPolicyHandlers["SEC-11-BY09"](ctx);
+    assert.equal(assertionPassed(result, "deny"), false);
+  });
+
+  it("phase-on proven env cannot pass BY-09 even with the unproven reason", async () => {
+    const ctx = fakeRefusingCtx();
+    ctx.run.instance.env = { LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN: "1" };
+    const result = await rowPolicyHandlers["SEC-11-BY09"](ctx);
+    assert.equal(assertionPassed(result, "deny"), false);
   });
 });
 
@@ -519,6 +596,34 @@ describe("C1 review (additional): dynamic secret registry is persisted to a priv
 // Helpers
 // ============================================================================
 
+function packAgentTokens() {
+  return {
+    [AGENTS.east]: "tok-ag-east",
+    [AGENTS.eastWest]: "tok-ag-east-west",
+    [AGENTS.all]: "tok-ag-all",
+    [AGENTS.eastConstrained]: "tok-ag-east-constrained"
+  };
+}
+
+function regionQueryResponse(rows) {
+  const payload = { headers: [TABLES.fact.field, "order_count"], rows };
+  const text = JSON.stringify(payload);
+  return {
+    status: 200,
+    headers: {},
+    setCookies: [],
+    cookie: null,
+    json: { jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text }] } },
+    text
+  };
+}
+
+function assertionPassed(result, token) {
+  const hit = result.assertions.find((item) => item.token === token);
+  assert.ok(hit, `missing assertion ${token}`);
+  return hit.passed;
+}
+
 /** Build a synthetic SecurityContext that returns successful MCP responses. */
 function fakeAllowingCtx() {
   const okBody = { aggregate: 16, rows: [{ count_distinct_order_id: 16 }] };
@@ -535,7 +640,7 @@ function fakeAllowingCtx() {
     run: { runId: "test", paths: { project: "/tmp/fake", checker: "/tmp/fake-check" }, instance: { mcpUrl: "http://127.0.0.1:0/mcp" } },
     lucy: { logPath: "/tmp/fake.log", restart: async () => {}, stop: async () => {}, start: async () => {} },
     capabilities: { "lucy-http": true, "ktx-upstream": true, postgres: true, "fault-control": true },
-    tokens: { e2e_finance: "tok-fin", e2e_finance_east: "tok-east", e2e_sales: "tok-sales", e2e_channel_only: "tok-co", e2e_discover_only: "tok-d", e2e_east_west: "tok-ew", e2e_east_constrained: "tok-ec" },
+    tokens: { e2e_finance: "tok-fin", e2e_finance_east: "tok-east", e2e_sales: "tok-sales", e2e_channel_only: "tok-co", e2e_discover_only: "tok-d", e2e_east_west: "tok-ew", e2e_east_constrained: "tok-ec", ...packAgentTokens() },
     adminCreds: { owner: { adminId: "o", password: "p" }, operator: { adminId: "op", password: "op" } },
     bootstrapToken: "bt",
     gold: { questions: { "Q-ORDERS-EAST": { expected: { type: "int", value: 16 }, queryKey: { region: "East", table: "fin.orders" }, allowedCanaries: [] }, "Q-ORDERS-WEST-SALES": { expected: { type: "int", value: 6 }, queryKey: { region: "West", table: "sales.orders" }, allowedCanaries: [] }, "Q-CAC-EAST": { expected: { type: "money_cents", cents: 1000, toleranceCents: 0 }, queryKey: { days: 28, region: "East", table: "marketing_daily" }, allowedCanaries: [] } } },
@@ -625,7 +730,7 @@ function fakeRefusingCtx() {
     run: { runId: "test", paths: { project: "/tmp/fake", checker: "/tmp/fake-check" }, instance: { mcpUrl: "http://127.0.0.1:0/mcp" } },
     lucy: { logPath: "/tmp/fake.log", restart: async () => {}, stop: async () => {}, start: async () => {} },
     capabilities: { "lucy-http": true, "ktx-upstream": true, postgres: true, "fault-control": true },
-    tokens: { e2e_finance: "tok-fin", e2e_finance_east: "tok-east", e2e_sales: "tok-sales", e2e_channel_only: "tok-co", e2e_discover_only: "tok-d", e2e_east_west: "tok-ew", e2e_east_constrained: "tok-ec" },
+    tokens: { e2e_finance: "tok-fin", e2e_finance_east: "tok-east", e2e_sales: "tok-sales", e2e_channel_only: "tok-co", e2e_discover_only: "tok-d", e2e_east_west: "tok-ew", e2e_east_constrained: "tok-ec", ...packAgentTokens() },
     adminCreds: { owner: { adminId: "o", password: "p" }, operator: { adminId: "op", password: "op" } },
     bootstrapToken: "bt",
     gold: { questions: { "Q-ORDERS-EAST": { expected: { type: "int", value: 16 }, queryKey: { region: "East", table: "fin.orders" }, allowedCanaries: [] }, "Q-ORDERS-WEST-SALES": { expected: { type: "int", value: 6 }, queryKey: { region: "West", table: "sales.orders" }, allowedCanaries: [] }, "Q-CAC-EAST": { expected: { type: "money_cents", cents: 1000, toleranceCents: 0 }, queryKey: { days: 28, region: "East", table: "marketing_daily" }, allowedCanaries: [] } } },

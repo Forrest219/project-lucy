@@ -93,6 +93,7 @@ roles:
         - lucy_explain_query
         - lucy_freshness
         - lucy_begin_question
+        - lucy_continue_question
         - kx_catalog
         - connection_list
         - entity_details
@@ -107,12 +108,12 @@ roles:
         - lucy_report_template
 ```
 
-上例 18 个工具等于 `webui/server/admin/role-templates.ts` 的 `LUCY_ADMIN_TOOLS = DATA_PLANE_TOOLS ∪ META_TOOLS`
-（`webui/server/proxy/acl.ts`，共 18 个，排除 AbsoluteDeny）。新增工具须同步改这份示例。
+上例 19 个工具等于 `webui/server/admin/role-templates.ts` 的 `LUCY_ADMIN_TOOLS = DATA_PLANE_TOOLS ∪ META_TOOLS`
+（`webui/server/proxy/acl.ts`，共 19 个，排除 AbsoluteDeny）。新增工具须同步改这份示例。
 
 其中 `wiki_search`、`wiki_read`、`lucy_skill_search`、`lucy_skill_read` 自 Spec 170 起归入
 `CONTEXT_TOOLS`，对任意已解析且启用的 Agent 常开，不依赖本字段授权；写在这里只为与实现保持一致。
-真正需要本字段授予的是 `sl_validate`、`lucy_certified_route`、`lucy_report_template` 这三个后续新增项。
+真正需要本字段授予的是 `sl_validate`、`lucy_continue_question`、`lucy_certified_route`、`lucy_report_template` 这四个后续新增项。
 Demo 模板 `examples/docker-demo/project-template/webui/config/access.yaml` 已补齐同一组工具，
 `scripts/runtime/docker-entrypoint.sh` 的 `patch_lucy_admin_tools` 负责给存量卷幂等补齐。
 
@@ -130,11 +131,11 @@ Demo 模板 `examples/docker-demo/project-template/webui/config/access.yaml` 已
 
 | 形态 | 行为 |
 |---|---|
-| Reference Role Template `lucy_admin` | 恒存在于 `role-templates.ts`；工具集 = 代码分类表并集 `DATA_PLANE_TOOLS ∪ META_TOOLS`（排除 AbsoluteDeny）；不直接写入客户 `access.yaml` |
-| Demo / docker 项目模板 | 可种子化正式 Role `lucy_admin`（带 demo connection） |
-| 客户包 | 默认不自动落盘；运维从参考模板「复制为正式 Role」并填 connections；**允许**以模板同名 id `lucy_admin` 提升为正式 yaml Role（仅禁止与已存在 yaml Role 撞名） |
+| Reference Role Template `lucy_admin` | 恒存在于 `role-templates.ts`；工具集 = 代码分类表并集 `DATA_PLANE_TOOLS ∪ META_TOOLS`（排除 AbsoluteDeny）；模板本身不是可绑定事实源 |
+| Demo / docker 项目模板 | 种子化正式 Role `lucy_admin` |
+| 客户包 | **有效口径见** [`docs/specs/lucy-20261105-customer-default-system-roles-spec.md`](../../docs/specs/lucy-20261105-customer-default-system-roles-spec.md)：新装种子与缺则 ensure **必须**落盘正式 `lucy_admin`（`connections: ["*"]` + `catalog_bound`）；已存在不覆盖；**仍不**强制预置 Agent。旧句「客户包默认不自动落盘」**已作废，不得当作现值**。仍**允许**以模板同名 id 提升为正式 yaml Role（仅禁止与已存在 yaml Role 撞名） |
 
-模板展开时 `connections` 可为占位空列表；保存前必须填入至少一个合法 connection，否则 dryRun/保存失败。
+模板展开时 `connections` 可为占位空列表；保存前必须填入至少一个合法 connection，否则 dryRun/保存失败。`lucy_admin` 规范正式 Role 使用 `["*"]`，不走占位空列表。
 
 ---
 
@@ -215,7 +216,7 @@ SourcesGrantedBy(r) =
 ## 6. Admin UI / API
 
 - `GET /api/admin/roles` 合并返回模板 `lucy_admin`（`source=template`）。
-- Role 编辑：`source_scope` 可选 `（默认：指定表名）` / `catalog_bound（启用目录绑定）`。
+- Role 编辑：`source_scope` 可选 `（默认：指定表名）` / `catalog_bound（启用目录绑定）`。**可见入口呈现**（连接卡「跟随此连接的启用表」、不再依赖页底高级设置）以 [`docs/specs/lucy-20261104-role-catalog-bound-connection-card-ux-spec.md`](../../docs/specs/lucy-20261104-role-catalog-bound-connection-card-ux-spec.md) 为准；本条仍管编译与安全语义。
 - 选 `catalog_bound` 时：隐藏或禁用 tableSelectors 编辑；保存 payload 不得带非空 `tableSelectors`。
 - Preview / dryRun 必须展示当前匹配的 source 数量与列表摘要（复用 effective permissions）。
 - `permission_model_version` 对新建含 `catalog_bound` 的 Role 强制为 `2`。

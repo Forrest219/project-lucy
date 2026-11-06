@@ -1,7 +1,5 @@
 # Admin Data Grid Frame Consistency Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** 让 `/admin/agents`、`/admin/config-audit` 与 `/admin/audit` 复用同一套数据网格外框与密度语言，同时为配置审计和访问日志保留适合各自内容规模的列宽与滚动策略。
 
 **Architecture:** 保留现有原生 `<table>`、`pl-data-grid` 和页面级语义类，不引入新的 React 表格组件或数据层。新增共享的 `pl-data-grid-frame` / `pl-data-grid-scroll` 布局契约：Agent 和配置审计使用普通横向滚动框，访问日志在同一视觉外框内叠加唯一的 `pl-audit-grid-scroll` 有界双向滚动行为。配置审计通过固定语义列模板和长标识换行控制在 1280 桌面基线内，访问日志不强行压缩宽表（调用流水 L1 含「访问上下文」，共 13 列）。

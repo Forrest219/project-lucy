@@ -14,7 +14,8 @@
 //  - A reindex failure keeps the saved files with `activationStatus =
 //    unconfirmed` — the activation is never claimed.
 
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { rmSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
@@ -32,6 +33,8 @@ import {
 
 let projectRoot: string;
 let previousContentRoot: string | undefined;
+let previousKtxRoot: string | undefined;
+let restoreKtxRoot = false;
 
 const TARGET = "semantic-layer/shop-db/orders.yaml";
 
@@ -49,10 +52,22 @@ beforeEach(async () => {
   await writeFileAt(TARGET, "name: orders\n");
 });
 
-afterEach(async () => {
+afterEach(() => {
+  // Delete the temp project BEFORE restoring env. Async reindex / lock-release
+  // can still recreate children under projectRoot while Node walks it for
+  // rmdir; recursive rm with retries absorbs that race (same class of flake as
+  // display-invalidation / api.semantic-batch). Restoring env first lets a
+  // concurrent content-path resolve recreate dirs into the temp root mid-rm.
+  if (projectRoot) {
+    rmSync(projectRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
   if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
   else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
-  if (projectRoot) await rm(projectRoot, { recursive: true, force: true });
+  if (restoreKtxRoot) {
+    if (previousKtxRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
+    else process.env.KTX_PROJECT_ROOT = previousKtxRoot;
+    restoreKtxRoot = false;
+  }
 });
 
 describe("D16 — the journal phase decides what a startup recovery may do", () => {
@@ -148,18 +163,12 @@ grain:
 `;
 
 describe("D19/D20 — the activation state of a release", () => {
-  let previousRoot: string | undefined;
-
   beforeEach(async () => {
-    previousRoot = process.env.KTX_PROJECT_ROOT;
+    previousKtxRoot = process.env.KTX_PROJECT_ROOT;
+    restoreKtxRoot = true;
     await writeFileAt("ktx.yaml", KTX_YAML);
     await writeFileAt("semantic-layer/shop-db/_schema/public.yaml", MANIFEST);
     await writeFileAt("semantic-layer/shop-db/orders.yaml", "name: orders\ntable: public.orders\n");
-  });
-
-  afterEach(async () => {
-    if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
-    else process.env.KTX_PROJECT_ROOT = previousRoot;
   });
 
   it("keeps the journal open and the activation unconfirmed until the index is done", async () => {

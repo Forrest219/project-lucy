@@ -1,7 +1,5 @@
 # Clipboard Non-Secure-Context Fallback Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Implement M65: every WebUI copy entry point must work (or fail loudly) when the origin is not a secure context, including the supported intranet-HTTP customer mode `security.access=http`.
 
 **Architecture:** Frontend-only. Add one pure, stateless helper (`src/lib/clipboard.ts`) that owns the Clipboard API detection, the `execCommand` fallback and the failure reason. Every existing copy entry point routes through it. No backend, ACL, endpoint, routing or visual change.

@@ -35,7 +35,7 @@ import {
   derivePermissionImpact,
   partitionGrantableTools,
   permissionTableKey,
-  READONLY_QA_PRESET,
+  BUSINESS_QA_PRESET,
   rolePermissionDraftHash,
   ROW_POLICY_TEMPLATE_NAME_PATTERN,
   type PermissionImpactSummary,
@@ -123,9 +123,9 @@ type DraftValidation = {
 };
 
 /**
- * Spec 194 §3 — 新建草稿的默认工具全集。
+ * Spec lucy-20261104 — 新建草稿的默认工具全集（业务问答）。
  *
- * 唯一事实源是 `READONLY_QA_PRESET`；这里只复制它的独立副本，
+ * 唯一事实源是 `BUSINESS_QA_PRESET`；这里只复制它的独立副本，
  * 不另抄一份工具名单。编辑、复制与模板沿用各自已有的工具。
  */
 function newCreateDraft(): RolePermissionDraft {
@@ -133,7 +133,7 @@ function newCreateDraft(): RolePermissionDraft {
     roleId: "",
     description: "",
     scope: { mode: "names", tables: [] },
-    tools: [...READONLY_QA_PRESET],
+    tools: [...BUSINESS_QA_PRESET],
   };
 }
 
@@ -156,7 +156,7 @@ function newEmptyDraft(): RolePermissionDraft {
  *
  * 与 Toast 用的是同一句话；页内提示另外给 `MCP` 加翻译防御。
  */
-const EMPTY_GRANTABLE_TOOLS_MESSAGE = "请至少选择一个 MCP 工具。常规查询可选择“只读问答”。";
+const EMPTY_GRANTABLE_TOOLS_MESSAGE = "请至少选择一个 MCP 工具。常规场景可选择“业务问答”。";
 
 const ROW_POLICY_INCOMPATIBLE_TOOLS = new Set([
   "lucy_read_source",
@@ -960,7 +960,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
               {mode === "create" ? (
                 /* Spec 194 §4.2 — 新建时的默认能力引导。 */
                 <p className="text-xs text-fg-muted" data-testid="role-create-default-tools-hint">
-                  已默认启用只读问答工具，请选择可访问的表；如需调整工具，可前往“允许的 <span className="notranslate" translate="no">MCP</span> 工具”。
+                  已默认启用业务问答工具，请选择可访问的表；如需调整工具，可前往“允许的 <span className="notranslate" translate="no">MCP</span> 工具”。
                 </p>
               ) : null}
             </div>
@@ -986,7 +986,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                   ref={toolGrantAlertRef}
                   data-testid="role-tools-empty-error"
                 >
-                  请至少选择一个 <span className="notranslate" translate="no">MCP</span> 工具。常规查询可选择“只读问答”。
+                  请至少选择一个 <span className="notranslate" translate="no">MCP</span> 工具。常规场景可选择“业务问答”。
                 </p>
               ) : null}
               {rejectedTools.length > 0 ? <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">旧配置包含 {rejectedTools.length} 个系统禁止工具，保存时将移除。</div> : null}

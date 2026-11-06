@@ -1,7 +1,5 @@
 # WebUI Connection Whitelist And Test UX Refresh Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Upgrade `/connections/whitelist` and `/connections/test` into a complete SaaS-grade database access closure: searchable table whitelist with dry-run/save-and-scan workflow, and structured connection diagnostics with collapsed raw logs.
 
 **Architecture:** Frontend-first refinement over existing WebUI contracts. Reuse `GET /api/connections`, `GET /api/connections/:connId/tables`, `GET /api/sources`, `PUT /api/connections/:connId/enabled-tables`, `POST /api/connections/:connId/ingest`, and `POST /api/connections/:connId/test`. Do not add backend fields unless a task explicitly marks them optional.

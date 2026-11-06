@@ -27,6 +27,7 @@ import {
   parseInquiryKindFilter,
   type InquiryKind
 } from "./audit-inquiry-kind.js";
+import { buildCallStoryLine } from "../../src/lib/audit-call-storyline.js";
 import {
   ensureBackfillBeforeAllocate,
   ensureInquirySerialSchema,
@@ -1151,6 +1152,9 @@ const ACCESS_LOG_CSV_HEADERS = [
   "device_name",
   "访问等级",
   "tool",
+  "call_action",
+  "call_intent",
+  "call_result_summary",
   "tables",
   "args_summary",
   "query_hash",
@@ -1398,6 +1402,24 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     description: "本次访问调用的 MCP 工具名或协议工具名。",
     trigger: "每条 access_log 行均输出。"
   },
+  call_action: {
+    label: "动作",
+    format: "string",
+    description: "由工具名与访问等级派生的中文短标签（如问询登记、查数、连接握手）。",
+    trigger: "每条 access_log 行均输出。"
+  },
+  call_intent: {
+    label: "意图",
+    format: "string",
+    description: "由参数摘要与表名派生的一行意图（维度、指标、实体等）。",
+    trigger: "每条 access_log 行均输出；缺参数时可能为 —。"
+  },
+  call_result_summary: {
+    label: "结果摘要",
+    format: "string",
+    description: "成功带行数、失败带人话错误、拒绝带裁决原因的短摘要。",
+    trigger: "每条 access_log 行均输出。"
+  },
   tables: {
     label: "数据表",
     format: "JSON string|null",
@@ -1607,6 +1629,28 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.device_name),
         csvCell(accessGradeLabelZh(accessGrade(row.tool))),
         csvCell(row.tool),
+        ...(() => {
+          let args: Record<string, unknown> | undefined;
+          if (row.args_summary) {
+            try {
+              args = redactSensitive(JSON.parse(row.args_summary)) as Record<string, unknown>;
+            } catch {
+              args = undefined;
+            }
+          }
+          const tables = row.tables ? (JSON.parse(row.tables) as string[]) : undefined;
+          const story = buildCallStoryLine({
+            tool: row.tool,
+            accessGrade: accessGrade(row.tool),
+            tables,
+            argsSummary: args,
+            outcome: row.outcome,
+            decisionReason: row.decision_reason,
+            errorDetail: row.error_detail ? redactJsonString(row.error_detail) : undefined,
+            responseRowCount: row.response_row_count
+          });
+          return [csvCell(story.action), csvCell(story.intent), csvCell(story.resultSummary)];
+        })(),
         csvCell(row.tables),
         csvCell(redactJsonString(row.args_summary)),
         csvCell(row.query_hash),
@@ -3865,20 +3909,43 @@ export function registerAuditRoutes(app: FastifyInstance) {
         duration_ms: number;
         trace_id: string | null;
         tables: string | null;
+        args_summary: string | null;
+        error_detail: string | null;
+        generated_sql: string | null;
+        response_row_count: number | null;
+        response_column_count: number | null;
+        response_bytes: number | null;
       },
       connectionByLogId: Map<number, string>
-    ) => ({
-      id: row.id,
-      ts: row.ts,
-      tool: row.tool,
-      outcome: row.outcome,
-      decisionReason: row.decision_reason ?? undefined,
-      durationMs: row.duration_ms,
-      isSlowCall: p95Ms > 0 && row.duration_ms > p95Ms,
-      traceId: row.trace_id ?? undefined,
-      tables: row.tables ? (JSON.parse(row.tables) as string[]) : undefined,
-      connectionId: connectionByLogId.get(row.id)
-    });
+    ) => {
+      let argsSummary: Record<string, unknown> | undefined;
+      if (row.args_summary) {
+        try {
+          argsSummary = redactSensitive(JSON.parse(row.args_summary)) as Record<string, unknown>;
+        } catch {
+          argsSummary = undefined;
+        }
+      }
+      return {
+        id: row.id,
+        ts: row.ts,
+        tool: row.tool,
+        outcome: row.outcome,
+        decisionReason: row.decision_reason ?? undefined,
+        durationMs: row.duration_ms,
+        isSlowCall: p95Ms > 0 && row.duration_ms > p95Ms,
+        traceId: row.trace_id ?? undefined,
+        tables: row.tables ? (JSON.parse(row.tables) as string[]) : undefined,
+        connectionId: connectionByLogId.get(row.id),
+        accessGrade: accessGrade(row.tool),
+        argsSummary,
+        errorDetail: row.error_detail ? redactJsonString(row.error_detail) ?? undefined : undefined,
+        generatedSql: row.generated_sql ?? undefined,
+        responseRowCount: row.response_row_count ?? undefined,
+        responseColumnCount: row.response_column_count ?? undefined,
+        responseBytes: row.response_bytes ?? undefined
+      };
+    };
 
     const connectionByLogId = (ids: number[]): Map<number, string> => {
       const map = new Map<number, string>();
@@ -3904,7 +3971,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
       const accessLogIds = links.map((l) => l.access_log_id);
       const accessLogs = accessLogIds.length > 0
         ? database.prepare(`
-            SELECT id, ts, tool, outcome, decision_reason, duration_ms, trace_id, tables
+            SELECT id, ts, tool, outcome, decision_reason, duration_ms, trace_id, tables,
+                   args_summary, error_detail, generated_sql,
+                   response_row_count, response_column_count, response_bytes
             FROM access_log WHERE id IN (${accessLogIds.map(() => "?").join(",")}) ORDER BY ts ASC
           `).all(...accessLogIds) as Array<{
             id: number;
@@ -3915,6 +3984,12 @@ export function registerAuditRoutes(app: FastifyInstance) {
             duration_ms: number;
             trace_id: string | null;
             tables: string | null;
+            args_summary: string | null;
+            error_detail: string | null;
+            generated_sql: string | null;
+            response_row_count: number | null;
+            response_column_count: number | null;
+            response_bytes: number | null;
           }>
         : [];
       const connMap = connectionByLogId(accessLogIds);
@@ -3960,7 +4035,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
       return { ok: false, error: "not found" };
     }
     const accessLogs = database.prepare(`
-      SELECT id, ts, tool, outcome, decision_reason, duration_ms, trace_id, tables FROM access_log
+      SELECT id, ts, tool, outcome, decision_reason, duration_ms, trace_id, tables,
+             args_summary, error_detail, generated_sql,
+             response_row_count, response_column_count, response_bytes
+      FROM access_log
       WHERE lucy_turn_id = ?
       ORDER BY ts ASC
     `).all(turnId) as Array<{
@@ -3972,6 +4050,12 @@ export function registerAuditRoutes(app: FastifyInstance) {
       duration_ms: number;
       trace_id: string | null;
       tables: string | null;
+      args_summary: string | null;
+      error_detail: string | null;
+      generated_sql: string | null;
+      response_row_count: number | null;
+      response_column_count: number | null;
+      response_bytes: number | null;
     }>;
     const accessLogIds = accessLogs.map((l) => l.id);
     const sources = accessLogIds.length > 0

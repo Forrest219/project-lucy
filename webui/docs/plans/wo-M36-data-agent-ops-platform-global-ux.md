@@ -1,7 +1,5 @@
 # M36 Data Agent Ops Platform Global UX Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Upgrade Lucy WebUI from a set of semantic asset maintenance pages into a data agent operations control plane with a global ops dashboard, cross-module object context, release risk review, quality operations, and audit traceability.
 
 **Architecture:** Frontend-first IA and UX upgrade using existing React pages, PageHeader, CSS tokens, TanStack Query data, and current API contracts where possible. New derived view models should live in `webui/src/lib/` and aggregate existing endpoints before any backend API is added. Cross-module context is delivered through a reusable object detail drawer keyed by URL query parameters.

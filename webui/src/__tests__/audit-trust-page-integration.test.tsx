@@ -108,6 +108,22 @@ async function waitForRow(id: number) {
   await waitFor(() => expect(screen.getByTestId(`audit-primary-status-${id}`)).toBeInTheDocument());
 }
 
+/**
+ * Open a row's detail panels.
+ *
+ * The audit-trust surfaces (the client coverage pill, the read-only SQL rowset)
+ * live in the row's DETAIL panel, which stays collapsed until the row is
+ * clicked. A test that looks for them without expanding first asserts
+ * nothing about them.
+ */
+async function expandRow(id: number) {
+  const cell = screen.getByTestId(`audit-primary-status-${id}`);
+  const row = cell.closest("tr");
+  if (!row) throw new Error(`audit row ${id} not found`);
+  fireEvent.click(row);
+  await waitFor(() => expect(screen.getByTestId(`audit-detail-panels-${id}`)).toBeInTheDocument());
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -192,6 +208,7 @@ describe("批 C-1：Audit.tsx 挂载 audit-trust 组件", () => {
 
     await waitForRow(8);
     expect(screen.getByTestId("audit-status-coverage").getAttribute("data-status")).toBe("observed");
+    await expandRow(8);
     expect(screen.getByTestId("client-coverage-pill")).toHaveTextContent("客户端已采集");
   });
 
@@ -210,6 +227,7 @@ describe("批 C-1：Audit.tsx 挂载 audit-trust 组件", () => {
     renderAudit();
 
     await waitForRow(10);
+    await expandRow(10);
     const rowset = screen.getByTestId("readonly-sql-rowset");
     expect(rowset.getAttribute("data-status")).toBe("not_collected");
     expect(screen.getByTestId("readonly-sql-rows").textContent).toContain("—");

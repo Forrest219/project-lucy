@@ -1,0 +1,15 @@
+# 可问治理面 W2 — 边状态／确凿越权。
+name: ops_edge_signals
+
+grain:
+  - snapshot_id
+  - edge_id
+
+measures:
+  - name: edge_count
+    expr: count(*)
+    description: 边数。
+
+  - name: confirmed_unauthorized_edges
+    expr: sum(confirmed_unauthorized)
+    description: 确凿越权边数（confirmedUnauthorized 布尔合计）。

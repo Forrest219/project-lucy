@@ -1,7 +1,5 @@
 # M30 Help Center Layout Polish Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make `/help` feel like a mature enterprise Help Center by fixing deep-link positioning, header metadata, TOC density, first-screen noise, and reading width.
 
 **Architecture:** Frontend-only layout refinement over the existing fixed-source Help API and M26 Markdown renderer. Keep `GET /api/help/handbook` unchanged; adjust `HelpCenter.tsx` and CSS to improve information hierarchy while preserving local-only rendering and Markdown security boundaries.

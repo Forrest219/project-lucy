@@ -141,6 +141,10 @@ const DEFAULT_QUERY = {
   window: "168h" as const,
   layer: "flat" as const,
   trust: "confirmed" as const,
+  // Spec 20261102: inquiryKind / accessGrade are required parts of the query
+  // (they default to management / exclude_connect when parsed from a URL).
+  inquiryKind: "management" as const,
+  accessGrade: "exclude_connect" as const,
   view: "map" as const,
   focus: null
 };

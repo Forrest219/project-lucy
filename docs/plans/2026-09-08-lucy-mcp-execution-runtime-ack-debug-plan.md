@@ -1,7 +1,5 @@
 # Lucy MCP Execution Runtime Ack Debug Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Add execution-layer runtime acknowledgement and debug surfaces so Lucy can detect when WebUI config and the MCP / KTX execution runtime disagree.
 
 **Architecture:** Keep `ktx.yaml`, `access.yaml`, static Catalog reload, and Policy Runtime as existing facts of record. Add a narrow execution-runtime status/canary service, expose explicit ack fields, and classify stale KTX connection errors without storing secrets or running broad data queries.

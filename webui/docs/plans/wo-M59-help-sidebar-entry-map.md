@@ -1,7 +1,5 @@
 # M59 Help Sidebar Entry Map Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** 在 `docs/SYSTEM_HANDBOOK.md` §1 末尾新增 `### 1.5 WebUI 入口速查（5+1 侧栏地图）` H3 子节，作为面向三类用户的全局功能模块入口结构表；抽离 `webui/src/app/navigation.ts` 共享导航配置；在 `webui/server/help.ts` `SECTION_ALIASES` 追加锚定 id；新增 `webui/src/__tests__/navigation.test.ts` 自动对齐测试；不引入搜索、不暴露到 MCP 工具面、不改 Help API、不改 Markdown 渲染器。
 
 **Architecture:** 文档层（handbook §1.5 新增 + 14 行 4 列表格 + 顶部目录补链）+ 代码层（`navigation.ts` 抽离 + App.tsx 改 import + help.ts SECTION_ALIASES 追加一条）+ 测试层（`navigation.test.ts` 新增 + `help-center.test.tsx` 扩展 + `help.test.ts` 扩展）。06 spec §3 / §4 与代码事实源不一致由独立 follow-up 工单承接，**不在本 plan 范围**。

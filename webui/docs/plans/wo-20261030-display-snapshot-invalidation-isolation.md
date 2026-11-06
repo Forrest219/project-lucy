@@ -1,7 +1,5 @@
 # Display Snapshot Invalidation and Isolation Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** 落实 Spec 195：同一次已确认文件变更不重复触发派生重建，普通 overlay 修改不牵连 Agent 权限展示，并如实提示后台刷新失败。
 
 **Architecture:** 在现有单进程展示快照服务内统一 metadata / digest 文件版本基线，保留写屏障并确认事务最终磁盘版本。缓存依赖和校验健康状态同时按 scope 隔离；Agent 使用 P/C，sources 使用 D/P/C。沿用原 API 和运行时权限边界。
@@ -16,7 +14,7 @@
 - **实施状态**：Task 1–6 已完成，SI-01–SI-13 已执行并通过；Task 7 的综合验证已跑完，SI-14 的浏览器往返见 Spec 195 §8.1。
 - **收口状态（2026-11-01）**：**v0.2 功能合同已收口**，SI-01–SI-14 全部关闭。证据 `docs/reviews/2026-11-01-display-snapshot-invalidation-isolation-closure.md`；原始证据已入库 `webui/scripts/evidence/2026-10-31-spec195-si14-roundtrip/`（与工作区原件逐字节一致）。**本条收口不表示可上线**——镜像构建、部署、客户交付、现场实例复核不在本条出口。
 - 本轮**未**构建镜像、未部署、未出客户包、未改现场实例、未改 KTX / 运行时 ACL / Policy / 锁生命周期，未执行 `git commit` / `git push`。
-- 本计划按仓库模块落位规则放在 `webui/docs/plans/`。任务执行时使用当前可用的 `executing-plans` 技能；若工具环境的技能命名没有 `superpowers:` 前缀，使用已安装的同名工作流，不为此安装软件或扩大任务。
+- 本计划按仓库模块落位规则放在 `webui/docs/plans/`。按仓库治理与本计划勾选步骤执行，不另装流程插件。
 - 已完成方向确认，无需重新从需求访谈开始。实施中若设计需改变检测窗口、运行时授权或发布窗口语义，应先回到 Spec 195 修改方案，不静默扩大范围。
 
 | 任务 | 状态 | 落地要点 |

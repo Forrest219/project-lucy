@@ -14,6 +14,8 @@
 //   | Token | 搜索 Token | `search` |
 //   | 目录 | 搜索表名或字段名 | `q` |
 //   | 发布历史 | 操作人 | `actor` |
+//   | 访问关系图 | 按 Agent 筛选行为轨迹 | `agent` |
+//   | 访问关系图 | 按连接筛选 | `connection` |
 //
 // 断言口径（Spec §5.2 / §5.4）：
 //   - 受控输入框的值 = 用户输入的**原文**（尾空格保留在输入框与 URL 里）；
@@ -31,6 +33,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Catalog } from "../pages/Catalog";
+import { AccessMap } from "../pages/admin/AccessMap";
 import { ConfigAudit } from "../pages/admin/ConfigAudit";
 import { Tokens } from "../pages/admin/Tokens";
 import { PublishHistory } from "../pages/publish/PublishHistory";
@@ -333,4 +336,117 @@ describe("发布历史：逐处镜像（SC-13）", () => {
     expect(input).toHaveValue("abc ");
     await expectParam("actor", "abc ");
   });
+});
+
+// ─── 访问关系图（2 处；与 Audit INV-2 同构：draft + URL 写原文，不 trim）────────
+
+function stubAccessMapForMirror() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              meta: {
+                window: {
+                  startIso: "2026-10-18T00:00:00.000Z",
+                  endIso: "2026-10-25T00:00:00.000Z",
+                  asOf: "2026-10-25T00:00:00.000Z"
+                },
+                grant: {
+                  state: "ok",
+                  problem: null,
+                  accessConfigVersion: "cfg-1",
+                  policyVersion: "pol-1",
+                  sourceMapVersion: "smap-1",
+                  capabilityDigest: "cap-1",
+                  failures: []
+                },
+                access: { state: "ok", trust: "confirmed", deniedCalls: 0, rawCalls: 0 },
+                echo: {
+                  enteringAllowCallCount: 0,
+                  enteringAllowCallCountBasis: "pre_structure"
+                },
+                counts: {
+                  agents: 0,
+                  roles: 0,
+                  connections: 0,
+                  schemas: 0,
+                  tables: 0,
+                  tokens: 0,
+                  edges: 0,
+                  grantPaths: 0,
+                  grantUsers: 0,
+                  accessPaths: 0,
+                  accessUsers: 0
+                },
+                signals: {
+                  dormantEdges: 0,
+                  needsReviewEdges: 0,
+                  overflowEdges: 0,
+                  confirmedUnauthorizedEdges: 0
+                },
+                snapshotCoverage: {
+                  reviewPaths: 0,
+                  matched: 0,
+                  missingOrInvalid: 0,
+                  ratio: 0
+                },
+                orphanGrants: 0,
+                folded: { nodes: 0, edges: 0 },
+                countingNotes: []
+              },
+              nodes: [],
+              edges: [],
+              render: { nodes: [], edges: [], folded: { nodes: 0, edges: 0 } },
+              detail: {
+                rows: [],
+                hasMore: false,
+                totalRowCount: 0,
+                limit: 200,
+                offset: 0
+              }
+            }
+          }),
+          { status: 200 }
+        )
+    )
+  );
+}
+
+function renderAccessMap(initialEntry: string) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path="/admin/access-map" element={<AccessMap />} />
+        </Routes>
+        <LocationProbe />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
+const ACCESS_MAP_FILTER_CASES = [
+  { id: "agent", label: "按 Agent 筛选行为轨迹", param: "agent" },
+  { id: "connection", label: "按连接筛选", param: "connection" }
+] as const;
+
+describe("访问关系图：逐处镜像（INV-2 / AccessMap 筛选）", () => {
+  for (const testCase of ACCESS_MAP_FILTER_CASES) {
+    it(`${testCase.id}：draft 与 URL 保留原文尾空格（不在 onChange 里 trim）`, async () => {
+      stubAccessMapForMirror();
+      renderAccessMap(`/admin/access-map?${testCase.param}=seed`);
+
+      const input = (await screen.findByLabelText(testCase.label)) as HTMLInputElement;
+      expect(input).toHaveValue("seed");
+
+      fireEvent.change(input, { target: { value: "abc " } });
+      expect(input).toHaveValue("abc ");
+      await expectParam(testCase.param, "abc ");
+    });
+  }
 });

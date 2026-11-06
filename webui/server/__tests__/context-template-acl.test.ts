@@ -96,6 +96,12 @@ describe("template Skill ACLs", () => {
     const named = skills.filter(({ parsed }) => parsed.data.status === "published");
     expect(named.map(({ rel }) => rel).sort()).toEqual([
       path.join("skills", "answer-style", "SKILL.md"),
+      // 03fe45cc published the four asset_finance business Skills. They carry an explicit
+      // `roles_allowed` and are governed template Skills like the superstore one.
+      path.join("skills", "domains", "asset_finance", "dupont.skill.md"),
+      path.join("skills", "domains", "asset_finance", "income-sankey.skill.md"),
+      path.join("skills", "domains", "asset_finance", "oi-bridge.skill.md"),
+      path.join("skills", "domains", "asset_finance", "pl-compare.skill.md"),
       path.join("skills", "domains", "superstore", "profit-breakdown.skill.md"),
       // 70f27ba0 shipped the lucy-ops governed Skill: `status: published` + an explicit
       // `roles_allowed: [lucy_ops_reader]`, so it is a governed template Skill exactly like the

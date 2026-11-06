@@ -1,7 +1,5 @@
 # M19 Semantic Asset Publish And Export Work Order
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Turn Lucy WebUI YAML operations into a self-service semantic asset lifecycle: analysts can upload manifest and overlay YAML, preview diff, publish through a hard validate gate, trigger KTX reindex only after a successful promote, and export a sanitized asset package without secrets.
 
 **Architecture:** Extend M17 controlled upload into a staged publish pipeline. The backend classifies uploaded YAML, computes target paths, builds a staging project, runs `ktx sl validate` before touching the formal PVC, atomically promotes files only after validation passes, records release metadata as `reindexing`, returns immediately with `releaseId`, runs `ktx admin reindex` asynchronously, and exposes a white-listed sanitized export endpoint.

@@ -1,9 +1,23 @@
 /**
  * Spec 149 §8 — `ensureOpsEvidence()`：视图、连接块、内容根复制、项目根镜像、
  * 就绪状态。
+ * Spec 20261104 §4.2 — 重排：先落资产并镜像，再按 Manifest 收敛 enabled_tables。
  *
  * 幂等：块已一致且戳与摘要相同 → `readiness = current`；否则 `reload_required`。
- * **不**启动 KTX，**不**提交 Spec 191 的重载请求，**不**写 `access.yaml`。
+ * **不**启动 KTX，**不**提交 Spec 191 的重载请求。
+ * `access.yaml` 仅在成功返回前缺则创建正式 Role `lucy_ops_reader`
+ * （`docs/specs/lucy-20261105-customer-default-system-roles-spec.md` §3.2.1）。
+ * conflict / not_ready 提前返回不写。已存在的 Role 不覆盖。
+ *
+ * 执行顺序（Spec 20261104 §4.2）：
+ *
+ * 1. 重建视图
+ * 2. 检查连接块（driver / 路径 / readonly）—— 冲突则整段中止，**此步不写 enabled**
+ * 3. 放置内容根资产（官方历史版本自愈为 `upgraded`）
+ * 4. 镜像到项目根 —— 失败则 `not_ready`
+ * 5. 按项目根 Manifest 收敛 `enabled_tables`
+ * 6. 就绪判定
+ * 7. 状态表允许时缺则写入 `lucy_ops_reader`
  */
 
 import {
@@ -20,6 +34,9 @@ import {
 } from "./contract.js";
 import {
   ensureOpsEvidenceConnectionBlock,
+  inspectOpsEvidenceBlock,
+  readOpsEvidenceBlock,
+  readOpsEvidenceManifestPhysicalTables,
   resolveOpsEvidenceAuditDbPath,
   type OpsEvidenceConnectionWrite
 } from "./connection-block.js";
@@ -29,6 +46,7 @@ import {
   type OpsEvidenceAssetResult
 } from "./assets.js";
 import { recordOpsEvidenceEnsureState } from "./readiness.js";
+import { ensureLucyOpsReaderFormalRole } from "../admin/ensure-system-formal-roles.js";
 
 export interface OpsEvidenceEnsureResult {
   projectRoot: string;
@@ -43,6 +61,8 @@ export interface OpsEvidenceEnsureResult {
   assets: OpsEvidenceAssetResult[];
   /** 字节不同、未改写的资产。 */
   assetConflicts: OpsEvidenceAssetResult[];
+  /** 官方历史版本被自愈升级为当前模板的资产。 */
+  assetUpgrades: OpsEvidenceAssetResult[];
   /** 项目根镜像结果。 */
   mirror: ContentMirrorResult;
   /** 视图是否已重建。 */
@@ -60,14 +80,15 @@ export interface EnsureOpsEvidenceOptions {
 /**
  * 执行一次确保。
  *
- * 顺序与 Spec 149 §8 的伪代码一致：
- * 视图 → 连接块 → 内容根复制 → 项目根镜像 → 就绪判定。
+ * 顺序见文件头：视图 → 检查连接块 → 放置资产 → 镜像 → 收敛 enabled_tables →
+ * 就绪判定。
  */
 export async function ensureOpsEvidence(
   options: EnsureOpsEvidenceOptions = {}
 ): Promise<OpsEvidenceEnsureResult> {
   const projectRoot = options.projectRoot ?? (await resolveProjectRoot());
   const auditDbPath = options.auditDbPath ?? (await resolveOpsEvidenceAuditDbPath(projectRoot));
+  const contentPaths = options.contentPaths ?? (await resolveContentPaths(projectRoot));
 
   // 1) 视图：每次确保都 DROP VIEW 后重建，绝不 DROP 基表。
   let viewsRecreated = false;
@@ -76,8 +97,81 @@ export async function ensureOpsEvidence(
     viewsRecreated = true;
   }
 
-  // 2) 连接块。
-  const blockState = await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath);
+  // 2) 连接块检查：只看 driver / 路径 / readonly，冲突则整段中止。
+  //    这一步**不写** enabled_tables —— 启用范围必须等 Manifest 落定后才知道。
+  const existingBlock = await readOpsEvidenceBlock(projectRoot);
+  const inspected = inspectOpsEvidenceBlock(existingBlock, auditDbPath, projectRoot);
+  if (inspected.write === "conflict") {
+    console.warn(
+      `[ops-evidence] ${OPS_EVIDENCE_CONNECTION_ID}: ${inspected.conflictReason ?? "配置不一致，未改写"}` +
+        `（字段：${inspected.conflictField ?? "unknown"}）`
+    );
+    recordOpsEvidenceEnsureState({
+      connectionWrite: "conflict",
+      readiness: "conflict",
+      detail: inspected.conflictReason
+    });
+    return {
+      projectRoot,
+      auditDbPath,
+      connectionWrite: "conflict",
+      readiness: "conflict",
+      detail: inspected.conflictReason,
+      assets: [],
+      assetConflicts: [],
+      assetUpgrades: [],
+      mirror: { copied: 0, skipped: 0, failed: 0 },
+      viewsRecreated
+    };
+  }
+
+  // 3) 内容根资产：缺失则复制，字节相同则跳过，官方历史版本升级为当前模板，
+  //    其余字节不同则保留并记冲突。
+  const assets: OpsEvidenceAssetResult[] = [];
+  for (const spec of opsEvidenceAssetSpecs()) {
+    assets.push(await placeOpsEvidenceAsset(spec, contentPaths));
+  }
+  const assetConflicts = assets.filter((asset) => asset.outcome === "conflict");
+  const assetUpgrades = assets.filter((asset) => asset.outcome === "upgraded");
+  for (const conflict of assetConflicts) {
+    console.warn(
+      `[ops-evidence] ${OPS_EVIDENCE_ASSET_CONFLICT}: ${conflict.destPath} 与模板字节不同，未改写`
+    );
+  }
+  for (const upgrade of assetUpgrades) {
+    console.log(`[ops-evidence] 资产已升级到当前模板：${upgrade.destPath}`);
+  }
+
+  // 4) 项目根镜像：失败时状态保持未就绪，不把内容根的文件当成执行层已看见。
+  const mirror = await syncContentToProjectRoot(projectRoot, contentPaths);
+  if (mirror.failed > 0) {
+    recordOpsEvidenceEnsureState({
+      connectionWrite: "unchanged",
+      readiness: "not_ready",
+      detail: `内容根镜像有 ${mirror.failed} 个文件失败`
+    });
+    return {
+      projectRoot,
+      auditDbPath,
+      connectionWrite: "unchanged",
+      readiness: "not_ready",
+      detail: `内容根镜像有 ${mirror.failed} 个文件失败`,
+      assets,
+      assetConflicts,
+      assetUpgrades,
+      mirror,
+      viewsRecreated
+    };
+  }
+
+  // 5) 按项目根 Manifest 收敛 enabled_tables（冻结集合 ∩ Manifest 物理表）。
+  const manifestPhysicalTables = await readOpsEvidenceManifestPhysicalTables(
+    projectRoot,
+    contentPaths
+  );
+  const blockState = await ensureOpsEvidenceConnectionBlock(projectRoot, auditDbPath, {
+    manifestPhysicalTables
+  });
   if (blockState.write === "conflict") {
     console.warn(
       `[ops-evidence] ${OPS_EVIDENCE_CONNECTION_ID}: ${blockState.conflictReason ?? "配置不一致，未改写"}` +
@@ -94,48 +188,15 @@ export async function ensureOpsEvidence(
       connectionWrite: "conflict",
       readiness: "conflict",
       detail: blockState.conflictReason,
-      assets: [],
-      assetConflicts: [],
-      mirror: { copied: 0, skipped: 0, failed: 0 },
-      viewsRecreated
-    };
-  }
-
-  // 3) 内容根资产：缺失则复制，字节相同则跳过，字节不同则保留并记冲突。
-  const contentPaths = options.contentPaths ?? (await resolveContentPaths(projectRoot));
-  const assets: OpsEvidenceAssetResult[] = [];
-  for (const spec of opsEvidenceAssetSpecs()) {
-    assets.push(await placeOpsEvidenceAsset(spec, contentPaths));
-  }
-  const assetConflicts = assets.filter((asset) => asset.outcome === "conflict");
-  for (const conflict of assetConflicts) {
-    console.warn(
-      `[ops-evidence] ${OPS_EVIDENCE_ASSET_CONFLICT}: ${conflict.destPath} 与模板字节不同，未改写`
-    );
-  }
-
-  // 4) 项目根镜像：失败时状态保持未就绪，不把内容根的文件当成执行层已看见。
-  const mirror = await syncContentToProjectRoot(projectRoot, contentPaths);
-  if (mirror.failed > 0) {
-    recordOpsEvidenceEnsureState({
-      connectionWrite: blockState.write,
-      readiness: "not_ready",
-      detail: `内容根镜像有 ${mirror.failed} 个文件失败`
-    });
-    return {
-      projectRoot,
-      auditDbPath,
-      connectionWrite: blockState.write,
-      readiness: "not_ready",
-      detail: `内容根镜像有 ${mirror.failed} 个文件失败`,
       assets,
       assetConflicts,
+      assetUpgrades,
       mirror,
       viewsRecreated
     };
   }
 
-  // 5) 就绪判定（readinessAfterEnsure）。
+  // 6) 就绪判定（readinessAfterEnsure）。
   const { readOpsEvidenceReadiness } = await import("./readiness.js");
   recordOpsEvidenceEnsureState({
     connectionWrite: blockState.write,
@@ -149,6 +210,13 @@ export async function ensureOpsEvidence(
     detail: readinessState.detail
   });
 
+  if (
+    (blockState.write === "inserted" || blockState.write === "expanded" || blockState.write === "unchanged") &&
+    (readinessState.readiness === "current" || readinessState.readiness === "reload_required")
+  ) {
+    await ensureLucyOpsReaderFormalRole({ projectRoot });
+  }
+
   return {
     projectRoot,
     auditDbPath,
@@ -157,6 +225,7 @@ export async function ensureOpsEvidence(
     detail: readinessState.detail,
     assets,
     assetConflicts,
+    assetUpgrades,
     mirror,
     viewsRecreated
   };

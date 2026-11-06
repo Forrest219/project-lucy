@@ -1,7 +1,5 @@
 # Admin Audit CSV Readability and Metadata Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Improve `/admin/audit` CSV exports with readable timestamps, precise filenames, and downloadable field metadata.
 
 **Architecture:** Keep the two CSV export endpoints from Spec 140. Add shared timestamp/filename helpers in the audit route module, extend CSV renderers without dropping raw UTC fields, and expose a small metadata JSON endpoint that the Audit page links from the granularity guidance area.

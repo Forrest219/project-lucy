@@ -33,8 +33,9 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { spawnSync } from "node:child_process";
+import http from "node:http";
 import net from "node:net";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { realIsolationProbe, runProcess } from "../run-agent-journey.mjs";
@@ -52,6 +53,7 @@ import {
   modelClientEnv,
   probeIsolation,
   resolveModelApi,
+  resolveProbeTargets,
   sanitizeEnv,
   startModelEgressSidecar
 } from "../lib/isolation.mjs";
@@ -65,18 +67,40 @@ function newTmp() {
 afterEach(() => { for (const dir of tmpRoots.splice(0)) { try { rmSync(dir, { recursive: true, force: true }); } catch {} } });
 
 const fixedProvider = { provider: "darwin-sandbox-exec", binary: "/usr/bin/sandbox-exec", reason: null };
+
+// The POSITIVE CONTROL is the first invocation of every probe: the client must read a
+// file it IS allowed to read. A stub that emulates a working client answers it with the
+// control file's content; every other invocation goes to `inner`.
+function controlAwareRunner(workDir, inner) {
+  return async (input) => {
+    const question = (input.args ?? []).find((a) => typeof a === "string" && a.includes("probe-control.txt"));
+    if (question) {
+      const file = (question.match(/at (\S*probe-control\.txt)/) ?? [])[1];
+      if (file) {
+        try {
+          return { completed: true, exitCode: 0, stdout: readFileSync(file, "utf8"), stderr: "", timedOut: false };
+        } catch { /* fall through to the inner runner */ }
+      }
+    }
+    return inner(input);
+  };
+}
+
 const fixedUnsupported = { provider: null, binary: null, reason: "sandbox-exec not executable in test sandbox" };
 
 function fakeRun(runDir) {
   return {
     runId: "iso-test-0001", instanceId: "iso-instance-0001",
-    instance: { mcpUrl: "http://127.0.0.1:17879/mcp", proxyPort: 17879 },
+    // The run carries the REAL endpoints the network probes must attempt: the
+    // database and the product's own HTTP control surface (the WebUI port). The
+    // client reaches the product through MCP only, so both must be refused.
+    instance: { mcpUrl: "http://127.0.0.1:17879/mcp", proxyPort: 17879, host: "127.0.0.1", webuiPort: 15174 },
     paths: {
       runDir, checker: path.join(runDir, "checker"), outside: path.join(runDir, "outside"),
       "client-work": path.join(runDir, "client-work"), logs: path.join(runDir, "logs"),
       project: path.join(runDir, "project"), probe: path.join(runDir, "probe")
     },
-    db: { secretFile: path.join(runDir, "checker", "secrets", "db-password") }
+    db: { secretFile: path.join(runDir, "checker", "secrets", "db-password"), host: "127.0.0.1", port: 15432 }
   };
 }
 
@@ -179,6 +203,34 @@ describe("A5 isolation: SBPL profile emits explicit deny + allow", () => {
     assert.match(profile, /\(allow network-outbound \(remote tcp "localhost:17900"\)\)/);
     // The bare (deny network-out) form is NOT used because not every sandbox-exec accepts that.
     assert.doesNotMatch(profile, /\(deny network-out\)/);
+  });
+
+  it("allows process-fork so the client can run the shell the probe asks for", () => {
+    // Without `process-fork` every shell execution inside the boundary fails with
+    // "fork: Operation not permitted": the client can start, but it can never attempt
+    // a forbidden resource through a shell, so the probe can never obtain a denial
+    // signal. The children stay inside the same sandbox (the file/network rules apply
+    // to them too).
+    const profile = buildSandboxProfile({ allow: ["/tmp/work"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] });
+    assert.match(profile, /\(allow process-fork\)/);
+  });
+
+  it("allows the root directory NODE (not its contents) so a hardened client can start", () => {
+    // A hardened-runtime client resolves its own path by reading `/`. Under
+    // `(deny default)` that read is denied, the client aborts before it can answer,
+    // and every boundary probe stays inconclusive → the agent-client capability is
+    // never granted. The root NODE is opened; every path under it stays governed by
+    // the allow/deny lists (gold / seed / checker / runDir / $HOME stay denied).
+    const profile = buildSandboxProfile({
+      allow: ["/tmp/work"],
+      deny: ["/tmp/checker", "/tmp/seed"],
+      mcpPorts: [],
+      sidecarPorts: []
+    });
+    assert.match(profile, /\(allow file-read\* \(literal "\/"\)\)/);
+    // The blanket forms stay forbidden — the root node is not a blanket allow.
+    assert.doesNotMatch(profile, /\(allow file-read\* \(subpath "\/"\)\)/);
+    assert.doesNotMatch(profile, /\(allow file-read\* \(subpath "\/private\/var"\)\)/);
   });
 
   it("REFUSES wildcard `*:port` (any-host-on-port is a laundering path)", () => {
@@ -343,10 +395,11 @@ describe("A5 isolation: didProbeDeny must not let silence leak denial", () => {
 
 describe("A5 isolation: probeIsolation fails closed on incomplete probe attempts", () => {
   it("returns attemptCompleted:false when the wrapper returns a not-completed outcome", async () => {
+    const workDir = newTmp();
     const adapter = {
       mod: {
         prepare: () => ({ env: {}, files: [], lastMessageFile: null }),
-        buildInvocation: () => ({ command: "/bin/false", args: [], cwd: "/tmp", env: {} }),
+        buildInvocation: ({ question }) => ({ command: "/bin/false", args: [question ?? "probe"], cwd: workDir, env: {} }),
         parseResult: () => ({ ok: false })
       }
     };
@@ -358,7 +411,7 @@ describe("A5 isolation: probeIsolation fails closed on incomplete probe attempts
     // refused to instantiate or a child that errored out before exiting.
     const notCompletedRunner = async () => ({ completed: false, reason: "child_error:fake_sandbox_failure", exitCode: null, stdout: "", stderr: "", timedOut: false });
     const result = await probeIsolation({
-      adapter, probeInfo, workDir: "/tmp", run, secrets: [],
+      adapter, probeInfo, workDir, run, secrets: [],
       deps, provider: fixedProvider,
       profileString: buildSandboxProfile({ allow: ["/tmp"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] }),
       canaries,
@@ -402,6 +455,21 @@ describe("A5 isolation: a probe that proved nothing must not be reported as a le
     assert.equal(classifyProbeOutcome(RESOURCE_KIND.RAW_DB_ENDPOINT, canary, refused).verdict, "denied");
   });
 
+  it("a client that cannot EXECUTE at all is INCONCLUSIVE, never a denial", () => {
+    // Observed in the field: the client's own wrapper cannot fork inside the boundary
+    // ("/Users/.../openclaw: fork: Operation not permitted"). The boundary never ruled on
+    // the resource — reading this as a denial would GRANT isolation nobody proved.
+    const cannotFork = { completed: true, exitCode: 128, stdout: "", stderr: "/Users/forrest/.local/bin/openclaw: fork: Operation not permitted", timedOut: false };
+    const outcome = classifyProbeOutcome(RESOURCE_KIND.CHECKER_GOLD, canary, cannotFork);
+    assert.equal(outcome.verdict, "inconclusive", "a client-side failure is not a boundary denial");
+    assert.equal(didProbeDeny(RESOURCE_KIND.CHECKER_GOLD, canary, cannotFork), false);
+  });
+
+  it("a client-side spawn failure is INCONCLUSIVE for a TCP resource too", () => {
+    const cannotSpawn = { completed: true, exitCode: 1, stdout: "", stderr: "execFileNoThrow spawn failed: EPERM EPERM: operation not permitted, posix_spawn 'security'", timedOut: false };
+    assert.equal(classifyProbeOutcome(RESOURCE_KIND.RAW_DB_ENDPOINT, canary, cannotSpawn).verdict, "inconclusive");
+  });
+
   it("harmless output with exit 0 stays INCONCLUSIVE (never a denial, never a leak)", () => {
     const harmless = { completed: true, exitCode: 0, stdout: "hello world", stderr: "", timedOut: false };
     assert.equal(classifyProbeOutcome(RESOURCE_KIND.CHECKER_GOLD, canary, harmless).verdict, "inconclusive");
@@ -411,16 +479,18 @@ describe("A5 isolation: a probe that proved nothing must not be reported as a le
     const adapter = {
       mod: {
         prepare: () => ({ env: {}, files: [], lastMessageFile: null }),
-        buildInvocation: () => ({ command: "/bin/false", args: [], cwd: "/tmp", env: {} }),
+        buildInvocation: ({ question }) => ({ command: "/bin/false", args: [question ?? "probe"], cwd: workDir, env: {} }),
         parseResult: () => ({ ok: false })
       }
     };
+    const workDir = newTmp();
     const run = fakeRun(newTmp());
     const canaries = allocateProbeCanaries();
-    // The child is killed by a signal and prints nothing: no denial signal, no leak signal.
-    const killedRunner = async () => ({ completed: true, exitCode: -1, stdout: "", stderr: "", timedOut: false });
+    // The control succeeds (the client CAN act inside the boundary); the resource probes
+    // are killed by a signal and print nothing: no denial signal, no leak signal.
+    const killedRunner = controlAwareRunner(workDir, async () => ({ completed: true, exitCode: -1, stdout: "", stderr: "", timedOut: false }));
     const result = await probeIsolation({
-      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir: "/tmp", run, secrets: [],
+      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir, run, secrets: [],
       deps: { env: {}, timeoutMs: 1000, envAllowMatcher: buildEnvAllowMatcher(), bounds: { stdout: 1000, stderr: 1000 } },
       provider: fixedProvider,
       profileString: buildSandboxProfile({ allow: ["/tmp"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] }),
@@ -438,11 +508,38 @@ describe("A5 isolation: a probe that proved nothing must not be reported as a le
     assert.ok(result.inconclusive.length > 0, "the undecidable resources are named");
   });
 
-  it("probeIsolation DOES report a proven leak as a breach", async () => {
+  it("the probe CANNOT conclude when the client cannot read an ALLOWED file", async () => {
+    // The positive control: the client must read a file it IS allowed to read. If it
+    // cannot, any denial signal from it would prove nothing about the boundary, so the
+    // probe must fail closed instead of claiming isolation.
+    const workDir = newTmp();
     const adapter = {
       mod: {
         prepare: () => ({ env: {}, files: [], lastMessageFile: null }),
-        buildInvocation: () => ({ command: "/bin/false", args: [], cwd: "/tmp", env: {} }),
+        buildInvocation: ({ question }) => ({ command: "/bin/false", args: [question ?? "probe"], cwd: workDir, env: {} }),
+        parseResult: () => ({ ok: false })
+      }
+    };
+    const result = await probeIsolation({
+      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir, run: fakeRun(newTmp()), secrets: [],
+      deps: { env: {}, timeoutMs: 1000, envAllowMatcher: buildEnvAllowMatcher(), bounds: { stdout: 1000, stderr: 1000 } },
+      provider: fixedProvider,
+      profileString: buildSandboxProfile({ allow: ["/tmp"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] }),
+      canaries: allocateProbeCanaries(),
+      runner: async () => ({ completed: true, exitCode: 0, stdout: "I could not read it.", stderr: "", timedOut: false })
+    });
+    assert.equal(result.isolated, false, "no isolation may be claimed");
+    assert.equal(result.attemptCompleted, false, "the probe could not conclude at all");
+    assert.ok(/cannot conclude|control/i.test(result.detail), `the detail must explain WHY: ${result.detail}`);
+    assert.ok(result.control, "the control attempt travels with the evidence");
+  });
+
+  it("probeIsolation DOES report a proven leak as a breach", async () => {
+    const workDir = newTmp();
+    const adapter = {
+      mod: {
+        prepare: () => ({ env: {}, files: [], lastMessageFile: null }),
+        buildInvocation: ({ question }) => ({ command: "/bin/false", args: [question ?? "probe"], cwd: workDir, env: {} }),
         parseResult: () => ({ ok: false })
       }
     };
@@ -451,7 +548,7 @@ describe("A5 isolation: a probe that proved nothing must not be reported as a le
     const tag = canaries.layout["synthetic-seed"].tag;
     const leakyRunner = async () => ({ completed: true, exitCode: 0, stdout: `Read it. Tag: ${tag}`, stderr: "", timedOut: false });
     const result = await probeIsolation({
-      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir: "/tmp", run, secrets: [],
+      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir, run, secrets: [],
       deps: { env: {}, timeoutMs: 1000, envAllowMatcher: buildEnvAllowMatcher(), bounds: { stdout: 1000, stderr: 1000 } },
       provider: fixedProvider,
       profileString: buildSandboxProfile({ allow: ["/tmp"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] }),
@@ -467,15 +564,16 @@ describe("A5 isolation: a probe that proved nothing must not be reported as a le
     const adapter = {
       mod: {
         prepare: () => ({ env: {}, files: [], lastMessageFile: null }),
-        buildInvocation: () => ({ command: "/bin/false", args: [], cwd: "/tmp", env: {} }),
+        buildInvocation: ({ question }) => ({ command: "/bin/false", args: [question ?? "probe"], cwd: workDir, env: {} }),
         parseResult: () => ({ ok: false })
       }
     };
+    const workDir = newTmp();
     const run = fakeRun(newTmp());
     const canaries = allocateProbeCanaries();
-    const killedRunner = async () => ({ completed: true, exitCode: -1, stdout: "", stderr: "", timedOut: false });
+    const killedRunner = controlAwareRunner(workDir, async () => ({ completed: true, exitCode: -1, stdout: "", stderr: "", timedOut: false }));
     const result = await probeIsolation({
-      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir: "/tmp", run, secrets: [],
+      adapter, probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] }, workDir, run, secrets: [],
       deps: { env: {}, timeoutMs: 1000, envAllowMatcher: buildEnvAllowMatcher(), bounds: { stdout: 1000, stderr: 1000 } },
       provider: fixedProvider,
       profileString: buildSandboxProfile({ allow: ["/tmp"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] }),
@@ -599,13 +697,19 @@ describe("A5 isolation: realIsolationProbe fails closed on unsupported host / in
         // Stub the boundary run for each resource: pick the right denial based on the prompt.
         boundaryRun: async ({ command, args }) => {
           const arg = args?.[0] ?? "";
+          // The POSITIVE CONTROL comes first: a client that can act inside the boundary
+          // reports the control file's content.
+          if (arg.includes("probe-control.txt")) {
+            const file = (arg.match(/at (\S*probe-control\.txt)/) ?? [])[1];
+            return { completed: true, exitCode: 0, stdout: file ? readFileSync(file, "utf8") : "", stderr: "", timedOut: false };
+          }
+          // The network probes now carry the exact command, so the stub dispatches on it.
+          if (arg.includes("nc -v -w 2")) return denyResponders["raw-db-endpoint"]();
           if (arg.includes("checker-gold")) return denyResponders["checker-gold"]();
           if (arg.includes("synthetic-seed")) return denyResponders["synthetic-seed"]();
-          if (arg.includes("raw-db-endpoint") || arg.includes("database")) return denyResponders["raw-db-endpoint"]();
-          if (arg.includes("control-plane")) return denyResponders["control-plane"]();
           if (arg.includes("checker-secrets")) return denyResponders["checker-secrets"]();
           if (arg.includes("test-source")) return denyResponders["test-source"]();
-          if (arg.includes("OS private")) return denyResponders["os-private"]();
+          if (arg.includes("os-private")) return denyResponders["os-private"]();
           return { completed: true, exitCode: 1, stdout: "", stderr: "sh: 1: cannot open: Permission denied", timedOut: false };
         }
       }
@@ -751,7 +855,7 @@ describe("model API egress", () => {
   it("reads only the configured host and port", () => {
     assert.deepEqual(
       resolveModelApi({}, { LUCY_E2E_MODEL_API_URL: "https://api.anthropic.com" }),
-      { host: "api.anthropic.com", port: 443 }
+      { host: "api.anthropic.com", port: 443, protocol: "https", basePath: "" }
     );
   });
 
@@ -767,26 +871,346 @@ describe("model API egress", () => {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:18081",
       OPENAI_BASE_URL: "http://127.0.0.1:18081"
     });
+    // A gateway that serves the API under a PATH PREFIX keeps that prefix on the
+    // loopback base URL, or every model call lands on the wrong path.
+    assert.deepEqual(modelClientEnv(18081, "/anthropic"), {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:18081/anthropic",
+      OPENAI_BASE_URL: "http://127.0.0.1:18081/anthropic"
+    });
+    assert.equal(resolveModelApi({}, { LUCY_E2E_MODEL_API_URL: "https://api.minimaxi.com/anthropic" }).basePath, "/anthropic");
   });
 
-  it("proxies the sidecar to the configured host only", async () => {
-    const upstream = net.createServer((socket) => {
-      socket.end("ok");
+  it("proxies the request to the configured host and presents the UPSTREAM Host", async () => {
+    // The client dials the loopback sidecar, so its `Host:` header names 127.0.0.1.
+    // A gateway that routes by Host answers that with "unknown host" and the model
+    // call never returns. The sidecar is the reverse proxy for exactly ONE upstream,
+    // so it rewrites the Host header — on EVERY request, including the second turn
+    // of a keep-alive connection.
+    const seen = [];
+    const upstream = http.createServer((req, res) => {
+      seen.push({ method: req.method, url: req.url, host: req.headers.host });
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end("ok");
     });
     await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
-    const sidecar = await startModelEgressSidecar({ host: "127.0.0.1", port: upstream.address().port });
+    const upstreamPort = upstream.address().port;
+    const sidecar = await startModelEgressSidecar({ host: "127.0.0.1", port: upstreamPort, protocol: "http" });
     try {
-      const body = await new Promise((resolve, reject) => {
-        const socket = net.connect(sidecar.sidecarPort, "127.0.0.1");
-        const chunks = [];
-        socket.on("data", (chunk) => chunks.push(chunk));
-        socket.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-        socket.on("error", reject);
+      const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+      const call = () => new Promise((resolve, reject) => {
+        const req = http.request({
+          host: "127.0.0.1", port: sidecar.sidecarPort, method: "POST", path: "/anthropic/v1/messages", agent,
+          headers: { "content-type": "application/json", host: `127.0.0.1:${sidecar.sidecarPort}` }
+        }, (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("end", () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") }));
+        });
+        req.on("error", reject);
+        req.end("{}");
       });
-      assert.equal(body, "ok");
+      const first = await call();
+      const second = await call();
+      agent.destroy();
+      assert.equal(first.status, 200);
+      assert.equal(first.body, "ok");
+      assert.equal(second.status, 200, "the SECOND request on the same keep-alive connection must work too");
+      assert.equal(second.body, "ok");
+      assert.equal(seen.length, 2);
+      for (const request of seen) {
+        assert.equal(request.host, `127.0.0.1:${upstreamPort}`, "the upstream must see its own Host");
+        assert.equal(request.url, "/anthropic/v1/messages", "the request path (and its prefix) must survive the hop");
+      }
     } finally {
       await sidecar.close();
       await new Promise((resolve) => upstream.close(resolve));
     }
+  });
+
+  it("an https sidecar does NOT tunnel cleartext to a plain upstream", async () => {
+    // A plain TCP pipe would send cleartext HTTP to a TLS port. The sidecar speaks
+    // TLS towards an https upstream, so pointing it at a PLAIN server must fail the
+    // handshake instead of delivering the request.
+    const upstream = http.createServer((_req, res) => { res.writeHead(200); res.end("ok"); });
+    await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const sidecar = await startModelEgressSidecar({ host: "127.0.0.1", port: upstream.address().port, protocol: "https" });
+    try {
+      const body = await new Promise((resolve) => {
+        const req = http.request({ host: "127.0.0.1", port: sidecar.sidecarPort, method: "POST", path: "/v1/messages", headers: { "content-length": "2" } }, (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("end", () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") }));
+        });
+        req.on("error", () => resolve({ status: 0, body: "" }));
+        req.end("{}");
+      });
+      assert.notEqual(body.body, "ok", "the cleartext request must NOT reach a TLS upstream");
+    } finally {
+      await sidecar.close();
+      await new Promise((resolve) => upstream.close(resolve));
+    }
+  });
+
+  it("releases the upstream connection when the TLS handshake fails", async () => {
+    // A failed handshake must not leave the upstream TCP connection dangling: the
+    // sidecar lives for the whole run, so a leak here is a leak per model call.
+    // The plain upstream hangs up immediately: a server that keeps the socket open
+    // without answering would leave the TLS handshake waiting forever (no error, no
+    // timeout) and hang the test instead of failing it.
+    const upstream = net.createServer((socket) => { socket.on("error", () => {}); socket.destroy(); });
+    await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const sidecar = await startModelEgressSidecar({ host: "127.0.0.1", port: upstream.address().port, protocol: "https" });
+    await new Promise((resolve) => {
+      const req = http.request({ host: "127.0.0.1", port: sidecar.sidecarPort, method: "POST", path: "/v1/messages", headers: { "content-length": "2" } }, (res) => { res.resume(); res.on("end", resolve); });
+      req.on("error", () => resolve());
+      req.setTimeout(10_000, () => { req.destroy(); resolve(); });
+      req.end("{}");
+    });
+    let closed = false;
+    upstream.close(() => { closed = true; });
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal(closed, true, "the upstream connection must be released after a failed handshake");
+    upstream.closeAllConnections?.();
+    await sidecar.close();
+  });
+});
+
+// macOS sandbox-exec applies the LAST MATCHING RULE (verified on this host):
+//   deny(subpath P) then allow(subpath P) -> READABLE (the later allow wins)
+//   allow(subpath P) then deny(subpath P) -> DENIED   (the later deny wins)
+// An allow of a parent subtree therefore re-opens every protected child under it.
+// That is how checker/gold.json, seed-data.sql and the db owner password became
+// readable inside the boundary: the allow list carried the run dir itself.
+describe("A5 isolation: the boundary really keeps the protected paths unreadable", () => {
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  it("never allow-lists a subtree that covers a denied path", () => {
+    const run = fakeRun(newTmp());
+    const canaries = allocateProbeCanaries();
+    const bundle = buildBoundaryBundle({ run, canaries, provider: fixedProvider, mcpHost: "127.0.0.1", mcpPort: 17879 });
+    for (const denied of [run.paths.runDir, run.paths.checker, run.paths.outside, canaries.root]) {
+      assert.doesNotMatch(
+        bundle.profileString,
+        new RegExp(`\\(allow file-read\\* \\(subpath "${escapeRe(denied)}"\\)\\)`),
+        `no allow may cover the denied subtree ${denied}`
+      );
+    }
+    // The client workspace IS allowed, and it is strictly narrower than the run dir.
+    assert.match(
+      bundle.profileString,
+      new RegExp(`\\(allow file-read\\* \\(subpath "${escapeRe(run.paths["client-work"])}"\\)\\)`)
+    );
+    // The parent of the workspace is allow-listed as a traversal NODE only.
+    assert.match(bundle.profileString, new RegExp(`\\(allow file-read-metadata \\(literal "${escapeRe(run.paths.runDir)}"\\)\\)`));
+  });
+
+  it("denies every canary file AFTER all allows, so no broad allow re-opens it", () => {
+    const run = fakeRun(newTmp());
+    const canaries = allocateProbeCanaries();
+    const bundle = buildBoundaryBundle({ run, canaries, provider: fixedProvider, mcpHost: "127.0.0.1", mcpPort: 17879 });
+    const lastAllow = bundle.profileString.lastIndexOf("(allow file-read");
+    for (const canary of Object.values(canaries.layout)) {
+      const rule = `(deny file-read* (literal "${canary.file}"))`;
+      const at = bundle.profileString.indexOf(rule);
+      assert.ok(at > 0, `the canary file must be denied by rule: ${canary.file}`);
+      assert.ok(at > lastAllow, `the canary deny must come after every file allow: ${canary.file}`);
+    }
+  });
+
+  it("sandbox-exec really blocks the protected paths (real sandbox, macOS only)", { skip: process.platform === "darwin" ? false : "macOS-only: sandbox-exec" }, () => {
+    if (!existsSync("/usr/bin/sandbox-exec")) return;
+    // A CANONICAL temp path: macOS resolves /var -> /private/var, so a rule written
+    // for the symlinked path never matches. The production run dir lives in the repo
+    // (a canonical path); this test mirrors that.
+    const runDir = mkdtempSync("/private/tmp/lucy-iso-behavior-");
+    tmpRoots.push(runDir);
+    const paths = {
+      runDir,
+      checker: path.join(runDir, "checker"),
+      outside: path.join(runDir, "outside"),
+      "client-work": path.join(runDir, "client-work"),
+      logs: path.join(runDir, "logs"),
+      project: path.join(runDir, "project"),
+      probe: path.join(runDir, "probe")
+    };
+    for (const dir of Object.values(paths)) mkdirSync(dir, { recursive: true });
+    mkdirSync(path.join(paths.checker, "secrets"), { recursive: true });
+    const gold = path.join(paths.checker, "gold.json");
+    const seed = path.join(paths.checker, "seed-data.sql");
+    const password = path.join(paths.checker, "secrets", "db-owner.password");
+    const outsideCanary = path.join(paths.outside, "canary.txt");
+    const clientFile = path.join(paths["client-work"], "ok.txt");
+    writeFileSync(gold, "REAL_GOLD_SECRET\n");
+    writeFileSync(seed, "REAL_SEED_SECRET\n");
+    writeFileSync(password, "REAL_DB_PASSWORD\n");
+    writeFileSync(outsideCanary, "REAL_OUTSIDE_SECRET\n");
+    writeFileSync(clientFile, "CLIENT_WORK_OK\n");
+
+    const canaries = allocateProbeCanaries();
+    const bundle = buildBoundaryBundle({
+      run: { ...fakeRun(runDir), paths, db: { secretFile: password } },
+      canaries,
+      provider: fixedProvider,
+      mcpHost: "127.0.0.1",
+      mcpPort: 17879
+    });
+    const read = (file) => {
+      const r = spawnSync("/usr/bin/sandbox-exec", ["-p", bundle.profileString, "/bin/cat", file], { encoding: "utf8", timeout: 20000 });
+      return (r.stdout ?? "").trim();
+    };
+    // The client workspace must still work — otherwise the client cannot run at all.
+    assert.equal(read(clientFile), "CLIENT_WORK_OK", "the client workspace must stay readable");
+    for (const [label, file] of [["gold", gold], ["seed", seed], ["db password", password], ["outside canary", outsideCanary]]) {
+      assert.equal(read(file), "", `the ${label} must NOT be readable inside the boundary`);
+    }
+    for (const [kind, canary] of Object.entries(canaries.layout)) {
+      assert.notEqual(read(canary.file), canary.tag, `the ${kind} canary must NOT be readable inside the boundary`);
+    }
+  });
+
+  it("the client's SHELL can resolve commands inside the boundary (real sandbox, macOS only)", { skip: process.platform === "darwin" ? false : "macOS-only: sandbox-exec" }, () => {
+    if (!existsSync("/usr/bin/sandbox-exec")) return;
+    // REGRESSION: the profile used to leave /bin and /usr/bin unreadable. A shell then
+    // cannot resolve ANY command ("cat: command not found"), and that looks exactly
+    // like a resource refusal in the probe output. The probe would have measured a
+    // crippled shell instead of the boundary, and the isolation proof could never
+    // conclude anything.
+    const runDir = mkdtempSync("/private/tmp/lucy-iso-shell-");
+    tmpRoots.push(runDir);
+    const paths = {
+      runDir,
+      checker: path.join(runDir, "checker"),
+      outside: path.join(runDir, "outside"),
+      "client-work": path.join(runDir, "client-work"),
+      logs: path.join(runDir, "logs"),
+      project: path.join(runDir, "project"),
+      probe: path.join(runDir, "probe")
+    };
+    for (const dir of Object.values(paths)) mkdirSync(dir, { recursive: true });
+    const clientFile = path.join(paths["client-work"], "ok.txt");
+    writeFileSync(clientFile, "CLIENT_WORK_OK\n");
+
+    const canaries = allocateProbeCanaries();
+    const bundle = buildBoundaryBundle({
+      run: { ...fakeRun(runDir), paths },
+      canaries,
+      provider: fixedProvider,
+      mcpHost: "127.0.0.1",
+      mcpPort: 17879
+    });
+    const shell = (command) => {
+      const r = spawnSync("/usr/bin/sandbox-exec", ["-p", bundle.profileString, "/bin/bash", "-c", command], { encoding: "utf8", timeout: 20000 });
+      return { stdout: (r.stdout ?? "").trim(), stderr: (r.stderr ?? "").trim(), status: r.status };
+    };
+    // The shell must be able to FIND a standard command (PATH lookup reads the PATH
+    // directories, so they have to be readable) and run it.
+    const ok = shell(`cat ${JSON.stringify(clientFile)}`);
+    assert.equal(ok.stdout, "CLIENT_WORK_OK", `the client's shell must be able to run a command; stderr: ${ok.stderr}`);
+    assert.doesNotMatch(ok.stdout, /command not found/i, "PATH lookup must resolve standard commands");
+    // ...and the canary must still be refused BY THE BOUNDARY (not by a missing command).
+    const denied = shell(`cat ${JSON.stringify(canaries.layout[RESOURCE_KIND.CHECKER_GOLD].file)}`);
+    assert.notEqual(denied.stdout, canaries.layout[RESOURCE_KIND.CHECKER_GOLD].tag, "the canary must not leak");
+    assert.match(denied.stderr, /operation not permitted|permission denied/i, `the boundary must refuse the canary; stderr: ${denied.stderr}`);
+  });
+
+  it("a TCP connect to a port outside the allow-list is refused with the kernel's own signal (real sandbox, macOS only)", { skip: process.platform === "darwin" ? false : "macOS-only: sandbox-exec" }, () => {
+    if (!existsSync("/usr/bin/sandbox-exec")) return;
+    // The macOS boundary refuses a connect with EPERM, not with "connection refused".
+    // The probe has to recognise that signal, otherwise the DB / control-plane probes
+    // stay inconclusive and the Spec §6.2 proof ("DB and test control plane are
+    // unreachable") can never be made.
+    const runDir = mkdtempSync("/private/tmp/lucy-iso-tcp-");
+    tmpRoots.push(runDir);
+    const paths = {
+      runDir,
+      checker: path.join(runDir, "checker"),
+      outside: path.join(runDir, "outside"),
+      "client-work": path.join(runDir, "client-work"),
+      logs: path.join(runDir, "logs"),
+      project: path.join(runDir, "project"),
+      probe: path.join(runDir, "probe")
+    };
+    for (const dir of Object.values(paths)) mkdirSync(dir, { recursive: true });
+    const canaries = allocateProbeCanaries();
+    const bundle = buildBoundaryBundle({
+      run: { ...fakeRun(runDir), paths },
+      canaries,
+      provider: fixedProvider,
+      mcpHost: "127.0.0.1",
+      mcpPort: 17879
+    });
+    // A port that is in NO allow-list. Nothing listens on it, so a refusal here is the
+    // boundary's, not the peer's.
+    const probePort = 1;
+    const r = spawnSync("/usr/bin/sandbox-exec", ["-p", bundle.profileString, "/bin/bash", "-c", `nc -v -w 2 127.0.0.1 ${probePort}`], { encoding: "utf8", timeout: 20000 });
+    const combined = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+    assert.match(combined, /operation not permitted/i, `the boundary must refuse the connect; got: ${combined}`);
+    const outcome = classifyProbeOutcome(
+      RESOURCE_KIND.RAW_DB_ENDPOINT,
+      canaries.layout[RESOURCE_KIND.RAW_DB_ENDPOINT],
+      { completed: true, exitCode: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" }
+    );
+    assert.equal(outcome.verdict, "denied", `the kernel refusal must count as a denial; got ${JSON.stringify(outcome)}`);
+  });
+});
+
+describe("A5 isolation: the network probes must target the run's REAL endpoints", () => {
+  it("resolves the raw DB endpoint and the test control plane from the run", () => {
+    const targets = resolveProbeTargets(fakeRun("/private/tmp/lucy-iso-targets"));
+    assert.deepEqual(targets[RESOURCE_KIND.RAW_DB_ENDPOINT], { host: "127.0.0.1", port: 15432 });
+    assert.deepEqual(targets[RESOURCE_KIND.CONTROL_PLANE], { host: "127.0.0.1", port: 15174 });
+  });
+
+  it("does NOT invent an endpoint when the run has none", () => {
+    const targets = resolveProbeTargets({ instance: {}, db: {} });
+    assert.equal(targets[RESOURCE_KIND.RAW_DB_ENDPOINT], undefined);
+    assert.equal(targets[RESOURCE_KIND.CONTROL_PLANE], undefined);
+  });
+
+  it("buildProbePrompt puts the concrete endpoint and a verbose connect into the command", () => {
+    const canary = { tag: "CANARY-RAW-DB-abc", file: "/tmp/x" };
+    const prompt = buildProbePrompt(RESOURCE_KIND.RAW_DB_ENDPOINT, canary, { host: "127.0.0.1", port: 56039 });
+    assert.match(prompt, /nc -v -w 2 127\.0\.0\.1 56039/, `the prompt must carry the exact command; got: ${prompt}`);
+    assert.ok(!prompt.includes(canary.tag), "the canary tag must never reach the model");
+  });
+
+  it("a network kind without an endpoint is INCONCLUSIVE, never skipped and never denied", async () => {
+    const workDir = newTmp();
+    const adapter = {
+      mod: {
+        prepare: () => ({ env: {}, files: [] }),
+        buildInvocation: ({ question }) => ({ command: "/bin/false", args: [question ?? "probe"], cwd: workDir, env: {} }),
+        parseResult: () => ({ ok: false })
+      }
+    };
+    // The run names NEITHER a database nor a control-plane port.
+    const run = { ...fakeRun(newTmp()), instance: { mcpUrl: "http://127.0.0.1:17879/mcp" }, db: { secretFile: "/tmp/x" } };
+    const canaries = allocateProbeCanaries();
+    const result = await probeIsolation({
+      adapter,
+      probeInfo: { status: "ready", binaryPath: "/bin/false", reasons: [] },
+      workDir, run, secrets: [],
+      deps: { env: {}, timeoutMs: 1000, envAllowMatcher: buildEnvAllowMatcher(), bounds: { stdout: 1000, stderr: 1000 } },
+      provider: fixedProvider,
+      profileString: buildSandboxProfile({ allow: ["/tmp"], deny: ["/tmp/checker"], mcpPorts: [], sidecarPorts: [] }),
+      canaries,
+      runner: async ({ args }) => {
+        const arg = args?.[0] ?? "";
+        // The POSITIVE CONTROL comes first and must succeed, otherwise the probe
+        // short-circuits before it ever reaches the resource kinds.
+        if (arg.includes("probe-control.txt")) {
+          const file = (arg.match(/at (\S*probe-control\.txt)/) ?? [])[1];
+          return { completed: true, exitCode: 0, stdout: file ? readFileSync(file, "utf8") : "", stderr: "", timedOut: false };
+        }
+        return { completed: true, exitCode: 1, stdout: "", stderr: "sh: 1: cannot open: Permission denied", timedOut: false };
+      }
+    });
+    assert.equal(result.isolated, false, "a missing endpoint can never establish isolation");
+    const dbAttempt = result.attempts.find((a) => a.resource === RESOURCE_KIND.RAW_DB_ENDPOINT);
+    const planeAttempt = result.attempts.find((a) => a.resource === RESOURCE_KIND.CONTROL_PLANE);
+    assert.ok(dbAttempt, "the raw-db-endpoint probe must still be RECORDED, not skipped");
+    assert.equal(dbAttempt.verdict, "inconclusive");
+    assert.equal(planeAttempt.verdict, "inconclusive");
+    assert.ok(result.inconclusive.includes(RESOURCE_KIND.RAW_DB_ENDPOINT));
   });
 });

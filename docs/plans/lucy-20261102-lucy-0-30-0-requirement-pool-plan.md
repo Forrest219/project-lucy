@@ -3,13 +3,13 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 候选需求池。**不是**功能 Spec，**不授权**实现 |
-| 版本 / 日期 | v0.3 / 2026-11-03 |
-| 状态 | **候选需求池（2026-11-03）**。REQ-030-001–011 均为 Deferred，不进入 `0.25.0`。本条不表示任何功能已获授权实现，也不表示可上线 |
+| 版本 / 日期 | v0.6 / 2026-11-05 |
+| 状态 | **候选需求池（2026-11-05）**。REQ-030-001–017 登记在池；除已注明拉出收口者外均为 Deferred，不进入 `0.25.0`。本条不表示任何功能已获授权实现，也不表示可上线 |
 | 授权边界 | **只登记、不实现**。条目进入实施前须：需求澄清 → 独立 Spec → Plan → 开发授权；本池自身不构成其中任一步 |
 | 验收 | 本池自身的验收＝条目结构完整（ID／标题／来源／优先级／状态齐备）＋ 来源可追。**不构成任何功能验收** |
 | 目标版本 | 候选产品线 **`0.30.0`**（尚未开线；当前产品线仍是 `0.25.0`） |
 | 维护规则 | 只追加条目；开工前须另立 Spec／Plan 并获授权。不得把本文件当作本版（`0.25.0`）实施依据 |
-| 变更 | v0.3（2026-11-03）：按 [D 剥离记录](../reviews/2026-11-03-product-close-peel-d.md) 追加 REQ-030-008–011。v0.2：按 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md) 追加 REQ-030-002–007 |
+| 变更 | v0.6（2026-11-05）：复核实跑归因——REQ-030-013 五合一拆分为编译门禁单条（BY-19），新增 REQ-030-016（各面拒绝码统一）/017（explain E5 形状）；BY-05 改判口径争议（Spec 99 §6 strip-then-inject 合规、harness 更严）移出池归 debug，确认收紧后再入池。v0.5（2026-11-05）：按 row-policy 强度 B 实跑归因（`inbox/row-policy-b-run-notes.md`）追加 REQ-030-013–015，只登记缺陷/能力缺口，不授权实现。v0.4（2026-11-05）：追加 REQ-030-012（语义层宽表字段暴露裁剪；澄清结论已写入条目，仍不授权实现）。v0.3（2026-11-03）：按 [D 剥离记录](../reviews/2026-11-03-product-close-peel-d.md) 追加 REQ-030-008–011。v0.2：按 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md) 追加 REQ-030-002–007 |
 
 ## 目标
 
@@ -29,7 +29,7 @@
 |---|---|---|---|---|
 | REQ-030-001 | 发布工作台：分文件勾选发布 | 2026-11-02 `/publish/workbench` UAT 反馈 | 待定 | Deferred — 不进 `0.25.0` |
 | REQ-030-002 | 帮助中心体验（L25-12） | Spec `lucy-20261031-help-center-experience` | 待定 | Deferred — 不进 `0.25.0` |
-| REQ-030-003 | 访问关系图与访问日志口径对齐 | Spec `lucy-20261102-access-map-audit-echo` | 待定 | Deferred — 不进 `0.25.0` |
+| REQ-030-003 | 访问关系图与访问日志口径对齐 | Spec `lucy-20261102-access-map-audit-echo` | 待定 | **已拉出；功能合同已收口（2026-11-04）**。S1–S3 已落地；SC-14 逐边在出口；SC-12 页序子句已拆出。本条收口不表示可上线。不进 `0.25.0` |
 | REQ-030-004 | 运维控制面 W-B（语义发布） | L25-16 W-B；Spec `lucy-20261028-v0p25-lucy-ops-control-plane` | 待定 | Deferred — 不进 `0.25.0` |
 | REQ-030-005 | 客户升级 E2E 自动化（L25-07） | Spec `lucy-20261025-v0p25-upgrade-e2e-automation` | 待定 | Deferred — 发布取证；不进 `0.25.0` 产品分母 |
 | REQ-030-006 | 升级候选验证环境（L25-13） | Spec `lucy-20261025-v0p25-upgrade-candidate-verification` | 待定 | Deferred — 发布取证；不进 `0.25.0` 产品分母 |
@@ -38,6 +38,12 @@
 | REQ-030-009 | OIDC 功能合同验收（L25-06） | Spec `lucy-20261025-v0p25-oidc-single-sign-on` OIDC-01–21／26 | 待定 | Deferred — 已实施；验收不进 `0.25.0` 产品分母 |
 | REQ-030-010 | 语义整批恢复 SRR 验收（L25-15） | Spec `lucy-20261027-v0p25-semantic-release-restore` SRR | 待定 | Deferred — 代码已落；验收不进 `0.25.0` 产品分母 |
 | REQ-030-011 | 运维控制面 W-A VOPS 验收 | L25-16 W-A；VOPS（除已拆出） | 待定 | Deferred — 已授权实现；验收不进 `0.25.0` 产品分母 |
+| REQ-030-012 | 语义层宽表字段暴露裁剪 | 2026-11-05 产品澄清（对话登记） | 待定 | Deferred — 不进 `0.25.0`；未开 Spec |
+| REQ-030-013 | 行权限行策略编译门禁（度量/派生列作谓词字段零上游执行） | 2026-11-05 row-policy 强度 B 实跑（BY-19） | 高 | Deferred — debug 实锤 fail-open；未开 Spec |
+| REQ-030-016 | 行权限各面拒绝码统一（row_policy_requires_wrapped_tool） | 2026-11-05 row-policy 强度 B 实跑（BY-06/17） | 待定 | Deferred — 单元期望与实跑不一致；未开 Spec |
+| REQ-030-017 | lucy_explain_query 诊断形状补全（E5 summary） | 2026-11-05 row-policy 强度 B 实跑（BY-18） | 低 | Deferred — 未开 Spec |
+| REQ-030-014 | 行权限模板展开保留 templateRefs | 2026-11-05 row-policy 强度 B 实跑（ROW25-V01/V03、RTP25-02） | 待定 | Deferred — 归口行权限视图 Spec SC-10 功能闭口；未开 Spec |
+| REQ-030-015 | 语义层孤儿路径治理（lucy-ops 反查孤儿） | 2026-11-05 row-policy 强度 B 实跑（RTV25-06） | 待定 | Deferred — 未开 Spec |
 
 ---
 
@@ -133,16 +139,16 @@ L25-12 帮助中心 Spec／Plan 已落盘为 v0.1-draft；2026-11-02 起本版�
 
 ### 背景
 
-Spec／Plan v0.3 可定稿（Codex 两轮）；定稿不表示开发已授权。2026-11-03 明确本版不开发，迁入池。
+Spec／Plan v0.3 可定稿（Codex 两轮）。2026-11-03 曾迁入池；**2026-11-04 用户批准拉出实施**（Plan 升 v0.4）；同日 **S1–S3 实施完成**，出口修订把 SC-12 页序子句拆出、SC-14 逐边留在出口，并批准 **功能合同已收口（2026-11-04）**。本条收口不表示可上线。实施笔记：`docs/reviews/2026-11-04-access-map-audit-echo-implementation-notes.md`。
 
 ### 期望方向
 
-访问关系图工具条与访问日志共用问询种类／访问等级；关联口径降为弱入口。细节以既有 Spec 为准。
+访问关系图工具条与访问日志共用问询种类／访问等级；关联口径降为弱入口；投影集合 E 可打假。细节以既有 Spec 为准。
 
 ### 关联
 
 - Spec：`docs/specs/lucy-20261102-access-map-audit-echo-spec.md`
-- Plan：`docs/plans/lucy-20261102-access-map-audit-echo-plan.md`
+- Plan：`docs/plans/lucy-20261102-access-map-audit-echo-plan.md`（v0.4）
 
 ---
 
@@ -247,3 +253,139 @@ W-A 已授权实现；W-B 已是 REQ-030-004。VOPS-27／30 已拆出；其余 V
 ### 关联
 
 - Spec：`docs/specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md`
+
+---
+
+## REQ-030-012：语义层宽表字段暴露裁剪
+
+### 背景
+
+宽表接入语义层后，Agent 经 Catalog / 读源 / 查数看到全量物理列，上下文噪音大、易误用字段。现行合同要求 standalone source 含全部物理列；ACL 仅为表级 + Row Policy；列级权限与脱敏不在现行承诺。合规侧「库内不可见」仍靠 VIEW / 拆表兜底，不是产品化「勾选删列」。
+
+2026-11-05 产品澄清：要的是 **Source 级业务暴露裁剪**（全实例同一套采用集），不是列级 ACL；倾向 **Lucy 门面闸**（库存与暴露分离，不改 KTX 全物理列合同、不手删 Manifest 列）。
+
+### 期望方向（池内草案；澄清已写，设计未冻结，不授权实现）
+
+- **库存 ≠ 暴露**：Manifest / 扫描保留全量物理库存；另维护本 Source 的暴露集供 Agent 数据面使用。
+- **运行时（A1）**：未暴露列在 `lucy_catalog` / `lucy_read_source`（及等价发现面）不可见；`lucy_query`（及等价查数）点名未暴露列 → 拒绝（fail-closed）。闸落在 Lucy MCP Proxy 等 Agent 入口，避免半通。
+- **发布（B1）**：grain / measure / segment / join / 派生列仍引用未暴露列 → 发布/生效硬失败并指出引用方。
+- **新列（C2）**：扫描到的新物理列默认自动进入暴露集；裁剪靠事后在工作台收敛。
+- **操作面（D1）**：表语义工作台字段列表维护暴露/取消暴露；变更进待发布；工作台仍能看到「已取消暴露」库存以便恢复。
+- **推荐实现方向**：Lucy 门面闸（路线 1）。存量无显式配置的 Source 等价「全库存暴露」。
+
+### 非目标（本条目当前）
+
+- 列级 ACL / 脱敏 / 按 Role 异列。
+- 替代合规用 VIEW；不改库表结构。
+- 从 Manifest 物理删除列，或改写 KTX「全物理列」合同作为主路径。
+- 本版（`0.25.0`）不优化、不开 Spec、不改代码。
+
+### 已知硬约束（开 Spec 前必须再核）
+
+1. 暴露集须版本化并随发布进入运行内容根；不得只活在浏览器本地状态。
+2. A1 必须覆盖所有 Agent 查数/发现入口，禁止 Catalog 已裁、Query 仍通的半通形状。
+3. 与现行 semantic-author / 上传 / `sl read` 全物理列叙事的文档与门禁对齐方式（库存保留、暴露另册）。
+4. 文案与交付口径必须写清：业务暴露裁剪 ≠ 列级安全。
+
+### 关联
+
+- 澄清来源：2026-11-05 产品对话（路线 1 已认可；本池只登记）
+- 相关既有边界：`docs/governance/vision.md`（不做列级脱敏）；`docs/access-control/*`（VIEW-as-pseudo-table 兜底）；表语义工作台既有 Spec（`webui/docs/48` 等）；MCP Proxy Catalog/Query 面（`webui/docs/07-mcp-auth-proxy-spec.md`）
+- 开线前须另立独立 Spec／Plan；本条目不构成其中任一步
+
+
+---
+
+## REQ-030-013：行权限行策略编译门禁（度量/派生列作谓词字段）
+
+### 背景
+
+2026-11-05 row-policy 强度 B 两阶段实跑（`inbox/e2e/final-rds-20261105`，证据
+`evidence/phase-on/security.json` 的 SEC-11-BY19）实锤：行策略谓词引用语义度量名
+（`total_sales` 作谓词字段，语义编译失败类输入）时，门禁未在编译期拦截，实测上游
+执行 1 次。合同口径：编译期拒绝且零上游执行（fail-closed）。
+
+### 期望方向（池内草案；不授权实现）
+
+- 行策略编译校验覆盖「度量/派生列作谓词字段」类输入，拒绝发生在任何上游执行之前。
+- 拒绝原因码进入行策略专属命名空间，与 REQ-030-016（各面拒绝码统一）一并设计。
+
+### 非目标（本条目当前）
+
+- 不改冻结 catalog 合同字面量；不动 `--pack row-policy` 的只读边界。
+- 不涵盖 forged forced 处理口径（BY-05 归 debug，见收工笔记）；本版（`0.25.0`）不修复。
+
+---
+
+## REQ-030-016：行权限各面拒绝码统一
+
+### 背景
+
+同一实跑 BY-06／BY-17：entity_details／sl_validate／lucy_freshness 在 scoped source
+上的拒绝码实测为 `tool_forbidden`，而浏览器面同场景（ROW25-V17 通过）与单元期望
+（row-policy-ac-p1.test.ts「BY-06/07/17」用例）均为 `row_policy_requires_wrapped_tool`。
+同一拒绝语义在不同执行面使用不同 reason code，排障与合同断言都会分叉。
+
+### 期望方向（池内草案；不授权实现）
+
+- 同一拒绝语义在各 MCP 工具面与浏览器面使用同一 reason code 命名空间。
+- 以单元合同测试固化各面一致；实跑 BY-06/17 作为验收。
+
+### 非目标（本条目当前）
+
+- 不改变拒绝本身的行为（拒绝已发生，只是码不一致）。
+- 本版（`0.25.0`）不修复；修复须另立 Spec／Plan 并获授权。
+
+---
+
+## REQ-030-017：lucy_explain_query 诊断形状补全（E5 summary）
+
+### 背景
+
+同一实跑 BY-18：`lucy_explain_query` 的 forced 谓词本地诊断 E1..E4 可用，但 E5
+summary=undefined，响应 envelope 不被实跑识别。诊断形状合同不完整。
+
+### 期望方向（池内草案；不授权实现）
+
+- 补齐 E5 summary 字段并固化形状合同测试；诊断保持本地-only、零上游转发。
+
+### 非目标（本条目当前）
+
+- 不改变 explain 的本地诊断定位；不新增数据返回路径。
+- 本版（`0.25.0`）不修复；未开 Spec。
+
+---
+
+## REQ-030-014：行权限模板展开保留 templateRefs
+
+### 背景
+
+同一实跑浏览器腿维度证据（phase-on v025 条目 `executorResults.B.assertions`）：ROW25-V01／ROW25-V03 与 RTP25-02 的 `allow_control` 断言记录 `refs=[]`——模板展开后 templateRefs 丢失，「最终约束引用了哪个模板」不可追溯。row-policy 实施计划风险表已预告此项属产品缺陷，归**行权限视图 Spec SC-10** 功能闭口。
+
+### 期望方向（池内草案；不授权实现）
+
+- 模板展开为 scoped 条件时保留 templateRefs（模板 id／版本）于预览与运行时证据。
+- 视图反查与 digest 比对继续以展开后条件为准，templateRefs 不改变判定语义。
+
+### 非目标（本条目当前）
+
+- 不改变 digest／policyVersion 计算口径。
+- 本版（`0.25.0`）不修复；归口功能闭口走其既有授权路径。
+
+---
+
+## REQ-030-015：语义层孤儿路径治理（lucy-ops 反查孤儿）
+
+### 背景
+
+同一实跑 RTV25-06（反查与关系图同快照）维度证据：按表反查出现孤儿路径一批，均指向 `lucy-ops::main::ops_*`（`ops_access_paths`／`ops_agent_activity`／`ops_agents`／`ops_call_tables`／`ops_calls`／`ops_edge_signals` 等）。关系图计数与反查路径数因此不一致。性质为语义层/视图数据完整性问题，非用例问题。
+
+### 期望方向（池内草案；不授权实现）
+
+- 清点 `lucy-ops` 语义层孤儿路径来源（残留引用／已删对象／命名漂移三选一归因）。
+- 反查与关系图读取同一份快照口径；孤儿不再计入路径数或在两处一致呈现。
+
+### 非目标（本条目当前）
+
+- 不在本条重建语义层对象；不改 RTV25 合同口径。
+- 本版（`0.25.0`）不修复；未开 Spec。

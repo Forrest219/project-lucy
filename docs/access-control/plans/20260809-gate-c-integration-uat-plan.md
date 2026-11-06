@@ -1,7 +1,5 @@
 # Gate C Docker Integration UAT Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** 在 Docker/本地集成环境中启动 Lucy WebUI + MCP Proxy + DataPlane，完成 AC-P0 Gate C 的真实环境 UAT 与 Runbook 演练留证。
 
 **Architecture:** 以 `deploy/compose/docker-compose.demo.yml` 的持久化 demo 环境作为集成底座，先跑现有 P0 demo smoke 证明 WebUI/KTX/MCP 基线可用，再注入 AC-P0 专用 Role/Agent/Token fixture。数据面通过 MCP JSON-RPC 真实调用，控制面通过 Admin UI/API 真实保存，降级恢复通过实际改坏/回滚 `access.yaml` 验证。

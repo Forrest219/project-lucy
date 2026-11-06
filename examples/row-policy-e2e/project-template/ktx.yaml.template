@@ -1,0 +1,33 @@
+# Template: rendered into <runDir>/project/ktx.yaml by scripts/e2e/prepare-environment.mjs.
+# Single MySQL connection (mysql-aliyun). No second connectionId.
+# Host / reader / password file are injected per run; no real password is stored here.
+connections:
+  mysql-aliyun:
+    driver: mysql
+    host: "{{DB_HOST}}"
+    port: {{DB_PORT}}
+    database: dataforai
+    username: "{{DB_READER_ROLE}}"
+    password: file:{{DB_PASSWORD_FILE}}
+    schemas: [dataforai]
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+      - dataforai.superstore_people
+storage:
+  state: sqlite
+  search: sqlite-fts5
+  git:
+    author: ktx <ktx@example.invalid>
+llm:
+  provider:
+    backend: claude-code
+  models:
+    default: sonnet
+    triage: haiku
+    candidateExtraction: sonnet
+    curator: sonnet
+    reconcile: sonnet
+    repair: sonnet
+setup:
+  database_connection_ids: [mysql-aliyun]

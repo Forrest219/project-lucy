@@ -1,7 +1,5 @@
 # 行权限视图表清单列密度 Implementation Plan
 
-> **For agentic workers:** REQUIRED-SUB-SKILL: Use superpowers:subagent-driven-development or executing-plans to implement task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 | 元数据 | 内容 |
 |---|---|
 | 文档版本 / 日期 | **v0.1** / 2026-11-02 |

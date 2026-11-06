@@ -15,7 +15,7 @@
 | 用户批准 | 已同意原优化方案及生成本工单；范围内按本单执行，无需重复确认常规实现步骤 |
 | 输出 | 代码与测试 + `webui/docs/plans/wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md` |
 
-用户指定 Cursor，本单直接交给 Cursor 执行，不依赖 Claude/superpowers 的未安装技能，不要求另开 agent 或双核流水线。适用仓库治理优先于通用计划模板。
+用户指定 Cursor，本单直接交给 Cursor 执行，不要求另开 agent 或双核流水线。适用仓库治理优先于通用计划模板。
 
 v1.2：在最新lucy-v2.0基线上重新核对，并保留v1.1的修正：补实际写回/回滚入口、写屏障与响应epoch、enabled_tables上下文、runtime隔离、缓存重置IPC、baseline就绪谓词、逐情景30样本；按照本单顺序可直接执行。
 

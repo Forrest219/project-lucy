@@ -91,15 +91,16 @@ describe("Audit", () => {
     expect(await screen.findByText("tool_denied")).toBeInTheDocument();
     await waitFor(() => expect(String(fetchMock.mock.calls.find((call) => String(call[0]).startsWith("/api/admin/audit?"))?.[0] ?? "")).toContain("includeProtocol=false"));
 
-    expect(screen.getByRole("columnheader", { name: "访问上下文" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "动作" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "意图" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "访问上下文" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "生成 SQL" })).not.toBeInTheDocument();
+
+    // Spec lucy-20261104：Agent / 访问上下文在展开区；点行展开后取证。
+    fireEvent.click(await screen.findByText("tool_denied"));
+    expect(await screen.findByTestId("audit-detail-panels-1")).toBeInTheDocument();
     expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("203.0.113.10");
     expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("Hermes/1.2.3 (test-agent)");
-
-    // 20261019 §5：Agent 列现在并列展示「凭证主体」，同一行会出现两个
-    // "zhangsan"（Agent 主体 + 凭证主体），因此按单元格 testid 定位，
-    // 不用裸文本匹配。
-    fireEvent.click(await screen.findByTestId("audit-call-agent-1"));
-    expect(await screen.findByTestId("audit-detail-panels-1")).toBeInTheDocument();
     expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("调用方");
     expect(screen.getByTestId("audit-detail-decision-1")).toHaveTextContent("裁决与权限");
     expect(screen.getByTestId("audit-detail-request-1")).toHaveTextContent("请求与结果");
@@ -182,8 +183,9 @@ describe("Audit", () => {
       expect(call).toBeTruthy();
       expect(call).toContain("includeProtocol=true");
     });
+    fireEvent.click(await screen.findByText("tools/list"));
     expect(await screen.findByTestId("audit-call-source-playground-9")).toHaveTextContent("受控试调");
-    expect(screen.getByRole("columnheader", { name: "调用来源" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "调用来源" })).not.toBeInTheDocument();
   });
 
   it("keeps an exact Token filter visible and applies it to calls and exports", async () => {
@@ -357,5 +359,65 @@ describe("Audit", () => {
     expect(within(source).getByRole("option", { name: "用户原始问询" })).toBeInTheDocument();
     expect(within(source).getByRole("option", { name: "系统推断问询" })).toBeInTheDocument();
     expect(screen.getByTestId("audit-advanced-filters")).not.toContainElement(kindSelect);
+  });
+
+  it("SC-29 — 深链 view=calls 解析后列表请求带上 inquiryKind／accessGrade／user", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/admin/agents")) {
+        return new Response(JSON.stringify({ ok: true, data: { agents: [] } }));
+      }
+      if (url.startsWith("/api/admin/audit?")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              total: 0,
+              entries: [],
+              summary: {
+                businessCalls: 0,
+                protocolCalls: 0,
+                deniedCalls: 0,
+                dataBearingCalls: 0
+              }
+            }
+          })
+        );
+      }
+      if (url.includes("/api/admin/audit/turns")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              total: 0,
+              entries: [],
+              summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
+              kindCounts: { real: 0, unreportedQuery: 0, sessionVisit: 0 },
+              referenceLatency: {
+                windowHours: 24,
+                p95Ms: 0,
+                totalCallsInWindow: 0,
+                slowCallsInFilter: 0
+              }
+            }
+          })
+        );
+      }
+      return new Response(JSON.stringify({ ok: false }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAudit(
+      "/admin/audit?view=calls&hours=24&inquiryKind=real&accessGrade=all&user=hehe"
+    );
+    await waitFor(() => {
+      const callUrl = fetchMock.mock.calls
+        .map((entry) => String(entry[0]))
+        .find((url) => url.startsWith("/api/admin/audit?"));
+      expect(callUrl).toBeTruthy();
+      expect(callUrl).toContain("inquiryKind=real");
+      expect(callUrl).toContain("accessGrade=all");
+      expect(callUrl).toContain("user=hehe");
+    });
   });
 });

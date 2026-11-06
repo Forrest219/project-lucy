@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { RoleDetail } from "../pages/admin/RoleDetail";
-import { READONLY_QA_PRESET } from "../lib/rolePermissionDraft";
+import { BUSINESS_QA_PRESET } from "../lib/rolePermissionDraft";
 import type { RoleDetail as RoleDetailType } from "../lib/types";
 
 vi.mock("sonner", () => ({
@@ -100,6 +100,8 @@ function installFetch(role: RoleDetailType | null = null, handler?: FetchHandler
         { name: "lucy_continue_question", globalDenied: false },
         { name: "wiki_search", globalDenied: false },
         { name: "wiki_read", globalDenied: false },
+        { name: "lucy_skill_search", globalDenied: false },
+        { name: "lucy_skill_read", globalDenied: false },
         { name: "entity_details", globalDenied: false },
         { name: "sl_validate", globalDenied: false },
       ] } }));
@@ -227,18 +229,20 @@ describe("RoleDetail Spec 150", () => {
     expect(screen.queryByTestId("role-permission-review-drawer")).not.toBeInTheDocument();
   });
 
-  it("requires catalog_bound confirmation and a non-empty connection", async () => {
+  it("requires catalog_bound confirmation and disables row policy while following enabled tables", async () => {
     const fetchMock = installFetch();
     renderAt("/admin/roles/new");
     fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "catalog_role" } });
     fireEvent.click(screen.getByRole("tab", { name: /可访问的表/ }));
-    fireEvent.click(screen.getByText("高级设置"));
-    fireEvent.click(screen.getByRole("checkbox", { name: "启用目录绑定" }));
+    const followToggle = screen.getAllByRole("checkbox", { name: /跟随此连接的启用表/ })[0];
+    expect(followToggle).toBeTruthy();
+    fireEvent.click(followToggle!);
+    expect(screen.getByRole("alertdialog", { name: "确认切换表范围模式" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "确认切换" }));
-    fireEvent.click(screen.getByRole("button", { name: "保存权限配置" }));
-    await waitFor(() => expect(fetchMock.mock.calls.some((call) => String(call[0]) === "/api/admin/roles")).toBe(false));
+    expect(screen.getByTestId("catalog-bound-scope-note")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /行级策略/ }));
     expect(screen.getByTestId("row-policy-catalog-bound-disabled")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => String(call[0]) === "/api/admin/roles")).toBe(false);
   });
 
   it("edits row policy in a focused Drawer with physical columns only", async () => {
@@ -454,12 +458,12 @@ describe("Spec 149 — 运维问数角色的高权限警示（SC-23）", () => {
 });
 
 /**
- * 新建角色默认只读问答工具 Spec。
+ * 新建角色默认业务问答工具 Spec（lucy-20261104）。
  *
- * 默认集合的唯一事实源是 `READONLY_QA_PRESET`；测试只引用该常量，
+ * 默认集合的唯一事实源是 `BUSINESS_QA_PRESET`；测试只引用该常量，
  * 不另抄一份工具名单。
  */
-describe("新建角色默认只读问答工具 Spec", () => {
+describe("新建角色默认业务问答工具 Spec", () => {
   /** 生效边界摘要里某个指标的值。 */
   function summaryValue(summary: HTMLElement, label: string): string {
     const term = within(summary).getByText(label);
@@ -474,25 +478,25 @@ describe("新建角色默认只读问答工具 Spec", () => {
 
   /** 勾选状态与候选列表解耦：默认工具的取消只发生在复选框上。 */
   async function uncheckAllDefaultTools() {
-    for (const tool of READONLY_QA_PRESET) {
+    for (const tool of BUSINESS_QA_PRESET) {
       fireEvent.click(await screen.findByRole("checkbox", { name: tool }));
     }
   }
 
-  it("RD-01 新建页默认预选只读问答全集，初始无未保存修改提示", async () => {
+  it("RD-01 新建页默认预选业务问答全集，初始无未保存修改提示", async () => {
     installFetch();
     renderAt("/admin/roles/new");
     await screen.findByRole("heading", { name: "新建 Role" });
 
     const summary = screen.getByTestId("role-boundary-summary");
-    expect(summaryValue(summary, "MCP 工具")).toBe(String(READONLY_QA_PRESET.length));
+    expect(summaryValue(summary, "MCP 工具")).toBe(String(BUSINESS_QA_PRESET.length));
     expect(summaryValue(summary, "允许的连接")).toBe("0");
     expect(summaryValue(summary, "可访问的表")).toBe("0");
     expect(screen.queryByTestId("role-dirty-bar")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: /允许的 MCP 工具/ }));
-    expect(screen.getByText("当前与只读问答一致")).toBeInTheDocument();
-    expect(selectedToolNames().sort()).toEqual([...READONLY_QA_PRESET].sort());
+    expect(screen.getByText("当前与业务问答一致")).toBeInTheDocument();
+    expect(selectedToolNames().sort()).toEqual([...BUSINESS_QA_PRESET].sort());
   });
 
   it("RD-02 无需点击预设即可发起 dryRun，摘要与 Drawer 计入全部默认工具", async () => {
@@ -509,17 +513,17 @@ describe("新建角色默认只读问答工具 Spec", () => {
     fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "new_role" } });
     fireEvent.click(screen.getByRole("tab", { name: /可访问的表/ }));
     fireEvent.click(await screen.findByRole("checkbox", { name: "superstore_orders" }));
-    // 故意不点击「只读问答」预设。
+    // 故意不点击「业务问答」预设。
     fireEvent.click(screen.getByRole("button", { name: "保存权限配置" }));
 
     const drawer = await screen.findByTestId("role-permission-review-drawer");
     const added = within(drawer).getByText("新增 MCP 工具").parentElement!;
     const addedTools = within(added).getAllByRole("listitem").map((item) => item.textContent ?? "");
-    expect(addedTools.sort()).toEqual([...READONLY_QA_PRESET].sort());
+    expect(addedTools.sort()).toEqual([...BUSINESS_QA_PRESET].sort());
 
     expect(calls).toHaveLength(1);
     expect(calls[0]!.dryRun).toBe(true);
-    expect([...(calls[0]!.body.role.allow.tools as string[])].sort()).toEqual([...READONLY_QA_PRESET].sort());
+    expect([...(calls[0]!.body.role.allow.tools as string[])].sort()).toEqual([...BUSINESS_QA_PRESET].sort());
 
     fireEvent.click(within(drawer).getByRole("button", { name: "确认保存" }));
     await waitFor(() => expect(calls.some((call) => call.dryRun === false)).toBe(true));
@@ -555,7 +559,7 @@ describe("新建角色默认只读问答工具 Spec", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存权限配置" }));
     await screen.findByTestId("role-permission-review-drawer");
     expect(calls[0].role.allow.tools).not.toContain("lucy_freshness");
-    expect(calls[0].role.allow.tools).toHaveLength(READONLY_QA_PRESET.length - 1);
+    expect(calls[0].role.allow.tools).toHaveLength(BUSINESS_QA_PRESET.length - 1);
   });
 
   it("RD-04 放弃修改恢复默认工具与空输入，新的新建生命周期不受污染", async () => {
@@ -572,7 +576,7 @@ describe("新建角色默认只读问答工具 Spec", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /允许的 MCP 工具/ }));
     expect(screen.getByRole("checkbox", { name: "lucy_freshness" })).toBeChecked();
-    expect(screen.getByText("当前与只读问答一致")).toBeInTheDocument();
+    expect(screen.getByText("当前与业务问答一致")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /可访问的表/ }));
     expect(screen.getByRole("checkbox", { name: "superstore_orders" })).not.toBeChecked();
     fireEvent.click(screen.getByRole("tab", { name: /基本信息/ }));
@@ -584,8 +588,8 @@ describe("新建角色默认只读问答工具 Spec", () => {
     renderAt("/admin/roles/new");
     fireEvent.click(await screen.findByRole("tab", { name: /允许的 MCP 工具/ }));
     expect(screen.getByRole("checkbox", { name: "lucy_freshness" })).toBeChecked();
-    expect(screen.getByText("当前与只读问答一致")).toBeInTheDocument();
-    expect(selectedToolNames().sort()).toEqual([...READONLY_QA_PRESET].sort());
+    expect(screen.getByText("当前与业务问答一致")).toBeInTheDocument();
+    expect(selectedToolNames().sort()).toEqual([...BUSINESS_QA_PRESET].sort());
   });
 
   it("RD-05 清空可授予工具后保存被就地阻断，不发 dryRun、不打开 Drawer", async () => {
@@ -600,7 +604,7 @@ describe("新建角色默认只读问答工具 Spec", () => {
 
     const alert = await screen.findByTestId("role-tools-empty-error");
     expect(alert).toHaveAttribute("role", "alert");
-    expect(alert).toHaveTextContent("请至少选择一个 MCP 工具。常规查询可选择“只读问答”。");
+    expect(alert).toHaveTextContent("请至少选择一个 MCP 工具。常规场景可选择“业务问答”。");
     expect(screen.getByRole("tab", { name: /允许的 MCP 工具/ })).toHaveAttribute("aria-selected", "true");
     await waitFor(() => expect(alert).toHaveFocus());
     expect(
@@ -619,7 +623,7 @@ describe("新建角色默认只读问答工具 Spec", () => {
     fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "new_role" } });
     fireEvent.click(screen.getByRole("tab", { name: /允许的 MCP 工具/ }));
     // 候选不可用时走既有手工输入入口：移除全部默认工具，再填一个系统禁止工具。
-    for (const tool of READONLY_QA_PRESET) {
+    for (const tool of BUSINESS_QA_PRESET) {
       fireEvent.click(await screen.findByRole("button", { name: `移除标签 ${tool}` }));
     }
     const input = screen.getByLabelText("添加标签");
@@ -671,7 +675,7 @@ describe("新建角色默认只读问答工具 Spec", () => {
     renderAt("/admin/roles/wiki_only");
     fireEvent.click(await screen.findByRole("tab", { name: /允许的 MCP 工具/ }));
     expect(screen.getByText(/已选 1 个/)).toBeInTheDocument();
-    expect(screen.queryByText("当前与只读问答一致")).not.toBeInTheDocument();
+    expect(screen.queryByText("当前与业务问答一致")).not.toBeInTheDocument();
     expect(selectedToolNames()).toEqual(["wiki_search"]);
 
     cleanup();
@@ -679,7 +683,7 @@ describe("新建角色默认只读问答工具 Spec", () => {
     renderAt("/admin/roles/wiki_only?mode=copy");
     fireEvent.click(await screen.findByRole("tab", { name: /允许的 MCP 工具/ }));
     expect(screen.getByText(/已选 1 个/)).toBeInTheDocument();
-    expect(screen.queryByText("当前与只读问答一致")).not.toBeInTheDocument();
+    expect(screen.queryByText("当前与业务问答一致")).not.toBeInTheDocument();
     expect(selectedToolNames()).toEqual(["wiki_search"]);
   });
 
@@ -693,13 +697,13 @@ describe("新建角色默认只读问答工具 Spec", () => {
     fireEvent.click(await screen.findByRole("tab", { name: /允许的 MCP 工具/ }));
     expect(await screen.findByText("工具候选暂不可用，可手工填写工具 ID。")).toBeInTheDocument();
     // 候选失败不删减默认集合。
-    expect(selectedToolNames().sort()).toEqual([...READONLY_QA_PRESET].sort());
+    expect(selectedToolNames().sort()).toEqual([...BUSINESS_QA_PRESET].sort());
 
     const input = screen.getByLabelText("添加标签");
     fireEvent.change(input, { target: { value: "custom_probe" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(selectedToolNames()).toContain("custom_probe"));
-    expect(selectedToolNames().sort()).toEqual([...READONLY_QA_PRESET, "custom_probe"].sort());
+    expect(selectedToolNames().sort()).toEqual([...BUSINESS_QA_PRESET, "custom_probe"].sort());
   });
 
   it("RD-09 新建不会自动获得连接或表范围", async () => {
@@ -716,8 +720,8 @@ describe("新建角色默认只读问答工具 Spec", () => {
     installFetch();
     renderAt("/admin/roles/new");
     const hint = await screen.findByTestId("role-create-default-tools-hint");
-    expect(hint).toHaveTextContent("已默认启用只读问答工具，请选择可访问的表");
+    expect(hint).toHaveTextContent("已默认启用业务问答工具，请选择可访问的表");
     fireEvent.click(screen.getByRole("tab", { name: /允许的 MCP 工具/ }));
-    expect(screen.getByText(new RegExp(`已选 ${READONLY_QA_PRESET.length} 个`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`已选 ${BUSINESS_QA_PRESET.length} 个`))).toBeInTheDocument();
   });
 });

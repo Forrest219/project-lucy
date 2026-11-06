@@ -1,0 +1,115 @@
+# v0.25 E2E 已知缺口清单（覆盖可达性合同）
+#
+# 目的：让"跑不到的执行项"变成**显式登记**，而不是静默漏掉。
+#
+# 背景：v0.25 覆盖清单的 149 个 newScenarios 里，只有一部分能被某个分支真的跑到。
+# 分支选择集（scripts/e2e/lib/product-targets.mjs 的 SELECTED_IDS + AGENT 派生集）
+# 就是各分支的**判定分母**——分母外的执行项永远不参与分支判定，于是一次"绿"的
+# 分支运行并不代表它归属的执行项都跑过。
+#
+# 规则：
+#   1. 清单里的每个 newScenarios 执行项，要么被某个分支选中，要么必须出现在本文件；
+#      两者都不满足 = 静默漏项 = 门禁失败（scripts/e2e/__tests__/v025-reachability.test.mjs）。
+#   2. 本文件里的每一项都必须**当前确实不可达**；一旦某项变得可达（例如补了用例或
+#      备了数据源），必须从本文件移除，否则门禁失败——避免缺口清单变成垃圾桶。
+#   3. 本文件不改变任何执行项的状态口径。缺口项在运行结果里仍然是 blocked / not_run，
+#      绝不折叠成 passed。
+#   4. 每个分组必须写明：为什么现在跑不到、需要什么才能解掉、归谁。
+#
+# 校验：scripts/e2e/__tests__/v025-reachability.test.mjs
+version: 1
+coverage: "scripts/e2e/contracts/v025-coverage.yaml"
+
+gaps:
+  - group: sem-browser-spec-missing
+    ownerBranch: SEM
+    reason: "语义批量接入场景还没有浏览器用例：semantic-batch-v025.spec.ts 只有 3 条测试、覆盖 6 个执行项，其余 16 项既无标注也无用例。"
+    unblock: "补 16 条语义接入的浏览器用例（postgres + browser + fault-control 三个能力本机即可满足）。"
+    executionIds:
+      - "SEM25-V01"
+      - "SEM25-V02"
+      - "SEM25-V03"
+      - "SEM25-V04"
+      - "SEM25-V07"
+      - "SEM25-V08"
+      - "SEM25-V10"
+      - "SEM25-V11"
+      - "SEM25-V12"
+      - "SEM25-V13"
+      - "SEM25-V14"
+      - "SEM25-V15"
+      - "SEM25-V18"
+      - "SEM25-V19"
+      - "SEM25-V21"
+      - "SEM25-V22"
+
+  - group: hive-source-missing
+    ownerBranch: CONN
+    reason: "Hive 直连场景没有数据源：ktx.yaml 里 Doris / StarRocks 连接仍是 <CHANGE-ME> 占位，没有真实 Hive 家族数据面，也没有对应浏览器用例。"
+    unblock: "接入一个可用的 Doris / StarRocks 只读连接，并补 Hive 直连的浏览器用例。"
+    executionIds:
+      - "HIV25-V01"
+      - "HIV25-V02"
+      - "HIV25-V03"
+      - "HIV25-V04"
+      - "HIV25-V05"
+      - "HIV25-V06"
+      - "HIV25-V07"
+      - "HIV25-V08"
+      - "HIV25-V09"
+      - "HIV25-V10"
+      - "HIV25-V11"
+      - "HIV25-V12"
+      - "HIV25-V13"
+      - "HIV25-V14"
+      - "HIV25-V15"
+      - "HIV25-V16"
+      - "HIV25-V17"
+
+  - group: no-browser-leg
+    ownerBranch: OBSERVE
+    reason: "多轮会话跨轮调用关系重建的 executors 是 P/A/V，没有浏览器腿；AGENT 分支只收 AGENT 归属的冻结 variant，本项归 OBSERVE，因此没有任何腿能产出它的证据。"
+    unblock: "为跨轮调用关系重建补一条 Agent 腿执行项，或把它并入 AGENT 归属。"
+    executionIds:
+      - "LOG25-01"
+
+  - group: lifecycle-non-gate
+    ownerBranch: LIFECYCLE
+    reason: "原地升级执行项。legacy 升级清单（legacy:upgrade-feature 的 UPG-01..14）与 UPG25-* 语义完全不相交且禁止直接映射；W4 合同 upgrade-v025.mjs 已实现，但还没有 runner 产出它的证据，按非门禁登记。"
+    unblock: "实现 UPG25-* 的运行腿（真实原地升级 + 证据采集），或明确把它们移出 v0.25 覆盖清单。"
+    executionIds:
+      - "UPG25-01"
+      - "UPG25-02"
+      - "UPG25-03"
+      - "UPG25-04"
+      - "UPG25-05"
+      - "UPG25-06"
+      - "UPG25-07"
+      - "UPG25-08"
+      - "UPG25-09"
+      - "UPG25-10"
+      - "UPG25-11"
+      - "UPG25-12"
+      - "UPG25-13"
+      - "UPG25-14"
+      - "UPG25-15"
+      - "UPG25-16"
+
+  - group: image-track-delivery
+    ownerBranch: LIFECYCLE
+    reason: "升级候选验证项，镜像轨要求 k8s-amd64 + ci-runner，属于交付取证环境而非功能 E2E；本机是 macOS arm64，无法产出该轨证据，按非门禁登记。"
+    unblock: "在 amd64 交付环境 + CI runner 上跑候选验证矩阵。"
+    executionIds:
+      - "RVC25-01"
+      - "RVC25-02"
+      - "RVC25-03"
+      - "RVC25-04"
+      - "RVC25-05"
+      - "RVC25-06"
+      - "RVC25-07"
+      - "RVC25-08"
+      - "RVC25-09"
+      - "RVC25-10"
+      - "RVC25-11"
+      - "RVC25-12"
+      - "RVC25-13"
