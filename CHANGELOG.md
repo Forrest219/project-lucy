@@ -26,7 +26,7 @@ Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label i
 
 ## 0.25.0
 
-Product version on branch `lucy-v0.25` is `0.25.0` as of 2026-11-01. Customer-facing label is `v0.25.0`. The last tagged release remains `v0.20.0`; this version is not tagged yet (`docs/releases/v0.25.0.json` records `commit: PENDING`). Chart package version stays `0.2.8`; bundled KTX stays `0.16.0`.
+Release candidate for formal tag `v0.25.0` on branch `lucy-v0.25`（产品版本自 2026-11-01 对齐为 `0.25.0`）。Customer-facing label is `v0.25.0`. Chart package version stays `0.2.8`; bundled KTX stays `0.16.0`. Tag、GitHub Release 与发版台账 `commit` 回填仍属后续发版步骤；在 annotated tag 落地前，`docs/releases/v0.25.0.json` 可继续记 `commit: PENDING`。本候选相对上一 tagged 客户版 `v0.20.0`。
 
 ### Added
 - **执行层重载（Spec 191）**：WebUI 写 `ktx.yaml` 后，所有者可在 MCP 调试台点「重载执行层」，
@@ -56,12 +56,20 @@ Product version on branch `lucy-v0.25` is `0.25.0` as of 2026-11-01. Customer-fa
     `call_day` 是 UTC 日历日，生成 SQL 只在过滤后的明细里取。
   - Docker demo 模板新增演示运维问数 Agent `demo_ops` 与运维问数角色 `lucy_ops_reader`；
     `demo_readonly` 与 `lucy_admin` 的既有权限不变。
+- **访问关系图（本波收口）**：usage-first 几何与 scope 重投影；闲置授权文案与边悬停；
+  固定已确认关联；小时明细表；与访问日志口径对齐的故事线 Spec 与功能合同。
+- **访问日志调用链故事线**：一笔问询可按调用链读完轮次／调用／尝试，不再只剩摘要碎片。
+- **系统手册核心章节**：补齐导航与非导航路由章节、工具面与章节锚定门禁；修正过时事实并重排接入章。
+- **客户默认系统正式 Role**：正式交付路径下默认系统 Role 功能合同收口（含存量 demo
+  `lucy_admin` 补授 `lucy_continue_question`）。
+- **lucy-ops Manifest 升级自愈**：存量卷升级时幂等补齐 ops 连接／资产，避免「升级后运维问数 silently 缺席」。
+- **默认 asset_finance Skill**：四份财务规程（杜邦／收支桑基／经营利润桥／对照利润表）收为默认业务 Skill。
+- **row-policy 强度 B 证据**：共享 RDS 真实审判包与 v025 harness 增量；对应验收与需求登记进
+  `0.30` 池（本版主张「有强度 B 证据包」，不主张正式生产放行矩阵已闭合）。
 
 ### Changed
 - **文档口径**：`ktx.yaml` 新连接或凭据的生效说明从「可能需要重启 KTX MCP daemon」改为
   「在 MCP 调试台点『重载执行层』」；`McpRuntimeStatusPanel` 的待确认提示不再指向人工重启。
-
-### Changed
 - **用量统计口径统一（Spec 189）**：Agent／Token 的「业务活跃」与「业务调用量」不再把协议流量
   和评测探针算作业务使用。协议事件集合扩展为**完整集合**——握手（`initialize`、
   `notifications/initialized`、`tools/list`）＋探测（`ping`、`resources/list`、
@@ -83,17 +91,31 @@ Product version on branch `lucy-v0.25` is `0.25.0` as of 2026-11-01. Customer-fa
       供新 UI 使用，旧客户端继续读取旧字段。
   - **不变量**：原始 `access_log` 不改写；「最近 MCP 访问」与「近 N 使用过的凭据」保持全量
     访问语义；审计库不可用时窗口指标为 `null`（渲染「—」），Token 前缀碰撞仍为 `partial`。
+- **角色连接卡与新建默认业务问答**：治理台连接卡与默认问答路径收口，降低「先配 YAML 才能问」的摩擦。
+- **0.30 需求池登记**：帮助中心重做、升级 E2E／候选验证、W-B 语义发布、SRR／OIDC／AccessMap SC
+  等验收项明确进池，避免本版叙述越界。
 
 ### Fixed
 - **筛选栏文本输入框的中文输入法**：在访问日志、配置审计、Token 管理、语义资产与发布历史页的
   筛选栏文本输入框中输入中文时，输入法组合不再被打断——候选窗不再逐键消失，拼音缓冲不再被
   追加成 `zhongzhongwen` 一类的拼接乱码，最终上屏为正常中文。键入的末尾空格会原样保留在
   输入框里，筛选结果不受影响。
+- **启用表范围列宽与编辑连接字段标签对齐**。
+- **访问关系图合流门禁**：修复 tip CI 上 AccessMap 重复键／URL 驱动输入、ops-questioning 资产路径与
+  e2e-harness，使 `lucy-v0.25` Required checks 可绿。
 
 ### 已知限制
 - 容器生命周期验收（首次启动失败、自发退出、SIGTERM 无遗留进程、退出码）需在镜像重建后
   执行 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`；本次交付只完成了本地
   进程级实测（`--local`）。
+- **无 GitHub 客户放行链**：仓库无 `lucy-protected` self-hosted runner，`real-e2e` →
+  `customer-release-readiness` → `release-package` 链不可在 GitHub Actions 完成；本版不得宣称
+  经自动化客户发布链验证的制品身份。
+- **本版不主张**：帮助中心体验重做（L25-12）；客户升级 E2E 自动化／升级候选验证环境
+  （L25-07／13）；运维控制面语义发布 W-B（L25-16）；正式生产放行（`productionReady`）在无 UX
+  走查证据与无交付包身份时不得置真。
+- **验收仍在 `0.30` 池**：SRR 正式验收矩阵、OIDC 验收矩阵、AccessMap SC 矩阵等；代码或证据包
+  落地不等于对应正式验收已闭合。
 
 ---
 
