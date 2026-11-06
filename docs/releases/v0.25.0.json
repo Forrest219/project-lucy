@@ -1,23 +1,101 @@
 {
   "productVersion": "0.25.0",
   "releaseTag": "v0.25.0",
-  "commit": "PENDING",
-  "releasedAt": "2026-11-01",
+  "commit": "e84c9ed4c2994d6eeac262ed722503df3bcaae4d",
+  "releasedAt": "2026-11-06",
   "deliveryPackage": null,
-  "noDeliveryReason": "Product version aligned to 0.25.0 on branch lucy-v0.25. No tag, GitHub Release, customer delivery package, image digest, or package SHA256 exists yet.",
-  "runs": [],
+  "noDeliveryReason": "Annotated tag v0.25.0 and GitHub Release exist at commit e84c9ed4c2994d6eeac262ed722503df3bcaae4d, but this entry records no customer delivery package, image digest claimed as production-ready, or package SHA256. Tag run 42252441241 failed overall: release/spec-and-webui failed, customer-amd64-native failed at G8, and real-e2e / customer-release-readiness / release-package were skipped. No GitHub release-package chain completed; no docs/releases/ux/0.25.0.md exists; productionReady must stay unset/false.",
+  "runs": [
+    {
+      "id": "42250111386",
+      "trigger": "push to main at merge commit e84c9ed4c2994d6eeac262ed722503df3bcaae4d",
+      "note": "Completed with overall conclusion success. All four Required checks passed: spec-and-webui, docker-smoke, k8s-static and k8s-upgrade-gate. Non-Required demo smokes and supporting jobs also succeeded on this push run."
+    },
+    {
+      "id": "42252441241",
+      "trigger": "push of the v0.25.0 tag at commit e84c9ed4c2994d6eeac262ed722503df3bcaae4d",
+      "note": "Completed with overall conclusion failure. Among the four Required-named release jobs, release/k8s-static and release/k8s-upgrade-gate succeeded; release/spec-and-webui failed at lint:url-driven-input (Audit.tsx event-ID input); release/docker-smoke and other daily-style release jobs were skipped after that failure. customer-amd64-native failed at G8; real-e2e, customer-release-readiness and release-package were skipped. Do not describe the tag run as fully green or as having passed Required tag checks."
+    }
+  ],
   "gates": [
     {
-      "name": "release verification",
+      "name": "Required main checks",
+      "status": "passed",
+      "required": true,
+      "run": "42250111386"
+    },
+    {
+      "name": "Required tag checks",
       "status": "notExecuted",
-      "reason": "The v0.25.0 tag has not been cut. Required checks, customer image gates, and delivery gates have not run for this product version."
+      "required": true,
+      "reason": "Tag run 42252441241 did not complete the four Required-named release jobs successfully. release/spec-and-webui failed at npm run lint:url-driven-input (webui/src/pages/admin/Audit.tsx:2471 事件 ID value bound to router state). release/docker-smoke was skipped because it needs release/spec-and-webui. Only release/k8s-static and release/k8s-upgrade-gate succeeded. Ledger rules forbid recording a failed Required check as failed+required; this aggregate is therefore notExecuted and must not be claimed passed. Authoritative Required evidence remains the main push run 42250111386."
+    },
+    {
+      "name": "headless-config",
+      "status": "passed",
+      "required": false,
+      "run": "42250111386"
+    },
+    {
+      "name": "business-eval-catalog",
+      "status": "passed",
+      "required": false,
+      "run": "42250111386"
+    },
+    {
+      "name": "ktx-diff-audit",
+      "status": "passed",
+      "required": false,
+      "run": "42250111386"
+    },
+    {
+      "name": "demo-db-smoke",
+      "status": "passed",
+      "required": false,
+      "run": "42250111386"
+    },
+    {
+      "name": "postgres-demo-db-smoke",
+      "status": "passed",
+      "required": false,
+      "run": "42250111386"
+    },
+    {
+      "name": "customer-amd64-native",
+      "status": "failed",
+      "required": false,
+      "run": "42252441241",
+      "reason": "Tag run built and pushed candidate ghcr.io/forrest219/project-lucy@sha256:36eb0e0b106c7a46a23387e9fba2532301358f42df65b8c20677d07d54bdd562. G1/G2/G3/G4/G4b appeared to progress, but the G8 K8s contract gate failed (g8-image-k8s-contract-gate.sh exit 1 during G8-1 empty-volume entrypoint cleanup with permission-denied removals under the temp volume). No customer delivery package or productionReady claim is derived from this candidate digest."
+    },
+    {
+      "name": "real-e2e",
+      "status": "notExecuted",
+      "reason": "Skipped in tag run 42252441241 after upstream customer-amd64-native failed. Independently, the repository still has zero registered self-hosted runners, so the required lucy-protected linux/amd64 runner remains unavailable."
+    },
+    {
+      "name": "customer-release-readiness",
+      "status": "notExecuted",
+      "reason": "Skipped in tag run 42252441241 because its upstream release-chain dependencies did not complete successfully. No automated customer release credential was produced."
+    },
+    {
+      "name": "release-package",
+      "status": "notExecuted",
+      "reason": "Skipped in tag run 42252441241 because customer-release-readiness did not execute. No GitHub-gate-produced package, promoted image or release notes artifact exists."
+    },
+    {
+      "name": "customer delivery gates",
+      "status": "notExecuted",
+      "reason": "No customer delivery package exists for this version, so no artifact-specific delivery or production-readiness gate has been executed."
     }
   ],
   "notes": [
-    "This entry records the product-version alignment from 0.20.0 to 0.25.0 so branch lucy-v0.25 and VERSION agree. It is not a customer release.",
-    "commit stays PENDING until the release commit exists. Fill it with scripts/release/fill-ledger-commit.sh after the tag commit is known. runs stays empty until a real CI run verifies the release.",
-    "releasedAt is the date the product version was aligned. It is not a ship date.",
-    "The last tagged release remains v0.20.0. Ordering of the active line is 0.25.0 > 0.20.0 > 0.17.0 > 0.2.0.",
-    "Chart package version stays 0.2.8 with appVersion 0.25.0. Bundled KTX stays 0.16.0. No customer delivery package is claimed."
+    "The active 0.x product line is ordered 0.25.0 > 0.20.0 > 0.17.0 > 0.2.0. The retired 2.0.0 cut is historical and is not the baseline of the active 0.x line.",
+    "Product versions and deployment artifacts are independently versioned. Chart 0.2.8 carries appVersion 0.25.0 and bundled KTX remains 0.16.0.",
+    "The annotated v0.25.0 tag and formal GitHub Release point at e84c9ed4c2994d6eeac262ed722503df3bcaae4d (https://github.com/Forrest219/project-lucy/releases/tag/v0.25.0). This ledger backfills commit, runs and gates after the tag; it does not invent a customer delivery package.",
+    "Main push run 42250111386 is the authoritative Required-check evidence for this commit. Tag run 42252441241 is overall red: Required-named release/spec-and-webui failed (lint:url-driven-input on Audit.tsx), so Required tag checks are recorded as notExecuted rather than passed, and downstream release jobs including docker-smoke were skipped.",
+    "Note the workflow split: lucy-ci.yml (main/PR) spec-and-webui does not run lint:url-driven-input; lucy-release.yml (tag) does. Same commit can therefore pass Required main checks and still fail the tag release/spec-and-webui job.",
+    "customer-amd64-native reached a GHCR candidate digest under the forrest219 namespace, then failed G8. That digest is not claimed as a deliveryPackage identity.",
+    "The GitHub customer release chain remains incomplete (no real-e2e / customer-release-readiness / release-package). No productionReady flag and no docs/releases/ux/0.25.0.md accompany this entry.",
+    "This release records intent publication (tag + Release + honest ledger) with scoped CI evidence. Customer actual-path acceptance, if any, must be recorded separately and must not be inferred from this entry."
   ]
 }

@@ -13,7 +13,7 @@
 | Component | Current Baseline | Evidence |
 |---|---|---|
 | **Lucy product version** | **`0.25.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI 版本信息页 |
-| Lucy source | branch `lucy-v0.25`; `v0.25.0` is not tagged yet. Last tagged release is `v0.20.0` | see `docs/releases/README.md` for the per-version commit and digest ledger |
+| Lucy source | annotated tag `v0.25.0` on `e84c9ed4…`; previous tagged release `v0.20.0` | see `docs/releases/README.md` / `docs/releases/v0.25.0.json` for commit, runs and gate ledger |
 | Lucy package | `project-lucy-eval@0.25.0` | `package.json` (aligned with product version) |
 | WebUI package | `webui@1.0.0` | `webui/package.json` (npm package only; not customer-facing) |
 | Bundled KTX npm package | `@kaelio/ktx@0.16.0` | `Dockerfile`, `docker-compose.yml`, `npm run smoke:p0:docker` |
