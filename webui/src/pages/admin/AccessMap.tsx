@@ -13,6 +13,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { apiGet } from "../../lib/apiClient";
+import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import { PageHeader } from "../../components/PageHeader";
 import { AccessMapCanvas } from "../../components/admin/AccessMapCanvas";
 import { AccessMapLegend, AccessMapLegendMeta } from "../../components/admin/AccessMapLegend";
@@ -235,6 +236,36 @@ export function AccessMap() {
   const [searchText, setSearchText] = useState("");
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
 
+  // ── 局部状态镜像（Spec lucy-20261029 §5.2／§5.3）────────────────────────
+  // Agent／连接文本筛选框的 `value` 由本地 draft 驱动，URL 作为下游事实源跟随；
+  // 反向同步走回声协议（与 Audit 同构）。禁止把 value 直接绑到 get("agent")。
+  const agentMirror = useUrlMirroredField({
+    read: (sp) => sp.get("agent") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("agent", raw);
+      else next.delete("agent");
+      // 与既有 setParam("agent") 同口径：改 Agent 时清 focus／detailOffset／trust。
+      next.delete("focus");
+      next.delete("detailOffset");
+      next.delete("trust");
+      return next;
+    },
+    history: "push"
+  });
+  const connectionMirror = useUrlMirroredField({
+    read: (sp) => sp.get("connection") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("connection", raw);
+      else next.delete("connection");
+      next.delete("detailOffset");
+      next.delete("trust");
+      return next;
+    },
+    history: "push"
+  });
+
   const query = useQuery({
     queryKey: ["admin-access-map", queryString],
     queryFn: async () =>
@@ -313,9 +344,14 @@ export function AccessMap() {
     if (focusNodeId) setParam("focus", null);
   }, [focusNodeId, setParam]);
 
+  const resetAgentDraft = agentMirror.reset;
+  const resetConnectionDraft = connectionMirror.reset;
   const clearStructureFilters = useCallback(() => {
     clearParams(["agent", "role", "connection", "table", "focus"]);
-  }, [clearParams]);
+    // INV-3：URL 可能本就空；清除筛选必须显式归零草稿。
+    resetAgentDraft("");
+    resetConnectionDraft("");
+  }, [clearParams, resetAgentDraft, resetConnectionDraft]);
 
   const persistStructureFromNode = useCallback(
     (node: { id: string; kind: string }) => {
@@ -482,12 +518,8 @@ export function AccessMap() {
             placeholder="写入 agent="
             aria-label="按 Agent 筛选行为轨迹"
             data-testid="access-map-agent-filter"
-            value={agentFilter ?? ""}
-            onChange={(event) => {
-              const next = event.target.value.trim();
-              setParam("focus", null);
-              setParam("agent", next.length > 0 ? next : null);
-            }}
+            value={agentMirror.value}
+            onChange={(event) => agentMirror.onChange(event.target.value)}
           />
         </div>
 
@@ -502,11 +534,8 @@ export function AccessMap() {
             placeholder="写入 connection="
             aria-label="按连接筛选"
             data-testid="access-map-connection-filter"
-            value={connectionFilter ?? ""}
-            onChange={(event) => {
-              const next = event.target.value.trim();
-              setParam("connection", next.length > 0 ? next : null);
-            }}
+            value={connectionMirror.value}
+            onChange={(event) => connectionMirror.onChange(event.target.value)}
           />
         </div>
 

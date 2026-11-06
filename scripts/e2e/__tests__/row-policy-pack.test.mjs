@@ -146,11 +146,14 @@ test("prepareEnvironment throws PrepareError when pack=row-policy and applyDb", 
 test("prepareEnvironment pack=row-policy writes checker/gold.json with RDS readonly contract", async () => {
   const runRoot = mkdtempSync(path.join(os.tmpdir(), "lucy-e2e-rp-gold-"));
   try {
+    // Harness / CI must not require private `.ktx/secrets` or a live RDS probe.
+    // Inject a missing password source so prepare still writes structural gold.
     const { run } = await prepareEnvironment({
       runId: "local-rp-gold-write",
       mode: "local",
       runRoot,
-      pack: "row-policy"
+      pack: "row-policy",
+      rowPolicyPasswordSource: path.join(runRoot, "__missing__", "mysql-aliyun-password")
     });
     const goldPath = path.join(run.paths.checker, "gold.json");
     assert.ok(existsSync(goldPath), "gold.json must exist for SecurityContext");
@@ -159,7 +162,11 @@ test("prepareEnvironment pack=row-policy writes checker/gold.json with RDS reado
     assert.ok(gold.assertShape?.eastOnly?.includes(REGIONS.A));
     assert.deepEqual(gold.canaries, {});
     assert.equal(run.db.dataPlane, "rds-mysql-readonly");
-    assert.equal(typeof run.db.readonlyProven, "boolean");
+    assert.equal(run.db.readonlyProven, false);
+    assert.match(
+      String(run.db.readonlyProvenReason ?? ""),
+      /password source missing/
+    );
   } finally {
     rmSync(runRoot, { recursive: true, force: true });
   }

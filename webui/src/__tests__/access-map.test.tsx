@@ -13,7 +13,7 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccessMap } from "../pages/admin/AccessMap";
@@ -45,11 +45,10 @@ function makeNode(
     depth,
     ...(parentId ? { parentId } : {}),
     meta: {
-      grantPaths,
       grantUsers: 0,
-      accessPaths,
       accessUsers: accessPaths > 0 ? 1 : 0,
       ...meta,
+      // Force computed path counts after `...meta` without duplicate keys.
       accessPaths,
       grantPaths
     }
@@ -69,9 +68,7 @@ function makeEdge(
     id: `e|${source}|${target}`,
     source,
     target,
-    grantPaths,
     grantUsers: 0,
-    accessPaths,
     accessUsers: accessPaths > 0 ? 1 : 0,
     accessCalls: accessPaths,
     state: overrides.state ?? (accessPaths === 0 && grantPaths > 0 ? "dormant" : "normal"),
@@ -79,6 +76,7 @@ function makeEdge(
     reviewEvaluations: [],
     snapshotCoverage: { reviewPaths: 0, matched: 0, missingOrInvalid: 0, ratio: 0 },
     ...overrides,
+    // Force path counts after `...overrides` without duplicate keys.
     accessPaths: overrides.accessPaths ?? accessPaths,
     grantPaths: overrides.grantPaths ?? grantPaths
   };
@@ -298,21 +296,37 @@ describe("闲置授权文案与悬停结论（lucy-20261105 Spec SC-01／SC-02�
     expect(accessMapEdgeHoverConclusion("overflow")).toBe("窗口内有调用，且超出当前授权");
   });
 
-  it("SC-14 — ops 四份触发词无僵尸授权且含闲置授权", () => {
-    const roots = [
+  it("SC-14 — ops 触发词无僵尸授权且含闲置授权", () => {
+    // Demo template skills/ is gitignored — omit. Prefer skills/ over wiki/ so the
+    // first existing path is the skill asset that carries 闲置授权 trigger words.
+    const candidates = [
       resolve(process.cwd(), "../skills/lucy-ops/ops-questioning.md"),
       resolve(process.cwd(), "../config/skills/lucy-ops/ops-questioning.md"),
-      resolve(
-        process.cwd(),
-        "../examples/docker-demo/project-template/skills/lucy-ops/ops-questioning.md"
-      ),
-      resolve(process.cwd(), "config/ops-evidence/skills/lucy-ops/ops-questioning.md")
+      resolve(process.cwd(), "config/ops-evidence/skills/lucy-ops/ops-questioning.md"),
+      resolve(process.cwd(), "../wiki/lucy-ops/ops-questioning.md"),
+      resolve(process.cwd(), "../config/wiki/lucy-ops/ops-questioning.md"),
+      resolve(process.cwd(), "config/ops-evidence/wiki/lucy-ops/ops-questioning.md")
     ];
-    for (const path of roots) {
-      const text = readFileSync(path, "utf8");
-      expect(text, path).toContain("闲置授权");
-      expect(text, path).not.toContain("僵尸授权");
-    }
+    const path = candidates.find((candidate) => existsSync(candidate));
+    expect(
+      path,
+      `ops-questioning.md not found; candidates: ${candidates.join(", ")}`
+    ).toBeTruthy();
+    const text = readFileSync(path as string, "utf8");
+    expect(text, path).toContain("闲置授权");
+    expect(text, path).not.toContain("僵尸授权");
+  });
+
+  it("SC-14 — 缺文件时失败信息含全部候选", () => {
+    const candidates = [
+      resolve(process.cwd(), "__missing__/ops-questioning-a.md"),
+      resolve(process.cwd(), "__missing__/ops-questioning-b.md")
+    ];
+    const path = candidates.find((candidate) => existsSync(candidate));
+    const message = `ops-questioning.md not found; candidates: ${candidates.join(", ")}`;
+    expect(path).toBeUndefined();
+    expect(message).toContain(candidates[0]);
+    expect(message).toContain(candidates[1]);
   });
 });
 

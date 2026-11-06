@@ -321,7 +321,9 @@ describe("SC-09 / SC-12 — 原子写失败保留原字节且不制造恢复现�
     expect(failed.branch).toBe("D");
     expect(failed.reason).toBe("write_failed");
     expect(await readFile(file)).toEqual(before);
-    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes("system_ensure_formal_roles"))).toBe(true);
+    expect(
+      warnSpy.mock.calls.some((args: unknown[]) => String(args[0]).includes("system_ensure_formal_roles"))
+    ).toBe(true);
     const leftovers = (await readdir(configDir)).filter((name) => name.includes(".tmp-"));
     expect(leftovers).toEqual([]);
     await expect(stat(path.join(projectRoot, ".ktx-ui", "access-recovery.json"))).rejects.toThrow();
@@ -351,7 +353,9 @@ describe("SC-11 — 恢复闸拒绝时两路都不写盘", () => {
     expect(admin).toMatchObject({ wrote: false, branch: "D" });
     expect(reader).toMatchObject({ wrote: false, branch: "D" });
     expect(await readFile(file)).toEqual(before);
-    const warnings = warnSpy.mock.calls.map((args) => String(args[0])).join("\n");
+    const warnings = warnSpy.mock.calls
+      .map((args: unknown[]) => String(args[0]))
+      .join("\n");
     expect(warnings).toContain("system_ensure_formal_roles");
     expect(warnings).toContain(warnIncludes);
   }
@@ -443,6 +447,8 @@ describe("分支 D — YAML 无法解析时不写盘", () => {
     const result = await ensureLucyAdminFormalRole({ projectRoot });
     expect(result).toMatchObject({ wrote: false, branch: "D" });
     expect(await readFile(file)).toEqual(before);
-    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes("system_ensure_formal_roles"))).toBe(true);
+    expect(
+      warnSpy.mock.calls.some((args: unknown[]) => String(args[0]).includes("system_ensure_formal_roles"))
+    ).toBe(true);
   });
 });

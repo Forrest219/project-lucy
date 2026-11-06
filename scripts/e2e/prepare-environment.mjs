@@ -185,6 +185,11 @@ export async function prepareEnvironment(options) {
     throw new PrepareError(error instanceof Error ? error.message : String(error));
   }
   const isRowPolicy = pack === PACK_ID;
+  // Tests may inject a missing path so harness stays offline; live B runs omit the option.
+  const rowPolicyPasswordSource =
+    typeof options.rowPolicyPasswordSource === "string"
+      ? options.rowPolicyPasswordSource
+      : ROW_POLICY_PASSWORD_SOURCE;
   let rowPolicyDb = null;
   if (isRowPolicy) {
     try {
@@ -197,9 +202,10 @@ export async function prepareEnvironment(options) {
     } catch (error) {
       throw new PrepareError(error instanceof Error ? error.message : String(error));
     }
-    if (!existsSync(ROW_POLICY_PASSWORD_SOURCE)) {
-      throw new PrepareError("row-policy pack requires .ktx/secrets/mysql-aliyun-password");
-    }
+    // Missing private RDS password is not a hard prepare refuse: CI harness and
+    // machines without `.ktx/secrets/mysql-aliyun-password` still get structural
+    // gold.json with readonlyProven=false (probe fails closed). Live B runs that
+    // need proven counts must stage the secret first.
   }
   if (options.projectDir) {
     throw new PrepareError("拒绝真实私有项目目录：本脚本只生成 inbox/e2e/<runId>/project，不接受外部项目路径");
@@ -260,17 +266,31 @@ export async function prepareEnvironment(options) {
   let rowPolicyReadonlyProof = null;
   if (isRowPolicy) {
     const rdsPasswordCopyEarly = path.join(secretsDir, "mysql-aliyun-password");
+    const hasPrivatePassword = existsSync(rowPolicyPasswordSource);
     if (!existsSync(rdsPasswordCopyEarly)) {
-      cpSync(ROW_POLICY_PASSWORD_SOURCE, rdsPasswordCopyEarly);
-      chmodSync(rdsPasswordCopyEarly, 0o600);
+      if (hasPrivatePassword) {
+        cpSync(rowPolicyPasswordSource, rdsPasswordCopyEarly);
+        chmodSync(rdsPasswordCopyEarly, 0o600);
+      } else {
+        // Placeholder only — never a real credential. Do not probe RDS without the
+        // private source (CI harness / machines without `.ktx/secrets`).
+        secretFile(rdsPasswordCopyEarly, "ci-harness-missing-rds-password\n");
+      }
     }
-    rowPolicyReadonlyProof = proveRdsMysqlReadonly({
-      host: rowPolicyDb.host,
-      port: rowPolicyDb.port,
-      user: rowPolicyDb.readerRole,
-      passwordFile: rdsPasswordCopyEarly,
-      database: "dataforai"
-    });
+    if (hasPrivatePassword) {
+      rowPolicyReadonlyProof = proveRdsMysqlReadonly({
+        host: rowPolicyDb.host,
+        port: rowPolicyDb.port,
+        user: rowPolicyDb.readerRole,
+        passwordFile: rdsPasswordCopyEarly,
+        database: "dataforai"
+      });
+    } else {
+      rowPolicyReadonlyProof = {
+        ok: false,
+        reason: "row-policy pack password source missing (.ktx/secrets/mysql-aliyun-password)"
+      };
+    }
     const goldDoc = buildRowPolicyGoldDoc(rowPolicyReadonlyProof.ok ? rowPolicyReadonlyProof.regions : null);
     secretFile(path.join(paths.checker, "gold.json"), `${JSON.stringify(goldDoc, null, 2)}\n`);
   }
@@ -326,10 +346,16 @@ export async function prepareEnvironment(options) {
   const secretMountPath = options.dbSecretMountPath ?? defaultSecretMount;
   let containerPasswordPath = path.join(secretMountPath, "password");
   if (isRowPolicy) {
-    // Copy only; never print the RDS password. Template DB_PASSWORD_FILE points at this 0600 replica.
+    // Reuse the early-staged 0600 replica (real secret or CI placeholder). Never print it.
     const rdsPasswordCopy = path.join(secretsDir, "mysql-aliyun-password");
-    cpSync(ROW_POLICY_PASSWORD_SOURCE, rdsPasswordCopy);
-    chmodSync(rdsPasswordCopy, 0o600);
+    if (!existsSync(rdsPasswordCopy)) {
+      if (existsSync(rowPolicyPasswordSource)) {
+        cpSync(rowPolicyPasswordSource, rdsPasswordCopy);
+        chmodSync(rdsPasswordCopy, 0o600);
+      } else {
+        secretFile(rdsPasswordCopy, "ci-harness-missing-rds-password\n");
+      }
+    }
     secretFilePath = rdsPasswordCopy;
     containerPasswordPath = rdsPasswordCopy;
   } else if (mode === "local" && options.dbSecretMountPath === undefined) {
