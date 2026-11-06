@@ -13,9 +13,10 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFirstExistingTextFile } from "../../scripts/lib/readFirstExistingTextFile";
 import { AccessMap } from "../pages/admin/AccessMap";
 import { traceAccessMapChain, traceAccessMapSubjectChain } from "../components/admin/AccessMapCanvas";
 import {
@@ -307,12 +308,7 @@ describe("闲置授权文案与悬停结论（lucy-20261105 Spec SC-01／SC-02�
       resolve(process.cwd(), "../config/wiki/lucy-ops/ops-questioning.md"),
       resolve(process.cwd(), "config/ops-evidence/wiki/lucy-ops/ops-questioning.md")
     ];
-    const path = candidates.find((candidate) => existsSync(candidate));
-    expect(
-      path,
-      `ops-questioning.md not found; candidates: ${candidates.join(", ")}`
-    ).toBeTruthy();
-    const text = readFileSync(path as string, "utf8");
+    const { path, text } = readFirstExistingTextFile(candidates);
     expect(text, path).toContain("闲置授权");
     expect(text, path).not.toContain("僵尸授权");
   });
@@ -322,11 +318,16 @@ describe("闲置授权文案与悬停结论（lucy-20261105 Spec SC-01／SC-02�
       resolve(process.cwd(), "__missing__/ops-questioning-a.md"),
       resolve(process.cwd(), "__missing__/ops-questioning-b.md")
     ];
-    const path = candidates.find((candidate) => existsSync(candidate));
-    const message = `ops-questioning.md not found; candidates: ${candidates.join(", ")}`;
-    expect(path).toBeUndefined();
-    expect(message).toContain(candidates[0]);
-    expect(message).toContain(candidates[1]);
+    expect(() => readFirstExistingTextFile(candidates)).toThrowError(
+      /none of the candidate files exist; candidates:/
+    );
+    try {
+      readFirstExistingTextFile(candidates);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toContain(candidates[0]);
+      expect(message).toContain(candidates[1]);
+    }
   });
 });
 

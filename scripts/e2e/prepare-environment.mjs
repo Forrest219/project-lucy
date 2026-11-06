@@ -272,8 +272,9 @@ export async function prepareEnvironment(options) {
         cpSync(rowPolicyPasswordSource, rdsPasswordCopyEarly);
         chmodSync(rdsPasswordCopyEarly, 0o600);
       } else {
-        // Placeholder only — never a real credential. Do not probe RDS without the
-        // private source (CI harness / machines without `.ktx/secrets`).
+        // Placeholder only — never a real credential. Missing secret ⇒ structural
+        // gold only (`readonlyProven=false`); not delivery / live-B evidence.
+        // Do not probe RDS without the private source.
         secretFile(rdsPasswordCopyEarly, "ci-harness-missing-rds-password\n");
       }
     }
