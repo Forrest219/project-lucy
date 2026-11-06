@@ -26,7 +26,7 @@ Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label i
 
 ## 0.25.0
 
-Release candidate for formal tag `v0.25.0` on branch `lucy-v0.25`（产品版本自 2026-11-01 对齐为 `0.25.0`）。Customer-facing label is `v0.25.0`. Chart package version stays `0.2.8`; bundled KTX stays `0.16.0`. Tag、GitHub Release 与发版台账 `commit` 回填仍属后续发版步骤；在 annotated tag 落地前，`docs/releases/v0.25.0.json` 可继续记 `commit: PENDING`。本候选相对上一 tagged 客户版 `v0.20.0`。
+Formal annotated tag `v0.25.0` on 2026-11-06 at commit `e84c9ed4`（产品版本自 2026-11-01 对齐为 `0.25.0`）。Customer-facing label is `v0.25.0`. Chart package version stays `0.2.8`; bundled KTX stays `0.16.0`. GitHub Release 已创建；发版台账见 `docs/releases/v0.25.0.json`。本版**无**客户交付包／`productionReady`：main Required checks 通过，tag 跑批总体失败（含 `release/spec-and-webui` 与 `customer-amd64-native`），GitHub 客户放行链未完成。相对上一 tagged 客户版 `v0.20.0`。
 
 ### Added
 - **执行层重载（Spec 191）**：WebUI 写 `ktx.yaml` 后，所有者可在 MCP 调试台点「重载执行层」，
