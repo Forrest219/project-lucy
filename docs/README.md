@@ -40,6 +40,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261107-ui-interaction-contract-gate-spec.md](specs/lucy-20261107-ui-interaction-contract-gate-spec.md) | **v0.5，开发授权已获得；功能合同已收口（2026-11-07）**。本条收口不表示可上线。仓库级交互合同门禁已接入 `lint:spec-docs`。检查所覆盖的每个路由有一份元素清单。不入 `0.30` 功能清单池，不改页面。Plan 见 [lucy-20261107-ui-interaction-contract-gate-plan.md](plans/lucy-20261107-ui-interaction-contract-gate-plan.md)。评审见 [codex-review](reviews/2026-11-07-codex-review-ui-interaction-contract-gate.md) |
 | [specs/lucy-20261107-catalog-business-semantics-spec.md](specs/lucy-20261107-catalog-business-semantics-spec.md) | **v0.2-draft，待严格评审／验收；冻结落地；未授权实现**（0.30 Batch S2／P0-2／REQ-030-023）：Catalog 业务语义暴露——`lucy_catalog` 对**可见** source 携带语义层既有表级描述与粒度，使 Agent 不再靠表名字符串猜表；描述缺失显式标注、总量硬上限截断不丢条目、**不可见 source 的描述绝不泄漏**。Plan 见 [lucy-20261107-catalog-business-semantics-plan.md](plans/lucy-20261107-catalog-business-semantics-plan.md)。本条不表示可上线 （第 1 轮评审已修订；待第 2 轮对抗式评审） |
 | [specs/lucy-20261107-source-ambiguity-gate-spec.md](specs/lucy-20261107-source-ambiguity-gate-spec.md) | **v0.2-draft，待严格评审／验收；冻结落地；未授权实现**（P0-3／REQ-030-024）：多表命中先问 + 表级歧义门闩。Plan 见 [source-ambiguity-gate-plan](plans/lucy-20261107-source-ambiguity-gate-plan.md)。本条不表示可上线 （第 1 轮评审已修订；待第 2 轮对抗式评审） |
 | [specs/lucy-20261107-answer-verifiability-spec.md](specs/lucy-20261107-answer-verifiability-spec.md) | **v0.2-draft，待严格评审／验收；冻结落地；未授权实现**（P0-4／REQ-030-022）：答复可核对块。Plan 见 [answer-verifiability-plan](plans/lucy-20261107-answer-verifiability-plan.md)。本条不表示可上线 （第 1 轮评审已修订；待第 2 轮对抗式评审） |

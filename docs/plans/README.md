@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261107-ui-interaction-contract-gate-plan.md](lucy-20261107-ui-interaction-contract-gate-plan.md) | **v0.5，开发授权已获得；功能合同已收口（2026-11-07）**。本条收口不表示可上线。交互合同门禁的 lint 与治理正文已落地。不改页面。Spec 见 [lucy-20261107-ui-interaction-contract-gate-spec.md](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md)。评审见 [codex-review](../reviews/2026-11-07-codex-review-ui-interaction-contract-gate.md) |
 | [lucy-20261107-lucy-0-30-feature-inventory-pool.md](lucy-20261107-lucy-0-30-feature-inventory-pool.md) | **v0.5 生效跟进（不是 Spec；立项≠开发授权）**：`0.30` **完整功能清单池**。§2.2 三层进度——过程评审（可分叉）／**终稿确权＝Codex CLI 终审或委托人明示确权**／开发授权另发；暂时都不开工落地。本条不表示可上线 |
 | [lucy-20261107-lucy-0-30-core-direction.md](lucy-20261107-lucy-0-30-core-direction.md) | **v0.4 方向已锁定（不是 Spec，不授权实现）**：`0.30` **升级核心方向**。辅线＝现有功能 UX；**主线＝约 100 名存量用户每日稳定／准确／可靠交互**——四道机制闸。跟进主表见功能清单池。**终稿确权＝Codex 终审或委托人确权**；暂不开工落地。本条不表示可上线 |
 | [lucy-20261107-misreport-defense-and-stored-user-experience-plan.md](lucy-20261107-misreport-defense-and-stored-user-experience-plan.md) | **v0.1 草案，待拍板（不是 Spec，不授权实现）**：`0.30` 分支计划。**按 2026-11-06 CFO 选表误报事故 + 2026-11-07 客户沟通实录（客户：翊总 / 田总）**做定性——错表为 GPU 计提成本表（客户有权访问）⇒ **语义误报，ACL 越权排除**；事故有**两条独立故障轴**（选错表 ＋ 口径被 AI 自行加工）；**止血已落地**（改语义文件、客户真实账号复测通过）。八个缺口登记为 REQ-030-022–027（答复可核对性／选表语义暴露／多表命中先问＋表级歧义门闩／Eval 选表正确性／体感仪表盘与主动告警／口径固化）。**0.30 投入标准由沟通实录重新定义**：把已对客户承诺的「每天跑测评、每天迭代」「发现问题当天修正」从人力盯后台变成系统保证。本条不表示可上线 |
