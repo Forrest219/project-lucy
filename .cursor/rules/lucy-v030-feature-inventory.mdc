@@ -1,0 +1,17 @@
+---
+description: Lucy 0.30 功能清单池与评审门禁——本分支 agent 必须遵从
+alwaysApply: true
+---
+
+# Lucy 0.30 功能清单遵从
+
+在产品线 `0.30.0` / 分支 `lucy-v0.30` / 声称做「0.30」的任务上：
+
+1. **先读跟进主表** [`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)（含 §2.2 评审门禁与**终稿确权**口径），再动 Spec、Plan 或代码排期。
+2. **方向**见 [`docs/plans/lucy-20261107-lucy-0-30-core-direction.md`](docs/plans/lucy-20261107-lucy-0-30-core-direction.md)；**REQ 正文**见 [`docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)。
+3. **P0 立项已批准**＝可写 Spec／Plan；**≠ 开发授权**。
+4. **三层进度不得混写**：（a）过程评审（批次 R1／Claude Code／其他对抗）只记过程，允许单条深浅分叉；（b）**终稿确权**＝**Codex CLI 终审**，或当时无 Codex 时 **委托人明示确权**；（c）**开发授权**须委托人另发。过程对抗 ≠ 终稿；终稿 ≠ 可改代码。
+5. **2026-11-07 起现行阶段＝严格评审 Spec／Plan，暂时一律不开工落地。** 须该条 **终稿确权 + 决策闭合 + 委托人明确开发授权** 后才可改运行代码。禁止「顺手实现」。
+6. **主线优先**：P0（含 P0-A）抢带宽时，P2 辅线与非阻塞 P1 让路；带宽优先用于评审与修订，不用于未授权实现。
+7. **新功能先入清单池**（并回写需求池 REQ），禁止旁路开做。
+8. 未齐 P0-1…P0-7 前，不得宣称「0.30 核心升级完成」。

@@ -2,6 +2,8 @@
 
 本仓库的开发治理规则只以 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 为正文。本文件不复述第二套口径。功能闭口、发布取证、状态登记和新 Spec 的文件名，都见该文件「功能闭口与发布取证」。
 
+**产品线 `0.30.0` / 分支 `lucy-v0.30`**：跟进主表与 P0 立项见 [`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)（含 §2.2：过程评审／**终稿确权**／开发授权三层）；方向见 [`docs/plans/lucy-20261107-lucy-0-30-core-direction.md`](docs/plans/lucy-20261107-lucy-0-30-core-direction.md)。**P0 立项 ≠ 开发授权**。**终稿确权**＝Codex CLI 终审，或无 Codex 时委托人明示确权；其他对抗只记过程。**现行阶段（2026-11-07）**：严格评审／验收 Spec 与 Plan，**暂时都不开工落地**；终稿确权并另获开发授权后才可实现。
+
 功能的现行状态只以 Spec 头部「状态」行为准。改状态时按该文件改完现值镜像。历史变更行、复核快照和实施笔记不是现值。已作废的「未执行且不排期」和「不可交付 UAT」不得抄回。机器检查是 `lint:spec-docs` 的 `stale-status`。
 数据问答运行时指导走 Lucy MCP Proxy 的 `initialize` instructions 注入（内容来源 [`webui/config/data-qa-instructions.md`](webui/config/data-qa-instructions.md)，机制见 [`webui/docs/07-mcp-auth-proxy-spec.md`](webui/docs/07-mcp-auth-proxy-spec.md) §4.4），不再由 [`CLAUDE.md`](CLAUDE.md) 承载——`CLAUDE.md` 现在只做指引，不得再写入数据问答规则正文；如发现回归，请改回纯引用。
 
