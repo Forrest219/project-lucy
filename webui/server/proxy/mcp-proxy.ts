@@ -130,6 +130,25 @@ import {
   lookupReportTemplate,
   resolveCertifiedRoute,
 } from "./certified-route.js";
+// P0-1 问题类型口径绑定（Spec v0.9 D3–D12／O1／O2）。
+import {
+  bindingScopeKey,
+  checkCaliberBindingGate,
+  prepareCaliberBindingActivation,
+  withCaliberBindingRegistryExclusion,
+  withCaliberBindingScopeLock,
+  type CaliberBindingDenial,
+} from "./caliber-binding.js";
+import {
+  beginBindingSessionPreparation,
+  commitBindingSession,
+  restorePriorBindingSession,
+} from "./caliber-binding-session.js";
+import {
+  currentCaliberBindingRegistry,
+  registrySyncPending,
+  verifyCurrentBindingContentAndDependencies,
+} from "./caliber-binding-registry.js";
 
 export { registerPublishedVersion };
 
@@ -1074,7 +1093,9 @@ function lucyBeginQuestionTool() {
           type: "array",
           items: { type: "string" },
           maxItems: 20
-        }
+        },
+        // P0-1：显式指定生效绑定。优先于触发匹配；不回退触发匹配。
+        caliberBindingId: { type: "string", maxLength: 200 }
       },
       required: ["intentSummary"],
       additionalProperties: false
@@ -4177,6 +4198,73 @@ async function buildDenialRepairPayload(
       });
       return;
     }
+    // ─── P0-1 问题类型口径绑定：注入前门禁 ───
+    // 闸序（Spec D6）：**ACL →（若有可解析 Active Binding）口径集合 → 行权限注入／
+    // 既有 guardrails**。偏离 → `caliber_binding_violation`，**不转发上游**。
+    // 口径校验基于**注入前**的原始 Agent 入参（行权限谓词不参与）。
+    if (toolName === "lucy_query" || toolName === "lucy_explain_query") {
+      const caliberGate = await checkCaliberBindingGate({
+        identity,
+        identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+        sessionId: requestMeta.lucySessionId,
+        toolName,
+        args: (toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs))
+          ? toolArgs as Record<string, unknown>
+          : {}
+      });
+      if (caliberGate.kind === "deny") {
+        const denial: CaliberBindingDenial = caliberGate.denial;
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: denial.text }],
+            data: denial.payload
+          }
+        });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          tables: queryTables.length > 0 ? queryTables : undefined,
+          argsSummary,
+          ...queryMeta,
+          outcome: "denied",
+          decisionReason: denial.code,
+          errorDetail: denial.code,
+          failureDimension: denial.payload.failureDimension,
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          // 口径偏离是「效果发生前」的拒绝：本次尝试**未执行**（零上游执行）。
+          executionEvidence: executionEvidenceFromObservation({
+            authorizationAllowed: true,
+            notExecuted: true
+          }),
+          ...(await auditMeta(identity, denial.code))
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "denied",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: denial.code,
+          matchedRule: denial.payload.dimension
+        });
+        return;
+      }
+    }
     // Spec 99 §6 — Proxy-only forced_filters injection for lucy_query; strip any user-supplied alias.
     if (toolName === "lucy_query") {
       scopeIntersectionEmpty = isScopeIntersectionEmpty(toolArgs, decision.forcedFilters);
@@ -4765,22 +4853,206 @@ async function buildDenialRepairPayload(
       const questionPreview = storePreview && rawQuestion ? redactQuestionText(rawQuestion).slice(0, maxChars) : undefined;
       const questionHash = storePreview && rawQuestion ? createHash("sha256").update(rawQuestion).digest("hex") : undefined;
 
-      try {
-        await writeConversationTurn({
-          turnId,
-          sessionId: requestMeta.lucySessionId,
-          userId: identity.userId,
-          tokenHashPrefix: identity.tokenHashPrefix,
-          platform: requestMeta.lucyPlatform,
-          client: identity.client,
-          questionHash,
-          questionPreview,
-          questionSummary: intentSummary,
-          questionSource: "reported_tool",
-          redactionVersion: "v1"
+      // ─── P0-1 问题类型口径绑定：激活判定（准备阶段） ───
+      // 显式 `caliberBindingId` 优先；否则按 O2 触发匹配，**恰好一条**才激活。
+      // 激活错（ambiguous／显式 id 不可见或不存在）→ 拒绝，**不改旧 BindingSession**。
+      const explicitBindingId = typeof args.caliberBindingId === "string" ? args.caliberBindingId.trim() : "";
+      const activation = await prepareCaliberBindingActivation({
+        identity,
+        intentSummary,
+        question: rawQuestion,
+        explicitBindingId: explicitBindingId || undefined
+      });
+      if (!activation.ok) {
+        const denial = activation.denial;
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: denial.text }],
+            data: denial.payload
+          }
         });
-      } catch (err) {
-        console.error("[lucy-proxy] failed to write conversation turn", err);
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          outcome: "denied",
+          decisionReason: denial.code,
+          errorDetail: denial.code,
+          failureDimension: denial.payload.failureDimension,
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          executionEvidence: executionEvidenceFromObservation({
+            authorizationAllowed: true,
+            notExecuted: true
+          }),
+          ...(await auditMeta(identity, denial.code))
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "denied",
+          startedAt: new Date(start).toISOString(),
+          turnId: null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: denial.code,
+          policySource: "other"
+        });
+        return;
+      }
+      const chosenBinding = activation.activation.binding;
+      const registryGeneration = activation.activation.registryGeneration;
+      const caliberScopeKey = bindingScopeKey(
+        budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+        requestMeta.lucySessionId
+      );
+
+      // ─── D11 共同提交与恢复 ───
+      // 锁序：注册表激活互斥区间（与注册表提交互斥，**不仅** identityKey＋sessionId
+      // 锁）→ 作用域锁。进入任何写入前复核：准备阶段 generation、当前绑定文件集合
+      // ＋内容摘要＋sourceMap 解析依赖。任一不满足 → `caliber_binding_unresolved`，
+      // **禁止提交旧选择**；旧 BindingSession 不变。
+      const beginOutcome = await withCaliberBindingRegistryExclusion(() =>
+        withCaliberBindingScopeLock(caliberScopeKey, async () => {
+          const proof = await verifyCurrentBindingContentAndDependencies(registryGeneration);
+          const registry = currentCaliberBindingRegistry();
+          if (
+            !registry
+            || registry.generation !== registryGeneration
+            || registrySyncPending()
+            || !proof.complete
+            || !proof.matchesCommitted
+          ) {
+            return { ok: false as const, code: "caliber_binding_unresolved" as const };
+          }
+          // ④ 前半段：先写 `preparing`（未完成提交）。失败时旧 Session 原样恢复。
+          await beginBindingSessionPreparation(caliberScopeKey, {
+            turnId,
+            registryGeneration,
+            bindingId: chosenBinding?.bindingId ?? null,
+            boundKey: chosenBinding?.boundKey ?? null,
+            caliberSnapshot: chosenBinding?.caliber ?? null
+          });
+          // ① turn 持久化
+          try {
+            await writeConversationTurn({
+              turnId,
+              sessionId: requestMeta.lucySessionId,
+              userId: identity.userId,
+              tokenHashPrefix: identity.tokenHashPrefix,
+              platform: requestMeta.lucyPlatform,
+              client: identity.client,
+              questionHash,
+              questionPreview,
+              questionSummary: intentSummary,
+              questionSource: "reported_tool",
+              redactionVersion: "v1"
+            });
+          } catch (err) {
+            console.error("[lucy-proxy] failed to write conversation turn", err);
+            await restorePriorBindingSession(caliberScopeKey);
+            return { ok: false as const, code: "persist_failed" as const };
+          }
+          // ②（可选）预算开题。预算整体关闭时不受预算存储故障牵连。
+          const begun = questionBudgetEnabled()
+            ? await questionBudget.beginQuestion({
+                identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+                sessionId: requestMeta.lucySessionId,
+                turnId
+              })
+            : { ok: true as const, previousTurnId: null, state: null as never };
+          if (!begun.ok) {
+            await restorePriorBindingSession(caliberScopeKey);
+            return { ok: false as const, code: "budget_failed" as const, reason: begun.reason };
+          }
+          // ③ 取代旧轮次指针
+          reportedTurns.supersede({
+            identity,
+            sessionId: requestMeta.lucySessionId,
+            turnId
+          }, begun.previousTurnId ?? undefined);
+          await bindPriorSessionCalls({
+            turnId,
+            userId: identity.userId,
+            tokenHashPrefix: identity.tokenHashPrefix,
+            sessionId: requestMeta.lucySessionId,
+            at: new Date().toISOString()
+          });
+          // ④ 后半段：提交点。仅 ④ 成功后才标 `committed`；失败／中断 → lost_or_conflict。
+          await commitBindingSession(caliberScopeKey, {
+            turnId,
+            registryGeneration,
+            bindingId: chosenBinding?.bindingId ?? null,
+            boundKey: chosenBinding?.boundKey ?? null,
+            caliberSnapshot: chosenBinding?.caliber ?? null
+          });
+          return { ok: true as const, previousTurnId: begun.previousTurnId };
+        })
+      );
+
+      if (!beginOutcome.ok && beginOutcome.code === "caliber_binding_unresolved") {
+        const denialText = "Access denied: caliber_binding_unresolved（口径绑定无法解析）：绑定注册表状态不可信，本次开题未提交";
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: denialText }],
+            data: { reason: "caliber_binding_unresolved", failureDimension: "口径绑定" }
+          }
+        });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          outcome: "denied",
+          decisionReason: "caliber_binding_unresolved",
+          errorDetail: "caliber_binding_unresolved",
+          failureDimension: "口径绑定",
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          executionEvidence: executionEvidenceFromObservation({
+            authorizationAllowed: true,
+            notExecuted: true
+          }),
+          ...(await auditMeta(identity, "caliber_binding_unresolved"))
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "denied",
+          startedAt: new Date(start).toISOString(),
+          turnId: null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: "caliber_binding_unresolved",
+          policySource: "other"
+        });
+        return;
+      }
+
+      if (!beginOutcome.ok && beginOutcome.code === "persist_failed") {
         const responseBody = JSON.stringify({
           jsonrpc: "2.0",
           id: requestId,
@@ -4819,16 +5091,10 @@ async function buildDenialRepairPayload(
         return;
       }
       // Spec 162 §7.6 / SC-39：预算整体关闭时，问询开题不受预算存储故障牵连。
-      const begun = questionBudgetEnabled()
-        ? await questionBudget.beginQuestion({
-            identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
-            sessionId: requestMeta.lucySessionId,
-            turnId
-          })
-        : { ok: true as const, previousTurnId: null, state: null as never };
-      if (!begun.ok) {
+      // （预算开题与轮次取代已在上面的 D11 临界区内完成。）
+      if (!beginOutcome.ok && beginOutcome.code === "budget_failed") {
         const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
-          reason: begun.reason
+          reason: beginOutcome.reason
         }), { isError: true });
         res.writeHead(503, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
         res.end(responseBody);
@@ -4839,37 +5105,25 @@ async function buildDenialRepairPayload(
           tool: toolName,
           argsSummary,
           outcome: "error",
-          decisionReason: begun.reason,
-          errorDetail: begun.reason,
+          decisionReason: beginOutcome.reason,
+          errorDetail: beginOutcome.reason,
           durationMs: Date.now() - start,
           responseBytes: Buffer.byteLength(responseBody),
           requestId,
           ...requestMeta,
-          ...(await auditMeta(identity, begun.reason)),
+          ...(await auditMeta(identity, beginOutcome.reason)),
         });
         return;
       }
-      if (begun.previousTurnId) {
+      if (beginOutcome.ok && beginOutcome.previousTurnId) {
         // Spec 162 §6.5：同身份同会话的新问询**显式取代**旧轮次。
         // 取代事实写进本次开题的审计行（不另开一行，避免污染四桶恒等式）。
         // 审计不得回传 scopeKey / identityKey —— 只记两个 turnId。
         argsSummary = {
           ...(argsSummary ?? {}),
-          budgetSupersession: { from: begun.previousTurnId, to: turnId }
+          budgetSupersession: { from: beginOutcome.previousTurnId, to: turnId }
         };
       }
-      reportedTurns.supersede({
-        identity,
-        sessionId: requestMeta.lucySessionId,
-        turnId
-      }, begun.previousTurnId ?? undefined);
-      await bindPriorSessionCalls({
-        turnId,
-        userId: identity.userId,
-        tokenHashPrefix: identity.tokenHashPrefix,
-        sessionId: requestMeta.lucySessionId,
-        at: new Date().toISOString()
-      });
       // spec §8.4: lazy, sampled purge trigger on the (low-frequency) report path — no background worker.
       if (Math.random() < Number(process.env.LUCY_QUESTION_PREVIEW_PURGE_SAMPLE_RATE ?? 0.01)) {
         purgeExpiredConversationTurns().catch((err) => {
@@ -4885,6 +5139,8 @@ async function buildDenialRepairPayload(
             type: "text",
             text: JSON.stringify({
               turnId,
+              // P0-1：本次问询旅程的生效绑定（未命中时为 null）。
+              activeBindingId: chosenBinding?.bindingId ?? null,
               note: "Subsequent tool calls within the attach window will be associated with this turn automatically; no need to pass extra params."
             })
           }]

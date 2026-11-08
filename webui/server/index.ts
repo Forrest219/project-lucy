@@ -61,6 +61,13 @@ import {
   updateConnectionEndpoint
 } from "./project";
 import { loadContentPaths, resolveContentPaths } from "./paths";
+// P0-1 问题类型口径绑定（Spec v0.9 O1）。
+import {
+  commitCaliberBindingRegistry,
+  loadCaliberBindingCandidate,
+  recoverCaliberBindingRegistry
+} from "./proxy/caliber-binding-registry";
+import { withCaliberBindingRegistryExclusion } from "./proxy/caliber-binding-lock";
 import { collectContentLayout, mirrorOnlySemanticRelPaths } from "./content-layout";
 import { buildSemanticModelIndex } from "./semantic-identity";
 import { applySharedSemanticLegality } from "./semantic-checks";
@@ -2730,6 +2737,19 @@ export function buildServer() {
             attemptId,
             "pending"
           );
+          // ─── P0-1（O1 §4.1②／§4.1⑦）—— 绑定注册表在同一发布窗口内提交 ───
+          // 顺序固定：先读候选并校验（失败 → 整批不成功，**不得**借 KTX 成功推进
+          // 绑定基线）→ KTX 重建索引 → 绑定注册表提交（①②③）→ 基线 CAS。
+          // 「KTX 失败也不得先激活候选绑定」：提交在 reindex 成功之后。
+          const bindingCandidate = await loadCaliberBindingCandidate();
+          if (!bindingCandidate.ok) {
+            throw new SemanticAssetValidationError(
+              "caliber_binding_candidate_failed",
+              `口径绑定候选校验失败（${bindingCandidate.reason}${bindingCandidate.detail ? `:${bindingCandidate.detail}` : ""}），本次发布批次未成功。`,
+              [],
+              409
+            );
+          }
           const reindex = await reindexProject(projectRoot, { force });
           const finishedAt = new Date().toISOString();
           const reindexRecord = {
@@ -2742,8 +2762,14 @@ export function buildServer() {
           // the reindex result alongside normal publish batches. The snapshot is
           // the pending set at sync start, so a write that lands during reindex
           // stays on the workbench for the next sync.
+          //
+          // P0-1 —— 绑定文件同样进发布记录（O1 §4.1①）。
+          const pendingSnapshot = await readPublishPendingSnapshot(projectRoot);
+          const bindingFilePaths = pendingSnapshot.currentFiles
+            .filter((file) => file.kind === "caliber_binding")
+            .map((file) => file.logicalPath);
           const pending = await describePendingReleaseAssets(projectRoot, {
-            filePaths: consumedFiles.map((file) => file.filePath),
+            filePaths: [...consumedFiles.map((file) => file.filePath), ...bindingFilePaths],
             sources: consumedSourceEntries.map(([, source]) => source)
           });
           const historyRecord = await recordManualReindex(projectRoot, {
@@ -2756,6 +2782,23 @@ export function buildServer() {
             connectionIds: pending.connectionIds
           });
           if (reindexRecord.ok) {
+            // ①②③ —— 原子持久化提交凭据 → 切换内存 generation → 完成终态登记。
+            // 与 begin 提交互斥（`registryActivationCommitExclusion`）。
+            const bindingCommit = await withCaliberBindingRegistryExclusion(() =>
+              commitCaliberBindingRegistry(bindingCandidate, {
+                releaseId: historyRecord.id,
+                attemptId
+              })
+            );
+            if (!bindingCommit.ok) {
+              throw new SemanticAssetValidationError(
+                "caliber_binding_commit_failed",
+                `口径绑定注册表提交失败（${bindingCommit.reason}），本次发布批次未成功。`,
+                [],
+                409
+              );
+            }
+
             const consumed = new Set(consumedFiles);
             for (let index = writtenFiles.length - 1; index >= 0; index -= 1) {
               if (consumed.has(writtenFiles[index])) writtenFiles.splice(index, 1);
@@ -3199,6 +3242,15 @@ async function recoverSemanticJournals(): Promise<void> {
   await reconcilePublishWorkbenchAttempts(projectRoot).catch((error: unknown) => {
     console.error(
       "[lucy-publish-workbench] pending baseline reconciliation failed",
+      error instanceof Error ? error.message : "unknown"
+    );
+  });
+  // P0-1（O1 §4.1⑥）—— 绑定注册表的启动恢复。以持久化的 `activeGeneration`
+  // 提交凭据为权威：凭据已提交且引用完整 → 恢复同一 generation；只有 prepared、
+  // 凭据缺失或引用不完整 → **拒绝新 begin**。不把当前作者目录自动视为已发布。
+  await recoverCaliberBindingRegistry().catch((error: unknown) => {
+    console.error(
+      "[lucy-caliber-binding] registry recovery failed",
       error instanceof Error ? error.message : "unknown"
     );
   });

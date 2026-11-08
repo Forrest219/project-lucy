@@ -27,7 +27,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
-import { resolveContentPaths } from "./paths";
+import { CALIBER_BINDINGS_DIR_NAME, caliberBindingsPath, resolveContentPaths } from "./paths";
 import {
   buildSemanticModelIndex,
   readSemanticJoinReferences,
@@ -229,7 +229,9 @@ async function readCurrentContent(
   const paths = await resolveContentPaths(projectRoot);
   const roots: Array<[string, string]> = [
     ["semantic-layer/", paths.semanticLayer],
-    ["wiki/", paths.wiki]
+    ["wiki/", paths.wiki],
+    // P0-1 —— 绑定文件也要能取到当前字节（证据／差异用）。
+    [`${CALIBER_BINDINGS_DIR_NAME}/`, caliberBindingsPath(paths)]
   ];
   for (const [prefix, root] of roots) {
     if (!logicalPath.startsWith(prefix)) continue;

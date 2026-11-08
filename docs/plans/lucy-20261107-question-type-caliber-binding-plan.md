@@ -3,92 +3,92 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 实施计划（Plan） |
-| 版本 / 日期 | v0.2-draft / 2026-11-07 |
-| 状态 | **v0.2-draft，待严格评审／验收；冻结落地；未授权实现**（2026-11-07）。已并入 0.30 批次第 1 轮评审（形式合规 ＋ 事实性）并已修订；待 0.30 批次第 2 轮对抗式评审。配套 Spec v0.2-draft。本阶段只评审与修订本 Plan，**暂不执行任何实现 Task** |
-| 授权边界 | **不授权改代码**。须满足功能清单池 §2.2：R1 形态 → R2 对抗式评审 → R3 O1／O2 闭合 → R4 委托人开发授权 |
-| 验收 | Spec SC-01–SC-14 逐条有证据；`npm run lint:spec-docs` 退出 0；相关 vitest 全绿；夹具证明偏离请求零上游执行。**不构成发布取证，不表示可上线** |
+| 版本 / 日期 | v0.9 / 2026-11-08 |
+| 状态 | **v0.9，R4 已授予（委托人 2026-11-08）**；O1／O2 已闭合；配套 Spec v0.9。**允许按本 Plan 实现与测试**；实现主体＝Claude Code；review＝Cursor Agent。**不宣称可上线** |
+| 授权边界 | **已授权改代码（本条范围）**。R4：2026-11-08；主体 Claude Code；Cursor Agent review。不构成发布取证／可上线。 |
+| 验收 | Spec SC-01–SC-30 逐条有证据（授权实现后执行；SC-30 真实进程故障）；`npm run lint:spec-docs` 退出 0；相关 vitest 全绿；SC-17c 真实进程局部故障。**不构成发布取证，不表示可上线** |
 | 目标分支 / 产品线 | `lucy-v0.30` / `0.30.0` |
 | 需求来源 | 清单 P0-1；需求池 REQ-030-027 |
 | Spec | [lucy-20261107-question-type-caliber-binding-spec.md](../specs/lucy-20261107-question-type-caliber-binding-spec.md) |
+| 评审记录 | [Codex 对抗式评审](../reviews/2026-11-07-question-type-caliber-binding-codex-review.md) |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md) 落盘清单与 Plan Mode |
 
 ## 1. 目标
 
-把「问题类型 → 唯一表 + 固定口径」从逐题改 YAML 的止血手法，落成可发布资产 + Proxy 硬门禁，使命中绑定后的 Agent 无法自行加工口径。
+把「问题类型 → 唯一表 + 固定口径」落成可发布资产 + Proxy 硬门禁；命中后 Agent 无法自行加工口径。
 
 ## 2. 开工前置
 
-1. Spec v0.1 评审通过（或修订至可交付开发）。
-2. **O1**（发布／加载接线）与 **O2**（触发匹配算法）由委托人裁定并回写 Spec。
-3. 明确**开发授权**。
-4. 术语标准补登记 Question Type Binding 等（Spec Terminology 落位）。
-5. 基线：`npm run lint:spec-docs` 绿（存量 WARN 除外）。
+1. ~~Spec／Plan 终稿确权~~ **已完成**（委托人 2026-11-07）。
+2. ~~O1／O2 委托人裁定~~ **已完成**（委托人 2026-11-07；选项「1」＝全采纳闭合包；Spec §4.1／§4.2）。
+3. ~~开发授权（R4）~~ **已授予**（委托人 2026-11-08：Claude Code 实现 ＋ Cursor Agent code review）。
+4. 术语标准补登记。
+5. 复用 `acl.ts` `CanonicalSourceKey`／sourceMap（禁止自写前缀拼接）。
+6. `npm run lint:spec-docs` 绿（存量 WARN 除外）。
+
+> **授权已生效**：可执行 S0–S5 实现 Task；完成后不得自称可上线，须另走发布取证。
 
 ## 3. 文件结构
 
 | 文件 | 动作 | 职责 |
 |---|---|---|
-| `webui/server/proxy/caliber-binding.ts`（建议） | 新建 | 加载、匹配、集合校验纯函数 |
-| `webui/server/proxy/mcp-proxy.ts` | 修改 | `lucy_begin_question` 激活；query／explain 门禁 |
-| `webui/server/proxy/question-experience.ts` 或 journey 存储 | 修改 | Active Binding 挂在问询旅程 |
-| `webui/server/paths.ts` / publish 扫描（若 O1 要求） | 修改 | 内容根 `caliber-bindings/` |
-| `webui/docs/00-product-terminology-standard.md` | 修改 | 新术语 |
-| `webui/server/__tests__/caliber-binding*.test.ts` | 新建 | SC 覆盖 |
-| 示例 `caliber-bindings/*.yaml`（demo 或 docs 夹具） | 新建 | 测试夹具，非客户秘密 |
+| `webui/server/proxy/caliber-binding.ts` | 新建 | BindingSession（含 `commitPhase`／`boundKey`／`caliberSnapshot`）、加载、匹配、D7／D12 校验 |
+| `webui/server/proxy/mcp-proxy.ts` | 修改 | begin 临界区；query／explain 注入前门禁 |
+| `webui/server/proxy/acl.ts` | 复用／必要时导出 | CanonicalSourceKey、collect 键集 |
+| publish／content-mirror／paths | 按 O1 | `caliber-bindings/` |
+| 术语标准 | 修改 | 新术语 |
+| `__tests__/caliber-binding*.test.ts` | 新建 | SC-01–SC-28 |
+| 示例 YAML 夹具 | 新建 | 含 `connectionId`＋`source` |
+| Skill 管线 | **不动** | D8 延期 |
 
 ## 4. 任务分解
 
 ### S0：决策闭合与夹具
-
-- 回写 O1／O2；准备最小 published／draft YAML 夹具。
-- **验证**：决策表无「开工前必答」空项。
-
-### S1：纯函数加载与匹配
-
-- 实现 load／match／subset 校验；draft 过滤；歧义 ≥2。
-- **验证**：SC-01、SC-04、SC-05 单测红→绿。
-
-### S2：begin_question 激活
-
-- 显式 id、唯一触发、不可见 id、歧义拒绝；写入旅程。
-- **验证**：SC-02、SC-03、SC-06、SC-12。
-
+- ~~O1／O2 闭合~~ **已完成**（委托人 2026-11-07）。夹具带钉死 `connectionId`；trigger 字母数字码点 ≥4；SC-29／30 故障夹具在 **R4 后**执行。
+### S1：加载＋CanonicalSourceKey＋D12＋触发词校验
+- 资产解析 `boundKey`；禁键一律 violation；非法／过短 trigger → 发布失败（SC-01）。
+- **验证**：SC-01、SC-07、SC-08、SC-15、SC-15b、SC-26。
+### S2：BindingSession／快照／commitPhase
+- 四态；深拷贝快照；D11；SC-17*／25／27／28。
 ### S3：query／explain 门禁
+- 对照快照；双工具同码；SC-10–13、SC-18、SC-21。
+### S4：O1 发布／加载（须 O1 闭合）
+- ① 路径／种类／快照字节／删除分类／发布历史接线；② 消费回执、`activeGeneration` 提交凭据及重启恢复；③ 绑定独立变更与混合整批同步；④ begin generation＋内容有效性互斥复核（`registryActivationCommitExclusion`）。非 KTX 镜像。
+- **验证**：SC-19、SC-22–24、SC-28–30；SC-30 真实进程局部故障。
+### S4b：O2 触发匹配（须 O2 闭合）
+- NFKC＋`toLowerCase` 子串；分别匹配；非分词；`Straße`／`STRASSE` 与内部标点反例。
+- **验证**：SC-01、SC-04–06。
+### S5：术语与镜像
+- SC-14；绑定**不**入 KTX `CONTENT_DIR_NAMES`。
+### S6：实现完成后由 Cursor Agent code review；记录回链；**不**自动宣称可上线。
 
-- ACL 之后、上游之前；错 Source／越集／缺 requireMeasures；行权限字段豁免。
-- **验证**：SC-07–SC-11、SC-13；上游计数断言。
+## 5. 验收／完成定义
 
-### S4：术语与门禁文档
+- SC-01–SC-30 有证据（R4 后执行）；未授权前不得收口、不得宣称可上线。
+- 偏离 query：上游计数 0；explain：本条拒绝码。
+- 未授权前无运行代码合入；**不宣称可上线**。
 
-- 术语标准登记；Spec／Plan 状态行；清单池状态回写。
-- **验证**：SC-14；清单池 P0-1 行与需求池 REQ-030-027 状态同句。
-
-### S5：对抗式评审与收口准备
-
-- 独立评审；阻断项清零后才可申请开发授权后的合并。
-- **验证**：评审记录落 `docs/reviews/` 或 `inbox/` 并回链 Spec。
-
-## 5. 验收
-
-- Spec SC-01–SC-14 逐条有证据（单测或夹具上游计数）。
-- `npm run lint:spec-docs` 退出码 0；相关 vitest 全绿。
-- 偏离绑定的请求：**本机拒绝且上游执行计数为 0**。
-- **不构成发布取证，不表示可上线**。
-
-## 6. 完成定义
-
-- SC-01–SC-14 均有自动化证据（或夹具证据）。
-- 未授权前无运行代码合入；授权后合入须附实现笔记。
-- **不宣称可上线**。
-
-## 7. 风险
+## 6. 风险
 
 | 风险 | 缓解 |
 |---|---|
-| O1 未定导致发布后绑定不加载 | 阻塞 S3 合入 |
-| 与 Skill prerequisites 双源真相 | Spec D8：Skill 只可选引用 bindingId |
-| 触发误伤 | O2 + SC-05 fail-closed |
+| 实现偏离 Spec／漏 SC | Cursor Agent review；SC 证据门禁 |
+| 热读资产漂移 | D5 快照；SC-23／28 |
+| 部分提交放行 | commitPhase；SC-17c |
+| 额外参数绕过 | D12；SC-15b |
+| 短 trigger 误命中 | SC-01 最小长度；发布失败 |
 
-## 8. 建议实施序（产品线）
+## 7. 产品线序
 
-本条为 **Spec 批次 S1** 主角。下一批（S2）：P0-2 Catalog 语义暴露 Spec；P0-A 已有 Spec 继续评审。不得插队实现 P2 辅线挤占本条评审带宽。
+本条＝Spec 批次 **S1** 主角。下一批 S2：P0-2∥P0-A。
+
+
+## 变更记录
+
+| 版本 | 日期 | 说明 |
+|---|---|---|
+| v0.9 | 2026-11-08 | R4 授予；允许 Claude Code 实现 |
+| v0.8 | 2026-11-07 | 委托人闭合 O1／O2；对齐 Spec v0.8；仍待 R4 |
+| v0.7 | 2026-11-07 | 对齐 Spec v0.7 R2 补丁；SC-29／30；S4 四段 |
+| v0.6 | 2026-11-07 | 对齐 Spec v0.6 O1／O2 完整草案；S4／S4b；草案≠闭合 |
+| v0.5 | 2026-11-07 | 对齐 Spec v0.5 定稿；O1／O2 仍前置 |

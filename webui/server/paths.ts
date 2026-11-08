@@ -20,6 +20,15 @@ import { ProjectError } from "./project";
 const CONTENT_DIR_NAMES = ["semantic-layer", "wiki", "evals", "skills"] as const;
 export type ContentDirName = (typeof CONTENT_DIR_NAMES)[number];
 
+/**
+ * P0-1 —— 问题类型口径绑定在内容根下的子目录名。
+ *
+ * **刻意不在 `CONTENT_DIR_NAMES` 里**：绑定资产是一等发布种类，但**不**进 KTX
+ * 内容镜像（Spec O1 §4.1①「首期不加入 KTX 内容镜像名单」）。绑定由 Lucy 直接
+ * 消费权威内容根的提交快照。
+ */
+export const CALIBER_BINDINGS_DIR_NAME = "caliber-bindings";
+
 export interface ContentPaths {
   /** Resolved absolute path to the content root. */
   configDir: string;
@@ -27,8 +36,18 @@ export interface ContentPaths {
   wiki: string;
   evals: string;
   skills: string;
+  /**
+   * P0-1 —— 问题类型口径绑定目录。**可选**，因此既有构造 `ContentPaths` 字面量
+   * 的调用方无需改动；缺失时由 {@link caliberBindingsPath} 从 `configDir` 推导。
+   */
+  caliberBindings?: string;
   /** Which resolution rule won. */
   source: "env" | "yaml" | "default";
+}
+
+/** P0-1 —— 绑定目录的绝对路径（内容根下的 `caliber-bindings/`）。 */
+export function caliberBindingsPath(paths: Pick<ContentPaths, "configDir" | "caliberBindings">): string {
+  return paths.caliberBindings ?? path.join(paths.configDir, CALIBER_BINDINGS_DIR_NAME);
 }
 
 let cached: ContentPaths | null = null;
@@ -118,6 +137,7 @@ function build(
     wiki: path.join(configDir, "wiki"),
     evals: path.join(configDir, "evals"),
     skills: path.join(configDir, "skills"),
+    caliberBindings: path.join(configDir, CALIBER_BINDINGS_DIR_NAME),
     source
   };
 }

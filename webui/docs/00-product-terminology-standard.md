@@ -816,6 +816,11 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 访问日志主行中文、次行裁决原因码。调试台用裁决卡，允许时不重复「允许执行」 |
 | Decision Reason Code | Decision Reason Code | 裁决原因码 | — | 机器码（如 `tool_forbidden`）；次行 `notranslate` |
 | Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | 调试台结果不展示计数 |
+| Question Type Binding | Question Type Binding | 问题类型口径绑定 | 指标绑定、自动口径推断、ACL 绑定、权限绑定 | 协议／资产名 `caliber_binding`。人发布的声明式资产：问题类型（触发词／显式 id）→ **唯一 Source** ＋ **固定口径集合**。见 Spec `lucy-20261107-question-type-caliber-binding-spec` |
+| Bound Caliber | Bound Caliber | 固定口径 | 口径配置、指标口径说明、instructions 软约定 | 绑定内允许的 measures／dimensions／filters／segments 约束集合（首期不含 grain）。运行时由 Proxy 硬门禁，**不得**由 Agent 另行拼装 |
+| Active Binding | Active Binding | 生效绑定 | 全局绑定、跨问询记忆、上次口径 | 一次问询旅程内处于强制状态的那一条绑定。作用域＝问询旅程，以 begin 时深拷贝快照为准 |
+| Caliber Binding Violation | Caliber Binding Violation | 偏离固定口径 | 口径越权、ACL 拒绝、越权访问 | 拒绝码 `caliber_binding_violation`。命中生效绑定后查数参数违反固定口径 |
+| Caliber Binding Unresolved | Caliber Binding Unresolved | 口径绑定无法解析 | 未绑定、绑定缺失、权限不足 | 拒绝码 `caliber_binding_unresolved`。已开题且应有绑定，但权威作用域无法可靠解析（≠「未 begin」） |
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、JSON-RPC method。
 

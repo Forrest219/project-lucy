@@ -33,7 +33,12 @@
 import { createHash } from "node:crypto";
 import { chmod, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveContentPaths, type ContentPaths } from "./paths";
+import {
+  CALIBER_BINDINGS_DIR_NAME,
+  caliberBindingsPath,
+  resolveContentPaths,
+  type ContentPaths
+} from "./paths";
 
 // ─── Layout & limits ────────────────────────────────────────────────────────
 
@@ -57,8 +62,13 @@ export const PUBLISH_SCAN_FILE_BYTE_LIMIT = 8 * 1024 * 1024;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-/** Which business surface a file belongs to. */
-export type PublishContentKind = "semantic_overlay" | "schema_manifest" | "wiki";
+/**
+ * Which business surface a file belongs to.
+ *
+ * `caliber_binding` —— P0-1 问题类型口径绑定（O1 §4.1①）。一等发布种类，
+ * **不**进 KTX 内容镜像。
+ */
+export type PublishContentKind = "semantic_overlay" | "schema_manifest" | "wiki" | "caliber_binding";
 
 export interface PublishContentFile {
   /** Content-root relative, POSIX separators: `semantic-layer/...` / `wiki/...`. */
@@ -199,6 +209,15 @@ function scanRoots(contentPaths: ContentPaths): ScanRoot[] {
       absolute: contentPaths.wiki,
       accept: (name) => /\.md$/i.test(name),
       kind: () => "wiki"
+    },
+    {
+      // P0-1（O1 §4.1①）—— 问题类型口径绑定是一等发布种类。目录本身**不在**
+      // KTX 内容镜像名单里（`content-mirror.ts` 的 `CONTENT_DIR_NAMES`），
+      // Lucy 直接消费权威内容根的提交快照。
+      prefix: CALIBER_BINDINGS_DIR_NAME,
+      absolute: caliberBindingsPath(contentPaths),
+      accept: (name) => YAML_NAMES.test(name),
+      kind: () => "caliber_binding"
     }
   ];
 }
@@ -751,6 +770,8 @@ export function computePendingChanges(
 
 export function kindForLogicalPath(logicalPath: string): PublishContentKind {
   if (logicalPath.startsWith("wiki/")) return "wiki";
+  // P0-1 —— 绑定文件的删除差异必须归到自己的种类，不能落到 semantic_overlay。
+  if (logicalPath.startsWith(`${CALIBER_BINDINGS_DIR_NAME}/`)) return "caliber_binding";
   const parts = logicalPath.split("/");
   if (parts[0] === "semantic-layer" && parts[2] === "_schema") return "schema_manifest";
   return "semantic_overlay";
@@ -823,7 +844,10 @@ async function readContentBytes(
 ): Promise<Buffer | null> {
   const roots: Array<[string, string]> = [
     ["semantic-layer/", paths.semanticLayer],
-    ["wiki/", paths.wiki]
+    ["wiki/", paths.wiki],
+    // P0-1 —— 绑定文件的内容快照字节必须能被读到，否则基线推进会因
+    // 「发布基线引用的内容缺失」而失败。
+    [`${CALIBER_BINDINGS_DIR_NAME}/`, caliberBindingsPath(paths)]
   ];
   for (const [prefix, root] of roots) {
     if (!logicalPath.startsWith(prefix)) continue;

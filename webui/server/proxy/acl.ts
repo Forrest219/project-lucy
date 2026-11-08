@@ -308,6 +308,8 @@ interface SourceMapState {
   compileError?: string;
 }
 
+export type { SourceMapState };
+
 let sourceMapState: SourceMapState = {
   forward: new Map(),
   reverse: new Map(),
@@ -1981,6 +1983,113 @@ export async function extractTables(
   }
 
   return [...tables].filter(Boolean);
+}
+
+/**
+ * P0-1（Spec D3／D7）— 把 `(connectionId, sourceName)` 解析成不可变的
+ * `CanonicalSourceKey`。
+ *
+ * **严格作用域**：只接受同一连接上的 sourceName。资产侧的 `boundKey` 由这条
+ * 路径解析（D3「`connectionId`＋`source` 必须能解析为唯一 `boundKey`」）；
+ * 跨连接同名 logical source 不会被这里的全局唯一回退掩盖 —— 那会让
+ * 「另一连接上的同名 source」被当成命中（SC-07 要求 violation）。
+ */
+export async function resolveCanonicalSourceKey(
+  connectionId: string,
+  sourceName: string,
+  options: { fresh?: boolean; sourceMap?: SourceMapState } = {}
+): Promise<CanonicalSourceKey | null> {
+  const state = options.sourceMap ?? await loadSourceMap(options);
+  const normalizedConnection = normalizeRef(connectionId);
+  const normalizedSource = normalizeRef(sourceName);
+  if (!normalizedConnection || !normalizedSource) return null;
+  const entry = state.forward.get(forwardSourceKey(normalizedConnection, normalizedSource));
+  if (!entry) return null;
+  return {
+    connectionId: entry.connectionId,
+    schema: entry.schema,
+    sourceName: entry.sourceName,
+    physicalTable: entry.physicalTable
+  };
+}
+
+/**
+ * P0-1 —— 与 ACL 裁决**同一份**已提交 sourceMap。
+ *
+ * 口径绑定的请求侧键采集必须与 ACL 用同一份，否则两侧会对「哪个 source 是
+ * 哪个」产生分歧（SC-07 的双连接同名 logical source）。
+ */
+export async function committedSourceMap(): Promise<SourceMapState> {
+  const runtime = await ensurePolicyRuntime();
+  return runtime.sourceMap;
+}
+
+/**
+ * P0-1（Spec D7②）— 请求侧的规范源键采集。
+ *
+ * 采集集与 ACL 对 query／explain 的键集**同源**（复用 `extractTables`），
+ * 禁止在口径绑定模块里另写一套前缀拼接。解析不到的引用（既不是已知
+ * sourceName 也不是已知物理表）进 `unresolved`，由调用方按 fail-closed 处理。
+ */
+export async function collectCanonicalSourceKeys(
+  toolName: string,
+  args: unknown,
+  options: { fresh?: boolean } = {}
+): Promise<{ keys: CanonicalSourceKey[]; unresolved: string[] }> {
+  const state = options.fresh ? await loadSourceMap(options) : await committedSourceMap();
+  const tables = await extractTables(toolName, args, { sourceMap: state });
+  const argsRecord = args && typeof args === "object" && !Array.isArray(args)
+    ? args as Record<string, unknown>
+    : undefined;
+  const requestConnectionId = firstString(argsRecord ?? {}, ["connectionId", "connection_id", "connection", "database"]);
+  const keys: CanonicalSourceKey[] = [];
+  const unresolved: string[] = [];
+  const seen = new Set<string>();
+  for (const table of tables) {
+    const entry = lookupReverse(table, state, requestConnectionId);
+    if (!entry) {
+      if (!unresolved.includes(table)) unresolved.push(table);
+      continue;
+    }
+    const key: CanonicalSourceKey = {
+      connectionId: entry.connectionId,
+      schema: entry.schema,
+      sourceName: entry.sourceName,
+      physicalTable: entry.physicalTable
+    };
+    const id = canonicalSourceKeyDisplay(key);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    keys.push(key);
+  }
+  return { keys, unresolved };
+}
+
+/** P0-1 — 两个规范源键是否指向同一个 (connection, source, physical table)。 */
+export function canonicalSourceKeyEquals(a: CanonicalSourceKey, b: CanonicalSourceKey): boolean {
+  return canonicalSourceKeyDisplay(a) === canonicalSourceKeyDisplay(b);
+}
+
+/**
+ * P0-1 —— 当前 sourceMap 版本。绑定资产的 `boundKey` 由 sourceMap 解析，sourceMap
+ * 漂移必须让已提交注册表失效（O1 §4.1⑤「解析依赖的完整核验」）。
+ */
+export async function currentSourceMapVersion(options: { fresh?: boolean; sourceMap?: SourceMapState } = {}): Promise<string> {
+  const state = options.sourceMap ?? await loadSourceMap(options);
+  return state.version;
+}
+
+/** P0-1 —— sourceMap 编译错误。存在即不可用（fail-closed）。 */
+export async function currentSourceMapCompileError(options: { fresh?: boolean; sourceMap?: SourceMapState } = {}): Promise<string | undefined> {
+  const state = options.sourceMap ?? await loadSourceMap(options);
+  return state.compileError;
+}
+
+/**
+ * P0-1 —— 读取 sourceMap 快照。调用方可在一次装载里复用同一份，避免重复重建。
+ */
+export async function loadSourceMapSnapshot(options: { fresh?: boolean } = {}): Promise<SourceMapState> {
+  return loadSourceMap(options);
 }
 
 export async function lucyCatalog(identity: Identity): Promise<{

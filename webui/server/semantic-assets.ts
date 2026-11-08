@@ -101,7 +101,7 @@ import { changedFiles } from "./diff.js";
 import { ForbiddenPathError } from "./fs-safe";
 import { reindexProject, validateSource, type Issue, type ValidationResult } from "./ktx";
 import { reloadCatalog } from "./catalog-reload";
-import { resolveContentPaths } from "./paths";
+import { CALIBER_BINDINGS_DIR_NAME, caliberBindingsPath, resolveContentPaths } from "./paths";
 import { recordConfigChange } from "./admin/audit.js";
 import { isSemanticLayerJunkName } from "./semantic-layer-junk";
 import { sanitizeSemanticSourceYaml } from "./semantic-overlay-sanitize";
@@ -115,7 +115,7 @@ import {
 
 // ─── Public types (mirror of `webui/src/lib/types.ts`) ─────────────────────
 
-export type SemanticAssetKind = "schemaManifest" | "semanticSource" | "wiki" | "eval";
+export type SemanticAssetKind = "schemaManifest" | "semanticSource" | "wiki" | "eval" | "caliberBinding";
 
 export type SemanticAssetWarningCode =
   | "TARGET_EXISTS"
@@ -150,6 +150,12 @@ export type SemanticAssetErrorCode =
    * The batch keeps its pending range; the operator must re-check.
    */
   | "PUBLISH_CONTENT_VERSION_CHANGED"
+  /**
+   * P0-1（O1 §4.1③／§4.1⑦）—— 口径绑定候选校验失败或注册表提交失败。绑定是
+   * 整批同步的适用消费者之一：它失败 → 整批不得宣称成功，绑定基线不得推进。
+   */
+  | "caliber_binding_candidate_failed"
+  | "caliber_binding_commit_failed"
   /** Lucy v0.25 / L25-11 §7.1–§7.2 (D3) — an unresolved semantic recovery journal closes publishing and manual reindex. */
   | "semantic_recovery_required"
   /**
@@ -1702,7 +1708,7 @@ export type ManualReindexInput = {
   connectionIds?: string[];
 };
 
-const PENDING_REVIEW_PREFIXES = ["semantic-layer/", "wiki/", "evals/", "skills/"] as const;
+const PENDING_REVIEW_PREFIXES = ["semantic-layer/", "wiki/", "evals/", "skills/", "caliber-bindings/"] as const;
 
 function isPendingReviewPath(filePath: string): boolean {
   if (!filePath || filePath.includes("\0")) return false;
@@ -1714,6 +1720,8 @@ function isPendingReviewPath(filePath: string): boolean {
 function kindForPendingPath(filePath: string): SemanticAssetKind {
   if (filePath.startsWith("wiki/")) return "wiki";
   if (filePath.startsWith("evals/")) return "eval";
+  // P0-1 —— 口径绑定是独立的一等发布种类，发布记录里必须有自己的 kind。
+  if (filePath.startsWith(`${CALIBER_BINDINGS_DIR_NAME}/`)) return "caliberBinding";
   if (filePath.includes("/_schema/")) return "schemaManifest";
   return "semanticSource";
 }
@@ -1726,7 +1734,8 @@ function absoluteContentFile(
     ["semantic-layer/", paths.semanticLayer],
     ["wiki/", paths.wiki],
     ["evals/", paths.evals],
-    ["skills/", paths.skills]
+    ["skills/", paths.skills],
+    [`${CALIBER_BINDINGS_DIR_NAME}/`, caliberBindingsPath(paths)]
   ];
   for (const [prefix, root] of roots) {
     if (!rel.startsWith(prefix)) continue;
