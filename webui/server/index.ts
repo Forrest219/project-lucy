@@ -224,6 +224,11 @@ import { registerCallMonitorRoutes } from "./ops/call-monitor.js";
 import { safeWrite } from "./fs-safe.js";
 import { isPublishCoordinatorBusy, withPublishCoordinator } from "./publish-coordinator.js";
 import {
+  armSharedIndexMutationBarrier,
+  markUpstreamIndexAdvanced,
+  settleSharedIndexMutationBarrier
+} from "./proxy/field-exposure.js";
+import {
   beginPublishConsumptionEvidence,
   commitPublishConsumptionEvidence,
   describePendingReleaseAssets,
@@ -2750,7 +2755,29 @@ export function buildServer() {
               409
             );
           }
-          const reindex = await reindexProject(projectRoot, { force });
+          // D23／SC-26 Strat-B：手动 reindex 与 publish runReindex 共用同一屏障。
+          // STOP→DRAIN→mutate；成功对齐代次再 OPEN；索引已成功／绑定不一致则禁 OPEN。
+          const armed = await armSharedIndexMutationBarrier({ projectRoot });
+          if (!armed) {
+            throw new SemanticAssetValidationError(
+              "admission_stop_failed",
+              "字段暴露准入无法进入 STOP／DRAIN，禁止在 OPEN 下改写共享索引。",
+              [],
+              409
+            );
+          }
+          let admissionSettled = false;
+          let reindex: { exitCode: number; stdout: string; stderr: string };
+          try {
+            reindex = await reindexProject(projectRoot, { force });
+          } catch (error) {
+            await settleSharedIndexMutationBarrier({
+              projectRoot,
+              outcome: "index_failed"
+            }).catch(() => undefined);
+            admissionSettled = true;
+            throw error;
+          }
           const finishedAt = new Date().toISOString();
           const reindexRecord = {
             ok: reindex.exitCode === 0,
@@ -2781,7 +2808,17 @@ export function buildServer() {
             changedSources: pending.changedSources,
             connectionIds: pending.connectionIds
           });
-          if (reindexRecord.ok) {
+          if (!reindexRecord.ok) {
+            await settleSharedIndexMutationBarrier({
+              projectRoot,
+              outcome: "index_failed"
+            });
+            admissionSettled = true;
+            return { historyRecord, finishedAt, reindexRecord };
+          }
+          // 索引 mutate 已成功：耐久拉开 upstream≠serving，激活／align 前禁 index_failed→OPEN。
+          await markUpstreamIndexAdvanced({ projectRoot });
+          try {
             // ①②③ —— 原子持久化提交凭据 → 切换内存 generation → 完成终态登记。
             // 与 begin 提交互斥（`registryActivationCommitExclusion`）。
             const bindingCommit = await withCaliberBindingRegistryExclusion(() =>
@@ -2791,6 +2828,11 @@ export function buildServer() {
               })
             );
             if (!bindingCommit.ok) {
+              await settleSharedIndexMutationBarrier({
+                projectRoot,
+                outcome: "index_succeeded_keep_stop"
+              }).catch(() => undefined);
+              admissionSettled = true;
               throw new SemanticAssetValidationError(
                 "caliber_binding_commit_failed",
                 `口径绑定注册表提交失败（${bindingCommit.reason}），本次发布批次未成功。`,
@@ -2798,6 +2840,14 @@ export function buildServer() {
                 409
               );
             }
+
+            // 索引已成功：对齐 ExecutionGeneration（upstream==serving）后再 OPEN。
+            await settleSharedIndexMutationBarrier({
+              projectRoot,
+              outcome: "index_succeeded_align",
+              generationId: `gen-${historyRecord.id}`
+            });
+            admissionSettled = true;
 
             const consumed = new Set(consumedFiles);
             for (let index = writtenFiles.length - 1; index >= 0; index -= 1) {
@@ -2817,6 +2867,14 @@ export function buildServer() {
               historyRecord.id,
               consumption
             );
+          } catch (error) {
+            if (!admissionSettled) {
+              await settleSharedIndexMutationBarrier({
+                projectRoot,
+                outcome: "index_succeeded_keep_stop"
+              }).catch(() => undefined);
+            }
+            throw error;
           }
           return { historyRecord, finishedAt, reindexRecord };
         },

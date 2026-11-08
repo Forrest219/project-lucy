@@ -112,10 +112,32 @@ import {
   type PublishExemptionAudit,
   type PublishGateViolation
 } from "./publish-gate";
+import {
+  checkExposureReferenceContract,
+  type CandidateState
+} from "./proxy/field-exposure-publish.js";
+import {
+  activateExecutionGenerationStratB,
+  alignServingGenerationAfterSharedIndexSuccess,
+  armSharedIndexMutationBarrier,
+  loadServingGeneration,
+  markUpstreamIndexAdvanced,
+  parseLedgerYaml,
+  settleSharedIndexMutationBarrier,
+  sourceKey,
+  type ActivatedSnapshot
+} from "./proxy/field-exposure.js";
 
 // ─── Public types (mirror of `webui/src/lib/types.ts`) ─────────────────────
 
-export type SemanticAssetKind = "schemaManifest" | "semanticSource" | "wiki" | "eval" | "caliberBinding";
+export type SemanticAssetKind =
+  | "schemaManifest"
+  | "semanticSource"
+  | "wiki"
+  | "eval"
+  | "caliberBinding"
+  /** REQ-030-012 — Source 级字段暴露台账；不参与 KTX 上传。 */
+  | "fieldExposure";
 
 export type SemanticAssetWarningCode =
   | "TARGET_EXISTS"
@@ -598,6 +620,12 @@ type Classification =
       warnings: SemanticAssetWarning[];
     }
   | {
+      ok: true;
+      kind: "fieldExposure";
+      sourceName: string;
+      warnings: SemanticAssetWarning[];
+    }
+  | {
       ok: false;
       code: SemanticAssetErrorCode;
       message: string;
@@ -695,6 +723,27 @@ function classifyYaml(
       sourceNames: tableNames,
       warnings: []
     };
+  }
+
+  // REQ-030-012 — field exposure ledger: version + source + excluded_columns.
+  // Must be recognized before UNKNOWN_SHAPE；该种类不参与 KTX 上传。
+  if (
+    record.version === 1 &&
+    record.source &&
+    typeof record.source === "object" &&
+    !Array.isArray(record.source) &&
+    Array.isArray(record.excluded_columns)
+  ) {
+    const src = record.source as Record<string, unknown>;
+    const sourceName = typeof src.sourceName === "string" ? src.sourceName.trim() : "";
+    if (sourceName && isSafeSegment(sourceName)) {
+      return {
+        ok: true,
+        kind: "fieldExposure",
+        sourceName,
+        warnings: []
+      };
+    }
   }
 
   // Semantic source overlay: top-level `name` (and optional `table`).
@@ -1723,6 +1772,8 @@ function kindForPendingPath(filePath: string): SemanticAssetKind {
   // P0-1 —— 口径绑定是独立的一等发布种类，发布记录里必须有自己的 kind。
   if (filePath.startsWith(`${CALIBER_BINDINGS_DIR_NAME}/`)) return "caliberBinding";
   if (filePath.includes("/_schema/")) return "schemaManifest";
+  // REQ-030-012 — semantic-layer/<conn>/_exposure/<source>.yaml
+  if (filePath.includes("/_exposure/")) return "fieldExposure";
   return "semanticSource";
 }
 
@@ -2319,6 +2370,326 @@ function readSemanticSourceColumns(content: string): { columns?: unknown } {
   }
 }
 
+/**
+ * REQ-030-012 — after publish activation confirmed, pin new ExecutionGeneration (Strat-B).
+ * Merges pending fieldExposure ledgers into serving；expectedSetRequired=true once any ledger activates.
+ * No fieldExposure files: still align／advance generation then OPEN（禁止成功路径静默卡在 DRAINING）。
+ */
+async function activateFieldExposureServingFromSnapshot(
+  projectRoot: string,
+  snapshot: ValidationSnapshot,
+  releaseId: string
+): Promise<void> {
+  const exposureFiles = snapshot.files.filter((f) => f.kind === "fieldExposure" && f.sourceName);
+  const generationId = `gen-${releaseId}`;
+  if (exposureFiles.length === 0) {
+    await alignServingGenerationAfterSharedIndexSuccess({ projectRoot, generationId });
+    return;
+  }
+  const previous = await loadServingGeneration({ projectRoot, forceReload: true });
+  const ledgers = new Map(previous.exposureLedgersBySource);
+  const expected = new Set(previous.expectedSetLoad.set);
+  for (const file of exposureFiles) {
+    let schema = file.schema ?? "";
+    try {
+      const root = parseDocument(file.content).toJSON() as Record<string, unknown> | null;
+      const src = root?.source;
+      if (src && typeof src === "object" && !Array.isArray(src)) {
+        const rec = src as Record<string, unknown>;
+        if (typeof rec.schema === "string") schema = rec.schema;
+      }
+    } catch {
+      /* ignore */
+    }
+    const key = sourceKey(file.connectionId, schema, file.sourceName!);
+    ledgers.set(key, file.content);
+    expected.add(key);
+  }
+  const digests = new Map<string, string>();
+  for (const [key, text] of ledgers) {
+    digests.set(key, `sha256:${createHash("sha256").update(text, "utf8").digest("hex")}`);
+  }
+  const next: ActivatedSnapshot = {
+    generationId,
+    exposureLedgersBySource: ledgers,
+    exposureDigestPerSource: digests,
+    expectedSetLoad: {
+      state: "ready",
+      set: expected,
+      digest: `sha256:expected-${generationId}`,
+      generationId,
+      expectedSetRequired: true
+    },
+    semanticDefinitionView: {
+      generationId,
+      digest: previous.semanticDefinitionView.digest
+    },
+    indexConsumptionVersion: {
+      boundGenerationId: generationId,
+      digest: previous.indexConsumptionVersion.digest
+    },
+    upstreamExecutionGenerationId: generationId,
+    activatedAt: new Date().toISOString(),
+    admissionMode: "OPEN"
+  };
+  await activateExecutionGenerationStratB(next, { projectRoot });
+}
+
+/**
+ * REQ-030-012 — assemble CandidateState for B1 (snapshot pending + on-disk overlays／ledgers).
+ * Minimal: pending fieldExposure + co-located overlay for the same source; plus snapshot overlays.
+ */
+async function collectExposureReferenceViolations(
+  projectRoot: string,
+  snapshot: ValidationSnapshot
+): Promise<PublishGateViolation[]> {
+  const contentPaths = await resolveContentPaths(projectRoot);
+  const ledgers: CandidateState["ledgers"] = [];
+  const semanticSources: CandidateState["semanticSources"] = [];
+  const seenOverlay = new Set<string>();
+
+  const pushOverlay = (
+    targetPath: string,
+    connectionId: string,
+    schema: string,
+    sourceName: string,
+    content: string
+  ) => {
+    const key = `${connectionId}\0${sourceName}`;
+    if (seenOverlay.has(key)) return;
+    seenOverlay.add(key);
+    let parsed: Record<string, unknown> = {};
+    try {
+      const root = parseDocument(content).toJSON();
+      if (root && typeof root === "object" && !Array.isArray(root)) {
+        parsed = root as Record<string, unknown>;
+      }
+    } catch {
+      parsed = {};
+    }
+    semanticSources.push({
+      targetPath,
+      connectionId,
+      schema,
+      sourceName,
+      content: {
+        grain: parsed.grain,
+        measures: parsed.measures,
+        segments: parsed.segments,
+        joins: parsed.joins,
+        columns: parsed.columns
+      }
+    });
+  };
+
+  for (const file of snapshot.files) {
+    if (file.kind === "fieldExposure" && file.sourceName) {
+      let schema = file.schema ?? "";
+      try {
+        const root = parseDocument(file.content).toJSON() as Record<string, unknown> | null;
+        const src = root?.source;
+        if (src && typeof src === "object" && !Array.isArray(src)) {
+          const rec = src as Record<string, unknown>;
+          if (typeof rec.schema === "string") schema = rec.schema;
+        }
+      } catch {
+        /* ignore */
+      }
+      ledgers.push({
+        connectionId: file.connectionId,
+        schema,
+        sourceName: file.sourceName,
+        text: file.content,
+        expected: true
+      });
+      // Load sibling overlay from content root if not in snapshot (SC-16 只改台账).
+      const overlayRel = `semantic-layer/${file.connectionId}/${file.sourceName}.yaml`;
+      const overlayAbs = path.join(contentPaths.semanticLayer, file.connectionId, `${file.sourceName}.yaml`);
+      const fromSnapshot = snapshot.files.find(
+        (f) => f.kind === "semanticSource" && f.connectionId === file.connectionId && f.sourceName === file.sourceName
+      );
+      if (fromSnapshot) {
+        pushOverlay(
+          fromSnapshot.targetPath,
+          fromSnapshot.connectionId,
+          fromSnapshot.schema ?? schema,
+          fromSnapshot.sourceName ?? file.sourceName,
+          fromSnapshot.content
+        );
+      } else {
+        try {
+          const text = await readFile(overlayAbs, "utf8");
+          pushOverlay(overlayRel, file.connectionId, schema, file.sourceName, text);
+        } catch {
+          /* no overlay on disk */
+        }
+      }
+    }
+    if (file.kind === "semanticSource" && file.sourceName) {
+      pushOverlay(
+        file.targetPath,
+        file.connectionId,
+        file.schema ?? "",
+        file.sourceName,
+        file.content
+      );
+      // Existing ledger on disk for this source (if any).
+      const ledgerAbs = path.join(
+        contentPaths.semanticLayer,
+        file.connectionId,
+        "_exposure",
+        `${file.sourceName}.yaml`
+      );
+      const pendingLedger = snapshot.files.find(
+        (f) =>
+          f.kind === "fieldExposure" &&
+          f.connectionId === file.connectionId &&
+          f.sourceName === file.sourceName
+      );
+      if (!pendingLedger) {
+        try {
+          const text = await readFile(ledgerAbs, "utf8");
+          let schema = file.schema ?? "";
+          try {
+            const root = parseDocument(text).toJSON() as Record<string, unknown> | null;
+            const src = root?.source;
+            if (src && typeof src === "object" && !Array.isArray(src)) {
+              const rec = src as Record<string, unknown>;
+              if (typeof rec.schema === "string") schema = rec.schema;
+            }
+          } catch {
+            /* ignore */
+          }
+          ledgers.push({
+            connectionId: file.connectionId,
+            schema,
+            sourceName: file.sourceName,
+            text,
+            expected: true
+          });
+        } catch {
+          /* unconfigured */
+        }
+      }
+    }
+  }
+
+  // B1 affectedClosure：只改台账时，仍须扫引用该 trimmed 目标的外部 overlay。
+  const trimmedTargets = ledgers.flatMap((ledger) => {
+    if (!ledger.text) return [];
+    const set = parseLedgerYaml(ledger.text, {
+      connectionId: ledger.connectionId,
+      schema: ledger.schema,
+      sourceName: ledger.sourceName
+    });
+    if (set.mode !== "trimmed" && set.state !== "unavailable") return [];
+    return [{ connectionId: ledger.connectionId, sourceName: ledger.sourceName }];
+  });
+  if (trimmedTargets.length > 0) {
+    await appendAffectedClosureOverlaysFromDisk(
+      contentPaths.semanticLayer,
+      trimmedTargets,
+      pushOverlay,
+      seenOverlay
+    );
+  }
+
+  if (ledgers.length === 0) return [];
+  return checkExposureReferenceContract({ semanticSources, ledgers });
+}
+
+/**
+ * Spec §3.4 affectedClosure — 加载可能引用 trimmed／unavailable 目标的外部 overlay。
+ * 跳过 `_exposure`／`_schema`／已装载 Source；按 `<targetSource>.` 资格名启发式命中。
+ */
+export async function appendAffectedClosureOverlaysFromDisk(
+  semanticLayerRoot: string,
+  trimmedTargets: ReadonlyArray<{ connectionId: string; sourceName: string }>,
+  pushOverlay: (
+    targetPath: string,
+    connectionId: string,
+    schema: string,
+    sourceName: string,
+    content: string
+  ) => void,
+  seenOverlay: Set<string>
+): Promise<void> {
+  if (trimmedTargets.length === 0) return;
+  const targetNames = [
+    ...new Set(trimmedTargets.map((t) => t.sourceName).filter((n) => n.length > 0))
+  ];
+  if (targetNames.length === 0) return;
+  const namePattern = new RegExp(
+    `\\b(?:${targetNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\.`,
+    "i"
+  );
+
+  let connDirs: string[] = [];
+  try {
+    connDirs = await readdir(semanticLayerRoot);
+  } catch {
+    return;
+  }
+  for (const connId of connDirs) {
+    if (isSemanticLayerJunkName(connId) || connId.startsWith(".")) continue;
+    const connAbs = path.join(semanticLayerRoot, connId);
+    let st;
+    try {
+      st = await lstat(connAbs);
+    } catch {
+      continue;
+    }
+    if (!st.isDirectory()) continue;
+    let files: string[] = [];
+    try {
+      files = await readdir(connAbs);
+    } catch {
+      continue;
+    }
+    for (const name of files) {
+      if (!name.endsWith(".yaml") && !name.endsWith(".yml")) continue;
+      if (isSemanticLayerJunkName(name) || name.startsWith("._")) continue;
+      if (name === "_exposure" || name === "_schema") continue;
+      const sourceName = name.replace(/\.ya?ml$/i, "");
+      const dedupeKey = `${connId}\0${sourceName}`;
+      if (seenOverlay.has(dedupeKey)) continue;
+      const abs = path.join(connAbs, name);
+      let fileSt;
+      try {
+        fileSt = await lstat(abs);
+      } catch {
+        continue;
+      }
+      if (!fileSt.isFile()) continue;
+      let text: string;
+      try {
+        text = await readFile(abs, "utf8");
+      } catch {
+        continue;
+      }
+      if (!namePattern.test(text)) continue;
+      let schema = "";
+      try {
+        const root = parseDocument(text).toJSON() as Record<string, unknown> | null;
+        const src = root?.source;
+        if (src && typeof src === "object" && !Array.isArray(src)) {
+          const rec = src as Record<string, unknown>;
+          if (typeof rec.schema === "string") schema = rec.schema;
+        }
+      } catch {
+        /* ignore */
+      }
+      pushOverlay(
+        `semantic-layer/${connId}/${name}`,
+        connId,
+        schema,
+        sourceName,
+        text
+      );
+    }
+  }
+}
+
 // ─── Validate gate (runs `ktx sl validate` for each changed source) ─────
 
 type ValidateGateResult = {
@@ -2336,6 +2707,13 @@ async function runValidateGate(
   const results: SemanticAssetValidationRow[] = [];
   const warnings: string[] = [];
   if (snapshot.changedSources.length === 0) {
+    // REQ-030-012 / SC-17 — 合法纯台账发布：仅 fieldExposure 文件时跳过 ktx sl validate。
+    const onlyFieldExposure =
+      snapshot.files.length > 0 &&
+      snapshot.files.every((file) => file.kind === "fieldExposure");
+    if (onlyFieldExposure) {
+      return { ok: true, results: [], warnings };
+    }
     return {
       ok: false,
       results: [
@@ -2637,6 +3015,24 @@ export async function validateSemanticAssets(
     if (!conn && classification.kind === "semanticSource") {
       conn = connectionForOverlayTable(connections, classification.physicalTable);
     }
+    if (!conn && classification.kind === "fieldExposure") {
+      // Prefer client default / filename; ledger embeds connectionId in YAML.
+      const src = (() => {
+        try {
+          const root = parseDocument(content).toJSON() as Record<string, unknown> | null;
+          const s = root?.source;
+          if (s && typeof s === "object" && !Array.isArray(s)) {
+            return s as Record<string, unknown>;
+          }
+        } catch {
+          /* ignore */
+        }
+        return null;
+      })();
+      if (src && typeof src.connectionId === "string") {
+        conn = findConnection(connections, src.connectionId, filename);
+      }
+    }
 
     if (!conn) {
       errors.push({
@@ -2709,6 +3105,53 @@ export async function validateSemanticAssets(
           sourceName
         });
       }
+    } else if (classification.kind === "fieldExposure") {
+      // REQ-030-012 — 台账写入 semantic-layer/<conn>/_exposure/<source>.yaml；不进 changedSources（不参与 KTX validate／上传）。
+      let schema = "";
+      try {
+        const root = parseDocument(content).toJSON() as Record<string, unknown> | null;
+        const s = root?.source;
+        if (s && typeof s === "object" && !Array.isArray(s)) {
+          const rec = s as Record<string, unknown>;
+          if (typeof rec.schema === "string") schema = rec.schema.trim();
+        }
+      } catch {
+        /* ignore */
+      }
+      if (!schema || !conn.schemas.has(schema)) {
+        errors.push({
+          code: "SCHEMA_NOT_CONFIGURED",
+          message: `field exposure 台账的 schema '${schema || "<missing>"}' 不在 connection '${conn.id}' 中`,
+          filePath: filename
+        });
+        continue;
+      }
+      const targetPath = `semantic-layer/${conn.id}/_exposure/${classification.sourceName}.yaml`;
+      const oldText = await readExistingTextOrEmpty(projectRoot, targetPath);
+      const fileWarnings: SemanticAssetWarning[] = [...classification.warnings];
+      if (oldText.length > 0) {
+        fileWarnings.push({
+          code: "TARGET_EXISTS",
+          message: `目标文件已存在：${targetPath}`,
+          filePath: targetPath
+        });
+      }
+      const preview: SemanticAssetFilePreview = {
+        originalFilename: filename,
+        kind: "fieldExposure",
+        targetPath,
+        exists: oldText.length > 0,
+        sizeBytes,
+        sha256: sha256(content),
+        connectionId: conn.id,
+        schema,
+        sourceName: classification.sourceName,
+        warnings: fileWarnings
+      };
+      filePreviews.push(preview);
+      stagedContents.push(content);
+      diffParts.push(buildUnifiedDiff(targetPath, oldText, content));
+      // 故意不 addChangedSource：合法纯台账发布（SC-17）不得要求 KTX source validate。
     } else {
       // semanticSource
       const ref = parseTableRef(classification.physicalTable);
@@ -3080,6 +3523,10 @@ export async function publishSemanticAssets(
       }))
     );
   }
+  // REQ-030-012 / B1 — exposure.* on candidate complete state (SC-08／SC-16／SC-17／SC-29).
+  contractViolations.push(
+    ...(await collectExposureReferenceViolations(projectRoot, snapshot))
+  );
   const exemptionValidation = validatePublishExemption(request.exemption ?? {}, now());
   const exemption = exemptionValidation.ok ? exemptionValidation.exemption : null;
   const gateVerdict = evaluatePublishGate(contractViolations, exemption, now());
@@ -3515,6 +3962,8 @@ export async function publishSemanticAssets(
     // can be retried. Anything after a successful index (digest I/O, terminal
     // audit, journal completion) closes publishing instead.
     let stage: "index" | "after_index" = "index";
+    /** Strat-B: shared index mutate started after STOP／DRAIN; index failure may RESUME. */
+    let admissionStoppedForReindex = false;
     try {
       await notePublishPhase(projectRoot, "reindexing");
       // Spec §5.3 — capture the content version that is about to be consumed
@@ -3523,6 +3972,19 @@ export async function publishSemanticAssets(
       // whatever happens to be on disk at that moment, including a change
       // that landed during the index and was never consumed.
       const consumption = await beginPublishConsumptionEvidence(projectRoot, attemptId, releaseId);
+      // D23／SC-26 Strat-B：改写共享索引前必须 STOP →（可观测）DRAIN，禁止 OPEN 下混代。
+      // 与手动 reindex 共用 armSharedIndexMutationBarrier。
+      const armed = await armSharedIndexMutationBarrier({ projectRoot });
+      if (!armed) {
+        await persistReindexFailure({
+          ok: false,
+          exitCode: 1,
+          stderr: "admission_stop_failed:shared_index_barrier"
+        });
+        settled = true;
+        return;
+      }
+      admissionStoppedForReindex = true;
       let reindexResult;
       try {
         reindexResult = await reindexImpl(projectRoot, { force: false });
@@ -3532,6 +3994,18 @@ export async function publishSemanticAssets(
         // stays open in the activation-pending phase so the index can be retried
         // without rolling back a write that actually landed.
         await persistReindexFailure({ ok: false, exitCode: 1, stderr: message });
+        // 索引失败：统一走 settle；仅当 upstream==serving 才 RESUME（SC-26）。
+        if (admissionStoppedForReindex) {
+          await settleSharedIndexMutationBarrier({
+            projectRoot,
+            outcome: "index_failed"
+          }).catch((resumeErr) => {
+            console.error(
+              `[lucy-semantic] field-exposure settle(index_failed) after reindex throw failed for ${releaseId}:`,
+              resumeErr instanceof Error ? resumeErr.message : resumeErr
+            );
+          });
+        }
         settled = true;
         return;
       }
@@ -3543,11 +4017,24 @@ export async function publishSemanticAssets(
           stdout: redactText(reindexResult.stdout),
           stderr: redactText(reindexResult.stderr)
         });
+        if (admissionStoppedForReindex) {
+          await settleSharedIndexMutationBarrier({
+            projectRoot,
+            outcome: "index_failed"
+          }).catch((resumeErr) => {
+            console.error(
+              `[lucy-semantic] field-exposure settle(index_failed) after reindex fail failed for ${releaseId}:`,
+              resumeErr instanceof Error ? resumeErr.message : resumeErr
+            );
+          });
+        }
         settled = true;
         return;
       }
 
       stage = "after_index";
+      // 索引 mutate 已成功：耐久拉开 upstream≠serving，激活确认前禁任何 index_failed→OPEN。
+      await markUpstreamIndexAdvanced({ projectRoot }).catch(() => undefined);
       await notePublishPhase(projectRoot, "verify_digest");
       // The index succeeded — now the remaining evidence must be verified before
       // `published` may be written (L25-11 §7.2). The lock is still held.
@@ -3582,6 +4069,11 @@ export async function publishSemanticAssets(
           activationStatus: "unconfirmed",
           attemptId
         });
+        // 索引已成功消费新定义：STOP + upstream≠serving（SC-26）；禁后续误 OPEN。
+        await settleSharedIndexMutationBarrier({
+          projectRoot,
+          outcome: "index_succeeded_keep_stop"
+        }).catch(() => undefined);
         await reloadCatalog(projectRoot).catch(() => undefined);
         settled = true;
         return;
@@ -3596,38 +4088,18 @@ export async function publishSemanticAssets(
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         await persistReindexFailure({ ok: false, exitCode: 1, stderr: message });
+        // 索引已成功：保持 STOP，禁止失败后 OPEN 混代。
+        await settleSharedIndexMutationBarrier({
+          projectRoot,
+          outcome: "index_succeeded_keep_stop"
+        }).catch(() => undefined);
         settled = true;
         return;
       }
       if (options.beforeTerminalAudit) await options.beforeTerminalAudit();
 
-      // The terminal audit / history / status are persisted INSIDE the same
-      // critical section, before the journal is completed.
-      await recordConfigChange({
-        filePath: "semantic-layer/",
-        changeType: "semantic_publish_terminal",
-        assetKind: "publish",
-        actor: actor,
-        actorType: "ui_admin",
-        source: "publish_workbench_api",
-        targetId: releaseId,
-        operation: "publish_terminal",
-        // L25-15 §8.1 — the terminal audit identity of this attempt. The
-        // audit store refuses a duplicate key, so a startup replay cannot
-        // append a second success audit.
-        idempotencyKey: semanticTerminalAuditKey(releaseId, attemptId),
-        requestId: request.validationId,
-        oldSummary: { releaseId, attemptId },
-        newSummary: {
-          releaseId,
-          attemptId,
-          fileCount: releaseFiles.length,
-          activationStatus: "confirmed",
-          ...(confirmedPlanDigest ? { planDigest: confirmedPlanDigest } : {})
-        },
-        diff: snapshot.diff
-      });
-
+      // Terminal status stays unconfirmed until ServingGeneration activation succeeds
+      // (activationStatus 与激活成败同进退；禁止先写 confirmed 再激活失败)。
       await updateReleaseRecord(projectRoot, releaseId, {
         status: "published",
         reindex: {
@@ -3637,22 +4109,86 @@ export async function publishSemanticAssets(
           stderr: redactText(reindexResult.stderr)
         },
         recoveryRequired: false,
-        activationStatus: "confirmed",
+        activationStatus: "unconfirmed",
         terminalAuditPending: true,
         attemptId
       });
-      await updateReleaseRecord(projectRoot, releaseId, { terminalAuditPending: false });
-
-      // Only now is every applicable evidence durable: close the journal.
-      if (recoveryJournalId) {
-        await completeRecoveryJournal(projectRoot, recoveryJournalId);
+      // REQ-030-012 — 激活确认后原子切换 ServingGeneration（Strat-B）；台账仅此时生效。
+      // 失败则 STOP_ADMISSION（SC-26）：禁止索引已消费新定义却仍 OPEN 旧 serving。
+      let activationConfirmed = false;
+      try {
+        await activateFieldExposureServingFromSnapshot(projectRoot, snapshot, releaseId);
+        activationConfirmed = true;
+      } catch (err) {
+        console.error(
+          `[lucy-semantic] field-exposure serving activation failed for ${releaseId}:`,
+          err instanceof Error ? err.message : err
+        );
+        await settleSharedIndexMutationBarrier({
+          projectRoot,
+          outcome: "index_succeeded_keep_stop"
+        }).catch((stopErr) => {
+          console.error(
+            `[lucy-semantic] field-exposure settle(index_succeeded_keep_stop) failed for ${releaseId}:`,
+            stopErr instanceof Error ? stopErr.message : stopErr
+          );
+        });
       }
-      // Spec §5.3 — the baseline advance belongs to the SAME serial window as
-      // the terminal verification, the terminal audit and the `published`
-      // record. It is a compare-and-swap: if the generation moved while the
-      // index ran, the newer evidence wins and this attempt is marked
-      // uncertain instead of overwriting it.
-      await commitPublishConsumptionEvidence(projectRoot, attemptId, releaseId, consumption);
+
+      if (activationConfirmed) {
+        // The terminal audit / history / status are persisted INSIDE the same
+        // critical section, before the journal is completed.
+        await recordConfigChange({
+          filePath: "semantic-layer/",
+          changeType: "semantic_publish_terminal",
+          assetKind: "publish",
+          actor: actor,
+          actorType: "ui_admin",
+          source: "publish_workbench_api",
+          targetId: releaseId,
+          operation: "publish_terminal",
+          // L25-15 §8.1 — the terminal audit identity of this attempt. The
+          // audit store refuses a duplicate key, so a startup replay cannot
+          // append a second success audit.
+          idempotencyKey: semanticTerminalAuditKey(releaseId, attemptId),
+          requestId: request.validationId,
+          oldSummary: { releaseId, attemptId },
+          newSummary: {
+            releaseId,
+            attemptId,
+            fileCount: releaseFiles.length,
+            activationStatus: "confirmed",
+            ...(confirmedPlanDigest ? { planDigest: confirmedPlanDigest } : {})
+          },
+          diff: snapshot.diff
+        });
+        await updateReleaseRecord(projectRoot, releaseId, {
+          activationStatus: "confirmed",
+          terminalAuditPending: false
+        });
+        // Only now is every applicable evidence durable: close the journal.
+        if (recoveryJournalId) {
+          await completeRecoveryJournal(projectRoot, recoveryJournalId);
+        }
+        // Spec §5.3 — the baseline advance belongs to the SAME serial window as
+        // the terminal verification, the terminal audit and the `published`
+        // record. It is a compare-and-swap: if the generation moved while the
+        // index ran, the newer evidence wins and this attempt is marked
+        // uncertain instead of overwriting it.
+        await commitPublishConsumptionEvidence(projectRoot, attemptId, releaseId, consumption);
+      } else {
+        await updateReleaseRecord(projectRoot, releaseId, {
+          activationStatus: "unconfirmed",
+          terminalAuditPending: false
+        });
+        // Index already succeeded: keep journal activation-pending for retry; do not
+        // claim terminal success or advance baseline while STOP holds the mismatch.
+        if (recoveryJournalId) {
+          await markRecoveryJournalActivationPending(projectRoot, recoveryJournalId).catch(
+            () => undefined
+          );
+        }
+      }
       settled = true;
     } catch (error) {
       if (!settled) {
@@ -3660,8 +4196,19 @@ export async function publishSemanticAssets(
         try {
           if (stage === "index") {
             await persistReindexFailure({ ok: false, exitCode: 1, stderr: message });
+            if (admissionStoppedForReindex) {
+              await settleSharedIndexMutationBarrier({
+                projectRoot,
+                outcome: "index_failed"
+              }).catch(() => undefined);
+            }
           } else {
             await persistTerminalFailure(message);
+            // 索引成功后的任意失败：STOP + upstream≠serving，禁止 OPEN 混代。
+            await settleSharedIndexMutationBarrier({
+              projectRoot,
+              outcome: "index_succeeded_keep_stop"
+            }).catch(() => undefined);
           }
         } catch (persistError) {
           const persistMessage = persistError instanceof Error ? persistError.message : String(persistError);

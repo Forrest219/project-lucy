@@ -86,6 +86,14 @@ describe("POST /api/semantic-assets/reindex", () => {
     expect(res.body.data.startedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(res.body.data.finishedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(reindexProject).toHaveBeenCalledWith(projectRoot, { force: false });
+    // Strat-B：成功手动 reindex 后须 OPEN 且 upstream==serving（禁混代 OPEN）
+    const { loadServingGeneration, resetFieldExposureRuntimeForTests } = await import(
+      "../proxy/field-exposure.js"
+    );
+    const serving = await loadServingGeneration({ projectRoot, forceReload: true });
+    expect(serving.admissionMode).toBe("OPEN");
+    expect(serving.upstreamExecutionGenerationId).toBe(serving.generationId);
+    resetFieldExposureRuntimeForTests();
     await app.close();
   });
 
@@ -117,6 +125,67 @@ describe("POST /api/semantic-assets/reindex", () => {
       stderr: "reindex failed"
     });
     expect(reindexProject).toHaveBeenCalledWith(projectRoot, { force: true });
+    // 索引失败 RESUME 后仍不得留下混代 OPEN（upstream 须 == serving）
+    const { loadServingGeneration, resetFieldExposureRuntimeForTests } = await import(
+      "../proxy/field-exposure.js"
+    );
+    const afterFail = await loadServingGeneration({ projectRoot, forceReload: true });
+    expect(afterFail.admissionMode).toBe("OPEN");
+    expect(afterFail.upstreamExecutionGenerationId).toBe(afterFail.generationId);
+
+    // 同窗再成功：必须经 Strat-B 对齐代次，禁止「上游新代 + serving 旧代 + OPEN」
+    reindexProject.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: "indexed",
+      stderr: ""
+    });
+    await request(app.server).post("/api/semantic-assets/reindex").send({}).expect(200);
+    const afterOk = await loadServingGeneration({ projectRoot, forceReload: true });
+    expect(afterOk.admissionMode).toBe("OPEN");
+    expect(afterOk.upstreamExecutionGenerationId).toBe(afterOk.generationId);
+    resetFieldExposureRuntimeForTests();
+    await app.close();
+  });
+
+  it("keeps STOP on later index_failed after index-success half-open (D23 Critical)", async () => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    const reindexProject = vi.fn(async () => ({
+      exitCode: 0,
+      stdout: "indexed",
+      stderr: ""
+    }));
+    vi.doMock("../ktx", async () => {
+      const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+      return { ...actual, reindexProject };
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+    await request(app.server).post("/api/semantic-assets/reindex").send({}).expect(200);
+
+    const {
+      loadServingGeneration,
+      markUpstreamIndexAdvanced,
+      resetFieldExposureRuntimeForTests
+    } = await import("../proxy/field-exposure.js");
+    // 模拟：索引成功＋激活失败半通（upstream 已新于 serving，准入 STOP）
+    const half = await markUpstreamIndexAdvanced({ projectRoot });
+    expect(half.admissionMode).toBe("STOP_ADMISSION");
+    expect(half.upstreamExecutionGenerationId).not.toBe(half.generationId);
+
+    reindexProject.mockResolvedValueOnce({
+      exitCode: 3,
+      stdout: "",
+      stderr: "reindex failed again"
+    });
+    await request(app.server).post("/api/semantic-assets/reindex").send({}).expect(200);
+
+    const afterLaterFail = await loadServingGeneration({ projectRoot, forceReload: true });
+    expect(afterLaterFail.admissionMode).toBe("STOP_ADMISSION");
+    expect(afterLaterFail.upstreamExecutionGenerationId).not.toBe(afterLaterFail.generationId);
+    resetFieldExposureRuntimeForTests();
     await app.close();
   });
 

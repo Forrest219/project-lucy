@@ -21,6 +21,18 @@ export const NON_WAIVABLE_CHECKS: ReadonlySet<PublishGateCheckId> = new Set([
   "contract_presence"
 ]);
 
+/**
+ * REQ-030-012 / Spec D12 — prefix family for non-waivable checks.
+ * Dynamic ids such as `exposure.measure.m1.secret` must match; a literal
+ * `"exposure.*"` entry in {@link NON_WAIVABLE_CHECKS} would never hit.
+ */
+export const NON_WAIVABLE_PREFIXES: readonly string[] = ["exposure."];
+
+export function isNonWaivableCheckId(checkId: PublishGateCheckId): boolean {
+  if (NON_WAIVABLE_CHECKS.has(checkId)) return true;
+  return NON_WAIVABLE_PREFIXES.some((prefix) => checkId.startsWith(prefix));
+}
+
 export type PublishGateViolation = {
   /** Stable check id, e.g. `columns.0.type`. */
   checkId: PublishGateCheckId;
@@ -127,7 +139,7 @@ export function applyPublishExemption(
   };
   let matched = false;
   for (const violation of violations) {
-    const waivable = !NON_WAIVABLE_CHECKS.has(violation.checkId) && covers(exemption, violation);
+    const waivable = !isNonWaivableCheckId(violation.checkId) && covers(exemption, violation);
     if (waivable) {
       matched = true;
       continue;

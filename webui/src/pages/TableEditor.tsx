@@ -2001,6 +2001,9 @@ export function TableEditor() {
                         <div className="flex items-center justify-between gap-3 mb-2">
                           <p className="pl-notice mb-0">
                             表格展示 PK/类型/可空性与 AI 建议。Human 初始仅载入 descriptions.human，点击「采纳 AI 描述」才会把 AI 文本写进 Human。勾选字段后可批量采纳 AI 描述。
+                            {" "}
+                            字段列表保留全量库存；字段暴露开关随待发布进入发布激活后才对 Agent 数据面生效。
+                            业务暴露裁剪 ≠ 列级安全：字段暴露控制 Agent 数据面可见与可查范围，不提供列级 ACL／脱敏／按角色分列。
                           </p>
                           <label className="pl-field-search shrink-0">
                             <span className="sr-only">搜索字段</span>

@@ -2436,7 +2436,14 @@ export type CatalogSchemaManifestReadResponse = {
 // computes every target path, refuses paths from the client, and the
 // publish pipeline never shells out before a staging-validate gate passes.
 
-export type SemanticAssetKind = "schemaManifest" | "semanticSource" | "wiki" | "eval" | "caliberBinding";
+export type SemanticAssetKind =
+  | "schemaManifest"
+  | "semanticSource"
+  | "wiki"
+  | "eval"
+  | "caliberBinding"
+  /** REQ-030-012 — Source 级字段暴露台账 */
+  | "fieldExposure";
 
 export type SemanticAssetWarningCode =
   | "TARGET_EXISTS"

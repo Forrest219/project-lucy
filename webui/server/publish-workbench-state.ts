@@ -68,7 +68,13 @@ export const PUBLISH_SCAN_FILE_BYTE_LIMIT = 8 * 1024 * 1024;
  * `caliber_binding` —— P0-1 问题类型口径绑定（O1 §4.1①）。一等发布种类，
  * **不**进 KTX 内容镜像。
  */
-export type PublishContentKind = "semantic_overlay" | "schema_manifest" | "wiki" | "caliber_binding";
+export type PublishContentKind =
+  | "semantic_overlay"
+  | "schema_manifest"
+  | "wiki"
+  | "caliber_binding"
+  /** REQ-030-012 — 字段暴露台账；不参与 KTX 上传。 */
+  | "field_exposure";
 
 export interface PublishContentFile {
   /** Content-root relative, POSIX separators: `semantic-layer/...` / `wiki/...`. */
@@ -178,7 +184,11 @@ const YAML_NAMES = /\.ya?ml$/i;
 
 function semanticKind(relWithinRoot: string): PublishContentKind {
   const parts = relWithinRoot.split("/");
-  return parts[0] === "_schema" ? "schema_manifest" : "semantic_overlay";
+  // Spec D4：parts[0] 在 semantic-layer/<conn>/... 布局下通常是 conn，不是 _schema。
+  // _exposure 与 _schema 都按相对 semantic-layer 根的片段识别。
+  if (parts.includes("_exposure")) return "field_exposure";
+  if (parts[0] === "_schema" || parts.includes("_schema")) return "schema_manifest";
+  return "semantic_overlay";
 }
 
 /**
@@ -773,6 +783,7 @@ export function kindForLogicalPath(logicalPath: string): PublishContentKind {
   // P0-1 —— 绑定文件的删除差异必须归到自己的种类，不能落到 semantic_overlay。
   if (logicalPath.startsWith(`${CALIBER_BINDINGS_DIR_NAME}/`)) return "caliber_binding";
   const parts = logicalPath.split("/");
+  if (parts[0] === "semantic-layer" && parts[2] === "_exposure") return "field_exposure";
   if (parts[0] === "semantic-layer" && parts[2] === "_schema") return "schema_manifest";
   return "semantic_overlay";
 }
