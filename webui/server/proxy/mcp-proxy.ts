@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
-import { setSessionClient, type Identity } from "./identity.js";
+import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
 import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
 import {
   AuthorizationRevokedError,
@@ -62,6 +62,11 @@ import {
   resolveAndMaybeServeHiveTool
 } from "../hive/proxy-hook.js";
 import type { HiveExecutionTool } from "../hive/execution.js";
+import {
+  requestWouldHitUpstreamSemanticExecution,
+  trackUpstreamSemanticEnter,
+  trackUpstreamSemanticLeave
+} from "./field-exposure.js";
 import {
   isOpsEvidenceGovernanceSource,
   OPS_EVIDENCE_CONNECTION_ID,
@@ -142,6 +147,7 @@ import {
 import {
   beginBindingSessionPreparation,
   commitBindingSession,
+  readBindingSession,
   restorePriorBindingSession,
 } from "./caliber-binding-session.js";
 import {
@@ -149,8 +155,24 @@ import {
   registrySyncPending,
   verifyCurrentBindingContentAndDependencies,
 } from "./caliber-binding-registry.js";
+// P0-3 表级歧义门闩（REQ-030-024／Spec v0.5）。
+import {
+  ASK_FIRST_SECTION,
+  ambiguityScopeKey,
+  attestSourceConfirmation,
+  buildMatchableSourcesForGate,
+  checkSourceAmbiguityGate,
+  sourceAmbiguityGateAppliesToTool,
+  upsertJourneyOnBegin,
+  type SourceAmbiguityDenial,
+  type SourceIdentity,
+} from "./source-ambiguity-gate.js";
 
 export { registerPublishedVersion };
+export { attestSourceConfirmation };
+
+/** 宿主 attested 确认提交（非 tools/call；§4.4 层 B／sourceChannel=host_confirm_api）。 */
+export const SOURCE_AMBIGUITY_CONFIRM_PATH = "/mcp/host/source-ambiguity/confirm";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -1083,7 +1105,7 @@ function lucyBeginQuestionTool() {
   return {
     name: "lucy_begin_question",
     description:
-      "Optional but recommended. Call once at the start of each new user business question to help Lucy audit. Prefer passing the user's original wording in `question` when available; always provide `intentSummary`. Skipping this tool never blocks catalog or query tools. Do not call for protocol checks or tool discovery only.",
+      "Recommended at the start of each new user business question. Prefer the user's original wording in `question`; always provide `intentSummary`. When multiple visible sources may match the same business term, Lucy may return source_ambiguity_gate until the host confirms a source identity — skipping begin does not bypass that gate for asserted-source queries. Do not call for protocol checks or tool discovery only.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1844,6 +1866,19 @@ function isFileNotFound(err: unknown): boolean {
   return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "ENOENT");
 }
 
+/**
+ * D8 / SC-12 — initialize Visible Scope 每行只拼四元组身份字段。
+ * 导出供单测直接调用生产拼装路径，避免手写行假绿。
+ */
+export function formatVisibleScopeSourceLine(source: {
+  connectionId: string;
+  schema: string;
+  sourceName: string;
+  table: string;
+}): string {
+  return `- ${source.connectionId}.${source.schema}.${source.sourceName} -> ${source.table}`;
+}
+
 async function buildRoleAwareInstructions(identity: Identity): Promise<string | undefined> {
   const fallback = await loadDataQaInstructions();
   try {
@@ -1863,9 +1898,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       : visibleTools.has("kx_catalog")
         ? "`kx_catalog`"
         : "the visible catalog tool";
-    const sourceLines = catalog.sources.map((source) => (
-      `- ${source.connectionId}.${source.schema}.${source.sourceName} -> ${source.table}`
-    ));
+    const sourceLines = catalog.sources.map(formatVisibleScopeSourceLine);
     const exampleLines = catalog.examples.map((example) => `- ${example}`);
     const skillLines = accessibleSkills.map((skill) => (
       `- [${skill.name}] (${skill.uri}): ${skill.title} - ${skill.description}`
@@ -1881,7 +1914,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       : [];
     const questionReportingLines = visibleTools.has("lucy_begin_question")
       ? [
-          "- Optional but recommended: at the start of each new user business question, call `lucy_begin_question` once. Prefer the user's original wording in `question` when available; always provide `intentSummary`. Skipping this call never blocks catalog or query tools. Do not call it for protocol checks or tool discovery only.",
+          "- Recommended: at the start of each new user business question, call `lucy_begin_question` once. Prefer the user's original wording in `question` when available; always provide `intentSummary`. Skipping begin does not bypass the source ambiguity gate when a query asserts a source. Do not call it for protocol checks or tool discovery only.",
           ""
         ]
       : [];
@@ -1894,6 +1927,9 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       "- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.",
       "- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.",
       ...questionReportingLines,
+      // D13：与 md 事实源同一 ASK_FIRST 片段（有可见 catalog 时也必须出现）
+      ASK_FIRST_SECTION.trimEnd(),
+      "",
       "- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.",
       "- For multi-metric, multi-period, or multi-scenario questions, build an answerability dependency matrix before querying: numerator, denominator, period/grain, batch/version, actual/forecast/budget scenario, source/measure, and governed business definition. Mark a subquestion unavailable when a required dependency is missing; do not substitute an approximation.",
       "- Budget requires an independent budget measure, source, or governed formula. Never substitute forecast, target, or prior actual for budget. If budget evidence is missing, deliver the answerable parts and state that budget variance is currently unavailable.",
@@ -2117,16 +2153,24 @@ async function maybeWriteHiveDivertedResponse(input: {
     input.toolArgs && typeof input.toolArgs === "object" && !Array.isArray(input.toolArgs)
       ? (input.toolArgs as Record<string, unknown>)
       : {};
-  const decision = await resolveAndMaybeServeHiveTool({
-    projectRoot,
-    tool: input.toolName,
-    connectionId,
-    args,
-    correlationId: typeof input.requestId === "string" ? input.requestId : String(input.requestId)
-  });
+  // Strat-B DRAIN：Hive 分流亦计入上游语义在途，供 beginAdmissionDrain 有界排空。
+  const trackHiveUpstream = requestWouldHitUpstreamSemanticExecution(input.toolName);
+  if (trackHiveUpstream) trackUpstreamSemanticEnter();
+  let decision: Awaited<ReturnType<typeof resolveAndMaybeServeHiveTool>>;
+  try {
+    decision = await resolveAndMaybeServeHiveTool({
+      projectRoot,
+      tool: input.toolName,
+      connectionId,
+      args,
+      correlationId: typeof input.requestId === "string" ? input.requestId : String(input.requestId)
+    });
+  } finally {
+    if (trackHiveUpstream) trackUpstreamSemanticLeave();
+  }
   if (decision.action === "passthrough_ktx") return false;
 
-  const payload =
+  let payload: Record<string, unknown> =
     decision.action === "error"
       ? {
           ok: false,
@@ -2136,6 +2180,50 @@ async function maybeWriteHiveDivertedResponse(input: {
           dialect: "hive"
         }
       : hiveBridgePayload(decision.response);
+
+  // REQ-030-012 / SC-21 — Hive lucy_read_source 成功载荷列裁剪（与 KTX 下行共用 field-exposure-discovery）。
+  // 解析／裁剪失败 → fail-closed，禁止原文透传全量 columns（D22）。
+  if (input.toolName === "lucy_read_source" && payload.ok !== false) {
+    try {
+      const { trimDiscoveryPayload } = await import("./field-exposure-discovery.js");
+      const sourceName = firstStringValue(args, [
+        "sourceName",
+        "source_name",
+        "source",
+        "table"
+      ]);
+      const trimmed = await trimDiscoveryPayload({
+        toolName: "lucy_read_source",
+        payload,
+        connectionId: connectionId ?? undefined,
+        schema: firstStringValue(args, ["schema"]),
+        sourceName,
+        carrierKind: "hive_columns"
+      });
+      if (!trimmed.ok) {
+        payload = {
+          ok: false,
+          reason: trimmed.reason,
+          detail: "field exposure discovery trim failed",
+          jdbcInvokeCount:
+            typeof payload.jdbcInvokeCount === "number" ? payload.jdbcInvokeCount : 0,
+          dialect: "hive"
+        };
+      } else if (trimmed.payload && typeof trimmed.payload === "object" && !Array.isArray(trimmed.payload)) {
+        payload = trimmed.payload as Record<string, unknown>;
+      }
+    } catch {
+      payload = {
+        ok: false,
+        reason: "field_exposure_unavailable",
+        detail: "field exposure discovery trim failed",
+        jdbcInvokeCount:
+          typeof payload.jdbcInvokeCount === "number" ? payload.jdbcInvokeCount : 0,
+        dialect: "hive"
+      };
+    }
+  }
+
   const isError = payload.ok === false;
   const responseBody = jsonRpcToolResult(input.requestId, JSON.stringify(payload, null, 2), { isError });
   input.res.writeHead(200, {
@@ -2907,7 +2995,71 @@ async function writeLucySemanticResponse(
     }
   } catch (err) {
     metaFailed = `lucy_result_meta_failed:${err instanceof Error ? err.message : String(err)}`;
-    body = originalBody;
+    // REQ-030-012 / D22 — 发现面裁剪失败路径禁止原文透传；meta 失败时对 read_source 亦 fail-closed。
+    if (toolName === "lucy_read_source") {
+      body = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "field_exposure_unavailable" }]
+        }
+      });
+      forceJson = true;
+    } else {
+      body = originalBody;
+    }
+  }
+
+  // REQ-030-012 — lucy_read_source 下行列裁剪（与 Hive 共用 field-exposure-discovery）。
+  if (toolName === "lucy_read_source" && !metaFailed) {
+    try {
+      const { trimDiscoveryPayload } = await import("./field-exposure-discovery.js");
+      const argsRecord = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+        ? (toolArgs as Record<string, unknown>)
+        : {};
+      const primary = sourceRefs[0];
+      const parsedBody = JSON.parse(body) as unknown;
+      const trimmed = await trimDiscoveryPayload({
+        toolName,
+        payload: parsedBody,
+        connectionId:
+          (typeof argsRecord.connectionId === "string" ? argsRecord.connectionId : undefined) ??
+          primary?.connectionId,
+        schema: primary?.schema,
+        sourceName:
+          (typeof argsRecord.sourceName === "string"
+            ? argsRecord.sourceName
+            : typeof argsRecord.source === "string"
+              ? argsRecord.source
+              : undefined) ?? primary?.sourceName,
+        carrierKind: "read_source_columns"
+      });
+      if (!trimmed.ok) {
+        body = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: trimmed.reason }]
+          }
+        });
+        forceJson = true;
+      } else {
+        body = JSON.stringify(trimmed.payload);
+        forceJson = true;
+      }
+    } catch {
+      body = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "field_exposure_unavailable" }]
+        }
+      });
+      forceJson = true;
+    }
   }
 
   if (toolName === "lucy_query" && filterPushdownGuardEnabled() && isFilterPushdownText(body)) {
@@ -4265,6 +4417,186 @@ async function buildDenialRepairPayload(
         return;
       }
     }
+    // ─── P0-3 表级歧义门闩：ACL＋口径之后、上游／explain 成功体之前 ───
+    // explain 必须在本段拦截（约本地成功体之前）；不得只挂共享 query guard。
+    if (toolName && sourceAmbiguityGateAppliesToTool(toolName)) {
+      const sagResolved = await effectivePermissions(identity).catch(() => null);
+      // 权限／目录不可读 → fail-closed（D10／SC-24），禁止静默跳过门闩。
+      if (!sagResolved?.ok) {
+        const denialText = "Access denied: source_ambiguity_gate（表级歧义：目录或权限不可读，请先确认来源表）";
+        const denialPayload = {
+          reason: "source_ambiguity_gate",
+          failureDimension: "source_selection",
+          message: "表级歧义：请先确认来源表",
+          detail: "catalog_unreliable",
+          candidates: [] as unknown[],
+          repair: { usableTargets: [], rejected: [], factualError: "当前没有可用的合法目标：目录或权限不可读。", text: "当前没有可用的合法目标：目录或权限不可读。" }
+        };
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: denialText }],
+            data: denialPayload
+          }
+        });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          tables: queryTables.length > 0 ? queryTables : undefined,
+          argsSummary,
+          ...queryMeta,
+          outcome: "denied",
+          decisionReason: "source_ambiguity_gate",
+          errorDetail: "catalog_unreliable",
+          failureDimension: "source_selection",
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          executionEvidence: executionEvidenceFromObservation({
+            authorizationAllowed: true,
+            notExecuted: true
+          }),
+          ...(await auditMeta(identity, "source_ambiguity_gate"))
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "denied",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: "source_ambiguity_gate"
+        });
+        return;
+      }
+      {
+        // Critical：必须装配描述／度量／健康态；缺省仅 sourceName＋table 会让中文 description 场景 zero_hits 假放行。
+        const enriched = await buildMatchableSourcesForGate(sagResolved.permissions.sources);
+        const sagOutcome = await checkSourceAmbiguityGate({
+          identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          sessionId: requestMeta.lucySessionId,
+          toolName,
+          args: (toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs))
+            ? toolArgs as Record<string, unknown>
+            : {},
+          permissions: sagResolved.permissions,
+          matchableSources: enriched.matchableSources,
+          sourceMapReliable: true
+        });
+        if (sagOutcome.kind === "deny_caliber_unresolved") {
+          const responseBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            result: {
+              isError: true,
+              content: [{ type: "text", text: sagOutcome.text }],
+              data: { reason: "caliber_binding_unresolved", failureDimension: "口径绑定" }
+            }
+          });
+          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          res.end(responseBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            tables: queryTables.length > 0 ? queryTables : undefined,
+            argsSummary,
+            ...queryMeta,
+            outcome: "denied",
+            decisionReason: "caliber_binding_unresolved",
+            errorDetail: "caliber_binding_unresolved",
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(responseBody),
+            requestId,
+            ...requestMeta,
+            executionEvidence: executionEvidenceFromObservation({
+              authorizationAllowed: true,
+              notExecuted: true
+            }),
+            ...(await auditMeta(identity, "caliber_binding_unresolved"))
+          });
+          recordMcpTraceForTool({
+            traceId,
+            identity,
+            toolName,
+            status: "denied",
+            startedAt: new Date(start).toISOString(),
+            turnId: requestMeta.lucyTurnId ?? null,
+            sessionId: requestMeta.lucySessionId ?? null,
+            requestId,
+            argsSummary,
+            allowed: false,
+            reason: "caliber_binding_unresolved"
+          });
+          return;
+        }
+        if (sagOutcome.kind === "deny") {
+          const denial: SourceAmbiguityDenial = sagOutcome.denial;
+          const denialText = `Access denied: ${denial.reason}（${denial.message}）`;
+          const responseBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            result: {
+              isError: true,
+              content: [{ type: "text", text: denialText }],
+              data: denial
+            }
+          });
+          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          res.end(responseBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            tables: queryTables.length > 0 ? queryTables : undefined,
+            argsSummary,
+            ...queryMeta,
+            outcome: "denied",
+            decisionReason: denial.reason,
+            errorDetail: denial.reason,
+            failureDimension: denial.failureDimension,
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(responseBody),
+            requestId,
+            ...requestMeta,
+            executionEvidence: executionEvidenceFromObservation({
+              authorizationAllowed: true,
+              notExecuted: true
+            }),
+            ...(await auditMeta(identity, denial.reason))
+          });
+          recordMcpTraceForTool({
+            traceId,
+            identity,
+            toolName,
+            status: "denied",
+            startedAt: new Date(start).toISOString(),
+            turnId: requestMeta.lucyTurnId ?? null,
+            sessionId: requestMeta.lucySessionId ?? null,
+            requestId,
+            argsSummary,
+            allowed: false,
+            reason: denial.reason,
+            matchedRule: denial.failureDimension
+          });
+          return;
+        }
+        // allow / skip_bound → 继续既有 guardrails／上游／explain
+      }
+    }
     // Spec 99 §6 — Proxy-only forced_filters injection for lucy_query; strip any user-supplied alias.
     if (toolName === "lucy_query") {
       scopeIntersectionEmpty = isScopeIntersectionEmpty(toolArgs, decision.forcedFilters);
@@ -4997,6 +5329,18 @@ async function buildDenialRepairPayload(
             bindingId: chosenBinding?.bindingId ?? null,
             boundKey: chosenBinding?.boundKey ?? null,
             caliberSnapshot: chosenBinding?.caliber ?? null
+          });
+          // P0-3：写入旅程词源；supersede 清旧确认／快照／用户证据（对齐 generation）。
+          const committed = await readBindingSession(caliberScopeKey);
+          const sagScope = ambiguityScopeKey(
+            budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+            requestMeta.lucySessionId
+          );
+          await upsertJourneyOnBegin({
+            scopeKey: sagScope,
+            generation: committed.record?.generation ?? 1,
+            intentSummary,
+            question: rawQuestion ?? null
           });
           return { ok: true as const, previousTurnId: begun.previousTurnId };
         })
@@ -5861,9 +6205,15 @@ async function buildDenialRepairPayload(
   // being rewritten, so they are read here once and passed down. Only these paths
   // can recover a refused upstream session (a piped response cannot be retried).
   const bufferedUpstream = rpcMethod === "initialize" || rpcMethod === "tools/list" || rpcMethod === "tools/call";
+  // Strat-B DRAIN：KTX 上游语义 tools/call 计入在途，供 beginAdmissionDrain 有界排空。
+  const trackKtxUpstream =
+    rpcMethod === "tools/call" &&
+    typeof toolName === "string" &&
+    requestWouldHitUpstreamSemanticExecution(toolName);
   let upstream: IncomingMessage;
   let upstreamBody = "";
   let upstreamSession: UpstreamSessionState | undefined;
+  if (trackKtxUpstream) trackUpstreamSemanticEnter();
   try {
     if (rpcMethod === "initialize") {
       // `initialize` is what establishes the session; never inject one into it.
@@ -6015,6 +6365,8 @@ async function buildDenialRepairPayload(
       return;
     }
     throw err;
+  } finally {
+    if (trackKtxUpstream) trackUpstreamSemanticLeave();
   }
 
   if (upstreamSession?.recovered) {
@@ -6583,6 +6935,103 @@ function createBudgetPersistence(): BudgetPersistence | null {
   }
 }
 
+/**
+ * 宿主确认提交 HTTP（非 MCP tools/call）。
+ * POST /mcp/host/source-ambiguity/confirm
+ * Body: { sessionId, generation, selectedIdentity }
+ * Auth: Bearer（与 MCP 相同）；禁止经 tools/call 冒充。
+ */
+async function handleSourceAmbiguityHostConfirm(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<boolean> {
+  const pathname = (req.url ?? "").split("?")[0];
+  if (pathname !== SOURCE_AMBIGUITY_CONFIRM_PATH && pathname !== `${SOURCE_AMBIGUITY_CONFIRM_PATH}/`) {
+    return false;
+  }
+  if ((req.method ?? "").toUpperCase() !== "POST") {
+    const body = JSON.stringify({ error: "Method not allowed" });
+    res.writeHead(405, {
+      "content-type": "application/json",
+      "content-length": Buffer.byteLength(body),
+      allow: "POST"
+    });
+    res.end(body);
+    return true;
+  }
+  const sessionHeader =
+    normalizeHeader(req.headers["mcp-session-id"])
+    || normalizeHeader(req.headers["x-lucy-session-id"]);
+  const identify = await identifyRequestDetailed(req.headers.authorization, sessionHeader);
+  if (!identify.ok) {
+    const body = JSON.stringify({ error: "Unauthorized" });
+    res.writeHead(401, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  let payload: {
+    sessionId?: unknown;
+    generation?: unknown;
+    selectedIdentity?: unknown;
+  };
+  try {
+    const raw = await readBody(req);
+    payload = JSON.parse(raw.toString("utf8")) as typeof payload;
+  } catch {
+    const body = JSON.stringify({ error: "Invalid JSON body" });
+    res.writeHead(400, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  const sessionId =
+    typeof payload.sessionId === "string" && payload.sessionId.trim()
+      ? payload.sessionId.trim()
+      : sessionHeader;
+  const generation = typeof payload.generation === "number" ? payload.generation : Number.NaN;
+  const selected = payload.selectedIdentity;
+  const identityOk =
+    selected
+    && typeof selected === "object"
+    && !Array.isArray(selected)
+    && typeof (selected as SourceIdentity).connectionId === "string"
+    && typeof (selected as SourceIdentity).schema === "string"
+    && typeof (selected as SourceIdentity).sourceName === "string"
+    && typeof (selected as SourceIdentity).physicalTable === "string";
+  if (!sessionId || !Number.isInteger(generation) || !identityOk) {
+    const body = JSON.stringify({
+      error: "Invalid confirm payload",
+      detail: "sessionId, generation, selectedIdentity required"
+    });
+    res.writeHead(400, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  const identityKey = budgetIdentityKey(
+    identify.identity.userId,
+    identify.identity.tokenHashPrefix ?? ""
+  );
+  const scopeKey = ambiguityScopeKey(identityKey, sessionId);
+  const attested = await attestSourceConfirmation({
+    scopeKey,
+    generation,
+    selectedIdentity: selected as SourceIdentity
+  });
+  if (!attested.ok) {
+    const body = JSON.stringify({ ok: false, reason: attested.reason });
+    res.writeHead(409, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  const body = JSON.stringify({
+    ok: true,
+    confirmedSourceKey: attested.journey.confirmedSourceKey,
+    generation: attested.journey.generation
+  });
+  res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+  res.end(body);
+  return true;
+}
+
 export function buildProxy(options: BuildProxyOptions = {}) {
   assertSkillsPassthroughPolicy();
   const ledger = options.ledger ?? new ReleaseLedger();
@@ -6610,6 +7059,9 @@ export function buildProxy(options: BuildProxyOptions = {}) {
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
+      // 宿主 attested 确认：非 tools/call，先于 MCP 准入信封校验。
+      if (await handleSourceAmbiguityHostConfirm(req, res)) return;
+
       // T04-3: stamp before admission so a narrowing committed while identity
       // is being resolved still covers this request.
       const authorizationStamp = currentAuthorizationSequence();

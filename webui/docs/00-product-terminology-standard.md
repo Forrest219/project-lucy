@@ -408,6 +408,10 @@ Protected DOM（用户可见 DOM 须 `translate="no"` + `notranslate`）：`Hive
 | Metric Definition | 指标定义 | 度量定义混用 | 指标口径、聚合方式、过滤条件 |
 | Dimension Definition | 维度定义 | 维数定义 | 维度字段和展示属性 |
 | Upload Semantic Overlay | 上传 semantic overlay | 上传 overlay YAML | 裸用“上传 YAML” | 写入 `semantic-layer/<connection>/<table>.yaml` |
+| Field Exposure | 字段暴露 | 列级权限、列级脱敏、按角色分列、隐藏列（作文案主术语） | Source 级业务暴露裁剪；库存 ≠ 暴露；全实例同一套采用集。协议名 `field_exposure`。**业务暴露裁剪 ≠ 列级安全** |
+| Unexposed Field | 未暴露字段 | 禁用字段、脱敏字段、隐藏字段（作文案主术语） | 台账 `excluded_columns` 中的物理列；工作台仍可见可恢复 |
+| Field Not Exposed | （机器码，不新造 UI 译名） | — | 裁决码 `field_not_exposed`：查数面点名未暴露字段；沿用「访问控制」裁决码呈现 |
+| Field Exposure Unavailable | （机器码，不新造 UI 译名） | — | 裁决码 `field_exposure_unavailable`：台账／期望集合／执行代次不可用，或四透传首期 trimmed 阻断 |
 
 语义层对象展示必须遵守自顶向下的层级顺序：
 
@@ -821,10 +825,16 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Active Binding | Active Binding | 生效绑定 | 全局绑定、跨问询记忆、上次口径 | 一次问询旅程内处于强制状态的那一条绑定。作用域＝问询旅程，以 begin 时深拷贝快照为准 |
 | Caliber Binding Violation | Caliber Binding Violation | 偏离固定口径 | 口径越权、ACL 拒绝、越权访问 | 拒绝码 `caliber_binding_violation`。命中生效绑定后查数参数违反固定口径 |
 | Caliber Binding Unresolved | Caliber Binding Unresolved | 口径绑定无法解析 | 未绑定、绑定缺失、权限不足 | 拒绝码 `caliber_binding_unresolved`。已开题且应有绑定，但权威作用域无法可靠解析（≠「未 begin」） |
+| Field Not Exposed | Field Not Exposed | （机器码） | 列级权限拒绝（混用） | 裁决码 `field_not_exposed`；业务暴露裁剪，非列级安全 |
+| Field Exposure Unavailable | Field Exposure Unavailable | （机器码） | 配置损坏（裸露作文案主标签） | 裁决码 `field_exposure_unavailable`；台账／期望／代次故障或四透传首期阻断 |
+| Source Description | Source Description | 来源描述 | 元数据、schema 说明（作主术语）、授权信息 | 语义层为 source 发布的业务含义文本；目录取 `descriptions.db`。描述是语义，不得用于推断权限。见 Spec `lucy-20261107-catalog-business-semantics-spec` |
+| Source Grain | Source Grain | 来源粒度 | 主键、维度列表（冒充粒度） | overlay 的 `grain`；说明事实粒度。不从 manifest 读取 |
+| Description Coverage | Description Coverage | 描述覆盖率 | 质量门禁、发布阻断指标 | 可见 source 中携带非空描述的比例；首期只观测，不阻断发布 |
+| Description Missing Marker | Description Missing Marker | 描述缺失标记 | 数据缺失、表无数据 | 目录条目 `descriptionState: missing`；区分「无描述」与「未装配」 |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、JSON-RPC method。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、`descriptionState`、JSON-RPC method、`field_not_exposed`、`field_exposure_unavailable`、`field_exposure`。
 
-详见 Spec 99。Catalog 语义筛选「未完成」(`incomplete`) 与 overview 深链见 Spec 100，不在本表重复造译名。
+详见 Spec 99。Catalog 语义筛选「未完成」(`incomplete`) 与 overview 深链见 Spec 100，不在本表重复造译名。Catalog 业务语义暴露见 Spec `lucy-20261107-catalog-business-semantics-spec`。
 
 ### 4.8 访问权限升级（Access Control Upgrade / AC-P0 + AC-P1 + AC-P1.5）
 
@@ -862,10 +872,15 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Needs-review Signal | 需复核信号 | 需复核 | 越权（无调用当时快照证据时） | 当前授权无对应路径但历史有允许访问；快照缺失不得升级结论 |
 | Credential List | 凭证清单 | Token 清单 | 权限节点、凭证流 | 挂在 Agent 下的 Token 附属区，不承载授权、不参与流守恒 |
 | Association Scope | 关联口径 | 关联口径：已确认关联（静态披露） | **问询计入**；把「含候选关联」当作访问关系图可切换筛选项 | 访问关系图对 `trust`／`association_status` 的口径披露；固定已确认关联，只影响访问面。主筛选为问询种类／访问等级。见 `docs/specs/lucy-20261105-access-map-confirmed-only-spec.md`（废止可切换含候选） |
+| Source Ambiguity Gate | 表级歧义门闩 | 多表命中先问（instructions 侧） | ACL 拒绝、自动选表、字段歧义（单独冒充本条） | 业务词命中 ≥2 可见 source 时，在 `lucy_query`／`lucy_explain_query` 前 stop；拒绝码 `source_ambiguity_gate`。见 `docs/specs/lucy-20261107-source-ambiguity-gate-spec.md` |
+| Multi-Source Ask-First | 多表命中先问 | 问询范围确认（同族扩展） | 仅模型自觉、无 tool 硬拦（作本条完整交付） | instructions 层要求多表可能命中时先澄清再查 |
+| Ambiguity Candidate List | 歧义候选表清单 | 候选来源 | 越权推荐表、相似表推荐 | 门闩响应中的 ACL 裁剪候选（完整 source 身份＋展示名＋度量摘要） |
+| Source Confirmation | 选表确认 | 确认来源表 | Agent 自证确认、nonce 冒充确认 | 解除门闩所需的用户意图驱动可信显式信号（旅程 `confirmedSourceKey`＋宿主 attested 证据） |
+| Source Identity | 来源完整身份 | 四元组身份、CanonicalSourceKey | 仅用展示名／短名确认 | `{connectionId, schema, sourceName, physicalTable}`；命中去重与确认比较以此为准 |
 
 以上 v0.25 P1 条目仅登记设计术语（2026-10-25 需求审查已签核通过，设计口径），不表示对应页面、API 或验收已交付。
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_policy_templates`、`row_access`、`forced_filters`、`constraints`、`RowGrant`、`FinalRows`、`AgentConstraints`、`grantPath`、`accessPath`、`policyVersion`、`sourceMapVersion`、`capabilityDigest`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_policy_templates`、`row_access`、`forced_filters`、`constraints`、`RowGrant`、`FinalRows`、`AgentConstraints`、`grantPath`、`accessPath`、`policyVersion`、`sourceMapVersion`、`capabilityDigest`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文、`source_ambiguity_gate`、Source Identity 四元组。
 
 与既有 Role Admin 术语（§3 `Role Permission` / `Role Table Selector` / `Table Name Prefix` 等）并存：升级后「权限摘要」主展示改为 Data Capability Preview，不得回退为仅工具并集+表并集。
 

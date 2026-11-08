@@ -6,6 +6,10 @@ import { parse } from "yaml";
 import { resolveProjectRoot, readConnections } from "../project.js";
 import { loadContentPaths } from "../paths.js";
 import {
+  enrichCatalogSources,
+  type CatalogSourceEntry
+} from "./source-descriptions.js";
+import {
   OPS_EVIDENCE_CONNECTION_CONFLICT,
   OPS_EVIDENCE_CONNECTION_ID,
   OPS_EVIDENCE_RUNTIME_NOT_READY
@@ -53,6 +57,15 @@ import {
   isControlPlaneTool
 } from "../ops/control-plane.js";
 import { collectOpsGrants, normalizeOpsGrant, type OpsGrant } from "../ops/ops-grants.js";
+import {
+  admitToolsCallEntry,
+  afterAuthFieldExposureHook,
+  loadServingGeneration,
+  SENSITIVE_META_PASSTHROUGH_TOOLS,
+  TABLE_TOUCHING_PASSTHROUGH_TOOLS,
+  validateQueryFieldsAgainstExposure,
+  type SourceMapLookup
+} from "./field-exposure.js";
 
 export interface AclDecision {
   allowed: boolean;
@@ -513,7 +526,16 @@ function addTableRefsFromText(
   text: string,
   tables: Set<string>,
   state: SourceMapState,
-  options: { fallbackUnknown?: boolean; connectionId?: string } = {}
+  options: {
+    fallbackUnknown?: boolean;
+    connectionId?: string;
+    /**
+     * P0-3 §4.5／F-R2-04：当 `fallbackUnknown:false` 时仍把未知 dotted 引用
+     * 保留进集合，供 `collectCanonicalSourceKeys` 记入 `unresolved`。
+     * 默认 true（门闩／口径采集路径）；历史静默丢弃行为须显式关闭。
+     */
+    retainUnresolved?: boolean;
+  } = {}
 ): void {
   const entries = sourceMapEntries(state);
   let matchedKnownRef = false;
@@ -525,12 +547,21 @@ function addTableRefsFromText(
     }
   }
 
-  if (matchedKnownRef || options.fallbackUnknown === false) return;
+  if (matchedKnownRef) return;
 
   const dottedRef = normalizeRef(text).match(/[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+/);
   if (!dottedRef?.[0]) return;
   const parts = dottedRef[0].split(".");
   const candidate = parts.length >= 3 ? `${parts[0]}.${parts[1]}` : parts[0];
+
+  if (options.fallbackUnknown === false) {
+    // P0-3：禁止静默丢弃未知 filter／order_by；保留字面供 unresolved 裁决。
+    if (options.retainUnresolved !== false) {
+      tables.add(dottedRef[0]);
+    }
+    return;
+  }
+
   tables.add(sourceNameToTable(candidate, state, options.connectionId));
 }
 
@@ -2094,7 +2125,7 @@ export async function loadSourceMapSnapshot(options: { fresh?: boolean } = {}): 
 
 export async function lucyCatalog(identity: Identity): Promise<{
   connections: string[];
-  sources: Array<{ connectionId: string; schema: string; sourceName: string; table: string }>;
+  sources: CatalogSourceEntry[];
   examples: string[];
 }> {
   // Spec 98 §8.2 / §8.5 — committed policy only; under global degrade Meta catalog is empty.
@@ -2113,7 +2144,8 @@ export async function lucyCatalog(identity: Identity): Promise<{
   const connections = opsEvidenceHidden
     ? resolved.permissions.connections.filter((id) => !isOpsEvidenceConnection(id))
     : resolved.permissions.connections;
-  const sources = resolved.permissions.sources
+  // D0：先得到与现行相同的最终可返回集合，再增补描述／grain（D10）。
+  const finalSources = resolved.permissions.sources
     .filter((source) => !(opsEvidenceHidden && isOpsEvidenceConnection(source.connectionId)))
     .map((source) => ({
       connectionId: source.connectionId,
@@ -2122,24 +2154,52 @@ export async function lucyCatalog(identity: Identity): Promise<{
       table: source.table
     }))
     .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+
+  let sources: CatalogSourceEntry[] = finalSources.map((source) => ({
+    ...source,
+    description: null,
+    descriptionState: "missing" as const
+  }));
+  try {
+    const paths = await loadContentPaths();
+    // D4a：索引扫盘范围 ⊆ 最终可见连接。legacy allow.tables 可能 connections=[]
+    // 但仍有 sources——此时以 finalSources 的 connectionId 为准，避免空 scope 漏装描述。
+    const connectionScope = uniqueSorted([
+      ...connections,
+      ...finalSources.map((source) => source.connectionId)
+    ]);
+    sources = await enrichCatalogSources(finalSources, {
+      semanticLayerRoot: paths.semanticLayer,
+      connectionScope
+    });
+  } catch {
+    // 整根装载失败：目录本体仍返回，描述全部 missing（SC-09）
+  }
+
   const hasPocAdRevenue = sources.some((source) => source.connectionId === "poc-mysql-aliyun" && source.sourceName === "poc_ad_revenue_daily");
   const hasKxSources = sources.some((source) => source.sourceName.startsWith("kx_") || source.table.includes(".kx_"));
 
-  return {
-    connections,
-    sources,
-    examples: hasPocAdRevenue
-      ? [
-          "For 本年各月广告收入, call sl_query with exactly this shape: {\"connectionId\":\"poc-mysql-aliyun\",\"measures\":[\"poc_ad_revenue_daily.ad_revenue\"],\"dimensions\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"granularity\":\"month\"}],\"segments\":[\"poc_ad_revenue_daily.domestic\"],\"order_by\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"direction\":\"asc\"}],\"limit\":20}.",
-          "Do not rewrite semantic keys to short names such as ad_revenue/dt/domestic; ACL requires explicit source-qualified keys. Do not wrap semantic measures as objects; object measures are only for ad hoc expr/name aggregates.",
-          "POC ad revenue data currently covers 2026-01-01 through 2026-05-31."
-        ]
-      : hasKxSources
+  const rawExamples = hasPocAdRevenue
+    ? [
+        "For 本年各月广告收入, call sl_query with exactly this shape: {\"connectionId\":\"poc-mysql-aliyun\",\"measures\":[\"poc_ad_revenue_daily.ad_revenue\"],\"dimensions\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"granularity\":\"month\"}],\"segments\":[\"poc_ad_revenue_daily.domestic\"],\"order_by\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"direction\":\"asc\"}],\"limit\":20}.",
+        "Do not rewrite semantic keys to short names such as ad_revenue/dt/domestic; ACL requires explicit source-qualified keys. Do not wrap semantic measures as objects; object measures are only for ad hoc expr/name aggregates.",
+        "POC ad revenue data currently covers 2026-01-01 through 2026-05-31."
+      ]
+    : hasKxSources
       ? [
           "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
           "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
         ]
-      : []
+      : [];
+
+  // REQ-030-012 / SC-21 — examples／initialize 同源裁剪未暴露列名。
+  const { rewriteCatalogExamplesForExposure } = await import("./field-exposure-discovery.js");
+  const examples = await rewriteCatalogExamplesForExposure(rawExamples);
+
+  return {
+    connections,
+    sources,
+    examples
   };
 }
 
@@ -2150,15 +2210,19 @@ export async function kxCatalog(identity: Identity): Promise<{
 }> {
   const catalog = await lucyCatalog(identity);
   const hasKxSources = catalog.sources.some((source) => source.sourceName.startsWith("kx_") || source.table.includes(".kx_"));
+  // REQ-030-012 / SC-21 — 与 lucyCatalog 同源：examples 经 rewriteCatalogExamplesForExposure。
+  const rawExamples = hasKxSources
+    ? [
+        "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
+        "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
+      ]
+    : [];
+  const { rewriteCatalogExamplesForExposure } = await import("./field-exposure-discovery.js");
+  const examples = await rewriteCatalogExamplesForExposure(rawExamples);
   return {
     connections: catalog.connections,
     sources: catalog.sources,
-    examples: hasKxSources
-      ? [
-          "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
-          "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
-        ]
-      : []
+    examples
   };
 }
 
@@ -3131,6 +3195,37 @@ export async function resolveAdmissionSubject(
   return { ok: true, subject: { roleIds: [], legacyDirectAllow: true } };
 }
 
+/** REQ-030-012 — SourceMap → field-exposure lookup (same committed map as ACL). */
+function sourceMapLookup(state: SourceMapState | undefined): SourceMapLookup {
+  if (!state) return {};
+  return {
+    resolveSource(sourceName: string, connectionId?: string) {
+      const normalized = normalizeRef(sourceName);
+      if (!normalized) return null;
+      if (connectionId) {
+        const scoped = state.forward.get(forwardSourceKey(connectionId, normalized));
+        if (scoped) {
+          return {
+            connectionId: scoped.connectionId,
+            schema: scoped.schema,
+            sourceName: scoped.sourceName
+          };
+        }
+      }
+      const matches = [...state.forward.values()].filter(
+        (entry) => normalizeRef(entry.sourceName) === normalized
+      );
+      if (matches.length !== 1) return null;
+      const entry = matches[0]!;
+      return {
+        connectionId: entry.connectionId,
+        schema: entry.schema,
+        sourceName: entry.sourceName
+      };
+    }
+  };
+}
+
 /**
  * Spec 98 §4.6 / Spec 99 §5 — the single data gate. Every upstream data call must pass through here.
  * Hot path prefers the committed EffectivePolicy snapshot (Spec 98 §8).
@@ -3145,6 +3240,12 @@ export async function authorizeAndRewrite(
   // policy recompile would keep serving rows under an unverified policy.
   if (isAccessRecoveryRequired() && isDegradedBlockedTool(toolName)) {
     return { allowed: false, reason: "policy_degraded_deny" };
+  }
+  // REQ-030-012 — pin ServingGeneration + AdmissionMode before any upstream-bound path.
+  const exposureSnapshot = await loadServingGeneration();
+  const admission = admitToolsCallEntry(toolName, exposureSnapshot);
+  if (!admission.allow) {
+    return { allowed: false, reason: admission.reason };
   }
   const runtime = await ensurePolicyRuntime();
   const config = runtime.config;
@@ -3223,6 +3324,23 @@ export async function authorizeAndRewrite(
     return { allowed: false, reason: "sensitive_metadata_forbidden:kx" };
   }
 
+  // REQ-030-012 / D26 路径 A：sensitiveMetadata 授权通过后、转发前（dictionary_search／discover_data）。
+  // 禁止只嵌在下方 tableTouching 分支——本路径根本不会进入该分支。
+  if (
+    policy.sensitiveMetadataTools.has(toolName) &&
+    SENSITIVE_META_PASSTHROUGH_TOOLS.has(toolName)
+  ) {
+    const pt = afterAuthFieldExposureHook(
+      toolName,
+      args,
+      exposureSnapshot,
+      sourceMapLookup(sourceMap ?? runtime.sourceMap)
+    );
+    if (!pt.allow) {
+      return { allowed: false, reason: pt.reason };
+    }
+  }
+
   // 3. Table-level check (only for tools that touch tables)
   if (policy.tableTouchingTools.has(toolName)) {
     const argsRecord = args as Record<string, unknown> | undefined;
@@ -3269,6 +3387,55 @@ export async function authorizeAndRewrite(
         return { allowed: false, reason: `explicit_table_required:${table}` };
       }
     }
+    // REQ-030-012 / D20／D24 — 对象授权已全部通过后：查数面字段暴露（含 tables:["*"]）。
+    // 通配表权限仍须做暴露检查；越权路径已在上方 return 原 ACL 码。
+    // 插入点：行策略 protectedSources 提前 return 之前；禁止全局化 validateProtectedLucyQueryArgs。
+    if (toolName === "lucy_query" || toolName === "lucy_explain_query") {
+      const lookup = sourceMapLookup(runtime.sourceMap);
+      const exposureVerdict = validateQueryFieldsAgainstExposure(args, lookup, exposureSnapshot);
+      if (exposureVerdict.denyReason != null) {
+        return { allowed: false, reason: exposureVerdict.denyReason };
+      }
+    }
+
+    // REQ-030-012 / §3.2 — lucy_read_source 上行前台账可用性（零上游可断言）。
+    if (toolName === "lucy_read_source") {
+      const { admitSourceForDiscovery, snapshotHasAnyTrimmed } = await import("./field-exposure.js");
+      const lookup = sourceMapLookup(runtime.sourceMap);
+      const argsRecord = args && typeof args === "object" && !Array.isArray(args)
+        ? (args as Record<string, unknown>)
+        : {};
+      const connectionId = firstString(argsRecord, ["connectionId", "connection_id", "connection", "database"]);
+      const sourceName = firstString(argsRecord, ["sourceName", "source_name", "source", "table"]);
+      if (connectionId && sourceName) {
+        const resolved = lookup.resolveSource?.(sourceName, connectionId);
+        if (resolved) {
+          const admitted = admitSourceForDiscovery(resolved, exposureSnapshot, toolName);
+          if (!admitted.allow) {
+            return { allowed: false, reason: admitted.reason };
+          }
+        } else if (
+          exposureSnapshot.expectedSetLoad.state === "unavailable" ||
+          snapshotHasAnyTrimmed(exposureSnapshot)
+        ) {
+          return { allowed: false, reason: "field_exposure_unavailable" };
+        }
+      }
+    }
+
+    // REQ-030-012 / D26 路径 B：tableTouching 授权通过后（entity_details／sl_validate）。
+    if (TABLE_TOUCHING_PASSTHROUGH_TOOLS.has(toolName)) {
+      const pt = afterAuthFieldExposureHook(
+        toolName,
+        args,
+        exposureSnapshot,
+        sourceMapLookup(runtime.sourceMap)
+      );
+      if (!pt.allow) {
+        return { allowed: false, reason: pt.reason };
+      }
+    }
+
     if (!allowedTables.includes("*") && sourceMap) {
       const requestedConnection = argsRecord && typeof argsRecord === "object" && !Array.isArray(argsRecord)
         ? firstString(argsRecord, ["connectionId", "connection_id", "connection", "database"])
