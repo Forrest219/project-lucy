@@ -417,8 +417,11 @@ describe("P0-1 Proxy 口径绑定门禁", () => {
         connectionId: CONNECTION,
         measures: ["orders.order_count"]
       });
+      // P0-1：未开题不施加口径绑定。
       expect(queried.text).not.toContain("caliber_binding_violation");
-      expect(upstreamHits).toBe(before + 1);
+      // P0-3：never_begun＋已断言 source → source_ambiguity_gate（context_missing），零上游。
+      expect(queried.text).toContain("source_ambiguity_gate");
+      expect(upstreamHits).toBe(before);
     });
   });
 
@@ -432,7 +435,10 @@ describe("P0-1 Proxy 口径绑定门禁", () => {
         connectionId: CONNECTION,
         measures: ["orders.order_count"]
       });
+      // P0-1：仍 never_begun → 无口径绑定约束。
       expect(queried.text).not.toContain("caliber_binding_violation");
+      // P0-3：已断言 source 的 never_begun 走表级歧义／context_missing，不放行上游。
+      expect(queried.text).toContain("source_ambiguity_gate");
     });
   });
 

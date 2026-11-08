@@ -50,16 +50,16 @@ describe("data QA fallback instructions contract", () => {
     expect(standard).toContain("问询预算用尽后，该调用者是否仍有一条可达的继续通道");
   });
 
-  // WO-202610-13 T8 / SC-25 — 复述范围 lives in the instructions only.
-  // The proxy never gates on a confirmation field (SC-1).
-  it("states the restatement scope and skips it for inferred questions", async () => {
+  // WO-202610-13 T8 + P0-3：复述范围仍在 instructions；表级选表由硬门闩执行。
+  it("states the restatement scope, multi-source ask-first, and tool gate", async () => {
     const text = await readFile(path.join(process.cwd(), "config", "data-qa-instructions.md"), "utf8");
 
-    expect(text).toContain("问询范围确认");
+    expect(text).toContain("问询范围确认／多表命中先问");
     expect(text).toContain("先复述账户、月份和产品线");
     expect(text).toContain("用户确认后再发 `lucy_query`");
     expect(text).toContain("跳过复述");
-    expect(text).toContain("代理不实现确认门闩");
-    expect(text).toContain("仍然转发 `lucy_query`");
+    expect(text).toContain("source_ambiguity_gate");
+    expect(text).toContain("Proxy 硬门闩");
+    expect(text).not.toContain("代理不实现确认门闩");
   });
 });
