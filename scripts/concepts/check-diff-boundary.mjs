@@ -17,18 +17,29 @@ const ALLOW_EXACT = new Set([
   "docs/specs/lucy-20261108-concept-registry-ontology-lite-spec.md",
   "docs/plans/lucy-20261108-concept-registry-ontology-lite-plan.md",
   "docs/reviews/2026-11-09-concept-registry-ontology-lite-codex-review.md",
+  "docs/specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md",
+  "docs/plans/lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md",
+  "docs/reviews/2026-11-09-concept-registry-lucy-ops-control-plane-codex-review.md",
   "docs/README.md",
   "docs/plans/README.md",
   "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
   "docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md",
+  "webui/src/lib/rolePermissionDraft.ts",
+  "webui/server/admin/mcp-tools.ts",
 ]);
 
 const ALLOW_PREFIXES = [
   "scripts/concepts/",
+  "webui/server/ops/",
   "inbox/",
 ];
 
-const PACKAGE_SCRIPT_KEYS = new Set(["concepts", "concepts:test", "concepts:check-diff"]);
+const PACKAGE_SCRIPT_KEYS = new Set([
+  "concepts",
+  "concepts:test",
+  "concepts:check-diff",
+  "concepts:check-ask-path",
+]);
 
 function sh(cmd) {
   return execSync(cmd, { encoding: "utf8" }).trim();

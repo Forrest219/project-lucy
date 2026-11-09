@@ -69,6 +69,12 @@ export const BUSINESS_QA_PRESET = [
 export const CONTROL_PLANE_TOOL_NAMES = [
   "lucy_ops_connection_tables",
   "lucy_ops_source_import",
+  "lucy_ops_concept_list",
+  "lucy_ops_concept_show",
+  "lucy_ops_concept_summary",
+  "lucy_ops_concept_scan",
+  "lucy_ops_concept_set_canonical",
+  "lucy_ops_concept_reject",
 ] as const;
 
 // ─── Types ───────────────────────────────────────────────────────────────────

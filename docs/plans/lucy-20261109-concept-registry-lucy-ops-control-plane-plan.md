@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 实施计划 / **v0.5** |
 | 日期 / 目标版本 | 2026-11-09 / 产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 台账号 | 无 |
-| 状态 | **v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；实现中（Cursor）；未宣称可上线**（P1-11／REQ-030-032）。本条不表示可上线 |
+| 状态 | **v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；功能合同层已收口（SC-01–SC-22 有自动化证据）**；**本条不表示可上线**（P1-11／REQ-030-032） |
 | 授权边界 | **R4 已授予（2026-11-09）**。按 S1–S7 改运行代码；**不含**本版 WebUI；**不含**问数热路径注入 |
 | 验收 | Spec SC-01–SC-22；步骤出口见下表 |
 | 对应 Spec | [lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md)（v0.5） |
@@ -24,6 +24,9 @@
 | v0.4-draft | Codex R2 闭合残留（部分） |
 | v0.5-draft | Codex R3 后作者侧闭合：幂等核验序（D20）、半进位恢复（D21）、whitelist／目标映射（D22）、execute 内核验（D23）、SC-21／22；**不再开第 4 轮 Codex** |
 | v0.5 | 委托人 **R2-F** 认可 v0.5；**O2＝B**；**R4 开发授权（2026-11-09）**；实现中 |
+| v0.5+impl | S1–S4 已落地（纯 API／六工具／adapter／只读旁路／preview→commit 夹具）；S5 对照夹具已加；S6 差分白名单已扩；S7 文档收口进行中；**未宣称 SC 全关／可上线** |
+| v0.5+impl2 | SC-21 recovering 围栏；SC-15 基线漂移；SC-03／04 Ops 权威；SC-18 read_only；SC-09 语义／wiki 指纹不变；CLI usage 标急救（SC-14）；**仍未宣称 SC 全关／可上线** |
+| v0.5+close | SC-06／07／08／20／22 夹具补齐；`concepts:check-ask-path`；Spec §7 关闭证据表；**功能合同层收口；≠ 可上线** |
 
 > **For agentic workers:** R4 已授予；按本 Plan 改 `scripts/concepts/**` 与 `webui/server/**`（差分边界内）。
 

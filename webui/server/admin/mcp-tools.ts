@@ -38,7 +38,13 @@ const KNOWN_TOOLS: Array<{ name: string; description: string }> = [
   { name: "memory_ingest_status", description: "查询记忆注入状态" },
   // L25-16 — 控制面工具（由 role.allow.ops 授权，不在 allow.tools 里授予）。
   { name: "lucy_ops_connection_tables", description: "批量维护连接的启用表范围（控制面工具）" },
-  { name: "lucy_ops_source_import", description: "批量导入源表语义（控制面工具）" }
+  { name: "lucy_ops_source_import", description: "批量导入源表语义（控制面工具）" },
+  { name: "lucy_ops_concept_list", description: "概念注册表列表（控制面工具）" },
+  { name: "lucy_ops_concept_show", description: "概念详情（控制面工具）" },
+  { name: "lucy_ops_concept_summary", description: "概念汇总（控制面工具）" },
+  { name: "lucy_ops_concept_scan", description: "扫描概念候选绑定（控制面工具）" },
+  { name: "lucy_ops_concept_set_canonical", description: "设定概念权威绑定（控制面工具）" },
+  { name: "lucy_ops_concept_reject", description: "拒绝概念绑定（控制面工具）" }
 ];
 
 export function registerMcpToolsRoutes(app: FastifyInstance) {

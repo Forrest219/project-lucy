@@ -23,9 +23,23 @@ import { enforceOwnerOnly } from "./ops-delegation.js";
 import { opsDeny, opsOk, type OpsEnvelope } from "./ops-envelope.js";
 import { OpsConnectionTablesAdapter } from "./ops-ktx-batch.js";
 import { OpsSourceImportAdapter } from "./ops-source-batch.js";
+import {
+  OPS_CONCEPT_SCAN,
+  assertConceptCommitRequestMatchesPlan,
+  conceptWriteAdapters
+} from "./concepts-adapter.js";
+import { invokeConceptReadTool, rejectConceptRootOverrides } from "./concepts-read.js";
+import type { OpsPlan } from "./ops-batch.js";
+import { loadPlanRow } from "./ops-idempotency.js";
 
 export const OPS_TOOL_CONNECTION_TABLES = "lucy_ops_connection_tables";
 export const OPS_TOOL_SOURCE_IMPORT = "lucy_ops_source_import";
+export const OPS_TOOL_CONCEPT_LIST = "lucy_ops_concept_list";
+export const OPS_TOOL_CONCEPT_SHOW = "lucy_ops_concept_show";
+export const OPS_TOOL_CONCEPT_SUMMARY = "lucy_ops_concept_summary";
+export const OPS_TOOL_CONCEPT_SCAN = OPS_CONCEPT_SCAN;
+export const OPS_TOOL_CONCEPT_SET_CANONICAL = "lucy_ops_concept_set_canonical";
+export const OPS_TOOL_CONCEPT_REJECT = "lucy_ops_concept_reject";
 
 /** 控制面工具的稳定拒绝码（Spec §3.5 / §6.1）。 */
 export const OPS_TOOL_CODES = {
@@ -38,7 +52,8 @@ export const OPS_TOOL_CODES = {
 
 const ADAPTERS = new Map<string, OpsToolAdapter>([
   [OPS_TOOL_CONNECTION_TABLES, new OpsConnectionTablesAdapter()],
-  [OPS_TOOL_SOURCE_IMPORT, new OpsSourceImportAdapter()]
+  [OPS_TOOL_SOURCE_IMPORT, new OpsSourceImportAdapter()],
+  ...conceptWriteAdapters.map((adapter) => [adapter.toolName, adapter] as const)
 ]);
 
 export function opsAdapterFor(toolName: string): OpsToolAdapter | undefined {
@@ -115,6 +130,83 @@ export function opsToolDescriptors(): Array<{ name: string; description: string;
         required: ["targets"],
         additionalProperties: false
       }
+    },
+    {
+      name: OPS_TOOL_CONCEPT_LIST,
+      description: "概念注册表列表（只读，无计划机）。",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false }
+    },
+    {
+      name: OPS_TOOL_CONCEPT_SHOW,
+      description: "概念详情（只读）。入参：{ concept_id }",
+      inputSchema: {
+        type: "object",
+        properties: { concept_id: { type: "string" } },
+        required: ["concept_id"],
+        additionalProperties: false
+      }
+    },
+    {
+      name: OPS_TOOL_CONCEPT_SUMMARY,
+      description: "概念汇总（只读）。可选 concept_id。",
+      inputSchema: {
+        type: "object",
+        properties: { concept_id: { type: "string" } },
+        additionalProperties: false
+      }
+    },
+    {
+      name: OPS_TOOL_CONCEPT_SCAN,
+      description:
+        "扫描候选绑定（写，preview→commit）。dry_run 预览；commit 执行计划内全部目标。" +
+        "可选 whitelist_ref（仅 seed）。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          dry_run: { type: "boolean" },
+          whitelist_ref: { type: "string" },
+          idempotency_key: { type: "string" },
+          plan_id: { type: "string" },
+          confirm_digest: { type: "string" }
+        },
+        additionalProperties: false
+      }
+    },
+    {
+      name: OPS_TOOL_CONCEPT_SET_CANONICAL,
+      description:
+        "设定权威绑定（写，preview→commit）。入参：concept_id、binding_id、summary。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          concept_id: { type: "string" },
+          binding_id: { type: "string" },
+          summary: { type: "string" },
+          dry_run: { type: "boolean" },
+          idempotency_key: { type: "string" },
+          plan_id: { type: "string" },
+          confirm_digest: { type: "string" }
+        },
+        required: ["concept_id", "binding_id", "summary"],
+        additionalProperties: false
+      }
+    },
+    {
+      name: OPS_TOOL_CONCEPT_REJECT,
+      description: "拒绝绑定（写，preview→commit）。入参：concept_id、binding_id。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          concept_id: { type: "string" },
+          binding_id: { type: "string" },
+          dry_run: { type: "boolean" },
+          idempotency_key: { type: "string" },
+          plan_id: { type: "string" },
+          confirm_digest: { type: "string" }
+        },
+        required: ["concept_id", "binding_id"],
+        additionalProperties: false
+      }
     }
   ];
 }
@@ -188,10 +280,6 @@ export async function invokeOpsTool(invocation: OpsToolInvocation): Promise<OpsE
   if (!spec) {
     return opsDeny(OPS_TOOL_CODES.notControlPlane, undefined, `未登记的控制面工具：${invocation.toolName}`);
   }
-  const adapter = opsAdapterFor(invocation.toolName);
-  if (!adapter) {
-    return opsDeny(OPS_TOOL_CODES.notControlPlane, undefined, `未登记的控制面工具：${invocation.toolName}`);
-  }
 
   // 身份 → 角色 → ops grant
   const actorContext = await resolveOpsActorContext(invocation.userId);
@@ -204,6 +292,33 @@ export async function invokeOpsTool(invocation: OpsToolInvocation): Promise<OpsE
   if (!opsToolsFromGrants(grants).has(invocation.toolName)) {
     return opsDeny(`ops_not_granted:${invocation.toolName}`);
   }
+
+  const args = invocation.args;
+  const rootBlocked = rejectConceptRootOverrides(args);
+  if (rootBlocked && invocation.toolName.startsWith("lucy_ops_concept_")) {
+    return rootBlocked;
+  }
+
+  // D15：只读概念工具不走 preview/commit，也不要求适配器写路径。
+  if (!spec.write) {
+    const readAuth = authorizeOpsTargets(grants, spec, [{ id: "concept:governance", connectionId: "" }]);
+    if (!readAuth.ok) {
+      const first = readAuth.denied[0];
+      return opsDeny(
+        "ops_grant_unmatched",
+        { target_id: first?.targetId, reasons: first?.reasons },
+        "目标未被授权"
+      );
+    }
+    return invokeConceptReadTool(invocation.toolName, invocation.projectRoot, args);
+  }
+
+  const adapter = opsAdapterFor(invocation.toolName);
+  if (!adapter) {
+    return opsDeny(OPS_TOOL_CODES.notControlPlane, undefined, `未登记的控制面工具：${invocation.toolName}`);
+  }
+
+  const dryRun = args.dry_run === true;
 
   // 目标解析
   let targets: unknown[];
@@ -218,12 +333,35 @@ export async function invokeOpsTool(invocation: OpsToolInvocation): Promise<OpsE
     );
   }
 
-  // 逐对象完整匹配（Spec §3.2.2 规则 4 / §6.1 步骤 7）
-  const requested = targets.map((target) => ({
-    id: adapter.targetId(target),
-    connectionId: adapter.connectionId(target)
-  }));
-  const authorization = authorizeOpsTargets(grants, spec, requested);
+  let requestTargetIds: string[];
+  if (!dryRun && invocation.toolName === OPS_TOOL_CONCEPT_SCAN) {
+    const planId = typeof args.plan_id === "string" ? args.plan_id.trim() : "";
+    if (!planId) {
+      return opsDeny(OPS_TOOL_CODES.planIdRequired);
+    }
+    const database = await (await import("./ops-idempotency.js")).getOpsDatabase();
+    const stored = loadPlanRow(database, planId);
+    if (!stored) {
+      return opsDeny("ops_plan_not_found");
+    }
+    const plan = stored.plan as unknown as OpsPlan;
+    requestTargetIds = plan.perTarget.map((target) => target.id);
+  } else {
+    requestTargetIds = targets.map((target) => ({
+      id: adapter.targetId(target),
+      connectionId: adapter.connectionId(target)
+    })).map((target) => target.id);
+  }
+
+  const authTargets =
+    !dryRun && invocation.toolName === OPS_TOOL_CONCEPT_SCAN
+      ? requestTargetIds.map((id) => ({ id, connectionId: "" }))
+      : targets.map((target) => ({
+          id: adapter.targetId(target),
+          connectionId: adapter.connectionId(target)
+        }));
+
+  const authorization = authorizeOpsTargets(grants, spec, authTargets);
   if (!authorization.ok) {
     const first = authorization.denied[0];
     return opsDeny(
@@ -240,8 +378,6 @@ export async function invokeOpsTool(invocation: OpsToolInvocation): Promise<OpsE
   }
 
   // 写类前置（Spec §6.1 步骤 9）
-  const args = invocation.args;
-  const dryRun = args.dry_run === true;
   if (!dryRun) {
     if (typeof args.idempotency_key !== "string" || !args.idempotency_key.trim()) {
       return opsDeny(OPS_TOOL_CODES.idempotencyKeyRequired);
@@ -264,6 +400,18 @@ export async function invokeOpsTool(invocation: OpsToolInvocation): Promise<OpsE
         request: args
       });
     }
+    if (invocation.toolName.startsWith("lucy_ops_concept_")) {
+      const planId = (args.plan_id as string).trim();
+      const database = await (await import("./ops-idempotency.js")).getOpsDatabase();
+      const stored = loadPlanRow(database, planId);
+      if (stored) {
+        assertConceptCommitRequestMatchesPlan(
+          invocation.toolName,
+          args,
+          stored.plan as unknown as OpsPlan
+        );
+      }
+    }
     return await runOpsCommit({
       adapter,
       projectRoot: invocation.projectRoot,
@@ -272,7 +420,7 @@ export async function invokeOpsTool(invocation: OpsToolInvocation): Promise<OpsE
       idempotencyKey: (args.idempotency_key as string).trim(),
       planId: (args.plan_id as string).trim(),
       confirmDigest: (args.confirm_digest as string).trim(),
-      requestTargetIds: requested.map((target) => target.id),
+      requestTargetIds,
       grants,
       tool: spec
     });

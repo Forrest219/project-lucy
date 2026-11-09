@@ -45,6 +45,9 @@ function printYaml(obj) {
 function usage() {
   return `Usage: concepts <command> [options]
 
+NOTE: 客户／运维主交付面是 Lucy Ops MCP（lucy_ops_concept_*）。
+本 CLI 仅为共享库调试与急救通道（P1-11 D1／SC-14），不作为长期交付入口。
+
 Commands:
   scan [--project DIR] [--content-root DIR] [--whitelist FILE]
   list [--project DIR] [--content-root DIR] [--json]

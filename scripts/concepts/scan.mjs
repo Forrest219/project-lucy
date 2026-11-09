@@ -8,17 +8,21 @@ import {
   currentlyMatches,
   deriveConflicts,
   normalizeAlias,
+  loadWhitelist,
 } from "./model.mjs";
 import {
   ensureConceptsDir,
   readConcept,
-  writeConceptAtomic,
-  seedFromWhitelist,
+  readConceptBytes,
   loadWhitelistFile,
   defaultWhitelistPath,
+  emptyConceptFromWhitelist,
   mergeBinding,
   listConceptIds,
+  conceptToYamlBytes,
+  resolveFencedConceptsDir,
 } from "./store.mjs";
+import { applyConceptPlan, fingerprintBytes } from "./apply.mjs";
 
 function walkYamlFiles(root) {
   const out = [];
@@ -337,21 +341,40 @@ function readAssetFields(contentRoot, binding) {
   return undefined;
 }
 
-export function runScan({ contentRoot, whitelistPath = defaultWhitelistPath() }) {
-  const dir = ensureConceptsDir(contentRoot);
+function conceptTarget(dir, conceptId, beforeBytes, afterConcept) {
+  const afterBytes = conceptToYamlBytes(afterConcept);
+  return {
+    conceptId,
+    beforeBytes,
+    afterBytes,
+    beforeFingerprint: fingerprintBytes(beforeBytes),
+    afterFingerprint: fingerprintBytes(afterBytes),
+  };
+}
+
+/**
+ * Pure scan plan — no business file writes (P1-11 D7／D13 preview).
+ */
+export function planScan({ contentRoot, whitelistPath = defaultWhitelistPath() }) {
+  const dir = resolveFencedConceptsDir(contentRoot, { create: false });
   const whitelistDoc = loadWhitelistFile(whitelistPath);
-  seedFromWhitelist(dir, whitelistDoc);
+  const entries = loadWhitelist(whitelistDoc);
 
   const stats = { concepts: 0, added: 0, merged: 0, preserved_rejected: 0, conflicts: 0, degraded: 0 };
-  const ids = listConceptIds(dir);
+  const targets = [];
+  const plannedIds = new Set();
+  const dirExists = fs.existsSync(dir);
 
-  for (const id of ids) {
-    const concept = readConcept(dir, id);
-    if (!concept) continue;
+  for (const entry of entries) {
+    plannedIds.add(entry.id);
+    const beforeBytes = dirExists ? readConceptBytes(dir, entry.id) : null;
+    let concept = beforeBytes ? readConcept(dir, entry.id) : emptyConceptFromWhitelist(entry);
+    if (!concept) concept = emptyConceptFromWhitelist(entry);
+
     stats.concepts += 1;
     const discoveries = discoverForAliases(contentRoot, concept.aliases || []);
     let next = concept;
-    let dirty = false;
+    let dirty = beforeBytes == null;
     for (const d of discoveries) {
       try {
         rejectEmptyEvidence(d);
@@ -370,7 +393,6 @@ export function runScan({ contentRoot, whitelistPath = defaultWhitelistPath() })
       }
     }
 
-    // Mark stale candidates: still on disk but no longer match
     const aliases = next.aliases || [];
     next.bindings = (next.bindings || []).map((b) => {
       if (b.role !== "candidate") return b;
@@ -389,7 +411,7 @@ export function runScan({ contentRoot, whitelistPath = defaultWhitelistPath() })
 
     if (dirty) {
       next.updated_at = new Date().toISOString();
-      writeConceptAtomic(dir, next);
+      targets.push(conceptTarget(dir, entry.id, beforeBytes, next));
     }
 
     const { conflicts, conflicts_status } = deriveConflicts(next, {
@@ -400,7 +422,70 @@ export function runScan({ contentRoot, whitelistPath = defaultWhitelistPath() })
     if (conflicts_status === "degraded") stats.degraded += 1;
   }
 
-  return { dir, stats };
+  if (dirExists) {
+    for (const id of listConceptIds(dir)) {
+      if (plannedIds.has(id)) continue;
+      const beforeBytes = readConceptBytes(dir, id);
+      const concept = readConcept(dir, id);
+      if (!concept) continue;
+      stats.concepts += 1;
+      const discoveries = discoverForAliases(contentRoot, concept.aliases || []);
+      let next = concept;
+      let dirty = false;
+      for (const d of discoveries) {
+        try {
+          rejectEmptyEvidence(d);
+        } catch {
+          continue;
+        }
+        const result = mergeBinding(next, d);
+        if (result.changed) {
+          next = result.concept;
+          dirty = true;
+          if (result.action === "add") stats.added += 1;
+          else stats.merged += 1;
+        }
+      }
+      const aliases = next.aliases || [];
+      next.bindings = (next.bindings || []).map((b) => {
+        if (b.role !== "candidate") return b;
+        const match = currentlyMatches(b, aliases, (binding) => readAssetFields(contentRoot, binding));
+        if (match === false) {
+          dirty = true;
+          return { ...b, stale: true };
+        }
+        if (match === true && b.stale) {
+          dirty = true;
+          const { stale, ...rest } = b;
+          return rest;
+        }
+        return b;
+      });
+      if (dirty) {
+        next.updated_at = new Date().toISOString();
+        targets.push(conceptTarget(dir, id, beforeBytes, next));
+      }
+      const { conflicts, conflicts_status } = deriveConflicts(next, {
+        assetStatus: (b) => assetExists(contentRoot, b),
+        rematch: (b, als) => currentlyMatches(b, als, (binding) => readAssetFields(contentRoot, binding)),
+      });
+      if (conflicts.length) stats.conflicts += conflicts.length;
+      if (conflicts_status === "degraded") stats.degraded += 1;
+    }
+  }
+
+  return { contentRoot, conceptsDir: dir, whitelistPath, targets, stats };
+}
+
+export function applyScanPlan(plan) {
+  const dir = ensureConceptsDir(plan.contentRoot);
+  applyConceptPlan(dir, plan.targets);
+  return { dir, stats: plan.stats, applied: plan.targets.length };
+}
+
+export function runScan({ contentRoot, whitelistPath = defaultWhitelistPath() }) {
+  const plan = planScan({ contentRoot, whitelistPath });
+  return applyScanPlan(plan);
 }
 
 export function summarizeConcept(concept, contentRoot) {

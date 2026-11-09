@@ -13,7 +13,12 @@ import {
   seedFromWhitelist,
   loadWhitelistFile,
   defaultWhitelistPath,
+  resolveFencedConceptsDir,
+  ensureConceptsDir,
 } from "../store.mjs";
+import { planScan } from "../scan.mjs";
+import { planSetCanonical } from "../plan.mjs";
+import { applyConceptPlan } from "../apply.mjs";
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "lucy-concepts-"));
@@ -137,4 +142,66 @@ test("SC-merge: empty evidence cannot become candidate", () => {
   });
   assert.equal(result.action, "skip_empty_evidence");
   assert.equal(result.changed, false);
+});
+
+test("SC-19: conceptsDir symlink rejected", () => {
+  const root = tmpDir();
+  const real = path.join(root, "real-concepts");
+  fs.mkdirSync(real);
+  const link = path.join(root, "concepts");
+  fs.symlinkSync(real, link);
+  assert.throws(() => resolveFencedConceptsDir(link), /symlink/);
+  assert.throws(() => safeConceptPath(link, "revenue"), /symlink/);
+});
+
+test("SC-19: concept file symlink rejected", () => {
+  const dir = tmpDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const outside = path.join(path.dirname(dir), "outside-revenue.yaml");
+  fs.writeFileSync(outside, "id: revenue\n");
+  fs.symlinkSync(outside, path.join(dir, "revenue.yaml"));
+  assert.throws(() => safeConceptPath(dir, "revenue"), /symlink/);
+});
+
+test("planScan: preview does not write concepts/", () => {
+  const root = tmpDir();
+  const content = path.join(root, "config");
+  fs.mkdirSync(path.join(content, "semantic-layer", "demo"), { recursive: true });
+  fs.writeFileSync(
+    path.join(content, "semantic-layer", "demo", "orders.yaml"),
+    "name: orders\nmeasures:\n  - name: total_sales\n    description: 收入\n",
+  );
+  const plan = planScan({ contentRoot: content, whitelistPath: defaultWhitelistPath() });
+  assert.ok(plan.targets.length >= 1);
+  assert.equal(fs.existsSync(path.join(content, "concepts")), false);
+});
+
+test("planSetCanonical + applyConceptPlan roundtrip", () => {
+  const content = tmpDir();
+  const dir = ensureConceptsDir(content);
+  writeConceptAtomic(dir, {
+    id: "revenue",
+    label: "收入",
+    aliases: ["revenue"],
+    canonical: null,
+    bindings: [
+      {
+        bindingId: "measure:demo/orders/sales",
+        kind: "measure",
+        role: "candidate",
+        confidence: "high",
+        ref: { connectionId: "demo", sourceName: "orders", measureKey: "sales" },
+        evidence: [{ type: "semantic", path: "p", alias: "revenue", field: "measure_key", snippet: "sales" }],
+      },
+    ],
+    updated_at: "2026-01-01T00:00:00.000Z",
+  });
+  const plan = planSetCanonical({
+    conceptsDir: dir,
+    conceptId: "revenue",
+    bindingId: "measure:demo/orders/sales",
+    summary: "权威说明",
+  });
+  applyConceptPlan(dir, plan.targets);
+  assert.equal(readConcept(dir, "revenue").canonical, "measure:demo/orders/sales");
 });

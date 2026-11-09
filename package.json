@@ -140,7 +140,8 @@
     "test:upgrade-coverage": "node --test scripts/e2e/__tests__/upgrade-feature-coverage.test.mjs scripts/e2e/__tests__/real-browser-source-guard.test.mjs",
     "concepts": "node scripts/concepts/cli.mjs",
     "concepts:test": "node --test scripts/concepts/__tests__/*.test.mjs",
-    "concepts:check-diff": "node scripts/concepts/check-diff-boundary.mjs"
+    "concepts:check-diff": "node scripts/concepts/check-diff-boundary.mjs",
+    "concepts:check-ask-path": "node scripts/concepts/check-ask-path-invariant.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",

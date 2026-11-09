@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计基线 / **v0.5** |
 | 日期 / 目标版本 | 2026-11-09 / 产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 台账号 | 无 |
-| 状态 | **v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；实现中（Cursor）；未宣称可上线**（P1-11／REQ-030-032）。本条不表示可上线 |
+| 状态 | **v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；功能合同层已收口（SC-01–SC-22 有自动化证据，2026-11-09）**；**本条不表示可上线／发布取证**（P1-11／REQ-030-032） |
 | 授权边界 | **R4 已授予（2026-11-09）**。按 Plan S1–S7 改运行代码；**不含**本版 WebUI；**不含**问数热路径注入 |
 | 验收 | 见 §7 SC-01–SC-18；本条总出口＝Ops 控制面可完成概念 scan／人审写／只读盘点，且不改变业务问数热路径 |
 | 需求来源 | [REQ-030-032](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；委托人 2026-11-09：运维＝配置治理；正式立项并进 Lucy Ops；本版 Ops 检查完毕、下版再评估 WebUI |
@@ -229,37 +229,39 @@ function opsConceptList(...):
 |---|---|---|
 | 立项 | Spec／Plan | 已完成 |
 | 评审 | R1→R2→R2-F→R3 | §2.2 |
-| 本版实现 | R4 后落地 Ops | O2＝B 已跳过效果门；**仍须 R4** |
+| 本版实现 | R4 后落地 Ops | O2＝B；**R4 已授予**；功能合同层已收口 |
 | 下版 WebUI | 另 Spec | Ops 检查完毕后 |
 
 ---
 
 ## 7. 成功标准
 
-| 编号 | 标准 |
-|---|---|
-| SC-01 | 有效 ops grant 可调授权工具；无 grant 不可见／不可调 |
-| SC-02 | set_canonical 无 summary／非法 bindingId → 非 ok；磁盘不变 |
-| SC-03 | 人设 canonical＋summary 后再 scan：指针／role／summary 不变；仅 evidence 可追加 |
-| SC-04 | reject 后再 scan 同 ref 不复活为 candidate |
-| SC-05 | 仅问答 Token（无 allow.ops）不可调任何 concept 工具 |
-| SC-06 | 默认 `lucy_ops_reader` 不可调概念写工具；亦不可因角色名含 ops 而放行 |
-| SC-07 | **确认无效果**的失败：写集字节／ABSENT 相对前像不变，且 `operation_state`／`per_target` 标明失败（不要求 MCP `isError`）；**恢复中／效果未知**不得伪造成无效果失败 |
-| SC-08 | 审计顺序满足 claim→效果→verify→终结；可区分 scan／set_canonical／reject |
-| SC-09 | 固定 `CONCEPT_OPS_DIFF_BASE`＋本条归属差分；同一夹具比较（基线实现 vs 候选）且（概念资产变更前 vs 后）：选表／口径绑定／查询参数／SQL 不变 |
-| SC-10 | 无新增 WebUI 路由／导航／浏览器人审 API |
-| SC-11 | 经**服务适配器**调用的结果与直接调纯计算核心的规范化持久化对象／冲突一致（对照夹具，至少：未定权威扫描、空白 summary、reject 再命中、切换 canonical、零命中、degraded） |
-| SC-12 | preview **不写** concepts／semantic／wiki；commit 无有效 digest／基线漂移 → 不写业务文件（允许已有控制面计划行） |
-| SC-13 | 六工具在 known_tools＋CONTROL_PLANE_TOOLS；ops.tools 禁 `*` |
-| SC-14 | 交付文档以 Ops 为主；CLI 标急救 |
-| SC-15 | 并发：A preview 后 B 改权威，A 携旧 digest commit → 拒绝 |
-| SC-16 | 只读 list／show／summary 无 concepts 目录时返回空且不创建目录 |
-| SC-17 | 客户端传入 project／content 根字段被忽略或拒绝；解析仅信 Proxy projectRoot＋D12 |
-| SC-18 | read_only instance_scope grant 不能 commit 任何写工具 |
-| SC-19 | conceptsDir 或目标为 symlink／realpath 逃逸 → 拒绝；根外文件字节不变 |
-| SC-20 | 参数与计划不一致 → 拒绝；成功重放须先通过归属／digest／参数／授权核验后才返回；换 summary 不得命中旧成功 |
-| SC-21 | 半进位中断后：受影响概念读写返回 recovering，直至整组回滚或核验成功；根外与未在写集内文件不变 |
-| SC-22 | `executeGroup` 后像核验失败 → 不得 committed；恢复路径走 `verifyGroup` |
+| 编号 | 标准 | 关闭证据（2026-11-09） |
+|---|---|---|
+| SC-01 | 有效 ops grant 可调授权工具；无 grant 不可见／不可调 | `ops-concepts.test.ts` 授权用例 |
+| SC-02 | set_canonical 无 summary／非法 bindingId → 非 ok；磁盘不变 | adapter 校验＋CLI／Ops 夹具 |
+| SC-03 | 人设 canonical＋summary 后再 scan：指针／role／summary 不变；仅 evidence 可追加 | Ops SC-03 用例 |
+| SC-04 | reject 后再 scan 同 ref 不复活为 candidate | Ops SC-04 用例 |
+| SC-05 | 仅问答 Token（无 allow.ops）不可调任何 concept 工具 | `no_ops_agent` 拒 list |
+| SC-06 | 默认 `lucy_ops_reader` 不可调概念写工具；亦不可因角色名含 ops 而放行 | `lucy_ops_reader_agent` 拒 list／scan／set_canonical |
+| SC-07 | **确认无效果**的失败：写集字节／ABSENT 相对前像不变，且 `operation_state`／`per_target` 标明失败（不要求 MCP `isError`）；**恢复中／效果未知**不得伪造成无效果失败 | 缺概念 set_canonical；concepts 仍不存在 |
+| SC-08 | 审计顺序满足 claim→效果→verify→终结；可区分 scan／set_canonical／reject | 复用 `runOpsCommit`；`planChangeType` 三分 |
+| SC-09 | 固定 `CONCEPT_OPS_DIFF_BASE`＋本条归属差分；同一夹具比较（基线实现 vs 候选）且（概念资产变更前 vs 后）：选表／口径绑定／查询参数／SQL 不变 | `concepts:check-ask-path`＋语义／wiki 指纹夹具（禁改 ask-path 热文件） |
+| SC-10 | 无新增 WebUI 路由／导航／浏览器人审 API | 交互合同豁免；差分无 WebUI 页 |
+| SC-11 | 经**服务适配器**调用的结果与直接调纯计算核心的规范化持久化对象／冲突一致 | S5 目标 id 对照 |
+| SC-12 | preview **不写** concepts／semantic／wiki；commit 无有效 digest／基线漂移 → 不写业务文件（允许已有控制面计划行） | `planScan` 不落盘；SC-15 漂移 |
+| SC-13 | 六工具在 known_tools＋CONTROL_PLANE_TOOLS；ops.tools 禁 `*` | control-plane＋rolePermissionDraft parity |
+| SC-14 | 交付文档以 Ops 为主；CLI 标急救 | CLI usage 声明；本 Spec D1 |
+| SC-15 | 并发：A preview 后 B 改权威，A 携旧 digest commit → 拒绝 | SC-15 基线漂移用例 |
+| SC-16 | 只读 list／show／summary 无 concepts 目录时返回空且不创建目录 | 只读不建目录用例 |
+| SC-17 | 客户端传入 project／content 根字段被忽略或拒绝；解析仅信 Proxy projectRoot＋D12 | `rejectConceptRootOverrides` |
+| SC-18 | read_only instance_scope grant 不能 commit 任何写工具 | `concept_reader` read_only 拒写 |
+| SC-19 | conceptsDir 或目标为 symlink／realpath 逃逸 → 拒绝；根外文件字节不变 | `concepts:test` SC-19 |
+| SC-20 | 参数与计划不一致 → 拒绝；成功重放须先通过归属／digest／参数／授权核验后才返回；换 summary 不得命中旧成功 | `assertConceptCommitRequestMatchesPlan`＋summary 篡改用例 |
+| SC-21 | 半进位中断后：受影响概念读写返回 recovering，直至整组回滚或核验成功；根外与未在写集内文件不变 | `concepts-recovery-fence`＋围栏用例 |
+| SC-22 | `executeGroup` 后像核验失败 → 不得 committed；恢复路径走 `verifyGroup` | after-image mismatch 夹具；adapter verify 失败抛错 |
+
+> **收口说明**：上表关闭＝功能合同层自动化证据齐；**≠** 客户环境验收、**≠** 可上线／发布取证。
 
 ---
 
