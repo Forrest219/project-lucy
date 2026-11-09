@@ -65,6 +65,9 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run compat:ktx-upgrade -- --candidate <version>` | runtime + platform upgrade | validates a candidate bundled KTX version through Docker/demo/business gates |
 | `cd webui && npm run e2e:release-ux` | platform, release-only | 发版前 WebUI 菜单壳层。按 `navigation.ts` 点击每个一级分组和二级入口，并打开 `/help`。断言当前菜单、页头、H1、页头动作数量、错误原文、禁止主标签和时间筛选。独立 Playwright 配置，只跑 Chromium 1920×1080，不进入 `@pr-smoke`、`e2e:contract:release` 或 `e2e:real`。不是 PR 阻塞项，通过也不能单独把客户包签成可生产。规范见 [`docs/specs/lucy-20261030-webui-release-ux-review-spec.md`](../specs/lucy-20261030-webui-release-ux-review-spec.md) |
 | `npm run e2e:product -- --list` | product e2e entry | 列出主干或一个分支的文件、证据层级和配置。`--list` 不起 Lucy、不跑 Playwright。去掉 `--list` 才调度该目标。不是 PR 阻塞项，也不替代 `e2e:real:*` 或 `gate:customer-release`。规范见 [`docs/specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md`](../specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md) |
+| `npm run concepts` | content governance（本机） | Concept Registry 一期 CLI：`scan`／`list`／`show`／`set-canonical`／`reject`／`summary`。不进 CI。规范见 [`docs/specs/lucy-20261108-concept-registry-ontology-lite-spec.md`](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) |
+| `npm run concepts:test` | content governance（本机） | Concept Registry 单元／夹具测试（SC-01–SC-17）。不进 CI |
+| `npm run concepts:check-diff` | content governance（本机） | Concept Registry 一期差分白名单（D19／SC-05／SC-08）。可选 `CONCEPTS_DIFF_BASE=<commit>`。不进 CI |
 
 ### 2.1 Local Node / Native Addon Baseline
 

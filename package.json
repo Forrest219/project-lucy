@@ -137,7 +137,10 @@
     "smoke:agent-chat:a3": "node scripts/smoke/agent-chat-a3-smoke.mjs",
     "smoke:agent-chat:a3:test": "node --test scripts/smoke/agent-chat-a3-smoke.test.mjs",
     "e2e:upgrade": "node scripts/e2e/run-upgrade-features.mjs",
-    "test:upgrade-coverage": "node --test scripts/e2e/__tests__/upgrade-feature-coverage.test.mjs scripts/e2e/__tests__/real-browser-source-guard.test.mjs"
+    "test:upgrade-coverage": "node --test scripts/e2e/__tests__/upgrade-feature-coverage.test.mjs scripts/e2e/__tests__/real-browser-source-guard.test.mjs",
+    "concepts": "node scripts/concepts/cli.mjs",
+    "concepts:test": "node --test scripts/concepts/__tests__/*.test.mjs",
+    "concepts:check-diff": "node scripts/concepts/check-diff-boundary.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",

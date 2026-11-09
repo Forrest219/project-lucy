@@ -1,0 +1,9 @@
+concepts:
+  - id: revenue
+    label: 收入
+    aliases: [收入, GMV, revenue, 营业收入, total_sales, sales]
+    domain: finance
+  - id: total_assets
+    label: 资产
+    aliases: [资产, total_assets, 总资产]
+    domain: finance

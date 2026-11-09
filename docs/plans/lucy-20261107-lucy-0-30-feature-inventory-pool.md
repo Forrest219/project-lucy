@@ -3,8 +3,8 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **0.30 完整功能清单与跟进池**。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.10 / 2026-11-08 |
-| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**P0 立项已批准**（原 P0-1…P0-7＋P0-A）。**P0-1／P0-2／P0-A／P0-3 已获 R2-F＋R4（按条）**；其余原 P0／P1／P2 仍冻结。**2026-11-08 追加 P0-B／P1-8／P1-9；同日再追加 P1-10（概念注册表，仅入池；Spec 草案已有、Plan 未开；未授权实现）**。**终稿确权**＝Codex CLI 终审，或委托人明示确权（§2.2）。未授权条目禁止改运行代码 |
+| 版本 / 日期 | v0.18 / 2026-11-09 |
+| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**P0 立项已批准**（原 P0-1…P0-7＋P0-A）。**P1-11／REQ-030-032**：**v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合；实现中（Cursor）**。**P1-10** 一期 CLI 已落地、待效果门。**终稿确权**＝Codex CLI 终审，或委托人明示确权（§2.2）。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
 | 事实源分工 | **方向** → [核心方向](lucy-20261107-lucy-0-30-core-direction.md)；**缺口正文与来源** → [需求池](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；**本文件** → 优先级、立项状态、跟进序、agent 遵从规则 |
@@ -14,6 +14,15 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.18 | 2026-11-09 | **P1-11／REQ-030-032**：**R4 开发授权**；实现中（Cursor）；不挡原 P0 |
+| v0.17 | 2026-11-09 | **P1-11／REQ-030-032**：**R2-F** 认可 Spec／Plan v0.5；**O2＝B** 书面跳过效果门；**仍待 R4**；未授权实现；不挡原 P0 |
+| v0.16 | 2026-11-09 | **正式立项 P1-11／REQ-030-032**（概念注册表→Lucy Ops）；Spec／Plan v0.1-draft；路径 A（Ops 优先于 WebUI）；**未授权实现**；不挡原 P0 |
+| v0.15 | 2026-11-09 | **P1-10／REQ-030-031**：**R4 开发授权**（委托人明示）；一期 CLI 实现中（Cursor）；头部／§2／§6 镜像同句 |
+| v0.14 | 2026-11-09 | 头部状态镜像：P1-10 **R2-F 已确权、待 R4**（与 §3／变更 v0.12 行对齐） |
+| v0.13 | 2026-11-09 | **P0-4／REQ-030-022**：Spec／Plan 升 **v0.4-draft**（Codex R2＝BLOCK 后闭合 AV-08／03／06／09＋错位引用）；评审记录 v0.3；待 Codex R2 复验；**终稿未确权**；**未授权实现**；不代裁定 O1／O2 |
+| v0.12 | 2026-11-09 | **P0-4／REQ-030-022**：Spec／Plan 升 **v0.3-draft**（Codex R1＝BLOCK 后 AV-01…AV-10 文档闭合）；评审记录 v0.2；待 Codex R2；**终稿未确权**；**未授权实现** |
+| v0.12 | 2026-11-09 | **P1-10／REQ-030-031**：**R2-F 终稿确权**（委托人明示认可 Spec v0.6／Plan v0.4）；**仍待 R4**；未授权实现；**不挡**原 P0 |
+| v0.11 | 2026-11-09 | **P1-10／REQ-030-031**：配套 Plan 已开（v0.1-draft）；Spec 升 v0.3-draft。仍待评审／终稿确权；**未授权实现**；**不挡**原 P0 |
 | v0.10 | 2026-11-08 | 委托人确认登记：**P1-10**（REQ-030-031 轻量概念注册表／ontology-lite）。**仅入池**；头脑风暴 Spec 草案已有；Plan 未开；**不挡**原 P0；未授权实现。§7 覆盖扩至 REQ-030-001–031 |
 | v0.9 | 2026-11-08 | 委托人选定 3 条入池：**P0-B**（REQ-030-028 物理新鲜度合同）、**P1-8**（REQ-030-029 语义发布→Eval 门禁）、**P1-9**（REQ-030-030 质量域 safe-log→Eval）。**仅登记**；未立项开 Spec；未授权实现。§7 覆盖范围扩至 REQ-030-001–030 |
 | v0.8 | 2026-11-08 | P0-2／P0-A／P0-3：**委托人明示 R2-F 定稿＋R4 开发授权**（Cursor coder 实现；Cursor reviewer CR）；P0-2 O1／O2／O3 与 P0-3 O1／O2／O4 随授权闭合。其余 P0／P1／P2 仍冻结 |
@@ -47,7 +56,7 @@
 |---|---|
 | 批准日 | 2026-11-07 |
 | 批准范围 | 下表 **P0-1…P0-7** 与伴生 **P0-A**；授权进入「澄清 → Spec → Plan」流水线 |
-| 追加入池（未立项） | **P0-B**（028）、**P1-8**（029）、**P1-9**（030）、**P1-10**（031）——2026-11-08 入池；**不**自动进入上列立项包；须另澄清／立项后才开实现（P1-10 已有 Spec 草案，仍须 Plan＋终稿确权＋开发授权） |
+| 追加入池／跟进立项 | **P0-B**（028）、**P1-8**（029）、**P1-9**（030）——仍待立项开 Spec。**P1-10**（031）R2-F＋R4 已闭合；一期 CLI 已落地。**P1-11**（032）R2-F＋O2＝B＋R4 已闭合；实现中；**不挡**原 P0 |
 | 明确未授权 | 实现代码、客户出包、上线、把辅线抬成主线；**入池条目不得顺手实现** |
 | 建议实施序 | P0-1 → P0-2∥P0-A → P0-3 → P0-4∥P0-5 → P0-6（含 019／020 最小面）→ P0-7 |
 | 已有先行 Spec | P0-5＝REQ-030-018（Spec／Plan 已立，待评审）；P0-A＝REQ-030-012（Spec／Plan 已立，待评审）；P0-6 的 019／020 已有 Spec／Plan（最小面纳入 P0，完整体验见 P1） |
@@ -61,7 +70,7 @@
 | **S1** | P0-1（027） | Spec＋Plan | **v0.9；R2-F＋R3＋R4 已闭合；实现中（Claude Code）** |
 | **S2** | P0-2（023）∥ P0-A（012） | Spec＋Plan | **R2-F＋R4 已闭合（2026-11-08）；实现中（Cursor）** |
 | **S3** | P0-3（024） | Spec＋Plan | **R2-F＋R4 已闭合（2026-11-08）；实现中（Cursor）** |
-| **S4** | P0-4（022）∥ P0-5（018） | Spec＋Plan | 草案齐；批次 R1 已修订；018 过程对抗已记；**终稿未确权**；冻结落地 |
+| **S4** | P0-4（022）∥ P0-5（018） | Spec＋Plan＋实现 | P0-4＝**v0.4**（R2-F＋R3＋R4；复审 **Approve with nits**）。P0-5＝**v0.8**（R2-F＋R4；复审 **Approve with nits**）。均已落地；夹具证据债后置；**不表示可上线** |
 | **S5** | P0-6（025＋019／020 最小面） | Spec＋Plan | 草案齐；批次 R1 已修订；**终稿未确权**；冻结落地 |
 | **S6** | P0-7（026） | Spec＋Plan | 草案齐；批次 R1 已修订；**终稿未确权**；冻结落地 |
 
@@ -126,8 +135,8 @@
 | **P0-1** | P0 | 问题类型 → 唯一表 + 固定口径绑定 | REQ-030-027 | 约束 | **v0.9；R4 已授予（2026-11-08）；实现中（Claude Code／Cursor review）**；不表示可上线 | [Spec](../specs/lucy-20261107-question-type-caliber-binding-spec.md) · [Plan](lucy-20261107-question-type-caliber-binding-plan.md) · [评审](../reviews/2026-11-07-question-type-caliber-binding-codex-review.md) |
 | **P0-2** | P0 | Catalog 业务语义暴露 | REQ-030-023 | 约束 | **v0.6；R2-F＋R3（O1–O3）＋R4 已闭合（2026-11-08）；实现中（Cursor）**；不表示可上线 | [Spec](../specs/lucy-20261107-catalog-business-semantics-spec.md) · [Plan](lucy-20261107-catalog-business-semantics-plan.md) · [评审](../reviews/2026-11-08-catalog-business-semantics-codex-review.md) |
 | **P0-3** | P0 | 多表命中先问 + 表级歧义门闩 | REQ-030-024 | 约束 | **v0.5；R2-F＋R3（O1／O2／O4）＋R4 已闭合（2026-11-08）；实现中（Cursor）**；不表示可上线 | [Spec](../specs/lucy-20261107-source-ambiguity-gate-spec.md) · [Plan](lucy-20261107-source-ambiguity-gate-plan.md) · [评审](../reviews/2026-11-08-source-ambiguity-gate-codex-review.md) |
-| **P0-4** | P0 | 答复可核对块（来源／口径／截止期强制露出） | REQ-030-022 | 呈现 | 草案齐；批次 R1 已修订；**终稿未确权**；冻结落地；未授权实现 | [Spec](../specs/lucy-20261107-answer-verifiability-spec.md) · [Plan](lucy-20261107-answer-verifiability-plan.md) |
-| **P0-5** | P0 | 空结果结构化下一步指导 | REQ-030-018 | 呈现 | v0.4；过程对抗已记；**终稿未确权**（待 Codex 或委托人）；D3 待确认；冻结落地；未授权实现 | [Spec](../specs/lucy-20261107-empty-result-next-step-guidance-spec.md) · [Plan](lucy-20261107-empty-result-next-step-guidance-plan.md) |
+| **P0-4** | P0 | 答复可核对块（来源／口径／截止期强制露出） | REQ-030-022 | 呈现 | **v0.4-draft；R2-F＋R3＋R4 已闭合（2026-11-09）**。实现已落地；复审 **Approve with nits**。O1＝A／O2＝A。未宣称 SC 全关／可上线 | [Spec](../specs/lucy-20261107-answer-verifiability-spec.md) · [Plan](lucy-20261107-answer-verifiability-plan.md) · [评审](../reviews/2026-11-09-answer-verifiability-codex-review.md) |
+| **P0-5** | P0 | 空结果结构化下一步指导 | REQ-030-018 | 呈现 | **v0.8-draft；R2-F＋R4 已闭合（2026-11-09）**。实现已落地；复审 **Approve with nits**。未宣称可上线 | [Spec](../specs/lucy-20261107-empty-result-next-step-guidance-spec.md) · [Plan](lucy-20261107-empty-result-next-step-guidance-plan.md) · [Codex 评审](../reviews/2026-11-09-empty-result-next-step-codex-review.md) |
 | **P0-6** | P0 | Eval 选表正确性 + 真实问句日跑骨架（含 019／020 **最小面**） | REQ-030-025；最小面挂 019／020 | 检出 | 草案齐；批次 R1 已修订；**终稿未确权**；冻结落地；未授权实现 | [Spec](../specs/lucy-20261107-eval-source-selection-correctness-spec.md) · [Plan](lucy-20261107-eval-source-selection-correctness-plan.md)；另 [019 Spec](../specs/lucy-20261107-eval-tool-assertion-authoring-spec.md)／[019 Plan](lucy-20261107-eval-tool-assertion-authoring-plan.md)／[020 Spec](../specs/lucy-20261107-audit-journey-eval-case-draft-spec.md)／[020 Plan](lucy-20261107-audit-journey-eval-case-draft-plan.md) |
 | **P0-7** | P0 | 存量用户体感最小仪表盘 + 主动告警 | REQ-030-026 | 运营 | 草案齐；批次 R1 已修订；**终稿未确权**；冻结落地；未授权实现 | [Spec](../specs/lucy-20261107-stored-user-experience-dashboard-alerts-spec.md) · [Plan](lucy-20261107-stored-user-experience-dashboard-alerts-plan.md) |
 | **P0-A** | P0 伴生 | Source 级业务字段暴露裁剪 | REQ-030-012 | 约束伴生 | **v0.7；R2-F＋R4 已闭合（2026-11-08）；实现中（Cursor）**；不表示可上线 | [Spec](../specs/lucy-20261107-semantic-source-field-exposure-spec.md) · [Plan](lucy-20261107-semantic-source-field-exposure-plan.md) · [评审](../reviews/2026-11-08-semantic-source-field-exposure-codex-review.md) |
@@ -141,7 +150,8 @@
 | P1-7 | P1 | 行权限模板展开保留 templateRefs | REQ-030-014 | 正确性辅线 | 遗留验收排期；须 PM 批准重开已收口 Spec | [遗留验收 Plan](lucy-20261107-lucy-0-30-deferred-acceptance-execution-plan.md) |
 | P1-8 | P1 | 语义发布 → Eval 门禁（发布后必跑／失败阻断或告警） | REQ-030-029 | 检出闸强化 | **2026-11-08 入池**；待需求澄清与立项开 Spec；**未授权实现**；**不挡**原 P0；依赖 P0-6 日跑／发布跑骨架 | 未开（前身思路见 [2026-08-26 闭环 Plan](2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md)） |
 | P1-9 | P1 | 质量域 safe-log → Eval 候选回流 | REQ-030-030 | 检出／运营 | **2026-11-08 入池**；挂接既有质量域 Spec（未落地）；待澄清与 0.30 跟进对齐；**未授权实现**；与 P1-5／P1-6 并列质量轴 | 既有 [safe-log-to-quality-eval Spec](../specs/lucy-20261014-safe-log-to-quality-eval-spec.md)（功能合同未收口）· [WO](wo-20261014-safe-log-to-quality-eval.md) |
-| P1-10 | P1 | 轻量概念注册表（ontology-lite；CLI 先） | REQ-030-031 | 约束深化／内容治理 | **2026-11-08 入池**；头脑风暴 Spec v0.2-draft 已有；Plan 未开；**终稿未确权**；冻结落地；**不挡**原 P0；未授权实现；交付序＝CLI→效果门→WebUI→MCP | [Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) · Plan 未开 |
+| P1-10 | P1 | 轻量概念注册表（ontology-lite；CLI 先） | REQ-030-031 | 约束深化／内容治理 | **v0.6；R2-F＋R4 已闭合（2026-11-09）；一期 CLI 已落地；待效果门**；长期通道见 **P1-11**；**不挡**原 P0。本条不表示可上线 | [Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) · [Plan](lucy-20261108-concept-registry-ontology-lite-plan.md) · [评审](../reviews/2026-11-09-concept-registry-ontology-lite-codex-review.md) |
+| P1-11 | P1 | 概念注册表接入 Lucy Ops 控制面 | REQ-030-032 | 配置运维／控制面 | **v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；实现中（Cursor）；未宣称可上线**；本版 Ops／下版 WebUI（D2b）；**不挡**原 P0。本条不表示可上线 | [Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) · [Plan](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) · [评审](../reviews/2026-11-09-concept-registry-lucy-ops-control-plane-codex-review.md) |
 | P2-1 | P2 辅线 | 发布工作台分文件勾选发布 | REQ-030-001 | UX 辅线 | 草案齐；批次 R1 已修订；**终稿未确权**；**不定义 0.30 成败** | [Spec](../specs/lucy-20261107-publish-workbench-per-file-selection-spec.md) · [Plan](lucy-20261107-publish-workbench-per-file-selection-plan.md) |
 | P2-2 | P2 辅线 | 帮助中心体验 | REQ-030-002 | UX 辅线 | Deferred／开线对齐既有 Spec | 既有 Spec |
 | P2-3 | P2 辅线 | 运维控制面 W-B（语义发布） | REQ-030-004 | 运维辅线 | Deferred；阻塞条件见既有 Spec | 既有 Spec |
@@ -178,13 +188,14 @@
 
 ### P0-4｜答复可核对（REQ-030-022）
 
-- **出口**：来源表／口径／数据截止期在正常客户端强制可见（不依赖审计台）。
-- **不做**：重造 provenance 数据结构（优先露出已有 `_meta.lucy` 资产）。
+- **出口**：纳入路径成功 `lucy_query` 强制带 `answer_verifiability`（来源／口径／截止期披露）；首期截止期诚实 `not_checked`（物理真源见 P0-B）。
+- **跟进**：Spec／Plan **v0.4-draft**；Codex R2＝BLOCK 已文档修订（AV-08／03／06／09）；待 R2 复验；终稿未确权；冻结落地；不代裁定 O1／O2。
+- **不做**：重造 provenance 同义结构；静默成功无块；未授权前接真实 freshness；默认不做 WebUI 核对页（O1）。
 
 ### P0-5｜空结果下一步（REQ-030-018）
 
-- **出口**：`lucy_query` 0 行 → 结构化 `next_step`（合同位 + 模型可见）。
-- **边界**：以已立 Spec 为准；D1＝结构化、D2＝只提示不阻断。
+- **出口**：`lucy_query` 严格 0 行 → 结构化 `next_step`（已存在承载位一致；模型可读 MCP content）。
+- **边界**：以 Spec／Plan **v0.8-draft** 为准；D1＝结构化、D2＝只提示不阻断、**D3＝A 单块内加键**已冻结；与 P0-4 共存合同已按独立评审 Request changes 修订（SC-11／12／13／25＋AV 保留 018）；**不表示可上线**。
 
 ### P0-6｜Eval 选表可测 + 日跑骨架（REQ-030-025 + 019／020 最小面）
 
@@ -222,10 +233,18 @@
 
 ### P1-10｜轻量概念注册表（REQ-030-031）
 
-- **出口（一期）**：从 semantic-layer／Wiki 扫描概念候选与冲突；CLI 可 list／定 canonical／summary／reject；试点「收入／资产」可复核；**WebUI 零变更**；不改 MCP 热路径。
+- **出口（一期）**：从 semantic-layer／Wiki 扫描概念候选与冲突；CLI 可 list／定 canonical／summary／reject；试点「收入／资产」可复核；**WebUI 零变更**；不改问数 MCP 热路径。
 - **关系**：约束闸／内容治理辅线；为人审权威面与冲突发现服务；可反哺 P0-1／P0-2／P0-3，**不替代**它们。**不挡**原 P0 收口。
-- **交付序**：CLI → 效果门 → WebUI 人审页 → MCP 注入。
-- **不做**：形式化知识图谱／OWL；独立指标计算平台；一期 WebUI／MCP；机器自动裁定权威。
+- **交付序（一期）**：CLI → 效果门；**长期主通道改由 P1-11（Ops）承接**（2026-11-09 立项修订）。
+- **不做**：形式化知识图谱／OWL；独立指标计算平台；一期 WebUI；机器自动裁定权威。
+
+### P1-11｜概念注册表接入 Lucy Ops（REQ-030-032）
+
+- **出口**：运维经 `lucy_ops_concept_*` 完成概念 scan／人审写；`allow.ops`＋审计；客户长期不依赖独立 CLI。
+- **关系**：P1-10 数据／语义上游；L25-16 控制面通道；用户模型＝**配置治理**（≠ 问数）。**不挡**原 P0；**不依赖** W-B。
+- **交付序**：效果门（或书面跳过）→ R2-F→R3→R4 → **本版 Ops 检查完毕** → **下一产品版本再评估 WebUI**（友好折衷，D2b）。
+- **决策**：R2-F 已确权 v0.5；O1＝A；**O2＝B**；**R4 已授予（2026-11-09）**；实现中。
+- **不做（本条）**：本版 WebUI 概念页；问数热路径自动注入；并进 `lucy_ops_reader`；机器自动升权威。
 
 ---
 
@@ -256,12 +275,13 @@
 | [遗留验收执行 Plan](lucy-20261107-lucy-0-30-deferred-acceptance-execution-plan.md) | P2 验收类排期 |
 | [Eval 闭环与变更触发回归（前身）](2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md) | P1-8 相关前身思路 |
 | [Safe-log→质量 Eval Spec](../specs/lucy-20261014-safe-log-to-quality-eval-spec.md) | P1-9 既有 Spec（未落地） |
-| [概念注册表 Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) | P1-10／REQ-030-031（v0.2-draft；Plan 未开） |
+| [概念注册表 Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) · [Plan](lucy-20261108-concept-registry-ontology-lite-plan.md) | P1-10／REQ-030-031（一期 CLI 已落地；待效果门） |
+| [概念→Ops Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) · [Plan](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) | P1-11／REQ-030-032（**v0.5；R2-F＋O2＝B＋R4 已闭合；实现中**） |
 
 ---
 
 ## 7. 本池自身验收
 
-- 清单覆盖需求池 REQ-030-001–031（含已收口 003），无孤儿 REQ。
-- P0 立项范围与 §2／§3 一致；**P0-B／P1-8／P1-9／P1-10 为追加入池，不自动继承 2026-11-07 P0 立项**；agent 规则可被本分支会话引用。
+- 清单覆盖需求池 REQ-030-001–032（含已收口 003），无孤儿 REQ。
+- P0 立项范围与 §2／§3 一致；**P0-B／P1-8／P1-9 仍待立项**；**P1-10 已 R4（CLI）**；**P1-11 已 R4（Ops 实现中）**；agent 规则可被本分支会话引用。
 - **不构成任何功能验收或上线许可。**
