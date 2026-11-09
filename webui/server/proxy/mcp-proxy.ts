@@ -36,6 +36,7 @@ import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePerm
 import {
   redactQuestionText,
   summarizeArgsForAudit,
+  summarizeFilters,
   extractQueryTables,
   questionPreviewMaxChars,
   storeQuestionPreviewEnabled,
@@ -101,6 +102,7 @@ import { applyLucyQueryForcedFilters, buildExplainForcedPredicateDiagnostics, is
 import { TurnCorrelationRegistry } from "./turn-correlation.js";
 import { beginAuditWrite, completeAuditWrite, failAuditWrite } from "./audit-write-health.js";
 import {
+  buildEmptyResultNextStep,
   classifyFailure,
   denialAllowList,
   filterPushdownGuardEnabled,
@@ -119,6 +121,7 @@ import {
   QUESTION_BUDGET_ABS_EXEC_MS,
   installBudgetPersistence,
   type BudgetPersistence,
+  type NextStep,
   registerPublishedVersion,
   repairHint,
   buildRepairClosure,
@@ -155,6 +158,18 @@ import {
   registrySyncPending,
   verifyCurrentBindingContentAndDependencies,
 } from "./caliber-binding-registry.js";
+// P0-4 答复可核对块（REQ-030-022／Spec v0.4-draft）。
+import {
+  ANSWER_VERIFIABILITY_INSTRUCTION_LINES,
+  applyAnswerVerifiabilityToLucyQuery,
+  buildAnswerVerifiabilityErrorEnvelope,
+  extractLucy018PreserveFields,
+  captureRequestPinnedCaliberEvidence,
+  deepCopyJson,
+  extractSseJsonRpcResponseRaw,
+  systemConstraintsFromForcedFilters,
+  type RequestPinnedCaliberEvidence,
+} from "./answer-verifiability.js";
 // P0-3 表级歧义门闩（REQ-030-024／Spec v0.5）。
 import {
   ASK_FIRST_SECTION,
@@ -1926,6 +1941,8 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       "- Only use connections and sources listed in this session's visible scope.",
       "- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.",
       "- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.",
+      "- A successful `lucy_query` that returns zero fact rows carries a structured `next_step` inside the result JSON (and in `_meta.lucy.next_step`). Read it before retrying: it names the source, the filters you used, and the controlled next calls (`lucy_read_source`, `lucy_freshness`) to verify grain, period and filters. Do not substitute an approximation for the empty result.",
+      ...ANSWER_VERIFIABILITY_INSTRUCTION_LINES,
       ...questionReportingLines,
       // D13：与 md 事实源同一 ASK_FIRST 片段（有可见 catalog 时也必须出现）
       ASK_FIRST_SECTION.trimEnd(),
@@ -2138,6 +2155,10 @@ async function maybeWriteHiveDivertedResponse(input: {
   queryMeta: Record<string, unknown>;
   queryTables: string[];
   traceId: string;
+  /** P0-4：改写前口径快照与门禁 pin 证据（仅 lucy_query 成功路径消费）。 */
+  argsBeforeRewrite?: Record<string, unknown>;
+  requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+  forcedFilters?: unknown;
   /**
    * 审计写入回调 —— 由 `handlePost` 传入。
    *
@@ -2225,7 +2246,34 @@ async function maybeWriteHiveDivertedResponse(input: {
   }
 
   const isError = payload.ok === false;
-  const responseBody = jsonRpcToolResult(input.requestId, JSON.stringify(payload, null, 2), { isError });
+  let responseBody = jsonRpcToolResult(input.requestId, JSON.stringify(payload, null, 2), { isError });
+  let hiveAvFailedReason: string | undefined;
+  // P0-4／SC-17 — Hive 成功 lucy_query 必须投影可核对块（禁止旁路静默无块）。
+  if (!isError && input.toolName === "lucy_query") {
+    const sourceRefs = await extractSourceRefs(input.toolName, input.toolArgs).catch(() => []);
+    const applied = applyAnswerVerifiabilityToLucyQuery({
+      originalEnvelopeWire: responseBody,
+      enrichedEnvelope: JSON.parse(responseBody) as unknown,
+      requestId: input.requestId,
+      sourceRefs,
+      argsBeforeRewrite: input.argsBeforeRewrite
+        ?? (input.toolArgs && typeof input.toolArgs === "object" && !Array.isArray(input.toolArgs)
+          ? input.toolArgs as Record<string, unknown>
+          : {}),
+      requestPinnedCaliber: input.requestPinnedCaliber ?? { status: "none" },
+      systemConstraints: systemConstraintsFromForcedFilters(input.forcedFilters)
+    });
+    if (!applied.ok) {
+      hiveAvFailedReason = applied.reason;
+      responseBody = buildAnswerVerifiabilityErrorEnvelope({
+        requestId: input.requestId,
+        reason: applied.reason,
+        detail: "detail" in applied ? applied.detail : undefined
+      });
+    } else {
+      responseBody = applied.finalWire;
+    }
+  }
   input.res.writeHead(200, {
     "content-type": "application/json",
     "content-length": Buffer.byteLength(responseBody)
@@ -2234,6 +2282,7 @@ async function maybeWriteHiveDivertedResponse(input: {
 
   const jdbcInvokeCount =
     typeof payload.jdbcInvokeCount === "number" ? payload.jdbcInvokeCount : 0;
+  const hiveOutcomeError = isError || Boolean(hiveAvFailedReason);
   input.recordAuditEntry({
     ts: new Date().toISOString(),
     userId: input.identity.userId,
@@ -2242,13 +2291,15 @@ async function maybeWriteHiveDivertedResponse(input: {
     tables: input.queryTables.length > 0 ? input.queryTables : undefined,
     argsSummary: input.argsSummary,
     ...input.queryMeta,
-    outcome: isError ? "error" : "ok",
-    decisionReason: isError && typeof payload.reason === "string" ? payload.reason : undefined,
-    errorDetail: isError && typeof payload.detail === "string" ? payload.detail : undefined,
+    outcome: hiveOutcomeError ? "error" : "ok",
+    decisionReason: hiveAvFailedReason
+      ?? (isError && typeof payload.reason === "string" ? payload.reason : undefined),
+    errorDetail: hiveAvFailedReason
+      ?? (isError && typeof payload.detail === "string" ? payload.detail : undefined),
     executionEvidence: executionEvidenceFromObservation({
       authorizationAllowed: true,
-      ...(isError
-        ? jdbcInvokeCount > 0
+      ...(hiveOutcomeError
+        ? jdbcInvokeCount > 0 || hiveAvFailedReason
           ? { failed: true }
           : { notExecuted: true }
         : { executed: true })
@@ -2257,21 +2308,26 @@ async function maybeWriteHiveDivertedResponse(input: {
     responseBytes: Buffer.byteLength(responseBody),
     requestId: input.requestId,
     ...input.requestMeta,
-    ...(await auditMeta(input.identity, isError && typeof payload.reason === "string" ? payload.reason : "allowed"))
+    ...(await auditMeta(
+      input.identity,
+      hiveAvFailedReason
+        ?? (isError && typeof payload.reason === "string" ? payload.reason : "allowed")
+    ))
   });
   recordMcpTraceForTool({
     traceId: input.traceId,
     identity: input.identity,
     toolName: input.toolName,
-    status: isError ? "error" : "ok",
+    status: hiveOutcomeError ? "error" : "ok",
     startedAt: new Date(input.start).toISOString(),
     turnId: (input.requestMeta.lucyTurnId as string | null | undefined) ?? null,
     sessionId: (input.requestMeta.lucySessionId as string | null | undefined) ?? null,
     requestId: input.requestId,
     argsSummary: input.argsSummary,
-    allowed: !isError,
+    allowed: !hiveOutcomeError,
     reason:
-      isError && typeof payload.reason === "string" ? payload.reason : "allowed",
+      hiveAvFailedReason
+      ?? (isError && typeof payload.reason === "string" ? payload.reason : "allowed"),
     policySource: "other"
   });
   return true;
@@ -2749,12 +2805,250 @@ function appliedLucyVersion(
   };
 }
 
+/** Spec D13／R3 — 先判定再权限／注入；status 必须是实际上游 HTTP。禁止 ?? 200。 */
+function isEmptyResultNextStepEligible(input: {
+  status: number | undefined;
+  result: { isError?: unknown } | null | undefined;
+  toolName: string;
+  rowCount: number | null | undefined;
+}): boolean {
+  const { status, result, toolName, rowCount } = input;
+  if (typeof status !== "number" || !Number.isFinite(status) || status >= 400) return false;
+  if (result?.isError === true) return false;
+  if (toolName !== "lucy_query") return false;
+  return typeof rowCount === "number" && Number.isFinite(rowCount) && rowCount === 0;
+}
+
+/** Walk JSON text and collect number literals outside of strings (D15). */
+function extractJsonNumberTokens(text: string): string[] {
+  const tokens: string[] = [];
+  let i = 0;
+  let inString = false;
+  let escape = false;
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escape) {
+        escape = false;
+        i += 1;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        i += 1;
+        continue;
+      }
+      if (ch === "\"") inString = false;
+      i += 1;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      i += 1;
+      continue;
+    }
+    const startsNumber =
+      (ch >= "0" && ch <= "9")
+      || ((ch === "-" || ch === "+") && i + 1 < text.length && text[i + 1]! >= "0" && text[i + 1]! <= "9");
+    if (!startsNumber) {
+      i += 1;
+      continue;
+    }
+    let j = i;
+    if (text[j] === "-" || text[j] === "+") j += 1;
+    while (j < text.length && text[j]! >= "0" && text[j]! <= "9") j += 1;
+    if (j < text.length && text[j] === ".") {
+      j += 1;
+      while (j < text.length && text[j]! >= "0" && text[j]! <= "9") j += 1;
+    }
+    if (j < text.length && (text[j] === "e" || text[j] === "E")) {
+      j += 1;
+      if (j < text.length && (text[j] === "+" || text[j] === "-")) j += 1;
+      while (j < text.length && text[j]! >= "0" && text[j]! <= "9") j += 1;
+    }
+    tokens.push(text.slice(i, j));
+    i = j;
+  }
+  return tokens;
+}
+
+function isNumberTokenFidelitySafe(token: string): boolean {
+  const n = Number(token);
+  if (!Number.isFinite(n)) return false;
+  if (/^[-+]?\d+$/.test(token)) {
+    try {
+      if (BigInt(token) !== BigInt(Math.trunc(n))) return false;
+    } catch {
+      return false;
+    }
+  }
+  if (n === 0) {
+    const isZeroLiteral = /^[-+]?0(\.0+)?([eE][-+]?0+)?$/.test(token);
+    if (!isZeroLiteral) return false;
+  }
+  return true;
+}
+
+function rawNumericTokensFidelitySafe(text: string): boolean {
+  return extractJsonNumberTokens(text).every(isNumberTokenFidelitySafe);
+}
+
+function originalNumberTokensUnchanged(original: string, candidate: string): boolean {
+  const orig = extractJsonNumberTokens(original);
+  const cand = extractJsonNumberTokens(candidate);
+  let i = 0;
+  for (const token of cand) {
+    if (i < orig.length && token === orig[i]) i += 1;
+  }
+  return i === orig.length;
+}
+
+/**
+ * D15 — insert `"next_step":…` into a JSON object string without rewriting
+ * existing number literals. Returns null when the text is not a single object.
+ */
+function injectNextStepPreservingNumberTokens(text: string, nextStep: NextStep): string | null {
+  const trimmedEnd = text.replace(/\s+$/, "");
+  const trailingWs = text.slice(trimmedEnd.length);
+  const end = trimmedEnd.lastIndexOf("}");
+  if (end < 0) return null;
+  const open = trimmedEnd.indexOf("{");
+  if (open < 0 || open > end) return null;
+  const before = trimmedEnd.slice(0, end).replace(/\s+$/, "");
+  const inner = before.slice(open + 1).trim();
+  const fragment = `"next_step":${JSON.stringify(nextStep)}`;
+  return `${before}${inner.length > 0 ? "," : ""}${fragment}}${trailingWs}`;
+}
+
+function fidelitySafeStringify(
+  parsed: Record<string, unknown>,
+  nextStep: NextStep
+): string | null {
+  try {
+    return JSON.stringify({ ...parsed, next_step: nextStep });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * P0-4 — 在 Spec 162／018 富化之后投影 answer_verifiability。
+ * 仅 HTTP 200 且 `isError !== true` 的成功查数产块（D6／B-OK）；
+ * 上游错误／4xx／5xx 不产块（B-UPSTREAM-ERR）；装配失败返回错误信封。
+ */
+function projectLucyQueryAnswerVerifiability(input: {
+  originalEnvelopeWire: string;
+  enriched: unknown;
+  requestId: string | number;
+  sourceRefs: SourceRef[];
+  upstreamHttpStatus: number | undefined;
+  options: {
+    argsBeforeRewrite?: Record<string, unknown>;
+    requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+    forcedFilters?: unknown;
+  };
+}): string | null {
+  // D6：成功查数不变量只约束 HTTP 200；禁止对 4xx／5xx 假造可核对块或改写成装配失败。
+  if (input.upstreamHttpStatus !== 200) return null;
+  const enriched = input.enriched;
+  if (!enriched || typeof enriched !== "object" || Array.isArray(enriched)) return null;
+  const result = (enriched as Record<string, unknown>).result;
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  if ((result as Record<string, unknown>).isError === true) return null;
+
+  const applied = applyAnswerVerifiabilityToLucyQuery({
+    originalEnvelopeWire: input.originalEnvelopeWire,
+    enrichedEnvelope: enriched,
+    requestId: input.requestId,
+    sourceRefs: input.sourceRefs,
+    argsBeforeRewrite: input.options.argsBeforeRewrite ?? {},
+    requestPinnedCaliber: input.options.requestPinnedCaliber ?? { status: "none" },
+    systemConstraints: systemConstraintsFromForcedFilters(input.options.forcedFilters)
+  });
+  if (!applied.ok) {
+    // P0-5 共存：AV 错误信封必须保留 018 已写入的 next_step／skipped_reason。
+    return buildAnswerVerifiabilityErrorEnvelope({
+      requestId: input.requestId,
+      reason: applied.reason,
+      detail: "detail" in applied ? applied.detail : undefined,
+      lucy018: extractLucy018PreserveFields(input.enriched)
+    });
+  }
+  return applied.finalWire;
+}
+
+/**
+ * P0-4／D6／C2 — lucy_query 成功判定路径必须产块或 B-ASSEMBLE；
+ * 禁止 `if (originalEnvelopeWire)` 旁路导致静默无块。
+ * 错误信封走 `buildAnswerVerifiabilityErrorEnvelope`＋lucy018，与 018 共存兼容。
+ */
+function applyLucyQueryAnswerVerifiabilityOrFailClosed(input: {
+  toolName: string;
+  originalEnvelopeWire: string | undefined;
+  enriched: unknown;
+  requestId: string | number;
+  sourceRefs: SourceRef[];
+  upstreamHttpStatus: number | undefined;
+  options: {
+    argsBeforeRewrite?: Record<string, unknown>;
+    requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+    forcedFilters?: unknown;
+  };
+  currentBody: string;
+}): string {
+  if (input.toolName !== "lucy_query") return input.currentBody;
+  if (input.upstreamHttpStatus !== 200) return input.currentBody;
+
+  const enriched = input.enriched;
+  if (enriched && typeof enriched === "object" && !Array.isArray(enriched)) {
+    const result = (enriched as Record<string, unknown>).result;
+    if (
+      result
+      && typeof result === "object"
+      && !Array.isArray(result)
+      && (result as Record<string, unknown>).isError === true
+    ) {
+      return input.currentBody; // B-UPSTREAM-ERR：不产块
+    }
+  }
+
+  if (!input.originalEnvelopeWire) {
+    return buildAnswerVerifiabilityErrorEnvelope({
+      requestId: input.requestId,
+      reason: "answer_verifiability_assemble_failed",
+      detail: "missing_original_envelope_wire",
+      lucy018: extractLucy018PreserveFields(input.enriched)
+    });
+  }
+
+  const avBody = projectLucyQueryAnswerVerifiability({
+    originalEnvelopeWire: input.originalEnvelopeWire,
+    enriched: input.enriched,
+    requestId: input.requestId,
+    sourceRefs: input.sourceRefs,
+    upstreamHttpStatus: input.upstreamHttpStatus,
+    options: input.options
+  });
+  if (avBody) return avBody;
+  // 成功判定路径上投影器仍返回 null（畸形信封等）→ 禁止静默无块。
+  return buildAnswerVerifiabilityErrorEnvelope({
+    requestId: input.requestId,
+    reason: "answer_verifiability_assemble_failed",
+    detail: "answer_verifiability_projection_unavailable",
+    lucy018: extractLucy018PreserveFields(input.enriched)
+  });
+}
+
 function withLucyResultMeta(
   payload: unknown,
   requestId: string | number,
   toolName: string,
   args: unknown,
-  sourceRefs: SourceRef[]
+  sourceRefs: SourceRef[],
+  visibleTools: readonly string[] = [],
+  originalUserFilters: unknown = undefined,
+  scopeIntersectionEmpty = false,
+  upstreamHttpStatus: number
 ): unknown {
   const enveloped = ensureJsonRpcEnvelope(payload, requestId);
   if (!enveloped || typeof enveloped !== "object" || Array.isArray(enveloped)) return enveloped;
@@ -2781,6 +3075,107 @@ function withLucyResultMeta(
     })
     : null;
   const effectiveTruncated = truncation ? truncation.responseTruncated === 1 : responseTruncated;
+
+  const provenance = {
+    connectionId: firstStringField(argsRecord, ["connectionId", "connection_id", "connection"]) ?? null,
+    sourceName: firstStringField(argsRecord, ["sourceName", "source_name", "source", "table"]) ?? sourceRefs[0]?.sourceName ?? null,
+    measures: boundedProvenanceValue(firstFieldValue(argsRecord, ["measures"])) ?? null,
+    dimensions: boundedProvenanceValue(firstFieldValue(argsRecord, ["dimensions"])) ?? null,
+    filters: boundedProvenanceValue(filters) ?? null,
+    segments: boundedProvenanceValue(segments) ?? null,
+    orderBy: boundedProvenanceValue(orderBy) ?? null,
+    sourceResolution: sourceRefs.length > 0 ? "acl_source_map" : "none",
+    freshness: {
+      status: "not_checked",
+      tool: "lucy_freshness",
+      note: "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+    },
+    truncation: responseTruncated === undefined
+      ? "unknown; upstream did not expose a truncated flag"
+      : "reported from upstream response"
+  };
+
+  // D13／R3：先判定再权限／注入。禁止 (upstreamHttpStatus ?? 200)。
+  const eligible = isEmptyResultNextStepEligible({
+    status: upstreamHttpStatus,
+    result: resultRecord,
+    toolName,
+    rowCount: inspectedResult.rows
+  });
+
+  let lucyNextStep: NextStep | undefined;
+  let nextStepSkippedReason: string | undefined;
+
+  if (!eligible) {
+    if (resultRecord.isError === true && toolName === "lucy_query" && inspectedResult.rows === 0) {
+      nextStepSkippedReason = "result_is_error";
+    }
+  } else {
+    const nextStepProvenance: Record<string, unknown> = { ...provenance };
+    delete nextStepProvenance.filters;
+    const nextStep = buildEmptyResultNextStep({
+      toolName,
+      rowCount: inspectedResult.rows ?? null,
+      scopeIntersectionEmpty,
+      provenance: nextStepProvenance,
+      filtersSummary: originalUserFilters === undefined ? null : summarizeFilters(originalUserFilters),
+      visibleTools
+    });
+    if (nextStep) {
+      const content = Array.isArray(resultRecord.content) ? resultRecord.content : [];
+      const first = content[0] as { type?: string; text?: string } | undefined;
+      const originalText = first && typeof first.text === "string" ? first.text : undefined;
+      let parsed: Record<string, unknown> | undefined;
+      if (originalText !== undefined) {
+        try {
+          const maybe = JSON.parse(originalText) as unknown;
+          if (maybe && typeof maybe === "object" && !Array.isArray(maybe)) {
+            parsed = maybe as Record<string, unknown>;
+          }
+        } catch {
+          parsed = undefined;
+        }
+      }
+      const structuredIsObject =
+        resultRecord.structuredContent
+        && typeof resultRecord.structuredContent === "object"
+        && !Array.isArray(resultRecord.structuredContent);
+      if (!parsed || originalText === undefined) {
+        nextStepSkippedReason = originalText !== undefined
+          ? "content_text_not_json_object"
+          : "content_text_absent";
+      } else if (Object.prototype.hasOwnProperty.call(parsed, "next_step")) {
+        nextStepSkippedReason = "upstream_next_step_present";
+      } else if (
+        structuredIsObject
+        && Object.prototype.hasOwnProperty.call(resultRecord.structuredContent as object, "next_step")
+      ) {
+        nextStepSkippedReason = "upstream_next_step_present";
+      } else if (!rawNumericTokensFidelitySafe(originalText)) {
+        nextStepSkippedReason = "content_json_number_not_fidelity_safe";
+      } else {
+        const candidateText =
+          injectNextStepPreservingNumberTokens(originalText, nextStep)
+          ?? fidelitySafeStringify(parsed, nextStep);
+        if (
+          candidateText == null
+          || !originalNumberTokensUnchanged(originalText, candidateText)
+        ) {
+          nextStepSkippedReason = "content_json_number_not_fidelity_safe";
+        } else {
+          first!.text = candidateText;
+          if (structuredIsObject) {
+            resultRecord.structuredContent = {
+              ...(resultRecord.structuredContent as Record<string, unknown>),
+              next_step: nextStep
+            };
+          }
+          lucyNextStep = nextStep;
+        }
+      }
+    }
+  }
+
   return {
     ...record,
     result: {
@@ -2806,25 +3201,10 @@ function withLucyResultMeta(
             truncated: effectiveTruncated ?? null
           },
           ...(truncation?.repair ? { repair: truncation.repair } : {}),
+          ...(lucyNextStep ? { next_step: lucyNextStep } : {}),
+          ...(nextStepSkippedReason ? { next_step_skipped_reason: nextStepSkippedReason } : {}),
           ...(appliedLucyVersion(toolName, argsRecord, sourceRefs) ?? {}),
-          provenance: {
-            connectionId: firstStringField(argsRecord, ["connectionId", "connection_id", "connection"]) ?? null,
-            sourceName: firstStringField(argsRecord, ["sourceName", "source_name", "source", "table"]) ?? sourceRefs[0]?.sourceName ?? null,
-            measures: boundedProvenanceValue(firstFieldValue(argsRecord, ["measures"])) ?? null,
-            dimensions: boundedProvenanceValue(firstFieldValue(argsRecord, ["dimensions"])) ?? null,
-            filters: boundedProvenanceValue(filters) ?? null,
-            segments: boundedProvenanceValue(segments) ?? null,
-            orderBy: boundedProvenanceValue(orderBy) ?? null,
-            sourceResolution: sourceRefs.length > 0 ? "acl_source_map" : "none",
-            freshness: {
-              status: "not_checked",
-              tool: "lucy_freshness",
-              note: "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
-            },
-            truncation: responseTruncated === undefined
-              ? "unknown; upstream did not expose a truncated flag"
-              : "reported from upstream response"
-          }
+          provenance
         }
       }
     }
@@ -2948,11 +3328,24 @@ async function writeLucySemanticResponse(
   queryTables: string[],
   traceId: string,
   session: UpstreamSessionState | undefined,
-  options: { scopeIntersectionEmpty?: boolean } = {}
+  options: {
+    scopeIntersectionEmpty?: boolean;
+    originalUserFilters?: unknown;
+    argsBeforeRewrite?: Record<string, unknown>;
+    requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+    forcedFilters?: unknown;
+  } = {}
 ): Promise<void> {
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
   const sourceRefs = await extractSourceRefs(toolName, toolArgs).catch(() => []);
+  // Spec 20261107 D13／R3／N1 — 实际上游 HTTP；必为 number；禁止 ?? 200。
+  // status 缺失／非有限 → NaN，使 isEmptyResultNextStepEligible 失败（不得冒充 200）。
+  const rawUpstreamStatus = upstream.statusCode;
+  const upstreamHttpStatus =
+    typeof rawUpstreamStatus === "number" && Number.isFinite(rawUpstreamStatus)
+      ? rawUpstreamStatus
+      : Number.NaN;
   const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId, session);
   if (upstreamFailure) {
     await writeUpstreamFailureResponse(upstreamFailure, {
@@ -2982,14 +3375,79 @@ async function writeLucySemanticResponse(
   let forceJson = false;
 
   try {
+    const enrichWithNextStep = async (payload: unknown): Promise<unknown> => {
+      const enveloped = ensureJsonRpcEnvelope(payload, requestId);
+      const resultRecord =
+        enveloped
+        && typeof enveloped === "object"
+        && !Array.isArray(enveloped)
+        && (enveloped as Record<string, unknown>).result
+        && typeof (enveloped as Record<string, unknown>).result === "object"
+        && !Array.isArray((enveloped as Record<string, unknown>).result)
+          ? ((enveloped as Record<string, unknown>).result as Record<string, unknown>)
+          : undefined;
+      const inspectedEarly = inspectRowsAndColumns(resultRecord ?? payload);
+      // Spec 20261107 D13／D5／R2-02／R3 —— 统一成功判定通过后才求值。
+      // 顺序：isEmptyResultNextStepEligible → allowedToolNames → build／注入。
+      const shouldResolveVisibleTools = isEmptyResultNextStepEligible({
+        status: upstreamHttpStatus,
+        result: resultRecord,
+        toolName,
+        rowCount: inspectedEarly.rows
+      });
+      const visibleTools = shouldResolveVisibleTools
+        ? await allowedToolNames(identity).catch(() => [] as string[])
+        : ([] as string[]);
+      return withLucyResultMeta(
+        payload,
+        requestId,
+        toolName,
+        toolArgs,
+        sourceRefs,
+        visibleTools,
+        options.originalUserFilters,
+        options.scopeIntersectionEmpty === true,
+        upstreamHttpStatus
+      );
+    };
+
+    const originalEnvelopeWire = contentType.includes("text/event-stream")
+      ? extractSseJsonRpcResponseRaw(originalBody, requestId)
+      : contentType.includes("application/json")
+        ? originalBody
+        : undefined;
+
     if (contentType.includes("text/event-stream")) {
       const payload = decodeSseMessage(originalBody, requestId);
       if (!payload) throw new Error("missing SSE data frame");
-      body = JSON.stringify(withLucyResultMeta(payload, requestId, toolName, toolArgs, sourceRefs));
+      const enriched = await enrichWithNextStep(payload);
+      body = JSON.stringify(enriched);
       forceJson = true;
+      // P0-4／SC-21／C2 — SSE 最终写回与 JSON 同一装配合同；缺 raw → B-ASSEMBLE。
+      body = applyLucyQueryAnswerVerifiabilityOrFailClosed({
+        toolName,
+        originalEnvelopeWire,
+        enriched,
+        requestId,
+        sourceRefs,
+        upstreamHttpStatus,
+        options,
+        currentBody: body
+      });
     } else if (contentType.includes("application/json")) {
-      body = JSON.stringify(withLucyResultMeta(JSON.parse(originalBody), requestId, toolName, toolArgs, sourceRefs));
+      const enriched = await enrichWithNextStep(JSON.parse(originalBody));
+      body = JSON.stringify(enriched);
       forceJson = true;
+      body = applyLucyQueryAnswerVerifiabilityOrFailClosed({
+        toolName,
+        originalEnvelopeWire,
+        enriched,
+        requestId,
+        sourceRefs,
+        upstreamHttpStatus,
+        options,
+        currentBody: body
+      });
     } else {
       throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
     }
@@ -3004,6 +3462,14 @@ async function writeLucySemanticResponse(
           isError: true,
           content: [{ type: "text", text: "field_exposure_unavailable" }]
         }
+      });
+      forceJson = true;
+    } else if (toolName === "lucy_query" && upstreamHttpStatus === 200) {
+      // P0-4／D6／B-ASSEMBLE — HTTP 200 成功查数路径禁止回落原文静默无块。
+      body = buildAnswerVerifiabilityErrorEnvelope({
+        requestId,
+        reason: "answer_verifiability_assemble_failed",
+        detail: metaFailed
       });
       forceJson = true;
     } else {
@@ -3538,6 +4004,13 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
   let toolName: string | undefined;
   let toolArgs: unknown;
   let scopeIntersectionEmpty = false;
+  // Spec 20261107 D6 —— 行策略谓词会在下面被前插进 filters。先快照**原始用户
+  // filter**，next_step 只回显它（且去值），策略谓词与强制表达式一律不出现。
+  let originalUserFilters: unknown;
+  // P0-4 —— 改写前完整口径快照＋门禁当拍 pin 证据（随请求携带，禁止响应期重读）。
+  let argsBeforeRewrite: Record<string, unknown> | undefined;
+  let requestPinnedCaliber: RequestPinnedCaliberEvidence | undefined;
+  let forcedFiltersForAv: unknown;
   let requestId: string | number = "";
   let argsSummary: Record<string, unknown> | undefined;
   let queryMeta: Partial<Parameters<typeof writeLog>[0]> = {};
@@ -4416,6 +4889,18 @@ async function buildDenialRepairPayload(
         });
         return;
       }
+      // P0-4 §5.2.1 — 门禁 allow 当拍 pin；随请求携带至响应装配。
+      if (toolName === "lucy_query") {
+        const argsRecord =
+          toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+            ? toolArgs as Record<string, unknown>
+            : {};
+        argsBeforeRewrite = deepCopyJson(argsRecord);
+        requestPinnedCaliber = await captureRequestPinnedCaliberEvidence({
+          identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          sessionId: requestMeta.lucySessionId
+        });
+      }
     }
     // ─── P0-3 表级歧义门闩：ACL＋口径之后、上游／explain 成功体之前 ───
     // explain 必须在本段拦截（约本地成功体之前）；不得只挂共享 query guard。
@@ -4599,6 +5084,20 @@ async function buildDenialRepairPayload(
     }
     // Spec 99 §6 — Proxy-only forced_filters injection for lucy_query; strip any user-supplied alias.
     if (toolName === "lucy_query") {
+      const argsRecord =
+        toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+          ? toolArgs as Record<string, unknown>
+          : {};
+      // 若口径门禁未跑到（理论上不应），仍在改写前补齐快照／pin。
+      if (!argsBeforeRewrite) argsBeforeRewrite = deepCopyJson(argsRecord);
+      if (!requestPinnedCaliber) {
+        requestPinnedCaliber = await captureRequestPinnedCaliberEvidence({
+          identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          sessionId: requestMeta.lucySessionId
+        });
+      }
+      originalUserFilters = argsBeforeRewrite.filters ?? argsRecord.filters;
+      forcedFiltersForAv = decision.forcedFilters;
       scopeIntersectionEmpty = isScopeIntersectionEmpty(toolArgs, decision.forcedFilters);
       const record = applyLucyQueryForcedFilters(toolArgs, decision.forcedFilters);
       toolArgs = record;
@@ -6185,6 +6684,9 @@ async function buildDenialRepairPayload(
       queryMeta,
       queryTables,
       traceId,
+      argsBeforeRewrite,
+      requestPinnedCaliber,
+      forcedFilters: forcedFiltersForAv,
       recordAuditEntry: recordRequestAudit
     });
     if (hiveHandled) return;
@@ -6611,7 +7113,13 @@ async function buildDenialRepairPayload(
       queryTables,
       traceId,
       upstreamSession,
-      { scopeIntersectionEmpty }
+      {
+        scopeIntersectionEmpty,
+        originalUserFilters,
+        argsBeforeRewrite,
+        requestPinnedCaliber,
+        forcedFilters: forcedFiltersForAv
+      }
     );
     return;
   }

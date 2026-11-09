@@ -66,12 +66,18 @@
 - `orderBy` 是兼容别名，Proxy 会统一为 `order_by`；同一请求不要同时传两套不同排序，冲突会 fail closed。
 - 字段、measure、segment、order field 尽量都使用 source-qualified 名称；公司名称等实体名不完全确定时，优先用 `contains`/`LIKE` 类过滤再核对返回行。
 
+## 可核对块（answer_verifiability）
+
+- 成功的 `lucy_query` 工具结果会带 `answer_verifiability`（来源身份、口径要点、数据截止期披露）。你必须在用户可见答复中复述／引用这些要点。
+- 不得隐藏、省略或剥离 `answer_verifiability`。`cutoff.status` 为 `not_checked` 表示业务数据截止期**未校验**——如实披露，不得编造已校验截止期。
+- 工具结果里有可核对块，并不等于宿主 UI 已渲染；你仍须把可核对要点写进给用户的答复。
+
 ## 输出要求
 
 数据回答必须说明：
 
 - 使用的 connection / source / physical table。
 - 使用的 measure、date field 和主要 filter。
-- 数据可用周期或 freshness。
+- 数据可用周期或 freshness；若工具结果含 `answer_verifiability.cutoff`，按其中披露复述（含 `not_checked`）。
 - 查询失败时明确报告失败，不给数值结论。
 - 多子问题必须逐项给状态；部分可回答时也要交付最终回复。

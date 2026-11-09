@@ -3,46 +3,85 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 实施计划（Plan） |
-| 版本 / 日期 | v0.4 / 2026-11-07 |
-| 状态 | **v0.4，待严格评审／验收；冻结落地；未授权实现**。已并入 0.30 批次第 1 轮评审（形式合规 ＋ 事实性）并已修订；待 0.30 批次第 2 轮对抗式评审。v0.1 经第 1 轮对抗式设计评审（6 条阻断项全部成立）修订为 v0.2；v0.2 并入横切批评审 9 条修订为 v0.3；v0.3 经**第 2 轮对抗式设计评审**（2 blocker ＋ 7 major ＋ 7 minor，经独立复核**全部成立**）修订为 v0.4。需求澄清已完成（D1／D2 委托人裁定 2026-11-07）；**D3 落点反转待委托人确认**；**未获开发授权**；本条不表示可上线 |
-| 授权边界 | **不授权改代码**。本 Plan 只写清怎么改；动代码前须获得明确开工授权。Spec 见 [lucy-20261107-empty-result-next-step-guidance-spec.md](../specs/lucy-20261107-empty-result-next-step-guidance-spec.md) v0.4 |
-| 验收 | 实施完成须同时满足：① Spec 的 SC-01–SC-21 逐条有证据；② `npm run lint:spec-docs` / `lint:spec` / `lint:terminology` / `lint:ia-boundary` 退出码 0；③ 相关 vitest 全绿；④ 一次**夹具上游**的 MCP `lucy_query` 0 行响应取到 `next_step` 形状证据。**不构成发布取证，不表示可上线** |
+| 版本 / 日期 | **v0.8-draft** / 2026-11-09 |
+| 状态 | **v0.8-draft（2026-11-09）**：按 P0-5 独立评审 Request changes 修订与 P0-4 共存合同（SC-11／12／13／25＋装配保留）；**不表示可上线** |
+| 授权边界 | **已获开发授权（R4，2026-11-09）**：按本 Plan 执行实现 Task。Spec 见 [lucy-20261107-empty-result-next-step-guidance-spec.md](../specs/lucy-20261107-empty-result-next-step-guidance-spec.md) **v0.8-draft** |
+| 验收 | 实施完成须同时满足：① Spec 的 SC-01–SC-30 逐条有证据；② `npm run lint:spec-docs` / `lint:spec` / `lint:terminology` / `lint:ia-boundary` 退出码 0；③ 相关 vitest 全绿；④ 一次**夹具上游**的 MCP `lucy_query` 0 行响应取到 `next_step` 形状证据。**不构成发布取证，不表示可上线** |
 | 目标分支 / 产品线 | `lucy-v0.30` / `0.30.0` |
+| 第 1／2 轮评审与裁定记录 | [`docs/reviews/2026-11-07-empty-result-next-step-guidance-review.md`](../reviews/2026-11-07-empty-result-next-step-guidance-review.md) |
+| Codex 对抗评审 | [`docs/reviews/2026-11-09-empty-result-next-step-codex-review.md`](../reviews/2026-11-09-empty-result-next-step-codex-review.md)（过程对抗；≠ 终稿确权／开发授权） |
 | 需求来源 | 需求池 REQ-030-018；分支计划 §3.1 |
-| 第 1／2 轮评审与裁定记录 | [`docs/reviews/2026-11-07-empty-result-next-step-guidance-review.md`](../reviews/2026-11-07-empty-result-next-step-guidance-review.md)（**入库**；第 1 轮裁定、修订决定与横切批评审处理）。原始 findings 与裁定草稿在本机 `inbox/`（临时件目录，`.gitignore` 忽略、**不入库**），结论以评审记录为准 |
-| 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「落盘清单」「强制流程：Plan Mode」 |
+| 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「落盘清单」「强制流程：Plan Mode」「状态登记只有一份现值」 |
 
 ## 1. 目标
 
-让 Agent 在 `lucy_query` 成功但 0 行时，拿到一份**结构化、ACL 内、不发明事实、模型一定看得见**的下一步指导，并让这份指导说清真实成因（普通无数据 vs 行权限交集空）。
+让 Agent 在 `lucy_query` 成功但严格 0 行时，拿到一份**结构化、ACL 内、不发明事实、写入模型可读 MCP content 承载位**的下一步指导，并让这份指导说清真实成因（普通无数据 vs 行权限交集空）。
 
-实现口径全部以 Spec v0.4 为准，本 Plan 只负责落到具体文件、函数与测试。
+实现口径全部以 Spec **v0.8-draft** 为准，本 Plan 只负责落到具体文件、函数与测试。
 
-**v0.2 相对 v0.1 的三处反转（务必先读）**（v0.3／v0.4 未改这三条）：
+**v0.2 相对 v0.1 的三处反转（历史；D3 现已冻结为 A）**：
 
-1. **落点从「追加 content 块」改为「单块内加键」**——追加块会打断 `scripts/eval/eval-runner.mjs:293-300` 的多块 JSON 解析，且其模型可见性依赖客户端渲染全部块（仓内无法验证）。详见 Spec §4 D3。
-2. **`next_tools` 从授予清单改为可见清单**（`allowedToolNames`），删掉 `*` 通配语义。详见 Spec §4 D5。
-3. **`query.filters` 改为「改写前的原始用户 filter + 去值摘要」**，行策略谓词一律不出现。详见 Spec §4 D6。
+1. **落点从「追加 content 块」改为「单块内加键」**——见 Spec §4 **D3＝A**（委托人 2026-11-09 确认）。
+2. **`next_tools` 从授予清单改为可见清单**（`allowedToolNames`）。详见 Spec §4 D5。
+3. **`query.filters` 改为「改写前的原始用户 filter + 去值摘要」**。详见 Spec §4 D6。
 
-**v0.4 相对 v0.3 的六处反转（第 2 轮评审驱动，务必先读）**：
+**v0.4 相对 v0.3 的六处反转（第 2 轮；仍有效，已被 v0.5 收紧处见下表）**：见 Spec v0.4 变更史；本版不重抄。
 
-| # | 反转 | 触发发现 | 详见 |
+**v0.5-draft 相对 v0.4（Codex R1 F01…F12，务必先读）**：
+
+| # | 修订 | 触发 | 详见 |
 |---|---|---|---|
-| 1 | **三处落点改为同生同灭**——模型可见位不成立时三处都不发，只写 `next_step_skipped_reason` | N2（blocker）：v0.3 的三处伪码都是「先算再分别写」，`structuredContent` 与 `_meta.lucy` 照发 → 审计说「已下发」而模型一条没收到 | Spec §4 D4、§5.2 |
-| 2 | **Spec §6 伪码重写**——`filters` 不再走 `provenance` 透传，改为独立 `filtersSummary` 入参 | N1（blocker）：v0.3 §6 的 `pick` 含 `"filters"` 且把**原始值**塞进 `provenance`，与 D6／SC-05 直接冲突 | Spec §6、Plan Task 1 |
-| 3 | **`kind` 取 `scope_intersection_empty`**，summary／建议**不预设成因** | N4（major）：原措辞「该字段取值不在授权范围内」在「用户自己两条等值条件互斥」时是**假事实**（`row-policy.ts:672-676`／`:703`） | Spec §4 D7、§5.1 |
-| 4 | **载荷改白名单构造**——`query` 只 6 个键，measure/dimension 对象项只保留 `expr` | N5（major）：`invalidMeasuresFieldReason` 不限制对象内其余键 → 用户可把 `rows` 塞进 measure 对象污染审计行数 | Spec §4 D11、§5.2 |
-| 5 | **新增「上游自带 `next_step` 不覆盖」「`result.isError:true` 不发」两条短路** | N14／N13（minor→实质）：覆盖上游同名字段＝静默销毁数据；200 + `isError:true` 会在 outcome 判定**之前**进入富化 | Spec §4 D12／D13 |
-| 6 | **可见性裁决只在 0 行路径求值**；`next_tools` 为空时 `hint` 明说「没有可用工具」 | N8／M1（major）：`degradedGlobal` 下每次响应多触发一次策略重编译；「没有可用工具」未对模型表达 | Spec §4 D5／D10、Plan Task 2 Step 4 |
+| 1 | **D3 曾单列未决**（**v0.7 已迁入 §4＝A**）；开工前置补 **R2-F＋决策闭合＋另发 R4** | F01 | Spec §4 D3；Plan §2 |
+| 2 | **已存在承载位一致**（缺 structured 可注入 text＋meta；同名键冲突整单跳过） | F02 | Spec D4／D12；SC-22／SC-23 |
+| 3 | **截断 `repair` 与 `next_step` 可并存**；不得删 Spec 162 截断提示 | F03 | Spec D14；SC-24 |
+| 4 | **measures／dimensions／orderBy 分型白名单**对齐真实 schema | F04／F05 | Spec D11；SC-21 |
+| 5 | **JSON 数值保真**（v0.5 口径；**v0.6 已按原始 token 收紧**） | F06 | Spec D15；SC-25 |
+| 6 | **行数求值**仅成功 `lucy_query`；严格 `===0`；作用域在富化保护内 | F07／F09 | Spec D5／D8；SC-03／SC-20 |
+| 7 | **修正 SC-01／SC-20 假绿**；补 ACL／拒绝负向 SC-26–SC-28 | F08 | Spec §7；Plan Task 1／3 |
+| 8 | **证据措辞**止于 MCP content；状态镜像同句；版本指针／用例计数 | F10–F12 | Spec §5.4；Plan §2／Task 5 |
+
+
+**v0.6-draft 相对 v0.5（Codex R2-01／02／03，务必先读）**：
+
+| # | 修订 | 触发 | 详见 |
+|---|---|---|---|
+| 1 | **数值保真改为原始 token／保留原文注入**；补精度损失与下溢；跳过时原文不变 | R2-01／F06 | Spec D15；SC-25 |
+| 2 | **统一成功判定先于权限／注入**（含 `isError`、HTTP≥400＋JSON-RPC result）；JSON／SSE 错误路径断言 | R2-02／F07 | Spec D13；SC-18／SC-30 |
+| 3 | **Plan 术语模板同步 D4／D14**；证据范围扩至 SC-30（含 SC-29） | R2-03 | Plan Task 4／5 |
+
+
+**v0.7-draft 相对 v0.6（Codex R3＝BLOCK 残留，务必先读）**：
+
+| # | 修订 | 触发 | 详见 |
+|---|---|---|---|
+| 1 | **`withLucyResultMeta` 签名必含 `upstreamHttpStatus: number`**；JSON／SSE 两处调用传 `upstream.statusCode`；**禁止**成功判定 `?? 200`；可见工具门禁与注入门禁共用同一 status；可选辅助 `isEmptyResultNextStepEligible`；SC-30 夹具断言该路径 | R3／R2-02 major | Spec D13；Plan Task 2／3 |
+| 2 | **收口示例** `SC-01–SC-29` → **`SC-01–SC-30`** | R3／R2-03 minor | Plan Task 5 |
+| 3 | **D3＝A 全链路回写**：迁入 Spec §4；清空 §4.1；头部／Plan／评审／清单与「D3＝A 已确认」一致；**不得**再写「待确认 D3」 | R3 minor（回写缺陷）；委托人 2026-11-09 确认 | Spec §4／§4.1；Plan §2 |
+
+
+**v0.8-draft 相对 v0.7（P0-5 独立评审 Request changes＝与 P0-4 共存，务必先读）**：
+
+| # | 修订 | 触发 | 详见 |
+|---|---|---|---|
+| 1 | **SC-11／SC-25**：与 AV 共存后不再要求整段 text 逐字节相等；保证 next_step 承载位＋D15 业务数字保真；018 跳过／mock AV 时仍逐字节不变 | Major M1 | Spec §7；本 Plan 断言 |
+| 2 | **SC-12**：最终响应／可观测 `_meta` 必须仍见 `next_step_skipped_reason`（含 `content_text_not_json_object`）；不得被 AV 错误信封抹掉 | Major M1／M2 | Spec SC-12；装配 |
+| 3 | **SC-13**：区分 018 富化抛错 vs 018 完成后 AV 失败；后者须保留已写入 next_step／skipped_reason | Major M1／M2 | Spec SC-13；`buildAnswerVerifiabilityErrorEnvelope(lucy018)` |
+| 4 | **N1**：`upstreamHttpStatus: number` 必参；缺省／非有限传 NaN，禁止 `?? 200` | N1 | Spec D13；`withLucyResultMeta` |
+| 5 | **N2**：`content_text_absent` 写入 skipped_reason 枚举（独立码） | N2 | Spec §5.3 |
+
 
 ## 2. 开工前置
 
-1. **对抗式评审通过**：第 1 轮（6 条阻断项）与第 2 轮（2 blocker ＋ 7 major ＋ 7 minor）已全部修订；本 Plan v0.4 须再过一轮评审（Claude Code），阻断项清零。
-2. **开发授权**：委托人明确授权改代码。未授权前只允许读文件和写文档。
-3. **Spec 已立**：Spec v0.4 已落盘，D1–D13 已冻结（含评审修订的 D3–D13；**D3 的口径反转另需委托人确认**）。
-4. **术语登记先行**：新术语先登记进术语标准 **§4.8**（MCP 调试台 / ACL 裁决可见性分区），再写用户可见文案。
-5. **口径对齐**：不改 Spec 162 的 `result_empty` 审计语义、不改 `_meta.lucy` 既有字段取值、不改上游数据载荷的**值语义**、不追加 content 块、不新增任何真实数据查询。
-6. **基线干净**：`npm run lint:spec-docs` 与相关 vitest 在开工前为绿（存量 WARN 除外）。
+> **开工前置已齐（2026-11-09）**。下列项已闭合，**可按本 Plan 改运行代码与测试**。
+
+1. **过程对抗清零**：R3 残留已在 v0.7-draft 闭合；过程再审＝CONDITIONAL，镜像 minor 已修。
+2. **决策闭合**：D3＝A 已确认并迁入 Spec §4；D1–D15 一致。
+3. ~~R2-F~~ → **已闭合（2026-11-09，委托人明示确权）**
+4. ~~R4~~ → **已授予（2026-11-09）**
+5. **术语登记先行**：新术语先登记进术语标准 **§4.8**，再写用户可见文案。
+6. **口径对齐**：不改 Spec 162 的 `result_empty`／成功截断 `repair`、不改 `_meta.lucy` 既有字段取值、**不追加 content 块**（D3＝A）、不新增真实数据查询；数值无法保真时跳过指导（D15）；成功判定**禁止** `?? 200`。
+7. **基线干净**：`npm run lint:spec-docs` 与相关 vitest 在开工前为绿（存量 WARN 除外）。
+8. **状态镜像**：全部已有镜像与 Spec 头部「状态」行**同一句现值**（SC-29）。
 
 ## 3. 文件结构
 
@@ -127,20 +166,29 @@
 
   describe("buildEmptyResultNextStep", () => {
     it("SC-01 对 lucy_query 的 0 行返回 empty_result 指导", () => {
-      const step = buildEmptyResultNextStep({ toolName: "lucy_query", rowCount: 0 });
+      // F08：必须显式传可见工具；缺省 visibleTools=[] → hint=NO_TOOL_HINT（见 SC-17）
+      const step = buildEmptyResultNextStep({
+        toolName: "lucy_query",
+        rowCount: 0,
+        visibleTools: ["lucy_read_source", "lucy_freshness"]
+      });
       expect(step).not.toBeNull();
       expect(step?.kind).toBe("empty_result");
       expect(step?.summary).toBe(EMPTY_RESULT_SUMMARY);
       expect(step?.hint).toBe(EMPTY_RESULT_HINT);
+      expect(step?.next_tools).toEqual(["lucy_read_source", "lucy_freshness"]);
     });
 
     it("SC-02 有数据时不带指导", () => {
       expect(buildEmptyResultNextStep({ toolName: "lucy_query", rowCount: 3 })).toBeNull();
     });
 
-    it("SC-03 行数未知时不判空", () => {
+    it("SC-03 行数未知／非有限／非严格 0 时不判空", () => {
       expect(buildEmptyResultNextStep({ toolName: "lucy_query", rowCount: null })).toBeNull();
       expect(buildEmptyResultNextStep({ toolName: "lucy_query" })).toBeNull();
+      expect(buildEmptyResultNextStep({ toolName: "lucy_query", rowCount: -1 })).toBeNull();
+      expect(buildEmptyResultNextStep({ toolName: "lucy_query", rowCount: Number.NaN })).toBeNull();
+      expect(buildEmptyResultNextStep({ toolName: "lucy_query", rowCount: Number.POSITIVE_INFINITY })).toBeNull();
     });
 
     it("SC-04 非 lucy_query 工具不带指导", () => {
@@ -204,7 +252,11 @@
     });
 
     it("SC-08 hint 与 summary 不含结论性判断", () => {
-      const step = buildEmptyResultNextStep({ toolName: "lucy_query", rowCount: 0 });
+      const step = buildEmptyResultNextStep({
+        toolName: "lucy_query",
+        rowCount: 0,
+        visibleTools: ["lucy_read_source"]
+      });
       for (const text of [step?.summary ?? "", step?.hint ?? ""]) {
         expect(text).not.toContain("数据错误");
         expect(text).not.toContain("数据缺失");
@@ -224,20 +276,25 @@
       expect(some?.hint).toBe(EMPTY_RESULT_HINT);
     });
 
-    it("SC-21 measures/dimensions 对象项只保留 expr", () => {
+    it("SC-21 measures/dimensions/orderBy 白名单与真实 schema 对齐", () => {
       const step = buildEmptyResultNextStep({
         toolName: "lucy_query",
         rowCount: 0,
+        visibleTools: ["lucy_read_source"],
         provenance: {
-          measures: [{ expr: "sum(revenue)", rows: 999 }],
-          dimensions: ["month"]
+          measures: [{ expr: "sum(revenue)", rows: 999, name: "x" }],
+          dimensions: [
+            { field: "sales_order.month", granularity: "month", extra: true },
+            "month" // 字符串维度：真实 schema 不接受 → 整项丢弃
+          ],
+          orderBy: [{ field: "sales_order.month", direction: "asc", rows: [] }]
         }
       });
       expect(step?.query?.measures).toEqual([{ expr: "sum(revenue)" }]);
-      expect(step?.query?.dimensions).toEqual(["month"]);
-      // N5：载荷内不得出现 rows/totalRows/columns/headers
+      expect(step?.query?.dimensions).toEqual([{ field: "sales_order.month", granularity: "month" }]);
+      expect(step?.query?.orderBy).toEqual([{ field: "sales_order.month", direction: "asc" }]);
       const payload = JSON.stringify(step);
-      for (const banned of ["\"rows\"", "\"totalRows\"", "\"columns\"", "\"headers\""]) {
+      for (const banned of ["\"rows\"", "\"totalRows\"", "\"columns\"", "\"headers\"", "\"extra\""]) {
         expect(payload).not.toContain(banned);
       }
     });
@@ -268,17 +325,15 @@
 
   ```ts
   /**
-   * 空结果下一步指导（Spec 20261107 v0.4 §5.1 / D1–D13）。
+   * 空结果下一步指导（Spec 20261107 v0.7-draft §5.1 / D1–D15；D3＝A 已冻结）。
    *
    * 只复用响应链路上**已经解析出**的事实。不断言 grain / 数据可用周期 /
-   * 指标清单——代理在响应链路上拿不到这些事实，断言即编造。指导是 fail-open
-   * 的建议层，不是授权，也不是结论。
+   * 指标清单。指导是 fail-open 的建议层，不是授权，也不是结论。
    *
-   * `filters` 只能经 `filtersSummary`（已去值）进入：原始 filter 值在结构上
-   * 就到不了这里。
+   * `filters` 只能经 `filtersSummary`（已去值）进入。
    */
   export type NextStep = {
-    kind: "empty_result" | "scope_intersection_empty";   // N9：沿用既有机器码与主术语
+    kind: "empty_result" | "scope_intersection_empty";
     summary: string;
     query?: Record<string, unknown>;
     suggestions: string[];
@@ -287,7 +342,6 @@
   };
 
   export const EMPTY_RESULT_SUMMARY = "本次查询返回 0 行事实数据。";
-  // N4：不预设成因——「用户自己两条等值条件互斥」时不能说「取值不在授权范围内」。
   export const SCOPE_SUMMARY = "本次查询返回 0 行：当前的等值过滤与该角色的行权限范围没有交集，或同一字段的多个等值条件互相矛盾。";
   export const EMPTY_RESULT_HINT = "在核对粒度、期间与过滤条件之前，不要用近似值或上一期实际代替本次结果。";
   export const NO_TOOL_HINT = "当前角色没有可用的核对工具（next_tools 为空），以上建议只能人工核对；在核对粒度、期间与过滤条件之前，不要用近似值或上一期实际代替本次结果。";
@@ -297,18 +351,43 @@
   export const CHECK_GRAIN_SUGGESTION = "确认问题的时间粒度与该 source 的粒度一致";
   export const NEXT_STEP_TOOLS = ["lucy_read_source", "lucy_freshness"] as const;
 
-  // D11 载荷白名单：query 顶层只允许这些键；measure/dimension 对象项只保留 expr。
-  const NEXT_STEP_SCALAR_KEYS = ["connectionId", "sourceName", "orderBy"] as const;
-
-  function shapeStringOrExprList(value: unknown): unknown[] | undefined {
+  function shapeMeasures(value: unknown): unknown[] | undefined {
     if (!Array.isArray(value)) return undefined;
     const out: unknown[] = [];
     for (const item of value) {
-      if (typeof item === "string") { out.push(item); continue; }
+      if (typeof item === "string" && item.length > 0) { out.push(item); continue; }
       if (item && typeof item === "object" && !Array.isArray(item)) {
         const expr = (item as Record<string, unknown>).expr;
         if (typeof expr === "string" && expr.length > 0) out.push({ expr });
       }
+    }
+    return out.length > 0 ? out : undefined;
+  }
+
+  function shapeDimensions(value: unknown): unknown[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const out: unknown[] = [];
+    for (const item of value) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue; // 字符串维度丢弃
+      const rec = item as Record<string, unknown>;
+      if (typeof rec.field !== "string" || rec.field.length === 0) continue;
+      const dim: Record<string, unknown> = { field: rec.field };
+      if (typeof rec.granularity === "string") dim.granularity = rec.granularity;
+      out.push(dim);
+    }
+    return out.length > 0 ? out : undefined;
+  }
+
+  function shapeOrderBy(value: unknown): unknown[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const out: unknown[] = [];
+    for (const item of value) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const rec = item as Record<string, unknown>;
+      if (typeof rec.field !== "string" || rec.field.length === 0) continue;
+      const row: Record<string, unknown> = { field: rec.field };
+      if (rec.direction === "asc" || rec.direction === "desc") row.direction = rec.direction;
+      out.push(row);
     }
     return out.length > 0 ? out : undefined;
   }
@@ -322,23 +401,22 @@
     visibleTools?: readonly string[];
   }): NextStep | null {
     if (input.toolName !== "lucy_query") return null;
-    // 未知行数不是空结果的证据（沿用 isEmptyResult 口径）。
-    if (typeof input.rowCount !== "number" || input.rowCount > 0) return null;
+    // D8／F09：严格零；与 isEmptyResult 同口径。禁止 `rowCount > 0` 假对称。
+    if (typeof input.rowCount !== "number" || !Number.isFinite(input.rowCount) || input.rowCount !== 0) {
+      return null;
+    }
 
     const scopeConflict = input.scopeIntersectionEmpty === true;
     const provenance = input.provenance ?? {};
-    // D11：白名单构造——不透传 provenance 的任意键，用户自定义键进不来。
     const query: Record<string, unknown> = {};
-    for (const key of NEXT_STEP_SCALAR_KEYS) {
-      const value = provenance[key];
-      if (value === undefined || value === null) continue;
-      query[key] = value;
-    }
-    const measures = shapeStringOrExprList(provenance.measures);
+    if (provenance.connectionId != null) query.connectionId = provenance.connectionId;
+    if (provenance.sourceName != null) query.sourceName = provenance.sourceName;
+    const orderBy = shapeOrderBy(provenance.orderBy ?? provenance.order_by);
+    if (orderBy) query.orderBy = orderBy;
+    const measures = shapeMeasures(provenance.measures);
     if (measures) query.measures = measures;
-    const dimensions = shapeStringOrExprList(provenance.dimensions);
+    const dimensions = shapeDimensions(provenance.dimensions);
     if (dimensions) query.dimensions = dimensions;
-    // filters 只认独立入参的**去值摘要**；provenance.filters 一律不采纳。
     if (input.filtersSummary && typeof input.filtersSummary === "object") {
       query.filters = input.filtersSummary;
     }
@@ -364,7 +442,7 @@
 - [ ] **Step 4：跑测试确认通过**
 
   Run: `cd webui && npx vitest run server/__tests__/empty-result-next-step.test.ts`
-  Expected: PASS —— 9 条全绿。
+  Expected: PASS —— **本文件全部 `it` 全绿**（现行用例数以测试文件为准；**不得**再写死「9 条全绿」历史数量作出口，F12）。
 
 - [ ] **Step 5：提交**
 
@@ -418,27 +496,35 @@
 
   > 隐私纪律单一事实源：审计落库与 Agent 可见响应共用同一套「filters 去值」口径。
 
-- [ ] **Step 4：取调用者可见工具（只在 0 行路径求值）**
+- [ ] **Step 4：取调用者可见工具（只在成功 `lucy_query` 严格 0 行求值）**
 
-  在 `writeLucySemanticResponse` 内、构造 `body` 之前：
+  在 `writeLucySemanticResponse` 内、**既有富化 try／catch 保护之内**、且已能安全取得上游 `result` 子树之后。  
+  **实际 HTTP status 来源**（现行源码）：本函数入参 `upstream: IncomingMessage` 的 **`upstream.statusCode`**（同文件 `classifyUpstreamFailure(upstream.statusCode, …)` 已用该字段，见 `:2956`）。先绑定局部常量，再喂给门禁与 `withLucyResultMeta`：
 
   ```ts
-  // Spec 20261107 D5 —— next_tools 只列该调用者**可见**的工具。可见性裁决只有
-  // allowedToolNames 一处（acl.ts:2397）：它展开 `*`、剔 deny、要求 DataPlane
-  // capability、并在 degradedGlobal 下隐藏。permissions.tools 只是授予清单。
-  //
-  // N8：allowedToolNames → ensurePolicyRuntime()；degradedGlobal 下每次调用都会
-  // 重新 commitEffectivePolicy()（acl.ts:2897-2901）。所以**只在 0 行路径求值**，
-  // 有数据 / 非 lucy_query 的响应一次都不触发。
-  const rowCount = lucyQueryRowCountOf(payload);          // 纯函数：取上游 result 子树的 rows.length
-  const visibleTools = rowCount === 0
+  // Spec 20261107 D13／D5／R2-02／R3 —— 统一成功判定通过后才求值。
+  // 顺序：isEmptyResultNextStepEligible → allowedToolNames → build／注入。
+  // 禁止对 status 做 ?? 200；缺省／非有限 status ⇒ 非 eligible。
+  // 不得对 200+isError 或 500+JSON-RPC result+rows:[] 触发；JSON／SSE 同口径。
+  const upstreamHttpStatus = upstream.statusCode; // 实际上游 HTTP；不得 ?? 200
+  const inspectedEarly = inspectRowsAndColumns(/* 上游 result 子树 */);
+  const resultRecordEarly = /* 上游 result 子树 */;
+  const shouldResolveVisibleTools = isEmptyResultNextStepEligible({
+    status: upstreamHttpStatus,
+    result: resultRecordEarly,
+    toolName,
+    rowCount: inspectedEarly.rows
+  });
+  const visibleTools = shouldResolveVisibleTools
     ? await allowedToolNames(identity).catch(() => [] as string[])
-    : [] as string[];
+    : ([] as string[]);
   ```
 
-  > `allowedToolNames` 已在 `mcp-proxy.ts:35` import，无需加 import。
-  > `lucyQueryRowCountOf` 是**纯函数**：对上游 `result` 子树取 `rows.length`（与 `inspectRowsAndColumns` 同口径，`mcp-proxy.ts:861-862`）；取不到返回 `null`（未知行数 → 不是 0 行 → 不触发可见性裁决）。
-  > 行数判定与装配内 `inspectRowsAndColumns` 的结果必须一致；装配内**复用**同一份判定结果，不得二次解析出两个口径。
+  > `allowedToolNames` 已在 `mcp-proxy.ts:35` import。
+  > 可见工具门禁与注入门禁**必须**共用同一 `upstreamHttpStatus`（同一局部常量）。
+  > 装配内**复用**同一份行数判定，不得二次解析出两个口径。
+  > SC-20 须对本功能新增的 `allowedToolNames` 调用点做 **spy 计数＝0**（有数据／非 `lucy_query`）。
+  > SC-30 夹具须断言 HTTP≥400 路径上该门禁为 false 且 spy＝0。
 
 - [ ] **Step 5：跑既有测试确认无回归**
 
@@ -503,26 +589,29 @@
     expect(text.next_step).toEqual(parsed.result._meta?.lucy?.next_step);
   });
 
-  it("SC-11 非空结果响应逐字节不变", async () => {
-    // 同样夹具但上游 rows 非空（[["2902"]]）：
-    expect(parsed.result.content[0]?.text).toBe(upstreamText);            // 逐字节
-    expect(parsed.result.structuredContent).toEqual(upstreamStructured);  // 逐字节
+  it("SC-11 非空结果无 next_step；与 AV 共存时业务字段保真", async () => {
+    // 上游 rows 非空；与 P0-4 共存后不再要求整段 text 逐字节相等：
+    expect(textObj.headers).toEqual(["dau"]);
+    expect(textObj.rows).toEqual([["2902"]]);
+    expect(textObj.totalRows).toBe(1);
+    expect(textObj.answer_verifiability).toBeTruthy(); // P0-4 合法加键
     expect(parsed.result._meta?.lucy?.next_step).toBeUndefined();
-    expect(parsed.result.content?.length).toBe(1);                          // 不追加块
+    expect(parsed.result.content?.length).toBe(1); // 不追加块
   });
 
-  it("SC-12 text 不是 JSON 对象时三处都不发 next_step", async () => {
-    // 上游 content[0].text 为 "plain text"（非 JSON）：
-    expect(parsed.result.content[0]?.text).toBe("plain text");
+  it("SC-12 text 不是 JSON 对象 → 不注入；skipped_reason 不被 AV 抹掉", async () => {
+    // 上游 content[0].text 为 "plain text"（非 JSON）；P0-4 可走错误信封：
     expect(parsed.result.structuredContent?.next_step).toBeUndefined();
     expect(parsed.result._meta?.lucy?.next_step).toBeUndefined();
+    // 最终响应／可观测 _meta 必须仍见（M2：AV 错误信封保留）
     expect(parsed.result._meta?.lucy?.next_step_skipped_reason).toBe("content_text_not_json_object");
   });
 
-  it("SC-18 上游 result.isError=true 时三处都不发", async () => {
-    // 上游 200 + result.isError:true：
+  it("SC-18 JSON／SSE：200 + isError:true + rows:[] 不发且不调 allowedToolNames", async () => {
+    // 上游 HTTP 200 + result.isError:true + rows:[]（JSON 与 SSE 各一条）
     expect(parsed.result._meta?.lucy?.next_step).toBeUndefined();
     expect(parsed.result._meta?.lucy?.next_step_skipped_reason).toBe("result_is_error");
+    expect(allowedToolNamesSpy.mock.calls.length).toBe(0);
   });
 
   it("SC-19 上游已带 next_step 键时不覆盖", async () => {
@@ -532,10 +621,64 @@
     expect(parsed.result._meta?.lucy?.next_step_skipped_reason).toBe("upstream_next_step_present");
   });
 
-  it("SC-20 有数据时不触发可见性裁决", async () => {
-    // 上游 rows 非空：spy 住 allowedToolNames 或断言其未被 await——
-    // 断言口径：响应里没有 next_step，且没有触发额外的策略重编译（本条只断言前者，
-    // 后者靠 acl 层既有计数断言，不在本文件重复）。
+  it("SC-20 有数据／非 lucy_query 时不触发可见性裁决（计数）", async () => {
+    // F08：必须对本功能新增调用点 spy；不得只断言「没有 next_step」假绿。
+    const spy = vi.spyOn(/* allowedToolNames 模块导出 */, "allowedToolNames");
+    // 变体 A：lucy_query + rows 非空 → spy 调用次数增加量 === 0
+    // 变体 B：lucy_read_source + rows:[] → spy 调用次数增加量 === 0，且无 next_step
+    expect(parsed.result._meta?.lucy?.next_step).toBeUndefined();
+    expect(spy.mock.calls.length).toBe(0);
+  });
+
+  it("SC-22 无 structuredContent 时 text＋meta 仍注入", async () => {
+    // 上游只有 content text JSON、无 structuredContent：
+    expect(parsed.result.structuredContent).toBeUndefined();
+    expect(parsed.result._meta?.lucy?.next_step?.kind).toBe("empty_result");
+    expect(JSON.parse(parsed.result.content[0]?.text ?? "").next_step).toEqual(
+      parsed.result._meta?.lucy?.next_step
+    );
+  });
+
+  it("SC-23 structured 已有 next_step、text 无 → 整单跳过", async () => {
+    expect(parsed.result.structuredContent?.next_step).toEqual({ upstream: true });
+    expect(JSON.parse(parsed.result.content[0]?.text ?? "").next_step).toBeUndefined();
+    expect(parsed.result._meta?.lucy?.next_step).toBeUndefined();
+    expect(parsed.result._meta?.lucy?.next_step_skipped_reason).toBe("upstream_next_step_present");
+  });
+
+  it("SC-24 rows=[] 且截断 → repair 与 next_step 并存", async () => {
+    // 夹具：触发 Spec 162 resolveResponseTruncated 出 repair，同时 rows:[]
+    expect(parsed.result._meta?.lucy?.repair).toBe(TRUNCATION_REPAIR_HINT);
+    expect(parsed.result._meta?.lucy?.next_step?.kind).toBe("empty_result");
+  });
+
+  it("SC-25 原始 token 不保真 → 018 跳过；与 AV 共存时 token 仍在", async () => {
+    // 必覆盖三类原文夹具（禁止仅用 parse 后有限＋深等判可注入）：
+    //   (a) totalRows: 1e400
+    //   (b) totalRows: 9007199254740993
+    //   (c) totalRows: 1e-400
+    // 与 P0-4 共存：不再要求整段 text === upstreamText；须仍含原始 token。
+    expect(parsed.result.content[0]?.text).toContain(token);
+    expect(parsed.result._meta?.lucy?.next_step).toBeUndefined();
+    expect(parsed.result._meta?.lucy?.next_step_skipped_reason).toBe(
+      "content_json_number_not_fidelity_safe"
+    );
+  });
+
+  it("SC-13(b) 018 注入成功后 AV 失败 → _meta 仍含 next_step", async () => {
+    // 上游 text 已带 answer_verifiability 键 → 018 可注入 next_step，AV 键冲突失败
+    expect(parsed.result.isError).toBe(true);
+    expect(parsed.result._meta?.lucy?.next_step?.kind).toBe("empty_result");
+  });
+
+  it("SC-30 JSON／SSE：HTTP 500 + JSON-RPC result + rows:[] → 无 next_step 且不调 allowedToolNames", async () => {
+    // classifier 可能放过 JSON-RPC 信封；本条仍非成功（D13）
+    expect(parsed.result._meta?.lucy?.next_step).toBeUndefined();
+    expect(allowedToolNamesSpy.mock.calls.length).toBe(0);
+  });
+
+  it("SC-26／SC-27 ACL 外表／未暴露列／P0-3 拒绝／权限拒绝 → 无 next_step", async () => {
+    // 复用既有 denial／歧义门闩夹具；断言响应无 next_step，且不改既有拒绝形状
     expect(parsed.result._meta?.lucy?.next_step).toBeUndefined();
   });
 
@@ -552,7 +695,7 @@
   ```
 
   > **N7 的夹具要求**：原 smoke 夹具的 `lucy_query` 入参**不带任何 filter**（`mcp-proxy-smoke.test.ts:957-962` 只有 `connectionId`/`measures`/`limit`）→ `originalUserFilters` 恒为 `undefined` → `query.filters` 在所有 Proxy 层测试里**根本不会出现**，第 1 轮唯一 blocker（B2：策略谓词泄漏）的不变量就**一条断言都没有**。因此本任务必须**加一条带 filter 的夹具变体**：用户在 `lucy_query` 入参里带一条 `filters`（如 `{ field: "company", op: "contains", value: "某某公司" }`），且该角色的行策略同时带一条 forced filter，断言 `query.filters` 里只有用户那条的 `field`/`op`/`valueCount`、**没有** forced 谓词。
-  > SC-13（富化抛错回落上游原文）与 SC-14（审计行数不被污染）在同文件补断言：SC-14 断言审计行的 `response_row_count` 为 `0`，且**额外**断言载荷内不含 `rows`/`totalRows`/`columns`/`headers` 键（用 `JSON.stringify(next_step)` 做子串断言）。
+  > SC-13（区分 018 富化抛错 vs AV 失败保留 next_step）与 SC-14（审计行数不被污染）在同文件补断言：SC-14 断言审计行的 `response_row_count` 为 `0`，且**额外**断言载荷内不含 `rows`/`totalRows`/`columns`/`headers` 键（用 `JSON.stringify(next_step)` 做子串断言）。
 
 - [ ] **Step 2：跑测试确认失败**
 
@@ -568,9 +711,23 @@
   import { summarizeFilters } from "./audit-privacy.js";
   ```
 
-  3.2 改 `withLucyResultMeta` 签名，增加三个入参：
+  3.2 先新增（或与 `withLucyResultMeta` 同文件局部）统一成功判定辅助函数，**签名必含 `status`**；再改 `withLucyResultMeta` 签名，**必含** `upstreamHttpStatus: number`（或从上游 `IncomingMessage`／`Response` 明确传入的同义参数）。**禁止**在成功判定里对缺省 `?? 200`：
 
   ```ts
+  /** Spec D13／R3 — 先判定再权限／注入；status 必须是实际上游 HTTP。 */
+  function isEmptyResultNextStepEligible(input: {
+    status: number | undefined;
+    result: { isError?: unknown } | null | undefined;
+    toolName: string;
+    rowCount: number | null | undefined;
+  }): boolean {
+    const { status, result, toolName, rowCount } = input;
+    if (typeof status !== "number" || !Number.isFinite(status) || status >= 400) return false;
+    if (result?.isError === true) return false;
+    if (toolName !== "lucy_query") return false;
+    return typeof rowCount === "number" && Number.isFinite(rowCount) && rowCount === 0;
+  }
+
   function withLucyResultMeta(
     payload: unknown,
     requestId: string | number,
@@ -579,9 +736,13 @@
     sourceRefs: SourceRef[],
     visibleTools: readonly string[],
     originalUserFilters: unknown,
-    scopeIntersectionEmpty: boolean
+    scopeIntersectionEmpty: boolean,
+    upstreamHttpStatus: number   // 必含；来自 writeLucySemanticResponse 的 upstream.statusCode
   ): unknown {
   ```
+
+  > 调用顺序硬约束：① `isEmptyResultNextStepEligible({ status: upstreamHttpStatus, … })` → ② 仅 eligible 时 `allowedToolNames` → ③ `buildEmptyResultNextStep`／注入。  
+  > `upstreamHttpStatus` 与 Task 2 Step 4 的局部常量**同一来源**；JSON／SSE 两处调用均须传入（见 3.6）。
 
   3.3 把既有内联的 `provenance` 提成局部变量（**字段与取值一个都不改**，只是提成变量以便复用）：
 
@@ -613,54 +774,92 @@
 
   装配时把 `nextStepProvenance` 传给纯函数（见 3.4）。
 
-  3.4 构造并注入 `next_step`（**三处同生同灭**，D4）：
+  3.4 构造并注入 `next_step`（**已存在承载位一致**，D4；**先统一成功判定**，D13；**同一 `upstreamHttpStatus`**）：
 
   ```ts
-  const nextStep = buildEmptyResultNextStep({
+  // D13／R3：先判定再权限／注入。非 eligible 时不得依赖 visibleTools 副作用。
+  // 禁止 (upstreamHttpStatus ?? 200)；缺省／非有限 status ⇒ eligible=false。
+  const eligible = isEmptyResultNextStepEligible({
+    status: upstreamHttpStatus,
+    result: resultRecord,
     toolName,
-    rowCount: inspectedResult.rows ?? null,
-    scopeIntersectionEmpty,
-    provenance: withoutFilters(provenance),          // 不含 filters（N1）
-    filtersSummary: originalUserFilters === undefined ? null : summarizeFilters(originalUserFilters),
-    visibleTools
+    rowCount: inspectedResult.rows
   });
 
-  let lucyNextStep: NextStep | undefined;            // 只有模型可见位注入成功才赋值
+  let lucyNextStep: NextStep | undefined;
   let nextStepSkippedReason: string | undefined;
-  if (nextStep) {
-    if (resultRecord.isError === true) {
-      nextStepSkippedReason = "result_is_error";     // D13：200 + isError 不发
-    } else {
+
+  if (!eligible) {
+    if (resultRecord.isError === true && toolName === "lucy_query" && inspectedResult.rows === 0) {
+      nextStepSkippedReason = "result_is_error"; // SC-18
+    }
+  } else {
+    // visibleTools 须已在 Task 2 按同一 eligible 口径求值后传入；此处不得再补 ?? 200。
+    const nextStep = buildEmptyResultNextStep({
+      toolName,
+      rowCount: inspectedResult.rows ?? null,
+      scopeIntersectionEmpty,
+      provenance: withoutFilters(provenance),
+      filtersSummary: originalUserFilters === undefined ? null : summarizeFilters(originalUserFilters),
+      visibleTools
+    });
+    if (nextStep) {
       const content = Array.isArray(resultRecord.content) ? resultRecord.content : [];
       const first = content[0] as { type?: string; text?: string } | undefined;
+      const originalText = first && typeof first.text === "string" ? first.text : undefined;
       let parsed: Record<string, unknown> | undefined;
-      if (first && typeof first.text === "string") {
+      if (originalText !== undefined) {
         try {
-          const maybe = JSON.parse(first.text) as unknown;
+          const maybe = JSON.parse(originalText) as unknown;
           if (maybe && typeof maybe === "object" && !Array.isArray(maybe)) parsed = maybe as Record<string, unknown>;
         } catch { parsed = undefined; }
       }
-      if (!parsed) {
-        nextStepSkippedReason = first && typeof first.text === "string"
+      const structuredIsObject =
+        resultRecord.structuredContent
+        && typeof resultRecord.structuredContent === "object"
+        && !Array.isArray(resultRecord.structuredContent);
+      if (!parsed || originalText === undefined) {
+        nextStepSkippedReason = originalText !== undefined
           ? "content_text_not_json_object"
-          : "content_text_absent";
+          : "content_text_absent"; // N2：独立枚举码，见 Spec §5.3
       } else if (Object.prototype.hasOwnProperty.call(parsed, "next_step")) {
-        nextStepSkippedReason = "upstream_next_step_present";   // D12：不覆盖上游同名字段
+        nextStepSkippedReason = "upstream_next_step_present";
+      } else if (
+        structuredIsObject
+        && Object.prototype.hasOwnProperty.call(resultRecord.structuredContent as object, "next_step")
+      ) {
+        nextStepSkippedReason = "upstream_next_step_present";
+      } else if (!rawNumericTokensFidelitySafe(originalText)) {
+        // D15／R2-01：扫原始数字字面量；禁止 parse 后有限＋深等冒充保真
+        nextStepSkippedReason = "content_json_number_not_fidelity_safe";
       } else {
-        // 1) 模型可见位：data text 的 JSON 对象内加键
-        first!.text = JSON.stringify({ ...parsed, next_step: nextStep });
-        // 2) 结构化位
-        if (resultRecord.structuredContent && typeof resultRecord.structuredContent === "object" && !Array.isArray(resultRecord.structuredContent)) {
-          resultRecord.structuredContent = { ...(resultRecord.structuredContent as Record<string, unknown>), next_step: nextStep };
+        const candidateText =
+          injectNextStepPreservingNumberTokens(originalText, nextStep)
+          ?? fidelitySafeStringify(parsed, nextStep);
+        if (
+          candidateText == null
+          || !originalNumberTokensUnchanged(originalText, candidateText)
+        ) {
+          nextStepSkippedReason = "content_json_number_not_fidelity_safe";
+        } else {
+          first!.text = candidateText;
+          if (structuredIsObject) {
+            resultRecord.structuredContent = {
+              ...(resultRecord.structuredContent as Record<string, unknown>),
+              next_step: nextStep
+            };
+          }
+          lucyNextStep = nextStep;
         }
-        // 3) 合同位：与前两处**同生同灭**
-        lucyNextStep = nextStep;
       }
     }
   }
   ```
 
-  > **D4 的实现要点**：三处不是「各自判断、各自发」，而是**先判定模型可见位能不能承载，再一次性把同一个对象写进三处**。写成「text 不可注入就跳过 text、但 structuredContent 与 `_meta.lucy` 照发」＝ 审计说「已下发」而模型一条没收到，正是 D3 不变式要防的静默消失（第 2 轮 N2 blocker）。
+  > **D13／R2-02／R3**：`eligible` 失败时**不**进入注入；HTTP≥400＋JSON-RPC result 与 200＋isError 同属非成功；`upstreamHttpStatus` **必传**且禁止 `?? 200`。
+  > **D15／R2-01**：优先**保留原文注入**；跳过时 `content[0].text` 必须与上游 **逐字节**相同。
+  > **D3＝A／D4／F02**：单块内加键；先判定 text 能否承载 + 同名键冲突 + 原始 token 保真，再写入。**缺失 structuredContent 不是失败**。**不得**在 text 失败时仍写 `_meta`／structured。**不追加** content 块。
+  > **D14／F03**：下方 `lucy` 字面量继续 `...(truncation?.repair ? { repair } : {})`，**不得**因注入 `next_step` 而删除 Spec 162 截断 `repair`。
 
   3.5 **把 `next_step` 放进 `lucy` 字面量内部**（关键，Spec §6 已钉死）：
 
@@ -691,15 +890,32 @@
 
   > **不得**写成 `resultRecord._meta.lucy.next_step = ...`：既有返回路径的 `lucy` 是全新字面量（`mcp-proxy.ts:2675-2719`），那样写会落到被丢弃的旧对象上；且上游无 `_meta` 时会 TypeError → 整个特性静默消失。
 
-  3.6 两处调用点补参数：
+  3.6 两处调用点补参数（现行 `writeLucySemanticResponse` 内 `:2988` SSE／`:2991` JSON）。**必须传入实际** `upstream.statusCode`（先绑定为 `upstreamHttpStatus`，与 Task 2 Step 4 同一局部常量）；**禁止**省略或 `?? 200`：
 
   ```ts
-  body = JSON.stringify(withLucyResultMeta(payload, requestId, toolName, toolArgs, sourceRefs, visibleTools, originalUserFilters, scopeIntersectionEmpty));
-  ...
-  body = JSON.stringify(withLucyResultMeta(JSON.parse(originalBody), requestId, toolName, toolArgs, sourceRefs, visibleTools, originalUserFilters, scopeIntersectionEmpty));
+  // writeLucySemanticResponse 内（与 classifyUpstreamFailure 同源）：
+  const upstreamHttpStatus = upstream.statusCode;
+  if (typeof upstreamHttpStatus !== "number" || !Number.isFinite(upstreamHttpStatus)) {
+    // 无可靠 HTTP status ⇒ 本条视为非成功：visibleTools=[]，withLucyResultMeta 仍传入
+    // 该非有限／缺省值会使 isEmptyResultNextStepEligible 返回 false（不得改写成 200）。
+  }
+
+  // SSE 分支（现行 :2988 附近）：
+  body = JSON.stringify(withLucyResultMeta(
+    payload, requestId, toolName, toolArgs, sourceRefs,
+    visibleTools, originalUserFilters, scopeIntersectionEmpty,
+    upstreamHttpStatus as number
+  ));
+  // JSON 分支（现行 :2991 附近）：
+  body = JSON.stringify(withLucyResultMeta(
+    JSON.parse(originalBody), requestId, toolName, toolArgs, sourceRefs,
+    visibleTools, originalUserFilters, scopeIntersectionEmpty,
+    upstreamHttpStatus as number
+  ));
   ```
 
-  > `scopeIntersectionEmpty` 在 `writeLucySemanticResponse` 里来自既有入参 `options.scopeIntersectionEmpty`（现行 `:2842`，调用点 `:6006` 已在传）。
+  > `scopeIntersectionEmpty` 在 `writeLucySemanticResponse` 里来自既有入参 `options.scopeIntersectionEmpty`（现行 options 形参；调用点已在传）。
+  > SC-30 夹具：上游 `statusCode=500`（或其它 ≥400）+ JSON-RPC `result` + `rows:[]`，断言 JSON 与 SSE 均无 `next_step`、本功能 `allowedToolNames` spy＝0，并确认装配走了上述带 `upstreamHttpStatus` 的调用路径。
 
 - [ ] **Step 4：跑测试确认通过**
 
@@ -728,12 +944,12 @@
 - Consumes: Task 1 的字段名
 - Produces: §4.8（MCP 调试台）表格**末尾追加三行**＋既有 `Scope Intersection Empty` 行补注；`initialize` instructions 多一行
 
-- [ ] **Step 1：在术语标准 §4.8（MCP 调试台 / ACL 裁决可见性）登记**
+- [ ] **Step 1：在术语标准 §4.8（MCP 调试台 / ACL 裁决可见性）登记**（须满足 Spec SC-15：含 D4「已存在承载位」与 D14 截断并存说明）
 
   ⚠️ **锚点说明**：该文件里 `§4.8` **重号**——`:807` 是「MCP 调试台 / ACL 裁决可见性」，`:824` 又是「访问权限升级」。本任务的目标是**第一个** §4.8，其表格**末行是 `Effective Permissions Snapshot`**——三行**追加在它之后、表格结束之前**（不是插在表格中间，那会破坏表格结构）。
 
   ```markdown
-  | Next Step | next_step | 下一步建议 | 修复提示（作同义词）、安全边界、结论 | 成功但 0 行时响应附带的受控下一步指引；落在**三处**——`content[0].text` 的 JSON 对象内同名键（模型可见，主落位）、`structuredContent.next_step`（结构化位）、`_meta.lucy.next_step`（合同／审计位）；三处**同生同灭**；**不得与 `Repair Hint` 混用**（成功路径 vs 失败路径）。Spec `lucy-20261107-empty-result-next-step-guidance` |
+  | Next Step | next_step | 下一步建议 | 修复提示（作同义词）、安全边界、结论 | 成功但严格 0 行时响应附带的受控下一步指引；落在**已存在承载位**：`content[0].text` 的 JSON 对象内同名键（模型可读主落点，必选）、`structuredContent.next_step`（**仅当** `structuredContent` 已是普通对象时同步）、`_meta.lucy.next_step`（合同／审计位）。**Lucy 注入的** `next_step` 同生同灭（D4）；缺失 structured **不是**失败，不得为凑齐「三处」而新建空对象。**不得与 `Repair Hint` 混称／替代**；**例外（D14）**：成功截断路径的 `_meta.lucy.repair` 与空结果 `next_step` **允许并存**（不得删 Spec 162 截断提示）。Spec `lucy-20261107-empty-result-next-step-guidance` |
   | Empty Result | — | 空结果 | 与审计标记 `result_empty` 混为一件 | `lucy_query` 成功返回 0 行事实数据；与 `result_empty`（Spec 162 §8）同义不同层 |
   | Suggestion | — | 建议动作 | 写成对 Agent 的强制命令 | `next_step.suggestions` 的每一条，是排查方向不是指令 |
   ```
@@ -776,7 +992,7 @@
 
 **Interfaces:**
 - Consumes: Task 1–4 的全部产物
-- Produces: Spec 的 SC-01–SC-21 逐条证据落点
+- Produces: Spec 的 SC-01–SC-30 逐条证据落点（含 SC-29 状态镜像）
 
 - [ ] **Step 1：用夹具上游取形状证据**
 
@@ -785,7 +1001,9 @@
   1. `result._meta.lucy.next_step.kind == "empty_result"`；
   2. `result.content[0].text` 解析后含 `next_step`，且 `headers`/`rows`/`totalRows` 与上游原文一致；
   3. `result.structuredContent.next_step` 与 `_meta.lucy.next_step` 内容一致；
-  4. **三处同生同灭**：另跑一次「上游 text 非 JSON」的夹具，确认三处都没有 `next_step`、且 `_meta.lucy.next_step_skipped_reason == "content_text_not_json_object"`（D4）。
+  4. **已存在承载位一致（D4）**：另跑一次「上游 text 非 JSON」的夹具，确认 Lucy 未注入任何 `next_step`、且最终响应／可观测 `_meta.lucy.next_step_skipped_reason == "content_text_not_json_object"`（与 P0-4 错误信封共存时亦须可见）；再跑一次「无 structuredContent」夹具确认 text＋meta 仍注入且不新建 structured（SC-22）。
+  5. **错误路径（D13／SC-18／SC-30）**：200＋isError、500＋JSON-RPC result＋rows:[] 在 JSON／SSE 均无 `next_step` 且本功能 `allowedToolNames` 计数为 0。
+  6. **保真跳过（D15／SC-25）**：精度损失／下溢／上溢三类 token → 018 跳过；与 AV 共存时最终 text 仍含原始 token（不再要求整段逐字节相等）。
 
   Run: `cd webui && npx vitest run server/__tests__/empty-result-next-step-proxy.test.ts`（同一夹具，断言即证据）。
   Expected: 全绿；响应快照另存 `inbox/empty-result-next-step-evidence-20261107.json`。
@@ -807,46 +1025,63 @@
   ```
   Expected: 四条全绿（存量 WARN 除外）。
 
-- [ ] **Step 4：更新状态**
+- [ ] **Step 4：更新状态（SC-29／F11）**
 
-  Spec 状态行改为 `**v0.4 功能合同已收口（2026-11-XX）**。SC-01–SC-21 关闭。本条收口不表示可上线`，本 Plan 状态行改为 `**已执行（2026-11-XX）**`，并同步 `docs/README.md` 与 `docs/plans/README.md` 的索引行。
+  收口时 **全部已有镜像**使用与 Spec 头部「状态」行**同一句现值**（禁止 Spec 写「功能合同已收口」、Plan 写「已执行」两套现值）。同步落点（有则必改，无则不新造）：
+
+  1. Spec 头部「状态」
+  2. 本 Plan 头部「状态」
+  3. `docs/README.md` 本条索引
+  4. `docs/plans/README.md` 本条索引
+  5. `docs/governance/project-overview.md` §9 本条现行行（另加历史 `v1.x 更新` 留痕，不回改旧行）
+  6. `docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md` REQ-030-018 条目状态
+  7. `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md` P0-5／S4 跟进状态
+
+  示例收口句（日期实填）：`**vX.Y 功能合同已收口（2026-11-XX）**。SC-01–SC-30 关闭。本条收口不表示可上线`——Spec／Plan／上述镜像**同句**。
 
 - [ ] **Step 5：提交**
 
   ```bash
-  git add docs/specs/lucy-20261107-empty-result-next-step-guidance-spec.md docs/plans/lucy-20261107-empty-result-next-step-guidance-plan.md docs/README.md docs/plans/README.md
+  git add docs/specs/lucy-20261107-empty-result-next-step-guidance-spec.md docs/plans/lucy-20261107-empty-result-next-step-guidance-plan.md docs/README.md docs/plans/README.md docs/governance/project-overview.md docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md
   git commit -m "docs: close empty-result next-step guidance functional contract"
   ```
 
 ## 5. 验收
 
-- **本 Plan 级验收**：Task 1–5 全部步骤完成；Spec 的 SC-01–SC-21 逐条有证据落点；四道机器门禁退出码 0；相关 vitest 全绿。
+- **本 Plan 级验收**：Task 1–5 全部步骤完成；Spec 的 SC-01–SC-30 逐条有证据落点；四道机器门禁退出码 0；相关 vitest 全绿。
 - **功能级验收**：在 Spec §7 完成，本 Plan 不重复列断言。
 - **不构成发布取证**：镜像构建、部署、客户环境验收、Eval 跑批成绩均不在本条出口。
 
 ## 6. 完成定义
 
-- `buildEmptyResultNextStep` 为纯函数，无 I/O、无副作用，9 条单测覆盖 SC-01–SC-08。
-- `lucy_query` 0 行响应的**三个落点**内容一致；上游 `headers`/`rows`/`totalRows` 取值不变。
-- 非空结果响应**逐字节不变**；`content` 数组**长度不变**（不追加块）。
-- `next_tools` 只含 `allowedToolNames` 判可见的工具；**没有任何 `*` 通配语义**。
-- `query.filters` 是去值摘要；**行策略谓词与任何 filter 值都不出现**。
-- `scopeIntersectionEmpty` 时 `kind` 与 `suggestions` 分流正确。
-- text 非 JSON 对象时三处都不出现 `next_step`，且 `_meta.lucy.next_step_skipped_reason` 有值。
-- 术语标准 §4.8 已登记四行；动态 instructions 已加一行。
-- Spec 状态行与 Plan 状态行按 `docs/governance/DEVELOPMENT.md`「功能闭口与发布取证」同步；索引行同步。
+- `buildEmptyResultNextStep` 为纯函数，无 I/O、无副作用；纯函数单测覆盖 SC-01…SC-08／SC-17／SC-21（及 SC-03 边界）；**用例数以测试文件为准**（F12）。
+- `lucy_query` 严格 0 行时：**已存在承载位**上的 Lucy `next_step` 内容一致；缺 structured 时 text＋meta 仍注入（SC-22）。
+- 上游 `headers`/`rows`/`totalRows`/`sql` 在注入成功时**原始字面量**不变；无法保真（含精度损失／下溢）则 018 跳过且原始 token 仍可见（SC-25；与 AV 共存后不以整段逐字节为合同）。
+- 非空结果：`_meta` 无 `next_step`；`content` 长度不变；与 AV 共存时业务字段保真，不再要求整段 text 逐字节相等（SC-11）。
+- 成功截断 `repair` 与 `next_step` 可并存（SC-24）；不得删 Spec 162 截断提示。
+- `next_tools` 只含 `allowedToolNames` 判可见的工具；**没有任何 `*` 通配语义**；裁决仅成功 `lucy_query` 严格 0 行触发（SC-20 计数）。
+- `query.filters` 是去值摘要；行策略谓词与任何 filter 值都不出现；measures／dimensions／orderBy 白名单与真实 schema 对齐（SC-14／SC-21）。
+- text 非 JSON／同名键冲突／`isError`／HTTP≥400＋JSON-RPC result／ACL 拒绝／P0-3 拒绝时 Lucy 不注入；非 JSON 时 `next_step_skipped_reason` 最终仍可见（SC-12／SC-18／SC-19／SC-23／SC-26／SC-27／SC-30）。
+- AV fail-closed 不得抹掉已写入的 `next_step`／`next_step_skipped_reason`（SC-13(b)）。
+- 术语标准 §4.8 已登记；动态 instructions 已加一行。
+- Spec／Plan／全部已有镜像**同一句现值**（SC-29）——v0.8 共存修订后须再对齐镜像句。
 - **本条收口不表示可上线。**
 
 ## 7. 风险与回滚
 
 | 风险 | 说明 | 缓解 |
 |---|---|---|
-| **数据文本被重新序列化** | `content[0].text` 走 parse → 加键 → stringify，键序保留、值语义不变，但字符串规范化 | SC-09 / SC-11 断言取值一致；非空响应逐字节不变；不改上游取值 |
-| **模型可见性仍可能落空** | 极少数客户端只渲染 `structuredContent` 或只读首个块 | 单块内加键使模型与数据同处一段文本；`structuredContent` 同步；`_meta.lucy` 兜底 |
-| **指导不可见（富化抛错）** | 富化异常时整体回落上游原文 | fail-safe；SC-13 固化；审计可查 |
-| **回显请求面带出敏感值** | filter 值若回显会带出敏感值 | D6 去值摘要（复用 `audit-privacy`）；原始值在结构上进不了 `next_step` |
-| **指导越权泄漏** | 带出角色不可见的 source | 候选只来自 ACL 已解析的 `sourceRefs`；`next_tools` 按 `allowedToolNames` 过滤 |
-| **建议方向错** | 泛化建议把 Agent 引向无关方向 | D7 按 `scopeIntersectionEmpty` 分流 |
-| **行策略谓词泄漏进模型可见位** | `provenance.filters` 含策略谓词 | D6 用改写前的原始 filter；策略谓词完全不进 `next_step` |
-| **额外权限解析开销** | 每次 0 行多一次 `allowedToolNames` | 走同一策略运行时（有缓存），且只在 0 行冷路径触发 |
-| **回滚** | —— | 去掉 `withLucyResultMeta` 里的 `next_step` 装配与三处注入即可；不改上游取值、不改审计字段、无数据迁移 |
+| **数据文本被重新序列化／有限数仍改值** | parse 深等假绿（精度损失／下溢） | D15／SC-25：原始 token 或保留原文注入；018 跳过时原文不变 |
+| **HTTP 错误＋JSON-RPC result** | classifier 放过后误注入 | D13／SC-18／SC-30：先成功判定再权限／注入 |
+| **模型可见性证据边界** | 服务端一致 ≠ 客户端已投递 | 保证止于 MCP content（F10）；不得由 `_meta` 推导「模型已收到」 |
+| **截断 repair 被误删** | 旧「不得并存」口径 | D14／SC-24：并存；保留 Spec 162 `repair` |
+| **指导不可见（018 富化抛错）** | 无 next_step；HTTP 200 可走 P0-4 错误信封 | SC-13(a) |
+| **AV fail-closed 抹掉 018** | 错误信封替换整包 | SC-13(b)：`lucy018` 保留 next_step／skipped_reason |
+| **指导不可见（富化抛错）** | 回落上游原文 | fail-safe；SC-13 |
+| **回显敏感值／附加键** | filter 值或 orderBy.rows | D6／D11／SC-14／SC-21 |
+| **指导越权泄漏** | 不可见 source | ACL `sourceRefs`；SC-06／SC-26 |
+| **建议方向错** | 泛化建议 | D7／SC-07 |
+| **行策略谓词泄漏** | 改写后 filters | D6 改写前快照 |
+| **额外权限解析开销** | `allowedToolNames` | 仅成功 `lucy_query` 严格 0 行（SC-20） |
+| **假绿验收** | SC-01／SC-20 旧写法 | 显式 visibleTools；spy 计数；负向 SC-26–SC-28 |
+| **回滚** | —— | 去掉装配与注入即可；不改上游取值、不改审计、不删 Spec 162 `repair`、无迁移 |

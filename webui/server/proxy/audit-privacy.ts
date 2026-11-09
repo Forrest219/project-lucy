@@ -145,7 +145,7 @@ function auditSafeOperator(value: unknown): string | undefined {
   return /^[A-Za-z_]+$/.test(value) ? value : undefined;
 }
 
-function summarizeFilterItem(value: unknown): Record<string, unknown> {
+export function summarizeFilterItem(value: unknown): Record<string, unknown> {
   if (typeof value === "string") {
     return { kind: "expression", length: value.length };
   }
@@ -168,7 +168,7 @@ function summarizeFilterItem(value: unknown): Record<string, unknown> {
   };
 }
 
-function summarizeFilters(value: unknown): Record<string, unknown> {
+export function summarizeFilters(value: unknown): Record<string, unknown> {
   const items = Array.isArray(value) ? value : [value];
   return {
     kind: Array.isArray(value) ? "list" : "single",

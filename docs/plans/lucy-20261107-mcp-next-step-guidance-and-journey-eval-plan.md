@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 分支实施计划（**不是**功能 Spec，**不授权**实现） |
 | 版本 / 日期 | v0.4 / 2026-11-07 |
-| 状态 | **D1／D2／D3／D4／D5 已全部裁定（2026-11-07）**；G1（REQ-030-018）的 Spec／Plan 已至 **v0.4**（经第 1 轮对抗式评审 6 条阻断项全部修订，并入横切批评审 9 条、第 2 轮对抗式评审 16 条修订），G2（REQ-030-019）、G3（REQ-030-020）、G4（REQ-030-021）已各开 Spec 与 Plan，均 v0.2-draft；全部**待评审、未授权实现**。已并入 0.30 批次第 1 轮评审（形式合规 ＋ 事实性）并已修订；待 0.30 批次第 2 轮对抗式评审。G1 的 **D3 落点反转（追加 content 块 → 单块内加键）待委托人确认**。本条只做差距登记与顺序裁决，**不授权实现**。**本条不表示任何功能已获授权实现，也不表示可上线** |本条只做差距登记、顺序裁决与决策点收口；实现须各自另立 Spec 并获授权 |
+| 状态 | **D1／D2／D3／D4／D5 已全部裁定（2026-11-07）**；G1（REQ-030-018）的 Spec／Plan 已至 **v0.7-draft**（Codex R3 BLOCK 残留已修订；**G1 D3＝A 已由委托人 2026-11-09 确认**；**不构成 R2-F／R4**），G2（REQ-030-019）、G3（REQ-030-020）、G4（REQ-030-021）已各开 Spec 与 Plan，均 v0.2-draft；全部**待评审、未授权实现**。本条只做差距登记与顺序裁决，**不授权实现**。**本条不表示任何功能已获授权实现，也不表示可上线** |本条只做差距登记、顺序裁决与决策点收口；实现须各自另立 Spec 并获授权 |
 | 授权边界 | **只登记、不实现**。本文不改动任何运行代码，不开 Spec，不改现行协议 |
 | 验收 | 本条验收＝① 差距判定逐条带 `file:line` 证据；② 候选条目已登记进 `0.30` 需求池；③ Plan 五类小节齐备且机器门禁通过。**不构成任何功能验收，不表示可上线** |
 | 目标分支 / 产品线 | `lucy-v0.30` / `0.30.0` |
@@ -60,7 +60,9 @@
 
 **落法**：`lucy_query` 成功且 0 行时，结构化返回下一步建议，且建议内容只含当前角色**可见**的工具与 ACL 内的来源。
 
-> **2026-11-07 已开 Spec**：[`lucy-20261107-empty-result-next-step-guidance-spec.md`](../specs/lucy-20261107-empty-result-next-step-guidance-spec.md) **v0.4**（经第 1 轮对抗式评审 6 条阻断项、横切批评审 9 条、第 2 轮对抗式评审 16 条修订）＋ 实施 Plan [`lucy-20261107-empty-result-next-step-guidance-plan.md`](lucy-20261107-empty-result-next-step-guidance-plan.md) **v0.4**。D1＝结构化、D2＝提示不阻断已裁定；**D3 落点反转待委托人确认**。评审记录见 [`docs/reviews/2026-11-07-empty-result-next-step-guidance-review.md`](../reviews/2026-11-07-empty-result-next-step-guidance-review.md)。**代码改动未授权。**
+> **2026-11-09**：G1 Spec／Plan 升 **v0.7-draft**（Codex R3 BLOCK → 闭合 R2-02 `upstreamHttpStatus`／收口 SC-30／**D3＝A 回写**）。D1＝结构化、D2＝提示不阻断、**D3＝A 单块内加键**（委托人 2026-11-09 确认）已冻结；**不构成 R2-F／R4**。见 [`docs/reviews/2026-11-09-empty-result-next-step-codex-review.md`](../reviews/2026-11-09-empty-result-next-step-codex-review.md)。**代码改动未授权。**
+>
+> **2026-11-09（历史）**：G1 曾升 **v0.6-draft**（Codex R2 BLOCK → 闭合 R2-01／02／03；当时仍写 D3 待确认）。已被 v0.7 取代。
 
 **相对本节初稿的收窄**（第 1 轮评审判定初稿伪码与 Spec 形状不一致，此处对齐 Spec v0.4）：
 
@@ -200,7 +202,7 @@ W1 与 W2 可并行（文件不重叠：proxy 响应层 vs Eval 编排层）。
 | D4 | G3 的方向是单向导出还是双向回放？ | (a) 审计 → 用例草稿（单向）；(b) 用例 → 审计回放（双向） | (a) 单向——双向回放涉及生产审计写入，风险与成本都不成比例 | **已裁定：取 (a)**。委托人 2026-11-07 批准按推荐；Spec 见 [`lucy-20261107-audit-journey-eval-case-draft-spec.md`](../specs/lucy-20261107-audit-journey-eval-case-draft-spec.md)（SC-01–09） |
 | D5 | 本轮是否直接开 G1 的 Spec？ | (a) 只留池条目；(b) 同轮开 Spec 并授权实现 | 待定——取决于 §9 决策点 D1/D2 的答案 | **已裁定：开 Spec**（不含实施授权）。D1／D2 已给出，Spec 与实施 Plan 已落盘；**代码改动仍未授权** |
 
-裁定后派生出的 Spec 级冻结决策（不再回本表）：指导落**三处**——`content[0].text` 的 JSON 对象内同名键（**模型可见，主落点**）、`structuredContent.next_step`（结构化位）、`_meta.lucy.next_step`（合同／审计位），**不追加 content 块**，且三处**同生同灭**（模型可见位不成立时三处都不发）。理由：既有截断修复提示至今只在 `_meta.lucy.repair`，**从未进入模型可见的 `content`**（`webui/server/proxy/mcp-proxy.ts:2699` 是唯一落点），只落 `_meta` 达不到原文主张；而追加 content 块会打断 `scripts/eval/eval-runner.mjs:293-300` 的多块 JSON 解析，且其可见性依赖客户端渲染全部块（仓内无法验证），故改为单块内加键——**不变式：凡出现 `next_step`，模型一定看得见**。⚠️ 该落点反转**待委托人确认**，详见 G1 的 Spec §4 D3。
+裁定后派生出的 Spec 级冻结决策（不再回本表）：**D3＝A（委托人 2026-11-09 确认）**——落点＝`content[0].text` JSON 对象内加 `next_step` 键（模型可见主落点）；`structuredContent` 已是对象时同步加键；`_meta.lucy.next_step` 同步（合同／审计位）；**不追加 content 块**。承载细则见 G1 Spec §4 **D4＝已存在承载位一致**（缺 structured 可只写 text＋meta；模型可见位不成立则 Lucy 不注入任何 `next_step`）。理由：既有截断修复提示至今只在 `_meta.lucy.repair`，**从未进入模型可见的 `content`**；追加 content 块会打断 `scripts/eval/eval-runner.mjs:293-300`。**不变式：凡 Lucy 注入 `next_step`，模型可见位一定有。**
 
 ## 10. 刻意不做（原文第 3 节）
 

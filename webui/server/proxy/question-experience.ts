@@ -1275,3 +1275,124 @@ export function buildRepairClosure(input: {
     text: `${factualError}${availableText}`
   };
 }
+
+/**
+ * 空结果下一步指导（Spec 20261107 v0.7-draft §5.1 / D1–D15；D3＝A 已冻结）。
+ *
+ * 只复用响应链路上**已经解析出**的事实。不断言 grain / 数据可用周期 /
+ * 指标清单。指导是 fail-open 的建议层，不是授权，也不是结论。
+ *
+ * `filters` 只能经 `filtersSummary`（已去值）进入。
+ */
+export type NextStep = {
+  kind: "empty_result" | "scope_intersection_empty";
+  summary: string;
+  query?: Record<string, unknown>;
+  suggestions: string[];
+  next_tools: string[];
+  hint: string;
+};
+
+export const EMPTY_RESULT_SUMMARY = "本次查询返回 0 行事实数据。";
+export const SCOPE_SUMMARY =
+  "本次查询返回 0 行：当前的等值过滤与该角色的行权限范围没有交集，或同一字段的多个等值条件互相矛盾。";
+export const EMPTY_RESULT_HINT =
+  "在核对粒度、期间与过滤条件之前，不要用近似值或上一期实际代替本次结果。";
+export const NO_TOOL_HINT =
+  "当前角色没有可用的核对工具（next_tools 为空），以上建议只能人工核对；在核对粒度、期间与过滤条件之前，不要用近似值或上一期实际代替本次结果。";
+export const RELAX_FILTER_SUGGESTION = "放宽过滤条件（公司 / 产品线 / 时间范围）后重查";
+export const SCOPE_SUGGESTION =
+  "移除或调整与行权限范围冲突的等值过滤条件，或检查同一字段的多个等值条件是否互相矛盾";
+export const CHECK_PERIOD_SUGGESTION = "确认目标期间落在该 source 的数据可用周期内";
+export const CHECK_GRAIN_SUGGESTION = "确认问题的时间粒度与该 source 的粒度一致";
+export const NEXT_STEP_TOOLS = ["lucy_read_source", "lucy_freshness"] as const;
+
+function shapeMeasures(value: unknown): unknown[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: unknown[] = [];
+  for (const item of value) {
+    if (typeof item === "string" && item.length > 0) {
+      out.push(item);
+      continue;
+    }
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const expr = (item as Record<string, unknown>).expr;
+      if (typeof expr === "string" && expr.length > 0) out.push({ expr });
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function shapeDimensions(value: unknown): unknown[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: unknown[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.field !== "string" || rec.field.length === 0) continue;
+    const dim: Record<string, unknown> = { field: rec.field };
+    if (typeof rec.granularity === "string") dim.granularity = rec.granularity;
+    out.push(dim);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function shapeOrderBy(value: unknown): unknown[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: unknown[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.field !== "string" || rec.field.length === 0) continue;
+    const row: Record<string, unknown> = { field: rec.field };
+    if (rec.direction === "asc" || rec.direction === "desc") row.direction = rec.direction;
+    out.push(row);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+export function buildEmptyResultNextStep(input: {
+  toolName: string;
+  rowCount?: number | null;
+  scopeIntersectionEmpty?: boolean;
+  provenance?: Record<string, unknown>;
+  filtersSummary?: Record<string, unknown> | null;
+  visibleTools?: readonly string[];
+}): NextStep | null {
+  if (input.toolName !== "lucy_query") return null;
+  // D8／F09：严格零；与 isEmptyResult 同口径。禁止 `rowCount > 0` 假对称。
+  if (typeof input.rowCount !== "number" || !Number.isFinite(input.rowCount) || input.rowCount !== 0) {
+    return null;
+  }
+
+  const scopeConflict = input.scopeIntersectionEmpty === true;
+  const provenance = input.provenance ?? {};
+  const query: Record<string, unknown> = {};
+  if (provenance.connectionId != null) query.connectionId = provenance.connectionId;
+  if (provenance.sourceName != null) query.sourceName = provenance.sourceName;
+  const orderBy = shapeOrderBy(provenance.orderBy ?? provenance.order_by);
+  if (orderBy) query.orderBy = orderBy;
+  const measures = shapeMeasures(provenance.measures);
+  if (measures) query.measures = measures;
+  const dimensions = shapeDimensions(provenance.dimensions);
+  if (dimensions) query.dimensions = dimensions;
+  if (input.filtersSummary && typeof input.filtersSummary === "object") {
+    query.filters = input.filtersSummary;
+  }
+
+  const suggestions = scopeConflict
+    ? [SCOPE_SUGGESTION, CHECK_PERIOD_SUGGESTION, CHECK_GRAIN_SUGGESTION]
+    : [RELAX_FILTER_SUGGESTION, CHECK_PERIOD_SUGGESTION, CHECK_GRAIN_SUGGESTION];
+
+  const visible = input.visibleTools ?? [];
+  const nextTools = NEXT_STEP_TOOLS.filter((tool) => visible.includes(tool));
+
+  return {
+    kind: scopeConflict ? "scope_intersection_empty" : "empty_result",
+    summary: scopeConflict ? SCOPE_SUMMARY : EMPTY_RESULT_SUMMARY,
+    ...(Object.keys(query).length > 0 ? { query } : {}),
+    suggestions,
+    next_tools: [...nextTools],
+    hint: nextTools.length > 0 ? EMPTY_RESULT_HINT : NO_TOOL_HINT
+  };
+}

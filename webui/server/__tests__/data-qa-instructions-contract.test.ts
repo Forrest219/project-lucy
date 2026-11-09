@@ -62,4 +62,15 @@ describe("data QA fallback instructions contract", () => {
     expect(text).toContain("Proxy 硬门闩");
     expect(text).not.toContain("代理不实现确认门闩");
   });
+
+  // P0-4／SC-08 — fallback md 须要求引用可核对块且不得要求隐藏。
+  it("requires citing answer_verifiability and forbids hiding it", async () => {
+    const text = await readFile(path.join(process.cwd(), "config", "data-qa-instructions.md"), "utf8");
+    expect(text).toContain("answer_verifiability");
+    expect(text).toContain("必须在用户可见答复中复述／引用");
+    expect(text).toContain("不得隐藏、省略或剥离");
+    expect(text).toContain("not_checked");
+    expect(text.toLowerCase()).not.toContain("hide answer_verifiability");
+    expect(text).not.toContain("不要向用户展示可核对");
+  });
 });

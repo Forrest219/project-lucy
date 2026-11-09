@@ -820,6 +820,9 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 访问日志主行中文、次行裁决原因码。调试台用裁决卡，允许时不重复「允许执行」 |
 | Decision Reason Code | Decision Reason Code | 裁决原因码 | — | 机器码（如 `tool_forbidden`）；次行 `notranslate` |
 | Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | 调试台结果不展示计数 |
+| Next Step | next_step | 下一步建议 | 修复提示（作同义词）、安全边界、结论 | 成功但严格 0 行时响应附带的受控下一步指引；落在**已存在承载位**：`content[0].text` 的 JSON 对象内同名键（模型可读主落点，必选）、`structuredContent.next_step`（**仅当** `structuredContent` 已是普通对象时同步）、`_meta.lucy.next_step`（合同／审计位）。**Lucy 注入的** `next_step` 同生同灭（D4）；缺失 structured **不是**失败，不得为凑齐「三处」而新建空对象。**不得与 `Repair Hint` 混称／替代**；**例外（D14）**：成功截断路径的 `_meta.lucy.repair` 与空结果 `next_step` **允许并存**（不得删 Spec 162 截断提示）。Spec `lucy-20261107-empty-result-next-step-guidance` |
+| Empty Result | — | 空结果 | 与审计标记 `result_empty` 混为一件 | `lucy_query` 成功返回 0 行事实数据；与 `result_empty`（Spec 162 §8）同义不同层 |
+| Suggestion | — | 建议动作 | 写成对 Agent 的强制命令 | `next_step.suggestions` 的每一条，是排查方向不是指令 |
 | Question Type Binding | Question Type Binding | 问题类型口径绑定 | 指标绑定、自动口径推断、ACL 绑定、权限绑定 | 协议／资产名 `caliber_binding`。人发布的声明式资产：问题类型（触发词／显式 id）→ **唯一 Source** ＋ **固定口径集合**。见 Spec `lucy-20261107-question-type-caliber-binding-spec` |
 | Bound Caliber | Bound Caliber | 固定口径 | 口径配置、指标口径说明、instructions 软约定 | 绑定内允许的 measures／dimensions／filters／segments 约束集合（首期不含 grain）。运行时由 Proxy 硬门禁，**不得**由 Agent 另行拼装 |
 | Active Binding | Active Binding | 生效绑定 | 全局绑定、跨问询记忆、上次口径 | 一次问询旅程内处于强制状态的那一条绑定。作用域＝问询旅程，以 begin 时深拷贝快照为准 |
@@ -831,8 +834,12 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Source Grain | Source Grain | 来源粒度 | 主键、维度列表（冒充粒度） | overlay 的 `grain`；说明事实粒度。不从 manifest 读取 |
 | Description Coverage | Description Coverage | 描述覆盖率 | 质量门禁、发布阻断指标 | 可见 source 中携带非空描述的比例；首期只观测，不阻断发布 |
 | Description Missing Marker | Description Missing Marker | 描述缺失标记 | 数据缺失、表无数据 | 目录条目 `descriptionState: missing`；区分「无描述」与「未装配」 |
+| Answer Verifiability Block | Answer Verifiability Block | 可核对块 | 自动正确校验、安全边界披露、已校验新鲜度（冒充） | 协议字段名 `answer_verifiability`。成功 `lucy_query` 工具结果中强制露出的来源／口径／截止期结构。见 Spec `lucy-20261107-answer-verifiability-spec` |
+| Data Cutoff Disclosure | Data Cutoff Disclosure | 数据截止期披露 | 已校验业务截止期（当 `not_checked`）、安全边界 | 落在 `answer_verifiability.cutoff`；首期诚实 `not_checked`，不得用语义 mtime／查询时／`businessDate` 冒充已校验 |
+| Model-Readable Tool Result | Model-Readable Tool Result | 模型可读工具结果 | 用户一定看见、宿主已渲染 | MCP `tools/call` 的 `result`（含 `content`／`structuredContent`／`_meta`），供模型与自动化读 |
+| User-Visible Answer | User-Visible Answer | 用户可见答复 | 工具字段已等于用户已见 | 宿主最终呈现给终端用户的文本／UI；本条默认不强制宿主 UI 渲染可核对块 |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、`descriptionState`、JSON-RPC method、`field_not_exposed`、`field_exposure_unavailable`、`field_exposure`。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、`descriptionState`、JSON-RPC method、`field_not_exposed`、`field_exposure_unavailable`、`field_exposure`、`answer_verifiability`。
 
 详见 Spec 99。Catalog 语义筛选「未完成」(`incomplete`) 与 overview 深链见 Spec 100，不在本表重复造译名。Catalog 业务语义暴露见 Spec `lucy-20261107-catalog-business-semantics-spec`。
 
@@ -851,7 +858,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户 filters 即行权限 | 仅 Proxy 注入 |
 | Row Policy Requires Wrapped Tool | 需包装工具 | 请使用 lucy_query | 表未授权（混用） | Toast / 审计主文案 |
 | Row Policy Upstream Unproven | 上游契约未证明 | 行策略未启用取数 | 临时可用 | proven 前取数 deny |
-| Scope Intersection Empty | 行范围与用户筛选无交集 | `scope_intersection_empty` | 允许执行（混用） | 调用流水：`outcome=ok` 且裁决原因区分空交集 |
+| Scope Intersection Empty | 行范围与用户筛选无交集 | `scope_intersection_empty` | 允许执行（混用） | 调用流水：`outcome=ok` 且裁决原因区分空交集。**第二处承载：MCP 工具响应的 `next_step.kind`（同一概念、同一机器码，跨面引用须写明承载位）** |
 | Canonical Source Key | 规范源键 | 源键 | 表名（作为唯一 ID） | 预览 / snapshot 展示四元组 |
 | Policy Version | 策略版本 | `policyVersion` | 配置时间戳（冒充策略世代） | 保存成功回执与审计列 |
 | Runtime Ack | 运行时确认 | 已生效 | 已保存（无 ack 时显示成功） | 收窄保存成功条件 |
@@ -1023,6 +1030,20 @@ Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Agent`、`Role`
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`semantic-release-snapshot/v1`、`releaseId`、`snapshotId`、`planDigest`、`scopeDigest`、路径、digest 与恢复包 URL。
 
 **「不修改无关文件」的两种方向不得合并表述**：内容根侧，恢复写集之外的文件内容与摘要完全不变；ktx 视图侧，允许变化的恰为「恢复写集的受控镜像目标 ∪ 已确认的镜像同步写集」两类。两类变化方向不同，分区展示、分别核对。
+
+### 4.16 概念注册表（Concept Registry / P1-10）
+
+内容根 `concepts/` 下的人机共读概念盘点层。一期仅 CLI；不改查询执行语义，不把 Concept 当作第二公式源。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Concept | 业务概念 | 概念 | 知识图谱节点、指标平台指标 | 跨表／跨文件收敛的业务词（如收入、资产） |
+| Concept Registry | 概念注册表 | 概念盘点 | 知识图谱、本体论平台、指标平台、元数据仓库 | 存放 Concept、Binding、权威状态的薄层资产 |
+| Binding | 概念绑定 | 绑定 | 边、三元组 | Concept 与语义／Wiki 出现关系，含证据与角色 |
+| Canonical Binding | 权威绑定 | 权威 | 把 `confidence` 写成权威 | 人指定的该 Concept 当前唯一权威出现；空＝尚未定权威 |
+| Conflict | 概念冲突 | 冲突 | 图谱不一致 | 派生状态（多候选未定权威、权威悬空等），可计算 |
+
+Protected terms（DOM 须 `translate="no"` + `notranslate`）：`conceptId`、`bindingId`、`canonical`、`confidence`、`needs_authority`、`broken_canonical`、路径与文件名。
 
 ## 5. 新术语登记流程
 
