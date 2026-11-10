@@ -190,7 +190,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(response.body.ok).toBe(true);
     expect(response.body.data.written).toBe(true);
     expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledTimes(1);
-    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot);
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot, "demo-mysql");
     expect(response.body.data.test.status).toBe("ok");
     expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
     expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");

@@ -1,4 +1,4 @@
-import { showDatabasesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
+import { showDatabasesFromCatalogSql, showTablesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo, LiveSchemaSummary, LiveSchemasResponse } from "./model";
@@ -132,6 +132,49 @@ function sqlForConnection(conn: ConnectionInfo, protocol: CatalogProtocol): stri
   return sqlForProtocol(protocol);
 }
 
+function rowCount(json: unknown): number {
+  if (!json || typeof json !== "object") return 0;
+  const rows = (json as { rows?: unknown }).rows;
+  return Array.isArray(rows) ? rows.length : 0;
+}
+
+/**
+ * External catalogs have no unqualified information_schema. SHOW DATABASES
+ * lists names only, so each database is counted with SHOW TABLES FROM
+ * catalog.database. A failure here is the catalog read failing, not an empty
+ * database.
+ */
+async function countExternalCatalogTables(
+  projectRoot: string,
+  conn: ConnectionInfo,
+  schemas: LiveSchemaSummary[],
+  runSqlImpl: typeof runSql
+): Promise<{ ok: true; schemas: LiveSchemaSummary[] } | { ok: false; reason: string }> {
+  const catalog = splitCatalogDatabase(conn.database);
+  if (!catalog) return { ok: true, schemas };
+  const counted: LiveSchemaSummary[] = [];
+  for (const item of schemas) {
+    let sql: string;
+    try {
+      sql = showTablesFromCatalogSql(catalog.catalog, item.schema);
+    } catch {
+      return { ok: false, reason: `无法读取目录 ${catalog.catalog}.${item.schema} 的表。` };
+    }
+    const result = await runSqlImpl(projectRoot, conn.id, sql, {
+      maxRows: 10_000,
+      timeoutMs: 30_000
+    });
+    if (!result.ok || result.json == null || typeof result.json !== "object") {
+      const reason =
+        (result.stderr || result.stdout).trim() ||
+        `ktx sql failed (exit ${result.exitCode})`;
+      return { ok: false, reason };
+    }
+    counted.push({ schema: item.schema, tableCount: rowCount(result.json) });
+  }
+  return { ok: true, schemas: counted };
+}
+
 function parseRows(json: unknown): LiveSchemaSummary[] {
   if (!json || typeof json !== "object") return [];
   const rows = (json as { rows?: unknown }).rows;
@@ -263,7 +306,14 @@ export async function listLiveSchemas(
     );
   }
 
-  const schemas = filterSystemSchemas(parseRows(sqlResult.json), wireProtocol);
+  let schemas = filterSystemSchemas(parseRows(sqlResult.json), wireProtocol);
+  if (wireProtocol === "mysql" && splitCatalogDatabase(conn.database)) {
+    const counted = await countExternalCatalogTables(projectRoot, conn, schemas, runSqlImpl);
+    if (!counted.ok) {
+      return errorPayload(connId, counted.reason, wireProtocol, fetchedAt);
+    }
+    schemas = counted.schemas;
+  }
   const payload: LiveSchemasResponse = {
     status: "ok",
     connectionId: connId,
