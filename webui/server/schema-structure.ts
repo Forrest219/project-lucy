@@ -84,7 +84,16 @@ export type SchemaColumnRow = {
 export type SchemaColumnsRead =
   | { status: "ok"; columns: SchemaColumnRow[]; tables?: string[] }
   | { status: "too_large" }
-  | { status: "error"; message: string };
+  | {
+      status: "error";
+      message: string;
+      detail?: {
+        connectionId?: string | null;
+        schema?: string | null;
+        table?: string | null;
+        phase?: string | null;
+      };
+    };
 
 export type SchemaStructurePreview = {
   schema: string;
@@ -294,11 +303,11 @@ function columnsForTable(table: string, rows: unknown[]): ColumnInput[] {
 }
 
 /**
- * Wide schemas (advertising reports) cannot return every column in one 30s
- * information_schema scan. Read the table names, then one table at a time.
- * Each table still has its own 30s deadline. A single table that fills the
- * row cap is truncated and rejected; the schema total is not capped at that
- * page size.
+ * Ordinary MySQL schema-structure reads go table-by-table. A single schema-wide
+ * information_schema.columns scan is unreliable on wide schemas (fast opaque
+ * failures or ~30s timeouts). Each table still has its own 30s deadline. A
+ * single table that fills the row cap is truncated and rejected; the schema
+ * total is not capped at that page size.
  */
 async function readMysqlColumnsByTable(
   projectRoot: string,
@@ -386,6 +395,8 @@ function describeSchemaStructurePhase(
   switch (phase) {
     case "catalog-list-tables":
       return `无法列出 Schema${schemaLabel}下的表`;
+    case "catalog-columns":
+      return `无法读取表${tableLabel}的字段`;
     case "schema-wide-columns":
       return `无法一次读取 Schema${schemaLabel}的字段`;
     case "mysql-wide-fallback-list-tables":
@@ -397,17 +408,24 @@ function describeSchemaStructurePhase(
   }
 }
 
-/** User-visible READ_FAILED copy: what failed + clipped database reason. */
-export function formatSchemaStructureUserMessage(
-  context: SchemaStructureLogContext,
-  result?: Pick<SqlResult, "stderr" | "stdout">
-): string {
+/** User-visible READ_FAILED copy: phase only. SQL / driver text stay in logs. */
+export function formatSchemaStructureUserMessage(context: SchemaStructureLogContext): string {
   const action = describeSchemaStructurePhase(context.phase, context.schema, context.table);
-  const driver = clipLogText(result?.stderr || result?.stdout, 180);
-  if (driver) {
-    return `读取表结构失败：${action}。数据库返回：${driver}`;
-  }
   return `读取表结构失败：${action}。`;
+}
+
+function safeStructureDetail(context: SchemaStructureLogContext): {
+  connectionId: string | null;
+  schema: string | null;
+  table: string | null;
+  phase: string | null;
+} {
+  return {
+    connectionId: context.connectionId ?? null,
+    schema: context.schema ?? null,
+    table: context.table ?? null,
+    phase: context.phase ?? null
+  };
 }
 
 function structureRows(result: SqlResult, context: SchemaStructureLogContext = {}): unknown[] {
@@ -419,19 +437,25 @@ function structureRows(result: SqlResult, context: SchemaStructureLogContext = {
   if (!result.ok || rows === null) {
     const meta = { ...context, sql: context.sql ?? result.command, phase: context.phase ?? "sql" };
     logSchemaStructureFailure(meta, result);
-    throw new SchemaStructureError("READ_FAILED", formatSchemaStructureUserMessage(meta, result), 400, {
-      connectionId: meta.connectionId ?? null,
-      schema: meta.schema ?? null,
-      table: meta.table ?? null,
-      phase: meta.phase ?? null,
-      sql: clipLogText(meta.sql, 300) || null,
-      stderr: clipLogText(result.stderr, 300) || null
-    });
+    throw new SchemaStructureError(
+      "READ_FAILED",
+      formatSchemaStructureUserMessage(meta),
+      400,
+      safeStructureDetail(meta)
+    );
   }
   if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
     throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
   }
   return rows;
+}
+
+/** SelectDB / Doris: only statement rejection may fall back to a narrower probe. */
+export function isCatalogStatementRejected(result: Pick<SqlResult, "stderr" | "stdout">): boolean {
+  const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+  return /unsupported command|unknown command|not support(?:ed)?\s+(?:this\s+)?command|command not supported/i.test(
+    text
+  );
 }
 
 function mapShowFullColumn(table: string, row: unknown[]): ColumnInput | null {
@@ -486,7 +510,9 @@ function tryParseColumnRows(
 
 /**
  * SelectDB external catalogs often reject SHOW FULL COLUMNS. Try narrower
- * probes before giving up; an empty column list still keeps the table name.
+ * probes only when the engine rejects the statement; connection / timeout
+ * failures surface immediately. An empty column list still keeps the table name
+ * when every probe was a statement rejection.
  */
 async function readCatalogColumnsForTable(
   projectRoot: string,
@@ -512,6 +538,22 @@ async function readCatalogColumnsForTable(
     });
     const mapped = tryParseColumnRows(table, result, probe.mapper);
     if (mapped) return mapped;
+    const meta: SchemaStructureLogContext = {
+      connectionId,
+      schema,
+      table,
+      phase: "catalog-columns",
+      sql: probe.sql
+    };
+    if (!isCatalogStatementRejected(result)) {
+      logSchemaStructureFailure(meta, result);
+      throw new SchemaStructureError(
+        "READ_FAILED",
+        formatSchemaStructureUserMessage(meta),
+        400,
+        safeStructureDetail(meta)
+      );
+    }
     rejected.push({
       sql: clipLogText(probe.sql, 200),
       stderr: clipLogText(result.stderr || result.stdout, 300),
@@ -617,14 +659,16 @@ export async function readSchemaColumns(
       return { status: "ok", columns, tables: tableNames };
     }
     const protocol = protocolOf(connection);
+    // MySQL: always per-table. Do not attempt a schema-wide columns scan first —
+    // wide schemas fail in well under the 30s deadline and never reached fallback.
+    if (protocol === "mysql") {
+      return await readMysqlColumnsByTable(projectRoot, connectionId, safeSchema, execute);
+    }
     const listSql = sqlFor(protocol, safeSchema);
     const result = await execute(projectRoot, connectionId, listSql, {
       maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
       timeoutMs: 30000
     });
-    if (protocol === "mysql" && columnScanTimedOut(result)) {
-      return await readMysqlColumnsByTable(projectRoot, connectionId, safeSchema, execute);
-    }
     const rows = structureRows(result, {
       connectionId,
       schema: safeSchema,
@@ -640,7 +684,16 @@ export async function readSchemaColumns(
       if (error.message.includes("超过一次可读取的上限")) {
         return { status: "too_large" };
       }
-      return { status: "error", message: error.message };
+      const detail =
+        error.detail && typeof error.detail === "object"
+          ? (error.detail as {
+              connectionId?: string | null;
+              schema?: string | null;
+              table?: string | null;
+              phase?: string | null;
+            })
+          : undefined;
+      return { status: "error", message: error.message, ...(detail ? { detail } : {}) };
     }
     console.error("[schema-structure] unexpected read failure", {
       connectionId,
@@ -666,7 +719,7 @@ export async function previewSchemaStructure(
     throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
   }
   if (read.status === "error") {
-    throw new SchemaStructureError("READ_FAILED", read.message);
+    throw new SchemaStructureError("READ_FAILED", read.message, 400, read.detail);
   }
   return buildMinimalSchemaManifest(safeSchema, read.columns, read.tables ?? []);
 }

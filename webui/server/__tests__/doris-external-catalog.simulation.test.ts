@@ -263,7 +263,60 @@ describe("isolated Doris external catalog", () => {
     }
   });
 
-  it("logs driver stderr when catalog SHOW TABLES itself fails", async () => {
+  it("fails hard on connection errors instead of soft-degrading catalog columns", async () => {
+    const seen: string[] = [];
+    const runSqlImpl = async (_root: string, _id: string, sql: string) => {
+      seen.push(sql);
+      const text = sql.replace(/\s+/g, " ").trim();
+      if (text === "SHOW TABLES FROM `hive_jd`.`app`") {
+        return sqlResult([["日活明细"]]);
+      }
+      if (text.startsWith("SHOW FULL COLUMNS FROM `hive_jd`.`app`.")) {
+        return sqlResult([], false, "ERROR 2003 (HY000): Can't connect to MySQL server on '172.16.19.21'");
+      }
+      return sqlResult([], false, `unexpected sql: ${text}`);
+    };
+
+    await expect(
+      previewSchemaStructure("/isolated", "hive-jd", "app", {
+        readConnectionsImpl: async () => [hiveJd],
+        runSqlImpl
+      })
+    ).rejects.toMatchObject({
+      code: "READ_FAILED",
+      message: "读取表结构失败：无法读取表「日活明细」的字段。"
+    });
+    expect(seen.some((sql) => sql.startsWith("SHOW COLUMNS FROM"))).toBe(false);
+    expect(seen.some((sql) => sql.startsWith("DESCRIBE "))).toBe(false);
+  });
+
+  it("fails hard on statement timeouts instead of soft-degrading catalog columns", async () => {
+    const runSqlImpl = async (_root: string, _id: string, sql: string) => {
+      const text = sql.replace(/\s+/g, " ").trim();
+      if (text === "SHOW TABLES FROM `hive_jd`.`app`") {
+        return sqlResult([["日活明细"]]);
+      }
+      if (text.startsWith("SHOW FULL COLUMNS FROM `hive_jd`.`app`.")) {
+        return {
+          ...sqlResult([], false, "Query execution was interrupted, maximum statement execution time exceeded"),
+          latencyMs: 29_500
+        };
+      }
+      return sqlResult([], false, `unexpected sql: ${text}`);
+    };
+
+    await expect(
+      previewSchemaStructure("/isolated", "hive-jd", "app", {
+        readConnectionsImpl: async () => [hiveJd],
+        runSqlImpl
+      })
+    ).rejects.toMatchObject({
+      code: "READ_FAILED",
+      message: "读取表结构失败：无法读取表「日活明细」的字段。"
+    });
+  });
+
+  it("logs driver stderr when catalog SHOW TABLES itself fails, without leaking SQL to the client", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const runSqlImpl = async (_root: string, _id: string, sql: string) => {
       const text = sql.replace(/\s+/g, " ").trim();
@@ -280,7 +333,11 @@ describe("isolated Doris external catalog", () => {
           runSqlImpl
         })
       ).rejects.toMatchObject({
-        message: expect.stringMatching(/^读取表结构失败：无法列出 Schema「app」下的表。数据库返回：.*Unknown catalog 'hive_jd'/)
+        message: "读取表结构失败：无法列出 Schema「app」下的表。",
+        detail: expect.not.objectContaining({
+          sql: expect.anything(),
+          stderr: expect.anything()
+        })
       });
 
       expect(error).toHaveBeenCalledWith(

@@ -12,10 +12,6 @@ const mysqlConn: ConnectionInfo = {
   enabledTables: []
 };
 
-function column(table: string, name: string): unknown[] {
-  return [table, name, "varchar", "YES", "", ""];
-}
-
 function sqlResult(overrides: Partial<SqlResult> = {}): SqlResult {
   return {
     ok: true,
@@ -30,6 +26,22 @@ function sqlResult(overrides: Partial<SqlResult> = {}): SqlResult {
   };
 }
 
+/** Per-table column row: name, data_type, is_nullable, column_key, column_comment. */
+function tableColumn(name: string, dataType = "varchar"): unknown[] {
+  return [name, dataType, "YES", "", ""];
+}
+
+function mysqlPerTableRunSql(
+  handler: (sql: string) => SqlResult | undefined
+): typeof import("../ktx").runSql {
+  return vi.fn(async (_root: string, _connectionId: string, sql: string) => {
+    expect(sql.includes("JOIN")).toBe(false);
+    const handled = handler(sql);
+    if (handled) return handled;
+    return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+  });
+}
+
 function preview(runSqlImpl: typeof import("../ktx").runSql) {
   return previewSchemaStructure("/project", "demo", "dataforai", {
     readConnectionsImpl: async () => [mysqlConn],
@@ -38,20 +50,35 @@ function preview(runSqlImpl: typeof import("../ktx").runSql) {
 }
 
 describe("previewSchemaStructure", () => {
-  it("asks ktx for at most 10000 rows", async () => {
-    const runSqlImpl = vi.fn(async () => sqlResult({ json: { rows: [column("orders", "id")] } }));
+  it("lists tables then reads columns one table at a time", async () => {
+    const runSqlImpl = mysqlPerTableRunSql((sql) => {
+      if (sql.includes("table_name FROM information_schema.tables")) {
+        return sqlResult({ json: { rows: [["orders"]] } });
+      }
+      if (sql.includes("table_name = 'orders'")) {
+        return sqlResult({ json: { rows: [tableColumn("id")] } });
+      }
+      return undefined;
+    });
 
     await preview(runSqlImpl);
 
     expect(runSqlImpl).toHaveBeenCalledWith(
       "/project",
       "demo",
-      expect.stringContaining("information_schema.columns"),
+      expect.stringContaining("table_name FROM information_schema.tables"),
       expect.objectContaining({ maxRows: 10_000, timeoutMs: 30_000 })
     );
+    expect(runSqlImpl).toHaveBeenCalledWith(
+      "/project",
+      "demo",
+      expect.stringContaining("table_name = 'orders'"),
+      expect.objectContaining({ maxRows: 10_000, timeoutMs: 30_000 })
+    );
+    expect(runSqlImpl.mock.calls.every((call) => !String(call[2]).includes("JOIN"))).toBe(true);
   });
 
-  it("throws when the CLI fails instead of reporting an empty schema", async () => {
+  it("throws when listing tables fails instead of reporting an empty schema", async () => {
     const runSqlImpl = vi.fn(async () => sqlResult({
       ok: false,
       exitCode: 1,
@@ -62,43 +89,64 @@ describe("previewSchemaStructure", () => {
     await expect(preview(runSqlImpl)).rejects.toMatchObject({
       name: "SchemaStructureError",
       code: "READ_FAILED",
-      message: expect.stringMatching(
-        /^读取表结构失败：无法一次读取 Schema「dataforai」的字段。数据库返回：.*--max-rows/
-      )
+      message: "读取表结构失败：无法列出 Schema「dataforai」下的表。",
+      detail: expect.objectContaining({
+        phase: "mysql-wide-fallback-list-tables",
+        schema: "dataforai"
+      })
+    });
+    await expect(preview(runSqlImpl)).rejects.toSatisfy((error: unknown) => {
+      const detail = (error as { detail?: Record<string, unknown> }).detail;
+      return !detail || (!("sql" in detail) && !("stderr" in detail));
     });
     await expect(preview(runSqlImpl)).rejects.toBeInstanceOf(SchemaStructureError);
   });
 
-  it("throws when the CLI result is not JSON rows", async () => {
+  it("throws when the table-list result is not JSON rows", async () => {
     const runSqlImpl = vi.fn(async () => sqlResult({ ok: true, json: null }));
 
     await expect(preview(runSqlImpl)).rejects.toMatchObject({
       code: "READ_FAILED",
-      message: expect.stringMatching(/^读取表结构失败：无法一次读取 Schema「dataforai」的字段。/)
+      message: "读取表结构失败：无法列出 Schema「dataforai」下的表。"
     });
   });
 
-  it("counts tables from a successful read", async () => {
-    const runSqlImpl = vi.fn(async () => sqlResult({
-      json: {
-        rows: [
-          column("orders", "id"),
-          column("orders", "amount"),
-          column("people", "name")
-        ]
+  it("counts tables from a successful per-table read", async () => {
+    const runSqlImpl = mysqlPerTableRunSql((sql) => {
+      if (sql.includes("table_name FROM information_schema.tables")) {
+        return sqlResult({ json: { rows: [["orders"], ["people"]] } });
       }
-    }));
+      if (sql.includes("table_name = 'orders'")) {
+        return sqlResult({
+          json: { rows: [tableColumn("id"), tableColumn("amount", "decimal")] }
+        });
+      }
+      if (sql.includes("table_name = 'people'")) {
+        return sqlResult({ json: { rows: [tableColumn("name")] } });
+      }
+      return undefined;
+    });
 
     const result = await preview(runSqlImpl);
 
     expect(result.tableCount).toBe(2);
     expect(result.columnCount).toBe(3);
     expect(result.schema).toBe("dataforai");
+    expect(result.yaml).toContain("orders");
+    expect(result.yaml).toContain("people");
   });
 
-  it("refuses a result that fills the row cap", async () => {
-    const rows = Array.from({ length: 10_000 }, (_, index) => column("orders", `c${index}`));
-    const runSqlImpl = vi.fn(async () => sqlResult({ json: { rows } }));
+  it("refuses a single table that fills the row cap", async () => {
+    const rows = Array.from({ length: 10_000 }, (_, index) => tableColumn(`c${index}`));
+    const runSqlImpl = mysqlPerTableRunSql((sql) => {
+      if (sql.includes("table_name FROM information_schema.tables")) {
+        return sqlResult({ json: { rows: [["orders"]] } });
+      }
+      if (sql.includes("table_name = 'orders'")) {
+        return sqlResult({ json: { rows } });
+      }
+      return undefined;
+    });
 
     await expect(preview(runSqlImpl)).rejects.toMatchObject({
       code: "READ_FAILED",
@@ -106,59 +154,68 @@ describe("previewSchemaStructure", () => {
     });
   });
 
-  it("reads columns one table at a time after the schema-wide scan times out", async () => {
-    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
-      if (sql.includes("JOIN")) {
-        return sqlResult({
-          ok: false,
-          exitCode: 1,
-          stderr: "Query execution was interrupted, maximum statement execution time exceeded",
-          latencyMs: 30_000,
-          json: null
-        });
-      }
+  it("does not attempt a schema-wide columns JOIN for MySQL", async () => {
+    const runSqlImpl = mysqlPerTableRunSql((sql) => {
       if (sql.includes("table_name FROM information_schema.tables")) {
         return sqlResult({ json: { rows: [["orders"], ["people"]] } });
       }
       if (sql.includes("table_name = 'orders'")) {
         return sqlResult({
-          json: { rows: [["id", "varchar", "YES", "", ""], ["amount", "decimal", "YES", "", ""]] }
+          json: { rows: [tableColumn("id"), tableColumn("amount", "decimal")] }
         });
       }
       if (sql.includes("table_name = 'people'")) {
-        return sqlResult({ json: { rows: [["name", "varchar", "YES", "", ""]] } });
+        return sqlResult({ json: { rows: [tableColumn("name")] } });
       }
-      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+      return undefined;
     });
 
     const result = await preview(runSqlImpl);
 
     expect(result.tableCount).toBe(2);
     expect(result.columnCount).toBe(3);
-    expect(result.yaml).toContain("orders");
-    expect(result.yaml).toContain("people");
-    expect(runSqlImpl.mock.calls.some((call) => String(call[2]).includes("table_name = 'orders'"))).toBe(true);
+    expect(runSqlImpl.mock.calls.some((call) => String(call[2]).includes("JOIN"))).toBe(false);
   });
 
-  it("does not split a fast column-scan failure into per-table reads", async () => {
-    const runSqlImpl = vi.fn(async () => sqlResult({
-      ok: false,
-      exitCode: 1,
-      stderr: "syntax error",
-      latencyMs: 20,
-      json: null
-    }));
+  it("names the table when a per-table column read fails quickly", async () => {
+    const runSqlImpl = mysqlPerTableRunSql((sql) => {
+      if (sql.includes("table_name FROM information_schema.tables")) {
+        return sqlResult({ json: { rows: [["orders"], ["people"]] } });
+      }
+      if (sql.includes("table_name = 'orders'")) {
+        return sqlResult({ json: { rows: [tableColumn("id")] } });
+      }
+      if (sql.includes("table_name = 'people'")) {
+        return sqlResult({
+          ok: false,
+          exitCode: 1,
+          stderr: "syntax error",
+          latencyMs: 20,
+          json: null
+        });
+      }
+      return undefined;
+    });
 
-    await expect(preview(runSqlImpl)).rejects.toMatchObject({ code: "READ_FAILED" });
-    expect(runSqlImpl).toHaveBeenCalledTimes(1);
+    await expect(preview(runSqlImpl)).rejects.toMatchObject({
+      code: "READ_FAILED",
+      message: "读取表结构失败：无法读取表「people」的字段。"
+    });
+    expect(runSqlImpl.mock.calls.some((call) => String(call[2]).includes("JOIN"))).toBe(false);
   });
 
   it("returns tableCount 0 when the schema has no base tables", async () => {
-    const runSqlImpl = vi.fn(async () => sqlResult({ json: { rows: [] } }));
+    const runSqlImpl = mysqlPerTableRunSql((sql) => {
+      if (sql.includes("table_name FROM information_schema.tables")) {
+        return sqlResult({ json: { rows: [] } });
+      }
+      return undefined;
+    });
 
     const result = await preview(runSqlImpl);
 
     expect(result.tableCount).toBe(0);
     expect(result.columnCount).toBe(0);
+    expect(runSqlImpl).toHaveBeenCalledTimes(1);
   });
 });

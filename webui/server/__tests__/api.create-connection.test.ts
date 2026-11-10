@@ -191,6 +191,8 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(response.body.data.written).toBe(true);
     expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledTimes(1);
     expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot, "demo-mysql");
+    // Reload mock returns reloaded — write path must not re-mark pending over that.
+    expect(response.body.data.executionRuntimePending).toBe(false);
     expect(response.body.data.test.status).toBe("ok");
     expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
     expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");

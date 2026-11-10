@@ -409,13 +409,12 @@ function supportedErrorDetail(error: SupportedError): unknown {
     const detail = error.detail;
     if (!detail || typeof detail !== "object") return undefined;
     const source = detail as Record<string, unknown>;
+    // SQL and driver stderr stay in server logs only — never on the wire.
     return {
       ...(typeof source.connectionId === "string" ? { connectionId: source.connectionId } : {}),
       ...(typeof source.schema === "string" ? { schema: source.schema } : {}),
       ...(typeof source.table === "string" ? { table: source.table } : {}),
-      ...(typeof source.phase === "string" ? { phase: source.phase } : {}),
-      ...(typeof source.sql === "string" ? { sql: source.sql } : {}),
-      ...(typeof source.stderr === "string" ? { stderr: source.stderr } : {})
+      ...(typeof source.phase === "string" ? { phase: source.phase } : {})
     };
   }
   if (error.code === "connection_references_remain") {
@@ -457,10 +456,10 @@ function distDir(): string {
  */
 
 /**
- * Spec 191 §11.1 — a write that changes ktx.yaml leaves the execution layer
- * behind: the configuration is on disk, but the daemon has not confirmed
- * loading it. The write path only REPORTS that fact (and never triggers a
- * reload by itself); the owner decides when to reload.
+ * Spec 191 §11.1 — after a ktx.yaml write the write path attempts an automatic
+ * execution-layer reload. Mark `reload_required` only when that attempt did not
+ * complete (`reloaded` / `started`); a successful reload must not be overwritten
+ * back to pending.
  */
 async function noteExecutionRuntimePending(
   projectRoot: string,
@@ -472,6 +471,17 @@ async function noteExecutionRuntimePending(
     console.error("[execution-runtime] failed to record the pending activation", error);
     return false;
   }
+}
+
+async function pendingAfterConfigReload(
+  projectRoot: string,
+  digestBefore: string,
+  reload: { status: string }
+): Promise<boolean> {
+  if (reload.status === "reloaded" || reload.status === "started") {
+    return false;
+  }
+  return noteExecutionRuntimePending(projectRoot, digestBefore);
 }
 
 /** The configuration digest as it was BEFORE a write, for the pending check. */
@@ -1664,7 +1674,7 @@ export function buildServer() {
         console.error("[connection-create] catalog reload failed", error);
       }
 
-      await reloadKtxMcpAfterConfigWrite(projectRoot, body.id);
+      const reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, body.id);
 
       let policyVersion = "";
       let policyRuntimeAck = false;
@@ -1678,7 +1688,11 @@ export function buildServer() {
       }
 
       const executionAck = await executionAckForConnection(body.id);
-      const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
+      const executionRuntimePending = await pendingAfterConfigReload(
+        projectRoot,
+        digestBefore,
+        reloadResult
+      );
 
       return {
         ok: true,
@@ -1933,10 +1947,14 @@ export function buildServer() {
       policyRuntimeAck = false;
     }
 
-    await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+    const reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
 
     const executionAck = await executionAckForConnection(connId);
-    const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
+    const executionRuntimePending = await pendingAfterConfigReload(
+      projectRoot,
+      digestBefore,
+      reloadResult
+    );
 
     return {
       ok: true,
@@ -2023,13 +2041,14 @@ export function buildServer() {
         }
       }
     );
+    let reloadResult: { status: string } = { status: "skipped" };
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+      reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await pendingAfterConfigReload(projectRoot, digestBefore, reloadResult);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2047,6 +2066,7 @@ export function buildServer() {
       deleteSecret: body.deleteSecret,
       deleteAssets: body.deleteAssets
     });
+    let reloadResult: { status: string } = { status: "skipped" };
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
       if ("deletedFiles" in result) {
@@ -2054,11 +2074,11 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
+      reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await pendingAfterConfigReload(projectRoot, digestBefore, reloadResult);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2077,13 +2097,14 @@ export function buildServer() {
     const result = await addSchema(projectRoot, connId, body.schema, dryRun, {
       recordConfigChange
     });
+    let reloadResult: { status: string } = { status: "skipped" };
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+      reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await pendingAfterConfigReload(projectRoot, digestBefore, reloadResult);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2104,6 +2125,7 @@ export function buildServer() {
       deleteManifest: body.deleteManifest,
       deleteOverlays: body.deleteOverlays
     });
+    let reloadResult: { status: string } = { status: "skipped" };
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
       if ("deletedFiles" in result) {
@@ -2111,11 +2133,11 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+      reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await pendingAfterConfigReload(projectRoot, digestBefore, reloadResult);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
