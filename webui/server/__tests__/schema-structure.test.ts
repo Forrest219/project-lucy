@@ -104,6 +104,53 @@ describe("previewSchemaStructure", () => {
     });
   });
 
+  it("reads columns one table at a time after the schema-wide scan times out", async () => {
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
+      if (sql.includes("JOIN")) {
+        return sqlResult({
+          ok: false,
+          exitCode: 1,
+          stderr: "Query execution was interrupted, maximum statement execution time exceeded",
+          latencyMs: 30_000,
+          json: null
+        });
+      }
+      if (sql.includes("table_name FROM information_schema.tables")) {
+        return sqlResult({ json: { rows: [["orders"], ["people"]] } });
+      }
+      if (sql.includes("table_name = 'orders'")) {
+        return sqlResult({
+          json: { rows: [["id", "varchar", "YES", "", ""], ["amount", "decimal", "YES", "", ""]] }
+        });
+      }
+      if (sql.includes("table_name = 'people'")) {
+        return sqlResult({ json: { rows: [["name", "varchar", "YES", "", ""]] } });
+      }
+      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+    });
+
+    const result = await preview(runSqlImpl);
+
+    expect(result.tableCount).toBe(2);
+    expect(result.columnCount).toBe(3);
+    expect(result.yaml).toContain("orders");
+    expect(result.yaml).toContain("people");
+    expect(runSqlImpl.mock.calls.some((call) => String(call[2]).includes("table_name = 'orders'"))).toBe(true);
+  });
+
+  it("does not split a fast column-scan failure into per-table reads", async () => {
+    const runSqlImpl = vi.fn(async () => sqlResult({
+      ok: false,
+      exitCode: 1,
+      stderr: "syntax error",
+      latencyMs: 20,
+      json: null
+    }));
+
+    await expect(preview(runSqlImpl)).rejects.toMatchObject({ code: "READ_FAILED" });
+    expect(runSqlImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("returns tableCount 0 when the schema has no base tables", async () => {
     const runSqlImpl = vi.fn(async () => sqlResult({ json: { rows: [] } }));
 

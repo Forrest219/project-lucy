@@ -155,10 +155,50 @@ export function reloadKtxMcpExecutionRuntime(
   return run;
 }
 
-export async function reloadKtxMcpAfterConfigWrite(projectRoot: string): Promise<KtxMcpReloadResult> {
-  const result = await reloadKtxMcpExecutionRuntime(projectRoot);
+/**
+ * Make the running execution layer re-read ktx.yaml.
+ *
+ * The customer container owns KTX with `mcp start --foreground`. `ktx mcp stop`
+ * cannot replace that process, and "already running" means the new file was
+ * not loaded. Ask the supervisor to restart its own child first. The CLI
+ * stop/start path remains for a process that is not supervised.
+ */
+export async function reloadKtxMcpAfterConfigWrite(
+  projectRoot: string,
+  connectionId?: string
+): Promise<KtxMcpReloadResult> {
+  const channel = await reloadThroughSupervisor(projectRoot, connectionId);
+  const result = channel ?? await reloadKtxMcpExecutionRuntime(projectRoot);
   if (result.status === "failed") {
     console.error("[ktx-mcp-reload] failed to reload KTX MCP after ktx.yaml write:", result.detail);
   }
   return result;
+}
+
+async function reloadThroughSupervisor(
+  projectRoot: string,
+  connectionId?: string
+): Promise<KtxMcpReloadResult | null> {
+  try {
+    const { reloadExecutionRuntime } = await import("./admin/mcp-runtime-reload.js");
+    const channel = await reloadExecutionRuntime({
+      projectRoot,
+      ...(connectionId ? { connectionId } : {}),
+      reason: "ktx.yaml write"
+    });
+    if (channel.reloadStatus === "unsupported") return null;
+    if (channel.reloadStatus === "succeeded") {
+      return {
+        status: "reloaded",
+        detail: channel.detail?.trim() || "执行层已重读 ktx.yaml"
+      };
+    }
+    return {
+      status: "failed",
+      detail: channel.detail?.trim() || `执行层重载未完成（${channel.reloadStatus}）`
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { status: "failed", detail };
+  }
 }

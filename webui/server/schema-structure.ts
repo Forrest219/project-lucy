@@ -211,6 +211,95 @@ ORDER BY c.table_name, c.ordinal_position
 `.trim().replace(/\s+/g, " ");
 }
 
+/**
+ * A schema-wide column scan that used up its deadline should be retried in
+ * smaller pieces. Connection failures stay out of this bucket: "connect timed
+ * out" is not a slow metadata scan.
+ */
+export function columnScanTimedOut(result: SqlResult, timeoutMs = 30_000): boolean {
+  const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+  if (/can't connect|cannot connect|connection refused|connection timed out|connect timed out|unknown host|no such host/i.test(text)) {
+    return false;
+  }
+  if (/max_execution_time|maximum statement execution time|query execution was interrupted/i.test(text)) {
+    return true;
+  }
+  return !result.ok && result.latencyMs >= Math.max(0, timeoutMs - 1_500);
+}
+
+function sqlStringLiteral(value: string): string {
+  if (!value || value.length > 256 || /[\0\r\n]/.test(value)) {
+    throw new SchemaStructureError("READ_FAILED", "读取表结构失败。");
+  }
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function mysqlTableNamesSql(schema: string): string {
+  return `SELECT table_name FROM information_schema.tables WHERE table_schema = ${sqlStringLiteral(schema)} AND table_type = 'BASE TABLE' ORDER BY table_name`;
+}
+
+function mysqlTableColumnsSql(schema: string, table: string): string {
+  return `SELECT column_name, data_type, is_nullable, column_key, column_comment FROM information_schema.columns WHERE table_schema = ${sqlStringLiteral(schema)} AND table_name = ${sqlStringLiteral(table)} ORDER BY ordinal_position`;
+}
+
+function tableNamesFromRows(rows: unknown[]): string[] {
+  const names: string[] = [];
+  for (const row of rows) {
+    const name = Array.isArray(row) ? String(row[0] ?? "").trim() : "";
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+function columnsForTable(table: string, rows: unknown[]): ColumnInput[] {
+  const columns: ColumnInput[] = [];
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length < 5) continue;
+    const column = String(row[0] ?? "").trim();
+    if (!column) continue;
+    columns.push({
+      table,
+      column,
+      dataType: String(row[1] ?? ""),
+      nullable: String(row[2] ?? "").toUpperCase() !== "NO",
+      primaryKey: String(row[3] ?? "").toUpperCase() === "PRI",
+      comment: String(row[4] ?? "")
+    });
+  }
+  return columns;
+}
+
+/**
+ * Wide schemas (advertising reports) cannot return every column in one 30s
+ * information_schema scan. Read the table names, then one table at a time.
+ * Each table still has its own 30s deadline. A single table that fills the
+ * row cap is truncated and rejected; the schema total is not capped at that
+ * page size.
+ */
+async function readMysqlColumnsByTable(
+  projectRoot: string,
+  connectionId: string,
+  schema: string,
+  execute: typeof runSql
+): Promise<SchemaColumnsRead> {
+  const listed = await execute(projectRoot, connectionId, mysqlTableNamesSql(schema), {
+    maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+    timeoutMs: 30_000
+  });
+  const tableNames = tableNamesFromRows(structureRows(listed));
+  const columns: ColumnInput[] = [];
+  for (const table of tableNames) {
+    const result = await execute(projectRoot, connectionId, mysqlTableColumnsSql(schema, table), {
+      maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+      timeoutMs: 30_000
+    });
+    const rows = structureRows(result);
+    if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) return { status: "too_large" };
+    columns.push(...columnsForTable(table, rows));
+  }
+  return { status: "ok", columns };
+}
+
 function structureRows(result: SqlResult): unknown[] {
   const json = result.json;
   const rows =
@@ -315,21 +404,24 @@ export async function readSchemaColumns(
           maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
           timeoutMs: 30000
         });
-        for (const row of structureRows(columnResult)) {
+        const columnRows = structureRows(columnResult);
+        if (columnRows.length >= SCHEMA_STRUCTURE_MAX_ROWS) return { status: "too_large" };
+        for (const row of columnRows) {
           if (!Array.isArray(row)) continue;
           const mapped = mapShowFullColumn(table, row);
           if (mapped) columns.push(mapped);
         }
-        if (columns.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
-          return { status: "too_large" };
-        }
       }
       return { status: "ok", columns };
     }
-    const result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
+    const protocol = protocolOf(connection);
+    const result = await execute(projectRoot, connectionId, sqlFor(protocol, safeSchema), {
       maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
       timeoutMs: 30000
     });
+    if (protocol === "mysql" && columnScanTimedOut(result)) {
+      return await readMysqlColumnsByTable(projectRoot, connectionId, safeSchema, execute);
+    }
     const rows = structureRows(result);
     if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
       return { status: "too_large" };

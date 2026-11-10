@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { listLiveSchemas } from "../live-catalog";
+import { createSqlLiveTableProvider } from "../live-tables";
 import { previewSchemaStructure } from "../schema-structure";
 import type { SqlResult } from "../ktx";
 import type { ConnectionInfo } from "../model";
@@ -60,6 +61,15 @@ function simulateIsolatedDoris(sql: string): SqlResult {
   if (text === "SHOW DATABASES FROM `hive`") {
     return sqlResult([["dw"], ["dm"], ["ods"]]);
   }
+  if (text === "SHOW TABLES FROM `hive`.`dw`") {
+    return sqlResult([["dw_sns_user"], ["dw_other"]]);
+  }
+  if (text === "SHOW TABLES FROM `hive`.`dm`") {
+    return sqlResult([["dm_one"]]);
+  }
+  if (text === "SHOW TABLES FROM `hive`.`ods`") {
+    return sqlResult([["ods_one"]]);
+  }
   if (text === "SHOW TABLES FROM `hive_jd`.`app`") {
     return sqlResult([
       ["app_user_tail_dau_i_d_i_d"],
@@ -90,10 +100,13 @@ describe("isolated Doris external catalog", () => {
       }
     });
 
-    expect(seen).toEqual(["SHOW DATABASES FROM `hive_jd`"]);
+    expect(seen).toEqual([
+      "SHOW DATABASES FROM `hive_jd`",
+      "SHOW TABLES FROM `hive_jd`.`app`"
+    ]);
     expect(seen.join("\n")).not.toMatch(/information_schema/i);
     expect(result.status).toBe("ok");
-    expect(result.schemas).toEqual([{ schema: "app", tableCount: 0 }]);
+    expect(result.schemas).toEqual([{ schema: "app", tableCount: 3 }]);
     expect(result.reason ?? "").not.toContain("default_cluster");
   });
 
@@ -104,7 +117,11 @@ describe("isolated Doris external catalog", () => {
     });
 
     expect(result.status).toBe("ok");
-    expect(result.schemas.map((item) => item.schema)).toEqual(["dw", "dm", "ods"]);
+    expect(result.schemas).toEqual([
+      { schema: "dw", tableCount: 2 },
+      { schema: "dm", tableCount: 1 },
+      { schema: "ods", tableCount: 1 }
+    ]);
     expect(result.schemas.some((item) => item.schema === "app")).toBe(false);
   });
 
@@ -125,5 +142,31 @@ describe("isolated Doris external catalog", () => {
     expect(preview.yaml).toContain("日活明细");
     expect(preview.yaml).toContain("统计日期");
     expect(preview.readable).toBe(true);
+  });
+
+  it("lists hive_jd.app tables with SHOW TABLES and never touches information_schema", async () => {
+    const seen: string[] = [];
+    const provider = createSqlLiveTableProvider({
+      readConnectionsImpl: async () => [hiveJd],
+      runSqlImpl: async (_root, _id, sql) => {
+        seen.push(sql);
+        return simulateIsolatedDoris(sql);
+      }
+    });
+    const result = await provider.listTables({
+      projectRoot: "/isolated",
+      connectionId: "hive-jd",
+      schema: "app",
+      generation: 0
+    });
+
+    expect(seen).toEqual(["SHOW TABLES FROM `hive_jd`.`app`"]);
+    expect(seen.join("\n")).not.toMatch(/information_schema/i);
+    expect(result.status).toBe("ok");
+    expect(result.tables.map((item) => item.table)).toEqual([
+      "app_user_tail_dau_i_d_i_d",
+      "app_user_tail_retain_i_d_i_d",
+      "日活明细"
+    ]);
   });
 });

@@ -10,9 +10,10 @@
  * not distinguish "schema missing" from "schema not visible" is always reported
  * as `SCHEMA_NOT_VISIBLE`, so the UI never claims a table was deleted.
  */
+import { showTablesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
-import { assertSchemaIdent } from "./schema-structure";
+import { assertSchemaIdent, columnScanTimedOut } from "./schema-structure";
 import { resolveWireProtocol, type CatalogProtocol } from "./live-catalog";
 import type { ProbePurpose } from "./background-probes";
 import type { ConnectionInfo } from "./model";
@@ -79,6 +80,16 @@ WHERE t.table_schema = '__SCHEMA__' AND t.table_type = 'BASE TABLE'
 GROUP BY t.table_name, t.table_type, t.table_comment
 ORDER BY t.table_name
 `.trim().replace(/\s+/g, " ");
+
+/** Names only. Used after the column join above hits the 30s deadline on a wide schema. */
+const MYSQL_TABLE_NAME_SQL = `
+SELECT table_name, table_type, COALESCE(table_comment, '')
+FROM information_schema.tables
+WHERE table_schema = '__SCHEMA__' AND table_type = 'BASE TABLE'
+ORDER BY table_name
+`.trim().replace(/\s+/g, " ");
+
+const MYSQL_COLUMN_COUNT_BATCH = 8;
 
 const POSTGRES_TABLE_LIST_SQL = `
 SELECT c.relname, 'BASE TABLE', COALESCE(obj_description(c.oid, 'pg_class'), ''), COUNT(a.attname) AS column_count
@@ -236,6 +247,18 @@ function rawRowCount(json: unknown): number {
   return Array.isArray(rows) ? rows.length : 0;
 }
 
+function parseShowTableNames(json: unknown): string[] {
+  if (!json || typeof json !== "object") return [];
+  const rows = (json as { rows?: unknown }).rows;
+  if (!Array.isArray(rows)) return [];
+  const names: string[] = [];
+  for (const row of rows) {
+    const table = Array.isArray(row) ? String(row[0] ?? "").trim() : "";
+    if (table) names.push(table);
+  }
+  return names;
+}
+
 function parseTableRows(json: unknown): LiveTableEntry[] {
   if (!json || typeof json !== "object") return [];
   const rows = (json as { rows?: unknown }).rows;
@@ -258,6 +281,134 @@ function parseTableRows(json: unknown): LiveTableEntry[] {
     });
   }
   return out;
+}
+
+function mysqlStringLiteral(value: string): string | null {
+  if (!value || value.length > 256 || /[\0\r\n]/.test(value)) return null;
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function parseMysqlNameRows(json: unknown): LiveTableEntry[] {
+  if (!json || typeof json !== "object") return [];
+  const rows = (json as { rows?: unknown }).rows;
+  if (!Array.isArray(rows)) return [];
+  const out: LiveTableEntry[] = [];
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length < 3) continue;
+    const table = String(row[0] ?? "").trim();
+    if (!table) continue;
+    const rawType = String(row[1] ?? "").trim().toUpperCase();
+    const comment = String(row[2] ?? "").trim();
+    out.push({
+      table,
+      tableType: rawType === "VIEW" ? "VIEW" : "BASE TABLE",
+      columnCount: 0,
+      ...(comment ? { tableComment: comment } : {})
+    });
+  }
+  return out;
+}
+
+function mysqlColumnCountSql(schema: string, tables: string[]): string | null {
+  const schemaLiteral = mysqlStringLiteral(schema);
+  const tableLiterals = tables.map((table) => mysqlStringLiteral(table));
+  if (!schemaLiteral || tableLiterals.some((literal) => literal === null)) return null;
+  return `SELECT table_name, COUNT(*) FROM information_schema.columns WHERE table_schema = ${schemaLiteral} AND table_name IN (${tableLiterals.join(", ")}) GROUP BY table_name`;
+}
+
+/**
+ * The one-shot table/column join cannot finish on a wide schema. Names come
+ * from information_schema.tables alone; column counts are read in small
+ * batches and split again if a batch still hits the deadline. A batch that
+ * cannot be counted does not drop the table.
+ */
+async function listMysqlTablesAfterWideScanTimeout(input: {
+  runSqlImpl: typeof runSql;
+  projectRoot: string;
+  connectionId: string;
+  schema: string;
+  fetchedAt: string;
+}): Promise<{
+  status: "ok" | "error";
+  tables: LiveTableEntry[];
+  fetchedAt: string;
+  reason?: LiveTableFailureReason;
+  latencyMs?: number;
+  wireProtocol: LiveTableWireProtocol;
+}> {
+  const { runSqlImpl, projectRoot, connectionId, schema, fetchedAt } = input;
+  const listed = await runSqlImpl(
+    projectRoot,
+    connectionId,
+    MYSQL_TABLE_NAME_SQL.replace("__SCHEMA__", schema),
+    { maxRows: TABLE_LIST_MAX_ROWS, timeoutMs: 30_000 }
+  );
+  if (!listed.ok || listed.json == null || typeof listed.json !== "object") {
+    return {
+      status: "error",
+      tables: [],
+      fetchedAt,
+      reason: classifyLiveTableFailure({
+        exitCode: listed.exitCode,
+        stdout: listed.stdout,
+        stderr: listed.stderr
+      }),
+      latencyMs: listed.latencyMs,
+      wireProtocol: "mysql"
+    };
+  }
+  if (rawRowCount(listed.json) >= TABLE_LIST_MAX_ROWS) {
+    return {
+      status: "error",
+      tables: [],
+      fetchedAt,
+      reason: "TABLE_LIST_TOO_LARGE",
+      latencyMs: listed.latencyMs,
+      wireProtocol: "mysql"
+    };
+  }
+  const tables = parseMysqlNameRows(listed.json);
+  const counts = new Map<string, number>();
+
+  async function readCounts(batch: string[]): Promise<void> {
+    if (batch.length === 0) return;
+    const sql = mysqlColumnCountSql(schema, batch);
+    if (!sql) return;
+    const result = await runSqlImpl(projectRoot, connectionId, sql, {
+      maxRows: TABLE_LIST_MAX_ROWS,
+      timeoutMs: 30_000
+    });
+    if (columnScanTimedOut(result) && batch.length > 1) {
+      const mid = Math.ceil(batch.length / 2);
+      await readCounts(batch.slice(0, mid));
+      await readCounts(batch.slice(mid));
+      return;
+    }
+    if (!result.ok || result.json == null || typeof result.json !== "object") return;
+    const rows = (result.json as { rows?: unknown }).rows;
+    if (!Array.isArray(rows)) return;
+    for (const row of rows) {
+      if (!Array.isArray(row) || row.length < 2) continue;
+      const name = String(row[0] ?? "").trim();
+      const count = Number(row[1]);
+      if (name && Number.isFinite(count)) counts.set(name, Math.max(0, Math.floor(count)));
+    }
+  }
+
+  for (let index = 0; index < tables.length; index += MYSQL_COLUMN_COUNT_BATCH) {
+    await readCounts(tables.slice(index, index + MYSQL_COLUMN_COUNT_BATCH).map((entry) => entry.table));
+  }
+
+  return {
+    status: "ok",
+    tables: tables.map((entry) => ({
+      ...entry,
+      columnCount: counts.get(entry.table) ?? 0
+    })),
+    fetchedAt,
+    latencyMs: listed.latencyMs,
+    wireProtocol: "mysql"
+  };
 }
 
 /**
@@ -305,12 +456,31 @@ export function createSqlLiveTableProvider(
         };
       }
       const protocol = wireProtocol as "mysql" | "postgres";
+      const catalog = protocol === "mysql" ? splitCatalogDatabase(conn.database) : null;
+      // SelectDB / Doris external catalogs resolve unqualified information_schema
+      // to a missing default-cluster database. List those tables with SHOW TABLES
+      // FROM catalog.database. Column counts stay 0 here: one name query must not
+      // turn into a per-table column scan on the shared probe.
+      let listSql: string;
+      try {
+        listSql = catalog
+          ? showTablesFromCatalogSql(catalog.catalog, schema)
+          : tableListSql(protocol, schema);
+      } catch {
+        return {
+          status: "error",
+          tables: [],
+          fetchedAt,
+          reason: "QUERY_FAILED",
+          wireProtocol: protocol
+        };
+      }
       let result: SqlResult;
       try {
         result = await runSqlImpl(
           projectRoot,
           connectionId,
-          tableListSql(protocol, schema),
+          listSql,
           { maxRows: TABLE_LIST_MAX_ROWS, timeoutMs: 30_000 }
         );
       } catch (err) {
@@ -328,6 +498,15 @@ export function createSqlLiveTableProvider(
           };
         }
         throw err;
+      }
+      if (!catalog && protocol === "mysql" && columnScanTimedOut(result)) {
+        return listMysqlTablesAfterWideScanTimeout({
+          runSqlImpl,
+          projectRoot,
+          connectionId,
+          schema,
+          fetchedAt
+        });
       }
       if (!result.ok) {
         return {
@@ -353,7 +532,13 @@ export function createSqlLiveTableProvider(
           wireProtocol: protocol
         };
       }
-      const tables = parseTableRows(result.json);
+      const tables = catalog
+        ? parseShowTableNames(result.json).map((table) => ({
+            table,
+            tableType: "BASE TABLE" as const,
+            columnCount: 0
+          }))
+        : parseTableRows(result.json);
       // A full page may be truncated — fail loudly instead of returning a partial
       // list. The ceiling is measured on the raw row count, so a truncated page
       // is caught even when some of its rows are malformed.

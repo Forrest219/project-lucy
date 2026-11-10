@@ -1651,7 +1651,7 @@ export function buildServer() {
         console.error("[connection-create] catalog reload failed", error);
       }
 
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
+      await reloadKtxMcpAfterConfigWrite(projectRoot, body.id);
 
       let policyVersion = "";
       let policyRuntimeAck = false;
@@ -1908,6 +1908,8 @@ export function buildServer() {
       policyRuntimeAck = false;
     }
 
+    await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+
     const executionAck = await executionAckForConnection(connId);
     const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
@@ -1998,12 +2000,12 @@ export function buildServer() {
     );
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      void digestBefore;
+      await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
     }
-    return {
-      ok: true,
-      data: dryRun ? result : { ...result, executionRuntimePending: true as const }
-    };
+    const executionRuntimePending = dryRun
+      ? false
+      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+    return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
   app.post<{
@@ -2052,7 +2054,7 @@ export function buildServer() {
     });
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
+      await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
@@ -2084,7 +2086,7 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
+      await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false

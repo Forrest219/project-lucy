@@ -138,9 +138,11 @@ export function LiveTableListCell({
                   <code className="notranslate" translate="no" dir="ltr">
                     {entry.table}
                   </code>
-                  <span className="pl-schema-live-table-columns notranslate" translate="no">
-                    {entry.columnCount} 列
-                  </span>
+                  {entry.columnCount > 0 ? (
+                    <span className="pl-schema-live-table-columns notranslate" translate="no">
+                      {entry.columnCount} 列
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>
