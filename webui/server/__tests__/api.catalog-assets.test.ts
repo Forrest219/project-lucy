@@ -1,9 +1,11 @@
+import { rmSync } from "node:fs";
 import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parse as parseYaml } from "yaml";
+import { resetAuditDbForTests } from "../admin/audit";
 import { SEMANTIC_BATCH_LIMITS } from "../semantic-limits";
 
 // M17 mirror of the M14 ingest-route defense: the WebUI catalog-asset routes
@@ -26,7 +28,7 @@ vi.mock("../ktx", async () => {
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
-  let previousContentRoot: string | undefined;
+let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
 async function makeProject(
@@ -71,7 +73,15 @@ beforeEach(async () => {
   vi.clearAllMocks();
 });
 
-afterEach(async () => {
+afterEach(() => {
+  // Close the audit singleton before deleting its on-disk path, then remove the
+  // temp project BEFORE restoring env. Same ENOTEMPTY race class as
+  // semantic-batch-journal-lifecycle / display-invalidation: a late content-path
+  // resolve can recreate children under the temp root mid-rmdir.
+  resetAuditDbForTests();
+  if (projectRoot) {
+    rmSync(projectRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
   if (previousRoot === undefined) {
     delete process.env.KTX_PROJECT_ROOT;
   } else {
@@ -86,9 +96,6 @@ afterEach(async () => {
     delete process.env.LUCY_AUDIT_DB;
   } else {
     process.env.LUCY_AUDIT_DB = previousAuditDb;
-  }
-  if (projectRoot) {
-    await rm(projectRoot, { recursive: true, force: true });
   }
 });
 
