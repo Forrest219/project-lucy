@@ -169,6 +169,17 @@ import {
 import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
 import { readKtxYamlDigest } from "./mcp-runtime-state.js";
 import { reloadKtxMcpAfterConfigWrite } from "./ktx-mcp-reload.js";
+
+async function reloadExecutionRuntimeOrFail(projectRoot: string, connectionId?: string): Promise<void> {
+  const reload = await reloadKtxMcpAfterConfigWrite(projectRoot, connectionId);
+  if (reload.status === "reloaded" || reload.status === "started") return;
+  const err = new Error(
+    reload.detail?.trim() || "问数服务没有加载这条连接，暂时不能读取数据。"
+  ) as Error & { statusCode: number; code: string };
+  err.statusCode = 503;
+  err.code = "EXECUTION_RUNTIME_NOT_LOADED";
+  throw err;
+}
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
@@ -1651,7 +1662,7 @@ export function buildServer() {
         console.error("[connection-create] catalog reload failed", error);
       }
 
-      await reloadKtxMcpAfterConfigWrite(projectRoot, body.id);
+      await reloadExecutionRuntimeOrFail(projectRoot, body.id);
 
       let policyVersion = "";
       let policyRuntimeAck = false;
@@ -1908,7 +1919,7 @@ export function buildServer() {
       policyRuntimeAck = false;
     }
 
-    await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+    await reloadExecutionRuntimeOrFail(projectRoot, connId);
 
     const executionAck = await executionAckForConnection(connId);
     const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
@@ -2000,7 +2011,7 @@ export function buildServer() {
     );
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+      await reloadExecutionRuntimeOrFail(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
@@ -2029,7 +2040,7 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
+      await reloadExecutionRuntimeOrFail(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
@@ -2054,7 +2065,7 @@ export function buildServer() {
     });
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+      await reloadExecutionRuntimeOrFail(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
@@ -2086,7 +2097,7 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+      await reloadExecutionRuntimeOrFail(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false

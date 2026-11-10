@@ -10,7 +10,7 @@
  * not distinguish "schema missing" from "schema not visible" is always reported
  * as `SCHEMA_NOT_VISIBLE`, so the UI never claims a table was deleted.
  */
-import { showTablesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
+import { catalogTablesSql, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
 import { assertSchemaIdent, columnScanTimedOut } from "./schema-structure";
@@ -458,13 +458,13 @@ export function createSqlLiveTableProvider(
       const protocol = wireProtocol as "mysql" | "postgres";
       const catalog = protocol === "mysql" ? splitCatalogDatabase(conn.database) : null;
       // SelectDB / Doris external catalogs resolve unqualified information_schema
-      // to a missing default-cluster database. List those tables with SHOW TABLES
-      // FROM catalog.database. Column counts stay 0 here: one name query must not
-      // turn into a per-table column scan on the shared probe.
+      // to a missing default-cluster database, and KTX 0.16.0 rejects SHOW.
+      // List those tables from catalog.information_schema. Column counts stay 0
+      // here: one name query must not turn into a per-table column scan.
       let listSql: string;
       try {
         listSql = catalog
-          ? showTablesFromCatalogSql(catalog.catalog, schema)
+          ? catalogTablesSql(catalog.catalog, schema)
           : tableListSql(protocol, schema);
       } catch {
         return {

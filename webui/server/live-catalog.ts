@@ -1,4 +1,4 @@
-import { showDatabasesFromCatalogSql, showTablesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
+import { catalogSchemataSql, catalogTablesSql, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo, LiveSchemaSummary, LiveSchemasResponse } from "./model";
@@ -127,7 +127,7 @@ function sqlForProtocol(protocol: CatalogProtocol): string {
 function sqlForConnection(conn: ConnectionInfo, protocol: CatalogProtocol): string {
   if (protocol === "mysql") {
     const catalog = splitCatalogDatabase(conn.database);
-    if (catalog) return showDatabasesFromCatalogSql(catalog.catalog);
+    if (catalog) return catalogSchemataSql(catalog.catalog);
   }
   return sqlForProtocol(protocol);
 }
@@ -139,10 +139,10 @@ function rowCount(json: unknown): number {
 }
 
 /**
- * External catalogs have no unqualified information_schema. SHOW DATABASES
- * lists names only, so each database is counted with SHOW TABLES FROM
- * catalog.database. A failure here is the catalog read failing, not an empty
- * database.
+ * External catalogs are read through catalog-qualified information_schema.
+ * SHOW is rejected by KTX 0.16.0, and an unqualified information_schema is a
+ * missing default-cluster database. A failure here is the catalog read
+ * failing, not an empty database.
  */
 async function countExternalCatalogTables(
   projectRoot: string,
@@ -156,7 +156,7 @@ async function countExternalCatalogTables(
   for (const item of schemas) {
     let sql: string;
     try {
-      sql = showTablesFromCatalogSql(catalog.catalog, item.schema);
+      sql = catalogTablesSql(catalog.catalog, item.schema);
     } catch {
       return { ok: false, reason: `无法读取目录 ${catalog.catalog}.${item.schema} 的表。` };
     }

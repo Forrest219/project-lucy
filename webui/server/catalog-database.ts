@@ -28,14 +28,26 @@ export function quoteMysqlIdent(value: string): string {
   return `\`${value.replace(/`/g, "``")}\``;
 }
 
-export function showDatabasesFromCatalogSql(catalog: string): string {
-  return `SHOW DATABASES FROM ${quoteMysqlIdent(catalog)}`;
+function sqlString(value: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error("invalid SQL string");
+  }
+  return `'${value}'`;
 }
 
-export function showTablesFromCatalogSql(catalog: string, database: string): string {
-  return `SHOW TABLES FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}`;
+/**
+ * Catalog-qualified information_schema. KTX 0.16.0 rejects SHOW, and an
+ * unqualified information_schema resolves to a missing default-cluster database
+ * on this customer's SelectDB external catalogs.
+ */
+export function catalogSchemataSql(catalog: string): string {
+  return `SELECT schema_name FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent("information_schema")}.${quoteMysqlIdent("schemata")} ORDER BY schema_name`;
 }
 
-export function showFullColumnsSql(catalog: string, database: string, table: string): string {
-  return `SHOW FULL COLUMNS FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
+export function catalogTablesSql(catalog: string, database: string): string {
+  return `SELECT table_name FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent("information_schema")}.${quoteMysqlIdent("tables")} WHERE table_schema = ${sqlString(database)} AND table_type = 'BASE TABLE' ORDER BY table_name`;
+}
+
+export function describeCatalogTableSql(catalog: string, database: string, table: string): string {
+  return `DESC ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
 }

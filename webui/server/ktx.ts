@@ -254,11 +254,18 @@ export async function runSql(
     execFileImpl(
       "ktx",
       args,
-      { cwd: projectRoot, timeout: timeoutMs, env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" } },
+      {
+        cwd: projectRoot,
+        timeout: timeoutMs,
+        maxBuffer: 16 * 1024 * 1024,
+        env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" }
+      },
       (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
         const latencyMs = Date.now() - start;
         const out = stdout.toString();
-        const err = stderr.toString();
+        const childErr = stderr.toString();
+        const message = error && typeof error.message === "string" ? error.message : "";
+        const err = message && !childErr.includes(message) ? `${childErr}\n${message}`.trim() : childErr;
         if (error?.code === "ENOENT") {
           reject(new KtxCliError("ktx CLI was not found in PATH"));
           return;
