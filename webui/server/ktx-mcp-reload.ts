@@ -198,6 +198,12 @@ async function reloadThroughSupervisor(
       detail: channel.detail?.trim() || `执行层重载未完成（${channel.reloadStatus}）`
     };
   } catch (error) {
+    // Missing supervisor module means this process is not a customer/supervised
+    // runtime — keep the CLI stop/start fallback. Other failures stay hard fails.
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "MODULE_NOT_FOUND" || code === "ERR_MODULE_NOT_FOUND") {
+      return null;
+    }
     const detail = error instanceof Error ? error.message : String(error);
     return { status: "failed", detail };
   }

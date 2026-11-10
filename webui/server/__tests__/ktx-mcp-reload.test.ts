@@ -131,6 +131,23 @@ describe("reloadKtxMcpExecutionRuntime", () => {
     }
   });
 
+  it("falls back to the CLI daemon when the supervisor module is missing", async () => {
+    const previous = process.env.LUCY_KTX_MCP_RELOAD;
+    process.env.LUCY_KTX_MCP_RELOAD = "0";
+    supervisor.reloadExecutionRuntime.mockRejectedValue(
+      Object.assign(new Error("Cannot find module './admin/mcp-runtime-reload.js'"), {
+        code: "ERR_MODULE_NOT_FOUND"
+      })
+    );
+    try {
+      const result = await reloadKtxMcpAfterConfigWrite("/tmp/lucy-project");
+      expect(result).toEqual({ status: "skipped", detail: "LUCY_KTX_MCP_RELOAD=0" });
+    } finally {
+      if (previous === undefined) delete process.env.LUCY_KTX_MCP_RELOAD;
+      else process.env.LUCY_KTX_MCP_RELOAD = previous;
+    }
+  });
+
   it("can be skipped with LUCY_KTX_MCP_RELOAD=0", async () => {
     const previous = process.env.LUCY_KTX_MCP_RELOAD;
     process.env.LUCY_KTX_MCP_RELOAD = "0";
