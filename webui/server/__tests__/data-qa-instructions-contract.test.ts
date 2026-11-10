@@ -14,14 +14,14 @@ describe("data QA fallback instructions contract", () => {
     // WO-202610-12 T3: the 8-minute wording became the proxy budget
     // (20 data-tool calls / 120s wall clock, with one continuation).
     // Spec 162 修订（D8 / SC-40）：口径改为「已结算数据处理时长」，不含思考时间。
-    expect(text).toContain("同一问询最多 20 次数据工具调用，或累计 120 秒数据处理时长（不含思考时间）");
+    expect(text).toContain("同一问询最多 60 次数据工具调用，或累计 300 秒数据处理时长（不含思考时间）");
     expect(text).toContain("question_budget_exhausted");
     expect(text).toContain("部分可回答时仍必须回复");
     expect(text).toContain("`ok` / `no_data` / `unavailable` / `partial`");
   });
 
   // Spec 162 修订 / D8 / SC-40 —— 指导文本按 `continuable` 分支处置，
-  // 且不得宽于代理预算（次数上限仍是 20，续查只能一次）。
+  // 且不得宽于代理预算（次数上限现行 60，续查只能一次）。
   it("routes the budget stop by continuable and keeps the guidance within the proxy budget", async () => {    const text = await readFile(path.join(process.cwd(), "config", "data-qa-instructions.md"), "utf8");
 
     expect(text).toContain("若 `continuable` 为 true，调用 `lucy_continue_question`");

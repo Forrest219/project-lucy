@@ -12,7 +12,7 @@
 | 来源计划 | [`docs/plans/2026-10-11-customer-log-next-optimizations.md`](../../docs/plans/2026-10-11-customer-log-next-optimizations.md) v1.1 |
 | 关联工单 | [`wo-202610-12`](plans/wo-202610-12-query-turn-budget-and-repair.md)、[`wo-202610-13`](plans/wo-202610-13-usage-evidence-and-query-guardrails.md)、[`wo-202610-14`](plans/wo-202610-14-usage-signal-and-publish-gate.md) |
 | 关联 Spec | 08 问询追踪、09 R1 工具契约、125 生成 SQL 热库、138 轮次归因、137 审计证据 |
-| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件。v0.3：SC-16 补上探测连接的评测标记；新增 SC-25、SC-26。慢标记的新定义不覆盖其它工具，也不替换 Spec 143。**v0.4（2026-10-29，PM 授权代改）：§7.2 的墙钟口径与续查兑现通道由 `docs/specs/lucy-20261029-question-budget-window-optimization-spec.md` v1.0 修订**——墙钟第二维度改为「已结算的数据处理时长」（空闲不计入）；新增 `lucy_continue_question` 续查通道；`continuable` 改为「该调用者是否仍有可达的继续通道」。**2026-10-30 本分支代理已按该修订实现，验收表已逐条记录。** SC-04 的留证是 vitest 进程内关服务、清模块、再经 HTTP MCP 调用，不是操作系统或容器重启。不构成客户交付。§7.1／§7.3／§7.8 其余语义不变 |
+| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件。v0.3：SC-16 补上探测连接的评测标记；新增 SC-25、SC-26。慢标记的新定义不覆盖其它工具，也不替换 Spec 143。**v0.4（2026-10-29，PM 授权代改）：§7.2 的墙钟口径与续查兑现通道由 `docs/specs/lucy-20261029-question-budget-window-optimization-spec.md` v1.0 修订**——墙钟第二维度改为「已结算的数据处理时长」（空闲不计入）；新增 `lucy_continue_question` 续查通道；`continuable` 改为「该调用者是否仍有可达的继续通道」。**2026-10-30 本分支代理已按该修订实现，验收表已逐条记录。** **2026-11-11 默认阈值放宽为 60 次／300 秒**（[`lucy-20261111-question-budget-threshold-relax-spec.md`](../../docs/specs/lucy-20261111-question-budget-threshold-relax-spec.md)）；续查仍 1 次。SC-04 的留证是 vitest 进程内关服务、清模块、再经 HTTP MCP 调用，不是操作系统或容器重启。不构成客户交付。§7.1／§7.3／§7.8 其余语义不变 |
 
 > **问询预算优化 Spec 修订（2026-10-30）**：本文 §7.2 由 [`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md`](../../docs/specs/lucy-20261029-question-budget-window-optimization-spec.md)（v1.0）修订，并已是现行口径。默认按已结算数据处理时长判定，`continuable` 取决于调用者能否看见 `lucy_continue_question`。SC-04 有进程内 MCP 自动化（关服务、清模块、再经 HTTP 调用），不是操作系统或容器重启。逐条记录见 [`docs/reviews/2026-10-30-question-budget-acceptance.md`](../../docs/reviews/2026-10-30-question-budget-acceptance.md)。历史审计行不按新口径重解释。客户交付未授权。
 
@@ -120,13 +120,13 @@ function onToolCall(call):
 
 ### 7.2 问询预算
 
-默认值可配置：数据工具 20 次，或已结算的数据处理时长 120 秒，先到为准。空闲时间不计入。同一问询允许继续一次，继续后计数清零再给同一档。第二次用尽后仍返回可继续，由客户端决定是否再问；服务端不再自动加档。历史审计行不按这个口径重解释。
+默认值可配置：数据工具 60 次，或已结算的数据处理时长 300 秒，先到为准（2026-11-11 由 [`lucy-20261111-question-budget-threshold-relax-spec.md`](../../docs/specs/lucy-20261111-question-budget-threshold-relax-spec.md) 从 20／120 放宽）。空闲时间不计入。同一问询允许继续一次，继续后计数清零再给同一档。第二次用尽后仍返回可继续，由客户端决定是否再问；服务端不再自动加档。历史审计行不按这个口径重解释。
 
 ```text
 function budgetExceeded(turn):
   if turn.continuations >= 1 and turn.usedSinceContinue >= budget:
     return true
-  if turn.continuations == 0 and (turn.dataCalls >= 20 or turn.settledBusyMs >= 120000):
+  if turn.continuations == 0 and (turn.dataCalls >= 60 or turn.settledBusyMs >= 300000):
     return true
   return false
 
@@ -140,7 +140,7 @@ function continuable(reason):
   }
 ```
 
-模型侧指导的事实源是 `webui/config/data-qa-instructions.md`，由 Spec 07 §4.4 在 `initialize` 注入。注入失败 fail-open，不是权限边界。该文件与本节一致：同一问询最多 20 次数据工具，或累计 120 秒数据处理时长（不含思考时间），并写明可以继续一次。指导不得再宽于代理预算。
+模型侧指导的事实源是 `webui/config/data-qa-instructions.md`，由 Spec 07 §4.4 在 `initialize` 注入。注入失败 fail-open，不是权限边界。该文件与本节一致：同一问询最多 60 次数据工具，或累计 300 秒数据处理时长（不含思考时间），并写明可以继续一次。指导不得再宽于代理预算。
 
 P0 不拆句。复述范围在 P1，载体仍是这份指导，不新增代理拦截。见 §7.2 的下一段，任务在 WO-13 T8。
 
@@ -349,7 +349,7 @@ function compileMeasure(measure, source):
 | SC-1 | P0 | 不调用 `lucy_begin_question` 的 `lucy_query` 在授权通过时成功 |
 | SC-2 | P0 | 测试客户端送出 session 时，begin 之后的调用 `turn_attribution_mode=session_bound`、`association_status=candidate` 且置信度为 low；不得升级为 confirmed。生产环境的 turn 绑定率不是本条的退出条件 |
 | SC-3 | P0 | begin 的 `intentSummary` 在问询导出里来源为用户原话；空 summary 返回 `missing_intent_summary` 且不阻断随后的查数 |
-| SC-4 | P0 | 第 21 次数据工具或已结算数据处理时长达到 120 秒时返回 `question_budget_exhausted`，`outcome=budget_stop`，失败维度为空。空闲时间不计入 |
+| SC-4 | P0 | 第 61 次数据工具或已结算数据处理时长达到 300 秒时返回 `question_budget_exhausted`，`outcome=budget_stop`，失败维度为空。空闲时间不计入（2026-11-11 阈值放宽） |
 | SC-5 | P0 | 修复提示中的 source 全部属于该角色；夹入一个 ACL 外的名字时测试失败 |
 | SC-6 | P0 | 日志中的 filter 形状不得编译出 `AS field` / `STRUCT(`。复现夹具用 KSC 的 MySQL 文本和 MJ 的 `...RUCT(` 文本各一条 |
 | SC-7 | P0 | 引擎只返回截断文本时，`compiler_reason=filter_pushdown` 且 `generated_sql` 允许为空 |

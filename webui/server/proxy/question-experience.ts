@@ -6,9 +6,10 @@
 
 import { randomUUID } from "node:crypto";
 
-export const QUESTION_BUDGET_MAX_CALLS = 20;
-export const QUESTION_BUDGET_MAX_WALL_MS = 120_000;
-export const QUESTION_BUDGET_MAX_BUSY_MS = 120_000;
+/** Defaults: Spec lucy-20261111 threshold relax (was 20 / 120_000). */
+export const QUESTION_BUDGET_MAX_CALLS = 60;
+export const QUESTION_BUDGET_MAX_WALL_MS = 300_000;
+export const QUESTION_BUDGET_MAX_BUSY_MS = 300_000;
 export const QUESTION_BUDGET_MAX_INFLIGHT = 4;
 export const QUESTION_BUDGET_ABS_EXEC_MS = 120_000;
 
@@ -199,7 +200,7 @@ export class QuestionBudget {
    *
    * 缺陷：首次消费某个作用域时，状态要从持久层 `await load()`。两个并发请求
    * 会同时看到「内存里没有这个作用域」，各自 load 到同一份旧计数（如 calls=19），
-   * 各自 +1 后都判定为放行 —— 于是**实际执行了 21 次**，而落库只有 20 次，
+   * 各自 +1 后都判定为放行 —— 于是**实际执行次数会超过上限**，而落库仍按上限封顶，
    * 硬上限被并发在途请求穿透。
    *
    * 修法：按作用域串行化这一段。**不引入多副本锁** —— Lucy 是单实例／单副本

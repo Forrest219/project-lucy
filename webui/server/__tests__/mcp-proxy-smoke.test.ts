@@ -2667,7 +2667,8 @@ describe("MCP proxy smoke", () => {
       turnDb.close();
 
       await post("budget-begin", "lucy_begin_question", { intentSummary: "问询预算" }, { "mcp-session-id": "session-budget" });
-      for (let i = 0; i < 20; i += 1) {
+      const { QUESTION_BUDGET_MAX_CALLS } = await import("../proxy/question-experience.js");
+      for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS; i += 1) {
         const ok = await post(`budget-${i}`, "lucy_query", queryArgs, { "mcp-session-id": "session-budget" });
         expect(ok.result?.isError).not.toBe(true);
       }

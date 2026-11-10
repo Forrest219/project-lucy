@@ -18,6 +18,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import {
+  QUESTION_BUDGET_ABS_EXEC_MS,
   QUESTION_BUDGET_MAX_BUSY_MS,
   QUESTION_BUDGET_MAX_CALLS,
   QuestionBudget,
@@ -227,12 +228,17 @@ describe("question budget continuation", () => {
     budget.setMonoClock(() => mono);
     await budget.beginQuestion({ identityKey: IDENTITY, sessionId: SESSION, turnId: TURN, now: 0 });
 
-    // 一次 120 秒的数据调用把「已结算处理时长」打满
-    const opening = await open(budget, 1_000);
-    expect(opening.action).toBe("allow");
-    if (opening.action !== "allow" || !opening.ticket) return;
-    mono = QUESTION_BUDGET_MAX_BUSY_MS;
-    await budget.settle(opening.ticket, mono);
+    // 单次 settle 受 ABS_EXEC 封顶；按剩余额度切块累计到恰好 MAX_BUSY_MS
+    let remainingBusy = QUESTION_BUDGET_MAX_BUSY_MS;
+    while (remainingBusy > 0) {
+      const opening = await open(budget, mono + 1);
+      expect(opening.action).toBe("allow");
+      if (opening.action !== "allow" || !opening.ticket) return;
+      const chunk = Math.min(QUESTION_BUDGET_ABS_EXEC_MS, remainingBusy);
+      mono += chunk;
+      await budget.settle(opening.ticket, mono);
+      remainingBusy -= chunk;
+    }
     expect(budget.snapshotScope(scopeKey)?.busyMs).toBe(QUESTION_BUDGET_MAX_BUSY_MS);
 
     const stopped = await admit(budget, 2_000);

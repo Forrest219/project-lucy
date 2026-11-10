@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { closeAuditDb, readR1AuditObservability, writeLog } from "../proxy/audit.js";
 import { identifyRequestDetailed, invalidateAccessConfigCache } from "../proxy/identity.js";
 import {
+  QUESTION_BUDGET_MAX_CALLS,
+  QUESTION_BUDGET_MAX_WALL_MS,
   QuestionBudget,
   actorFromToken,
   classifyFailure,
@@ -19,9 +21,9 @@ import {
 } from "../proxy/question-experience.js";
 
 describe("question budget and repair hints", () => {
-  it("stops on the 21st data call and again after the one allowed continuation", () => {
+  it("stops after MAX_CALLS data calls and again after the one allowed continuation", () => {
     const budget = new QuestionBudget();
-    for (let i = 0; i < 20; i += 1) {
+    for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS; i += 1) {
       expect(budget.consume("turn-1", 1_000).action).toBe("allow");
     }
     const firstStop = budget.consume("turn-1", 1_000);
@@ -33,20 +35,20 @@ describe("question budget and repair hints", () => {
     expect(classifyFailure({ outcome: "budget_stop", decisionReason: firstStop.reason })).toBe("");
 
     expect(budget.consume("turn-1", 1_000, "turn-1").action).toBe("allow");
-    for (let i = 0; i < 19; i += 1) {
+    for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS - 1; i += 1) {
       expect(budget.consume("turn-1", 1_000).action).toBe("allow");
     }
     expect(budget.consume("turn-1", 1_000).action).toBe("stop");
     expect(budget.consume("turn-1", 1_000, "turn-1").action).toBe("stop");
   });
 
-  it("stops when elapsed wall mode reaches 120 seconds", () => {
+  it("stops when elapsed wall mode reaches MAX_WALL_MS", () => {
     const previous = process.env.LUCY_QUESTION_BUDGET_WALL_MODE;
     process.env.LUCY_QUESTION_BUDGET_WALL_MODE = "elapsed";
     try {
       const budget = new QuestionBudget();
       expect(budget.consume("turn-wall", 5_000).action).toBe("allow");
-      const stopped = budget.consume("turn-wall", 5_000 + 120_000);
+      const stopped = budget.consume("turn-wall", 5_000 + QUESTION_BUDGET_MAX_WALL_MS);
       expect(stopped.action).toBe("stop");
     } finally {
       if (previous === undefined) delete process.env.LUCY_QUESTION_BUDGET_WALL_MODE;
@@ -246,7 +248,7 @@ describe("D-24 concurrent first consume must not exceed the hard cap", () => {
   }
 
   it("两个并发的首次消费只有一个放行", async () => {
-    const { budget, saved } = makeBudget(19);
+    const { budget, saved } = makeBudget(QUESTION_BUDGET_MAX_CALLS - 1);
     const [a, b] = await Promise.all([
       budget.consumePersisted("d24", 1_000),
       budget.consumePersisted("d24", 1_000)
@@ -261,7 +263,7 @@ describe("D-24 concurrent first consume must not exceed the hard cap", () => {
     expect(stop.reason).toBe("question_budget_exhausted");
 
     // 落库的计数不得超过上限。
-    expect(Math.max(...saved)).toBeLessThanOrEqual(20);
+    expect(Math.max(...saved)).toBeLessThanOrEqual(QUESTION_BUDGET_MAX_CALLS);
   });
 
   it("并发消费受在途上限约束，落库次数等于实际放行次数", async () => {

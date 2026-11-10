@@ -211,11 +211,11 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
   }
 }
 
-/** 把该作用域的额度用尽（20 次数据调用上限）。 */
+/** 把该作用域的额度用尽（MAX_CALLS 次数据调用上限）。 */
 async function exhaustBudget(scopeKey: string): Promise<void> {
-  const { questionBudget, budgetIdentityKey } = await import("../proxy/question-experience.js");
+  const { questionBudget, budgetIdentityKey, QUESTION_BUDGET_MAX_CALLS } = await import("../proxy/question-experience.js");
   const identityKey = budgetIdentityKey("route_agent", tokenHash(TOKEN).slice(0, 19));
-  for (let i = 0; i < 20; i += 1) {
+  for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS; i += 1) {
     const decision = await questionBudget.consumePersisted(undefined, Date.now(), undefined, undefined, {
       identityKey,
       sessionId: SESSION,
@@ -226,7 +226,7 @@ async function exhaustBudget(scopeKey: string): Promise<void> {
       await questionBudget.settle(decision.ticket, decision.ticket.startMonoMs);
     }
   }
-  expect(questionBudget.snapshotScope(scopeKey)?.calls).toBe(20);
+  expect(questionBudget.snapshotScope(scopeKey)?.calls).toBe(QUESTION_BUDGET_MAX_CALLS);
 }
 
 describe("question budget bypass scope", () => {
@@ -237,9 +237,10 @@ describe("question budget bypass scope", () => {
       expect(JSON.stringify(result.body)).toContain(ROUTE_ID);
       // 一次外部调用 = 1 次额度；内部源查询不重复记次数。
       expect(harness.budgetCalls()).toBe(1);
-      // 内部查询的时长计入 busyMs（封顶 120 秒）。
+      // 内部查询的时长计入 busyMs（封顶 MAX_BUSY_MS；单次绝对时限仍 120s）。
+      const { QUESTION_BUDGET_MAX_BUSY_MS } = await import("../proxy/question-experience.js");
       expect(harness.budgetBusyMs()).toBeGreaterThanOrEqual(0);
-      expect(harness.budgetBusyMs()).toBeLessThan(120_000);
+      expect(harness.budgetBusyMs()).toBeLessThan(QUESTION_BUDGET_MAX_BUSY_MS);
       expect(harness.upstreamCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
@@ -253,7 +254,8 @@ describe("question budget bypass scope", () => {
       expect(JSON.stringify(result.body)).toContain("question_budget_exhausted");
       // 没有执行真实查询，也没有增加次数。
       expect(harness.upstreamCalls.length).toBe(upstreamBefore);
-      expect(harness.budgetCalls()).toBe(20);
+      const { QUESTION_BUDGET_MAX_CALLS } = await import("../proxy/question-experience.js");
+      expect(harness.budgetCalls()).toBe(QUESTION_BUDGET_MAX_CALLS);
     });
   });
 

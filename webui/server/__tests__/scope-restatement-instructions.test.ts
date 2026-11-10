@@ -40,7 +40,7 @@ describe("scope restatement instructions (SC-25)", () => {
 
   it("keeps the existing proxy budget wording alongside the new section", async () => {
     const text = await instructions();
-    expect(text).toContain("同一问询最多 20 次数据工具调用，或累计 120 秒数据处理时长（不含思考时间）");
+    expect(text).toContain("同一问询最多 60 次数据工具调用，或累计 300 秒数据处理时长（不含思考时间）");
     expect(text).toContain("question_budget_exhausted");
   });
 
