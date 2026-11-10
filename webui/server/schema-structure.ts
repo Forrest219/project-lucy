@@ -1,12 +1,5 @@
 import { stringify } from "yaml";
-import {
-  describeTableSql,
-  quoteMysqlIdent,
-  showColumnsSql,
-  showFullColumnsSql,
-  showTablesFromCatalogSql,
-  splitCatalogDatabase
-} from "./catalog-database";
+import { catalogTablesSql, describeCatalogTableSql, quoteMysqlIdent, splitCatalogDatabase } from "./catalog-database";
 import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
@@ -450,32 +443,44 @@ function structureRows(result: SqlResult, context: SchemaStructureLogContext = {
   return rows;
 }
 
-/** SelectDB / Doris: only statement rejection may fall back to a narrower probe. */
-export function isCatalogStatementRejected(result: Pick<SqlResult, "stderr" | "stdout">): boolean {
-  const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
-  return /unsupported command|unknown command|not support(?:ed)?\s+(?:this\s+)?command|command not supported/i.test(
-    text
-  );
+async function readCatalogTableColumns(
+  projectRoot: string,
+  connectionId: string,
+  catalog: string,
+  schema: string,
+  table: string,
+  execute: typeof runSql
+): Promise<{ columns: ColumnInput[]; failure: string }> {
+  const described = await execute(projectRoot, connectionId, describeCatalogTableSql(catalog, schema, table), {
+    maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+    timeoutMs: 30000
+  });
+  const columns = mapDescribeColumns(table, optionalRows(described));
+  return { columns, failure: columns.length > 0 ? "" : readFailureMessage(described) };
 }
 
-function mapShowFullColumn(table: string, row: unknown[]): ColumnInput | null {
+function resultRows(result: SqlResult): unknown[] | null {
+  const json = result.json;
+  if (!result.ok || !json || typeof json !== "object" || !Array.isArray((json as { rows?: unknown }).rows)) {
+    return null;
+  }
+  return (json as { rows: unknown[] }).rows;
+}
+
+function readFailureMessage(result: SqlResult): string {
+  const driver = [result.stderr, result.stdout].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  const clipped = driver.length > 240 ? `${driver.slice(0, 240)}…` : driver;
+  return clipped ? `读取表结构失败：${clipped}` : "读取表结构失败。";
+}
+
+function optionalRows(result: SqlResult): unknown[] | null {
+  const rows = resultRows(result);
+  if (!rows || rows.length === 0 || rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) return null;
+  return rows;
+}
+
+function mapDescribeColumn(table: string, row: unknown[]): ColumnInput | null {
   if (!Array.isArray(row) || row.length < 4) return null;
-  const column = String(row[0] ?? "").trim();
-  if (!column || column.length > 256 || /[\0\r\n]/.test(column)) return null;
-  const comment = row.length >= 9 ? String(row[8] ?? "") : "";
-  return {
-    table,
-    column,
-    dataType: String(row[1] ?? ""),
-    nullable: String(row[3] ?? "YES").toUpperCase() !== "NO",
-    primaryKey: String(row[4] ?? "").toUpperCase() === "PRI",
-    comment
-  };
-}
-
-/** SHOW COLUMNS / DESCRIBE: Field, Type, Null, Key, Default, Extra. */
-function mapShowColumn(table: string, row: unknown[]): ColumnInput | null {
-  if (!Array.isArray(row) || row.length < 2) return null;
   const column = String(row[0] ?? "").trim();
   if (!column || column.length > 256 || /[\0\r\n]/.test(column)) return null;
   return {
@@ -488,88 +493,15 @@ function mapShowColumn(table: string, row: unknown[]): ColumnInput | null {
   };
 }
 
-function tryParseColumnRows(
-  table: string,
-  result: SqlResult,
-  mapper: (table: string, row: unknown[]) => ColumnInput | null
-): ColumnInput[] | null {
-  if (!result.ok || result.json == null || typeof result.json !== "object") return null;
-  const rows = (result.json as { rows?: unknown }).rows;
-  if (!Array.isArray(rows)) return null;
-  if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
-    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
-  }
+function mapDescribeColumns(table: string, rows: unknown[] | null): ColumnInput[] {
+  if (!rows) return [];
   const columns: ColumnInput[] = [];
   for (const row of rows) {
     if (!Array.isArray(row)) continue;
-    const mapped = mapper(table, row);
+    const mapped = mapDescribeColumn(table, row);
     if (mapped) columns.push(mapped);
   }
   return columns;
-}
-
-/**
- * SelectDB external catalogs often reject SHOW FULL COLUMNS. Try narrower
- * probes only when the engine rejects the statement; connection / timeout
- * failures surface immediately. An empty column list still keeps the table name
- * when every probe was a statement rejection.
- */
-async function readCatalogColumnsForTable(
-  projectRoot: string,
-  connectionId: string,
-  catalog: string,
-  schema: string,
-  table: string,
-  execute: typeof runSql
-): Promise<ColumnInput[]> {
-  const probes: Array<{
-    sql: string;
-    mapper: (table: string, row: unknown[]) => ColumnInput | null;
-  }> = [
-    { sql: showFullColumnsSql(catalog, schema, table), mapper: mapShowFullColumn },
-    { sql: showColumnsSql(catalog, schema, table), mapper: mapShowColumn },
-    { sql: describeTableSql(catalog, schema, table), mapper: mapShowColumn }
-  ];
-  const rejected: Array<{ sql: string; stderr: string; exitCode: number }> = [];
-  for (const probe of probes) {
-    const result = await execute(projectRoot, connectionId, probe.sql, {
-      maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-      timeoutMs: 30_000
-    });
-    const mapped = tryParseColumnRows(table, result, probe.mapper);
-    if (mapped) return mapped;
-    const meta: SchemaStructureLogContext = {
-      connectionId,
-      schema,
-      table,
-      phase: "catalog-columns",
-      sql: probe.sql
-    };
-    if (!isCatalogStatementRejected(result)) {
-      logSchemaStructureFailure(meta, result);
-      throw new SchemaStructureError(
-        "READ_FAILED",
-        formatSchemaStructureUserMessage(meta),
-        400,
-        safeStructureDetail(meta)
-      );
-    }
-    rejected.push({
-      sql: clipLogText(probe.sql, 200),
-      stderr: clipLogText(result.stderr || result.stdout, 300),
-      exitCode: result.exitCode
-    });
-  }
-  // Soft-degrade to table-name-only manifest; still log so upgrades can see
-  // whether DESCRIBE / SHOW COLUMNS were also rejected on the customer build.
-  console.warn("[schema-structure] catalog column probes exhausted; keeping table without columns", {
-    connectionId,
-    schema,
-    table,
-    catalog,
-    rejected
-  });
-  return [];
 }
 
 function parseColumns(rows: unknown[]): ColumnInput[] {
@@ -621,17 +553,13 @@ export async function readSchemaColumns(
   const catalog = protocolOf(connection) === "mysql" ? splitCatalogDatabase(connection.database) : null;
   try {
     if (catalog) {
-      const listSql = showTablesFromCatalogSql(catalog.catalog, safeSchema);
-      const tablesResult = await execute(projectRoot, connectionId, listSql, {
-        maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-        timeoutMs: 30000
-      });
-      const tableNames = structureRows(tablesResult, {
+      const tablesResult = await execute(
+        projectRoot,
         connectionId,
-        schema: safeSchema,
-        phase: "catalog-list-tables",
-        sql: listSql
-      })
+        catalogTablesSql(catalog.catalog, safeSchema),
+        { maxRows: SCHEMA_STRUCTURE_MAX_ROWS, timeoutMs: 30000 }
+      );
+      const tableNames = structureRows(tablesResult)
         .map((row) => (Array.isArray(row) ? String(row[0] ?? "").trim() : ""))
         .filter((name) => {
           try {
@@ -641,12 +569,10 @@ export async function readSchemaColumns(
             return false;
           }
         });
-      if (tableNames.length > CATALOG_STRUCTURE_MAX_TABLES) {
-        return { status: "too_large" };
-      }
       const columns: ColumnInput[] = [];
+      let failure = "";
       for (const table of tableNames) {
-        const mapped = await readCatalogColumnsForTable(
+        const read = await readCatalogTableColumns(
           projectRoot,
           connectionId,
           catalog.catalog,
@@ -654,9 +580,13 @@ export async function readSchemaColumns(
           table,
           execute
         );
-        columns.push(...mapped);
+        columns.push(...read.columns);
+        if (read.failure) failure = read.failure;
       }
-      return { status: "ok", columns, tables: tableNames };
+      if (tableNames.length > 0 && columns.length === 0) {
+        return { status: "error", message: failure || "读取表结构失败。" };
+      }
+      return { status: "ok", columns };
     }
     const protocol = protocolOf(connection);
     // MySQL: always per-table. Do not attempt a schema-wide columns scan first —

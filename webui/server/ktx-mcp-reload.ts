@@ -187,10 +187,16 @@ async function reloadThroughSupervisor(
       reason: "ktx.yaml write"
     });
     if (channel.reloadStatus === "unsupported") return null;
-    if (channel.reloadStatus === "succeeded") {
+    if (channel.reloadStatus === "succeeded" && channel.configVerification === "verified") {
       return {
         status: "reloaded",
         detail: channel.detail?.trim() || "执行层已重读 ktx.yaml"
+      };
+    }
+    if (channel.reloadStatus === "succeeded") {
+      return {
+        status: "failed",
+        detail: channel.detail?.trim() || "执行层已重启，但没有确认新连接已加载"
       };
     }
     return {

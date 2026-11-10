@@ -82,6 +82,7 @@ describe("reloadKtxMcpExecutionRuntime", () => {
     process.env.LUCY_KTX_MCP_RELOAD = "0";
     supervisor.reloadExecutionRuntime.mockResolvedValue({
       reloadStatus: "succeeded",
+      configVerification: "verified",
       detail: "执行层已重读 ktx.yaml"
     });
     try {
@@ -92,6 +93,24 @@ describe("reloadKtxMcpExecutionRuntime", () => {
         connectionId: "hive-jd",
         reason: "ktx.yaml write"
       });
+    } finally {
+      if (previous === undefined) delete process.env.LUCY_KTX_MCP_RELOAD;
+      else process.env.LUCY_KTX_MCP_RELOAD = previous;
+    }
+  });
+
+  it("does not report reloaded when the supervisor restarted without loading the connection", async () => {
+    const previous = process.env.LUCY_KTX_MCP_RELOAD;
+    process.env.LUCY_KTX_MCP_RELOAD = "0";
+    supervisor.reloadExecutionRuntime.mockResolvedValue({
+      reloadStatus: "succeeded",
+      configVerification: "failed",
+      detail: "Connection \"hive-jd\" is not configured in ktx.yaml"
+    });
+    try {
+      const result = await reloadKtxMcpAfterConfigWrite("/tmp/lucy-project", "hive-jd");
+      expect(result.status).toBe("failed");
+      expect(result.detail).toContain("hive-jd");
     } finally {
       if (previous === undefined) delete process.env.LUCY_KTX_MCP_RELOAD;
       else process.env.LUCY_KTX_MCP_RELOAD = previous;

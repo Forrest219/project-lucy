@@ -169,6 +169,17 @@ import {
 import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
 import { readKtxYamlDigest } from "./mcp-runtime-state.js";
 import { reloadKtxMcpAfterConfigWrite } from "./ktx-mcp-reload.js";
+
+async function reloadExecutionRuntimeOrFail(projectRoot: string, connectionId?: string): Promise<void> {
+  const reload = await reloadKtxMcpAfterConfigWrite(projectRoot, connectionId);
+  if (reload.status === "reloaded" || reload.status === "started") return;
+  const err = new Error(
+    reload.detail?.trim() || "问数服务没有加载这条连接，暂时不能读取数据。"
+  ) as Error & { statusCode: number; code: string };
+  err.statusCode = 503;
+  err.code = "EXECUTION_RUNTIME_NOT_LOADED";
+  throw err;
+}
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
@@ -1674,7 +1685,7 @@ export function buildServer() {
         console.error("[connection-create] catalog reload failed", error);
       }
 
-      const reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, body.id);
+      await reloadExecutionRuntimeOrFail(projectRoot, body.id);
 
       let policyVersion = "";
       let policyRuntimeAck = false;
@@ -1688,11 +1699,7 @@ export function buildServer() {
       }
 
       const executionAck = await executionAckForConnection(body.id);
-      const executionRuntimePending = await pendingAfterConfigReload(
-        projectRoot,
-        digestBefore,
-        reloadResult
-      );
+      const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
       return {
         ok: true,
@@ -1947,14 +1954,10 @@ export function buildServer() {
       policyRuntimeAck = false;
     }
 
-    const reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+    await reloadExecutionRuntimeOrFail(projectRoot, connId);
 
     const executionAck = await executionAckForConnection(connId);
-    const executionRuntimePending = await pendingAfterConfigReload(
-      projectRoot,
-      digestBefore,
-      reloadResult
-    );
+    const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
     return {
       ok: true,
@@ -2041,14 +2044,13 @@ export function buildServer() {
         }
       }
     );
-    let reloadResult: { status: string } = { status: "skipped" };
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+      await reloadExecutionRuntimeOrFail(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await pendingAfterConfigReload(projectRoot, digestBefore, reloadResult);
+      : await noteExecutionRuntimePending(projectRoot, digestBefore);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2066,7 +2068,6 @@ export function buildServer() {
       deleteSecret: body.deleteSecret,
       deleteAssets: body.deleteAssets
     });
-    let reloadResult: { status: string } = { status: "skipped" };
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
       if ("deletedFiles" in result) {
@@ -2074,11 +2075,11 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot);
+      await reloadExecutionRuntimeOrFail(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await pendingAfterConfigReload(projectRoot, digestBefore, reloadResult);
+      : await noteExecutionRuntimePending(projectRoot, digestBefore);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2097,14 +2098,13 @@ export function buildServer() {
     const result = await addSchema(projectRoot, connId, body.schema, dryRun, {
       recordConfigChange
     });
-    let reloadResult: { status: string } = { status: "skipped" };
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+      await reloadExecutionRuntimeOrFail(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await pendingAfterConfigReload(projectRoot, digestBefore, reloadResult);
+      : await noteExecutionRuntimePending(projectRoot, digestBefore);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2125,7 +2125,6 @@ export function buildServer() {
       deleteManifest: body.deleteManifest,
       deleteOverlays: body.deleteOverlays
     });
-    let reloadResult: { status: string } = { status: "skipped" };
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
       if ("deletedFiles" in result) {
@@ -2133,11 +2132,11 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      reloadResult = await reloadKtxMcpAfterConfigWrite(projectRoot, connId);
+      await reloadExecutionRuntimeOrFail(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await pendingAfterConfigReload(projectRoot, digestBefore, reloadResult);
+      : await noteExecutionRuntimePending(projectRoot, digestBefore);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
