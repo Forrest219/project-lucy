@@ -39,3 +39,13 @@ export function showTablesFromCatalogSql(catalog: string, database: string): str
 export function showFullColumnsSql(catalog: string, database: string, table: string): string {
   return `SHOW FULL COLUMNS FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
 }
+
+/** Narrower than SHOW FULL COLUMNS; some SelectDB external catalogs accept this. */
+export function showColumnsSql(catalog: string, database: string, table: string): string {
+  return `SHOW COLUMNS FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
+}
+
+/** Last-resort column probe for external catalogs that reject SHOW * COLUMNS. */
+export function describeTableSql(catalog: string, database: string, table: string): string {
+  return `DESCRIBE ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
+}

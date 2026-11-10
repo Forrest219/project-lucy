@@ -405,6 +405,19 @@ function supportedErrorDetail(error: SupportedError): unknown {
       );
     }
   }
+  if (error.code === "READ_FAILED") {
+    const detail = error.detail;
+    if (!detail || typeof detail !== "object") return undefined;
+    const source = detail as Record<string, unknown>;
+    return {
+      ...(typeof source.connectionId === "string" ? { connectionId: source.connectionId } : {}),
+      ...(typeof source.schema === "string" ? { schema: source.schema } : {}),
+      ...(typeof source.table === "string" ? { table: source.table } : {}),
+      ...(typeof source.phase === "string" ? { phase: source.phase } : {}),
+      ...(typeof source.sql === "string" ? { sql: source.sql } : {}),
+      ...(typeof source.stderr === "string" ? { stderr: source.stderr } : {})
+    };
+  }
   if (error.code === "connection_references_remain") {
     // Spec 179 §3 / §5: blockers let the Admin client say which of 角色 / 用户 /
     // 业务 Wiki / 本地 YAML 资产 still block deletion. Pinned shape — only `{kind, id}`.
@@ -1773,8 +1786,20 @@ export function buildServer() {
       return { ok: true, data };
     } catch (err) {
       if (err instanceof SchemaStructureError) {
-        throw enabledTableError(err.code, err.message);
+        console.error("[schema-structure] preview API failed", {
+          connectionId: request.params.connId,
+          schema,
+          code: err.code,
+          message: err.message,
+          detail: err.detail ?? null
+        });
+        throw enabledTableError(err.code, err.message, err.detail);
       }
+      console.error("[schema-structure] preview API unexpected failure", {
+        connectionId: request.params.connId,
+        schema,
+        detail: err instanceof Error ? err.message : String(err)
+      });
       throw err;
     }
   });

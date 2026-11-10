@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { listLiveSchemas } from "../live-catalog";
 import { createSqlLiveTableProvider } from "../live-tables";
 import { previewSchemaStructure } from "../schema-structure";
@@ -168,5 +168,132 @@ describe("isolated Doris external catalog", () => {
       "app_user_tail_retain_i_d_i_d",
       "日活明细"
     ]);
+  });
+
+  /**
+   * Field reproduction for customer SelectDB: SHOW TABLES works, but
+   * SHOW FULL COLUMNS is rejected. Fall back to DESCRIBE so prepare-structure
+   * still returns tables (and can write a local manifest).
+   */
+  it("falls back to DESCRIBE when SelectDB rejects SHOW FULL COLUMNS", async () => {
+    const seen: string[] = [];
+    const runSqlImpl = async (_root: string, _id: string, sql: string) => {
+      seen.push(sql);
+      const text = sql.replace(/\s+/g, " ").trim();
+      if (text === "SHOW TABLES FROM `hive_jd`.`app`") {
+        return sqlResult([
+          ["app_user_tail_dau_i_d_i_d"],
+          ["日活明细"]
+        ]);
+      }
+      if (text.startsWith("SHOW FULL COLUMNS FROM `hive_jd`.`app`.")) {
+        return sqlResult([], false, "errCode = 2, detailMessage =\nUnsupported command: SHOW FULL COLUMNS");
+      }
+      if (text.startsWith("SHOW COLUMNS FROM `hive_jd`.`app`.")) {
+        return sqlResult([], false, "errCode = 2, detailMessage =\nUnsupported command: SHOW COLUMNS");
+      }
+      if (text === "DESCRIBE `hive_jd`.`app`.`日活明细`") {
+        return sqlResult([["统计日期", "date", "YES", "", null, ""]]);
+      }
+      if (text === "DESCRIBE `hive_jd`.`app`.`app_user_tail_dau_i_d_i_d`") {
+        return sqlResult([["stat_date", "date", "YES", "", null, ""]]);
+      }
+      if (/\binformation_schema\b/i.test(text)) {
+        return sqlResult([], false, DEFAULT_CLUSTER_ERROR);
+      }
+      return sqlResult([], false, `unexpected sql: ${text}`);
+    };
+
+    const preview = await previewSchemaStructure("/isolated", "hive-jd", "app", {
+      readConnectionsImpl: async () => [hiveJd],
+      runSqlImpl
+    });
+
+    expect(preview.readable).toBe(true);
+    expect(preview.tableCount).toBe(2);
+    expect(preview.yaml).toContain("日活明细");
+    expect(preview.yaml).toContain("app_user_tail_dau_i_d_i_d");
+    expect(preview.yaml).toContain("统计日期");
+    expect(seen[0]).toBe("SHOW TABLES FROM `hive_jd`.`app`");
+    expect(seen.some((sql) => sql.startsWith("SHOW FULL COLUMNS FROM `hive_jd`.`app`."))).toBe(true);
+    expect(seen.some((sql) => sql.startsWith("DESCRIBE `hive_jd`.`app`."))).toBe(true);
+    expect(seen.join("\n")).not.toMatch(/information_schema/i);
+  });
+
+  it("keeps catalog tables when every column probe is rejected", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const runSqlImpl = async (_root: string, _id: string, sql: string) => {
+      const text = sql.replace(/\s+/g, " ").trim();
+      if (text === "SHOW TABLES FROM `hive_jd`.`app`") {
+        return sqlResult([["日活明细"]]);
+      }
+      if (
+        text.startsWith("SHOW FULL COLUMNS FROM `hive_jd`.`app`.") ||
+        text.startsWith("SHOW COLUMNS FROM `hive_jd`.`app`.") ||
+        text.startsWith("DESCRIBE `hive_jd`.`app`.")
+      ) {
+        return sqlResult([], false, "errCode = 2, detailMessage =\nUnsupported command");
+      }
+      return sqlResult([], false, `unexpected sql: ${text}`);
+    };
+
+    try {
+      const preview = await previewSchemaStructure("/isolated", "hive-jd", "app", {
+        readConnectionsImpl: async () => [hiveJd],
+        runSqlImpl
+      });
+
+      expect(preview.readable).toBe(true);
+      expect(preview.tableCount).toBe(1);
+      expect(preview.columnCount).toBe(0);
+      expect(preview.yaml).toContain("日活明细");
+      expect(warn).toHaveBeenCalledWith(
+        "[schema-structure] catalog column probes exhausted; keeping table without columns",
+        expect.objectContaining({
+          connectionId: "hive-jd",
+          schema: "app",
+          table: "日活明细",
+          rejected: expect.arrayContaining([
+            expect.objectContaining({ stderr: expect.stringContaining("Unsupported command") })
+          ])
+        })
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("logs driver stderr when catalog SHOW TABLES itself fails", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const runSqlImpl = async (_root: string, _id: string, sql: string) => {
+      const text = sql.replace(/\s+/g, " ").trim();
+      if (text === "SHOW TABLES FROM `hive_jd`.`app`") {
+        return sqlResult([], false, "errCode = 2, detailMessage =\nUnknown catalog 'hive_jd'");
+      }
+      return sqlResult([], false, `unexpected sql: ${text}`);
+    };
+
+    try {
+      await expect(
+        previewSchemaStructure("/isolated", "hive-jd", "app", {
+          readConnectionsImpl: async () => [hiveJd],
+          runSqlImpl
+        })
+      ).rejects.toMatchObject({
+        message: expect.stringMatching(/^读取表结构失败：无法列出 Schema「app」下的表。数据库返回：.*Unknown catalog 'hive_jd'/)
+      });
+
+      expect(error).toHaveBeenCalledWith(
+        "[schema-structure] read failed",
+        expect.objectContaining({
+          connectionId: "hive-jd",
+          schema: "app",
+          phase: "catalog-list-tables",
+          stderr: expect.stringContaining("Unknown catalog 'hive_jd'")
+        })
+      );
+    } finally {
+      error.mockRestore();
+    }
   });
 });

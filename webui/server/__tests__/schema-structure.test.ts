@@ -59,11 +59,13 @@ describe("previewSchemaStructure", () => {
       json: null
     }));
 
-    await expect(preview(runSqlImpl)).rejects.toEqual(expect.objectContaining({
+    await expect(preview(runSqlImpl)).rejects.toMatchObject({
       name: "SchemaStructureError",
       code: "READ_FAILED",
-      message: "读取表结构失败。"
-    }));
+      message: expect.stringMatching(
+        /^读取表结构失败：无法一次读取 Schema「dataforai」的字段。数据库返回：.*--max-rows/
+      )
+    });
     await expect(preview(runSqlImpl)).rejects.toBeInstanceOf(SchemaStructureError);
   });
 
@@ -72,7 +74,7 @@ describe("previewSchemaStructure", () => {
 
     await expect(preview(runSqlImpl)).rejects.toMatchObject({
       code: "READ_FAILED",
-      message: "读取表结构失败。"
+      message: expect.stringMatching(/^读取表结构失败：无法一次读取 Schema「dataforai」的字段。/)
     });
   });
 
