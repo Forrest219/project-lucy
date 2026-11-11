@@ -414,6 +414,15 @@ async function handleTableStructureDiff(
         columns: { added: [], removed: [], changed: [] }
       };
     }
+    const rejection = read.rejections?.find((item) => item.table.toLowerCase() === table.toLowerCase());
+    if (rejection?.reason === "ambiguous") {
+      return {
+        table: physical,
+        status: "error" as const,
+        reason: "QUERY_FAILED" as LiveTableFailureReason,
+        columns: { added: [], removed: [], changed: [] }
+      };
+    }
     // The library spells the table the way the database spells it; the caller
     // may spell it differently. Both sides are compared case insensitively,
     // like `normalizeRef` does in Spec 183.

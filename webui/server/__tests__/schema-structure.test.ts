@@ -68,10 +68,13 @@ describe("previewSchemaStructure", () => {
 
   it("reads one checked table's columns", async () => {
     const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
-      if (!sql.includes("LOWER(table_name) = 'orders'")) {
-        return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'orders'")) {
+        return sqlResult({ json: { rows: [["orders"]] } });
       }
-      return sqlResult({ json: { rows: [["id", "varchar", "YES", "", "订单"]] } });
+      if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = 'orders'")) {
+        return sqlResult({ json: { rows: [["id", "varchar", "YES", "", "订单"]] } });
+      }
+      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
     });
 
     const result = await previewSchemaStructure("/project", "demo", "dataforai", {
@@ -83,13 +86,82 @@ describe("previewSchemaStructure", () => {
     expect(result.namesOnly).toBe(false);
     expect(result.tableCount).toBe(1);
     expect(result.columnCount).toBe(1);
-    expect(result.yaml).toContain("orders");
+    expect(result.yaml).toContain("orders:");
+    expect(result.yaml).toContain("name: id");
     expect(runSqlImpl).toHaveBeenCalledWith(
       "/project",
       "demo",
       expect.stringContaining("LOWER(table_name) = 'orders'"),
+      expect.objectContaining({ maxRows: 10, timeoutMs: 120_000 })
+    );
+    expect(runSqlImpl).toHaveBeenCalledWith(
+      "/project",
+      "demo",
+      expect.stringContaining("table_name = 'orders'"),
       expect.objectContaining({ maxRows: 2_000, timeoutMs: 120_000 })
     );
+  });
+
+  it("keeps a differently spelled request when only one physical table matches", async () => {
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'ledger'")) {
+        return sqlResult({ json: { rows: [["ledger"]] } });
+      }
+      if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = 'ledger'")) {
+        return sqlResult({ json: { rows: [["id", "int", "NO", "PRI", ""]] } });
+      }
+      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+    });
+
+    const result = await previewSchemaStructure("/project", "demo", "dataforai", {
+      readConnectionsImpl: async () => [mysqlConn],
+      runSqlImpl,
+      tables: ["Ledger"]
+    });
+
+    expect(result.columnCount).toBe(1);
+    expect(result.yaml).toContain("Ledger:");
+    expect(result.yaml).toContain("name: id");
+  });
+
+  it("rejects a checked table that returns no columns", async () => {
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'orders'")) {
+        return sqlResult({ json: { rows: [["orders"]] } });
+      }
+      if (sql.includes("FROM information_schema.columns")) {
+        return sqlResult({ json: { rows: [] } });
+      }
+      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+    });
+
+    await expect(previewSchemaStructure("/project", "demo", "dataforai", {
+      readConnectionsImpl: async () => [mysqlConn],
+      runSqlImpl,
+      tables: ["orders"]
+    })).rejects.toMatchObject({
+      code: "READ_FAILED",
+      message: "表「orders」没有读到字段。"
+    });
+  });
+
+  it("rejects a request that matches two physical tables", async () => {
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'orders'")) {
+        return sqlResult({ json: { rows: [["Orders"], ["orders"]] } });
+      }
+      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+    });
+
+    await expect(previewSchemaStructure("/project", "demo", "dataforai", {
+      readConnectionsImpl: async () => [mysqlConn],
+      runSqlImpl,
+      tables: ["orders"]
+    })).rejects.toMatchObject({
+      code: "READ_FAILED",
+      message: "表名「orders」对应多张表，无法读取字段。"
+    });
+    expect(runSqlImpl).toHaveBeenCalledTimes(1);
   });
 
   it("hides driver text when the name query fails", async () => {
@@ -124,7 +196,12 @@ describe("previewSchemaStructure", () => {
 
   it("fails closed when one table returns 2000 column rows", async () => {
     const rows = Array.from({ length: 2_000 }, (_, index) => [`c${index}`, "varchar", "YES", "", ""]);
-    const runSqlImpl = vi.fn(async () => sqlResult({ json: { rows } }));
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
+      if (sql.includes("FROM information_schema.tables")) {
+        return sqlResult({ json: { rows: [["orders"]] } });
+      }
+      return sqlResult({ json: { rows } });
+    });
 
     await expect(previewSchemaStructure("/project", "demo", "dataforai", {
       readConnectionsImpl: async () => [mysqlConn],
@@ -134,7 +211,7 @@ describe("previewSchemaStructure", () => {
       code: "READ_FAILED",
       message: "这次读取超过一次可读取的上限。"
     });
-    expect(runSqlImpl).toHaveBeenCalledTimes(1);
+    expect(runSqlImpl).toHaveBeenCalledTimes(2);
   });
 
   it("returns tableCount 0 when the schema has no base tables", async () => {
