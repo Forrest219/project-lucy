@@ -473,13 +473,14 @@ Claude Desktop 的"添加自定义连接器" UI 要求 HTTPS，且 URL 由 Anthr
 
 ## Skills 当前状态
 
-`skills/` 是 project-lucy 的增量能力补齐，**当前不被 KTX MCP server 自动加载**。data agent 仅能通过 Read 工具主动读取 `skills/**/SKILL.md`。
+`skills/` 是 project-lucy 的业务 Skill 文件事实源。KTX MCP server **不**自动加载这些文件。
 
-- `skills/` = single source of truth（lucy 增量补齐能力）
+- `skills/` = single source of truth（业务 Skill 资产）
 - `.ktx/skills/` 已废弃移除，不要再写入
-- 自动加载 / 按需触发能力将由独立的 `lucy-skills` MCP server 提供（P1.5 立项中）
+- 业务 Skill 的 Agent 读取通道：现行经 Lucy MCP Proxy 主面 `/mcp` 的 `lucy_skill_search` / `lucy_skill_read`（受 Role 通道授予 + Skill `roles_allowed`）
+- 独立 `lucy-skills` MCP server / `/mcp/skills` passthrough：规划见 `docs/specs/lucy-skills-mcp-spec.md`，**不是**当前客户端默认接入；仓库 `.mcp.json` 不得再指向该路径（门禁见 `scripts/smoke/mcp-client-config-guard.mjs`）
 
-KTX 上游不承担 skill 加载职责（KTX 定位是语义层 + wiki 通用 MCP server）；skill 由 lucy 自行起 MCP server 暴露，与 KTX 并列向 data agent 提供服务。
+KTX 上游不承担 skill 加载职责（KTX 定位是语义层 + wiki 通用 MCP server）。现行对外问数入口是单一 Lucy Proxy `/mcp`。
 
 ## 语境分工（详细说明）
 

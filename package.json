@@ -96,6 +96,7 @@
     "e2e:spider2-lite:sample": "node scripts/eval/e2e-spider2-lite-sample.mjs",
     "smoke:p1:context": "node scripts/smoke/p1-context-smoke.mjs",
     "smoke:p1:skills": "node scripts/smoke/p1-skills-smoke.mjs",
+    "smoke:p1:mcp-client-config:test": "node --test scripts/smoke/mcp-client-config-guard.test.mjs",
     "smoke:p1:endpoint": "node scripts/smoke/p1-endpoint-smoke.mjs",
     "smoke:p1:governance": "node scripts/smoke/p1-governance-smoke.mjs",
     "smoke:p1:publish-regression": "node scripts/smoke/p1-publish-regression-smoke.mjs",

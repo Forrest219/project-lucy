@@ -12,7 +12,7 @@
 - 不要根据不可见的库名、表名、wiki 标题或记忆内容作答。
 - 如果 `lucy_query` / `lucy_read_source` 没有成功返回事实数据，不要用 wiki-only context 编造数值。
 - 对日期字段按可见 source / wiki 的业务时区说明解释；POC 日期通常是 `Asia/Shanghai` 业务自然日。
-- Fallback instructions 不自动加载 Skill；如需复用 `skills/**/SKILL.md` 的分析路径，必须由客户端/agent 显式读取可见 Skill 或等待后续 lucy-skills MCP server 提供路由。
+- Fallback instructions 不自动加载 Skill；如需复用已发布业务 Skill，必须由客户端经主面 `/mcp` 显式调用可见的 `lucy_skill_search` / `lucy_skill_read`（或等价 Resource 读）。不要配置已关闭的 `/mcp/skills` passthrough。
 
 ## 可选问询上报（锦上添花）
 

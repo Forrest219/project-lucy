@@ -13,6 +13,8 @@
 | 输出位置 | docs/specs/lucy-skills-mcp-spec.md（2026-09-25 自 lucy-skills/docs/01-spec.md 迁入；规划的 server 实现目录仍为 lucy-skills/） |
 | 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复，不改实现、不补验收证据。实现现状：规划的 server 实现目录 `lucy-skills/` 尚未建立，验证材料 `inbox/lucy-skills-v5-report.md` 仍只在工作区（被 `.gitignore` 排除）。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
 
+> **现行客户端接入（2026-11-11）：** 仓库与手册默认 `.mcp.json` 只挂主面 `/mcp`。本 Spec 描述的 `/mcp/skills` 与并列 `lucy-skills` server 仍属未交付规划；不得作为当前 CC/Codex 配置模板。修正合同见 [`lucy-20261111-mcp-client-skill-endpoint-fix-spec.md`](lucy-20261111-mcp-client-skill-endpoint-fix-spec.md)。
+
 ## 闭口层级
 
 - 层级：功能合同

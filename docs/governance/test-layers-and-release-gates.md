@@ -50,6 +50,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p0:customer` | customer/manual | verifies configured real DB path on this machine |
 | `npm run smoke:p1:context` | context governance | semantic-layer inventory/readability and key wiki playbook evidence; optional KTX/proxy runtime checks |
 | `npm run smoke:p1:skills` | skill governance | `SKILL.md` frontmatter, dependency references, runtime boundary, and eval `skill_version` coverage |
+| `npm run smoke:p1:mcp-client-config:test` | skill / MCP client config | 仓库 `.mcp.json` 必须挂主面 `/mcp`；拒绝 legacy `lucy-skills`／`/mcp/skills`。规范见 [`docs/specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md`](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md) |
 | `npm run smoke:p1:endpoint` | MCP lifecycle | authenticated proxy precheck, `initialize`, `tools/list`, and `lucy_read_source` forwarding metadata |
 | `npm run smoke:p1:observability` | observability | generic `/api/observability` evidence; reports blocked if WebUI service is not reachable |
 | `npm run e2e:agent` | agent database E2E | database-backed Lucy MCP control path plus main/Hermes/moz agent final-answer assertions; missing local tokens or agent adapters returns blocked evidence |
@@ -274,6 +275,7 @@ Recommended CI jobs:
 | business-eval-catalog | `npm run smoke:p0:business-eval` |
 | p1-context | `npm run smoke:p1:context -- --strict-runtime` in a prepared KTX/proxy environment |
 | p1-skills | `npm run smoke:p1:skills` |
+| p1-mcp-client-config | `npm run smoke:p1:mcp-client-config:test` |
 | p1-endpoint | protected secret environment: `npm run smoke:p1:endpoint -- --proxy-url <url> --token <token>` |
 | p1-observability | service environment: `npm run smoke:p1:observability -- --url <url>/api/observability` |
 | p1-agent-e2e | protected local agent environment: `npm run e2e:agent` |

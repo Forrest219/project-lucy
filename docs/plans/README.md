@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261111-mcp-client-skill-endpoint-fix-plan.md](lucy-20261111-mcp-client-skill-endpoint-fix-plan.md) | **v0.1 功能合同已收口（2026-11-11）**：`.mcp.json`→`/mcp`；SC-01–SC-11 通过（含 CC 全真复测）。本条收口不表示可上线。Spec 见 [lucy-20261111-mcp-client-skill-endpoint-fix-spec.md](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md)。收口见 [closure](../reviews/2026-11-11-mcp-client-skill-endpoint-fix-closure.md) |
 | [lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) | **v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；功能合同层已收口（SC-01–SC-22 有自动化证据）；本条不表示可上线**（P1-11／REQ-030-032） |
 | [lucy-20261108-concept-registry-ontology-lite-plan.md](lucy-20261108-concept-registry-ontology-lite-plan.md) | **v0.6；R2-F＋R4 已闭合（2026-11-09）；一期 CLI 已落地；待效果门**（P1-10／REQ-030-031）；长期通道见 P1-11。本条不表示可上线。Spec 见 [lucy-20261108-concept-registry-ontology-lite-spec.md](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md)。评审见 [codex-review](../reviews/2026-11-09-concept-registry-ontology-lite-codex-review.md) |
 | [lucy-20261107-ui-interaction-contract-gate-plan.md](lucy-20261107-ui-interaction-contract-gate-plan.md) | **v0.5，开发授权已获得；功能合同已收口（2026-11-07）**。本条收口不表示可上线。交互合同门禁的 lint 与治理正文已落地。不改页面。Spec 见 [lucy-20261107-ui-interaction-contract-gate-spec.md](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md)。评审见 [codex-review](../reviews/2026-11-07-codex-review-ui-interaction-contract-gate.md) |
