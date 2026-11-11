@@ -241,7 +241,13 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
 
     expect(response.body.ok).toBe(false);
     expect(response.body.error.code).toBe("EXECUTION_RUNTIME_NOT_LOADED");
-    expect(response.body.error.message).toContain("没有确认新连接已加载");
+    expect(response.body.error.message).toBe("配置已保存，但执行层未加载。");
+    const yaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(yaml).toContain("demo-mysql:");
+    const state = JSON.parse(await readFile(path.join(projectRoot, ".ktx-ui", "ktx-reload.state.json"), "utf8")) as {
+      activation: string;
+    };
+    expect(state.activation).toBe("reload_required");
     expect(JSON.stringify(response.body)).not.toContain("plain-secret-value");
   });
 

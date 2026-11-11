@@ -365,6 +365,49 @@ describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () =>
     await app.close();
   });
 
+  it("reports a permission failure for that table and keeps the successful table", async () => {
+    runSqlMock.mockImplementation(async (_root: unknown, _id: unknown, sql: string) => {
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'ledger'")) {
+        return okSql([["ledger"]]);
+      }
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'orders'")) {
+        return okSql([["orders"]]);
+      }
+      if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = 'ledger'")) {
+        return okSql([["id", "int", "NO", "PRI", ""]]);
+      }
+      if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = 'orders'")) {
+        return {
+          ...okSql([]),
+          ok: false,
+          exitCode: 1,
+          stderr: "SELECT command denied for table orders",
+          json: null
+        };
+      }
+      return { ...okSql([]), ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null };
+    });
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/connections/warehouse/table-structure-diff")
+      .query({ schema: "fin", tables: "ledger,orders" })
+      .expect(200);
+    const ledger = res.body.data.tables.find((entry: { table: string }) => entry.table === "fin.ledger");
+    const orders = res.body.data.tables.find((entry: { table: string }) => entry.table === "fin.orders");
+    expect(ledger.status).toBe("ok");
+    expect(orders.status).toBe("error");
+    expect(orders.reason).toBe("SCHEMA_NOT_VISIBLE");
+    const database = await getAuditDb();
+    const rows = database
+      .prepare(
+        "SELECT outcome, reason FROM discovery_audit_log WHERE action = 'structure_diff' ORDER BY id DESC LIMIT 1"
+      )
+      .all() as Array<{ outcome: string; reason: string | null }>;
+    expect(rows[0]).toEqual({ outcome: "error", reason: "SCHEMA_NOT_VISIBLE" });
+    await app.close();
+  });
+
   it("SC-33: finds the library table even when the caller spells it differently", async () => {
     // The library spells the table in lower case; the caller asked for
     // `Ledger`. Both are the same table, so the deep check must not report it

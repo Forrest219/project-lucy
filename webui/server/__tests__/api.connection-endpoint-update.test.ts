@@ -234,10 +234,16 @@ describe("POST /api/connections/:connId/endpoint (lucy-20261101)", () => {
         username: "sc",
         dryRun: false
       })
-      .expect(200);
-    expect(response.body.ok).toBe(true);
-    expect(response.body.data.written).toBe(true);
-    expect(response.body.data.executionRuntimePending).toBe(true);
+      .expect(503);
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("EXECUTION_RUNTIME_NOT_LOADED");
+    expect(response.body.error.message).toBe("配置已保存，但执行层未加载。");
+    const yaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(yaml).toContain("host: db-test.internal");
+    const state = JSON.parse(await readFile(path.join(projectRoot, ".ktx-ui", "ktx-reload.state.json"), "utf8")) as {
+      activation: string;
+    };
+    expect(state.activation).toBe("reload_required");
     await app.close();
   });
 });

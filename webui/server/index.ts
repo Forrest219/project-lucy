@@ -170,12 +170,15 @@ import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
 import { readKtxYamlDigest } from "./mcp-runtime-state.js";
 import { reloadKtxMcpAfterConfigWrite } from "./ktx-mcp-reload.js";
 
-async function reloadExecutionRuntimeOrFail(projectRoot: string, connectionId?: string): Promise<void> {
+async function settleExecutionRuntime(
+  projectRoot: string,
+  digestBefore: string,
+  connectionId?: string
+): Promise<boolean> {
   const reload = await reloadKtxMcpAfterConfigWrite(projectRoot, connectionId);
-  if (reload.status === "reloaded" || reload.status === "started") return;
-  const err = new Error(
-    reload.detail?.trim() || "问数服务没有加载这条连接，暂时不能读取数据。"
-  ) as Error & { statusCode: number; code: string };
+  await pendingAfterConfigReload(projectRoot, digestBefore, reload);
+  if (reload.status === "reloaded" || reload.status === "started") return false;
+  const err = new Error("配置已保存，但执行层未加载。") as Error & { statusCode: number; code: string };
   err.statusCode = 503;
   err.code = "EXECUTION_RUNTIME_NOT_LOADED";
   throw err;
@@ -1685,7 +1688,7 @@ export function buildServer() {
         console.error("[connection-create] catalog reload failed", error);
       }
 
-      await reloadExecutionRuntimeOrFail(projectRoot, body.id);
+      const executionRuntimePending = await settleExecutionRuntime(projectRoot, digestBefore, body.id);
 
       let policyVersion = "";
       let policyRuntimeAck = false;
@@ -1699,7 +1702,6 @@ export function buildServer() {
       }
 
       const executionAck = await executionAckForConnection(body.id);
-      const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
       return {
         ok: true,
@@ -1960,10 +1962,9 @@ export function buildServer() {
       policyRuntimeAck = false;
     }
 
-    await reloadExecutionRuntimeOrFail(projectRoot, connId);
+    const executionRuntimePending = await settleExecutionRuntime(projectRoot, digestBefore, connId);
 
     const executionAck = await executionAckForConnection(connId);
-    const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
     return {
       ok: true,
@@ -2052,11 +2053,10 @@ export function buildServer() {
     );
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      await reloadExecutionRuntimeOrFail(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore, connId);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2081,11 +2081,10 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadExecutionRuntimeOrFail(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2106,11 +2105,10 @@ export function buildServer() {
     });
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      await reloadExecutionRuntimeOrFail(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore, connId);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2138,11 +2136,10 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadExecutionRuntimeOrFail(projectRoot, connId);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore, connId);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 

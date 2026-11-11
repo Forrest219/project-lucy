@@ -132,7 +132,7 @@ describe("isolated SelectDB external catalog", () => {
       tables: ["日活明细"]
     })).rejects.toMatchObject({
       code: "READ_FAILED",
-      message: "读取表结构失败：rejected"
+      message: "表「日活明细」没有读到字段。"
     });
   });
 

@@ -36,7 +36,8 @@ import {
   SchemaStructureError,
   assertSchemaIdent,
   mapColumnType,
-  readSchemaColumns
+  readSchemaColumns,
+  type SchemaColumnRejection
 } from "../schema-structure.js";
 import {
   DEFAULT_DISCOVERY_INTERVAL_MS,
@@ -71,6 +72,14 @@ function apiError(code: string, message: string, statusCode?: number) {
   err.statusCode = statusCode ?? (code === "CONNECTION_NOT_FOUND" ? 404 : 400);
   err.code = code;
   return err;
+}
+
+function structureDiffFailureReason(
+  reason: SchemaColumnRejection["reason"]
+): LiveTableFailureReason {
+  if (reason === "permission") return "SCHEMA_NOT_VISIBLE";
+  if (reason === "too_large") return "TABLE_LIST_TOO_LARGE";
+  return "QUERY_FAILED";
 }
 
 /** Client disconnect aborts this request's probe subscription. */
@@ -395,10 +404,12 @@ async function handleTableStructureDiff(
     }
   }
 
+  let auditReason: LiveTableFailureReason | null = null;
   const tables = tableNames.map((table) => {
     const physical = `${schema}.${table}`;
     const baseline = manifestByTable.get(table.toLowerCase()) ?? [];
     if (read.status === "too_large") {
+      auditReason ??= "TABLE_LIST_TOO_LARGE";
       return {
         table: physical,
         status: "error" as const,
@@ -407,6 +418,7 @@ async function handleTableStructureDiff(
       };
     }
     if (read.status === "error") {
+      auditReason ??= readFailureReason;
       return {
         table: physical,
         status: "error" as const,
@@ -415,11 +427,13 @@ async function handleTableStructureDiff(
       };
     }
     const rejection = read.rejections?.find((item) => item.table.toLowerCase() === table.toLowerCase());
-    if (rejection?.reason === "ambiguous") {
+    if (rejection && rejection.reason !== "missing") {
+      const reason = structureDiffFailureReason(rejection.reason);
+      auditReason ??= reason;
       return {
         table: physical,
         status: "error" as const,
-        reason: "QUERY_FAILED" as LiveTableFailureReason,
+        reason,
         columns: { added: [], removed: [], changed: [] }
       };
     }
@@ -492,13 +506,14 @@ async function handleTableStructureDiff(
     return { table: physical, status: "ok" as const, columns: { added, removed, changed } };
   });
 
+  const failed = tables.some((entry) => entry.status === "error");
   await recordDiscoveryAudit({
     actor: actor.actorId,
     connectionId: connId,
     schema,
     action: "structure_diff",
-    outcome: tables.some((entry) => entry.status === "error") ? "error" : "ok",
-    reason: tables.some((entry) => entry.status === "error") ? "QUERY_FAILED" : null,
+    outcome: failed ? "error" : "ok",
+    reason: failed ? auditReason : null,
     latencyMs: Date.now() - startedAt,
     tableCount: tables.length,
     requestId: actor.requestId

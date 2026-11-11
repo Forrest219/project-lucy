@@ -76,7 +76,7 @@ export type SchemaColumnRow = {
  */
 export type SchemaColumnRejection = {
   table: string;
-  reason: "empty" | "ambiguous";
+  reason: "missing" | "ambiguous" | "unreadable" | "permission" | "timeout" | "too_large";
 };
 
 export type SchemaColumnsRead =
@@ -383,6 +383,24 @@ function structureRows(result: SqlResult, context: SchemaStructureLogContext = {
   return rows;
 }
 
+function sqlFailureReason(result: SqlResult): SchemaColumnRejection["reason"] {
+  if (columnScanTimedOut(result)) return "timeout";
+  const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+  if (/access denied|command denied|permission denied|\bprivilege\b/i.test(text)) return "permission";
+  if (/unknown table|doesn't exist|does not exist|table not found/i.test(text)) return "missing";
+  return "unreadable";
+}
+
+function answeredRows(
+  result: SqlResult,
+  limit: number
+): { rows: unknown[] } | { reason: SchemaColumnRejection["reason"] } {
+  const rows = resultRows(result);
+  if (!result.ok || rows === null) return { reason: sqlFailureReason(result) };
+  if (rows.length >= limit) return { reason: "too_large" };
+  return { rows };
+}
+
 async function readCatalogTableColumns(
   projectRoot: string,
   connectionId: string,
@@ -390,17 +408,16 @@ async function readCatalogTableColumns(
   schema: string,
   table: string,
   execute: typeof runSql
-): Promise<{ columns: ColumnInput[]; failure: string }> {
+): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection }> {
   const described = await execute(projectRoot, connectionId, describeCatalogTableSql(catalog, schema, table), {
     maxRows: COLUMN_READ_ROW_LIMIT,
     timeoutMs: CATALOG_SCAN_TIMEOUT_MS
   });
-  const raw = resultRows(described);
-  if (raw && raw.length >= COLUMN_READ_ROW_LIMIT) {
-    return { columns: [], failure: "读取表结构失败：这张表的字段数超过一次可读取的上限。" };
-  }
-  const columns = mapDescribeColumns(table, optionalRows(described));
-  return { columns, failure: columns.length > 0 ? "" : readFailureMessage(described) };
+  const answered = answeredRows(described, COLUMN_READ_ROW_LIMIT);
+  if ("reason" in answered) return { columns: [], rejection: { table, reason: answered.reason } };
+  const columns = mapDescribeColumns(table, answered.rows);
+  if (columns.length === 0) return { columns: [], rejection: { table, reason: "unreadable" } };
+  return { columns };
 }
 
 function resultRows(result: SqlResult): unknown[] | null {
@@ -409,18 +426,6 @@ function resultRows(result: SqlResult): unknown[] | null {
     return null;
   }
   return (json as { rows: unknown[] }).rows;
-}
-
-function readFailureMessage(result: SqlResult): string {
-  const driver = [result.stderr, result.stdout].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-  const clipped = driver.length > 240 ? `${driver.slice(0, 240)}…` : driver;
-  return clipped ? `读取表结构失败：${clipped}` : "读取表结构失败。";
-}
-
-function optionalRows(result: SqlResult): unknown[] | null {
-  const rows = resultRows(result);
-  if (!rows || rows.length === 0 || rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) return null;
-  return rows;
 }
 
 function mapDescribeColumn(table: string, row: unknown[]): ColumnInput | null {
@@ -537,42 +542,50 @@ async function readMysqlTableColumns(
   schema: string,
   table: string,
   execute: typeof runSql
-): Promise<{ status: "ok" | "too_large"; columns: ColumnInput[]; rejection?: SchemaColumnRejection }> {
-  const matchSql = mysqlMatchingTablesSql(schema, table);
-  const matched = await execute(projectRoot, connectionId, matchSql, {
-    maxRows: 10,
-    timeoutMs: CATALOG_SCAN_TIMEOUT_MS
-  });
-  const physical = distinctPhysicalNames(structureRows(matched, {
-    connectionId,
-    schema,
-    table,
-    phase: "table-name-match",
-    sql: matchSql
-  }));
-  if (physical.length > 1) {
-    return { status: "ok", columns: [], rejection: { table, reason: "ambiguous" } };
+): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection }> {
+  try {
+    const matchSql = mysqlMatchingTablesSql(schema, table);
+    const matched = await execute(projectRoot, connectionId, matchSql, {
+      maxRows: 10,
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+    });
+    const matchedRows = answeredRows(matched, 11);
+    if ("reason" in matchedRows) return { columns: [], rejection: { table, reason: matchedRows.reason } };
+    const physical = distinctPhysicalNames(matchedRows.rows);
+    if (physical.length > 1) return { columns: [], rejection: { table, reason: "ambiguous" } };
+    if (physical.length === 0) return { columns: [], rejection: { table, reason: "missing" } };
+    const columnSql = mysqlOneTableColumnsSql(schema, physical[0]);
+    const result = await execute(projectRoot, connectionId, columnSql, {
+      maxRows: COLUMN_READ_ROW_LIMIT,
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+    });
+    const columnRows = answeredRows(result, COLUMN_READ_ROW_LIMIT);
+    if ("reason" in columnRows) return { columns: [], rejection: { table, reason: columnRows.reason } };
+    const columns = columnsForOneTable(table, columnRows.rows);
+    if (columns.length === 0) return { columns: [], rejection: { table, reason: "unreadable" } };
+    return { columns };
+  } catch (error) {
+    logSchemaStructureFailure(
+      { connectionId, schema, table, phase: "table-columns" },
+      { ok: false, exitCode: 1, stderr: error instanceof Error ? error.message : String(error), stdout: "", latencyMs: 0 }
+    );
+    return { columns: [], rejection: { table, reason: "unreadable" } };
   }
-  if (physical.length === 0) {
-    return { status: "ok", columns: [], rejection: { table, reason: "empty" } };
+}
+
+function rejectionMessage(rejection: SchemaColumnRejection): string {
+  switch (rejection.reason) {
+    case "ambiguous":
+      return `表名「${rejection.table}」对应多张表，无法读取字段。`;
+    case "too_large":
+      return "这次读取超过一次可读取的上限。";
+    case "permission":
+      return `没有权限读取表「${rejection.table}」的字段。`;
+    case "timeout":
+      return `读取表「${rejection.table}」的字段超时。`;
+    default:
+      return `表「${rejection.table}」没有读到字段。`;
   }
-  const columnSql = mysqlOneTableColumnsSql(schema, physical[0]);
-  const result = await execute(projectRoot, connectionId, columnSql, {
-    maxRows: COLUMN_READ_ROW_LIMIT,
-    timeoutMs: CATALOG_SCAN_TIMEOUT_MS
-  });
-  const rows = structureRows(result, {
-    connectionId,
-    schema,
-    table,
-    phase: "table-columns",
-    sql: columnSql
-  });
-  const columns = columnsForOneTable(table, rows);
-  if (columns.length === 0) {
-    return { status: "ok", columns: [], rejection: { table, reason: "empty" } };
-  }
-  return { status: "ok", columns };
 }
 
 /**
@@ -632,7 +645,7 @@ export async function readSchemaColumns(
         return { status: "ok", columns: [], tables: tableNames };
       }
       const columns: ColumnInput[] = [];
-      let failure = "";
+      const rejections: SchemaColumnRejection[] = [];
       for (const table of requested) {
         const read = await readCatalogTableColumns(
           projectRoot,
@@ -642,13 +655,16 @@ export async function readSchemaColumns(
           table,
           execute
         );
-        if (read.columns.length === 0 && read.failure) failure = read.failure;
+        if (read.rejection) rejections.push(read.rejection);
         columns.push(...read.columns);
       }
-      if (requested.length > 0 && columns.length === 0) {
-        return { status: "error", message: failure || "读取表结构失败。" };
-      }
-      return { status: "ok", columns };
+      const rejected = new Set(rejections.map((item) => item.table));
+      return {
+        status: "ok",
+        columns,
+        tables: requested.filter((table) => !rejected.has(table)),
+        ...(rejections.length > 0 ? { rejections } : {})
+      };
     }
     const protocol = protocolOf(connection);
     if (protocol === "mysql" && !requested) {
@@ -677,7 +693,6 @@ export async function readSchemaColumns(
           table,
           execute
         );
-        if (read.status === "too_large") return { status: "too_large" };
         if (read.rejection) rejections.push(read.rejection);
         columns.push(...read.columns);
       }
@@ -761,9 +776,7 @@ export async function previewSchemaStructure(
     const rejection = read.rejections?.[0];
     throw new SchemaStructureError(
       "READ_FAILED",
-      rejection?.reason === "ambiguous"
-        ? `表名「${rejection.table}」对应多张表，无法读取字段。`
-        : `表「${rejection?.table ?? requested[0]}」没有读到字段。`
+      rejection ? rejectionMessage(rejection) : `表「${requested[0]}」没有读到字段。`
     );
   }
   const preview = buildMinimalSchemaManifest(safeSchema, read.columns, read.tables ?? []);
