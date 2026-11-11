@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -123,6 +123,22 @@ test("stamp writer records the build arg and rejects a fake sha", () => {
     });
     assert.notEqual(bad.status, 0);
     assert.match(bad.stderr, /40 lowercase hex/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("stamp writer refuses an empty LUCY_GIT_SHA instead of writing unknown", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "lucy-rev-empty-sha-"));
+  const out = path.join(dir, "BUILD_REVISION");
+  try {
+    const empty = spawnSync(process.execPath, [SCRIPT, out], {
+      env: { ...process.env, LUCY_GIT_SHA: "", LUCY_GIT_DIRTY: "0" },
+      encoding: "utf8"
+    });
+    assert.notEqual(empty.status, 0);
+    assert.match(empty.stderr, /LUCY_GIT_SHA/);
+    assert.equal(existsSync(out), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

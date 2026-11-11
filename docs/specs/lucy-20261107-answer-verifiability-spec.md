@@ -13,7 +13,7 @@
 | 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 对抗评审](../reviews/2026-11-09-answer-verifiability-codex-review.md)（**R2-F＋R3＋R4 已闭合 2026-11-09**） |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md) |
 | 实施主体 | Proxy 结果呈现合同 +（可选）只读核对入口。复用既有 provenance／审计故事线 |
-| 与既有 Spec 的关系 | Spec 162 `_meta.lucy`；审计调用链故事线；018 落点教训（本条更强：成功路径禁静默无块）；**不改 ACL**；物理新鲜度真源见清单 **P0-B／REQ-030-028**（未立项） |
+| 与既有 Spec 的关系 | Spec 162 `_meta.lucy`；审计调用链故事线；018 落点教训（本条更强：成功路径禁静默无块）；**不改 ACL**；物理新鲜度真源见 [P0-B Spec](lucy-20261109-physical-freshness-contract-spec.md)（v0.1-draft，终稿未确权，未授权）。本条 O2＝A 不变，cutoff 仍不得改成已校验 |
 
 ## 变更记录
 
@@ -73,7 +73,7 @@ Forbidden:
 
 ### Follow-up Needed
 
-- 真实物理 freshness 探测＝**P0-B／REQ-030-028**（入池未立项）；本条首期只诚实 `not_checked`（D3／§7）。
+- 真实物理 freshness 探测见 [P0-B Spec](lucy-20261109-physical-freshness-contract-spec.md)（v0.1-draft，未授权）。本条首期仍只诚实 `not_checked`（D3／O2＝A）。
 
 ## 1. 背景与取证
 
@@ -163,10 +163,10 @@ Forbidden:
 
 | 项 | 状态 |
 |---|---|
-| 物理数据截止期真源 | **缺口**：清单 **P0-B／REQ-030-028** 仅入池，未立项、未开 Spec、未授权 |
-| 本条首期 | 全部成功查数块的 `cutoff.status = "not_checked"`，`cutoff.note` 固定诚实文案（§5.1） |
-| 禁止冒充 | 语义 overlay／schema mtime、`Date.now()`、发布 `business_date`／`applied_version`、仅 `lucy_freshness` 调用成功 | 
-| 接入条件 | 须 O2 委托人裁定 **且** P0-B 合同／授权齐备后另升版；不得把「P0-B 未立项」误当作本条已授权真实 freshness |
+| 物理数据截止期真源 | [P0-B Spec](lucy-20261109-physical-freshness-contract-spec.md) **v0.1-draft**；终稿未确权；未授权实现 |
+| 本条首期 | 全部成功查数块的 `cutoff.status = "not_checked"`，`cutoff.note` 固定诚实文案（§5.1）。P0-B 开 Spec **不改变**本款 |
+| 禁止冒充 | 语义 overlay／schema mtime、`Date.now()`、发布 `business_date`／`applied_version`、仅 `lucy_freshness` 调用成功 |
+| 接入条件 | O2 已裁定为 A。把已校验水位写进本块必须另升本 Spec；不得把 P0-B 草案误当作本条已授权真实 freshness |
 
 ## 5. 公开 Schema 与投影合同（AV-03）
 

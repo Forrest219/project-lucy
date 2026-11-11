@@ -1,7 +1,7 @@
 # Lucy Helm Chart — Upgrade Guide
 
 Upgrade Lucy on Kubernetes while preserving `/data/lucy` PVC data, Secrets, and MCP tokens.
-Current chart: **0.2.8** (Lucy `0.25.0`, bundled KTX `0.16.0`).
+Current chart: **0.2.8** (Lucy `0.30.0`, bundled KTX `0.16.0`).
 
 ## Open-mode upgrade to administrator login
 

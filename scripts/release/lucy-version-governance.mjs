@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
+import { runHandbookBaseline } from "./handbook-baseline.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const PRODUCT_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -78,7 +79,6 @@ export function collectVersionGovernanceErrors() {
     ["package-lock.json packages[''] version", rootLock.packages?.[""]?.version],
     ["Dockerfile ARG LUCY_VERSION", firstMatch(dockerfile, /^ARG LUCY_VERSION=(\S+)$/m, "Dockerfile ARG LUCY_VERSION")],
     ["docker-compose build arg", compose.services?.lucy?.build?.args?.LUCY_VERSION?.match(/:-([^}]+)}/)?.[1]],
-    ["docker-compose runtime env", compose.services?.lucy?.environment?.LUCY_VERSION?.match(/:-([^}]+)}/)?.[1]],
     ["Chart.appVersion", String(chart.appVersion)],
     ["values lucy.version", String(helmValues.lucy?.version)],
     ["values image.tag", String(helmValues.image?.tag)],
@@ -114,6 +114,36 @@ export function collectVersionGovernanceErrors() {
     .join("\n");
   if (helmTemplates.includes("LUCY_GIT_SHA")) {
     errors.push("Helm must not inject LUCY_GIT_SHA; the build revision is an image file");
+  }
+
+  // The 0.30 product-line open updated VERSION/Dockerfile/FALLBACK but left the
+  // handbook and K8s contract claiming 0.25 / 0.20. Those surfaces are what
+  // testers and operators read; keep them inside lint:version.
+  try {
+    runHandbookBaseline(ROOT);
+  } catch (error) {
+    errors.push(`SYSTEM_HANDBOOK baseline: ${error.message}`);
+  }
+
+  const k8sContract = read("deploy/k8s/K8S_CONTRACT.md");
+  if (!k8sContract.includes(`current baseline \`${version}\``)) {
+    errors.push(
+      `K8S_CONTRACT LUCY_VERSION current baseline does not match VERSION=${version}`
+    );
+  }
+  if (!new RegExp(`\\| \\\`0\\.2\\.8\\\` \\| \\\`${escapeRegExp(version)}\\\` \\|.*?\\| \\*\\*Current\\*\\*`, "s").test(k8sContract)) {
+    errors.push(
+      `K8S_CONTRACT compatibility matrix has no **Current** row for product ${version}`
+    );
+  }
+
+  // Root compose must not let a host LUCY_VERSION override the image identity at
+  // runtime — that is how a rebuild can still show an old product version.
+  const composeRuntime = compose.services?.lucy?.environment?.LUCY_VERSION;
+  if (composeRuntime !== undefined) {
+    errors.push(
+      "docker-compose.yml must not set runtime LUCY_VERSION; use the image-baked ENV from the Dockerfile ARG"
+    );
   }
 
   return { version, errors };

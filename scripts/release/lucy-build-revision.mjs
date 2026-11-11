@@ -75,9 +75,16 @@ export function loadClientRevision({ stampPath = DEFAULT_STAMP_PATH, repoRoot = 
 }
 
 function main() {
-  const sha = process.env.LUCY_GIT_SHA ?? "";
-  if (sha.trim() !== "" && !SHA_RE.test(sha.trim())) {
-    console.error(`FAIL: LUCY_GIT_SHA must be 40 lowercase hex or empty; got ${JSON.stringify(sha)}`);
+  const sha = (process.env.LUCY_GIT_SHA ?? "").trim();
+  // Image builds dockerignore .git, so the only honest stamp is an explicit
+  // build-arg. Writing "unknown" here used to ship a runnable image that then
+  // misled /admin/version during test deploys.
+  if (sha === "") {
+    console.error("FAIL: LUCY_GIT_SHA is required to stamp BUILD_REVISION (40 lowercase hex)");
+    process.exit(1);
+  }
+  if (!SHA_RE.test(sha)) {
+    console.error(`FAIL: LUCY_GIT_SHA must be 40 lowercase hex; got ${JSON.stringify(sha)}`);
     process.exit(1);
   }
   const revision = revisionFromBuildArgs(sha, process.env.LUCY_GIT_DIRTY);

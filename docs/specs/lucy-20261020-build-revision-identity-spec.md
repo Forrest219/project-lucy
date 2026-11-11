@@ -16,7 +16,7 @@
 
 - 「系统设置 / 版本信息」和 `GET /api/health` 同时给出产品版本与这次构建对应的源提交。
 - 提交标识在构建时写入，运行中的环境变量、Helm values、`LUCY_VERSION` 都不能改写它。
-- 构建时拿不到合法提交时显示 `unknown`，不用产品版本冒充提交。
+- 镜像构建拿不到合法提交时失败，不写出可运行的 `unknown` 镜像；运行时若戳记缺失/非法仍显示 `unknown`，不用产品版本冒充提交。
 - 客户可见的常驻信息收敛为产品版本、构建提交、随包 KTX 版本。工作区脏状态不在客户可见页面展示；`gitDirty` 仍由 `GET /api/health` 返回供内部诊断。排版以[版本信息身份块 Spec](lucy-20261030-version-info-identity-spec.md) §4 为准。不向客户暴露构建时间。
 
 **非目标**
@@ -93,10 +93,12 @@ function revisionFromBuildArg(sha, dirtyFlag):
 image build:
   # .git is dockerignored, so the image cannot discover the commit itself.
   pass build-arg LUCY_GIT_SHA and LUCY_GIT_DIRTY
-  if LUCY_GIT_SHA is non-empty and does not match SHA: fail the build
-  write STAMP as "unknown", "<sha>", or "<sha>-dirty"
+  if LUCY_GIT_SHA is empty or does not match SHA: fail the build
+  write STAMP as "<sha>" or "<sha>-dirty"
   do not set ENV LUCY_GIT_SHA
   the WebUI bundle does not inline the commit
+  # "unknown" remains a runtime display for a missing/invalid stamp file, not a
+  # successful image-build outcome. Demo/customer/CI entrypoints must export the sha.
 
 server process:
   resolve loadRuntime once and reuse it for /api/health

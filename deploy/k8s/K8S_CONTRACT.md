@@ -25,12 +25,13 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.6` | `0.2.0` | `0.16.0` | same workload contract as 0.2.5 | Superseded by chart 0.2.7. Chart 0.2.6 verifies archive config/manifest/index identities, ships private CA files, and provides a single-instance upgrade entry with baseline backups and recovery instructions. The short-lived `0.2.0` product version was numerically lower than `0.17.0` |
 | `0.2.7` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Superseded by chart 0.2.8. Corrects the active product line to `0.20.0 > 0.17.0`; chart and product versions remain independent |
 | `0.2.8` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Optional SMTP notification wiring, off by default. Product version was still `0.20.0` when this chart package was cut |
-| `0.2.8` | `0.25.0` | `0.16.0` | same workload contract as 0.2.5 | **Current**. Product version aligned to branch `lucy-v0.25`. Chart package version was not bumped |
+| `0.2.8` | `0.25.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.25`. Chart package version was not bumped. Superseded as current product line by `0.30.0` |
+| `0.2.8` | `0.30.0` | `0.16.0` | same workload contract as 0.2.5 | **Current**. Product version aligned to branch `lucy-v0.30`. Chart package version was not bumped |
 
 Image tags must be **immutable**. Recommended form:
 
 ```text
-project-lucy:customer-amd64-0.25.0-YYYYMMDD-<gitShortSha>
+project-lucy:customer-amd64-0.30.0-YYYYMMDD-<gitShortSha>
 ```
 
 Record the digest in `image/image-digest.txt` and pin via Helm `image.digest` when possible.
@@ -145,7 +146,7 @@ Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod start
 |---|---|---|
 | `KTX_PROJECT_ROOT` | yes | `/data/lucy` |
 | `POSTHOG_DISABLED` | yes | `"1"` |
-| `LUCY_VERSION` | yes | Lucy product version; current baseline `0.20.0`. This is not the source commit. Commit identity is the image file `/app/BUILD_REVISION` (`gitSha` on `/api/health`). Do not add `LUCY_GIT_SHA` to the chart or Pod env. |
+| `LUCY_VERSION` | yes | Lucy product version; current baseline `0.30.0`. This is not the source commit. Commit identity is the image file `/app/BUILD_REVISION` (`gitSha` on `/api/health`). Do not add `LUCY_GIT_SHA` to the chart or Pod env. |
 | `LUCY_BUNDLED_KTX_VERSION` | yes | Bundled KTX identity; current baseline `0.16.0` |
 | `LUCY_PUBLIC_MCP_URL` | yes (non-local) | Externally reachable MCP URL; chart fails render if empty for customer registry |
 | `LUCY_ALLOW_PLACEHOLDER_KTX` | prod: empty | `"1"` only for demo seed |

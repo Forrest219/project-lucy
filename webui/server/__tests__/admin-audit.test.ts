@@ -1451,7 +1451,7 @@ describe("Spec 137 audit evidence pack", () => {
         completeness: { complete: boolean };
         files: Array<{ name: string; sha256: string; filterScope: string }>;
       };
-      expect(manifest.appVersion).toBe("0.25.0");
+      expect(manifest.appVersion).toBe("0.30.0");
       expect(manifest.includeProtocol).toBe(true);
       expect(manifest.filter).toMatchObject({
         user: "audit-user",

@@ -5,7 +5,9 @@ services:
       args:
         KTX_VERSION: "${KTX_VERSION:-0.16.0}"
         LUCY_VERSION: "${LUCY_VERSION:-0.30.0}"
-        # Source commit for /app/BUILD_REVISION. Not a product version and not a runtime env.
+        # Source commit for /app/BUILD_REVISION. Not a product version and not a
+        # runtime env. Empty fails the image build — export via upgrade-lucy.sh
+        # or pass a full 40-hex sha explicitly.
         LUCY_GIT_SHA: "${LUCY_GIT_SHA:-}"
         LUCY_GIT_DIRTY: "${LUCY_GIT_DIRTY:-}"
         # Customer / production baseline is amd64. Override on arm64 hosts.
@@ -16,7 +18,9 @@ services:
     image: project-lucy:local
     environment:
       KTX_PROJECT_ROOT: /data/lucy
-      LUCY_VERSION: "${LUCY_VERSION:-0.30.0}"
+      # Product version comes from the image ENV baked at build time (Dockerfile
+      # ARG LUCY_VERSION). Do not re-inject host LUCY_VERSION here — a stale shell
+      # export (e.g. 0.20.0) would override /api/health and /admin/version.
       LUCY_WEBUI_HOST: 0.0.0.0
       LUCY_WEBUI_PORT: "5174"
       LUCY_PROXY_HOST: 0.0.0.0

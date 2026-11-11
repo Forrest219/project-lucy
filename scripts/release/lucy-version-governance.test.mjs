@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -53,6 +54,23 @@ test("release tag accepts exact product releases and immutable customer tags", (
 test("all committed Lucy version projections match VERSION", () => {
   const result = collectVersionGovernanceErrors();
   assert.deepEqual(result.errors, []);
+});
+
+test("identity surfaces that lagged the 0.30 open must stay aligned with VERSION", () => {
+  const result = collectVersionGovernanceErrors();
+  assert.equal(
+    result.errors.some((error) => /SYSTEM_HANDBOOK|K8S_CONTRACT|handbook-baseline/i.test(error)),
+    false,
+    result.errors.join("\n")
+  );
+  assert.match(
+    readFileSync(path.join(ROOT, "deploy/k8s/K8S_CONTRACT.md"), "utf8"),
+    new RegExp(`current baseline \`${REPO_VERSION_IN_REGEX}\``)
+  );
+  assert.match(
+    readFileSync(path.join(ROOT, "docs/SYSTEM_HANDBOOK.md"), "utf8"),
+    new RegExp(`\\| 产品版本（\`VERSION\`） \\| ${REPO_VERSION_IN_REGEX} \\|`)
+  );
 });
 
 test("customer build fails before Docker when IMAGE tag disagrees with VERSION", () => {

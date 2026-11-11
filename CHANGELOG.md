@@ -1,8 +1,28 @@
 # Changelog
 
-All notable user-visible changes to Lucy ship here. Versions follow `<major>.<minor>.<patch>`; the current development line is M31.
+All notable user-visible changes to Lucy ship here. Versions follow `<major>.<minor>.<patch>`; the current development line is `0.30.0` (`lucy-v0.30`).
 
 > Conventions: `**Breaking**` = action required on upgrade; `**Deprecated**` = still works, will be removed; `**Added**` / `**Changed**` / `**Fixed**` are self-describing.
+
+---
+
+## Unreleased — 0.30.0
+
+产品线 `lucy-v0.30`／`VERSION=0.30.0` 开发中捕捉。用户可见一句草稿见 `docs/releases/drafts/0.30.0-user.md`。**未**写正式 `user-facing` 定稿，**未**开 `v0.30.0` 发版台账；合入 ≠ 可上线。对齐 tip `2ca5f939`。
+
+### Added
+- **P0-1／REQ-030-027 问题类型口径绑定**：运维可发布「问题类型 → 唯一 source + 固定口径」绑定；命中后 `lucy_query`／`lucy_explain_query` 偏离由 Proxy 本机拒绝且零上游执行。
+- **P0-2／REQ-030-023 Catalog 业务语义暴露**：可见表在 catalog 携带业务描述等语义资产，按业务相关排序优于纯字母序。
+- **P0-A／REQ-030-012 Source 级字段暴露裁剪**：按 source 裁剪 Agent 可见业务字段。
+- **P0-3／REQ-030-024 表级歧义门闩**：多表命中不得静默成交；限定名错表可拦。
+- **P0-4／REQ-030-022 答复可核对块**：纳入路径成功 `lucy_query` 强制带 `answer_verifiability`（来源／口径／截止期披露）；首期截止期可 `not_checked`。
+- **P0-5／REQ-030-018 空结果下一步**：严格 0 行返回结构化 `next_step`。
+- **P1-10／REQ-030-031 概念注册表 CLI**：ontology-lite 一期 CLI 维护概念资产。
+- **P1-11／REQ-030-032 概念注册表 Lucy Ops 控制面**：`lucy_ops_concept_*` 扫描／人审写；本版无 WebUI 概念页。
+
+### Notes
+- 用户叙事草稿：`docs/releases/drafts/0.30.0-user.md`（双层 RN 设计见 `docs/plans/lucy-20261107-dual-layer-release-notes-design.md`）。
+- P0-6／P0-7／P0-B 及未授权 P1／P2 不进本节主张。
 
 ---
 

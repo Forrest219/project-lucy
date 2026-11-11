@@ -172,6 +172,21 @@ ensure_bootstrap_token() {
   done
 }
 
+export_product_version() {
+  local repo_version
+  repo_version="$(tr -d '[:space:]' < "${ROOT}/VERSION" 2>/dev/null || true)"
+  if [[ ! "${repo_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "[lucy-upgrade] FAIL: VERSION must use numeric X.Y.Z form; got: ${repo_version:-<empty>}" >&2
+    exit 1
+  fi
+  if [[ -n "${LUCY_VERSION:-}" && "${LUCY_VERSION}" != "${repo_version}" ]]; then
+    echo "[lucy-upgrade] FAIL: host LUCY_VERSION=${LUCY_VERSION} does not match repo VERSION=${repo_version}" >&2
+    exit 1
+  fi
+  export LUCY_VERSION="${repo_version}"
+  echo "[lucy-upgrade] product version ${LUCY_VERSION}"
+}
+
 export_source_revision() {
   local sha
   sha="$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || true)"
@@ -184,13 +199,13 @@ export_source_revision() {
     fi
     echo "[lucy-upgrade] source revision ${sha} dirty=${LUCY_GIT_DIRTY}"
   else
-    export LUCY_GIT_SHA=
-    export LUCY_GIT_DIRTY=0
-    echo "[lucy-upgrade] WARN: no source git sha; image revision will be unknown" >&2
+    echo "[lucy-upgrade] FAIL: source git sha required to stamp BUILD_REVISION; got: ${sha:-<empty>}" >&2
+    exit 1
   fi
 }
 
 build_and_up() {
+  export_product_version
   export_source_revision
   if printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q 'deploy/compose/docker-compose.demo.yml'; then
     bash "${ROOT}/scripts/demo/sync-demo-skills-template.sh"
