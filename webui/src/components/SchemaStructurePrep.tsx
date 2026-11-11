@@ -352,7 +352,11 @@ export function SchemaStructurePrep({
         </div>
       ) : null}
       {error ? (
-        <p role="alert" data-testid={`${idPrefix}-structure-error`}>
+        <p
+          role="alert"
+          data-testid={`${idPrefix}-structure-error`}
+          className="whitespace-pre-wrap break-words text-sm"
+        >
           {error}
         </p>
       ) : null}

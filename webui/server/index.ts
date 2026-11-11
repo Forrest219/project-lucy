@@ -416,6 +416,18 @@ function supportedErrorDetail(error: SupportedError): unknown {
       );
     }
   }
+  if (error.code === "READ_FAILED") {
+    const detail = error.detail;
+    if (!detail || typeof detail !== "object") return undefined;
+    const source = detail as Record<string, unknown>;
+    // SQL and driver stderr stay in server logs only — never on the wire.
+    return {
+      ...(typeof source.connectionId === "string" ? { connectionId: source.connectionId } : {}),
+      ...(typeof source.schema === "string" ? { schema: source.schema } : {}),
+      ...(typeof source.table === "string" ? { table: source.table } : {}),
+      ...(typeof source.phase === "string" ? { phase: source.phase } : {})
+    };
+  }
   if (error.code === "connection_references_remain") {
     // Spec 179 §3 / §5: blockers let the Admin client say which of 角色 / 用户 /
     // 业务 Wiki / 本地 YAML 资产 still block deletion. Pinned shape — only `{kind, id}`.
@@ -455,10 +467,10 @@ function distDir(): string {
  */
 
 /**
- * Spec 191 §11.1 — a write that changes ktx.yaml leaves the execution layer
- * behind: the configuration is on disk, but the daemon has not confirmed
- * loading it. The write path only REPORTS that fact (and never triggers a
- * reload by itself); the owner decides when to reload.
+ * Spec 191 §11.1 — after a ktx.yaml write the write path attempts an automatic
+ * execution-layer reload. Mark `reload_required` only when that attempt did not
+ * complete (`reloaded` / `started`); a successful reload must not be overwritten
+ * back to pending.
  */
 async function noteExecutionRuntimePending(
   projectRoot: string,
@@ -470,6 +482,17 @@ async function noteExecutionRuntimePending(
     console.error("[execution-runtime] failed to record the pending activation", error);
     return false;
   }
+}
+
+async function pendingAfterConfigReload(
+  projectRoot: string,
+  digestBefore: string,
+  reload: { status: string }
+): Promise<boolean> {
+  if (reload.status === "reloaded" || reload.status === "started") {
+    return false;
+  }
+  return noteExecutionRuntimePending(projectRoot, digestBefore);
 }
 
 /** The configuration digest as it was BEFORE a write, for the pending check. */
@@ -1784,8 +1807,20 @@ export function buildServer() {
       return { ok: true, data };
     } catch (err) {
       if (err instanceof SchemaStructureError) {
-        throw enabledTableError(err.code, err.message);
+        console.error("[schema-structure] preview API failed", {
+          connectionId: request.params.connId,
+          schema,
+          code: err.code,
+          message: err.message,
+          detail: err.detail ?? null
+        });
+        throw enabledTableError(err.code, err.message, err.detail);
       }
+      console.error("[schema-structure] preview API unexpected failure", {
+        connectionId: request.params.connId,
+        schema,
+        detail: err instanceof Error ? err.message : String(err)
+      });
       throw err;
     }
   });

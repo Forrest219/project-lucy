@@ -79,6 +79,32 @@ function okSql(rows: unknown[]): SqlResult {
   };
 }
 
+/** One information_schema.columns query returns table name plus the five column fields. */
+function mockMysqlPerTableColumns(
+  columnsByTable: Record<string, unknown[][]>,
+  options: { delayMs?: number } = {}
+): void {
+  const delayMs = options.delayMs ?? 0;
+  runSqlMock.mockImplementation(async (_root: unknown, _id: unknown, sql: string) => {
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    if (sql.includes("FROM information_schema.columns") && sql.includes("JOIN")) {
+      const rows = Object.entries(columnsByTable).flatMap(([table, columns]) =>
+        columns.map((column) => [table, ...column])
+      );
+      return okSql(rows);
+    }
+    return {
+      ...okSql([]),
+      ok: false,
+      exitCode: 1,
+      stderr: `unexpected ${sql}`,
+      json: null
+    };
+  });
+}
+
 beforeEach(async () => {
   runSqlMock.mockReset();
   resetAuditDbForTests();
@@ -264,13 +290,13 @@ describe("Spec 190 — GET /api/connections/:connId/table-diff", () => {
 
 describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () => {
   it("SC-33: compares the library columns with the local Manifest", async () => {
-    runSqlMock.mockResolvedValue(
-      okSql([
-        ["ledger", "id", "int", "NO", "PRI", ""],
-        ["ledger", "amount", "decimal", "YES", "", ""],
-        ["ledger", "memo", "varchar", "YES", "", ""]
-      ])
-    );
+    mockMysqlPerTableColumns({
+      ledger: [
+        ["id", "int", "NO", "PRI", ""],
+        ["amount", "decimal", "YES", "", ""],
+        ["memo", "varchar", "YES", "", ""]
+      ]
+    });
     const app = buildServer();
     await app.ready();
     const res = await request(app.server)
@@ -296,12 +322,12 @@ describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () =>
   });
 
   it("SC-33: reports a changed column with the before and after values", async () => {
-    runSqlMock.mockResolvedValue(
-      okSql([
-        ["ledger", "id", "bigint", "NO", "PRI", ""],
-        ["ledger", "amount", "decimal", "NO", "", ""]
-      ])
-    );
+    mockMysqlPerTableColumns({
+      ledger: [
+        ["id", "bigint", "NO", "PRI", ""],
+        ["amount", "decimal", "NO", "", ""]
+      ]
+    });
     const app = buildServer();
     await app.ready();
     const res = await request(app.server)
@@ -341,12 +367,12 @@ describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () =>
     // The library spells the table in lower case; the caller asked for
     // `Ledger`. Both are the same table, so the deep check must not report it
     // as missing from the library.
-    runSqlMock.mockResolvedValue(
-      okSql([
-        ["ledger", "id", "int", "NO", "PRI", ""],
-        ["ledger", "amount", "decimal", "YES", "", ""]
-      ])
-    );
+    mockMysqlPerTableColumns({
+      ledger: [
+        ["id", "int", "NO", "PRI", ""],
+        ["amount", "decimal", "YES", "", ""]
+      ]
+    });
     const app = buildServer();
     await app.ready();
     const res = await request(app.server)
@@ -363,10 +389,12 @@ describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () =>
   });
 
   it("SC-30: the deep check records its duration in the audit log", async () => {
-    runSqlMock.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 60));
-      return okSql([["ledger", "id", "int", "NO", "PRI", ""]]);
-    });
+    mockMysqlPerTableColumns(
+      {
+        ledger: [["id", "int", "NO", "PRI", ""]]
+      },
+      { delayMs: 60 }
+    );
     const app = buildServer();
     await app.ready();
     await request(app.server)

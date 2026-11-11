@@ -4,15 +4,15 @@
 |---|---|
 | Document name | 执行层重载 Spec（Execution Runtime Reload） |
 | Document type | Product / Architecture Spec |
-| Version | **v0.2（按交叉审阅意见修订，待复审）** |
+| Version | **v0.3（写路径自动尝试重载）** |
 | Written date | 2026-10-26 |
-| Revised | 2026-10-27（依 `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md` 8 项批准条件修订） |
+| Revised | 2026-10-27（依 `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md` 8 项批准条件修订）；**2026-11-10**（写路径在 `ktx.yaml` 写入后自动尝试重载；成功不再标 pending；失败仍留待确认重试） |
 | Scope | WebUI 写 ktx.yaml 后的执行层生效、KTX daemon 进程编排、MCP Runtime 状态面与 UI 提示 |
 | 前置 | `docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md`（分层模型与 stale 分类） |
 | 排查记录 | `inbox/2026-10-26-ktx-config-restart-only-investigation.md`（过程性材料，未入版本库） |
 | 实施计划 | `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` |
-| 决策 | 只重载 KTX daemon；**用户点确认**触发；失败**不回滚** ktx.yaml；不推进上游 KTX reload 能力 |
-| 实施状态 | **已实现，未验收**（2026-10-27）。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8；容器生命周期验收（AC-12）待镜像重建后执行 |
+| 决策 | 只重载 KTX daemon；**写路径自动尝试重载**（失败或跳过时仍可由用户点确认重试）；失败**不回滚** ktx.yaml；不推进上游 KTX reload 能力 |
+| 实施状态 | **已实现，未验收**（2026-10-27；2026-11-10 登记写路径自动重载决策变更）。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8；容器生命周期验收（AC-12）待镜像重建后执行 |
 
 ## v0.2 修订摘要
 
@@ -56,7 +56,7 @@ KTX 的 `ktx mcp start` 常驻进程在**启动时**把 `ktx.yaml` 解析为内�
 
 ### 2.1 目标
 
-- G1：用户点确认后，**只重载 KTX daemon**，Pod / WebUI / Proxy 进程存活。
+- G1：写路径自动尝试或用户点确认后，**只重载 KTX daemon**，Pod / WebUI / Proxy 进程存活。
 - G2（v0.2 重写）：重载**过程**与**配置生效**是两个独立事实，分别报告：
   - G2a：daemon 完成重启（进程级事实）。
   - G2b：目标配置通过**连接级证据**验证已加载（配置级事实）。
@@ -73,7 +73,7 @@ KTX 的 `ktx mcp start` 常驻进程在**启动时**把 `ktx.yaml` 解析为内�
 ### 2.2 非目标
 
 - NG1：不修改 KTX 源码（AGENTS.md 上游边界）。
-- NG2：不实现自动触发（首版由用户点确认）。
+- NG2（v0.3 修订）：不把自动重载做成静默后台任务或定时轮询；写 `ktx.yaml` 的同步写路径**可以**自动尝试一次重载，失败或跳过时由用户点确认重试。
 - NG3：不实现 KTX 会话内热重载。
 - NG4：不支持多副本 / 双实例并存。
 - NG5：不推进上游 KTX reload 能力。
@@ -452,10 +452,13 @@ open mode 下 `attachAdminContext` 无 session ⇒ `admin === null` ⇒ `require
 写 ktx.yaml 成功后，返回体增加：
 
 ```ts
-executionRuntimePending: boolean;   // 该连接是否待重载
+executionRuntimePending: boolean;   // 该连接是否仍待重载（自动重载未成功时为 true）
 ```
 
-**不自动触发重载**（首版由用户点确认）。写路径的改动点见实施计划 Step 5。
+**v0.3**：写路径在落盘后**自动尝试**一次执行层重载（supervisor 优先，必要时 CLI stop/start）。  
+- 重载结果为 `reloaded` / `started` → **不得**再标 `reload_required`，`executionRuntimePending=false`。  
+- 重载 `failed` / `skipped` → 标记 pending，`executionRuntimePending=true`，用户可在 MCP 调试台点确认重试。  
+写路径的改动点见实施计划 Step 5。
 
 ### 11.2 状态面扩展
 

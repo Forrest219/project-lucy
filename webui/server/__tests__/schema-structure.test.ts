@@ -62,16 +62,25 @@ describe("previewSchemaStructure", () => {
     expect(String(runSqlImpl.mock.calls[0][2])).not.toContain("table_name = '");
   });
 
-  it("throws when the column query fails instead of retrying per table", async () => {
+  it("hides driver text when the column query fails", async () => {
     const runSqlImpl = columnQuery([], true);
 
-    await expect(preview(runSqlImpl)).rejects.toEqual(expect.objectContaining({
+    await expect(preview(runSqlImpl)).rejects.toMatchObject({
       name: "SchemaStructureError",
       code: "READ_FAILED",
-      message: "读取表结构失败：column read failed"
-    }));
-    expect(runSqlImpl).toHaveBeenCalledTimes(1);
-    await expect(preview(runSqlImpl)).rejects.toBeInstanceOf(SchemaStructureError);
+      message: "读取表结构失败：无法一次读取 Schema「dataforai」的字段。",
+      detail: expect.objectContaining({
+        phase: "schema-wide-columns",
+        schema: "dataforai"
+      })
+    });
+    await expect(preview(runSqlImpl)).rejects.toSatisfy((error: unknown) => {
+      const detail = (error as { detail?: Record<string, unknown> }).detail;
+      const message = error instanceof Error ? error.message : "";
+      return !message.includes("column read failed")
+        && (!detail || (!("sql" in detail) && !("stderr" in detail)));
+    });
+    expect(runSqlImpl).toHaveBeenCalledTimes(2);
   });
 
   it("throws when the column query is not JSON rows", async () => {
@@ -79,7 +88,7 @@ describe("previewSchemaStructure", () => {
 
     await expect(preview(runSqlImpl)).rejects.toMatchObject({
       code: "READ_FAILED",
-      message: "读取表结构失败。"
+      message: "读取表结构失败：无法一次读取 Schema「dataforai」的字段。"
     });
   });
 
@@ -111,7 +120,7 @@ describe("previewSchemaStructure", () => {
   });
 
   it("returns tableCount 0 when the schema has no base tables", async () => {
-    const runSqlImpl = vi.fn(async () => sqlResult({ json: { rows: [] } }));
+    const runSqlImpl = columnQuery([]);
 
     const result = await preview(runSqlImpl);
 
