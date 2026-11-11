@@ -1795,15 +1795,21 @@ export function buildServer() {
 
   app.post<{
     Params: { connId: string };
-    Body: { schema?: string };
+    Body: { schema?: string; tables?: string[] };
   }>("/api/connections/:connId/schema-structure", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const schema = request.body?.schema;
     if (typeof schema !== "string" || !schema.trim()) {
       throw enabledTableError("BAD_REQUEST", "schema is required");
     }
+    const tables = request.body?.tables;
+    if (tables !== undefined && (!Array.isArray(tables) || tables.length !== 1 || typeof tables[0] !== "string" || !tables[0].trim())) {
+      throw enabledTableError("BAD_REQUEST", "一次只读取一张表的字段。");
+    }
     try {
-      const data = await previewSchemaStructure(projectRoot, request.params.connId, schema);
+      const data = await previewSchemaStructure(projectRoot, request.params.connId, schema, {
+        ...(tables ? { tables } : {})
+      });
       return { ok: true, data };
     } catch (err) {
       if (err instanceof SchemaStructureError) {

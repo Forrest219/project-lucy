@@ -32,7 +32,7 @@ vi.mock("../ktx", async () => {
 });
 
 const ktxMcpReload = vi.hoisted(() => ({
-  reloadKtxMcpAfterConfigWrite: vi.fn(async () => ({ status: "reloaded" as const, detail: "ok" }))
+  reloadKtxMcpAfterConfigWrite: vi.fn(async (): Promise<{ status: "reloaded" | "started" | "skipped" | "failed"; detail: string }> => ({ status: "reloaded", detail: "ok" }))
 }));
 
 vi.mock("../ktx-mcp-reload.js", () => ({

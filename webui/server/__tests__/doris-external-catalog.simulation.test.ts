@@ -99,29 +99,38 @@ describe("isolated SelectDB external catalog", () => {
     expect(actual.reason).toContain("Access denied");
   });
 
-  it("describes external table fields through KTX and preserves Chinese names", async () => {
+  it("lists external table names without describing columns", async () => {
     const injected = deps();
     const preview = await previewSchemaStructure("/fixture", "hive-jd", "app", injected);
+    expect(preview.namesOnly).toBe(true);
     expect(preview.tableCount).toBe(169);
+    expect(preview.columnCount).toBe(0);
+    expect(preview.yaml).toContain("日活明细");
+    expect(injected.runSqlImpl).not.toHaveBeenCalled();
+  });
+
+  it("describes one checked external table through KTX and preserves Chinese names", async () => {
+    const injected = deps();
+    const preview = await previewSchemaStructure("/fixture", "hive-jd", "app", {
+      ...injected,
+      tables: ["日活明细"]
+    });
+    expect(preview.namesOnly).toBe(false);
+    expect(preview.tableCount).toBe(1);
     expect(preview.yaml).toContain("日活明细");
     expect(preview.yaml).toContain("统计日期");
-    expect(injected.runSqlImpl.mock.calls.every((call) => String(call[2]).startsWith("DESC "))).toBe(true);
+    expect(injected.runSqlImpl.mock.calls.map((call) => String(call[2]))).toEqual([
+      "DESC `hive_jd`.`app`.`日活明细`"
+    ]);
   });
 
-  it("retains existing partial DESC behavior when one external table fails", async () => {
-    const injected = deps();
-    injected.runSqlImpl.mockImplementation(async (_root, _id, sql) => (
-      String(sql).includes("日活明细") ? result([], false, "rejected") : ktx(String(sql))
-    ));
-    const preview = await previewSchemaStructure("/fixture", "hive-jd", "app", injected);
-    expect(preview.tableCount).toBe(168);
-    expect(preview.yaml).not.toContain("日活明细");
-  });
-
-  it("fails when every external DESC fails", async () => {
+  it("fails when the checked external DESC fails", async () => {
     const injected = deps();
     injected.runSqlImpl.mockImplementation(async () => result([], false, "rejected"));
-    await expect(previewSchemaStructure("/fixture", "hive-jd", "app", injected)).rejects.toMatchObject({
+    await expect(previewSchemaStructure("/fixture", "hive-jd", "app", {
+      ...injected,
+      tables: ["日活明细"]
+    })).rejects.toMatchObject({
       code: "READ_FAILED",
       message: "读取表结构失败：rejected"
     });
@@ -139,5 +148,20 @@ describe("isolated SelectDB external catalog", () => {
     expect(actual.tables.map((item) => item.table)).toEqual(appNames);
     expect(actual.tables.every((item) => item.columnCount === 0)).toBe(true);
     expect(injected.runSqlImpl).not.toHaveBeenCalled();
+  });
+
+  it("accepts a SHOW TABLES result above 10000 names", async () => {
+    const injected = deps();
+    injected.runCatalogShowImpl.mockResolvedValue(
+      result(Array.from({ length: 10_001 }, (_, index) => [`t${index}`]))
+    );
+    const actual = await createSqlLiveTableProvider(injected).listTables({
+      projectRoot: "/fixture",
+      connectionId: "hive-jd",
+      schema: "app",
+      generation: 0
+    });
+    expect(actual.status).toBe("ok");
+    expect(actual.tables).toHaveLength(10_001);
   });
 });

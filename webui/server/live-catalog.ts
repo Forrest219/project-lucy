@@ -1,4 +1,4 @@
-import { catalogSchemataSql, catalogTablesSql, splitCatalogDatabase } from "./catalog-database";
+import { catalogSchemataSql, catalogTablesSql, CATALOG_SCAN_TIMEOUT_MS, CATALOG_TABLE_NAME_LIMIT, splitCatalogDatabase } from "./catalog-database";
 import { runCatalogShow } from "./catalog-show";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
@@ -161,8 +161,8 @@ async function countExternalCatalogTables(
       return { ok: false, reason: `无法读取目录 ${catalog.catalog}.${item.schema} 的表。` };
     }
     const result = await runShow(projectRoot, conn.id, sql, {
-      maxRows: 10_000,
-      timeoutMs: 30_000
+      maxRows: CATALOG_TABLE_NAME_LIMIT,
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
     });
     if (!result.ok || result.json == null || typeof result.json !== "object") {
       const reason =
@@ -170,7 +170,11 @@ async function countExternalCatalogTables(
         "读取库内目录失败。";
       return { ok: false, reason };
     }
-    counted.push({ schema: item.schema, tableCount: rowCount(result.json) });
+    const count = rowCount(result.json);
+    if (count >= CATALOG_TABLE_NAME_LIMIT) {
+      return { ok: false, reason: "读取结果超过一次可读取的上限。" };
+    }
+    counted.push({ schema: item.schema, tableCount: count });
   }
   return { ok: true, schemas: counted };
 }
@@ -283,7 +287,7 @@ export async function listLiveSchemas(
   try {
     sqlResult = await execute(projectRoot, connId, sqlForConnection(conn, wireProtocol), {
       maxRows: 2000,
-      timeoutMs: 30_000
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
     });
   } catch (err) {
     if (err instanceof KtxCliError) {

@@ -89,11 +89,9 @@ function mockMysqlPerTableColumns(
     if (delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
-    if (sql.includes("FROM information_schema.columns") && sql.includes("JOIN")) {
-      const rows = Object.entries(columnsByTable).flatMap(([table, columns]) =>
-        columns.map((column) => [table, ...column])
-      );
-      return okSql(rows);
+    if (sql.includes("FROM information_schema.columns") && sql.includes("LOWER(table_name) = '")) {
+      const table = /LOWER\(table_name\) = '([^']*)'/.exec(sql)?.[1] ?? "";
+      return okSql(columnsByTable[table] ?? []);
     }
     return {
       ...okSql([]),

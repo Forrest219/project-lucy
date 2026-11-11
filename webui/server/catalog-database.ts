@@ -37,6 +37,16 @@ export function catalogTablesSql(catalog: string, database: string): string {
   return `SHOW TABLES FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}`;
 }
 
+/**
+ * SelectDB rejects LIMIT on SHOW TABLES, so one direct response is the full
+ * name list. A result that fills this ceiling is incomplete and is not published
+ * as the table count. 200_000 leaves room above the measured hive.temp list.
+ */
+export const CATALOG_TABLE_NAME_LIMIT = 200_000;
+
+/** One scan or `ktx sql` statement. */
+export const CATALOG_SCAN_TIMEOUT_MS = 120_000;
+
 export function describeCatalogTableSql(catalog: string, database: string, table: string): string {
   return `DESC ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
 }

@@ -381,7 +381,7 @@ async function handleTableStructureDiff(
   let read: Awaited<ReturnType<typeof readSchemaColumns>>;
   let readFailureReason: LiveTableFailureReason = "QUERY_FAILED";
   try {
-    read = await readSchemaColumns(projectRoot, connId, schema);
+    read = await readSchemaColumns(projectRoot, connId, schema, { tables: tableNames });
   } catch (err) {
     if (err instanceof SchemaStructureError) {
       if (err.code === "CONNECTION_NOT_FOUND") throw apiError(err.code, err.message, 404);

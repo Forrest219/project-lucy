@@ -1,4 +1,5 @@
 import { execFile, type ExecFileException } from "node:child_process";
+import { CATALOG_SCAN_TIMEOUT_MS } from "./catalog-database";
 import { syncContentToProjectRoot } from "./content-mirror";
 import { resolveContentPaths } from "./paths";
 import { scrubSemanticLayerJunk } from "./semantic-layer-junk";
@@ -246,7 +247,7 @@ export async function runSql(
 ): Promise<SqlResult> {
   const execFileImpl = options.execFileImpl ?? execFile;
   const maxRows = options.maxRows ?? 1000;
-  const timeoutMs = options.timeoutMs ?? 30_000;
+  const timeoutMs = options.timeoutMs ?? CATALOG_SCAN_TIMEOUT_MS;
   const args = ["sql", "-c", connId, "--json", "--max-rows", String(maxRows), sql];
   const command = `ktx ${args.join(" ")}`;
   const start = Date.now();
@@ -257,7 +258,7 @@ export async function runSql(
       {
         cwd: projectRoot,
         timeout: timeoutMs,
-        maxBuffer: 16 * 1024 * 1024,
+        maxBuffer: 64 * 1024 * 1024,
         env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" }
       },
       (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {

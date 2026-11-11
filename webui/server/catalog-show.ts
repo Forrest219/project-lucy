@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createConnection, type ConnectionOptions } from "mysql2";
 import { parse } from "yaml";
+import { CATALOG_SCAN_TIMEOUT_MS } from "./catalog-database";
 import { safeReadSecretPasswordBytesIfExists } from "./fs-safe";
 import type { SqlResult } from "./ktx";
 
@@ -20,16 +21,21 @@ type DriverDeps = {
   createConnectionImpl?: (options: ConnectionOptions) => CatalogShowConnection;
 };
 
-const DEADLINE_MS = 30_000;
+const DEADLINE_MS = CATALOG_SCAN_TIMEOUT_MS;
 const IDENT = "`(?:``|[^`\\0\\r\\n])+`";
 const SHOW = new RegExp(`^SHOW (?:DATABASES FROM ${IDENT}|TABLES FROM ${IDENT}\\.${IDENT})$`);
 
+const PUBLIC_MESSAGES = new Set([
+  "Unsupported catalog statement",
+  "Invalid catalog connection configuration",
+  "Invalid catalog port",
+  "Catalog password must use a file reference",
+  "Catalog password file is missing"
+]);
+
 function safeMessage(error: unknown, password: string): string {
   const text = error instanceof Error ? error.message : "读取表结构失败。";
-  if (!password) {
-    if (/^(Catalog |Unsupported |Invalid )/.test(text)) return text;
-    return "读取表结构失败。";
-  }
+  if (!password) return PUBLIC_MESSAGES.has(text) ? text : "读取表结构失败。";
   return text.split(password).join("[REDACTED]");
 }
 
@@ -101,13 +107,17 @@ export async function runCatalogShow(
         done(null, { rows: rows as unknown[][], headers: (fields ?? []).map((field) => field.name) });
       });
     });
+    const maxRows = options.maxRows ?? 10_000;
+    if (answer.rows.length >= maxRows) {
+      throw new Error("读取结果超过一次可读取的上限。");
+    }
     return {
       ...base,
       ok: true,
       exitCode: 0,
       stderr: "",
       latencyMs: Date.now() - started,
-      json: { headers: answer.headers, rows: answer.rows.slice(0, options.maxRows ?? 10_000) }
+      json: { headers: answer.headers, rows: answer.rows }
     };
   } catch (error) {
     return {

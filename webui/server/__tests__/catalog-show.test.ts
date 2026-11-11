@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { stringify } from "yaml";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ConnectionOptions } from "mysql2";
 import { runCatalogShow, type CatalogShowConnection } from "../catalog-show";
 
 const roots: string[] = [];
@@ -49,7 +50,7 @@ function driver(mode = "ok") {
     }),
     destroy: vi.fn()
   });
-  const createConnectionImpl = vi.fn(() => conn as CatalogShowConnection);
+  const createConnectionImpl = vi.fn((_options: ConnectionOptions) => conn as CatalogShowConnection);
   return { conn, createConnectionImpl };
 }
 
@@ -66,11 +67,11 @@ describe("production catalog SHOW adapter", () => {
       port: 9030,
       user: "reader",
       password: "fixture-private-password",
-      connectTimeout: 30000,
+      connectTimeout: 120000,
       multipleStatements: false
     });
     expect(params).not.toHaveProperty("database");
-    expect(injected.conn.query.mock.calls[0][0]).toMatchObject({ timeout: 30000, rowsAsArray: true });
+    expect(injected.conn.query.mock.calls[0][0]).toMatchObject({ timeout: 120000, rowsAsArray: true });
     expect(injected.conn.destroy).toHaveBeenCalledOnce();
     expect(JSON.stringify(actual)).not.toContain("fixture-private-password");
   });
@@ -125,7 +126,7 @@ describe("production catalog SHOW adapter", () => {
     await vi.waitFor(() => {
       expect(mode === "connect-hang" ? injected.conn.connect : injected.conn.query).toHaveBeenCalled();
     });
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(120_000);
     const actual = await pending;
     expect(actual.ok).toBe(false);
     expect(actual.stderr).toMatch(/timed out/i);
@@ -141,5 +142,26 @@ describe("production catalog SHOW adapter", () => {
     const injected = driver();
     expect((await runCatalogShow(root, "hive-1", sql, {}, injected)).ok).toBe(false);
     expect(injected.createConnectionImpl).not.toHaveBeenCalled();
+  });
+
+  it("does not echo a YAML source line that contains a secret", async () => {
+    const root = await fixture();
+    await writeFile(path.join(root, "ktx.yaml"), "connections:\n  hive-1: \"super-secret-value\\q\"\n");
+    const actual = await runCatalogShow(root, "hive-1", "SHOW DATABASES FROM `hive`", {}, driver());
+    expect(actual.ok).toBe(false);
+    expect(actual.stderr).toBe("读取表结构失败。");
+    expect(JSON.stringify(actual)).not.toContain("super-secret-value");
+  });
+
+  it("fails closed when the result fills the row cap", async () => {
+    const root = await fixture();
+    const injected = driver();
+    injected.conn.query.mockImplementation((_options, callback) => {
+      callback(null, [["dw"], ["dim"]], [{ name: "Database" }]);
+    });
+    const actual = await runCatalogShow(root, "hive-1", "SHOW DATABASES FROM `hive`", { maxRows: 2 }, injected);
+    expect(actual.ok).toBe(false);
+    expect(actual.json).toBeNull();
+    expect(actual.stderr).toBe("读取结果超过一次可读取的上限。");
   });
 });

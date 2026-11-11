@@ -10,11 +10,11 @@
  * not distinguish "schema missing" from "schema not visible" is always reported
  * as `SCHEMA_NOT_VISIBLE`, so the UI never claims a table was deleted.
  */
-import { catalogTablesSql, splitCatalogDatabase } from "./catalog-database";
+import { catalogTablesSql, CATALOG_SCAN_TIMEOUT_MS, CATALOG_TABLE_NAME_LIMIT, splitCatalogDatabase } from "./catalog-database";
 import { runCatalogShow } from "./catalog-show";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
-import { assertSchemaIdent, columnScanTimedOut } from "./schema-structure";
+import { assertSchemaIdent } from "./schema-structure";
 import { resolveWireProtocol, type CatalogProtocol } from "./live-catalog";
 import type { ProbePurpose } from "./background-probes";
 import type { ConnectionInfo } from "./model";
@@ -72,25 +72,13 @@ export const LIVE_TABLES_MANUAL_TTL_MS = 10 * 60 * 1000;
 /** Automatic reads are cached for one polling interval (Spec 190 §6.4). */
 export const LIVE_TABLES_AUTOMATIC_TTL_MS = 60 * 60 * 1000;
 
-const MYSQL_TABLE_LIST_SQL = `
-SELECT t.table_name, t.table_type, COALESCE(t.table_comment, ''), COUNT(c.column_name) AS column_count
-FROM information_schema.tables t
-LEFT JOIN information_schema.columns c
-  ON c.table_schema = t.table_schema AND c.table_name = t.table_name
-WHERE t.table_schema = '__SCHEMA__' AND t.table_type = 'BASE TABLE'
-GROUP BY t.table_name, t.table_type, t.table_comment
-ORDER BY t.table_name
-`.trim().replace(/\s+/g, " ");
-
-/** Names only. Used after the column join above hits the 30s deadline on a wide schema. */
+/** Names only. Column rows are read later, and only for tables the user checks. */
 const MYSQL_TABLE_NAME_SQL = `
 SELECT table_name, table_type, COALESCE(table_comment, '')
 FROM information_schema.tables
 WHERE table_schema = '__SCHEMA__' AND table_type = 'BASE TABLE'
 ORDER BY table_name
 `.trim().replace(/\s+/g, " ");
-
-const MYSQL_COLUMN_COUNT_BATCH = 8;
 
 const POSTGRES_TABLE_LIST_SQL = `
 SELECT c.relname, 'BASE TABLE', COALESCE(obj_description(c.oid, 'pg_class'), ''), COUNT(a.attname) AS column_count
@@ -109,7 +97,7 @@ export function supportsTableList(protocol: CatalogProtocol | "unknown"): boolea
 }
 
 function tableListSql(protocol: "mysql" | "postgres", schema: string): string {
-  const template = protocol === "postgres" ? POSTGRES_TABLE_LIST_SQL : MYSQL_TABLE_LIST_SQL;
+  const template = protocol === "postgres" ? POSTGRES_TABLE_LIST_SQL : MYSQL_TABLE_NAME_SQL;
   // `schema` already passed `assertSchemaIdent` (identifier whitelist), so the
   // literal below can never carry a quote, comment or statement separator.
   return template.replace("__SCHEMA__", schema);
@@ -285,11 +273,6 @@ function parseTableRows(json: unknown): LiveTableEntry[] {
   return out;
 }
 
-function mysqlStringLiteral(value: string): string | null {
-  if (!value || value.length > 256 || /[\0\r\n]/.test(value)) return null;
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
 function parseMysqlNameRows(json: unknown): LiveTableEntry[] {
   if (!json || typeof json !== "object") return [];
   const rows = (json as { rows?: unknown }).rows;
@@ -309,108 +292,6 @@ function parseMysqlNameRows(json: unknown): LiveTableEntry[] {
     });
   }
   return out;
-}
-
-function mysqlColumnCountSql(schema: string, tables: string[]): string | null {
-  const schemaLiteral = mysqlStringLiteral(schema);
-  const tableLiterals = tables.map((table) => mysqlStringLiteral(table));
-  if (!schemaLiteral || tableLiterals.some((literal) => literal === null)) return null;
-  return `SELECT table_name, COUNT(*) FROM information_schema.columns WHERE table_schema = ${schemaLiteral} AND table_name IN (${tableLiterals.join(", ")}) GROUP BY table_name`;
-}
-
-/**
- * The one-shot table/column join cannot finish on a wide schema. Names come
- * from information_schema.tables alone; column counts are read in small
- * batches and split again if a batch still hits the deadline. A batch that
- * cannot be counted does not drop the table.
- */
-async function listMysqlTablesAfterWideScanTimeout(input: {
-  runSqlImpl: typeof runSql;
-  projectRoot: string;
-  connectionId: string;
-  schema: string;
-  fetchedAt: string;
-}): Promise<{
-  status: "ok" | "error";
-  tables: LiveTableEntry[];
-  fetchedAt: string;
-  reason?: LiveTableFailureReason;
-  latencyMs?: number;
-  wireProtocol: LiveTableWireProtocol;
-}> {
-  const { runSqlImpl, projectRoot, connectionId, schema, fetchedAt } = input;
-  const listed = await runSqlImpl(
-    projectRoot,
-    connectionId,
-    MYSQL_TABLE_NAME_SQL.replace("__SCHEMA__", schema),
-    { maxRows: TABLE_LIST_MAX_ROWS, timeoutMs: 30_000 }
-  );
-  if (!listed.ok || listed.json == null || typeof listed.json !== "object") {
-    return {
-      status: "error",
-      tables: [],
-      fetchedAt,
-      reason: classifyLiveTableFailure({
-        exitCode: listed.exitCode,
-        stdout: listed.stdout,
-        stderr: listed.stderr
-      }),
-      latencyMs: listed.latencyMs,
-      wireProtocol: "mysql"
-    };
-  }
-  if (rawRowCount(listed.json) >= TABLE_LIST_MAX_ROWS) {
-    return {
-      status: "error",
-      tables: [],
-      fetchedAt,
-      reason: "TABLE_LIST_TOO_LARGE",
-      latencyMs: listed.latencyMs,
-      wireProtocol: "mysql"
-    };
-  }
-  const tables = parseMysqlNameRows(listed.json);
-  const counts = new Map<string, number>();
-
-  async function readCounts(batch: string[]): Promise<void> {
-    if (batch.length === 0) return;
-    const sql = mysqlColumnCountSql(schema, batch);
-    if (!sql) return;
-    const result = await runSqlImpl(projectRoot, connectionId, sql, {
-      maxRows: TABLE_LIST_MAX_ROWS,
-      timeoutMs: 30_000
-    });
-    if (columnScanTimedOut(result) && batch.length > 1) {
-      const mid = Math.ceil(batch.length / 2);
-      await readCounts(batch.slice(0, mid));
-      await readCounts(batch.slice(mid));
-      return;
-    }
-    if (!result.ok || result.json == null || typeof result.json !== "object") return;
-    const rows = (result.json as { rows?: unknown }).rows;
-    if (!Array.isArray(rows)) return;
-    for (const row of rows) {
-      if (!Array.isArray(row) || row.length < 2) continue;
-      const name = String(row[0] ?? "").trim();
-      const count = Number(row[1]);
-      if (name && Number.isFinite(count)) counts.set(name, Math.max(0, Math.floor(count)));
-    }
-  }
-
-  for (let index = 0; index < tables.length; index += MYSQL_COLUMN_COUNT_BATCH) {
-    await readCounts(tables.slice(index, index + MYSQL_COLUMN_COUNT_BATCH).map((entry) => entry.table));
-  }
-
-  return {
-    status: "ok",
-    tables: tables.map((entry) => ({
-      ...entry,
-      columnCount: counts.get(entry.table) ?? 0
-    })),
-    fetchedAt,
-    latencyMs: listed.latencyMs,
-    wireProtocol: "mysql"
-  };
 }
 
 /**
@@ -483,7 +364,7 @@ export function createSqlLiveTableProvider(
           projectRoot,
           connectionId,
           listSql,
-          { maxRows: TABLE_LIST_MAX_ROWS, timeoutMs: 30_000 }
+          { maxRows: catalog ? CATALOG_TABLE_NAME_LIMIT : TABLE_LIST_MAX_ROWS, timeoutMs: CATALOG_SCAN_TIMEOUT_MS }
         );
       } catch (err) {
         if (err instanceof KtxCliError) {
@@ -500,15 +381,6 @@ export function createSqlLiveTableProvider(
           };
         }
         throw err;
-      }
-      if (!catalog && protocol === "mysql" && columnScanTimedOut(result)) {
-        return listMysqlTablesAfterWideScanTimeout({
-          runSqlImpl,
-          projectRoot,
-          connectionId,
-          schema,
-          fetchedAt
-        });
       }
       if (!result.ok) {
         return {
@@ -540,11 +412,14 @@ export function createSqlLiveTableProvider(
             tableType: "BASE TABLE" as const,
             columnCount: 0
           }))
-        : parseTableRows(result.json);
+        : protocol === "mysql"
+          ? parseMysqlNameRows(result.json)
+          : parseTableRows(result.json);
       // A full page may be truncated — fail loudly instead of returning a partial
       // list. The ceiling is measured on the raw row count, so a truncated page
       // is caught even when some of its rows are malformed.
-      if (rawRowCount(result.json) >= TABLE_LIST_MAX_ROWS) {
+      const nameLimit = catalog ? CATALOG_TABLE_NAME_LIMIT : TABLE_LIST_MAX_ROWS;
+      if (rawRowCount(result.json) >= nameLimit) {
         return {
           status: "error",
           tables: [],

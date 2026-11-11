@@ -1,5 +1,5 @@
 import { stringify } from "yaml";
-import { catalogTablesSql, describeCatalogTableSql, quoteMysqlIdent, splitCatalogDatabase } from "./catalog-database";
+import { catalogTablesSql, CATALOG_SCAN_TIMEOUT_MS, CATALOG_TABLE_NAME_LIMIT, describeCatalogTableSql, quoteMysqlIdent, splitCatalogDatabase } from "./catalog-database";
 import { runCatalogShow } from "./catalog-show";
 import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
@@ -94,12 +94,16 @@ export type SchemaStructurePreview = {
   yaml: string;
   tableCount: number;
   columnCount: number;
+  /** True when this response lists table names and has not read their columns. */
+  namesOnly: boolean;
   mapped: { number: number; string: number; time: number };
   downgraded: SchemaStructureColumn[];
 };
 
 /** `ktx sql --max-rows` accepts 1–10000. A full page is treated as truncated. */
 const SCHEMA_STRUCTURE_MAX_ROWS = 10_000;
+/** One checked table is read at a time, and one read stops at this many column rows. */
+const COLUMN_READ_ROW_LIMIT = 2_000;
 
 export class SchemaStructureError extends Error {
   code: "CONNECTION_NOT_FOUND" | "SCHEMA_UNSUPPORTED" | "INVALID_SCHEMA" | "READ_FAILED";
@@ -186,6 +190,7 @@ export function buildMinimalSchemaManifest(
     yaml,
     tableCount: Object.keys(tables).length,
     columnCount: columns.length,
+    namesOnly: false,
     mapped,
     downgraded
   };
@@ -242,7 +247,7 @@ ORDER BY c.table_name, c.ordinal_position
  * smaller pieces. Connection failures stay out of this bucket: "connect timed
  * out" is not a slow metadata scan.
  */
-export function columnScanTimedOut(result: SqlResult, timeoutMs = 30_000): boolean {
+export function columnScanTimedOut(result: SqlResult, timeoutMs = CATALOG_SCAN_TIMEOUT_MS): boolean {
   const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
   if (/can't connect|cannot connect|connection refused|connection timed out|connect timed out|unknown host|no such host/i.test(text)) {
     return false;
@@ -299,11 +304,14 @@ function describeSchemaStructurePhase(
   const tableLabel = table ? `「${table}」` : "";
   switch (phase) {
     case "catalog-list-tables":
+    case "mysql-name-list":
       return `无法列出 Schema${schemaLabel}下的表`;
     case "catalog-columns":
       return `无法读取表${tableLabel}的字段`;
     case "schema-wide-columns":
       return `无法一次读取 Schema${schemaLabel}的字段`;
+    case "table-columns":
+      return `无法读取表${tableLabel}的字段`;
     case "mysql-wide-fallback-list-tables":
       return `无法列出 Schema${schemaLabel}下的表`;
     case "mysql-wide-fallback-columns":
@@ -349,8 +357,17 @@ function structureRows(result: SqlResult, context: SchemaStructureLogContext = {
       safeStructureDetail(meta)
     );
   }
-  if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
-    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
+  if (rows.length >= (
+    context.phase === "table-columns"
+      ? COLUMN_READ_ROW_LIMIT
+      : context.phase === "catalog-list-tables"
+        ? CATALOG_TABLE_NAME_LIMIT
+        : SCHEMA_STRUCTURE_MAX_ROWS
+  )) {
+    const noun = context.phase === "catalog-list-tables" || context.phase === "mysql-name-list"
+      ? "表数"
+      : "字段数";
+    throw new SchemaStructureError("READ_FAILED", `这个 Schema 的${noun}超过一次可读取的上限。`);
   }
   return rows;
 }
@@ -364,9 +381,13 @@ async function readCatalogTableColumns(
   execute: typeof runSql
 ): Promise<{ columns: ColumnInput[]; failure: string }> {
   const described = await execute(projectRoot, connectionId, describeCatalogTableSql(catalog, schema, table), {
-    maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-    timeoutMs: 30000
+    maxRows: COLUMN_READ_ROW_LIMIT,
+    timeoutMs: CATALOG_SCAN_TIMEOUT_MS
   });
+  const raw = resultRows(described);
+  if (raw && raw.length >= COLUMN_READ_ROW_LIMIT) {
+    return { columns: [], failure: "读取表结构失败：这张表的字段数超过一次可读取的上限。" };
+  }
   const columns = mapDescribeColumns(table, optionalRows(described));
   return { columns, failure: columns.length > 0 ? "" : readFailureMessage(described) };
 }
@@ -435,12 +456,54 @@ function parseColumns(rows: unknown[]): ColumnInput[] {
   return columns;
 }
 
+function sqlStringLiteral(value: string): string {
+  if (!value || value.length > 256 || /[\0\r\n]/.test(value)) {
+    throw new SchemaStructureError("READ_FAILED", "读取表结构失败。");
+  }
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function mysqlTableNamesSql(schema: string): string {
+  return `SELECT table_name FROM information_schema.tables WHERE table_schema = ${sqlStringLiteral(schema)} AND table_type = 'BASE TABLE' ORDER BY table_name`;
+}
+
+function mysqlOneTableColumnsSql(schema: string, table: string): string {
+  return `SELECT column_name, data_type, is_nullable, column_key, column_comment FROM information_schema.columns WHERE table_schema = ${sqlStringLiteral(schema)} AND LOWER(table_name) = ${sqlStringLiteral(table.toLowerCase())} ORDER BY ordinal_position`;
+}
+
+function namesFromRows(rows: unknown[]): string[] {
+  const names: string[] = [];
+  for (const row of rows) {
+    const name = Array.isArray(row) ? String(row[0] ?? "").trim() : "";
+    if (!name) continue;
+    names.push(name);
+  }
+  return names;
+}
+
+function columnsForOneTable(table: string, rows: unknown[]): ColumnInput[] {
+  const columns: ColumnInput[] = [];
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length < 5) continue;
+    const column = String(row[0] ?? "").trim();
+    if (!column) continue;
+    columns.push({
+      table,
+      column,
+      dataType: String(row[1] ?? ""),
+      nullable: String(row[2] ?? "").toUpperCase() !== "NO",
+      primaryKey: String(row[3] ?? "").toUpperCase() === "PRI",
+      comment: String(row[4] ?? "")
+    });
+  }
+  return columns;
+}
+
 /**
- * Read the column rows of one Schema.
+ * Read table names, or the columns of the requested tables.
  *
- * The query shape is the one Spec 164 established; Spec 190 §7.4 reuses it for
- * the on-demand column-level deep check. A full page means the answer may be
- * truncated, so it is reported as `too_large` instead of a partial list.
+ * A call without `tables` lists names and does not read columns. A call with
+ * `tables` reads those tables one at a time. One column read stops at 2000 rows.
  */
 export async function readSchemaColumns(
   projectRoot: string,
@@ -450,6 +513,7 @@ export async function readSchemaColumns(
     readConnectionsImpl?: typeof readConnections;
     runSqlImpl?: typeof runSql;
     runCatalogShowImpl?: typeof runCatalogShow;
+    tables?: string[];
   } = {}
 ): Promise<SchemaColumnsRead> {
   const safeSchema = assertSchemaIdent(schema);
@@ -464,23 +528,23 @@ export async function readSchemaColumns(
   }
   const execute = deps.runSqlImpl ?? runSql;
   const catalog = protocolOf(connection) === "mysql" ? splitCatalogDatabase(connection.database) : null;
+  const requested = deps.tables?.map((table) => table.trim()).filter(Boolean);
   try {
     if (catalog) {
-      const tableSql = catalogTablesSql(catalog.catalog, safeSchema);
-      const tablesResult = await (deps.runCatalogShowImpl ?? runCatalogShow)(
-        projectRoot,
-        connectionId,
-        tableSql,
-        { maxRows: SCHEMA_STRUCTURE_MAX_ROWS, timeoutMs: 30000 }
-      );
-      const tableNames = structureRows(tablesResult, {
-        connectionId,
-        schema: safeSchema,
-        phase: "catalog-list-tables",
-        sql: tableSql
-      })
-        .map((row) => (Array.isArray(row) ? String(row[0] ?? "").trim() : ""))
-        .filter((name) => {
+      if (!requested) {
+        const tableSql = catalogTablesSql(catalog.catalog, safeSchema);
+        const tablesResult = await (deps.runCatalogShowImpl ?? runCatalogShow)(
+          projectRoot,
+          connectionId,
+          tableSql,
+          { maxRows: CATALOG_TABLE_NAME_LIMIT, timeoutMs: CATALOG_SCAN_TIMEOUT_MS }
+        );
+        const tableNames = namesFromRows(structureRows(tablesResult, {
+          connectionId,
+          schema: safeSchema,
+          phase: "catalog-list-tables",
+          sql: tableSql
+        })).filter((name) => {
           try {
             quoteMysqlIdent(name);
             return true;
@@ -488,9 +552,12 @@ export async function readSchemaColumns(
             return false;
           }
         });
+        if (tableNames.length >= CATALOG_TABLE_NAME_LIMIT) return { status: "too_large" };
+        return { status: "ok", columns: [], tables: tableNames };
+      }
       const columns: ColumnInput[] = [];
       let failure = "";
-      for (const table of tableNames) {
+      for (const table of requested) {
         const read = await readCatalogTableColumns(
           projectRoot,
           connectionId,
@@ -499,19 +566,54 @@ export async function readSchemaColumns(
           table,
           execute
         );
+        if (read.columns.length === 0 && read.failure) failure = read.failure;
         columns.push(...read.columns);
-        if (read.failure) failure = read.failure;
       }
-      if (tableNames.length > 0 && columns.length === 0) {
+      if (requested.length > 0 && columns.length === 0) {
         return { status: "error", message: failure || "读取表结构失败。" };
       }
       return { status: "ok", columns };
     }
     const protocol = protocolOf(connection);
+    if (protocol === "mysql" && !requested) {
+      const listSql = mysqlTableNamesSql(safeSchema);
+      const listed = await execute(projectRoot, connectionId, listSql, {
+        maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+        timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+      });
+      const tableNames = namesFromRows(structureRows(listed, {
+        connectionId,
+        schema: safeSchema,
+        phase: "catalog-list-tables",
+        sql: listSql
+      }));
+      if (tableNames.length >= SCHEMA_STRUCTURE_MAX_ROWS) return { status: "too_large" };
+      return { status: "ok", columns: [], tables: tableNames };
+    }
+    if (protocol === "mysql" && requested) {
+      const columns: ColumnInput[] = [];
+      for (const table of requested) {
+        const columnSql = mysqlOneTableColumnsSql(safeSchema, table);
+        const result = await execute(projectRoot, connectionId, columnSql, {
+          maxRows: COLUMN_READ_ROW_LIMIT,
+          timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+        });
+        const rows = structureRows(result, {
+          connectionId,
+          schema: safeSchema,
+          table,
+          phase: "table-columns",
+          sql: columnSql
+        });
+        if (rows.length >= COLUMN_READ_ROW_LIMIT) return { status: "too_large" };
+        columns.push(...columnsForOneTable(table, rows));
+      }
+      return { status: "ok", columns, tables: requested };
+    }
     const listSql = sqlFor(protocol, safeSchema);
     const result = await execute(projectRoot, connectionId, listSql, {
       maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-      timeoutMs: 30000
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
     });
     const rows = structureRows(result, {
       connectionId,
@@ -522,7 +624,15 @@ export async function readSchemaColumns(
     if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
       return { status: "too_large" };
     }
-    return { status: "ok", columns: parseColumns(rows) };
+    const columns = parseColumns(rows);
+    if (requested) {
+      const wanted = new Set(requested.map((table) => table.toLowerCase()));
+      return {
+        status: "ok",
+        columns: columns.filter((column) => wanted.has(column.table.toLowerCase()))
+      };
+    }
+    return { status: "ok", columns };
   } catch (error) {
     if (error instanceof SchemaStructureError) {
       if (error.message.includes("超过一次可读取的上限")) {
@@ -556,15 +666,18 @@ export async function previewSchemaStructure(
     readConnectionsImpl?: typeof readConnections;
     runSqlImpl?: typeof runSql;
     runCatalogShowImpl?: typeof runCatalogShow;
+    tables?: string[];
   } = {}
 ): Promise<SchemaStructurePreview> {
   const safeSchema = assertSchemaIdent(schema);
   const read = await readSchemaColumns(projectRoot, connectionId, schema, deps);
   if (read.status === "too_large") {
-    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
+    throw new SchemaStructureError("READ_FAILED", "这次读取超过一次可读取的上限。");
   }
   if (read.status === "error") {
     throw new SchemaStructureError("READ_FAILED", read.message, 400, read.detail);
   }
-  return buildMinimalSchemaManifest(safeSchema, read.columns, read.tables ?? []);
+  const preview = buildMinimalSchemaManifest(safeSchema, read.columns, read.tables ?? []);
+  const namesOnly = !deps.tables?.some((table) => table.trim()) && read.columns.length === 0 && (read.tables?.length ?? 0) > 0;
+  return { ...preview, namesOnly };
 }
