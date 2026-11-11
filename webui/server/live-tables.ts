@@ -11,6 +11,7 @@
  * as `SCHEMA_NOT_VISIBLE`, so the UI never claims a table was deleted.
  */
 import { catalogTablesSql, splitCatalogDatabase } from "./catalog-database";
+import { runCatalogShow } from "./catalog-show";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
 import { assertSchemaIdent, columnScanTimedOut } from "./schema-structure";
@@ -229,6 +230,7 @@ export type LiveTableProvider = {
 export type SqlLiveTableProviderDeps = {
   readConnectionsImpl?: typeof readConnections;
   runSqlImpl?: typeof runSql;
+  runCatalogShowImpl?: typeof runCatalogShow;
   now?: () => number;
 };
 
@@ -420,6 +422,7 @@ export function createSqlLiveTableProvider(
 ): LiveTableProvider {
   const readConnectionsImpl = deps.readConnectionsImpl ?? readConnections;
   const runSqlImpl = deps.runSqlImpl ?? runSql;
+  const runCatalogShowImpl = deps.runCatalogShowImpl ?? runCatalogShow;
   const now = deps.now ?? Date.now;
 
   return {
@@ -457,10 +460,9 @@ export function createSqlLiveTableProvider(
       }
       const protocol = wireProtocol as "mysql" | "postgres";
       const catalog = protocol === "mysql" ? splitCatalogDatabase(conn.database) : null;
-      // SelectDB / Doris external catalogs resolve unqualified information_schema
-      // to a missing default-cluster database, and KTX 0.16.0 rejects SHOW.
-      // List those tables from catalog.information_schema. Column counts stay 0
-      // here: one name query must not turn into a per-table column scan.
+      // External catalogs list names with SHOW on the direct adapter. KTX 0.16.0
+      // rejects SHOW, and this cluster has no catalog information_schema.
+      // Column counts stay 0: one name query must not turn into a column scan.
       let listSql: string;
       try {
         listSql = catalog
@@ -477,7 +479,7 @@ export function createSqlLiveTableProvider(
       }
       let result: SqlResult;
       try {
-        result = await runSqlImpl(
+        result = await (catalog ? runCatalogShowImpl : runSqlImpl)(
           projectRoot,
           connectionId,
           listSql,

@@ -1,4 +1,5 @@
 import { catalogSchemataSql, catalogTablesSql, splitCatalogDatabase } from "./catalog-database";
+import { runCatalogShow } from "./catalog-show";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo, LiveSchemaSummary, LiveSchemasResponse } from "./model";
@@ -63,6 +64,7 @@ const cache = new Map<string, CacheEntry>();
 export type ListLiveSchemasDeps = {
   readConnectionsImpl?: typeof readConnections;
   runSqlImpl?: typeof runSql;
+  runCatalogShowImpl?: typeof runCatalogShow;
   now?: () => number;
   ttlMs?: number;
   /** Spec 174 §5 — only reuse / store results of this config generation. */
@@ -139,16 +141,14 @@ function rowCount(json: unknown): number {
 }
 
 /**
- * External catalogs are read through catalog-qualified information_schema.
- * SHOW is rejected by KTX 0.16.0, and an unqualified information_schema is a
- * missing default-cluster database. A failure here is the catalog read
- * failing, not an empty database.
+ * Each external schema's table count is the row count of one direct SHOW TABLES.
+ * A failed count fails the whole catalog read. It is not published as zero.
  */
 async function countExternalCatalogTables(
   projectRoot: string,
   conn: ConnectionInfo,
   schemas: LiveSchemaSummary[],
-  runSqlImpl: typeof runSql
+  runShow: typeof runCatalogShow
 ): Promise<{ ok: true; schemas: LiveSchemaSummary[] } | { ok: false; reason: string }> {
   const catalog = splitCatalogDatabase(conn.database);
   if (!catalog) return { ok: true, schemas };
@@ -160,14 +160,14 @@ async function countExternalCatalogTables(
     } catch {
       return { ok: false, reason: `无法读取目录 ${catalog.catalog}.${item.schema} 的表。` };
     }
-    const result = await runSqlImpl(projectRoot, conn.id, sql, {
+    const result = await runShow(projectRoot, conn.id, sql, {
       maxRows: 10_000,
       timeoutMs: 30_000
     });
     if (!result.ok || result.json == null || typeof result.json !== "object") {
       const reason =
         (result.stderr || result.stdout).trim() ||
-        `ktx sql failed (exit ${result.exitCode})`;
+        "读取库内目录失败。";
       return { ok: false, reason };
     }
     counted.push({ schema: item.schema, tableCount: rowCount(result.json) });
@@ -277,9 +277,11 @@ export async function listLiveSchemas(
     );
   }
 
+  const external = wireProtocol === "mysql" && splitCatalogDatabase(conn.database) !== null;
+  const execute = external ? (deps.runCatalogShowImpl ?? runCatalogShow) : runSqlImpl;
   let sqlResult: SqlResult;
   try {
-    sqlResult = await runSqlImpl(projectRoot, connId, sqlForConnection(conn, wireProtocol), {
+    sqlResult = await execute(projectRoot, connId, sqlForConnection(conn, wireProtocol), {
       maxRows: 2000,
       timeoutMs: 30_000
     });
@@ -308,7 +310,7 @@ export async function listLiveSchemas(
 
   let schemas = filterSystemSchemas(parseRows(sqlResult.json), wireProtocol);
   if (wireProtocol === "mysql" && splitCatalogDatabase(conn.database)) {
-    const counted = await countExternalCatalogTables(projectRoot, conn, schemas, runSqlImpl);
+    const counted = await countExternalCatalogTables(projectRoot, conn, schemas, deps.runCatalogShowImpl ?? runCatalogShow);
     if (!counted.ok) {
       return errorPayload(connId, counted.reason, wireProtocol, fetchedAt);
     }

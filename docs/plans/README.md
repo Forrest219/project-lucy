@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261111-catalog-scan-read-path-plan.md](lucy-20261111-catalog-scan-read-path-plan.md) | **v0.2 实施中（2026-11-11）**。外部目录的库内表清单改走 SHOW，并带回每库表数；普通 MySQL 的准备表结构改为一次读取字段。本条收口不表示可上线。Spec 见 [lucy-20261111-catalog-scan-read-path-spec.md](../specs/lucy-20261111-catalog-scan-read-path-spec.md) |
 | [lucy-20261104-minimal-rds-dataplane-plan.md](lucy-20261104-minimal-rds-dataplane-plan.md) | **已执行（2026-11-04）**：最小化 RDS 数据面门禁。一推一／Strength B 只认 `--pack row-policy` + `rds-mysql-readonly` + `readonlyProven`；错包跑 SEC-11 判 `blocked` 不判 `passed`。双包边界与台账见 [行权限真实 e2e 审判包设计](../design/design-row-policy-real-e2e-pack.md)。本条不表示可上线。Spec 见 [lucy-20261018-enterprise-security-and-real-e2e-spec.md](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md) |
 | [lucy-20261022-row-permission-management-plan.md](lucy-20261022-row-permission-management-plan.md) | **实施中**：行权限真实 e2e 审判包（强度 B）。ROW25-V01…V22 + RTP25／RTV25 + BY-01…19 两阶段真实一推一，数据面为 RDS 只读 `mysql-aliyun`（区划 `华东`／`西南`），每个 execution id 唯一断言所有者。设计权威见 [行权限真实 e2e 审判包设计](../design/design-row-policy-real-e2e-pack.md)。本条不表示可上线。Spec 见 [lucy-20261022-v2p5-row-permission-management-spec.md](../specs/lucy-20261022-v2p5-row-permission-management-spec.md) |
 | [lucy-20261104-audit-call-storyline-plan.md](lucy-20261104-audit-call-storyline-plan.md) | **v0.1 功能合同已收口（2026-11-04）**。SC-01–SC-16 关闭。本条收口不表示可上线。Spec 见 [lucy-20261104-audit-call-storyline-spec.md](../specs/lucy-20261104-audit-call-storyline-spec.md) |

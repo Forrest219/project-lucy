@@ -33,59 +33,48 @@ function preview(runSqlImpl: typeof import("../ktx").runSql) {
   });
 }
 
-function mysqlTables(tables: Record<string, unknown[][] | null>) {
+function columnQuery(rows: unknown[][], fail = false) {
   return vi.fn(async (_root: string, _connectionId: string, sql: string) => {
-    if (sql.includes("table_name FROM information_schema.tables")) {
-      return sqlResult({ json: { rows: Object.keys(tables).map((name) => [name]) } });
+    if (!sql.includes("FROM information_schema.columns") || !sql.includes("table_schema = 'dataforai'")) {
+      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
     }
-    const match = sql.match(/table_name = '([^']+)'/);
-    if (!match) return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
-    const rows = tables[match[1]];
-    if (!rows) return sqlResult({ ok: false, exitCode: 1, stderr: "table failed", latencyMs: 20, json: null });
+    if (fail) return sqlResult({ ok: false, exitCode: 1, stderr: "column read failed", json: null });
     return sqlResult({ json: { rows } });
   });
 }
 
 describe("previewSchemaStructure", () => {
-  it("reads table names first, then one table at a time, with at most 10000 rows", async () => {
-    const runSqlImpl = mysqlTables({
-      orders: [["id", "varchar", "YES", "", ""]]
-    });
+  it("reads a plain MySQL schema with one columns query", async () => {
+    const runSqlImpl = columnQuery([
+      ["orders", "id", "varchar", "YES", "", "订单"]
+    ]);
 
     await preview(runSqlImpl);
 
+    expect(runSqlImpl).toHaveBeenCalledTimes(1);
     expect(runSqlImpl).toHaveBeenCalledWith(
       "/project",
       "demo",
-      expect.stringContaining("table_name FROM information_schema.tables"),
+      expect.stringContaining("FROM information_schema.columns"),
       expect.objectContaining({ maxRows: 10_000, timeoutMs: 30_000 })
     );
-    expect(runSqlImpl).toHaveBeenCalledWith(
-      "/project",
-      "demo",
-      expect.stringContaining("information_schema.columns"),
-      expect.objectContaining({ maxRows: 10_000, timeoutMs: 30_000 })
-    );
-    expect(runSqlImpl.mock.calls.some((call) => String(call[2]).includes("JOIN"))).toBe(false);
+    expect(String(runSqlImpl.mock.calls[0][2])).toContain("JOIN");
+    expect(String(runSqlImpl.mock.calls[0][2])).not.toContain("table_name = '");
   });
 
-  it("throws when the table list fails instead of reporting an empty schema", async () => {
-    const runSqlImpl = vi.fn(async () => sqlResult({
-      ok: false,
-      exitCode: 1,
-      stderr: "error: option '--max-rows <n>' argument '20000' is invalid.",
-      json: null
-    }));
+  it("throws when the column query fails instead of retrying per table", async () => {
+    const runSqlImpl = columnQuery([], true);
 
     await expect(preview(runSqlImpl)).rejects.toEqual(expect.objectContaining({
       name: "SchemaStructureError",
       code: "READ_FAILED",
-      message: "读取表结构失败：error: option '--max-rows <n>' argument '20000' is invalid."
+      message: "读取表结构失败：column read failed"
     }));
+    expect(runSqlImpl).toHaveBeenCalledTimes(1);
     await expect(preview(runSqlImpl)).rejects.toBeInstanceOf(SchemaStructureError);
   });
 
-  it("throws when the table list is not JSON rows", async () => {
+  it("throws when the column query is not JSON rows", async () => {
     const runSqlImpl = vi.fn(async () => sqlResult({ ok: true, json: null }));
 
     await expect(preview(runSqlImpl)).rejects.toMatchObject({
@@ -95,54 +84,30 @@ describe("previewSchemaStructure", () => {
   });
 
   it("counts tables from a successful read", async () => {
-    const runSqlImpl = mysqlTables({
-      orders: [["id", "varchar", "YES", "", ""], ["amount", "decimal", "YES", "", ""]],
-      people: [["name", "varchar", "YES", "", ""]]
-    });
+    const runSqlImpl = columnQuery([
+      ["orders", "id", "varchar", "YES", "", ""],
+      ["orders", "amount", "decimal", "YES", "", ""],
+      ["people", "name", "varchar", "YES", "", ""]
+    ]);
 
     const result = await preview(runSqlImpl);
 
     expect(result.tableCount).toBe(2);
     expect(result.columnCount).toBe(3);
     expect(result.schema).toBe("dataforai");
+    expect(result.yaml).toContain("orders");
+    expect(result.yaml).toContain("people");
   });
 
-  it("skips a table that fills the row cap and fails when nothing remains", async () => {
-    const rows = Array.from({ length: 10_000 }, (_, index) => [`c${index}`, "varchar", "YES", "", ""]);
-    const runSqlImpl = mysqlTables({ orders: rows });
+  it("fails closed when the column page reaches 10000 rows", async () => {
+    const rows = Array.from({ length: 10_000 }, (_, index) => ["orders", `c${index}`, "varchar", "YES", "", ""]);
+    const runSqlImpl = columnQuery(rows);
 
     await expect(preview(runSqlImpl)).rejects.toMatchObject({
       code: "READ_FAILED",
-      message: "读取表结构失败。"
+      message: "这个 Schema 的字段数超过一次可读取的上限。"
     });
-  });
-
-  it("reads every table without waiting for a schema-wide timeout", async () => {
-    const runSqlImpl = mysqlTables({
-      orders: [["id", "varchar", "YES", "", ""], ["amount", "decimal", "YES", "", ""]],
-      people: [["name", "varchar", "YES", "", ""]]
-    });
-
-    const result = await preview(runSqlImpl);
-
-    expect(result.tableCount).toBe(2);
-    expect(result.columnCount).toBe(3);
-    expect(result.yaml).toContain("orders");
-    expect(result.yaml).toContain("people");
-    expect(runSqlImpl.mock.calls.some((call) => String(call[2]).includes("JOIN"))).toBe(false);
-  });
-
-  it("keeps tables that were read when one table fails quickly", async () => {
-    const runSqlImpl = mysqlTables({
-      orders: null,
-      people: [["name", "varchar", "YES", "", ""]]
-    });
-
-    const result = await preview(runSqlImpl);
-
-    expect(result.tableCount).toBe(1);
-    expect(result.yaml).toContain("people");
-    expect(result.yaml).not.toContain("orders");
+    expect(runSqlImpl).toHaveBeenCalledTimes(1);
   });
 
   it("returns tableCount 0 when the schema has no base tables", async () => {
@@ -152,5 +117,6 @@ describe("previewSchemaStructure", () => {
 
     expect(result.tableCount).toBe(0);
     expect(result.columnCount).toBe(0);
+    expect(runSqlImpl).toHaveBeenCalledTimes(1);
   });
 });

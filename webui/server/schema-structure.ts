@@ -1,5 +1,6 @@
 import { stringify } from "yaml";
 import { catalogTablesSql, describeCatalogTableSql, quoteMysqlIdent, splitCatalogDatabase } from "./catalog-database";
+import { runCatalogShow } from "./catalog-show";
 import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
@@ -226,82 +227,6 @@ export function columnScanTimedOut(result: SqlResult, timeoutMs = 30_000): boole
   return !result.ok && result.latencyMs >= Math.max(0, timeoutMs - 1_500);
 }
 
-function sqlStringLiteral(value: string): string {
-  if (!value || value.length > 256 || /[\0\r\n]/.test(value)) {
-    throw new SchemaStructureError("READ_FAILED", "读取表结构失败。");
-  }
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function mysqlTableNamesSql(schema: string): string {
-  return `SELECT table_name FROM information_schema.tables WHERE table_schema = ${sqlStringLiteral(schema)} AND table_type = 'BASE TABLE' ORDER BY table_name`;
-}
-
-function mysqlTableColumnsSql(schema: string, table: string): string {
-  return `SELECT column_name, data_type, is_nullable, column_key, column_comment FROM information_schema.columns WHERE table_schema = ${sqlStringLiteral(schema)} AND table_name = ${sqlStringLiteral(table)} ORDER BY ordinal_position`;
-}
-
-function tableNamesFromRows(rows: unknown[]): string[] {
-  const names: string[] = [];
-  for (const row of rows) {
-    const name = Array.isArray(row) ? String(row[0] ?? "").trim() : "";
-    if (name) names.push(name);
-  }
-  return names;
-}
-
-function columnsForTable(table: string, rows: unknown[]): ColumnInput[] {
-  const columns: ColumnInput[] = [];
-  for (const row of rows) {
-    if (!Array.isArray(row) || row.length < 5) continue;
-    const column = String(row[0] ?? "").trim();
-    if (!column) continue;
-    columns.push({
-      table,
-      column,
-      dataType: String(row[1] ?? ""),
-      nullable: String(row[2] ?? "").toUpperCase() !== "NO",
-      primaryKey: String(row[3] ?? "").toUpperCase() === "PRI",
-      comment: String(row[4] ?? "")
-    });
-  }
-  return columns;
-}
-
-/**
- * Read a plain MySQL schema one table at a time. A schema-wide column scan is
- * not attempted. One table that fails or fills the row cap is skipped.
- */
-async function readMysqlColumnsByTable(
-  projectRoot: string,
-  connectionId: string,
-  schema: string,
-  execute: typeof runSql
-): Promise<SchemaColumnsRead> {
-  const listed = await execute(projectRoot, connectionId, mysqlTableNamesSql(schema), {
-    maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-    timeoutMs: 30_000
-  });
-  const tableNames = tableNamesFromRows(structureRows(listed));
-  if (tableNames.length === 0) return { status: "ok", columns: [] };
-  const columns: ColumnInput[] = [];
-  let failure = "";
-  for (const table of tableNames) {
-    const result = await execute(projectRoot, connectionId, mysqlTableColumnsSql(schema, table), {
-      maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-      timeoutMs: 30_000
-    });
-    const rows = optionalRows(result);
-    if (!rows) {
-      failure = readFailureMessage(result);
-      continue;
-    }
-    columns.push(...columnsForTable(table, rows));
-  }
-  if (columns.length === 0) return { status: "error", message: failure || "读取表结构失败。" };
-  return { status: "ok", columns };
-}
-
 async function readCatalogTableColumns(
   projectRoot: string,
   connectionId: string,
@@ -407,6 +332,7 @@ export async function readSchemaColumns(
   deps: {
     readConnectionsImpl?: typeof readConnections;
     runSqlImpl?: typeof runSql;
+    runCatalogShowImpl?: typeof runCatalogShow;
   } = {}
 ): Promise<SchemaColumnsRead> {
   const safeSchema = assertSchemaIdent(schema);
@@ -423,7 +349,7 @@ export async function readSchemaColumns(
   const catalog = protocolOf(connection) === "mysql" ? splitCatalogDatabase(connection.database) : null;
   try {
     if (catalog) {
-      const tablesResult = await execute(
+      const tablesResult = await (deps.runCatalogShowImpl ?? runCatalogShow)(
         projectRoot,
         connectionId,
         catalogTablesSql(catalog.catalog, safeSchema),
@@ -459,9 +385,6 @@ export async function readSchemaColumns(
       return { status: "ok", columns };
     }
     const protocol = protocolOf(connection);
-    if (protocol === "mysql") {
-      return await readMysqlColumnsByTable(projectRoot, connectionId, safeSchema, execute);
-    }
     const result = await execute(projectRoot, connectionId, sqlFor(protocol, safeSchema), {
       maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
       timeoutMs: 30000
@@ -489,6 +412,7 @@ export async function previewSchemaStructure(
   deps: {
     readConnectionsImpl?: typeof readConnections;
     runSqlImpl?: typeof runSql;
+    runCatalogShowImpl?: typeof runCatalogShow;
   } = {}
 ): Promise<SchemaStructurePreview> {
   const safeSchema = assertSchemaIdent(schema);
