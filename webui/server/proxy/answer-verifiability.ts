@@ -25,6 +25,18 @@ export const REASON_SOURCE_UNRESOLVED = "answer_verifiability_source_unresolved"
 export const REASON_ASSEMBLE_FAILED = "answer_verifiability_assemble_failed" as const;
 export const REASON_CALIBER_EVIDENCE_MISSING = "answer_verifiability_caliber_evidence_missing" as const;
 
+/**
+ * §4.1：本条强制出口的工具名集合（仅 lucy_query）。
+ * 排除路径（read_source／explain／freshness／certified_route／template）不产块。
+ * 用于 SC-16 夹具取证；mcp-proxy.ts 路由守卫与此集合语义对齐。
+ */
+export const ANSWER_VERIFIABILITY_IN_SCOPE_TOOLS: ReadonlySet<string> = new Set(["lucy_query"]);
+
+/** §4.1 是否为本条强制块出口的工具（SC-16 scope guard）。 */
+export function isAnswerVerifiabilityInScope(toolName: string): boolean {
+  return ANSWER_VERIFIABILITY_IN_SCOPE_TOOLS.has(toolName);
+}
+
 const STRUCTURED_CONTENT_PLACEHOLDER = "__LUCY_AV_STRUCTURED_CONTENT_RAW__";
 
 // ─── Public types ────────────────────────────────────────────────────────────

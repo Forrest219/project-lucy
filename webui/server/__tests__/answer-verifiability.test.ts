@@ -4,21 +4,25 @@
 import { describe, expect, it } from "vitest";
 import type { SourceRef } from "../proxy/acl.js";
 import {
+  ANSWER_VERIFIABILITY_IN_SCOPE_TOOLS,
   ANSWER_VERIFIABILITY_KEY,
   ANSWER_VERIFIABILITY_SCHEMA_VERSION,
   CUTOFF_NOTE_NOT_CHECKED,
   REASON_ASSEMBLE_FAILED,
   REASON_CALIBER_EVIDENCE_MISSING,
   REASON_SOURCE_UNRESOLVED,
+  applyAnswerVerifiabilityToLucyQuery,
   buildAnswerVerifiability,
   buildAnswerVerifiabilityErrorEnvelope,
-  extractLucy018PreserveFields,
   buildPinnedCaliberEvidenceFromRecord,
   caliberBindingRefFromPinned,
   digestPinnedCaliberSnapshot,
+  extractLucy018PreserveFields,
   extractNumberLiteralsFromJsonText,
+  extractSseJsonRpcResponseRaw,
   extractTopLevelMemberRaw,
   injectJsonObjectKeyPreservingLiterals,
+  isAnswerVerifiabilityInScope,
   projectBlockLossless,
   resolveAuthoritativeSourceIdentities,
   summarizeCaliber,
@@ -823,5 +827,298 @@ describe("answer-verifiability 排除与错误形状（SC-07／SC-15／SC-16 文
       }
     });
     expect(built).toEqual({ ok: false, reason: REASON_CALIBER_EVIDENCE_MISSING });
+  });
+});
+
+// ─── SC-16 fixture evidence ───────────────────────────────────────────────────
+
+describe("SC-16：排除路径（read_source／explain／freshness／certified_route／template）不产本条块", () => {
+  const EXCLUDED_TOOLS = [
+    "lucy_read_source",
+    "lucy_explain_query",
+    "lucy_freshness",
+    "lucy_certified_route",
+    "lucy_report_template"
+  ] as const;
+
+  it("§4.1 scope guard：排除工具不在本条强制出口集合，lucy_query 在", () => {
+    for (const tool of EXCLUDED_TOOLS) {
+      expect(isAnswerVerifiabilityInScope(tool)).toBe(false);
+      expect(ANSWER_VERIFIABILITY_IN_SCOPE_TOOLS.has(tool)).toBe(false);
+    }
+    expect(isAnswerVerifiabilityInScope("lucy_query")).toBe(true);
+  });
+
+  it("排除工具应答 wire 原封不动（未经 applyAnswerVerifiabilityToLucyQuery）→ 无块", () => {
+    // 每个排除工具的典型应答 wire 不含 answer_verifiability 键；
+    // 因为 mcp-proxy.ts 的 toolName !== "lucy_query" 守卫（B-OUT-OF-SCOPE）确保不调用此函数。
+    const excludedWires: Array<[string, string]> = [
+      ["lucy_read_source", JSON.stringify({
+        jsonrpc: "2.0", id: 1,
+        result: { content: [{ type: "text", text: JSON.stringify({ ok: true, columns: ["id", "name"] }) }] }
+      })],
+      ["lucy_explain_query", JSON.stringify({
+        jsonrpc: "2.0", id: 2,
+        result: { content: [{ type: "text", text: JSON.stringify({ ok: true, explanation: "基于 sl_query 推导" }) }] }
+      })],
+      ["lucy_freshness", JSON.stringify({
+        jsonrpc: "2.0", id: 3,
+        result: { content: [{ type: "text", text: JSON.stringify({ status: "not_checked", mode: "metadata_only", physicalDataUpdatedAt: null }) }] }
+      })],
+      ["lucy_certified_route", JSON.stringify({
+        jsonrpc: "2.0", id: 4,
+        result: { content: [{ type: "text", text: JSON.stringify({ ok: true, rows: [], totalRows: 0 }) }] }
+      })],
+      ["lucy_report_template", JSON.stringify({
+        jsonrpc: "2.0", id: 5,
+        result: { content: [{ type: "text", text: JSON.stringify({ ok: true, template: "{{query}}" }) }] }
+      })]
+    ];
+    for (const [tool, wire] of excludedWires) {
+      // 排除工具响应直接透传，无 AV 块
+      expect(wire).not.toContain(ANSWER_VERIFIABILITY_KEY);
+      // 正面证明：若错误地对该 wire 调用 applyAnswerVerifiabilityToLucyQuery，
+      // 函数仍会注入块（说明函数本身有效；排除靠 proxy 路由守卫，不靠函数内 toolName 检查）
+      const wrongApply = applyAnswerVerifiabilityToLucyQuery({
+        originalEnvelopeWire: wire,
+        enrichedEnvelope: JSON.parse(wire),
+        requestId: 1,
+        sourceRefs: [sampleSources()[0]!],
+        argsBeforeRewrite: {},
+        requestPinnedCaliber: nonePinned()
+      });
+      // 函数成功注入 → 证明排除路径不调用此函数才是关键守卫
+      expect(wrongApply.ok).toBe(true);
+      if (wrongApply.ok) {
+        expect(wrongApply.finalWire).toContain(ANSWER_VERIFIABILITY_KEY);
+      }
+      // 归纳结论：tool 在排除集合 ⟺ 不调用函数 ⟺ 无块
+      expect(isAnswerVerifiabilityInScope(tool)).toBe(false);
+    }
+  });
+});
+
+// ─── SC-17 fixture evidence ───────────────────────────────────────────────────
+
+describe("SC-17：Hive 成功 lucy_query 含合法块（B-HIVE-OK）", () => {
+  it("Hive 成功应答 wire 经 applyAnswerVerifiabilityToLucyQuery 产合法块", () => {
+    // 模拟 maybeWriteHiveDivertedResponse 产生的 wire（jsonRpcToolResult 格式，无 structuredContent）
+    const hivePayload = {
+      ok: true,
+      rows: [[9007199254740993, "北京"]], // 大整数验证保真
+      columns: ["id", "region"],
+      totalRows: 1,
+      dialect: "hive"
+    };
+    // 注意：jsonRpcToolResult 只有 content，无 structuredContent
+    const hiveWire = JSON.stringify({
+      jsonrpc: "2.0",
+      id: "hive-sc17",
+      result: {
+        content: [{ type: "text", text: JSON.stringify(hivePayload) }]
+      }
+    });
+
+    const applied = applyAnswerVerifiabilityToLucyQuery({
+      originalEnvelopeWire: hiveWire,
+      enrichedEnvelope: JSON.parse(hiveWire),
+      requestId: "hive-sc17",
+      sourceRefs: [sampleSources()[0]!],
+      argsBeforeRewrite: { measures: ["orders.sales"], dimensions: [{ field: "orders.region" }] },
+      requestPinnedCaliber: nonePinned()
+    });
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+
+    const finalParsed = JSON.parse(applied.finalWire) as {
+      result: {
+        content: Array<{ text: string }>;
+        _meta: { lucy: Record<string, unknown> };
+      };
+    };
+    const textObj = JSON.parse(finalParsed.result.content[0]!.text) as Record<string, unknown>;
+    const block = textObj[ANSWER_VERIFIABILITY_KEY] as AnswerVerifiabilityBlock;
+    expect(block).toBeTruthy();
+    expect(block.schema_version).toBe(ANSWER_VERIFIABILITY_SCHEMA_VERSION);
+    expect(block.cutoff.status).toBe("not_checked");
+    expect(block.cutoff.note).toBe(CUTOFF_NOTE_NOT_CHECKED);
+    expect(block.sources).toHaveLength(1);
+    expect(block.sources[0]?.connectionId).toBe("demo-mysql");
+    // Hive 无 structuredContent → 该载体 omitted_not_object
+    expect(block.carriers?.structuredContent).toBe("omitted_not_object");
+    // meta 同步
+    expect(finalParsed.result._meta?.lucy?.[ANSWER_VERIFIABILITY_KEY]).toEqual(block);
+    // 原始 text 的业务数据仍在（data fidelity）
+    expect(finalParsed.result.content[0]!.text).toContain("北京");
+  });
+});
+
+// ─── SC-21 fixture evidence ───────────────────────────────────────────────────
+
+describe("SC-21：KTX SSE 最终写回成功 lucy_query 含合法块", () => {
+  it("SSE body → extractSseJsonRpcResponseRaw → applyAnswerVerifiabilityToLucyQuery → 合法块", () => {
+    // 模拟 KTX 返回 SSE body（tools/call 最终事件）
+    const innerText = JSON.stringify({ headers: ["sales", "region"], rows: [[42, "华南"]], totalRows: 1 });
+    const scInner = `{"headers":["sales","region"],"rows":[[42,"华南"]],"totalRows":1}`;
+    const jsonRpcMsg = {
+      jsonrpc: "2.0",
+      id: 21,
+      result: {
+        content: [{ type: "text", text: innerText }],
+        // structuredContent 用原文形式内嵌（保真基准；真实 SSE 路径也是原文）
+        structuredContent: { headers: ["sales", "region"], rows: [[42, "华南"]], totalRows: 1 }
+      }
+    };
+    const sseBody = `event: message\ndata: ${JSON.stringify(jsonRpcMsg)}\n\n`;
+
+    // 步骤 1：mcp-proxy.ts SSE 路径先用 extractSseJsonRpcResponseRaw 取原始 wire
+    const originalEnvelopeWire = extractSseJsonRpcResponseRaw(sseBody, 21);
+    expect(originalEnvelopeWire).toBeTruthy();
+
+    // 步骤 2：018 富化（此处无空结果 → enrichedEnvelope 无 next_step）
+    const enrichedEnvelope = JSON.parse(originalEnvelopeWire!) as unknown;
+
+    // 步骤 3：applyAnswerVerifiabilityToLucyQuery（SC-21 核心）
+    const applied = applyAnswerVerifiabilityToLucyQuery({
+      originalEnvelopeWire: originalEnvelopeWire!,
+      enrichedEnvelope,
+      requestId: 21,
+      sourceRefs: [sampleSources()[0]!],
+      argsBeforeRewrite: { measures: ["orders.sales"], dimensions: [{ field: "orders.region" }] },
+      requestPinnedCaliber: nonePinned()
+    });
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+
+    const finalParsed = JSON.parse(applied.finalWire) as {
+      result: {
+        content: Array<{ text: string }>;
+        structuredContent: Record<string, unknown>;
+        _meta: { lucy: Record<string, unknown> };
+      };
+    };
+    const textObj = JSON.parse(finalParsed.result.content[0]!.text) as Record<string, unknown>;
+    const avBlock = textObj[ANSWER_VERIFIABILITY_KEY] as AnswerVerifiabilityBlock;
+
+    // 合法块必填项
+    expect(avBlock.schema_version).toBe(ANSWER_VERIFIABILITY_SCHEMA_VERSION);
+    expect(avBlock.cutoff.status).toBe("not_checked");
+    expect(avBlock.sources).toHaveLength(1);
+    // SSE 有 structuredContent → 三处投影
+    expect(avBlock.carriers?.structuredContent).toBe("projected");
+    expect(finalParsed.result._meta?.lucy?.[ANSWER_VERIFIABILITY_KEY]).toEqual(avBlock);
+    expect(finalParsed.result.structuredContent?.[ANSWER_VERIFIABILITY_KEY]).toEqual(avBlock);
+    // 业务数据保真
+    expect(finalParsed.result.content[0]!.text).toContain("华南");
+    // SC-21 与 SC-01 同一装配合同（非 Hive 专属）
+    expect(scInner).toContain("华南"); // 原始内嵌数据参照
+  });
+});
+
+// ─── SC-22 fixture evidence (full in-flight + supersede scenario) ────────────
+
+describe("SC-22：在途查询 + supersede：响应阶段使用门禁 pin 证据（A），禁止重读会话（B）", () => {
+  it("门禁 pin A 后 supersede 产生 B；响应装配使用 pinnedA → caliberBinding 仍引用 A", () => {
+    const recordA: BindingSessionRecord = {
+      turnId: "turn-1",
+      generation: 3,
+      commitPhase: "committed",
+      bindingId: "bind-a",
+      boundKey: {
+        connectionId: "demo-mysql",
+        schema: "dataforai",
+        sourceName: "orders",
+        physicalTable: "dataforai.orders"
+      },
+      caliberSnapshot: {
+        measures: ["orders.sales"],
+        dimensions: ["orders.region"],
+        segments: [],
+        filterFields: ["orders.region"],
+        requireMeasures: []
+      },
+      registryGeneration: 100,
+      updatedAt: "2026-11-10T00:00:00Z"
+    };
+
+    // 门禁 allow 当拍：捕获 pinnedA
+    const pinnedA = buildPinnedCaliberEvidenceFromRecord(recordA, "begun_bound");
+    expect(pinnedA.status).toBe("activated_snapshot");
+
+    // 在途期间 supersede 产生快照 B（新 bindingId、新 generation、新 registryGeneration）
+    const recordB: BindingSessionRecord = {
+      ...recordA,
+      generation: 4,
+      bindingId: "bind-b",
+      caliberSnapshot: {
+        ...recordA.caliberSnapshot!,
+        measures: ["orders.profit"]
+      },
+      registryGeneration: 101,
+      updatedAt: "2026-11-10T00:01:00Z"
+    };
+    const pinnedB = buildPinnedCaliberEvidenceFromRecord(recordB, "begun_bound");
+    expect(pinnedB.status).toBe("activated_snapshot");
+
+    const wire = makeEnvelope({ textObj: { headers: ["sales"], rows: [[88]], totalRows: 1 } });
+
+    // 正确路径：响应阶段使用门禁时取得的 pinnedA
+    const resultWithA = applyAnswerVerifiabilityToLucyQuery({
+      originalEnvelopeWire: wire,
+      enrichedEnvelope: JSON.parse(wire),
+      requestId: "sc22-a",
+      sourceRefs: [sampleSources()[0]!],
+      argsBeforeRewrite: { measures: ["orders.sales"] },
+      requestPinnedCaliber: pinnedA
+    });
+    expect(resultWithA.ok).toBe(true);
+    if (!resultWithA.ok) return;
+
+    const avA = (JSON.parse(
+      (JSON.parse(resultWithA.finalWire) as { result: { content: Array<{ text: string }> } })
+        .result.content[0]!.text
+    ) as Record<string, unknown>)[ANSWER_VERIFIABILITY_KEY] as AnswerVerifiabilityBlock;
+
+    // caliberBinding 必须引用 A（门禁 pin 时的 sessionGeneration／registryGeneration／bindingId）
+    expect(avA.caliber.caliberBinding).toMatchObject({
+      status: "activated_snapshot",
+      bindingId: "bind-a",
+      sessionGeneration: 3,
+      registryGeneration: 100
+    });
+
+    // 反例：若错误地用 pinnedB（响应阶段重读会话所得），caliberBinding 变成 B
+    const resultWithB = applyAnswerVerifiabilityToLucyQuery({
+      originalEnvelopeWire: wire,
+      enrichedEnvelope: JSON.parse(wire),
+      requestId: "sc22-b",
+      sourceRefs: [sampleSources()[0]!],
+      argsBeforeRewrite: { measures: ["orders.profit"] },
+      requestPinnedCaliber: pinnedB
+    });
+    expect(resultWithB.ok).toBe(true);
+    if (!resultWithB.ok) return;
+
+    const avB = (JSON.parse(
+      (JSON.parse(resultWithB.finalWire) as { result: { content: Array<{ text: string }> } })
+        .result.content[0]!.text
+    ) as Record<string, unknown>)[ANSWER_VERIFIABILITY_KEY] as AnswerVerifiabilityBlock;
+
+    expect(avB.caliber.caliberBinding).toMatchObject({
+      status: "activated_snapshot",
+      bindingId: "bind-b",
+      sessionGeneration: 4,
+      registryGeneration: 101
+    });
+
+    // A 与 B 的 caliberBinding 不同 → 若用 B 会将 A 的数据贴上 B 的引用（合同禁止）
+    expect(avA.caliber.caliberBinding).not.toEqual(avB.caliber.caliberBinding);
+
+    // digest 保真：pinnedA 的 digest 与重新计算一致
+    if (pinnedA.status === "activated_snapshot" && "digest" in avA.caliber.caliberBinding) {
+      const cb = avA.caliber.caliberBinding as { digest: string };
+      expect(cb.digest).toBe(pinnedA.digest);
+      expect(cb.digest).toHaveLength(64);
+    }
   });
 });

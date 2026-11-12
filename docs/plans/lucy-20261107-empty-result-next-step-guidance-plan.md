@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | **v0.8-draft** / 2026-11-09 |
-| 状态 | **v0.8-draft；R2-F＋R4 已闭合（2026-11-09）**。实现已落地；复审 **Approve with nits**。未宣称可上线 |
+| 状态 | **v0.8；R2-F＋R4 已闭合（2026-11-09）**。实现已落地；独立复审 **Approve with nits**；SC-01–SC-30 证据关闭（2026-11-13）；**功能合同已收口**。本条收口不表示可上线 |
 | 授权边界 | **已获开发授权（R4，2026-11-09）**：按本 Plan 执行实现 Task。Spec 见 [lucy-20261107-empty-result-next-step-guidance-spec.md](../specs/lucy-20261107-empty-result-next-step-guidance-spec.md) **v0.8-draft** |
 | 验收 | 实施完成须同时满足：① Spec 的 SC-01–SC-30 逐条有证据；② `npm run lint:spec-docs` / `lint:spec` / `lint:terminology` / `lint:ia-boundary` 退出码 0；③ 相关 vitest 全绿；④ 一次**夹具上游**的 MCP `lucy_query` 0 行响应取到 `next_step` 形状证据。**不构成发布取证，不表示可上线** |
 | 目标分支 / 产品线 | `lucy-v0.30` / `0.30.0` |

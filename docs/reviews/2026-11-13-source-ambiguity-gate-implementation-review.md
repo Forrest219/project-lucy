@@ -4,12 +4,12 @@
 |---|---|
 | 文档名称 | P0-3 表级歧义门闩实现质量审查 |
 | 文档类型 | Review |
-| 版本 | v1.1 |
+| 版本 | v1.2 |
 | 撰写日期 | 2026-11-13 |
-| 撰写人 | Cursor Reviewer；修复回写 Cursor coder |
+| 撰写人 | Cursor Reviewer；修复回写 Cursor coder；独立复验 Cursor Tester |
 | 委托人 | xingchen |
-| 基于材料 | Spec v0.5、Plan、`c1043fae`、`91a9dfc3` 及 `lucy-v0.30` 接线；本地 vitest 相关套件 30/30 |
-| 适用范围 | 实现合入后质量门；本记录不改代码、不构成上线授权 |
+| 基于材料 | Spec v0.5、Plan、`c1043fae`、`91a9dfc3` 及 `lucy-v0.30` 接线；独立复验 vitest 48/48（含生产 HTTP／装配夹具） |
+| 适用范围 | 实现合入后质量门；本记录不构成上线授权；独立复验仅补测试与本段写回 |
 | 输出位置 | `docs/reviews/2026-11-13-source-ambiguity-gate-implementation-review.md` |
 
 总体结论（初审）: **BLOCK**
@@ -25,9 +25,9 @@
 | CHANGE 旅程读失败当空 | **已修**：IO／JSON 损坏 → `readSourceAmbiguityJourneyResult` fail-closed deny |
 | SUGGEST ASK_FIRST 双写 | **未改**（非阻断；正文仍一致） |
 
-自动化：`source-ambiguity-gate` + `catalog-business-semantics` vitest **46/46**。**待独立复验**；本条不表示可上线。
+自动化（修复回写当时）：`source-ambiguity-gate` + `catalog-business-semantics` vitest **46/46**。**独立复验已完成（2026-11-13）**：含 HTTP／生产装配夹具后 **48/48**（见下文「独立复验」）。本条不表示可上线。
 
-对照 Spec v0.5（O1＝`confirmedSourceKey`，O2＝`lucy_read_source` 不纳入，O4＝8）。query／explain 插入点、`begun_bound` 跳过、`lost_or_conflict` 走 `caliber_binding_unresolved`、候选从可见 source 经 `denialAllowList` 滤出、以及 instructions／begin 工具描述已去掉「无门闩」承诺，这些与 D1／D3／D8／D15／O2 对齐。本地 30/30 不能关闭下面两条：测试把健康态和宿主证据直接注入纯函数，生产装配与 HTTP 鉴权没有走到同一条合同。
+对照 Spec v0.5（O1＝`confirmedSourceKey`，O2＝`lucy_read_source` 不纳入，O4＝8）。query／explain 插入点、`begun_bound` 跳过、`lost_or_conflict` 走 `caliber_binding_unresolved`、候选从可见 source 经 `denialAllowList` 滤出、以及 instructions／begin 工具描述已去掉「无门闩」承诺，这些与 D1／D3／D8／D15／O2 对齐。初审指出纯函数注入不足以关闭 SC-17／SC-25；独立复验已补生产 HTTP／装配夹具并全部 PASS。
 
 ## Findings
 
@@ -75,3 +75,46 @@
 - D14：`availableCandidates` 固定为 `[]`；在五项被写绿之后该项区分度不足，见上面的 CHANGE。
 - O4：`MEASURE_SUMMARY_MAX = 8`。
 - 字段级 `ambiguousFieldHint` 仍在 source 门闩放行后执行。
+
+## 独立复验（2026-11-13 · Track A Tester）
+
+复验人：Cursor Tester（独立于修复回写）。**不改 Spec／清单状态镜像**（由 parent 串行写回）。本段结论：初审两条 BLOCK 与三条 CHANGE 在修复后均 **PASS**；SUGGEST 仍 **OPEN（非阻断）**。未改 `mcp-proxy.ts` 生产代码。
+
+### 命令与结果
+
+```bash
+cd webui && npx vitest run --maxWorkers=1 \
+  server/__tests__/source-ambiguity-gate.test.ts \
+  server/__tests__/source-ambiguity-host-confirm-http.test.ts \
+  server/__tests__/catalog-business-semantics.test.ts
+```
+
+结果：**3 files / 48 tests passed**（基线修复回写宣称 46/46；本复验新增生产路径夹具后 48/48，无回归）。
+
+### Findings 清单
+
+| Finding | 复验 | 证据（测试名） |
+|---|---|---|
+| BLOCK 宿主 Bearer 自证（SC-17） | **PASS** | `SC-17 HTTP admit: same MCP Bearer without person+host attestation cannot confirm`（admit＋mcp-proxy 接线锁）；`same Bearer without person+host attestation gets 403; query still deny with zero upstream`（真实 HTTP POST `/mcp/host/source-ambiguity/confirm` → Agent／automation／缺头 403；失败后 `lucy_query` 仍 deny 且上游计数不变） |
+| BLOCK 描述单文件 fail-open（SC-25） | **PASS** | `SC-25 production: dual-hit schema + one corrupt overlay → read_failed deny (not single-hit allow)`：`buildMatchableSourcesForGate` 对坏 overlay 标 `read_failed`，假绿对照（ok＋missing）会单命中，生产装配路径 gate `deny`＋`executed=false`；整连接坏 schema 亦全员 `read_failed` |
+| CHANGE ACL ghost→table_forbidden | **PASS** | `SC-16 ACL: ghost.amount stays unresolved for gate; not ACL table set`；`SC-16: unknown filter/order_by ghost.amount retained as unresolved` |
+| CHANGE 五项证据写绿 | **PASS** | `SC-18 defaults: unwired evidence is fail-closed unknown, not all-true`（`schemaExists=null`／`compiled=false`／`parameterShapeValid=false` → `usableTargets=[]`） |
+| CHANGE 旅程读失败当空 | **PASS** | `CHANGE journey: corrupt JSON fails closed (deny, not empty-journey allow)` |
+| SUGGEST ASK_FIRST 双写 | **OPEN（非阻断）** | `SC-01/02/22` 断言正文一致；仍双处维护，D13 单一渲染片段未落地 |
+
+### 本复验新增／加强的生产路径夹具
+
+| 文件 | 说明 |
+|---|---|
+| `webui/server/__tests__/source-ambiguity-gate.test.ts` | 加强 SC-17 admit＋proxy 接线锁；重写 SC-25 为双命中 schema＋单 overlay 损坏生产装配；新增旅程 JSON 损坏 fail-closed |
+| `webui/server/__tests__/source-ambiguity-host-confirm-http.test.ts` | **新建**：真实 HTTP 宿主确认入口拒绝 Agent Bearer，确认失败后 query 零上游 |
+
+### 建议 Spec 状态行（供 parent 镜像写回；本复验未改 Spec）
+
+`**v0.5；R2-F＋R3（O1／O2／O4）＋R4 已闭合（2026-11-08）；实现已合入（本分支）；复审 BLOCK／CHANGE 已修；独立复验 PASS（2026-11-13，含 SC-17 HTTP／SC-25 生产装配）；本条不表示可上线**`
+
+### 剩余阻断
+
+- **无**复验阻断项。
+- SUGGEST（ASK_FIRST 双写）仍开放，不挡本条复验收口。
+- 本条仍 **不表示可上线**。

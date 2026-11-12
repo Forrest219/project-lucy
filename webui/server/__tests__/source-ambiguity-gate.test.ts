@@ -1,7 +1,7 @@
 /**
  * P0-3 表级歧义门闩 — SC-01–SC-26（O2＝否时 SC-21 按「不纳入」关闭）。
  */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -42,6 +42,7 @@ import {
   upsertJourneyOnBegin,
   type MatchableSource
 } from "../proxy/source-ambiguity-gate";
+import { LUCY_HOST_ATTESTATION_HEADER } from "../proxy/source-ambiguity-journey";
 
 const CONNECTION = "demo-mysql";
 const OTHER_CONNECTION = "mysql-other";
@@ -1200,7 +1201,7 @@ describe("P0-3 source ambiguity gate", () => {
 
   // ─── 复审 BLOCK／CHANGE 回归 ─────────────────────────────────────────────
 
-  it("SC-17 HTTP: same MCP Bearer without person+host attestation cannot confirm", () => {
+  it("SC-17 HTTP admit: same MCP Bearer without person+host attestation cannot confirm", async () => {
     expect(hostConfirmCallerAllowed({ actorKind: "automation" })).toBe(false);
     expect(hostConfirmCallerAllowed({ actorKind: undefined })).toBe(false);
     expect(hostConfirmCallerAllowed({ actorKind: "person" })).toBe(true);
@@ -1222,16 +1223,41 @@ describe("P0-3 source ambiguity gate", () => {
         hostAttestationHeader: "webui"
       }).ok
     ).toBe(true);
-    // mcp-proxy 接线锁：确认入口必须走 admitHostConfirmRequest
-    // （Agent 同 Bearer POST 不得写入 attested 证据）
+
+    // 生产接线锁：确认入口必须经 admitHostConfirmRequest；403 文案绑定宿主头
+    const proxy = await readFile(path.join(process.cwd(), "server", "proxy", "mcp-proxy.ts"), "utf8");
+    const confirmIdx = proxy.indexOf("handleSourceAmbiguityHostConfirm");
+    const admitIdx = proxy.indexOf("admitHostConfirmRequest", confirmIdx);
+    const attestIdx = proxy.indexOf("attestSourceConfirmation", admitIdx);
+    expect(confirmIdx).toBeGreaterThan(-1);
+    expect(admitIdx).toBeGreaterThan(confirmIdx);
+    expect(attestIdx).toBeGreaterThan(admitIdx);
+    expect(proxy).toContain(LUCY_HOST_ATTESTATION_HEADER);
+    expect(proxy.slice(admitIdx, attestIdx)).toMatch(/writeHead\(403/);
   });
 
-  it("SC-25 production: corrupt schema yaml marks read_failed and gate denies", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "sag-corrupt-desc-"));
+  it("SC-25 production: dual-hit schema + one corrupt overlay → read_failed deny (not single-hit allow)", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "sag-corrupt-overlay-"));
     const conn = "demo-mysql";
-    const schemaDir = path.join(root, "semantic-layer", conn, "_schema");
+    const connDir = path.join(root, "semantic-layer", conn);
+    const schemaDir = path.join(connDir, "_schema");
     await mkdir(schemaDir, { recursive: true });
-    await writeFile(path.join(schemaDir, "dataforai.yaml"), "tables:\n  {{broken", "utf8");
+    // 两表描述本应双命中「收入」；仅 b overlay 损坏 → 不得吞成 ok+missing 后单命中放行
+    await writeFile(
+      path.join(schemaDir, "dataforai.yaml"),
+      `tables:
+  a:
+    table: s.a
+    descriptions:
+      db: 销售收入金额
+  b:
+    table: s.b
+    descriptions:
+      db: 营业收入金额
+`,
+      "utf8"
+    );
+    await writeFile(path.join(connDir, "b.yaml"), "name: b\nmeasures:\n  {{broken", "utf8");
     process.env.LUCY_CONTENT_ROOT = root;
     invalidateContentPathsCache();
 
@@ -1243,12 +1269,47 @@ describe("P0-3 source ambiguity gate", () => {
       semanticLayerRoot: path.join(root, "semantic-layer"),
       connectionScope: [conn]
     });
-    expect(
-      enriched.matchableSources.some((s) => s.descriptionHealth?.status === "read_failed")
-    ).toBe(true);
+    const byName = Object.fromEntries(
+      enriched.matchableSources.map((s) => [s.identity.sourceName, s])
+    );
+    expect(byName.a?.descriptionHealth?.status).toBe("ok");
+    expect(byName.a?.description).toContain("销售");
+    expect(byName.b?.descriptionHealth?.status).toBe("read_failed");
+    expect(byName.b?.descriptionState).toBe("missing");
+    expect(byName.b?.description).toBeNull();
+
+    // 假绿对照：若把 b 当真 missing，只剩 a 单命中 → allow
+    const fakeOk = matchVisibleSources(extractTerms(["今年收入是多少"]), [
+      matchable(conn, "dataforai", "a", "s.a", {
+        description: "销售收入金额",
+        descriptionState: "present"
+      }),
+      matchable(conn, "dataforai", "b", "s.b", {
+        description: null,
+        descriptionState: "missing",
+        descriptionHealth: { status: "ok" }
+      })
+    ]);
+    expect(fakeOk.kind).toBe("hits");
+    if (fakeOk.kind === "hits") expect(fakeOk.hits).toHaveLength(1);
 
     const identityKey = "agent:tok-corrupt";
     const sessionId = "s-corrupt";
+    const cbScope = `cb:${identityKey}:${sessionId}`;
+    await beginBindingSessionPreparation(cbScope, {
+      turnId: "t",
+      registryGeneration: 1,
+      bindingId: null,
+      boundKey: null,
+      caliberSnapshot: null
+    });
+    await commitBindingSession(cbScope, {
+      turnId: "t",
+      registryGeneration: 1,
+      bindingId: null,
+      boundKey: null,
+      caliberSnapshot: null
+    });
     await upsertJourneyOnBegin({
       scopeKey: ambiguityScopeKey(identityKey, sessionId),
       generation: 1,
@@ -1272,11 +1333,84 @@ describe("P0-3 source ambiguity gate", () => {
       matchableSources: enriched.matchableSources
     });
     expect(outcome.kind).toBe("deny");
-    if (outcome.kind === "deny") expect(outcome.executed).toBe(false);
+    if (outcome.kind === "deny") {
+      expect(outcome.executed).toBe(false);
+      expect(outcome.denial.reason).toBe(SOURCE_AMBIGUITY_GATE);
+    }
+
+    // 整连接 schema 损坏仍 fail-closed（连接级 read_failed）
+    await writeFile(path.join(schemaDir, "dataforai.yaml"), "tables:\n  {{broken", "utf8");
+    const connFailed = await buildMatchableSourcesForGate(visible, {
+      semanticLayerRoot: path.join(root, "semantic-layer"),
+      connectionScope: [conn]
+    });
+    expect(
+      connFailed.matchableSources.every((s) => s.descriptionHealth?.status === "read_failed")
+    ).toBe(true);
 
     await rm(root, { recursive: true, force: true });
     delete process.env.LUCY_CONTENT_ROOT;
     invalidateContentPathsCache();
+  });
+
+  it("CHANGE journey: corrupt JSON fails closed (deny, not empty-journey allow)", async () => {
+    const identityKey = "agent:tok-journey-corrupt";
+    const sessionId = "s-jcorrupt";
+    const cbScope = `cb:${identityKey}:${sessionId}`;
+    const sagScope = ambiguityScopeKey(identityKey, sessionId);
+    await beginBindingSessionPreparation(cbScope, {
+      turnId: "t",
+      registryGeneration: 1,
+      bindingId: null,
+      boundKey: null,
+      caliberSnapshot: null
+    });
+    await commitBindingSession(cbScope, {
+      turnId: "t",
+      registryGeneration: 1,
+      bindingId: null,
+      boundKey: null,
+      caliberSnapshot: null
+    });
+    await upsertJourneyOnBegin({
+      scopeKey: sagScope,
+      generation: 1,
+      intentSummary: "今年收入是多少"
+    });
+    const journeysDir = path.join(sagDir, "journeys");
+    const files = await readdir(journeysDir);
+    expect(files.length).toBeGreaterThan(0);
+    await writeFile(path.join(journeysDir, files[0]!), "{not-json", "utf8");
+
+    const outcome = await checkSourceAmbiguityGate({
+      identityKey,
+      sessionId,
+      toolName: "lucy_query",
+      args: { sourceName: "a", connectionId: CONNECTION },
+      permissions: {
+        roleIds: [],
+        tools: ["lucy_query"],
+        tables: [],
+        connections: [CONNECTION],
+        sources: [
+          { connectionId: CONNECTION, schema: "dataforai", sourceName: "a", table: "s.a" }
+        ],
+        capabilities: [],
+        metaTools: [],
+        opsTools: []
+      } as never,
+      matchableSources: [
+        matchable(CONNECTION, "dataforai", "a", "s.a", {
+          description: "销售收入金额",
+          descriptionState: "present"
+        })
+      ]
+    });
+    expect(outcome.kind).toBe("deny");
+    if (outcome.kind === "deny") {
+      expect(outcome.executed).toBe(false);
+      expect(outcome.denial.reason).toBe(SOURCE_AMBIGUITY_GATE);
+    }
   });
 
   it("SC-16 ACL: ghost.amount stays unresolved for gate; not ACL table set", async () => {
