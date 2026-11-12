@@ -20,8 +20,11 @@ All notable user-visible changes to Lucy ship here. Versions follow `<major>.<mi
 - **P1-10／REQ-030-031 概念注册表 CLI**：ontology-lite 一期 CLI 维护概念资产。
 - **P1-11／REQ-030-032 概念注册表 Lucy Ops 控制面**：`lucy_ops_concept_*` 扫描／人审写；本版无 WebUI 概念页。
 
+### Fixed
+- **MCP 客户端 Skill 入口**：仓库默认 `.mcp.json` 改挂主面 `/mcp`（不再指向已关闭的 `/mcp/skills`），并加静态门禁与可选 CC 探针，避免 Claude Code／Codex 侧业务 Skill 假连通。
+
 ### Notes
-- 用户叙事草稿：`docs/releases/drafts/0.30.0-user.md`（双层 RN 设计见 `docs/plans/lucy-20261107-dual-layer-release-notes-design.md`）。
+- 用户叙事草稿：`docs/releases/drafts/0.30.0-user.md`（双层 RN 设计见 `docs/plans/lucy-20261107-dual-layer-release-notes-design.md`）。本 Fixed 为工程／Agent 接入项，**不进**用户草稿。
 - P0-6／P0-7／P0-B 及未授权 P1／P2 不进本节主张。
 
 ---
