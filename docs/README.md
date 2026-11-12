@@ -1,10 +1,9 @@
-| [specs/lucy-20261104-audit-call-storyline-spec.md](specs/lucy-20261104-audit-call-storyline-spec.md) | **v0.1 功能合同已收口（2026-11-04）**。SC-01–SC-16 关闭。本条收口不表示可上线。功能编号无。Plan 见 [lucy-20261104-audit-call-storyline-plan.md](plans/lucy-20261104-audit-call-storyline-plan.md) |
 # docs/ 文档地图
 
 > 本页是 `docs/` 的分类导航索引。自 2026-09-25 二级分类起，平铺文档已归入
-> `governance/ design/ specs/ runbooks/ reviews/ uat/ webui/` 六个新子目录，
-> 与既有 `access-control/ licensing/ plans/ qa/ ui-ux-feedback/ user-guide/` 并列。
-> 客户交付向的子集另见 `docs/governance/product-docs-index.md`。
+> `governance/ design/ specs/ runbooks/ reviews/ uat/ webui/` 等子目录，
+> 与既有 `access-control/ licensing/ plans/ qa/ ui-ux-feedback/ user-guide/` 并列；
+> 另有 `lessons/` 错题本。客户交付向的子集另见 `docs/governance/product-docs-index.md`。
 
 ## 目录布局
 
@@ -16,6 +15,7 @@
 | `specs/` | 功能/交付的 spec、plan、contract、register（`lucy-*`、CEO 一眼报系列等） |
 | `runbooks/` | 部署/运维 runbook、客户交付指南、管理与安全指南、SOP |
 | `reviews/` | 已实现代码的审查报告 |
+| `lessons/` | **错题本**：已核实错误的复盘与举一反三（登记 ≠ 开发授权）；按周可增，索引见 [`lessons/README.md`](lessons/README.md) |
 | `prompts/` | 交付提示词：给 coder／审阅者的任务提示词。**不是 Plan**，不进 Plan 形态门禁 |
 | `uat/` | 人工验收用例 |
 | `webui/` | WebUI 功能地图 / 实现状态 / 模块指南（仓库级视角） |

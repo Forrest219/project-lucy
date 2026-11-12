@@ -68,6 +68,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 - 子模块自带的架构 / API / 数据模型等实现细节允许放在 `<module>/docs/`（当前实例：`webui/docs/01–06`），并在 `docs/governance/project-overview.md` 注册索引
 - `webui` 的 M0–M5 开发已由 Codex 串行完成，对应工单包 `webui/docs/codex/` 作为执行历史归档保留，不再领取；后续若新增工单仍遵循「就近放 `<module>/docs/`」原则
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian
+- **错题本**落 [`docs/lessons/`](../lessons/README.md)：已核实错误的复盘与举一反三；按周可增。登记 ≠ 开发授权，也不替代 Spec／发布取证
 - eval cases（YAML，agent 测）与 quiz HTML（人类测）的设计原则、命名约定、数据获取路径见 `docs/governance/eval-quiz-conventions.md`；新增 dataset 的 eval/quiz 前必读
 
 ## 功能闭口与发布取证
