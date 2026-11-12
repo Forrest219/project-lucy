@@ -176,6 +176,20 @@ import {
 import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
 import { readKtxYamlDigest } from "./mcp-runtime-state.js";
 import { reloadKtxMcpAfterConfigWrite } from "./ktx-mcp-reload.js";
+
+async function settleExecutionRuntime(
+  projectRoot: string,
+  digestBefore: string,
+  connectionId?: string
+): Promise<boolean> {
+  const reload = await reloadKtxMcpAfterConfigWrite(projectRoot, connectionId);
+  await pendingAfterConfigReload(projectRoot, digestBefore, reload);
+  if (reload.status === "reloaded" || reload.status === "started") return false;
+  const err = new Error("配置已保存，但执行层未加载。") as Error & { statusCode: number; code: string };
+  err.statusCode = 503;
+  err.code = "EXECUTION_RUNTIME_NOT_LOADED";
+  throw err;
+}
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
@@ -417,6 +431,18 @@ function supportedErrorDetail(error: SupportedError): unknown {
       );
     }
   }
+  if (error.code === "READ_FAILED") {
+    const detail = error.detail;
+    if (!detail || typeof detail !== "object") return undefined;
+    const source = detail as Record<string, unknown>;
+    // SQL and driver stderr stay in server logs only — never on the wire.
+    return {
+      ...(typeof source.connectionId === "string" ? { connectionId: source.connectionId } : {}),
+      ...(typeof source.schema === "string" ? { schema: source.schema } : {}),
+      ...(typeof source.table === "string" ? { table: source.table } : {}),
+      ...(typeof source.phase === "string" ? { phase: source.phase } : {})
+    };
+  }
   if (error.code === "connection_references_remain") {
     // Spec 179 §3 / §5: blockers let the Admin client say which of 角色 / 用户 /
     // 业务 Wiki / 本地 YAML 资产 still block deletion. Pinned shape — only `{kind, id}`.
@@ -456,10 +482,10 @@ function distDir(): string {
  */
 
 /**
- * Spec 191 §11.1 — a write that changes ktx.yaml leaves the execution layer
- * behind: the configuration is on disk, but the daemon has not confirmed
- * loading it. The write path only REPORTS that fact (and never triggers a
- * reload by itself); the owner decides when to reload.
+ * Spec 191 §11.1 — after a ktx.yaml write the write path attempts an automatic
+ * execution-layer reload. Mark `reload_required` only when that attempt did not
+ * complete (`reloaded` / `started`); a successful reload must not be overwritten
+ * back to pending.
  */
 async function noteExecutionRuntimePending(
   projectRoot: string,
@@ -471,6 +497,17 @@ async function noteExecutionRuntimePending(
     console.error("[execution-runtime] failed to record the pending activation", error);
     return false;
   }
+}
+
+async function pendingAfterConfigReload(
+  projectRoot: string,
+  digestBefore: string,
+  reload: { status: string }
+): Promise<boolean> {
+  if (reload.status === "reloaded" || reload.status === "started") {
+    return false;
+  }
+  return noteExecutionRuntimePending(projectRoot, digestBefore);
 }
 
 /** The configuration digest as it was BEFORE a write, for the pending check. */
@@ -1663,7 +1700,7 @@ export function buildServer() {
         console.error("[connection-create] catalog reload failed", error);
       }
 
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
+      const executionRuntimePending = await settleExecutionRuntime(projectRoot, digestBefore, body.id);
 
       let policyVersion = "";
       let policyRuntimeAck = false;
@@ -1677,7 +1714,6 @@ export function buildServer() {
       }
 
       const executionAck = await executionAckForConnection(body.id);
-      const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
       return {
         ok: true,
@@ -1773,20 +1809,38 @@ export function buildServer() {
 
   app.post<{
     Params: { connId: string };
-    Body: { schema?: string };
+    Body: { schema?: string; tables?: string[] };
   }>("/api/connections/:connId/schema-structure", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const schema = request.body?.schema;
     if (typeof schema !== "string" || !schema.trim()) {
       throw enabledTableError("BAD_REQUEST", "schema is required");
     }
+    const tables = request.body?.tables;
+    if (tables !== undefined && (!Array.isArray(tables) || tables.length !== 1 || typeof tables[0] !== "string" || !tables[0].trim())) {
+      throw enabledTableError("BAD_REQUEST", "一次只读取一张表的字段。");
+    }
     try {
-      const data = await previewSchemaStructure(projectRoot, request.params.connId, schema);
+      const data = await previewSchemaStructure(projectRoot, request.params.connId, schema, {
+        ...(tables ? { tables } : {})
+      });
       return { ok: true, data };
     } catch (err) {
       if (err instanceof SchemaStructureError) {
-        throw enabledTableError(err.code, err.message);
+        console.error("[schema-structure] preview API failed", {
+          connectionId: request.params.connId,
+          schema,
+          code: err.code,
+          message: err.message,
+          detail: err.detail ?? null
+        });
+        throw enabledTableError(err.code, err.message, err.detail);
       }
+      console.error("[schema-structure] preview API unexpected failure", {
+        connectionId: request.params.connId,
+        schema,
+        detail: err instanceof Error ? err.message : String(err)
+      });
       throw err;
     }
   });
@@ -1920,8 +1974,9 @@ export function buildServer() {
       policyRuntimeAck = false;
     }
 
+    const executionRuntimePending = await settleExecutionRuntime(projectRoot, digestBefore, connId);
+
     const executionAck = await executionAckForConnection(connId);
-    const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
     return {
       ok: true,
@@ -2010,12 +2065,11 @@ export function buildServer() {
     );
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      void digestBefore;
     }
-    return {
-      ok: true,
-      data: dryRun ? result : { ...result, executionRuntimePending: true as const }
-    };
+    const executionRuntimePending = dryRun
+      ? false
+      : await settleExecutionRuntime(projectRoot, digestBefore, connId);
+    return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
   app.post<{
@@ -2039,11 +2093,10 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2064,11 +2117,10 @@ export function buildServer() {
     });
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore, connId);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2096,11 +2148,10 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore, connId);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 

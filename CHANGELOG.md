@@ -62,7 +62,8 @@ Formal annotated tag `v0.25.0` on 2026-11-06 at commit `e84c9ed4`（产品版本
   - 新增重载通道能力握手：supervisor 发布 `ktx-reload.capability`（协议版本 + 心跳 + 在途状态），
     无有效 supervisor 时快速返回 `unsupported` 且不产生任何文件或进程副作用。
   - 新增写路径响应字段 `executionRuntimePending`：连接创建、启用表范围调整与 Schema
-    增删在写入 `ktx.yaml` 后如实回报「执行层尚未加载」，但**不自动触发**重载。
+    增删在写入 `ktx.yaml` 后**自动尝试**重载执行层；成功则 `false`，失败／跳过则标
+    pending 并由所有者确认重试。
   - 容器入口 `scripts/runtime/docker-entrypoint.sh` 引入 KTX supervisor：进程归属、信号转发、
     退出码、首次启动失败不退化、自发退出的有限退避重启与遗留进程清理全部显式定义。
 - **运维问数连接（Spec 149）**：新增只读连接 `lucy-ops`，把审计热库的调用流水做成两张视图
@@ -70,7 +71,7 @@ Formal annotated tag `v0.25.0` on 2026-11-06 at commit `e84c9ed4`（产品版本
   「某个工具的失败是否集中在一个 Agent」。
   - 连接在**启动时**幂等建立：容器入口在 KTX daemon 启动**之前**完成视图、连接块、内容根资产
     与项目根镜像，并写下 `ktx.yaml` 摘要戳；已有卷第一次补上该连接时状态为「未就绪」，
-    需所有者按 Spec 191 确认重载后才可查询，**不自动重载**。
+    首次补齐后若写路径自动重载未成功，需所有者按 Spec 191 确认重试后才可查询。
   - 授权只认**显式列出**：只有 `allow.connections` 里写明 `lucy-ops` 的 Role 能看见并查询它；
     `*` 与 `catalog_bound`（含 `lucy_admin`）都不算。
   - 连接不可删除：删除接口在预览与写入时都返回 400 `OPS_EVIDENCE_CONNECTION_PROTECTED`，

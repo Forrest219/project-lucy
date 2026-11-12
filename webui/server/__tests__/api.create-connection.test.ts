@@ -54,7 +54,7 @@ vi.mock("../ktx", async () => {
 });
 
 const ktxMcpReload = vi.hoisted(() => ({
-  reloadKtxMcpAfterConfigWrite: vi.fn(async () => ({ status: "reloaded" as const, detail: "ok" }))
+  reloadKtxMcpAfterConfigWrite: vi.fn(async (): Promise<{ status: "reloaded" | "started" | "skipped" | "failed"; detail: string }> => ({ status: "reloaded", detail: "ok" }))
 }));
 
 vi.mock("../ktx-mcp-reload.js", () => ({
@@ -190,7 +190,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(response.body.ok).toBe(true);
     expect(response.body.data.written).toBe(true);
     expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledTimes(1);
-    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot);
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot, "demo-mysql");
     expect(response.body.data.test.status).toBe("ok");
     expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
     expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");
@@ -209,6 +209,46 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(yaml).toContain("demo-mysql:");
     expect(yaml).not.toContain("plain-secret-value");
     expect(yaml).toMatch(/password:\s*file:/);
+  });
+
+  it("does not report success when the execution runtime did not load the new connection", async () => {
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+    ktxMcpReload.reloadKtxMcpAfterConfigWrite.mockResolvedValueOnce({
+      status: "failed",
+      detail: "执行层已重启，但没有确认新连接已加载"
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const response = await request(app.server)
+      .post("/api/connections")
+      .send({
+        id: "demo-mysql",
+        driver: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "analytics",
+        username: "lucy_ro",
+        password: "plain-secret-value",
+        schemas: ["analytics"],
+        dryRun: false
+      })
+      .expect(503);
+
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("EXECUTION_RUNTIME_NOT_LOADED");
+    expect(response.body.error.message).toBe("配置已保存，但执行层未加载。");
+    const yaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(yaml).toContain("demo-mysql:");
+    const state = JSON.parse(await readFile(path.join(projectRoot, ".ktx-ui", "ktx-reload.state.json"), "utf8")) as {
+      activation: string;
+    };
+    expect(state.activation).toBe("reload_required");
+    expect(JSON.stringify(response.body)).not.toContain("plain-secret-value");
   });
 
   it("commits secret + yaml when connection test fails", async () => {

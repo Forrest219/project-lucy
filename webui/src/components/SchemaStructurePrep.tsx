@@ -10,6 +10,7 @@ import {
   manifestTableNames,
   mergeManifestTables,
   newTablesFromGenerated,
+  readCheckedTableColumns,
   reloadPreparedCatalog,
   writeMinimalManifest,
   type SchemaStructurePreview
@@ -59,6 +60,7 @@ export function SchemaStructurePrep({
   } | null>(null);
   const [reloadPending, setReloadPending] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const readable = canReadDatabaseStructure(connection);
@@ -135,34 +137,30 @@ export function SchemaStructurePrep({
   async function readStructure() {
     setBusy(true);
     setError(null);
+    setProgress(null);
     try {
       const data = await fetchSchemaStructure(connection.id, schema);
-      if (data.tableCount === 0) {
+      const names = manifestTableNames(data.yaml);
+      if (names.length === 0) {
         setError("这个 Schema 没有可读取的表。");
         return;
       }
-      if (refreshExisting) {
-        const existingYaml = await fetchExistingSchemaManifest(connection.id, schema);
-        const candidates = newTablesFromGenerated(existingYaml, data.yaml);
-        if (candidates.length === 0) {
-          setError("数据库里没有尚未写入 Manifest 的表。现有 YAML 已保留。");
-          return;
-        }
-        setRefreshPlan({
-          existingYaml,
-          generatedYaml: data.yaml,
-          existingCount: manifestTableNames(existingYaml).length,
-          newTables: candidates,
-          selected: candidates
-        });
-        setPreview(data.downgraded.length > 0 ? data : null);
+      const existingYaml = refreshExisting
+        ? await fetchExistingSchemaManifest(connection.id, schema)
+        : "tables: {}\n";
+      const candidates = refreshExisting ? newTablesFromGenerated(existingYaml, data.yaml) : names;
+      if (candidates.length === 0) {
+        setError("数据库里没有尚未写入 Manifest 的表。现有 YAML 已保留。");
         return;
       }
-      if (data.downgraded.length > 0) {
-        setPreview(data);
-        return;
-      }
-      await commitYaml(data.yaml);
+      setRefreshPlan({
+        existingYaml,
+        generatedYaml: data.yaml,
+        existingCount: refreshExisting ? manifestTableNames(existingYaml).length : 0,
+        newTables: candidates,
+        selected: candidates
+      });
+      setPreview(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "读取失败");
     } finally {
@@ -186,18 +184,31 @@ export function SchemaStructurePrep({
     if (!refreshPlan || refreshPlan.selected.length === 0) return;
     setBusy(true);
     setError(null);
+    setProgress(null);
     try {
-      const yaml = mergeManifestTables(
-        refreshPlan.existingYaml,
-        refreshPlan.generatedYaml,
-        refreshPlan.selected
+      const data = await readCheckedTableColumns(
+        connection.id,
+        schema,
+        refreshPlan.selected,
+        (_done, total, table) => {
+          const index = refreshPlan.selected.indexOf(table);
+          setProgress(`正在读取字段 ${index + 1}/${total}：${table}`);
+        }
       );
-      await commitYaml(yaml, true);
+      const yaml = mergeManifestTables(refreshPlan.existingYaml, data.yaml, refreshPlan.selected);
+      const overwrite = refreshPlan.existingCount > 0;
       setRefreshPlan(null);
+      setProgress(null);
+      if (data.downgraded.length > 0) {
+        setPreview({ ...data, yaml });
+        return;
+      }
+      await commitYaml(yaml, overwrite);
     } catch (err) {
       setError(err instanceof Error ? err.message : "读取失败");
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -225,7 +236,7 @@ export function SchemaStructurePrep({
 
   const primaryLabel =
     refreshPlan
-      ? `加入选中的 ${refreshPlan.selected.length} 张表`
+      ? `读取选中的 ${refreshPlan.selected.length} 张表字段`
       : pendingYaml
         ? "确认覆盖并继续"
         : primary === "retry"
@@ -285,8 +296,9 @@ export function SchemaStructurePrep({
       {refreshPlan ? (
         <div className="grid gap-2 text-xs" data-testid={`${idPrefix}-table-picker`}>
           <p className="notranslate" translate="no">
-            现有 Manifest 中的 {refreshPlan.existingCount} 张表会原样保留。数据库里还有{" "}
-            {refreshPlan.newTables.length} 张未写入的表，请勾选要加入的表。
+            {refreshPlan.existingCount > 0
+              ? `现有 Manifest 中的 ${refreshPlan.existingCount} 张表会原样保留。数据库里还有 ${refreshPlan.newTables.length} 张未写入的表，请勾选要读取字段并加入的表。`
+              : `读到 ${refreshPlan.newTables.length} 张表。请勾选要读取字段的表，然后写入 Schema Manifest。`}
           </p>
           <div className="flex gap-2">
             <button
@@ -352,7 +364,11 @@ export function SchemaStructurePrep({
         </div>
       ) : null}
       {error ? (
-        <p role="alert" data-testid={`${idPrefix}-structure-error`}>
+        <p
+          role="alert"
+          data-testid={`${idPrefix}-structure-error`}
+          className="whitespace-pre-wrap break-words text-sm"
+        >
           {error}
         </p>
       ) : null}
@@ -426,7 +442,7 @@ export function SchemaStructurePrep({
             }}
             data-testid={primaryTestId}
           >
-            {busy && (primary === "read" || primary === "continue") ? "正在读取表结构..." : primaryLabel}
+            {progress ?? (busy && (primary === "read" || primary === "continue" || refreshPlan) ? "正在读取表结构..." : primaryLabel)}
           </button>
         )}
       </div>

@@ -14,6 +14,7 @@ export type SchemaStructurePreview = {
   yaml: string;
   tableCount: number;
   columnCount: number;
+  namesOnly?: boolean;
   mapped: { number: number; string: number; time: number };
   downgraded: Array<{ table: string; column: string; rawType: string }>;
 };
@@ -48,12 +49,53 @@ export function manifestKnown(
 
 export async function fetchSchemaStructure(
   connectionId: string,
-  schema: string
+  schema: string,
+  tables?: string[]
 ): Promise<SchemaStructurePreview> {
   return apiPost<SchemaStructurePreview>(
     `/api/connections/${encodeURIComponent(connectionId)}/schema-structure`,
-    { schema }
+    tables?.length ? { schema, tables } : { schema }
   );
+}
+
+/** Read columns for the checked tables, one request per table, and merge the YAML. */
+export async function readCheckedTableColumns(
+  connectionId: string,
+  schema: string,
+  tables: string[],
+  onProgress?: (done: number, total: number, table: string) => void
+): Promise<SchemaStructurePreview> {
+  if (tables.length === 0) {
+    throw new ApiError({ code: "BAD_REQUEST", message: "请至少选择一张表。" });
+  }
+  let yaml = "tables: {}\n";
+  const downgraded: SchemaStructurePreview["downgraded"] = [];
+  const mapped = { number: 0, string: 0, time: 0 };
+  let columnCount = 0;
+  for (let index = 0; index < tables.length; index += 1) {
+    const table = tables[index];
+    onProgress?.(index, tables.length, table);
+    const part = await fetchSchemaStructure(connectionId, schema, [table]);
+    if (part.namesOnly) {
+      throw new ApiError({ code: "READ_FAILED", message: `读取表「${table}」的字段失败。` });
+    }
+    yaml = mergeManifestTables(yaml, part.yaml, [table]);
+    downgraded.push(...part.downgraded);
+    mapped.number += part.mapped.number;
+    mapped.string += part.mapped.string;
+    mapped.time += part.mapped.time;
+    columnCount += part.columnCount;
+  }
+  return {
+    schema,
+    readable: downgraded.length === 0,
+    yaml,
+    tableCount: tables.length,
+    columnCount,
+    namesOnly: false,
+    mapped,
+    downgraded
+  };
 }
 
 export async function fetchExistingSchemaManifest(

@@ -79,6 +79,34 @@ function okSql(rows: unknown[]): SqlResult {
   };
 }
 
+/** One information_schema.columns query returns table name plus the five column fields. */
+function mockMysqlPerTableColumns(
+  columnsByTable: Record<string, unknown[][]>,
+  options: { delayMs?: number } = {}
+): void {
+  const delayMs = options.delayMs ?? 0;
+  runSqlMock.mockImplementation(async (_root: unknown, _id: unknown, sql: string) => {
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = '")) {
+      const table = /LOWER\(table_name\) = '([^']*)'/.exec(sql)?.[1] ?? "";
+      return okSql(columnsByTable[table] ? [[table]] : []);
+    }
+    if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = '")) {
+      const table = /table_name = '([^']*)'/.exec(sql)?.[1]?.toLowerCase() ?? "";
+      return okSql(columnsByTable[table] ?? []);
+    }
+    return {
+      ...okSql([]),
+      ok: false,
+      exitCode: 1,
+      stderr: `unexpected ${sql}`,
+      json: null
+    };
+  });
+}
+
 beforeEach(async () => {
   runSqlMock.mockReset();
   resetAuditDbForTests();
@@ -264,13 +292,13 @@ describe("Spec 190 — GET /api/connections/:connId/table-diff", () => {
 
 describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () => {
   it("SC-33: compares the library columns with the local Manifest", async () => {
-    runSqlMock.mockResolvedValue(
-      okSql([
-        ["ledger", "id", "int", "NO", "PRI", ""],
-        ["ledger", "amount", "decimal", "YES", "", ""],
-        ["ledger", "memo", "varchar", "YES", "", ""]
-      ])
-    );
+    mockMysqlPerTableColumns({
+      ledger: [
+        ["id", "int", "NO", "PRI", ""],
+        ["amount", "decimal", "YES", "", ""],
+        ["memo", "varchar", "YES", "", ""]
+      ]
+    });
     const app = buildServer();
     await app.ready();
     const res = await request(app.server)
@@ -296,12 +324,12 @@ describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () =>
   });
 
   it("SC-33: reports a changed column with the before and after values", async () => {
-    runSqlMock.mockResolvedValue(
-      okSql([
-        ["ledger", "id", "bigint", "NO", "PRI", ""],
-        ["ledger", "amount", "decimal", "NO", "", ""]
-      ])
-    );
+    mockMysqlPerTableColumns({
+      ledger: [
+        ["id", "bigint", "NO", "PRI", ""],
+        ["amount", "decimal", "NO", "", ""]
+      ]
+    });
     const app = buildServer();
     await app.ready();
     const res = await request(app.server)
@@ -337,16 +365,59 @@ describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () =>
     await app.close();
   });
 
+  it("reports a permission failure for that table and keeps the successful table", async () => {
+    runSqlMock.mockImplementation(async (_root: unknown, _id: unknown, sql: string) => {
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'ledger'")) {
+        return okSql([["ledger"]]);
+      }
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'orders'")) {
+        return okSql([["orders"]]);
+      }
+      if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = 'ledger'")) {
+        return okSql([["id", "int", "NO", "PRI", ""]]);
+      }
+      if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = 'orders'")) {
+        return {
+          ...okSql([]),
+          ok: false,
+          exitCode: 1,
+          stderr: "SELECT command denied for table orders",
+          json: null
+        };
+      }
+      return { ...okSql([]), ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null };
+    });
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/connections/warehouse/table-structure-diff")
+      .query({ schema: "fin", tables: "ledger,orders" })
+      .expect(200);
+    const ledger = res.body.data.tables.find((entry: { table: string }) => entry.table === "fin.ledger");
+    const orders = res.body.data.tables.find((entry: { table: string }) => entry.table === "fin.orders");
+    expect(ledger.status).toBe("ok");
+    expect(orders.status).toBe("error");
+    expect(orders.reason).toBe("SCHEMA_NOT_VISIBLE");
+    const database = await getAuditDb();
+    const rows = database
+      .prepare(
+        "SELECT outcome, reason FROM discovery_audit_log WHERE action = 'structure_diff' ORDER BY id DESC LIMIT 1"
+      )
+      .all() as Array<{ outcome: string; reason: string | null }>;
+    expect(rows[0]).toEqual({ outcome: "error", reason: "SCHEMA_NOT_VISIBLE" });
+    await app.close();
+  });
+
   it("SC-33: finds the library table even when the caller spells it differently", async () => {
     // The library spells the table in lower case; the caller asked for
     // `Ledger`. Both are the same table, so the deep check must not report it
     // as missing from the library.
-    runSqlMock.mockResolvedValue(
-      okSql([
-        ["ledger", "id", "int", "NO", "PRI", ""],
-        ["ledger", "amount", "decimal", "YES", "", ""]
-      ])
-    );
+    mockMysqlPerTableColumns({
+      ledger: [
+        ["id", "int", "NO", "PRI", ""],
+        ["amount", "decimal", "YES", "", ""]
+      ]
+    });
     const app = buildServer();
     await app.ready();
     const res = await request(app.server)
@@ -363,10 +434,12 @@ describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () =>
   });
 
   it("SC-30: the deep check records its duration in the audit log", async () => {
-    runSqlMock.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 60));
-      return okSql([["ledger", "id", "int", "NO", "PRI", ""]]);
-    });
+    mockMysqlPerTableColumns(
+      {
+        ledger: [["id", "int", "NO", "PRI", ""]]
+      },
+      { delayMs: 60 }
+    );
     const app = buildServer();
     await app.ready();
     await request(app.server)

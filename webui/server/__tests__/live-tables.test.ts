@@ -120,11 +120,11 @@ describe("Spec 190 — live table provider", () => {
     expect(runSqlMock).not.toHaveBeenCalled();
   });
 
-  it("aggregates to table granularity and keeps the column count", async () => {
+  it("lists table names without reading columns", async () => {
     runSqlMock.mockResolvedValue(
       okSql([
-        ["ledger", "BASE TABLE", "总账", 6],
-        ["orders", "BASE TABLE", "", 3]
+        ["ledger", "BASE TABLE", "总账"],
+        ["orders", "BASE TABLE", ""]
       ])
     );
     const provider = createSqlLiveTableProvider();
@@ -136,13 +136,13 @@ describe("Spec 190 — live table provider", () => {
     });
     expect(result.status).toBe("ok");
     expect(result.tables).toEqual([
-      { table: "ledger", tableType: "BASE TABLE", columnCount: 6, tableComment: "总账" },
-      { table: "orders", tableType: "BASE TABLE", columnCount: 3 }
+      { table: "ledger", tableType: "BASE TABLE", columnCount: 0, tableComment: "总账" },
+      { table: "orders", tableType: "BASE TABLE", columnCount: 0 }
     ]);
     const sql = String(runSqlMock.mock.calls[0]?.[2] ?? "");
     expect(sql).toContain("information_schema.tables");
-    expect(sql).toContain("GROUP BY");
     expect(sql).toContain("'fin'");
+    expect(sql).not.toContain("GROUP BY");
   });
 
   it("SC-5: a full page fails instead of returning a truncated list", async () => {

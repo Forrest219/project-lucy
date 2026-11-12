@@ -429,10 +429,17 @@ ktx_write_atomic() {
   mv -f "${tmp}" "${target}"
 }
 
-# The supervisor's own pid. `$$` keeps the PARENT shell's pid inside a
-# background subshell, so BASHPID is the only reliable source here.
+# The supervisor's own pid.
+#
+# Callers publish this value from command substitutions. Inside $(...), both
+# $$ (parent of that subshell) and BASHPID (the subshell itself) are wrong:
+# the subshell exits as soon as printf returns, and Node then treats the
+# supervisor as dead. Capture the pid once in the supervisor shell and only
+# echo that saved value from here.
 ktx_supervisor_pid() {
-  if [[ -n "${BASHPID:-}" ]]; then
+  if [[ -n "${KTX_SUPERVISOR_SELF_PID:-}" ]]; then
+    printf '%s' "${KTX_SUPERVISOR_SELF_PID}"
+  elif [[ -n "${BASHPID:-}" ]]; then
     printf '%s' "${BASHPID}"
   else
     printf '%s' "$$"
@@ -598,6 +605,8 @@ ktx_start_daemon() {
 # The supervisor owns the daemon lifecycle; the parent shell only waits for the
 # supervisor and for Lucy.
 supervise_ktx() {
+  # This assignment must stay in the supervisor shell, before any $(...).
+  KTX_SUPERVISOR_SELF_PID="${BASHPID:-$$}"
   local started_at
   local failures=0
   local backoff=1

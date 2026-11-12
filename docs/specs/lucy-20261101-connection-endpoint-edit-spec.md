@@ -25,6 +25,7 @@
 | v0.4.1 | Codex r1（UX-01–UX-08）：明确 jsdom＋生产 CSS 取证；表单必须在 Dialog 面板内且面板外零可编辑字段；submitting 守卫覆盖全部关闭入口；Toast 参数断言成功文案禁令；分范围 primary 计数；SC-14 逐项术语；收口镜像含 §12.2；收口前必须删除旧 Drawer 文件 |
 | v0.4.2 | Codex r2：闭合 UX-01 残留（断言 `app.css` 中 modal 规则含 fixed／inset／居中，删改侧栏须失败）；焦点列入 SC-25；验收命令可从仓库根连续执行；残留扫描分源码／文档且错误失败 |
 | v0.4.3 | Codex r3：遮罩 CSS 须含建立居中的布局方式（`flex` 或等价）；掏空 `flex` 夹具须失败；残留 `rg` 按退出码 0／1／其他三分 |
+| v0.4.4 | 对齐 Spec 191 v0.3：写路径自动尝试重载后，API `executionRuntimePending` 以重载结果为准（成功 `false`，失败／跳过 `true`）；SC-21 改口径，不重开本条收口 |
 
 ## 闭口层级
 
@@ -215,7 +216,7 @@ type UpdateConnectionEndpointInput = {
 外层信封与既有写路由一致：`{ ok: true, data: { ... } }` 或 `{ ok: false, error: { code, message, detail? } }`。下列字段均在 `data` 内。
 
 - dryRun：`{ diff, proposedYaml, current, passwordAction: "keep" | "replace", connection? }`；无密码。门禁未通过时走错误信封，**不**在成功体里放 `endpointGate`。
-- 成功写入：`{ written: true, auditId?, current, connection, test: { status: "ok", message?, durationMs? }, presence: PresenceResult, executionRuntimePending: true, passwordAction }`。
+- 成功写入：`{ written: true, auditId?, current, connection, test: { status: "ok", message?, durationMs? }, presence: PresenceResult, executionRuntimePending: boolean, passwordAction }`（`executionRuntimePending` 以 Spec 191 写路径自动重载结果为准：成功 `false`，失败／跳过 `true`）。
 - 测失败：回滚后错误信封；磁盘恢复锁内快照。
 - 门禁 / 密码来源 / 无变更 / 校验：对应稳定 code + detail。
 
@@ -293,7 +294,7 @@ function updateConnectionEndpoint(root, connId, input, dryRun):
         presence = runPresenceCheck(enabled_tables, bypassCache=true)
           catch any → presence = { status: "not_completed", reason: "probe_error" }
         audit connection_endpoint_update (or rollback yaml+secret on audit failure; presence 结果仍附带若已算出)
-        return success + presence + executionRuntimePending=true
+        return success + presence + executionRuntimePending（按 Spec 191 自动重载结果）
       catch e:
         restore yaml + secret; throw e
 ```
@@ -311,7 +312,7 @@ function updateConnectionEndpoint(root, connId, input, dryRun):
 | 启用表存在性 | **强制软检查**（仅在硬门禁通过且 yaml/secret 已提交之后、审计之前）：数据源 = 现有 **live-tables**（按 `enabled_tables` 推断 schema 拉清单，本地比对，**不**另开临时 DB 连接）；**必须绕过** live-tables 缓存/TTL（endpoint 已变、connectionId 未变）；键对齐沿用 Spec 190 `LiveTableEntry` 物理名规则；单次最多 **3** 个 distinct schema（超出、总耗时 >10s、或驱动不支持表清单如 SQL Server/Oracle → `not_completed`，`reason` ∈ `budget_exceeded` \| `timeout` \| `unsupported_driver` \| `probe_error` \| `queue_busy`）；探测抛错只降级，**永不**回滚 endpoint |
 | Schema / Manifest / 列 diff | 本条不做；切换后运维须人工复核 overlay（§11） |
 
-成功 UI：**不得**写「问数已切到新库」；可提示执行运行时待重载（`executionRuntimePending`）。
+成功 UI：**不得**写「问数已切到新库」；仅当 `executionRuntimePending=true` 时可提示执行运行时待重载。
 
 ## 9. UX
 
@@ -406,7 +407,7 @@ function updateConnectionEndpoint(root, connId, input, dryRun):
 | SC-18 | sqlite/athena（或无 host 驱动）→ `CONNECTION_ENDPOINT_UNSUPPORTED_DRIVER` | 服务端（已关闭） |
 | SC-19 | port 越界 / 必填空 → 400 | API/服务端（已关闭） |
 | SC-20 | 错误 detail 白名单放行本条 gate code，前端可得 matches | API（已关闭） |
-| SC-21 | 成功响应含 `executionRuntimePending: true` | API（已关闭） |
+| SC-21 | 成功响应含 `executionRuntimePending`；自动重载成功为 `false`，失败／跳过为 `true`（Spec 191 v0.3） | API（已关闭；2026-11-10 口径对齐） |
 | SC-22 | 编辑冲突 UI 不出现「仍要新建连接 / 添加 Schema」主按钮文案 | 组件（**v0.4 重开**） |
 | SC-23 | 编辑 `lucy-ops` → `CONNECTION_ENDPOINT_FORBIDDEN`；磁盘不变 | 服务端（已关闭） |
 | SC-24 | DOM 使用 `pl-modal-backdrop`；不含 drawer 类；**且**读取生产 `app.css` 中该遮罩规则含 `fixed`＋`inset-0`＋布局方式 `flex`（或已登记等价）＋`items-center`＋`justify-center`；掏空／去 `flex`／改侧栏必须失败 | 组件（**v0.4 新增**） |
