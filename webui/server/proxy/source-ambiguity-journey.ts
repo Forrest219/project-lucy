@@ -92,19 +92,27 @@ function emptyJourney(scopeKey: string, generation = NEVER_BEGUN_GENERATION_SENT
   };
 }
 
-async function readJourneyFile(base: string, scopeKey: string): Promise<SourceAmbiguityJourney | null> {
+type JourneyFileRead =
+  | { kind: "missing" }
+  | { kind: "ok"; journey: SourceAmbiguityJourney }
+  | { kind: "failed"; reason: string };
+
+async function readJourneyFile(base: string, scopeKey: string): Promise<JourneyFileRead> {
   const file = journeyFilePath(base, scopeKey);
   let raw: string;
   try {
     raw = await readFile(file, "utf8");
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-    return null;
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
+    return {
+      kind: "failed",
+      reason: `journey_io:${(err as NodeJS.ErrnoException).code ?? "unknown"}`
+    };
   }
   try {
-    return JSON.parse(raw) as SourceAmbiguityJourney;
+    return { kind: "ok", journey: JSON.parse(raw) as SourceAmbiguityJourney };
   } catch {
-    return null;
+    return { kind: "failed", reason: "journey_parse_error" };
   }
 }
 
@@ -116,9 +124,29 @@ async function writeJourneyFile(base: string, journey: SourceAmbiguityJourney): 
   await rename(tmp, file);
 }
 
-export async function readSourceAmbiguityJourney(scopeKey: string): Promise<SourceAmbiguityJourney> {
+export type SourceAmbiguityJourneyRead =
+  | { ok: true; journey: SourceAmbiguityJourney }
+  | { ok: false; reason: string };
+
+/**
+ * ENOENT → 空旅程；IO／JSON 损坏 → fail-closed（不得当作空旅程放行）。
+ */
+export async function readSourceAmbiguityJourneyResult(
+  scopeKey: string
+): Promise<SourceAmbiguityJourneyRead> {
   const base = await stateDir();
-  return (await readJourneyFile(base, scopeKey)) ?? emptyJourney(scopeKey);
+  const read = await readJourneyFile(base, scopeKey);
+  if (read.kind === "failed") return { ok: false, reason: read.reason };
+  if (read.kind === "missing") return { ok: true, journey: emptyJourney(scopeKey) };
+  return { ok: true, journey: read.journey };
+}
+
+export async function readSourceAmbiguityJourney(scopeKey: string): Promise<SourceAmbiguityJourney> {
+  const result = await readSourceAmbiguityJourneyResult(scopeKey);
+  if (!result.ok) {
+    throw new Error(`source_ambiguity_journey_read_failed:${result.reason}`);
+  }
+  return result.journey;
 }
 
 /**
@@ -153,7 +181,12 @@ export async function persistAmbiguityCandidateSnapshot(input: {
   issuedAt?: string;
 }): Promise<AmbiguityCandidateSnapshot> {
   const base = await stateDir();
-  const current = (await readJourneyFile(base, input.scopeKey)) ?? emptyJourney(input.scopeKey, input.generation);
+  const read = await readJourneyFile(base, input.scopeKey);
+  if (read.kind === "failed") {
+    throw new Error(`source_ambiguity_journey_read_failed:${read.reason}`);
+  }
+  const current =
+    read.kind === "ok" ? read.journey : emptyJourney(input.scopeKey, input.generation);
   const snapshot: AmbiguityCandidateSnapshot = {
     generation: input.generation,
     candidateIdentities: input.candidates.map((c) => ({ ...c })),
@@ -173,6 +206,36 @@ export async function persistAmbiguityCandidateSnapshot(input: {
 }
 
 /**
+ * 宿主确认 HTTP 入口可调用方：仅 `actorKind=person`。
+ * MCP Agent／automation／未标注 actor 一律拒绝（D11／§4.4／SC-17）。
+ */
+export function hostConfirmCallerAllowed(identity: {
+  actorKind?: string | null;
+}): boolean {
+  return identity.actorKind === "person";
+}
+
+/** 宿主 UI 须携带；MCP Agent 不得依赖此头自证。 */
+export const LUCY_HOST_ATTESTATION_HEADER = "x-lucy-host-attestation";
+
+/**
+ * 宿主确认 HTTP 准入（与 mcp-proxy 共用；可单测）。
+ * 同一 MCP Bearer 且 actorKind≠person／缺宿主头 → 拒绝，防止 Agent 自证选表。
+ */
+export function admitHostConfirmRequest(input: {
+  identity: { actorKind?: string | null };
+  hostAttestationHeader?: string | null;
+}): { ok: true } | { ok: false; reason: string } {
+  if (!hostConfirmCallerAllowed(input.identity)) {
+    return { ok: false, reason: "host_confirm_requires_person" };
+  }
+  if (!input.hostAttestationHeader?.trim()) {
+    return { ok: false, reason: "host_attestation_header_missing" };
+  }
+  return { ok: true };
+}
+
+/**
  * 宿主确认提交 API（非 tools/call）—— 写入 O1 载体 + 层 B 用户参与证据。
  * Agent 不得经 tools/call 调用本入口冒充。
  */
@@ -183,7 +246,12 @@ export async function attestSourceConfirmation(input: {
   attestedAt?: string;
 }): Promise<{ ok: true; journey: SourceAmbiguityJourney } | { ok: false; reason: string }> {
   const base = await stateDir();
-  const current = (await readJourneyFile(base, input.scopeKey)) ?? emptyJourney(input.scopeKey, input.generation);
+  const read = await readJourneyFile(base, input.scopeKey);
+  if (read.kind === "failed") {
+    return { ok: false, reason: read.reason };
+  }
+  const current =
+    read.kind === "ok" ? read.journey : emptyJourney(input.scopeKey, input.generation);
   const snapshot = current.candidateSnapshot;
   if (!snapshot) {
     return { ok: false, reason: "candidate_snapshot_missing" };

@@ -40,7 +40,7 @@ import {
   ambiguityScopeKey,
   NEVER_BEGUN_GENERATION_SENTINEL,
   persistAmbiguityCandidateSnapshot,
-  readSourceAmbiguityJourney,
+  readSourceAmbiguityJourneyResult,
   verifyUserParticipationEvidence,
   type DescriptionReadHealth,
   type DescriptionState,
@@ -53,9 +53,13 @@ export type { DescriptionReadHealth, DescriptionState, SourceIdentity };
 export {
   ambiguityScopeKey,
   attestSourceConfirmation,
+  admitHostConfirmRequest,
+  hostConfirmCallerAllowed,
+  LUCY_HOST_ATTESTATION_HEADER,
   NEVER_BEGUN_GENERATION_SENTINEL,
   persistAmbiguityCandidateSnapshot,
   readSourceAmbiguityJourney,
+  readSourceAmbiguityJourneyResult,
   setSourceAmbiguityStateDir,
   upsertJourneyOnBegin,
   verifyUserParticipationEvidence
@@ -360,6 +364,11 @@ function toCandidateRow(source: MatchableSource): AmbiguityCandidateRow {
   };
 }
 
+/** 五项证据 Map 键＝完整 Source Identity（禁止仅用短名）。 */
+export function repairEvidenceIdentityKey(sourceKey: SourceIdentity): string {
+  return `${sourceKey.connectionId}|${sourceKey.schema}|${sourceKey.sourceName}|${sourceKey.physicalTable}`;
+}
+
 /**
  * §4.7 五项证据装配。
  * 缺省 **fail-closed／unknown**（`schemaExists=null`、其余 false），禁止假装全绿。
@@ -367,10 +376,12 @@ function toCandidateRow(source: MatchableSource): AmbiguityCandidateRow {
  */
 export function toRepairTargetEvidence(
   candidates: readonly AmbiguityCandidateRow[],
-  evidenceByAllowListName: ReadonlyMap<string, Omit<RepairTargetEvidence, "target">>
+  evidenceByIdentityOrName: ReadonlyMap<string, Omit<RepairTargetEvidence, "target">>
 ): RepairTargetEvidence[] {
   return candidates.map((c) => {
-    const base = evidenceByAllowListName.get(c.allowListName);
+    const base =
+      evidenceByIdentityOrName.get(repairEvidenceIdentityKey(c.sourceKey))
+      ?? evidenceByIdentityOrName.get(c.allowListName);
     return {
       target: c.allowListName,
       schemaExists: base?.schemaExists ?? null,
@@ -383,18 +394,20 @@ export function toRepairTargetEvidence(
 }
 
 /**
- * 生产五项证据：基于 permissions／工具面，不默认全 true。
- * schema／compiled 在 source 已进入有效权限集合时记为 true；
- * sourceMap 不可用时 schemaExists=null（不可判定 → 不进 usableTargets）。
+ * 生产五项证据：按 Source Identity 装配，不默认全绿。
+ * - schemaExists：无真实 schema 探测时一律 null（不可判定 → 不进 usableTargets）
+ * - compiled：无 completion=done 探测时 false
+ * - parameterShapeValid：无相对本次 args 的形状核验时 false
+ * 短名只用于 denialAllowList；Map 键＝完整身份串，避免双连接同名覆盖。
  */
+
 export function buildRepairEvidenceForGate(input: {
   candidates: readonly AmbiguityCandidateRow[];
   permissions: Pick<EffectivePermissions, "sources" | "tools">;
   toolName: string;
-  /** false → 全体 schemaExists=null（目录不可判定）。缺省 true。 */
+  /** false → 全体 schemaExists=null。缺省亦为不可判定（无真实探测）。 */
   sourceMapReliable?: boolean;
 }): Map<string, Omit<RepairTargetEvidence, "target">> {
-  const reliable = input.sourceMapReliable !== false;
   const visible = new Set(
     input.permissions.sources.map(
       (s) =>
@@ -404,13 +417,14 @@ export function buildRepairEvidenceForGate(input: {
   const callable = input.permissions.tools.includes(input.toolName);
   const out = new Map<string, Omit<RepairTargetEvidence, "target">>();
   for (const c of input.candidates) {
-    const key = `${c.sourceKey.connectionId}|${c.sourceKey.schema}|${c.sourceKey.sourceName}|${c.sourceKey.physicalTable}`;
+    const key = repairEvidenceIdentityKey(c.sourceKey);
     const isVisible = visible.has(key);
-    out.set(c.allowListName, {
-      schemaExists: reliable ? isVisible : null,
+    out.set(key, {
+      // 无独立 schema／编译探测入口时不得用可见性冒充
+      schemaExists: null,
       visibleToPrincipal: isVisible,
-      compiled: reliable && isVisible,
-      parameterShapeValid: true,
+      compiled: false,
+      parameterShapeValid: false,
       callable
     });
   }
@@ -519,10 +533,14 @@ export async function buildMatchableSourcesForGate(
   const connectionScope = options.connectionScope
     ?? [...new Set(sources.map((s) => s.connectionId))];
 
-  let descriptionHealth: DescriptionReadHealth = { status: "ok" };
+  let indexUnreliable = false;
+  let failedConnections = new Set<string>();
+  let failedSourceKeys = new Set<string>();
   let catalogEntries: CatalogSourceEntry[] = [];
   try {
     const indexes = await loadDescriptionIndexes(semanticLayerRoot, connectionScope);
+    failedConnections = indexes.failedConnections;
+    failedSourceKeys = indexes.failedSourceKeys;
     const identities = sources.map((s) => ({
       connectionId: s.connectionId,
       schema: s.schema,
@@ -536,7 +554,7 @@ export async function buildMatchableSourcesForGate(
       { maxTotalDescriptionChars: MAX_TOTAL_DESCRIPTION_CHARS }
     );
   } catch {
-    descriptionHealth = { status: "index_unreliable" };
+    indexUnreliable = true;
     catalogEntries = sources.map((s) => ({
       connectionId: s.connectionId,
       schema: s.schema,
@@ -559,6 +577,17 @@ export async function buildMatchableSourcesForGate(
     const key = descriptionIndexKey(source.connectionId, source.schema, source.sourceName);
     const entry = byKey.get(key);
     const names = await loadOverlayNamesForSource(semanticLayerRoot, source);
+    const connectionNorm = source.connectionId.trim().replace(/[`"']/g, "").toLowerCase();
+    let descriptionHealth: DescriptionReadHealth = { status: "ok" };
+    if (indexUnreliable) {
+      descriptionHealth = { status: "index_unreliable" };
+    } else if (failedConnections.has(connectionNorm)) {
+      descriptionHealth = { status: "read_failed", reason: "schema_index_unreadable" };
+    } else if (failedSourceKeys.has(key)) {
+      descriptionHealth = { status: "read_failed", reason: "overlay_unreadable" };
+    } else if (names.readPartial) {
+      descriptionHealth = { status: "read_failed", reason: "overlay_parse_or_io" };
+    }
     // assemble 已截断时保留 truncated 态与原文切片；健康态非 ok 时描述不参与匹配
     const descriptionState: DescriptionState =
       descriptionHealth.status !== "ok"
@@ -575,14 +604,14 @@ export async function buildMatchableSourcesForGate(
         descriptionHealth,
         measureNames: names.measureNames,
         dimensionNames: names.dimensionNames,
-        readPartial: names.readPartial
+        readPartial: names.readPartial || descriptionHealth.status !== "ok"
       })
     );
   }
 
   return {
     matchableSources,
-    descriptionIndexUnreliable: descriptionHealth.status === "index_unreliable"
+    descriptionIndexUnreliable: indexUnreliable
   };
 }
 
@@ -676,7 +705,16 @@ export async function checkSourceAmbiguityGate(
   }
 
   const sagScope = ambiguityScopeKey(input.identityKey, input.sessionId);
-  const journey = await readSourceAmbiguityJourney(sagScope);
+  const journeyRead = await readSourceAmbiguityJourneyResult(sagScope);
+  if (!journeyRead.ok) {
+    const emptyRepair = buildAmbiguityRepairClosure([]);
+    return {
+      kind: "deny",
+      executed: false,
+      denial: denialPayload([], emptyRepair, journeyRead.reason, input.fieldAmbiguity)
+    };
+  }
+  const journey = journeyRead.journey;
   const generation =
     session.record?.generation
     ?? (state === "never_begun" ? NEVER_BEGUN_GENERATION_SENTINEL : journey.generation);

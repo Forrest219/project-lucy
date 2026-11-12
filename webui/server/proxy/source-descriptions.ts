@@ -61,6 +61,13 @@ export interface DescriptionIndexes {
   manifestIndex: Map<string, ManifestDescEntry>;
   overlayIndex: Map<string, OverlayDescEntry>;
   contentRoot: string;
+  /**
+   * P0-3／D12：单文件读／解析失败不得吞成「真 missing」。
+   * - `failedConnections`：该连接下 schema 索引不可靠（整连接描述健康态 fail-closed）
+   * - `failedSourceKeys`：单 overlay 损坏时按 `descriptionIndexKey` 标记
+   */
+  failedConnections: Set<string>;
+  failedSourceKeys: Set<string>;
 }
 
 /** 与 `acl.ts` `normalizeRef` 保持字节级一致。 */
@@ -235,6 +242,8 @@ export async function loadDescriptionIndexes(
 ): Promise<DescriptionIndexes> {
   const manifestIndex = new Map<string, ManifestDescEntry>();
   const overlayIndex = new Map<string, OverlayDescEntry>();
+  const failedConnections = new Set<string>();
+  const failedSourceKeys = new Set<string>();
   const contentRoot = semanticLayerRoot;
   const scope = [...new Set(connectionScope.map(normalizeCatalogRef).filter(Boolean))];
 
@@ -247,6 +256,8 @@ export async function loadDescriptionIndexes(
         schemaFiles.push(path.join(base, entry));
       }
     } catch {
+      // 连接目录不可列 → 该连接描述索引不可靠（P0-3 fail-closed）
+      failedConnections.add(normalizeCatalogRef(connectionId));
       continue;
     }
 
@@ -268,12 +279,15 @@ export async function loadDescriptionIndexes(
           });
         }
       } catch {
-        // 单文件损坏：跳过，受影响 source 按缺失回退
+        // 单文件损坏：整连接描述健康态 fail-closed（不得吞成真 missing）
+        failedConnections.add(normalizeCatalogRef(connectionId));
       }
     }
   }
 
   for (const connectionId of scope) {
+    const normalizedConnection = normalizeCatalogRef(connectionId);
+    if (failedConnections.has(normalizedConnection)) continue;
     const base = connectionDir(semanticLayerRoot, connectionId);
     let overlayFiles: string[] = [];
     try {
@@ -283,6 +297,7 @@ export async function loadDescriptionIndexes(
         overlayFiles.push(path.join(base, entry));
       }
     } catch {
+      failedConnections.add(normalizedConnection);
       continue;
     }
 
@@ -309,12 +324,24 @@ export async function loadDescriptionIndexes(
           overlayIndex.set(descriptionIndexKey(connectionId, schema, sourceName), overlayEntry);
         }
       } catch {
-        // 单文件损坏：跳过
+        // overlay 单文件损坏：按 sourceName 挂到已知 schema 键；尚无 schema 时标连接级失败
+        const sourceName = normalizeCatalogRef(path.basename(overlayFile, ".yaml"));
+        const schemas = [...manifestIndex.keys()]
+          .filter((k) => k.startsWith(`${normalizedConnection}.`) && k.endsWith(`.${sourceName}`))
+          .map((k) => k.split(".")[1]!)
+          .filter(Boolean);
+        if (schemas.length === 0) {
+          failedConnections.add(normalizedConnection);
+        } else {
+          for (const schema of schemas) {
+            failedSourceKeys.add(descriptionIndexKey(connectionId, schema, sourceName));
+          }
+        }
       }
     }
   }
 
-  return { manifestIndex, overlayIndex, contentRoot };
+  return { manifestIndex, overlayIndex, contentRoot, failedConnections, failedSourceKeys };
 }
 
 /**
@@ -366,7 +393,9 @@ export async function enrichCatalogSources(
     indexes = {
       manifestIndex: new Map(),
       overlayIndex: new Map(),
-      contentRoot: options.semanticLayerRoot
+      contentRoot: options.semanticLayerRoot,
+      failedConnections: new Set(),
+      failedSourceKeys: new Set()
     };
   }
   return assembleCatalogSources(

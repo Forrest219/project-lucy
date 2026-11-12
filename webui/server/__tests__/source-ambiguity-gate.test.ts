@@ -22,6 +22,7 @@ import {
   MEASURE_SUMMARY_MAX,
   SOURCE_AMBIGUITY_GATE,
   SOURCE_AMBIGUITY_MESSAGE,
+  admitHostConfirmRequest,
   ambiguityScopeKey,
   attestSourceConfirmation,
   buildAmbiguityRepairClosure,
@@ -29,6 +30,7 @@ import {
   buildRepairEvidenceForGate,
   checkSourceAmbiguityGate,
   extractTerms,
+  hostConfirmCallerAllowed,
   matchVisibleSources,
   persistAmbiguityCandidateSnapshot,
   projectDescriptionForGate,
@@ -1041,9 +1043,13 @@ describe("P0-3 source ambiguity gate", () => {
       toolName: "lucy_query"
     });
     const live = toRepairTargetEvidence(candidates, probed);
-    expect(live[0]!.schemaExists).toBe(true);
+    // 无真实 schema／编译探测 → 不得用可见性写绿
+    expect(live[0]!.schemaExists).toBeNull();
+    expect(live[0]!.compiled).toBe(false);
+    expect(live[0]!.parameterShapeValid).toBe(false);
     expect(live[0]!.visibleToPrincipal).toBe(true);
     expect(live[0]!.callable).toBe(true);
+    expect(buildAmbiguityRepairClosure(live).usableTargets).toEqual([]);
   });
 
   // ─── SC-19／SC-03／SC-05：字段歧义并存；限定名不豁免 ─────────────────────
@@ -1190,5 +1196,111 @@ describe("P0-3 source ambiguity gate", () => {
   it("O4: measure summary cap=8; gate reason stable", () => {
     expect(MEASURE_SUMMARY_MAX).toBe(8);
     expect(SOURCE_AMBIGUITY_GATE).toBe("source_ambiguity_gate");
+  });
+
+  // ─── 复审 BLOCK／CHANGE 回归 ─────────────────────────────────────────────
+
+  it("SC-17 HTTP: same MCP Bearer without person+host attestation cannot confirm", () => {
+    expect(hostConfirmCallerAllowed({ actorKind: "automation" })).toBe(false);
+    expect(hostConfirmCallerAllowed({ actorKind: undefined })).toBe(false);
+    expect(hostConfirmCallerAllowed({ actorKind: "person" })).toBe(true);
+    expect(
+      admitHostConfirmRequest({
+        identity: { actorKind: "automation" },
+        hostAttestationHeader: "webui"
+      }).ok
+    ).toBe(false);
+    expect(
+      admitHostConfirmRequest({
+        identity: { actorKind: "person" },
+        hostAttestationHeader: null
+      }).ok
+    ).toBe(false);
+    expect(
+      admitHostConfirmRequest({
+        identity: { actorKind: "person" },
+        hostAttestationHeader: "webui"
+      }).ok
+    ).toBe(true);
+    // mcp-proxy 接线锁：确认入口必须走 admitHostConfirmRequest
+    // （Agent 同 Bearer POST 不得写入 attested 证据）
+  });
+
+  it("SC-25 production: corrupt schema yaml marks read_failed and gate denies", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "sag-corrupt-desc-"));
+    const conn = "demo-mysql";
+    const schemaDir = path.join(root, "semantic-layer", conn, "_schema");
+    await mkdir(schemaDir, { recursive: true });
+    await writeFile(path.join(schemaDir, "dataforai.yaml"), "tables:\n  {{broken", "utf8");
+    process.env.LUCY_CONTENT_ROOT = root;
+    invalidateContentPathsCache();
+
+    const visible = [
+      { connectionId: conn, schema: "dataforai", sourceName: "a", table: "s.a" },
+      { connectionId: conn, schema: "dataforai", sourceName: "b", table: "s.b" }
+    ];
+    const enriched = await buildMatchableSourcesForGate(visible, {
+      semanticLayerRoot: path.join(root, "semantic-layer"),
+      connectionScope: [conn]
+    });
+    expect(
+      enriched.matchableSources.some((s) => s.descriptionHealth?.status === "read_failed")
+    ).toBe(true);
+
+    const identityKey = "agent:tok-corrupt";
+    const sessionId = "s-corrupt";
+    await upsertJourneyOnBegin({
+      scopeKey: ambiguityScopeKey(identityKey, sessionId),
+      generation: 1,
+      intentSummary: "今年收入是多少"
+    });
+    const outcome = await checkSourceAmbiguityGate({
+      identityKey,
+      sessionId,
+      toolName: "lucy_query",
+      args: {},
+      permissions: {
+        roleIds: [],
+        tools: ["lucy_query"],
+        tables: [],
+        connections: [conn],
+        sources: visible,
+        capabilities: [],
+        metaTools: [],
+        opsTools: []
+      } as never,
+      matchableSources: enriched.matchableSources
+    });
+    expect(outcome.kind).toBe("deny");
+    if (outcome.kind === "deny") expect(outcome.executed).toBe(false);
+
+    await rm(root, { recursive: true, force: true });
+    delete process.env.LUCY_CONTENT_ROOT;
+    invalidateContentPathsCache();
+  });
+
+  it("SC-16 ACL: ghost.amount stays unresolved for gate; not ACL table set", async () => {
+    resetEffectivePolicyForTests();
+    const { extractTables } = await import("../proxy/acl");
+    const tables = await extractTables(
+      "lucy_query",
+      {
+        connectionId: CONNECTION,
+        sourceName: "orders",
+        filters: [{ field: "ghost.amount", op: "eq", value: 1 }]
+      },
+      { fresh: true }
+    );
+    expect(tables.some((t) => /ghost/i.test(t))).toBe(false);
+    const collected = await collectCanonicalSourceKeys(
+      "lucy_query",
+      {
+        connectionId: CONNECTION,
+        sourceName: "orders",
+        filters: [{ field: "ghost.amount", op: "eq", value: 1 }]
+      },
+      { fresh: true }
+    );
+    expect(collected.unresolved.some((u) => /ghost/i.test(u))).toBe(true);
   });
 });

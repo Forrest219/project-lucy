@@ -555,10 +555,8 @@ function addTableRefsFromText(
   const candidate = parts.length >= 3 ? `${parts[0]}.${parts[1]}` : parts[0];
 
   if (options.fallbackUnknown === false) {
-    // P0-3：禁止静默丢弃未知 filter／order_by；保留字面供 unresolved 裁决。
-    if (options.retainUnresolved !== false) {
-      tables.add(dottedRef[0]);
-    }
+    // P0-3／D9：未知字面**不得**进入 ACL 的 table 能力集合（否则会误判 table_forbidden）。
+    // 保留到 unresolved 侧通道见 collectUnresolvedDottedRefs／collectCanonicalSourceKeys。
     return;
   }
 
@@ -2062,6 +2060,54 @@ export async function committedSourceMap(): Promise<SourceMapState> {
  * 禁止在口径绑定模块里另写一套前缀拼接。解析不到的引用（既不是已知
  * sourceName 也不是已知物理表）进 `unresolved`，由调用方按 fail-closed 处理。
  */
+/**
+ * P0-3 §4.5：从 filters／order_by 等字段采集未知 dotted 字面，供门闩 unresolved deny。
+ * 与 ACL extractTables 分离，避免改写 table_forbidden 裁决。
+ */
+function collectUnresolvedDottedRefs(
+  toolName: string,
+  args: unknown,
+  state: SourceMapState
+): string[] {
+  if (toolName !== "lucy_query" && toolName !== "lucy_explain_query" && toolName !== "sl_query") {
+    return [];
+  }
+  const a = args && typeof args === "object" && !Array.isArray(args)
+    ? args as Record<string, unknown>
+    : undefined;
+  if (!a) return [];
+  const connectionId = firstString(a, ["connectionId", "connection_id", "connection", "database"]);
+  const unresolved = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (typeof value === "string") {
+      const entries = sourceMapEntries(state);
+      let matchedKnownRef = false;
+      for (const { source, physical, connectionId: entryConnection } of entries) {
+        if (connectionId && entryConnection !== normalizeRef(connectionId)) continue;
+        if (hasDelimitedRef(value, physical) || hasDelimitedRef(value, source)) {
+          matchedKnownRef = true;
+          break;
+        }
+      }
+      if (matchedKnownRef) return;
+      const dottedRef = normalizeRef(value).match(/[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+/);
+      if (dottedRef?.[0]) unresolved.add(dottedRef[0]);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item);
+    }
+  };
+  for (const key of ["filters", "where", "segments", "joins", "join", "orderBy", "order_by", "sort", "sorts", "having", "groupBy", "group_by"]) {
+    visit(a[key]);
+  }
+  return [...unresolved];
+}
+
 export async function collectCanonicalSourceKeys(
   toolName: string,
   args: unknown,
@@ -2092,6 +2138,9 @@ export async function collectCanonicalSourceKeys(
     if (seen.has(id)) continue;
     seen.add(id);
     keys.push(key);
+  }
+  for (const ref of collectUnresolvedDottedRefs(toolName, args, state)) {
+    if (!unresolved.includes(ref)) unresolved.push(ref);
   }
   return { keys, unresolved };
 }

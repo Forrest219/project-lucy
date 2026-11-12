@@ -3,15 +3,15 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 实施计划（Plan） |
-| 版本 / 日期 | **v0.5-draft** / 2026-11-08 |
-| 状态 | **v0.5，终稿已确权；O1／O2／O4 已闭合；R4 已授予（2026-11-08）；实现进行中**。不表示可上线 |
-| 授权边界 | R2-F＋R3＋R4 已闭合。授权实现本 Plan Task；不表示可上线。 |
+| 版本 / 日期 | **v0.5** / 2026-11-08（状态镜像 2026-11-13） |
+| 状态 | **v0.5；R2-F＋R3（O1／O2／O4）＋R4 已闭合（2026-11-08）；实现已合入（本分支）；复审 BLOCK／CHANGE 已修（2026-11-13）；待复验；本条不表示可上线** |
+| 授权边界 | R2-F＋R3＋R4 已闭合。授权实现本 Plan Task 与复审 BLOCK／CHANGE 修复；不表示可上线。 |
 | 验收 | Spec SC-01–SC-26 逐条有证据（§7.1 所列因 O 未闭合者保持未关闭）；`npm run lint:spec-docs` 退出 0；相关 vitest 全绿；歧义未确认／无 begin 事故路径零上游执行、explain 未进本地成功体。**SC-25／SC-26 必验，禁止按接线状态 skip**。**不构成发布取证，不表示可上线** |
 | 台账号 | 无（`0.30` 台账未建立；待 PM 指派后再登记） |
 | 目标分支 / 产品线 | `lucy-v0.30` / `0.30.0` |
 | 需求来源 | 清单 P0-3；需求池 REQ-030-024 |
-| Spec | [lucy-20261107-source-ambiguity-gate-spec.md](../specs/lucy-20261107-source-ambiguity-gate-spec.md)（**v0.5-draft**） |
-| 评审记录 | [Codex 对抗评审](../reviews/2026-11-08-source-ambiguity-gate-codex-review.md) |
+| Spec | [lucy-20261107-source-ambiguity-gate-spec.md](../specs/lucy-20261107-source-ambiguity-gate-spec.md)（**v0.5**） |
+| 评审记录 | [Codex 对抗评审](../reviews/2026-11-08-source-ambiguity-gate-codex-review.md)；[实现复审 BLOCK](../reviews/2026-11-13-source-ambiguity-gate-implementation-review.md) |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md) 落盘清单与 Plan Mode |
 
 ## 1. 目标
@@ -137,6 +137,7 @@
 
 | 版本 | 日期 | 说明 |
 |---|---|---|
+| v0.5（状态镜像） | 2026-11-13 | 实现已合入；独立复审 **BLOCK**（待修）。与 Spec 头部同句现值；不表示可上线 |
 | v0.5-draft | 2026-11-08 | 对齐 Spec v0.5；闭合 R3 残留 **F-R2-03…06**：宿主 attested 用户证据、修订 acl.collect*、五项失败不得进 availableCandidates、SC-25／SC-26 必验禁 skip；O1／O2 仍互斥待决；终稿未确权、未授权实现 |
 | v0.4-draft | 2026-11-08 | 对齐 Spec v0.4；任务／夹具覆盖 **F-R2-01…F-R2-07**；SC 扩至 26；O1／O2 仍互斥待决；终稿未确权、未授权实现 |
 | v0.3-draft | 2026-11-08 | 对齐 Spec v0.3；**F-11** 门禁链改为 R1→R2→R2-F→R3→R4；撤销 O2 默认执行（F-03）；任务覆盖 F-01–F-10 验收；SC 扩至 24；终稿未确权、未授权实现 |

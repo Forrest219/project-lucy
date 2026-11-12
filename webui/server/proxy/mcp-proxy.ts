@@ -177,6 +177,8 @@ import {
   attestSourceConfirmation,
   buildMatchableSourcesForGate,
   checkSourceAmbiguityGate,
+  admitHostConfirmRequest,
+  LUCY_HOST_ATTESTATION_HEADER,
   sourceAmbiguityGateAppliesToTool,
   upsertJourneyOnBegin,
   type SourceAmbiguityDenial,
@@ -184,7 +186,12 @@ import {
 } from "./source-ambiguity-gate.js";
 
 export { registerPublishedVersion };
-export { attestSourceConfirmation };
+export {
+  admitHostConfirmRequest,
+  attestSourceConfirmation,
+  hostConfirmCallerAllowed,
+  LUCY_HOST_ATTESTATION_HEADER
+} from "./source-ambiguity-gate.js";
 
 /** 宿主 attested 确认提交（非 tools/call；§4.4 层 B／sourceChannel=host_confirm_api）。 */
 export const SOURCE_AMBIGUITY_CONFIRM_PATH = "/mcp/host/source-ambiguity/confirm";
@@ -7447,7 +7454,8 @@ function createBudgetPersistence(): BudgetPersistence | null {
  * 宿主确认提交 HTTP（非 MCP tools/call）。
  * POST /mcp/host/source-ambiguity/confirm
  * Body: { sessionId, generation, selectedIdentity }
- * Auth: Bearer（与 MCP 相同）；禁止经 tools/call 冒充。
+ * Auth: Bearer + `actorKind=person` + `x-lucy-host-attestation`；
+ * 禁止 automation／未标注 actor／缺宿主头用同一 MCP Bearer 自证。
  */
 async function handleSourceAmbiguityHostConfirm(
   req: IncomingMessage,
@@ -7474,6 +7482,21 @@ async function handleSourceAmbiguityHostConfirm(
   if (!identify.ok) {
     const body = JSON.stringify({ error: "Unauthorized" });
     res.writeHead(401, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  const hostAttestation = normalizeHeader(req.headers[LUCY_HOST_ATTESTATION_HEADER]);
+  const hostAdmit = admitHostConfirmRequest({
+    identity: identify.identity,
+    hostAttestationHeader: hostAttestation
+  });
+  if (!hostAdmit.ok) {
+    const body = JSON.stringify({
+      error: "Forbidden",
+      reason: hostAdmit.reason,
+      detail: "Source confirmation requires actorKind=person and x-lucy-host-attestation"
+    });
+    res.writeHead(403, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
     res.end(body);
     return true;
   }
