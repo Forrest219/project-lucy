@@ -6,13 +6,13 @@
 | Document type | Product / Architecture Spec |
 | Version | **v0.3（写路径自动尝试重载）** |
 | Written date | 2026-10-26 |
-| Revised | 2026-10-27（依 `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md` 8 项批准条件修订）；**2026-11-10**（写路径在 `ktx.yaml` 写入后自动尝试重载；成功不再标 pending；失败仍留待确认重试） |
+| Revised | 2026-10-27（依 `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md` 8 项批准条件修订）；**2026-11-10**（写路径在 `ktx.yaml` 写入后自动尝试重载；成功不再标 pending；失败仍留待确认重试）；**2026-11-13**（AC-12 `--container` 本机验收通过） |
 | Scope | WebUI 写 ktx.yaml 后的执行层生效、KTX daemon 进程编排、MCP Runtime 状态面与 UI 提示 |
 | 前置 | `docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md`（分层模型与 stale 分类） |
 | 排查记录 | `inbox/2026-10-26-ktx-config-restart-only-investigation.md`（过程性材料，未入版本库） |
 | 实施计划 | `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` |
 | 决策 | 只重载 KTX daemon；**写路径自动尝试重载**（失败或跳过时仍可由用户点确认重试）；失败**不回滚** ktx.yaml；不推进上游 KTX reload 能力 |
-| 实施状态 | **已实现，未验收**（2026-10-27；2026-11-10 登记写路径自动重载决策变更）。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8；容器生命周期验收（AC-12）待镜像重建后执行 |
+| 实施状态 | **已实现，本机验收通过**（2026-10-27 实现；2026-11-10 写路径自动重载；**2026-11-13** AC-12 `--container` 19/19 + `--local` 16/16）。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8／§8.6 |
 
 ## v0.2 修订摘要
 

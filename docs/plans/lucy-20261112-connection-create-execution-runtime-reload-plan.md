@@ -30,7 +30,7 @@
 | `E2E-MCP-01` | 用 `page.route` **注入** `reload_required`；open 模式断言 owner-only 拒绝 | 不创建连接；不碰真实 daemon |
 | `E2E-CON-01…06` | 卡片文案、Schema、Manifest、刷新本地目录 | 无「新建连接 → 执行层可见」断言 |
 | `api.create-connection.test.ts` | mock `reloadKtxMcpAfterConfigWrite` 为成功，且期望 `executionRuntimeAck === false` | 故意不验证执行层真生效 |
-| `verify-ktx-reload-lifecycle.sh --container` | Spec 191 AC-12 **仍未跑通**（reserved / exit 2） | 成功重载进程路径无 CI 硬门禁 |
+| `verify-ktx-reload-lifecycle.sh --container` | Spec 191 AC-12 **本机已跑通**（2026-11-13，19/19）；本计划的 VERIFY-191-C01「新建连接 canary」仍待补 | 生命周期门禁已有；创建连接进程级 canary 仍缺 |
 
 结论：浏览器契约层与单元 mock 都「看起来绿」，运维真实路径（supervisor 管着 7878）从未被断言。
 

@@ -5,7 +5,7 @@
 | 对应 Spec | `webui/docs/191-execution-runtime-reload-spec.md` **v0.2**（已按交叉审阅意见修订） |
 | 审阅意见 | `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md`（8 项批准条件） |
 | 决策基线 | 只重载 KTX daemon / 用户点确认 / 失败不回滚 ktx.yaml / 不推进 S4 |
-| 状态 | **已实现，未验收**（2026-10-27）。实现完成并通过静态 Code Review 与本地进程级生命周期实测；容器生命周期验收（AC-12）待镜像重建后执行 |
+| 状态 | **已实现，本机验收通过**（2026-10-27 实现；**2026-11-13** AC-12 `--container` 19/19 + `--local` 16/16，见 §8.6） |
 | 前置已验证 | KTX daemon 收到 SIGTERM 干净退出、端口释放（本地实测）；Proxy 已有 upstream session 恢复机制（`mcp-proxy.ts:381-433`） |
 
 ---
@@ -217,7 +217,7 @@ UI 约定：
 | AC-9 UI 按钮 | Step 5 | `webui/src/__tests__/mcp-runtime-status-panel.test.tsx`（或既有连接概览测试扩展） |
 | AC-10 会话自动恢复 | Step 7 | `webui/server/__tests__/mcp-proxy-upstream-session.test.ts`（扩展） |
 | AC-11 鉴权 | Step 3 | `webui/server/__tests__/mcp-runtime-reload.test.ts` |
-| AC-12 容器生命周期 | Step 8 | `scripts/verify/verify-ktx-reload-lifecycle.sh`（`--container` 模式未验收，见 §8.4） |
+| AC-12 容器生命周期 | Step 8 | `scripts/verify/verify-ktx-reload-lifecycle.sh --container`（**2026-11-13 本机 19/19**，见 §8.6） |
 | AC-13 超时/迟到回执 | Step 2 | `webui/server/__tests__/mcp-runtime-reload.test.ts` |
 
 ---
@@ -322,13 +322,10 @@ UI 约定：
    前提下被真实执行（`scripts/verify/verify-ktx-reload-lifecycle.sh --local`），
    生产路径不设置该变量。
 
-### 8.4 未闭合项
+### 8.4 未闭合项（2026-10-27 当时；AC-12 已于 2026-11-13 闭合，见 §8.6）
 
-- **AC-12 容器生命周期**：`--container` 模式需要已构建镜像，本次按约束不做 Docker 重建，
-  因此未执行。已交付脚本与 `--local` 实测证据。
-- **AC-1／AC-3 的容器内形态**（旧 PID 退出、新 PID 就绪、WebUI 与 Proxy PID 不变）：
-  `--local` 已覆盖 supervisor 侧的旧 PID 退出与新 PID 就绪；「WebUI 与 Proxy PID 不变」
-  属于容器形态，未在本次范围内实测。
+- **AC-12 容器生命周期**：当时 `--container` 未实现检查表；仅有 `--local` 与占位退出码 2。**已作废为现值**——见 §8.6。
+- **AC-1／AC-3 的容器内形态**：当时未测。**已作废为现值**——§8.6 Phase B 已断言 live KTX PID 变化与 WebUI/Proxy PID 不变。
 - **E2E 浏览器契约覆盖**：MCP Runtime 状态面（含本次新增的「重载执行层」）此前**完全没有** E2E 覆盖
   （`webui/tests/e2e/specs/` 无相关 spec；`docs/qa/impact-map.json` 无该路由／组件／selector 映射）。
   本次已补齐浏览器契约层：
@@ -343,6 +340,14 @@ UI 约定：
     （同为 24 issues，`mcp-runtime` 命中 0）。
   - **「成功重载路径」不进 E2E**——那是进程级事实（daemon PID 变化、配置生效、连接级验证通过），
     浏览器无法断言；归口到 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`（即 AC-12）。
+
+### 8.6 AC-12 本机验收（2026-11-13）
+
+- **命令**：`LUCY_RELOAD_VERIFY_IMAGE=project-lucy:demo LUCY_RELOAD_VERIFY_CONTAINER=compose-lucy-1 bash scripts/verify/verify-ktx-reload-lifecycle.sh --container`
+- **结果**：`PASSED: 19 checks`（Phase A 临时 SUPERVISOR_ONLY 容器 + Phase B live demo）。
+- **回归**：同日 `--local` 仍 `PASSED: 16 checks`。
+- **镜像说明**：本轮曾尝试 `BUILDPLATFORM=linux/arm64 npm run demo:upgrade` 缓存重建，构建在安装 `@kaelio/ktx@0.16.0` 时被 SIGTERM 中断；验收改用已有 `project-lucy:demo`（镜像内已含 Spec 191 `supervise_ktx` / `LUCY_ENTRYPOINT_SUPERVISOR_ONLY`）。`--container` 检查表本身落在宿主脚本，不依赖本次失败的重建。
+- **仍不在本工单**：新建连接 canary（`VERIFY-191-C01`／`docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md`）另案跟踪。
 
 ### 8.5 静态 Code Review 发现与修复
 

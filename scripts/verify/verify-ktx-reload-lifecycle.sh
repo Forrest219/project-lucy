@@ -10,17 +10,21 @@
 #                reload request → daemon restart → receipt, SIGTERM → no leftover
 #                process, capability handshake.
 #
-#   --container  Reserved for the real container (Step 8 / AC-12). Requires an
-#                already built image (LUCY_RELOAD_VERIFY_IMAGE) and does NOT
-#                build one. Until those checks run, this mode exits 2 and must
-#                not print PASSED.
-#
-# Local mode covers the supervisor acceptance surface without a container.
-# Container mode does not yet run the Step 8 table; it refuses a zero-check pass.
+#   --container  Spec 191 Step 8 / AC-12 against a built image
+#                (LUCY_RELOAD_VERIFY_IMAGE). Never builds an image.
+#                Phase A runs ephemeral SUPERVISOR_ONLY containers with a stub
+#                ktx (first-start failure, reload, spontaneous exit, backoff
+#                exhaustion, SIGTERM). Phase B optionally checks a live lucy
+#                container (AC-3 WebUI PID unchanged + /api/health during reload).
 #
 # Usage:
 #   scripts/verify/verify-ktx-reload-lifecycle.sh --local
-#   LUCY_RELOAD_VERIFY_IMAGE=lucy:v0.25 scripts/verify/verify-ktx-reload-lifecycle.sh --container
+#   LUCY_RELOAD_VERIFY_IMAGE=project-lucy:demo \
+#     scripts/verify/verify-ktx-reload-lifecycle.sh --container
+#   Optional live phase:
+#     LUCY_RELOAD_VERIFY_CONTAINER=<name>   # default: auto-detect running image
+#     LUCY_RELOAD_VERIFY_HEALTH_URL=http://127.0.0.1:55176/api/health
+#     LUCY_RELOAD_VERIFY_SKIP_LIVE=1        # skip Phase B
 set -Eeuo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
@@ -362,6 +366,413 @@ run_local() {
 
 # ── container mode ───────────────────────────────────────────────────────────
 
+CONTAINER_WORKDIR=""
+CONTAINER_IDS=""
+
+cleanup_container() {
+  local id
+  for id in ${CONTAINER_IDS}; do
+    docker rm -f "${id}" >/dev/null 2>&1 || true
+  done
+  CONTAINER_IDS=""
+  if [[ -n "${CONTAINER_WORKDIR}" && -d "${CONTAINER_WORKDIR}" ]]; then
+    rm -rf "${CONTAINER_WORKDIR}"
+  fi
+  CONTAINER_WORKDIR=""
+}
+
+wait_container_file() {
+  # wait_container_file <container> <path-in-container> <ticks>
+  local container="$1"
+  local path="$2"
+  local limit="$3"
+  local waited=0
+  while [[ "${waited}" -lt "${limit}" ]]; do
+    if docker exec "${container}" test -f "${path}" >/dev/null 2>&1; then
+      return 0
+    fi
+    waited=$((waited + 1))
+    sleep 0.2
+  done
+  return 1
+}
+
+read_container_json_field() {
+  # read_container_json_field <container> <path> <field>
+  docker exec "$1" node -e '
+const fs = require("fs");
+const [file, field] = process.argv.slice(1);
+let doc = {};
+try { doc = JSON.parse(fs.readFileSync(file, "utf8")); } catch (error) { doc = {}; }
+const value = doc[field];
+process.stdout.write(value === undefined || value === null ? "" : String(value));
+' "$2" "$3" 2>/dev/null || true
+}
+
+container_sha256() {
+  # container_sha256 <container> <path>
+  docker exec "$1" node -e '
+const fs = require("fs");
+const crypto = require("crypto");
+const buf = fs.readFileSync(process.argv[1]);
+process.stdout.write(crypto.createHash("sha256").update(buf).digest("hex"));
+' "$2"
+}
+
+start_supervisor_container() {
+  # start_supervisor_container <name-suffix> <project-host-dir> [extra docker -e ...]
+  local suffix="$1"
+  local project_host="$2"
+  shift 2
+  local name="lucy-191-ac12-${suffix}-$$"
+  local cid
+  cid="$(docker run -d --name "${name}" --user 0 \
+    -e LUCY_ENTRYPOINT_SUPERVISOR_ONLY=1 \
+    -e KTX_PROJECT_ROOT=/verify/project \
+    -e KTX_MCP_HOST=127.0.0.1 \
+    -e KTX_MCP_PORT=7878 \
+    -e KTX_INTERNAL_TOKEN=stub-token \
+    -e KTX_STUB_PID_FILE=/verify/project/.ktx-ui/stub.pid \
+    -e PATH=/verify/stub:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    -v "${project_host}:/verify/project" \
+    -v "${CONTAINER_WORKDIR}/stub:/verify/stub:ro" \
+    "$@" \
+    "${LUCY_RELOAD_VERIFY_IMAGE}")"
+  CONTAINER_IDS="${CONTAINER_IDS} ${cid}"
+  printf '%s\n' "${cid}"
+}
+
+find_live_lucy_container() {
+  local explicit="${LUCY_RELOAD_VERIFY_CONTAINER:-}"
+  if [[ -n "${explicit}" ]]; then
+    printf '%s\n' "${explicit}"
+    return 0
+  fi
+  docker ps --filter "ancestor=${LUCY_RELOAD_VERIFY_IMAGE}" --format '{{.Names}}' | head -n 1
+}
+
+run_container_phase_a() {
+  echo "-- Phase A: ephemeral SUPERVISOR_ONLY containers (image entrypoint) --"
+  CONTAINER_WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/lucy-ktx-reload-ctr-XXXXXX")"
+  mkdir -p "${CONTAINER_WORKDIR}/stub" \
+    "${CONTAINER_WORKDIR}/project-ok/.ktx-ui" \
+    "${CONTAINER_WORKDIR}/project-fail/.ktx-ui" \
+    "${CONTAINER_WORKDIR}/project-exit/.ktx-ui" \
+    "${CONTAINER_WORKDIR}/project-backoff/.ktx-ui"
+  write_stub_ktx "${CONTAINER_WORKDIR}/stub/ktx"
+  printf 'connections:\n  demo:\n    host: db.example.test\n' > "${CONTAINER_WORKDIR}/project-ok/ktx.yaml"
+  cp "${CONTAINER_WORKDIR}/project-ok/ktx.yaml" "${CONTAINER_WORKDIR}/project-fail/ktx.yaml"
+  cp "${CONTAINER_WORKDIR}/project-ok/ktx.yaml" "${CONTAINER_WORKDIR}/project-exit/ktx.yaml"
+  cp "${CONTAINER_WORKDIR}/project-ok/ktx.yaml" "${CONTAINER_WORKDIR}/project-backoff/ktx.yaml"
+
+  # A1 — first start failure must exit non-zero (no degraded run)
+  local fail_cid
+  fail_cid="$(start_supervisor_container fail "${CONTAINER_WORKDIR}/project-fail" -e KTX_STUB_FAIL=1)"
+  local waited=0
+  local fail_status=""
+  while [[ "${waited}" -lt 75 ]]; do
+    fail_status="$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "${fail_cid}" 2>/dev/null || echo "missing 1")"
+    case "${fail_status}" in
+      "exited "*) break ;;
+    esac
+    waited=$((waited + 1))
+    sleep 0.2
+  done
+  local fail_exit
+  fail_exit="$(docker inspect -f '{{.State.ExitCode}}' "${fail_cid}" 2>/dev/null || echo 0)"
+  local fail_running
+  fail_running="$(docker inspect -f '{{.State.Running}}' "${fail_cid}" 2>/dev/null || echo true)"
+  if [[ "${fail_running}" == "false" && "${fail_exit}" != "0" ]]; then
+    pass "AC-12 first-start failure exits non-zero (status ${fail_exit})"
+  else
+    fail "AC-12 first-start failure exits non-zero (running=${fail_running} exit=${fail_exit})"
+    docker logs "${fail_cid}" >&2 || true
+  fi
+  docker rm -f "${fail_cid}" >/dev/null 2>&1 || true
+  CONTAINER_IDS="$(printf '%s\n' ${CONTAINER_IDS} | grep -v "^${fail_cid}$" | tr '\n' ' ')"
+
+  # A2 — happy path: ready + reload receipt + daemon pid change
+  local ok_cid
+  ok_cid="$(start_supervisor_container ok "${CONTAINER_WORKDIR}/project-ok")"
+  if wait_container_file "${ok_cid}" /verify/project/.ktx-ui/ktx-ready 75; then
+    pass "AC-12 supervisor reaches ready inside the image"
+  else
+    fail "AC-12 supervisor reaches ready inside the image"
+    docker logs "${ok_cid}" >&2 || true
+  fi
+
+  assert_eq "AC-12 capability protocol is published in-container" \
+    "lucy-ktx-reload/1" \
+    "$(read_container_json_field "${ok_cid}" /verify/project/.ktx-ui/ktx-reload.capability protocol)"
+
+  local first_daemon_pid
+  first_daemon_pid="$(docker exec "${ok_cid}" cat /verify/project/.ktx-ui/stub.pid 2>/dev/null | tr -d '[:space:]' || true)"
+  local request_id="container-reload-1"
+  local digest
+  digest="$(container_sha256 "${ok_cid}" /verify/project/ktx.yaml)"
+  docker exec "${ok_cid}" node -e '
+const fs = require("fs");
+const [id, digest] = process.argv.slice(1);
+const payload = JSON.stringify({
+  requestId: id,
+  requestedDigest: digest,
+  requestedAt: new Date().toISOString()
+}) + "\n";
+const tmp = "/verify/project/.ktx-ui/ktx-reload.request.tmp";
+const dest = "/verify/project/.ktx-ui/ktx-reload.request";
+fs.writeFileSync(tmp, payload);
+fs.renameSync(tmp, dest);
+' "${request_id}" "${digest}"
+
+  if wait_container_file "${ok_cid}" /verify/project/.ktx-ui/ktx-reload.result 75; then
+    pass "AC-12 reload receipt is written in-container"
+  else
+    fail "AC-12 reload receipt is written in-container"
+    docker logs "${ok_cid}" >&2 || true
+  fi
+
+  assert_eq "AC-12 receipt matches requestId" \
+    "${request_id}" \
+    "$(read_container_json_field "${ok_cid}" /verify/project/.ktx-ui/ktx-reload.result requestId)"
+  assert_eq "AC-12 receipt status is succeeded" \
+    "succeeded" \
+    "$(read_container_json_field "${ok_cid}" /verify/project/.ktx-ui/ktx-reload.result status)"
+
+  local second_daemon_pid
+  second_daemon_pid="$(docker exec "${ok_cid}" cat /verify/project/.ktx-ui/stub.pid 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ -n "${second_daemon_pid}" && "${second_daemon_pid}" != "${first_daemon_pid}" ]]; then
+    pass "AC-12 reload restarts the daemon (pid ${first_daemon_pid} → ${second_daemon_pid})"
+  else
+    fail "AC-12 reload restarts the daemon (before ${first_daemon_pid}, after ${second_daemon_pid})"
+  fi
+
+  # A3 — SIGTERM: container stops; daemon not left running inside a live container
+  docker stop -t 15 "${ok_cid}" >/dev/null 2>&1 || true
+  local ok_running
+  ok_running="$(docker inspect -f '{{.State.Running}}' "${ok_cid}" 2>/dev/null || echo true)"
+  local ok_exit
+  ok_exit="$(docker inspect -f '{{.State.ExitCode}}' "${ok_cid}" 2>/dev/null || echo 1)"
+  if [[ "${ok_running}" == "false" ]]; then
+    pass "AC-12 SIGTERM stops the supervisor container (exit ${ok_exit})"
+  else
+    fail "AC-12 SIGTERM stops the supervisor container"
+  fi
+  # After stop the container rootfs is still inspectable via docker start... but
+  # leftover host processes would only exist if the stub escaped the namespace.
+  # Assert the stopped container no longer has a running task.
+  local ok_pid
+  ok_pid="$(docker inspect -f '{{.State.Pid}}' "${ok_cid}" 2>/dev/null || echo 0)"
+  if [[ "${ok_pid}" == "0" ]]; then
+    pass "AC-12 no leftover container task after SIGTERM"
+  else
+    fail "AC-12 no leftover container task after SIGTERM (pid ${ok_pid})"
+  fi
+  docker rm -f "${ok_cid}" >/dev/null 2>&1 || true
+  CONTAINER_IDS="$(printf '%s\n' ${CONTAINER_IDS} | grep -v "^${ok_cid}$" | tr '\n' ' ')"
+
+  # A4 — spontaneous exit → restart once
+  local exit_cid
+  exit_cid="$(start_supervisor_container exit "${CONTAINER_WORKDIR}/project-exit")"
+  if wait_container_file "${exit_cid}" /verify/project/.ktx-ui/ktx-ready 75; then
+    pass "AC-12 spontaneous-exit fixture reaches ready"
+  else
+    fail "AC-12 spontaneous-exit fixture reaches ready"
+    docker logs "${exit_cid}" >&2 || true
+  fi
+  local exit_first
+  exit_first="$(docker exec "${exit_cid}" cat /verify/project/.ktx-ui/stub.pid 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ "${exit_first}" =~ ^[0-9]+$ ]]; then
+    # slim images may lack /bin/kill; bash builtin works under the entrypoint shell.
+    docker exec "${exit_cid}" bash -c "kill -KILL '${exit_first}'" >/dev/null 2>&1 || true
+  fi
+  waited=0
+  local exit_new=""
+  while [[ "${waited}" -lt 100 ]]; do
+    exit_new="$(docker exec "${exit_cid}" cat /verify/project/.ktx-ui/stub.pid 2>/dev/null | tr -d '[:space:]' || true)"
+    if [[ -n "${exit_new}" && "${exit_new}" != "${exit_first}" ]]; then break; fi
+    waited=$((waited + 1))
+    sleep 0.2
+  done
+  if [[ -n "${exit_new}" && "${exit_new}" != "${exit_first}" ]]; then
+    pass "AC-12 spontaneous daemon exit is restarted (pid ${exit_first} → ${exit_new})"
+  else
+    fail "AC-12 spontaneous daemon exit is restarted (before ${exit_first}, after ${exit_new})"
+    docker logs "${exit_cid}" >&2 || true
+  fi
+  docker rm -f "${exit_cid}" >/dev/null 2>&1 || true
+  CONTAINER_IDS="$(printf '%s\n' ${CONTAINER_IDS} | grep -v "^${exit_cid}$" | tr '\n' ' ')"
+
+  # A5 — backoff exhaustion ⇒ container exits
+  local backoff_cid
+  backoff_cid="$(start_supervisor_container backoff "${CONTAINER_WORKDIR}/project-backoff" \
+    -e LUCY_KTX_RELOAD_BACKOFF_LIMIT=0)"
+  if wait_container_file "${backoff_cid}" /verify/project/.ktx-ui/ktx-ready 75; then
+    pass "AC-12 backoff fixture reaches ready"
+  else
+    fail "AC-12 backoff fixture reaches ready"
+    docker logs "${backoff_cid}" >&2 || true
+  fi
+  local backoff_first
+  backoff_first="$(docker exec "${backoff_cid}" cat /verify/project/.ktx-ui/stub.pid 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ "${backoff_first}" =~ ^[0-9]+$ ]]; then
+    docker exec "${backoff_cid}" bash -c "kill -KILL '${backoff_first}'" >/dev/null 2>&1 || true
+  fi
+  waited=0
+  local backoff_status=""
+  while [[ "${waited}" -lt 100 ]]; do
+    backoff_status="$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "${backoff_cid}" 2>/dev/null || echo "missing 1")"
+    case "${backoff_status}" in
+      "exited "*) break ;;
+    esac
+    waited=$((waited + 1))
+    sleep 0.2
+  done
+  local backoff_exit
+  backoff_exit="$(docker inspect -f '{{.State.ExitCode}}' "${backoff_cid}" 2>/dev/null || echo 0)"
+  local backoff_running
+  backoff_running="$(docker inspect -f '{{.State.Running}}' "${backoff_cid}" 2>/dev/null || echo true)"
+  if [[ "${backoff_running}" == "false" && "${backoff_exit}" != "0" ]]; then
+    pass "AC-12 backoff exhaustion exits the container (status ${backoff_exit})"
+  else
+    fail "AC-12 backoff exhaustion exits the container (running=${backoff_running} exit=${backoff_exit})"
+    docker logs "${backoff_cid}" >&2 || true
+  fi
+  docker rm -f "${backoff_cid}" >/dev/null 2>&1 || true
+  CONTAINER_IDS="$(printf '%s\n' ${CONTAINER_IDS} | grep -v "^${backoff_cid}$" | tr '\n' ' ')"
+}
+
+run_container_phase_b() {
+  echo "-- Phase B: live lucy container (AC-3 + health window) --"
+  if [[ "${LUCY_RELOAD_VERIFY_SKIP_LIVE:-0}" == "1" ]]; then
+    echo "  skip — LUCY_RELOAD_VERIFY_SKIP_LIVE=1"
+    return 0
+  fi
+
+  local live
+  live="$(find_live_lucy_container)"
+  if [[ -z "${live}" ]]; then
+    fail "AC-3/AC-12 live lucy container is running (set LUCY_RELOAD_VERIFY_CONTAINER or start demo)"
+    return 0
+  fi
+  echo "  using live container ${live}"
+
+  local health_url="${LUCY_RELOAD_VERIFY_HEALTH_URL:-http://127.0.0.1:${LUCY_DEMO_WEBUI_HOST_PORT:-55176}/api/health}"
+  if curl -fsS -m 5 "${health_url}" >/dev/null 2>&1; then
+    pass "AC-12 live /api/health is 200 before reload"
+  else
+    fail "AC-12 live /api/health is 200 before reload (${health_url})"
+    return 0
+  fi
+
+  # Lucy WebUI + Proxy share one node process (npm run start → server/index.ts).
+  # slim images may lack pgrep; read /proc instead.
+  local lucy_pid_before
+  lucy_pid_before="$(docker exec "${live}" node -e '
+const fs = require("fs");
+const pids = fs.readdirSync("/proc").filter((n) => /^\d+$/.test(n));
+let best = "";
+for (const pid of pids) {
+  let cmd = "";
+  try { cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8"); } catch { continue; }
+  if (cmd.includes("server/index.ts") || cmd.includes("tsx")) {
+    best = pid; // last match is fine; typically one Lucy process
+  }
+}
+process.stdout.write(best);
+' 2>/dev/null || true)"
+  local ktx_pid_before
+  ktx_pid_before="$(docker exec "${live}" sh -c 'cat /data/lucy/.ktx-ui/ktx.pid 2>/dev/null || true' | tr -d '[:space:]')"
+  if [[ ! "${lucy_pid_before}" =~ ^[0-9]+$ ]]; then
+    fail "AC-3 live WebUI/Proxy pid is observable before reload"
+    return 0
+  fi
+  if [[ ! "${ktx_pid_before}" =~ ^[0-9]+$ ]]; then
+    fail "AC-12 live KTX pid is observable before reload"
+    return 0
+  fi
+  pass "AC-3 live WebUI/Proxy pid observed (${lucy_pid_before}); KTX pid ${ktx_pid_before}"
+
+  local request_id="live-reload-$$"
+  local digest
+  digest="$(container_sha256 "${live}" /data/lucy/ktx.yaml)"
+  docker exec "${live}" node -e '
+const fs = require("fs");
+const [id, digest] = process.argv.slice(1);
+const payload = JSON.stringify({
+  requestId: id,
+  requestedDigest: digest,
+  requestedAt: new Date().toISOString()
+}) + "\n";
+const tmp = "/data/lucy/.ktx-ui/ktx-reload.request.tmp";
+const dest = "/data/lucy/.ktx-ui/ktx-reload.request";
+fs.writeFileSync(tmp, payload);
+fs.renameSync(tmp, dest);
+' "${request_id}" "${digest}"
+
+  # Health must stay reachable during the reload window (Spec §10.1).
+  local health_ok=1
+  local i=0
+  while [[ "${i}" -lt 30 ]]; do
+    if ! curl -fsS -m 2 "${health_url}" >/dev/null 2>&1; then
+      health_ok=0
+      break
+    fi
+    if docker exec "${live}" test -f /data/lucy/.ktx-ui/ktx-reload.result >/dev/null 2>&1; then
+      local rid
+      rid="$(read_container_json_field "${live}" /data/lucy/.ktx-ui/ktx-reload.result requestId)"
+      if [[ "${rid}" == "${request_id}" ]]; then break; fi
+    fi
+    i=$((i + 1))
+    sleep 0.5
+  done
+  if [[ "${health_ok}" -eq 1 ]]; then
+    pass "AC-12 /api/health stays 200 during the reload window"
+  else
+    fail "AC-12 /api/health stays 200 during the reload window"
+  fi
+
+  if wait_container_file "${live}" /data/lucy/.ktx-ui/ktx-reload.result 40; then
+    local live_status
+    live_status="$(read_container_json_field "${live}" /data/lucy/.ktx-ui/ktx-reload.result status)"
+    local live_rid
+    live_rid="$(read_container_json_field "${live}" /data/lucy/.ktx-ui/ktx-reload.result requestId)"
+    if [[ "${live_rid}" == "${request_id}" && "${live_status}" == "succeeded" ]]; then
+      pass "AC-12 live reload receipt succeeded"
+    else
+      fail "AC-12 live reload receipt succeeded (requestId=${live_rid} status=${live_status})"
+    fi
+  else
+    fail "AC-12 live reload receipt is written"
+  fi
+
+  local lucy_pid_after
+  lucy_pid_after="$(docker exec "${live}" node -e '
+const fs = require("fs");
+const pids = fs.readdirSync("/proc").filter((n) => /^\d+$/.test(n));
+let best = "";
+for (const pid of pids) {
+  let cmd = "";
+  try { cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8"); } catch { continue; }
+  if (cmd.includes("server/index.ts") || cmd.includes("tsx")) {
+    best = pid;
+  }
+}
+process.stdout.write(best);
+' 2>/dev/null || true)"
+  local ktx_pid_after
+  ktx_pid_after="$(docker exec "${live}" sh -c 'cat /data/lucy/.ktx-ui/ktx.pid 2>/dev/null || true' | tr -d '[:space:]')"
+  if [[ "${lucy_pid_after}" == "${lucy_pid_before}" ]]; then
+    pass "AC-3 WebUI/Proxy PID unchanged across reload (${lucy_pid_before})"
+  else
+    fail "AC-3 WebUI/Proxy PID unchanged across reload (${lucy_pid_before} → ${lucy_pid_after})"
+  fi
+  if [[ -n "${ktx_pid_after}" && "${ktx_pid_after}" != "${ktx_pid_before}" ]]; then
+    pass "AC-1 live KTX daemon PID changed (${ktx_pid_before} → ${ktx_pid_after})"
+  else
+    fail "AC-1 live KTX daemon PID changed (${ktx_pid_before} → ${ktx_pid_after})"
+  fi
+}
+
 run_container() {
   echo "== Spec 191 reload lifecycle — container mode =="
   local image="${LUCY_RELOAD_VERIFY_IMAGE:-}"
@@ -373,11 +784,16 @@ run_container() {
     echo "docker is not available on this host" >&2
     return 2
   fi
+  if ! docker image inspect "${image}" >/dev/null 2>&1; then
+    echo "image not found: ${image}" >&2
+    return 2
+  fi
   echo "using image ${image}"
-  echo "NOT RUN: container mode has not executed the Step 8 checks" >&2
-  echo "         (first-start failure, spontaneous exit, SIGTERM, exit code," >&2
-  echo "         no leftover process). AC-12 stays open." >&2
-  return 0
+  trap cleanup_container EXIT
+  run_container_phase_a
+  run_container_phase_b
+  cleanup_container
+  trap - EXIT
 }
 
 if [[ "${MODE}" == "container" ]]; then
