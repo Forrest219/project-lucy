@@ -36,7 +36,8 @@
     "pretest:e2e": "npm run e2e:selector-contract",
     "verify:gate": "tsx ../scripts/smoke/verify-202608-access-governance-gate.mjs",
     "verify:test": "tsx --test ../scripts/smoke/verify-202608-access-governance-gate.test.mjs",
-    "perf:entry": "tsx scripts/entry-performance.mts"
+    "perf:entry": "tsx scripts/entry-performance.mts",
+    "perf:release-baseline": "tsx scripts/release-perf-baseline.mts"
   },
   "keywords": [],
   "author": "",
@@ -56,7 +57,7 @@
     "gray-matter": "^4.0.3",
     "jose": "6.2.13",
     "lucide-react": "^1.28.0",
-    "mysql2": "3.22.6",
+    "mysql2": "^3.22.6",
     "nodemailer": "^10.2.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

@@ -401,14 +401,18 @@ describe("AgentList", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument()
     );
-    // roles endpoint must be called with includeTemplates=false
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/api/admin/roles?includeTemplates=false"),
-        expect.anything()
-      );
-    });
+    // REQ-030-034 RPB-W4 — cold Agent list must not prefetch full Roles previews
+    expect(
+      fetchMock.mock.calls.every((call) => !String(call[0]).includes("/api/admin/roles"))
+    ).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some((call) =>
+          String(call[0]).includes("/api/admin/roles?includeTemplates=false")
+        )
+      ).toBe(true);
+    });
 
     const field = await screen.findByTestId("agent-role-field");
     expect(field).not.toHaveTextContent("demo_template");
@@ -439,7 +443,7 @@ describe("AgentList", () => {
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
     fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
     fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
-    fireEvent.click(screen.getByRole("checkbox", { name: "data_engineer" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "data_engineer" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("agent-role-capability")).toHaveTextContent("server_composed_source");
@@ -463,7 +467,7 @@ describe("AgentList", () => {
 
     fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
     fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
-    fireEvent.click(screen.getByRole("checkbox", { name: "analyst" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "analyst" }));
     fireEvent.click(screen.getByRole("button", { name: /下一步：预览配置/ }));
 
     await waitFor(() => {
@@ -490,7 +494,7 @@ describe("AgentList", () => {
     fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
     fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
 
-    const field = screen.getByTestId("agent-role-field");
+    const field = await screen.findByTestId("agent-role-field");
     expect(within(field).queryByRole("combobox")).not.toBeInTheDocument();
     const analyst = within(field).getByRole("checkbox", { name: "analyst" });
     const ops = within(field).getByRole("checkbox", { name: "ops_readonly" });
@@ -521,7 +525,7 @@ describe("AgentList", () => {
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
     fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
     fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
-    fireEvent.click(screen.getByRole("checkbox", { name: "analyst" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "analyst" }));
     fireEvent.click(screen.getByRole("button", { name: /下一步：预览配置/ }));
     expect(await screen.findByText(/\+ id: newagent1/)).toBeInTheDocument();
 
@@ -1118,9 +1122,9 @@ describe("Spec 149 — 绑定运维问数角色的高权限警示（SC-23）", (
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
 
-    fireEvent.change(screen.getByPlaceholderText("例：wangwu"), { target: { value: "hehe" } });
+    fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "hehe" } });
     fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "何老师" } });
-    fireEvent.click(screen.getByRole("checkbox", { name: /lucy_ops_reader/ }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /lucy_ops_reader/ }));
 
     const warning = await screen.findByTestId("agent-ops-evidence-role-warning");
     expect(warning).toHaveTextContent("运维问数角色可查看生成 SQL");

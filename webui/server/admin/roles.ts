@@ -3,12 +3,15 @@ import { randomUUID } from "node:crypto";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
 import {
+  buildAdminPermissionContext,
+  compileRoleForAdmin,
   expandSelectorSourceNames,
   normalizePermissionModelVersion,
   previewRolePermissionsForAdmin,
   absoluteDenyOrUnclassifiedReason,
   resolveRoleIds,
-  type EffectivePermissions
+  type EffectivePermissions,
+  type PerRoleCompilation
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
 // L25-16 — 控制面工具登记表（角色保存路径校验 `allow.ops` 用）。
@@ -252,9 +255,21 @@ function sourceNamesFromPreview(
   preview: Awaited<ReturnType<typeof previewRolePermissionsForAdmin>>
 ): string[] {
   if (!preview.ok) return [];
+  return sourceNamesFromSources(preview.permissions.sources);
+}
+
+/** List-path helper: same name surface as preview, from a shared-context compile. */
+function sourceNamesFromCompilation(compiled: PerRoleCompilation): string[] {
+  if (!compiled.ok || !compiled.sources) return [];
+  return sourceNamesFromSources(compiled.sources);
+}
+
+function sourceNamesFromSources(
+  sources: Array<{ table: string; sourceName?: string }>
+): string[] {
   return [
     ...new Set(
-      preview.permissions.sources.flatMap((source) => {
+      sources.flatMap((source) => {
         const full = source.table;
         const short = full.includes(".") ? full.slice(full.lastIndexOf(".") + 1) : full;
         return [full, short, source.sourceName].filter(
@@ -1008,24 +1023,30 @@ export function registerRoleRoutes(app: FastifyInstance) {
       : [];
     const entries: ResolvedRole[] = [...yamlEntries, ...templateEntries];
 
-    const roles = await Promise.all(
-      entries.map(async (entry) => {
-        const resolved = await previewRolePermissionsForAdmin(
-          entry.id,
-          entry.source === "template" ? { role: entry.role } : undefined
-        );
-        const summary = buildRoleSummary(config, entry);
-        const sourceNames = sourceNamesFromPreview(resolved);
-        return {
-          ...summary,
-          sourceCount: resolved.ok ? resolved.permissions.sources.length : 0,
-          sourceNames,
-          invalid: !resolved.ok,
-          warnings: resolved.ok ? [] : [resolved.reason],
-          configUpdatedAt: entry.source === "yaml" ? configUpdatedAt : null
-        };
-      })
-    );
+    // Spec REQ-030-034 / Spec 174 parity — one AdminPermissionContext (one
+    // source-map build) for the whole list. Detail/dryRun keep fresh preview.
+    const listConfig: YamlAccessConfig = {
+      ...config,
+      roles: {
+        ...(config.roles ?? {}),
+        ...Object.fromEntries(templateEntries.map((entry) => [entry.id, entry.role]))
+      }
+    };
+    const context = await buildAdminPermissionContext(listConfig as Parameters<typeof buildAdminPermissionContext>[0]);
+    const roles = [];
+    for (const entry of entries) {
+      const compiled = await compileRoleForAdmin(entry.id, context);
+      const summary = buildRoleSummary(config, entry);
+      const sourceNames = sourceNamesFromCompilation(compiled);
+      roles.push({
+        ...summary,
+        sourceCount: compiled.ok ? (compiled.sources?.length ?? 0) : 0,
+        sourceNames,
+        invalid: !compiled.ok,
+        warnings: compiled.ok ? [] : [compiled.reason ?? "role_resolution_failed"],
+        configUpdatedAt: entry.source === "yaml" ? configUpdatedAt : null
+      });
+    }
 
     return { ok: true, data: { roles } };
   });

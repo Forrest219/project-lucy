@@ -69,6 +69,9 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run concepts` | content governance（本机） | Concept Registry 一期 CLI：`scan`／`list`／`show`／`set-canonical`／`reject`／`summary`。不进 CI。规范见 [`docs/specs/lucy-20261108-concept-registry-ontology-lite-spec.md`](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) |
 | `npm run concepts:test` | content governance（本机） | Concept Registry 单元／夹具测试（SC-01–SC-17）。不进 CI |
 | `npm run concepts:check-diff` | content governance（本机） | Concept Registry 一期差分白名单（D19／SC-05／SC-08）。可选 `CONCEPTS_DIFF_BASE=<commit>`。不进 CI |
+| `npm --prefix webui run perf:release-baseline -- --tier ci-small --output inbox/perf-baselines/<run>` | release perf（REQ-030-034） | WebUI Roles API＋source-map 计数＋MCP initialize／tools/list／wiki_search＋相对 D6；CI 小夹具。夹具分档见 [`docs/runbooks/release-perf-baseline-fixture-tiers.md`](../runbooks/release-perf-baseline-fixture-tiers.md)。本条通过不表示可上线 |
+| `npm --prefix webui run perf:release-baseline -- --tier release-medium --output inbox/perf-baselines/<run> [--previous <report.json>]` | release perf（发版） | 发版中档夹具＋相对上版；无上版记 `baseline-seed`。正式副本见 `formal-seed` |
+| `npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>` | release perf（正式种子） | 将通过报告晋升到 `inbox/perf-baselines/formal/<ver>-<sha>/` 并更新 `formal/LATEST`（SC-10） |
 
 ### 2.1 Local Node / Native Addon Baseline
 
@@ -85,6 +88,15 @@ npm run smoke:p0:headless-config
 npm run smoke:p0:demo
 npm run smoke:p0:postgres-demo
 npm run smoke:p0:business-eval
+```
+
+Required before claiming **release performance evidence**（REQ-030-034／发版列车 P4-9；本条通过不表示可上线）:
+
+```bash
+npm run perf:release-baseline -- --tier release-medium \
+  --output inbox/perf-baselines/<run> \
+  --previous inbox/perf-baselines/formal/LATEST/report.json
+npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>
 ```
 
 Required before promoting P1 governance capabilities to verified:

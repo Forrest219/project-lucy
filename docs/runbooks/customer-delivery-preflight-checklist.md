@@ -43,6 +43,7 @@ Lucy 2.0 旧开放模式升级每次出包必须同时执行 [2.0 升级交付�
 | **G8** | **K8s 镜像契约** | `bash scripts/gates/g8-image-k8s-contract-gate.sh <tag>` | 与 Helm **解耦**；见镜像 checklist |
 | **G5** | 仓库冒烟 | `npm run smoke:p0:docker` | 全绿（覆盖真实 DuckDB/KTX 查询链路） |
 | **G6** | 交付隔离门禁 | `npm run smoke:p0:delivery-isolation` | 确保客户镜像中不含开发态内部路径 |
+| **G7** | 发版性能基线（REQ-030-034） | `npm run perf:release-baseline -- --tier release-medium --output inbox/perf-baselines/<run> [--previous inbox/perf-baselines/formal/LATEST/report.json]`；通过后 `npm run perf:release-baseline:formal-seed -- --from …` | 绝对闸绿；相对 D6 或 `baseline-seed`；正式副本可引用。**本条通过不表示可上线**；流程勾选见 [`lucy-release-train-workflow.md`](lucy-release-train-workflow.md) P4-9 |
 
 ---
 
@@ -109,6 +110,7 @@ bash scripts/gates/k8s-release-gate.sh --with-cluster \
 - [ ] **作废说明**：若有历史坏包，在 Release Notes 与 README 中明确标注作废原因（如 `20260827-v1 arm64 ELF 作废`）。
 - [ ] **资产完整性**：上传 `*.tar.gz` 与 `*.tar.gz.sha256`，校验下载链接与哈希值。
 - [ ] **手册同步**：更新 `Forrest219/lucy-customer-delivery` 仓库 `main` 分支的文档及指向。
+- [ ] **G7 发版性能基线（REQ-030-034）**：release-medium 已跑；`inbox/perf-baselines/formal/LATEST/report.json` 可被下一候选 `--previous` 引用；未宣称「可上线」。
 
 ---
 

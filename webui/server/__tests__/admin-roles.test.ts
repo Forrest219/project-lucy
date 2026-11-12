@@ -327,6 +327,17 @@ describe("GET /api/admin/roles", () => {
     expect(res.body.data.roles).toEqual([]);
     await app.close();
   });
+
+  it("REQ-030-034: builds the source map once for the whole roles list", async () => {
+    const { readEntryPerfCounters, resetEntryPerfCounters } = await import("../entry-performance-timing.js");
+    const app = buildServer();
+    await app.ready();
+    resetEntryPerfCounters();
+    const res = await request(app.server).get("/api/admin/roles").expect(200);
+    expect(res.body.data.roles.length).toBeGreaterThan(1);
+    expect(readEntryPerfCounters().sourceMapBuilds).toBe(1);
+    await app.close();
+  });
 });
 
 describe("GET /api/admin/roles/:roleId", () => {

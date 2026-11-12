@@ -11,16 +11,23 @@ import { test, type Browser, type BrowserContext, type Page } from "@playwright/
 import { predicatesScript, type PerfExpected } from "./entry-performance-predicates";
 import { FILTER_TRACE_NAMES, observationsInWindow } from "./entry-performance-observations";
 
-type RouteId = "connections" | "catalog" | "overview" | "agents";
+type RouteId = "connections" | "catalog" | "overview" | "agents" | "roles";
 type Expected = PerfExpected;
 
 const ROUTES: Record<RouteId, { path: string; nav: string }> = {
   connections: { path: "/connections", nav: "connections-overview" },
   catalog: { path: "/catalog", nav: "semantic-catalog" },
   overview: { path: "/overview", nav: "overview" },
-  agents: { path: "/admin/agents", nav: "admin-agents" }
+  agents: { path: "/admin/agents", nav: "admin-agents" },
+  roles: { path: "/admin/roles", nav: "admin-roles" }
 };
-const PARTNER: Record<RouteId, RouteId> = { connections: "catalog", catalog: "overview", overview: "agents", agents: "connections" };
+const PARTNER: Record<RouteId, RouteId> = {
+  connections: "catalog",
+  catalog: "overview",
+  overview: "agents",
+  agents: "roles",
+  roles: "connections"
+};
 
 const scenario = process.env.PERF_SCENARIO ?? "";
 const iterations = Number(process.env.PERF_ITERATIONS ?? "30");
@@ -28,7 +35,7 @@ const warmup = Number(process.env.PERF_WARMUP ?? "5");
 const resultsFile = process.env.PERF_RESULTS_FILE ?? "";
 const traceDir = process.env.PERF_TRACE_DIR ?? "";
 const expected = JSON.parse(process.env.PERF_EXPECTED ?? "{}") as Expected;
-const routes = (process.env.PERF_ROUTES ?? "connections,catalog,overview,agents").split(",").filter(Boolean) as RouteId[];
+const routes = (process.env.PERF_ROUTES ?? "connections,catalog,overview,agents,roles").split(",").filter(Boolean) as RouteId[];
 const OBSERVE_AFTER_READY_MS = Number(process.env.PERF_OBSERVE_AFTER_READY_MS ?? "1000");
 const fixtureDir = process.env.PERF_FIXTURE_DIR ?? "";
 const controlUrl = process.env.PERF_CONTROL_URL ?? "";
@@ -88,7 +95,8 @@ const INIT_SCRIPT = `(() => {
     connections: (exp) => P.connectionsReady(document, exp),
     catalog: (exp) => P.catalogReady(document, exp),
     overview: (exp) => P.overviewReady(document, exp),
-    agents: (exp) => P.agentsReady(document, exp)
+    agents: (exp) => P.agentsReady(document, exp),
+    roles: (exp) => P.rolesReady(document, exp)
   };
   perf.filterDone = (exp, term) => P.catalogFilterDone(document, exp, term);
   perf.probesSettled = (ids) => ids.every((id) => {

@@ -40,6 +40,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261113-release-perf-baseline-gate-spec.md](specs/lucy-20261113-release-perf-baseline-gate-spec.md) | **v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）**（P1-13／REQ-030-034）：发版性能基线与相对不回退。本条通过不表示各模块无问题，更不表示可上线。Plan 见 [lucy-20261113-release-perf-baseline-gate-plan.md](plans/lucy-20261113-release-perf-baseline-gate-plan.md)。验收见 [acceptance](reviews/2026-11-13-release-perf-baseline-gate-acceptance.md) |
 | [specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md](specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md) | **v0.1 功能合同已收口（2026-11-11）**：仓库 `.mcp.json` 改挂主面 `/mcp`；SC-01–SC-11 通过（含 CC 全真 `lucy_skill_read`）。本条收口不表示可上线。功能编号无。Plan 见 [lucy-20261111-mcp-client-skill-endpoint-fix-plan.md](plans/lucy-20261111-mcp-client-skill-endpoint-fix-plan.md)。收口见 [closure](reviews/2026-11-11-mcp-client-skill-endpoint-fix-closure.md)。 |
 | [specs/lucy-20261111-catalog-scan-read-path-spec.md](specs/lucy-20261111-catalog-scan-read-path-spec.md) | **v0.2 实施中（2026-11-11）**。外部目录的库内表清单改走 SHOW，并带回每库表数；普通 MySQL 的准备表结构改为一次读取字段。本条收口不表示可上线。功能编号无。Plan 见 [lucy-20261111-catalog-scan-read-path-plan.md](plans/lucy-20261111-catalog-scan-read-path-plan.md) |
 | [specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md](specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) | **v0.5；功能合同层已收口（SC-01–SC-22）**；**本分支概念注册表唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 2026-11-13 结案不做）。本条不表示可上线（P1-11／REQ-030-032） |

@@ -142,7 +142,9 @@
     "concepts": "node scripts/concepts/cli.mjs",
     "concepts:test": "node --test scripts/concepts/__tests__/*.test.mjs",
     "concepts:check-diff": "node scripts/concepts/check-diff-boundary.mjs",
-    "concepts:check-ask-path": "node scripts/concepts/check-ask-path-invariant.mjs"
+    "concepts:check-ask-path": "node scripts/concepts/check-ask-path-invariant.mjs",
+    "perf:release-baseline": "npm --prefix webui run perf:release-baseline --",
+    "perf:release-baseline:formal-seed": "node scripts/release/seed-release-perf-formal.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",

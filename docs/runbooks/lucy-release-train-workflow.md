@@ -247,6 +247,16 @@ gh release create v2.0.0 \
 | P4-6 | 合回 `main`（此时 `main` 才前进，§1.2） | 走 PR，必需检查绿 |
 | P4-7 | 在 `main` 的发版提交上打 `v<版本>` tag，推送 | tag 保护已开 |
 | P4-8 | CI 从 tag 触发全量发版门禁 | §4 门禁矩阵 |
+| P4-9 | **发版性能基线（REQ-030-034）**：跑 release-medium；相对上一正式基线按 D6；通过后写入 formal 副本 | 见下节勾选；本条通过不表示可上线 |
+
+#### P4-9 发版性能基线勾选（REQ-030-034／SC-11）
+
+未跑或相对失败且无接受记录 → **不得宣称性能取证通过**。夹具分档见 [`release-perf-baseline-fixture-tiers.md`](release-perf-baseline-fixture-tiers.md)。
+
+- [ ] `npm run perf:release-baseline -- --tier release-medium --output inbox/perf-baselines/<run> --previous inbox/perf-baselines/formal/LATEST/report.json`（无 LATEST 时省略 `--previous`，报告须为 `baseline-seed`）
+- [ ] 报告 `status` 为 `pass` 或首次 `baseline-seed`（绝对闸全绿）；相对失败须带 `--accepted-regression` 与书面接受人
+- [ ] 正式副本：`npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>`（写入 `inbox/perf-baselines/formal/<lucyVersion>-<gitShaShort>/` 并更新 `formal/LATEST`）
+- [ ] 报告不含 Token／密码／客户 DSN（SC-15）
 
 **候选与放行分离**（`docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md` §8.3）：
 
@@ -350,6 +360,12 @@ npm run lint:version && npm run lint:version:test   # 版本投影
 npm run lint:spec                                    # 路由 ↔ 文档
 npm run gate:k8s-static                              # Helm 渲染 + 负例
 actionlint .github/workflows/lucy-release.yml         # 工作流文件可加载
+
+# 发版性能取证（REQ-030-034；P4-9）
+npm run perf:release-baseline -- --tier release-medium \
+  --output inbox/perf-baselines/<run> \
+  --previous inbox/perf-baselines/formal/LATEST/report.json
+npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>
 
 # 合流
 git checkout main && git pull --ff-only

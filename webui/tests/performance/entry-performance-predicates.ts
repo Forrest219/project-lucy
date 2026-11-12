@@ -13,6 +13,8 @@ export type PerfExpected = {
   agents: number;
   connectionIds: string[];
   agentIds: string[];
+  /** Fixture YAML role ids that must appear on the Roles list (REQ-030-034 RPB-W2). */
+  roleIds?: string[];
   enabledTableNames: string[];
   connectionMetricValues: string[];
   schemaCount: number;
@@ -111,9 +113,26 @@ export function agentsReady(doc: Document, exp: PerfExpected): boolean {
   return true;
 }
 
+/** REQ-030-034 RPB-W2 — Roles list primary-ready: real rows + search/filter usable. */
+export function rolesReady(doc: Document, exp: PerfExpected): boolean {
+  if (doc.querySelector('[data-testid="async-region-pending"]')) return false;
+  if (!doc.querySelector('[data-testid="role-list-table"]')) return false;
+  const rows = Array.from(doc.querySelectorAll('[data-testid^="role-row-"]'))
+    .filter((n) => (n.getAttribute("data-testid") || "").indexOf("role-row-index-") !== 0);
+  if (rows.length === 0) return false;
+  for (const id of exp.roleIds ?? []) {
+    if (!doc.querySelector(`[data-testid="role-row-${id}"]`)) return false;
+  }
+  const search = doc.querySelector('input[aria-label="搜索 role"]') as HTMLInputElement | null;
+  if (!search || search.disabled) return false;
+  const sourceFilter = doc.querySelector('select[aria-label="筛选角色范围"]') as HTMLSelectElement | null;
+  if (!sourceFilter || sourceFilter.disabled) return false;
+  return true;
+}
+
 /** In-page source for the init script: `__lucyPredicates.<name>(document, exp[, arg])`. */
 export function predicatesScript(): string {
-  const fns = { connectionsReady, catalogReady, catalogFilterDone, overviewReady, agentsReady };
+  const fns = { connectionsReady, catalogReady, catalogFilterDone, overviewReady, agentsReady, rolesReady };
   const body = Object.entries(fns).map(([name, fn]) => `${JSON.stringify(name)}: (${fn.toString()})`).join(",\n");
   return `{\n${body}\n}`;
 }

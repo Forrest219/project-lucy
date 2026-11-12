@@ -321,7 +321,17 @@ function LastSeen({
   );
 }
 
-function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: () => void; onCreated: (id: string) => void }) {
+function NewAgentModal({
+  roles,
+  rolesLoading = false,
+  onClose,
+  onCreated
+}: {
+  roles: Role[];
+  rolesLoading?: boolean;
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
   const formalRoles = roles.filter((item) => item.source !== "template");
   const [id, setId] = useState("");
   const [name, setName] = useState("");
@@ -403,18 +413,24 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
                 <span className="text-sm font-medium">备注</span>
                 <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
               </label>
-              <AgentRoleField
-                roles={formalRoles}
-                selected={selectedRoles}
-                onChange={setSelectedRoles}
-                required
-                header={
-                  <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
-                    管理角色 →
-                  </Link>
-                }
-              />
-              {formalRoles.length === 0 && (
+              {rolesLoading ? (
+                <span className="text-xs text-fg-muted" data-testid="agent-roles-loading">
+                  正在加载角色…
+                </span>
+              ) : (
+                <AgentRoleField
+                  roles={formalRoles}
+                  selected={selectedRoles}
+                  onChange={setSelectedRoles}
+                  required
+                  header={
+                    <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
+                      管理角色 →
+                    </Link>
+                  }
+                />
+              )}
+              {!rolesLoading && formalRoles.length === 0 && (
                 <span className="text-xs text-warning-strong">
                   还没有可用角色。请先创建角色。
                   <Link to="/admin/roles/new" className="ml-2 pl-btn pl-btn--secondary text-xs">
@@ -495,10 +511,14 @@ export function AgentList() {
     setSearchParams(nextParams, { replace: true });
   }
   const { data, error } = agentsQuery;
-  const { data: rolesData } = useQuery({
+  // REQ-030-034 RPB-W4 — do not pull full Roles permission previews on cold entry;
+  // New Agent modal is the only consumer on this page.
+  const { data: rolesData, isPending: rolesPending, isFetching: rolesFetching } = useQuery({
     queryKey: ["admin", "roles", { includeTemplates: false }],
-    queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false")
+    queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false"),
+    enabled: showNew
   });
+  const rolesLoading = showNew && (rolesPending || rolesFetching) && !rolesData;
 
   const agents = data?.agents ?? [];
   const summary = data?.summary ?? summarizeAgents(agents);
@@ -924,6 +944,7 @@ export function AgentList() {
       {showNew && (
         <NewAgentModal
           roles={rolesData?.roles ?? []}
+          rolesLoading={rolesLoading}
           onClose={() => setShowNew(false)}
           onCreated={(id) => {
             setShowNew(false);
