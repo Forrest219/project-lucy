@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "description": "Lucy WebUI E2E 变更影响映射。维护规则：路由/组件/API 改动 → 必须更新对应映射；CI 通过 git diff 自动计算 L2 准入集合。v0.5.0（2026-11-02）：作废 E2E-NAV-01/02/03 抽样，从映射中移除；菜单壳层改由 e2e:release-ux 覆盖，不进入 PR impacted。catalog-row-related-wiki-badge 与 table-editor-related-wiki-card 改挂 E2E-SEM-01。v0.4.0（2026-10-27）：新增 MCP Runtime 执行层重载映射（Spec 191 / E2E-MCP-01）。",
-  "version": "0.5.0",
-  "lastUpdated": "2026-11-02",
+  "description": "Lucy WebUI E2E 变更影响映射。维护规则：路由/组件/API 改动 → 必须更新对应映射；CI 通过 git diff 自动计算 L2 准入集合。v0.6.0（2026-11-12）：登记 E2E-CON-07 / E2E-MCP-02（新建连接后执行层必须生效；写路径与 Spec 191 同协议）。v0.5.0（2026-11-02）：作废 E2E-NAV-01/02/03 抽样。v0.4.0（2026-10-27）：E2E-MCP-01。",
+  "version": "0.6.0",
+  "lastUpdated": "2026-11-12",
   "route": {
     "/onboarding": ["E2E-CON-01"],
-    "/connections": ["E2E-CON-01", "E2E-CON-02", "E2E-CON-03", "E2E-CON-04", "E2E-CON-05", "E2E-CON-06", "E2E-SEC-01"],
+    "/connections": ["E2E-CON-01", "E2E-CON-02", "E2E-CON-03", "E2E-CON-04", "E2E-CON-05", "E2E-CON-06", "E2E-CON-07", "E2E-SEC-01"],
     "/connections/whitelist": ["E2E-WHL-01", "E2E-WHL-02", "E2E-CON-03"],
     "/connections/test": ["E2E-CON-01"],
     "/": ["E2E-SEM-01"],
@@ -28,7 +28,7 @@
     "/eval/cases": ["spec:admin-data-grid-consistency"],
     "/eval/monitor": ["spec:admin-data-grid-consistency"],
     "/skills": ["spec:business-skill-151"],
-    "/admin/mcp-playground": ["E2E-MCP-01"],
+    "/admin/mcp-playground": ["E2E-MCP-01", "E2E-MCP-02"],
     "/help": ["spec:entry-performance-behavior"]
   },
   "component": {
@@ -37,7 +37,8 @@
     "CatalogAssetUploadDrawer": ["E2E-CON-03", "E2E-CON-04", "E2E-SEC-01"],
     "CatalogAssetValidationPanel": ["E2E-CON-03", "E2E-CON-04"],
     "CatalogReloadButton": ["E2E-CON-05"],
-    "ConnectionOverview": ["E2E-CON-01", "E2E-CON-02", "E2E-CON-03", "E2E-CON-04", "E2E-CON-05", "E2E-CON-06"],
+    "ConnectionOverview": ["E2E-CON-01", "E2E-CON-02", "E2E-CON-03", "E2E-CON-04", "E2E-CON-05", "E2E-CON-06", "E2E-CON-07"],
+    "CreateConnectionDrawer": ["E2E-CON-07"],
     "TableWhitelist": ["E2E-WHL-01", "E2E-WHL-02"],
     "ConnectionTest": ["E2E-CON-01"],
     "Catalog": ["E2E-SEM-01"],
@@ -64,12 +65,14 @@
     "SkillList": ["spec:business-skill-151"],
     "Audit": ["spec:admin-data-grid-consistency"],
     "CallMonitor": ["spec:admin-data-grid-consistency"],
-    "McpRuntimeStatusPanel": ["E2E-MCP-01"]
+    "McpRuntimeStatusPanel": ["E2E-MCP-01", "E2E-MCP-02"]
   },
   "api": {
     "GET /api/connections": ["E2E-CON-01", "E2E-CON-06"],
+    "POST /api/connections": ["E2E-CON-07", "E2E-MCP-02"],
     "POST /api/connections/:id/test": ["E2E-CON-01"],
     "POST /api/connections/:id/schemas": ["E2E-CON-02"],
+    "POST /api/admin/mcp-runtime/canary": ["E2E-CON-07", "E2E-MCP-02"],
     "GET /api/connections/:id/schemas": ["E2E-CON-01", "E2E-CON-02", "E2E-CON-05"],
     "POST /api/catalog/assets/validate": ["E2E-CON-03", "E2E-CON-04", "E2E-SEC-01"],
     "POST /api/catalog/assets/upload": ["E2E-CON-03", "E2E-CON-04", "E2E-SEC-01"],
@@ -87,8 +90,8 @@
     "GET /api/semantic-assets/releases": ["E2E-PUB-06"],
     "GET /api/semantic-assets/releases/:id/status": ["E2E-PUB-04", "E2E-PUB-06"],
     "POST /api/semantic-assets/export": ["E2E-PUB-07", "E2E-SEC-02"],
-    "GET /api/admin/mcp-runtime/status": ["E2E-MCP-01"],
-    "POST /api/admin/mcp-runtime/reload": ["E2E-MCP-01"],
+    "GET /api/admin/mcp-runtime/status": ["E2E-MCP-01", "E2E-CON-07", "E2E-MCP-02"],
+    "POST /api/admin/mcp-runtime/reload": ["E2E-MCP-01", "E2E-MCP-02"],
     "GET /api/wiki": ["E2E-WIKI-01", "E2E-WIKI-05"],
     "GET /api/wiki/:key": ["E2E-WIKI-01", "E2E-WIKI-03", "E2E-WIKI-04"],
     "PUT /api/wiki/:key": ["E2E-WIKI-04"]
@@ -179,10 +182,12 @@
     "wiki-yaml-boundary-hint": ["E2E-WIKI-05"],
     "sl-ref-picker": ["E2E-WIKI-03"],
     "sl-ref-badge-<conn>-<schema>-<table>": ["E2E-WIKI-03"],
-    "mcp-runtime-status-chips": ["E2E-MCP-01"],
-    "mcp-runtime-remediation": ["E2E-MCP-01"],
-    "mcp-runtime-reload-${testConnectionId}": ["E2E-MCP-01"],
-    "mcp-runtime-reload-outcome": ["E2E-MCP-01"],
+    "mcp-runtime-status-chips": ["E2E-MCP-01", "E2E-MCP-02"],
+    "mcp-runtime-remediation": ["E2E-MCP-01", "E2E-MCP-02"],
+    "mcp-runtime-reload-${testConnectionId}": ["E2E-MCP-01", "E2E-MCP-02"],
+    "mcp-runtime-reload-outcome": ["E2E-MCP-01", "E2E-MCP-02"],
+    "create-connection-btn": ["E2E-CON-07"],
+    "create-connection-success": ["E2E-CON-07"],
     "skill-role-none": ["spec:business-skill-151 (negative: must be absent)"],
     "role-skill-access-summary": ["spec:role-permission-structure (negative: must be absent)"]
   },

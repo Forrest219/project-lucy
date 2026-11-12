@@ -1,7 +1,29 @@
 # E2E 用例变更日志
 
 > 维护规则：每次 PR 涉及 E2E 用例 / Selector 契约 / 影响映射 / 术语表，必须在本文件追加一节。
-> CI 守门：PR 模板勾选"E2E 变更"时，要求本文件有本次 PR 对应的小节；否则阻断合并。
+> CI 守门：PR 模板勾选"E2E 变更"时，要求本文件有本次 PR 对应的章节；否则阻断合并。
+
+---
+
+## 2026-11-12 · 登记新建连接执行层生效门禁（缺陷复现后补网）
+
+### 新增
+- `E2E-CON-07`（P0 / L3 Live·Container）：新建连接后执行层必须加载新 `connectionId`；禁止仅 WebUI 落盘伪生效；禁止依赖 `docker restart`。
+- `E2E-MCP-02`（P0 / L3 Live·Container）：配置写路径自动重载与手动「重载执行层」必须走同一 Spec 191 supervisor 协议。
+- 计划内单测 ID：`UT-RELOAD-01` / `UT-RELOAD-02` / `UT-CONN-01`；容器门禁 `VERIFY-191-C01`（见计划 §3）。
+- 优化／修复计划：`docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md`。
+
+### 修改
+- `docs/qa/lucy-webui-e2e-test-suite.md` → v0.3：§7 影响映射示例、§10 矩阵、§11.5–11.7 详细用例与漏检说明；明确 `E2E-MCP-01` 不得代替进程级生效取证。
+- `docs/qa/impact-map.json` → `0.6.0`：挂接 `/connections`、`CreateConnectionDrawer`、`POST /api/connections`、`mcp-runtime/*`、`create-connection-*` selector。
+
+### 范围声明
+- **本轮只登记用例与计划，不改运行代码、不落地自动化脚本。** 修复实现须另获开发授权后按计划 Task 1–6 执行；关闭缺陷前必须有 `E2E-CON-07`／`VERIFY-191-C01` 进程级绿证。
+
+### 缺陷摘要（2026-11-12 本机 demo）
+- 症状：新建连接后 Agent／MCP 看不到新连接，需重启 KTX。
+- 日志：`[ktx-mcp-reload] failed … Port 7878 is already in use`。
+- 状态：`execution.activation=reload_required`。根因：写路径旁路 `ktx mcp stop/start` 与 `supervise_ktx` 抢端口。
 
 ---
 

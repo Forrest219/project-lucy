@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy WebUI E2E 真实浏览器测试套件 |
 | 文档类型 | QA / E2E / 活文档 |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-07-31（v0.1 评审回炉 → v0.2 落地版） |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-07-31（v0.1 评审回炉 → v0.2 落地版）；2026-11-12 v0.3 补登记新建连接执行层生效门禁 |
 | 落位 | `docs/qa/`（项目正式 spec，与 `inbox/` 临时区分离） |
 | 适用范围 | Lucy WebUI 在 `http://127.0.0.1:55176` 下的端到端交互；覆盖 `/connections`、`/connections/whitelist`、`/connections/test`、`/`、`/sources/:conn/:schema/:table`、`/joins/:conn/:schema/:table`、`/wiki`、`/publish/workbench`、`/publish/history`（含旧 `/review` 重定向） |
 | 测试层级 | **真实浏览器 E2E**（Playwright Chromium 主跑 / WebKit 回归 / Firefox 次回归），不替代也不允许改写为 Vitest/单元/Mock 断言 |
@@ -391,7 +391,7 @@ export async function assertProfessionalTermsProtected(page: Page) {
   "route": {
     "/publish/workbench":  ["E2E-PUB-02", "E2E-PUB-03", "E2E-PUB-04", "E2E-PUB-05", "E2E-PUB-07"],
     "/publish/history":    ["E2E-PUB-06", "E2E-PUB-07"],
-    "/connections":        ["E2E-CON-01", "E2E-CON-02", "E2E-CON-03", "E2E-CON-04", "E2E-CON-05", "E2E-CON-06"],
+    "/connections":        ["E2E-CON-01", "E2E-CON-02", "E2E-CON-03", "E2E-CON-04", "E2E-CON-05", "E2E-CON-06", "E2E-CON-07"],
     "/connections/whitelist": ["E2E-WHL-01", "E2E-WHL-02"],
     "/wiki":               ["E2E-WIKI-01", "E2E-WIKI-02", "E2E-WIKI-03", "E2E-WIKI-04", "E2E-WIKI-05"],
     "/sources/:conn/:schema/:table": ["E2E-SEM-01", "E2E-SEM-02", "E2E-SEM-03", "E2E-SEM-04"],
@@ -410,11 +410,13 @@ export async function assertProfessionalTermsProtected(page: Page) {
     "PublishHistory":        ["E2E-PUB-06"],
     "SemanticAssetPublishDrawer": ["E2E-PUB-01", "E2E-PUB-04"],
     "TableEditor":           ["E2E-SEM-01", "E2E-SEM-02", "E2E-SEM-03", "E2E-SEM-04"],
-    "McpRuntimeStatusPanel": ["E2E-MCP-01"]
+    "McpRuntimeStatusPanel": ["E2E-MCP-01", "E2E-MCP-02"],
+    "CreateConnectionDrawer": ["E2E-CON-07"]
   },
   "api": {
     "POST /api/catalog/assets/upload":   ["E2E-CON-03", "E2E-CON-04", "E2E-SEC-01"],
     "POST /api/catalog/reload":          ["E2E-CON-05"],
+    "POST /api/connections":             ["E2E-CON-07", "E2E-MCP-02"],
     "PUT /api/sources/:conn/:schema/:table": ["E2E-SEM-01", "E2E-SEM-02", "E2E-SEM-03"],
     "POST /api/validate-changed":         ["E2E-PUB-04"],
     "POST /api/semantic-assets/publish": ["E2E-PUB-01", "E2E-PUB-04"],
@@ -423,14 +425,17 @@ export async function assertProfessionalTermsProtected(page: Page) {
     "GET /api/semantic-assets/releases/:id/status": ["E2E-PUB-04", "E2E-PUB-06"],
     "POST /api/semantic-assets/export":  ["E2E-PUB-07", "E2E-SEC-02"],
     "PUT /api/wiki/:key":                ["E2E-WIKI-04"],
-    "GET /api/admin/mcp-runtime/status": ["E2E-MCP-01"],
-    "POST /api/admin/mcp-runtime/reload": ["E2E-MCP-01"]
+    "GET /api/admin/mcp-runtime/status": ["E2E-MCP-01", "E2E-CON-07", "E2E-MCP-02"],
+    "POST /api/admin/mcp-runtime/reload": ["E2E-MCP-01", "E2E-MCP-02"],
+    "POST /api/admin/mcp-runtime/canary": ["E2E-CON-07", "E2E-MCP-02"]
   },
   "selectorTestId": {
-    "mcp-runtime-status-chips": ["E2E-MCP-01"],
-    "mcp-runtime-remediation": ["E2E-MCP-01"],
-    "mcp-runtime-reload-${testConnectionId}": ["E2E-MCP-01"],
-    "mcp-runtime-reload-outcome": ["E2E-MCP-01"]
+    "mcp-runtime-status-chips": ["E2E-MCP-01", "E2E-MCP-02"],
+    "mcp-runtime-remediation": ["E2E-MCP-01", "E2E-MCP-02"],
+    "mcp-runtime-reload-${testConnectionId}": ["E2E-MCP-01", "E2E-MCP-02"],
+    "mcp-runtime-reload-outcome": ["E2E-MCP-01", "E2E-MCP-02"],
+    "create-connection-btn": ["E2E-CON-07"],
+    "create-connection-success": ["E2E-CON-07"]
   }
 }
 ```
@@ -576,7 +581,9 @@ E2E-<模块>-<序号>[-<变体>]
 | E2E-RES-02 | 1280×800 Wiki 阅读态纵向堆叠 | P1 | L3 | RES |
 | E2E-SEC-01 | 上传时前端无法写任意路径 | P0 | L1 | SEC |
 | E2E-SEC-02 | `inline` 凭据不被 `导出当前快照` 包含 | P0 | L2 | SEC |
+| E2E-CON-07 | 新建连接后执行层必须加载新连接（禁止仅落盘伪生效） | P0 | L3 Live/Container | CON |
 | E2E-MCP-01 | MCP Runtime 执行层状态面：三段事实分开呈现、重载入口 owner-only、拒绝不伪报成功 | P0 | L2 | MCP |
+| E2E-MCP-02 | 配置写路径自动重载与手动「重载执行层」同 Spec 191 协议 | P0 | L3 Live/Container | MCP |
 
 **L1 PR Smoke**（按矩阵中 `准入层=L1` 行筛选）：E2E-PUB-02 / E2E-CON-01 / E2E-CON-03 / E2E-WIKI-01 / E2E-WIKI-03 / E2E-PUB-04 / E2E-SEC-01。`E2E-NAV-01` 已从这组移除。
 
@@ -687,11 +694,67 @@ E2E-<模块>-<序号>[-<变体>]
 
 **断言与侧面验证**：
 - §0 Forbidden Terms 0 命中（`assertNoForbiddenTerms`）
-- **范围声明**：本用例只覆盖浏览器契约层。成功重载路径（daemon 旧 PID 退出、新 PID 就绪、连接级验证通过）是**进程级事实**，浏览器无法断言——E2E fixture 跑 `npm run dev` 而非容器入口脚本，本就没有 KTX supervisor 与重载通道能力文件。该路径由 `scripts/verify/verify-ktx-reload-lifecycle.sh --container` 负责（Spec 191 AC-12）。
+- **范围声明**：本用例只覆盖浏览器契约层。成功重载路径（daemon 旧 PID 退出、新 PID 就绪、连接级验证通过）是**进程级事实**，浏览器无法断言——E2E fixture 跑 `npm run dev` 而非容器入口脚本，本就没有 KTX supervisor 与重载通道能力文件。该路径由 `E2E-CON-07` / `E2E-MCP-02` 与 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`（`VERIFY-191-C01`）负责。**不得**用本条绿灯代替「新建连接后执行层已生效」的发布取证。
 
 ### 11.4 L2 / L3 用例索引
 
 完整列表见 §10 矩阵 + `webui/tests/e2e/specs/`。每条 L2 用例在 CI 中由 §7 变更影响映射自动选择是否加入本次 PR 的 L2 跑集。
+
+### 11.5 新建连接 → 执行层生效 `E2E-CON-07`（P0 · 2026-11-12 登记）
+
+**用例 ID 与名称**：`E2E-CON-07 / 新建连接后执行层必须加载新连接（禁止仅落盘伪生效）`
+**优先级 / 准入层**：P0 / **L3 Live 或 Container**（禁止在无 KTX supervisor 的 `npm run dev` fixture 上宣称通过）
+**关联缺陷**：本机 demo 复现（2026-11-12）——创建成功后 `[ktx-mcp-reload] … Port 7878 is already in use`，`activation=reload_required`
+**关联计划**：[`docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md`](../plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md)
+**源码落点（实现时）**：`webui/tests/live-e2e/` 或 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`（`VERIFY-191-C01`）；不得只加 `page.route` stub
+
+**前置条件**：
+- 运行中的 Lucy **容器**（入口脚本 `supervise_ktx` 持有 `7878`，存在有效 `ktx-reload.capability`）
+- Owner 会话可调用 `POST /api/connections` 与 `GET /api/admin/mcp-runtime/status`
+- 准备可达的临时库／Schema，`connectionId` 全局唯一（如 `e2e-conn-reload-<ts>`），测后可删除
+
+**步骤**：
+1. 记录重载前 `GET /api/admin/mcp-runtime/status` 的 `config.ktxYamlDigest` 与执行层 PID／capability 心跳（若可观测）。
+2. WebUI `/connections` → `create-connection-btn` → 填写并确认创建（必要时走「仍要新建连接」端点闸）。
+3. 断言创建 API／成功面：`ktx.yaml` 已含新 id；**不得**在 `executionRuntimeAck=false` 时文案暗示「问数已可用／执行层已加载」。
+4. 在超时（建议 ≤60s，与 Spec 191 一致）内轮询 `GET /api/admin/mcp-runtime/status`：
+   - `execution.activation === "current"`
+   - 新 `connectionId` **不在** `missingConnections`／`unknownConnections`
+   - `verification.state === "verified"`（或项目约定的等价连接级证据）
+5. （推荐）对具备 Agent 权限的会话做 canary／`connection_list`：新连接可见。
+6. 全程**不**执行 `docker restart`／整 Pod 重启。
+
+**失败判定（必须红）**：
+- 仅 WebUI 列表出现新卡片，但执行层仍 `reload_required`／新 id 在 unknown 列表
+- 日志出现 `Port 7878 is already in use` 且 API 仍报创建「完全成功」而无执行层失败字段
+- 依赖人工重启容器才使 Agent 看见新连接
+
+**配套单测（实现计划 §3）**：`UT-RELOAD-01`、`UT-RELOAD-02`、`UT-CONN-01` —— 登记于计划正文；合入修复 PR 时必须一并落地。
+
+### 11.6 写路径与手动重载同协议 `E2E-MCP-02`（P0 · 2026-11-12 登记）
+
+**用例 ID 与名称**：`E2E-MCP-02 / 配置写路径自动重载与手动「重载执行层」同 Spec 191 协议`
+**优先级 / 准入层**：P0 / L3 Live 或 Container
+**涉及 Selector**：`mcp-runtime-reload-*` / `mcp-runtime-reload-outcome` / `mcp-runtime-remediation`
+**前置**：同 `E2E-CON-07`（必须有 supervisor）
+
+**步骤**：
+1. 制造或沿用一次「配置已写、执行层未加载」状态（创建连接后若自动重载失败，或测试钩子写入 pending digest）。
+2. 断言 remediation 使用「尚未加载／重载执行层」口径，禁止「请重启 Pod」作为唯一推荐（除非 supervisor 不可用且已标明）。
+3. Owner 点击「重载执行层」→ 等待 outcome：`reloadStatus` 与 `configVerification` **分字段**呈现。
+4. 成功后 `activation=current`；失败如实 `failed`，可再次重试；响应不得合并为单一模糊 `ok`。
+5. 与写路径自动触发使用同一 request／receipt 协议（可用 requestId／日志／capability state 交叉证明）。
+
+### 11.7 为何 `E2E-MCP-01` 挡不住本缺陷（回归说明）
+
+| 门禁 | 为何漏检 |
+|---|---|
+| `E2E-MCP-01` | stub 状态 + open 模式 owner 拒绝；不创建连接、不启动 supervisor |
+| `E2E-CON-01…06` | 无新建连接后的执行层断言 |
+| `api.create-connection.test.ts` | mock reload 成功却长期期望 `executionRuntimeAck=false` |
+| `verify-ktx-reload-lifecycle.sh --container` | AC-12 仍 reserved，未成硬门禁 |
+
+因此 v0.3 强制增加 `E2E-CON-07` / `E2E-MCP-02` / `VERIFY-191-C01`，修复 PR 未带进程级证据不得关闭本缺陷。
 
 ---
 
