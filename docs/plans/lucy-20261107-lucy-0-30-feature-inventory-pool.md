@@ -3,8 +3,8 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **0.30 完整功能清单与跟进池**。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.21 / 2026-11-11 |
-| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**P0 立项已批准**（原 P0-1…P0-7＋P0-A）。**P1-12／REQ-030-033**：问询预算默认阈值放宽 **已实现（本分支）**；**不挡**原 P0；≠ 可上线。**P1-11／REQ-030-032**：**v0.5；功能合同层已收口（SC-01–SC-22）；≠ 可上线**。**P1-10** 一期 CLI 已落地、待效果门。**终稿确权**＝Codex CLI 终审，或委托人明示确权（§2.2）。未授权条目禁止改运行代码 |
+| 版本 / 日期 | v0.22 / 2026-11-13 |
+| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**P0 立项已批准**（原 P0-1…P0-7＋P0-A）。**P1-12／REQ-030-033**：问询预算默认阈值放宽 **已实现（本分支）**；**不挡**原 P0；≠ 可上线。**P1-11／REQ-030-032**：**v0.5；功能合同层已收口（SC-01–SC-22）；≠ 可上线**。**P1-10**：**委托人结案（2026-11-13）**——本分支不做 CLI／WebUI／效果门跟进；交付只走 P1-11 Ops MCP。**终稿确权**＝Codex CLI 终审，或委托人明示确权（§2.2）。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
 | 事实源分工 | **方向** → [核心方向](lucy-20261107-lucy-0-30-core-direction.md)；**缺口正文与来源** → [需求池](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；**本文件** → 优先级、立项状态、跟进序、agent 遵从规则 |
@@ -14,6 +14,7 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.22 | 2026-11-13 | **P1-10／REQ-030-031 委托人结案**：本分支不做 ontology-lite CLI／WebUI／效果门跟进；产品交付只走 **P1-11 Ops MCP**。镜像 Spec／Plan／需求池／README |
 | v0.21 | 2026-11-11 | **补登记 P1-12／REQ-030-033**（问询预算默认阈值放宽：20／120s → 60／300s；续查仍 1 次）。委托人批准方案二并已实现于本分支（`2032e970`）；**不挡**原 P0；≠ 可上线。§7 覆盖扩至 REQ-030-001–033 |
 | v0.20 | 2026-11-09 | **P0-6／P0-7** Spec／Plan 升 **v0.3-draft**（Cursor 过程对抗，建议包 S／E，**未闭合 O 项**）；**P0-B** 立项开 Spec／Plan **v0.1-draft**（建议包 F）。**均非 R2-F／R4**；冻结落地；未授权实现 |
 | v0.19 | 2026-11-09 | **P1-11／REQ-030-032**：功能合同层收口（SC-01–SC-22 自动化证据）；**≠ 可上线**；不挡原 P0 |
@@ -59,7 +60,7 @@
 |---|---|
 | 批准日 | 2026-11-07 |
 | 批准范围 | 下表 **P0-1…P0-7** 与伴生 **P0-A**；授权进入「澄清 → Spec → Plan」流水线 |
-| 追加入池／跟进立项 | **P0-B**（028）Spec／Plan v0.1-draft 已开，终稿未确权。**P1-8**（029）、**P1-9**（030）仍待立项开 Spec。**P1-10**（031）R2-F＋R4 已闭合；一期 CLI 已落地。**P1-11**（032）功能合同层已收口。**P1-12**（033）问询预算阈值放宽 **已实现（本分支）**；**不挡**原 P0 |
+| 追加入池／跟进立项 | **P0-B**（028）Spec／Plan v0.1-draft 已开，终稿未确权。**P1-8**（029）、**P1-9**（030）仍待立项开 Spec。**P1-10**（031）**委托人结案（2026-11-13）**：本分支不做 CLI／WebUI／效果门；交付只走 P1-11。**P1-11**（032）功能合同层已收口。**P1-12**（033）问询预算阈值放宽 **已实现（本分支）**；**不挡**原 P0 |
 | 明确未授权 | 实现代码、客户出包、上线、把辅线抬成主线；**入池条目不得顺手实现** |
 | 建议实施序 | P0-1 → P0-2∥P0-A → P0-3 → P0-4∥P0-5 → P0-6（含 019／020 最小面）→ P0-7 |
 | 已有先行 Spec | P0-4／P0-5＝S4 已落地（复审 Approve with nits）；P0-A＝REQ-030-012（R2-F＋R4，实现已提交）；P0-6 的 019／020 已有 Spec／Plan（最小面纳入 P0，完整体验见 P1） |
@@ -153,8 +154,8 @@
 | P1-7 | P1 | 行权限模板展开保留 templateRefs | REQ-030-014 | 正确性辅线 | 遗留验收排期；须 PM 批准重开已收口 Spec | [遗留验收 Plan](lucy-20261107-lucy-0-30-deferred-acceptance-execution-plan.md) |
 | P1-8 | P1 | 语义发布 → Eval 门禁（发布后必跑／失败阻断或告警） | REQ-030-029 | 检出闸强化 | **2026-11-08 入池**；待需求澄清与立项开 Spec；**未授权实现**；**不挡**原 P0；依赖 P0-6 日跑／发布跑骨架 | 未开（前身思路见 [2026-08-26 闭环 Plan](2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md)） |
 | P1-9 | P1 | 质量域 safe-log → Eval 候选回流 | REQ-030-030 | 检出／运营 | **2026-11-08 入池**；挂接既有质量域 Spec（未落地）；待澄清与 0.30 跟进对齐；**未授权实现**；与 P1-5／P1-6 并列质量轴 | 既有 [safe-log-to-quality-eval Spec](../specs/lucy-20261014-safe-log-to-quality-eval-spec.md)（功能合同未收口）· [WO](wo-20261014-safe-log-to-quality-eval.md) |
-| P1-10 | P1 | 轻量概念注册表（ontology-lite；CLI 先） | REQ-030-031 | 约束深化／内容治理 | **v0.6；R2-F＋R4 已闭合（2026-11-09）；一期 CLI 已落地；待效果门**；长期通道见 **P1-11**；**不挡**原 P0。本条不表示可上线 | [Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) · [Plan](lucy-20261108-concept-registry-ontology-lite-plan.md) · [评审](../reviews/2026-11-09-concept-registry-ontology-lite-codex-review.md) |
-| P1-11 | P1 | 概念注册表接入 Lucy Ops 控制面 | REQ-030-032 | 配置运维／控制面 | **v0.5；R2-F＋R3＋R4 已闭合；功能合同层已收口（SC-01–SC-22）；本条不表示可上线**；本版 Ops／下版 WebUI（D2b）；**不挡**原 P0。本条不表示可上线 | [Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) · [Plan](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) · [评审](../reviews/2026-11-09-concept-registry-lucy-ops-control-plane-codex-review.md) |
+| P1-10 | P1 | 轻量概念注册表（ontology-lite；上游合同） | REQ-030-031 | 约束深化／内容治理 | **委托人结案（2026-11-13）**：本分支不做 CLI／WebUI／效果门跟进；交付只走 **P1-11 Ops MCP**；保留上游数据／语义合同。**不挡**原 P0。本条不表示可上线 | [Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) · [Plan](lucy-20261108-concept-registry-ontology-lite-plan.md) · [评审](../reviews/2026-11-09-concept-registry-ontology-lite-codex-review.md) |
+| P1-11 | P1 | 概念注册表接入 Lucy Ops 控制面 | REQ-030-032 | 配置运维／控制面 | **v0.5；功能合同层已收口（SC-01–SC-22）**；**本分支概念注册表唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 已结案不做）；本版 Ops／下版 WebUI（D2b）；**不挡**原 P0。本条不表示可上线 | [Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) · [Plan](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) · [评审](../reviews/2026-11-09-concept-registry-lucy-ops-control-plane-codex-review.md) |
 | P1-12 | P1 | 问询预算默认阈值放宽（60 次／300s） | REQ-030-033 | 体验修调 | **v1.0；委托人批准方案二并已实现（2026-11-11，本分支）**；续查仍 1 次；**不挡**原 P0；≠ 可上线／客户交付 | [Spec](../specs/lucy-20261111-question-budget-threshold-relax-spec.md)（修订 Spec 162 §7.2 默认数字） |
 | P2-1 | P2 辅线 | 发布工作台分文件勾选发布 | REQ-030-001 | UX 辅线 | 草案齐；批次 R1 已修订；**终稿未确权**；**不定义 0.30 成败** | [Spec](../specs/lucy-20261107-publish-workbench-per-file-selection-spec.md) · [Plan](lucy-20261107-publish-workbench-per-file-selection-plan.md) |
 | P2-2 | P2 辅线 | 帮助中心体验 | REQ-030-002 | UX 辅线 | Deferred／开线对齐既有 Spec | 既有 Spec |
@@ -239,18 +240,18 @@
 
 ### P1-10｜轻量概念注册表（REQ-030-031）
 
-- **出口（一期）**：从 semantic-layer／Wiki 扫描概念候选与冲突；CLI 可 list／定 canonical／summary／reject；试点「收入／资产」可复核；**WebUI 零变更**；不改问数 MCP 热路径。
-- **关系**：约束闸／内容治理辅线；为人审权威面与冲突发现服务；可反哺 P0-1／P0-2／P0-3，**不替代**它们。**不挡**原 P0 收口。
-- **交付序（一期）**：CLI → 效果门；**长期主通道改由 P1-11（Ops）承接**（2026-11-09 立项修订）。
-- **不做**：形式化知识图谱／OWL；独立指标计算平台；一期 WebUI；机器自动裁定权威。
+- **出口（结案后）**：**本分支无独立交付出口**；保留 Concept／Binding／纯计算上游合同，供 P1-11 复用。
+- **关系**：约束闸／内容治理辅线上游；可反哺 P0-1／P0-2／P0-3，**不替代**它们。**不挡**原 P0 收口。
+- **结案（2026-11-13）**：本分支明确**不做** CLI／WebUI／效果门跟进；产品交付只走 **P1-11 Ops MCP**。
+- **不做**：本分支 CLI 产品面；本分支 WebUI；形式化知识图谱／OWL；独立指标计算平台；机器自动裁定权威。
 
 ### P1-11｜概念注册表接入 Lucy Ops（REQ-030-032）
 
-- **出口**：运维经 `lucy_ops_concept_*` 完成概念 scan／人审写；`allow.ops`＋审计；客户长期不依赖独立 CLI。
+- **出口**：运维经 `lucy_ops_concept_*` 完成概念 scan／人审写；`allow.ops`＋审计；**本分支唯一**概念注册表产品交付面。
 - **关系**：P1-10 数据／语义上游；L25-16 控制面通道；用户模型＝**配置治理**（≠ 问数）。**不挡**原 P0；**不依赖** W-B。
-- **交付序**：效果门（或书面跳过）→ R2-F→R3→R4 → **本版 Ops 检查完毕** → **下一产品版本再评估 WebUI**（友好折衷，D2b）。
+- **交付序**：R2-F→R3→R4 → **本版 Ops 检查完毕** → **下一产品版本再评估 WebUI**（D2b）。P1-10 CLI／效果门已结案不做。
 - **决策**：R2-F／O1＝A／O2＝B／R4 已闭合；**功能合同层已收口（SC-01–SC-22）**；≠ 可上线。
-- **不做（本条）**：本版 WebUI 概念页；问数热路径自动注入；并进 `lucy_ops_reader`；机器自动升权威。
+- **不做（本条）**：本版 WebUI 概念页；问数热路径自动注入；并进 `lucy_ops_reader`；机器自动升权威；不以 P1-10 CLI 作客户交付。
 
 ### P1-12｜问询预算默认阈值放宽（REQ-030-033）
 
@@ -288,7 +289,7 @@
 | [遗留验收执行 Plan](lucy-20261107-lucy-0-30-deferred-acceptance-execution-plan.md) | P2 验收类排期 |
 | [Eval 闭环与变更触发回归（前身）](2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md) | P1-8 相关前身思路 |
 | [Safe-log→质量 Eval Spec](../specs/lucy-20261014-safe-log-to-quality-eval-spec.md) | P1-9 既有 Spec（未落地） |
-| [概念注册表 Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) · [Plan](lucy-20261108-concept-registry-ontology-lite-plan.md) | P1-10／REQ-030-031（一期 CLI 已落地；待效果门） |
+| [概念注册表 Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) · [Plan](lucy-20261108-concept-registry-ontology-lite-plan.md) | P1-10／REQ-030-031（**委托人结案 2026-11-13**：本分支不做 CLI／WebUI；交付只走 P1-11） |
 | [概念→Ops Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) · [Plan](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) | P1-11／REQ-030-032（**功能合同层已收口；≠ 可上线**） |
 | [问询预算阈值放宽 Spec](../specs/lucy-20261111-question-budget-threshold-relax-spec.md) | P1-12／REQ-030-033（**本分支已实现；≠ 可上线**） |
 
@@ -297,5 +298,5 @@
 ## 7. 本池自身验收
 
 - 清单覆盖需求池 REQ-030-001–033（含已收口 003），无孤儿 REQ。
-- P0 立项范围与 §2／§3 一致；**P0-B Spec v0.1-draft 已开，终稿未确权**；**P1-8／P1-9 仍待立项**；**P1-10 已 R4（CLI）**；**P1-11 功能合同层已收口**；**P1-12 阈值放宽已实现（本分支）**；agent 规则可被本分支会话引用。
+- P0 立项范围与 §2／§3 一致；**P0-B Spec v0.1-draft 已开，终稿未确权**；**P1-8／P1-9 仍待立项**；**P1-10 委托人结案（本分支不做 CLI／WebUI）**；**P1-11 功能合同层已收口（本分支概念交付＝Ops MCP）**；**P1-12 阈值放宽已实现（本分支）**；agent 规则可被本分支会话引用。
 - **不构成任何功能验收或上线许可。**

@@ -2,13 +2,13 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 实施计划 / **v0.4** |
+| 文档类型 / 版本 | 实施计划 / **v0.5** |
 | 日期 / 目标版本 | 2026-11-09 / 产品线 `0.30.0`（分支 `lucy-v0.30`）；清单 **P1-10**；**不挡**原 P0 |
 | 台账号 | 无（0.30 台账未建立） |
-| 状态 | **v0.6；R2-F＋R4 已闭合（2026-11-09）；一期 CLI 已落地（S0–S7／`npm run concepts`）；待效果门**（P1-10／REQ-030-031；交付序 CLI→效果门→WebUI→MCP）。本条不表示可上线；**不含** WebUI／MCP |
-| 授权边界 | R2-F＋R4 已闭合（R4：2026-11-09）。授权范围＝本 Plan S0–S7 一期 CLI 实现与测试；**不**表示可上线；**不含** WebUI／MCP |
-| 验收 | S0–S7 各自出口见 §验收；本条总出口＝Spec SC-01–SC-17 全部关闭；**不**含 WebUI／MCP；**不**含效果门后的人审页 |
-| 对应 Spec | [lucy-20261108-concept-registry-ontology-lite-spec.md](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md)（**v0.6-draft**） |
+| 状态 | **委托人结案（2026-11-13）**：本分支明确**不做** ontology-lite **CLI／WebUI** 交付与效果门跟进；产品交付只走 **P1-11／REQ-030-032 Ops MCP**。P1-10 保留上游数据／语义合同（纯计算核心可被 Ops 复用）；既有 `npm run concepts` **不作为本分支交付出口**。本条不表示可上线 |
+| 授权边界 | 本分支**不再授权** P1-10 CLI／WebUI／效果门跟进。历史 R4（2026-11-09）仅覆盖当时一期 CLI 试验；后续交付改动以 **P1-11 Ops MCP** 为准 |
+| 验收 | 本分支**无** P1-10 独立验收出口；交付验收归 **P1-11**。历史 S0–S7／SC-01–SC-17 仅作上游合同参考 |
+| 对应 Spec | [lucy-20261108-concept-registry-ontology-lite-spec.md](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md)（**v0.7**） |
 | 需求池条目 | REQ-030-031 |
 | 清单条目 | P1-10 |
 | 评审记录 | [Codex 对抗评审](../reviews/2026-11-09-concept-registry-ontology-lite-codex-review.md)（过程对抗；**不构成终稿确权**） |
@@ -22,6 +22,7 @@
 | v0.3-draft | Codex R2 修订：对齐 Spec v0.5（D13 项目根、D15 确定性置信、D16 不变量、D17 候选失效、D19／F-08 白名单、D20 id 围栏、D21 list／show 即时冲突；SC-13／14） |
 | v0.4-draft | Codex R3 后作者侧闭合：currentlyMatches、固定 diff 基线、文件名／id 一致、conceptsDir 禁 symlink；验收 SC-01–17 |
 | v0.4 | **R2-F＋R4**：委托人 2026-11-09 明示认可并授权进入开发；实现中 |
+| v0.5 | **委托人结案（2026-11-13）**：本分支不做 CLI／WebUI／效果门跟进；交付只走 P1-11 Ops MCP；状态镜像同句 |
 
 > **For agentic workers（获 R4 后）:** 按 S0→S7 执行。未获 R4 前禁止改运行代码。一期 **不改 WebUI**。
 
