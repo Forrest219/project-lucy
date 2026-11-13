@@ -3,9 +3,9 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 实施计划（Plan） |
-| 版本 / 日期 | v0.3-draft / 2026-11-09 |
-| 状态 | **v0.3-draft；Cursor 过程对抗已修订（2026-11-09）；终稿未确权；冻结落地；未授权实现**。配套 Spec v0.3-draft。本阶段只评审与修订本 Plan，**暂不执行任何实现 Task**。本版不是 R2-F |
-| 授权边界 | **不授权改代码**。须满足功能清单池 §2.2：R1 形态 → R2 对抗式评审 → R3 开放决策闭合 → R4 委托人开发授权 |
+| 版本 / 日期 | v0.4-draft / 2026-11-13 |
+| 状态 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；终稿未确权；冻结落地；未授权实现**。配套 Spec v0.4-draft。O1–O3 未闭合（建议包 S；[决策纸](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md)）。本阶段只评审与修订本 Plan，**暂不执行任何实现 Task**。**不是** R2-F，**不是** R4，**不可功能合同收口** |
+| 授权边界 | **不授权改代码**。须满足功能清单池 §2.2：R1 形态 → R2 对抗式评审 → R2-F 终稿确权 → R3 开放决策闭合 → R4 委托人开发授权 |
 | 验收 | Spec SC-01–SC-15 逐条有证据；`npm run lint:spec-docs` 退出 0；相关单测全绿。**不构成发布取证，不表示可上线** |
 | 台账号 | 无（`0.30` 台账未建立；待 PM 指派后再登记） |
 | 目标分支 / 产品线 | `lucy-v0.30` / `0.30.0` |
@@ -20,11 +20,13 @@
 
 ## 2. 开工前置
 
-1. Spec 获得 R2-F（Codex CLI 终审，或委托人明示确权）。过程修订到 v0.3 不等于终稿。
-2. **O1**（五域 domain id）、**O2**（候选表来源）、**O3**（谁调用 enqueue）由委托人裁定并回写 Spec。建议包 S 可整包采纳。未采纳前不得实现这三支。
-3. 明确**开发授权**。D4／D11／D12／D13／D14 已冻结，授权后按冻结合同实现，不再另选。
+1. 委托人裁定 **O1／O2／O3**（推荐整包建议包 S；决策纸 [2026-11-13-p0-6-o1-o3-decision-package.md](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md)）并回写 Spec。未采纳前不得实现这三支。
+2. Spec 获得 **R2-F**（Codex CLI 终审，或委托人明示确权）。过程修订到 v0.4-draft **不等于**终稿。
+3. 明确 **R4 开发授权**。D4／D11／D12／D13／D14 已冻结，授权后按冻结合同实现，不再另选。
 4. 与 019／020 评审对齐：本条只依赖其 **最小面** SC；完整 WebUI 不得阻塞本条收口定义（可并行，但范围隔离）。
 5. 基线：`npm run lint:spec-docs` 绿；确认现网 runner 仍支持两型 regex 断言。
+
+> **门禁声明**：本 Plan 现行 **不是 R2-F、不是 R4、不可功能合同收口**，直至 O1–O3 闭合且 R2-F 完成、另获 R4。
 
 ## 3. 文件结构
 
@@ -45,19 +47,26 @@
 
 ## 4. 任务分解
 
+### 变更记录（Plan）
+
+| 版本 | 说明 |
+|---|---|
+| v0.3-draft | 与 Spec v0.3 对齐；建议包 S；冻结落地 |
+| v0.4-draft | 对齐 Spec v0.4：D13／`review_status`；决策纸链入；门禁声明（非 R2-F／非 R4／不可闭口）；S2／S4 措辞收窄。**不构成 R2-F／R3／R4** |
+
 ### S0：决策闭合与基线声明草稿
 
-- 回写 O1／O2／O3。建议包 S 可整包采纳。起草 `source-select-v1-post-leak-fix` 基线说明；标注 chatbi_intl 历史不可信。
+- 回写 O1／O2／O3。建议包 S 可整包采纳（决策纸已出）。起草 `source-select-v1-post-leak-fix` 基线说明；标注 chatbi_intl 历史不可信。
 - **验证**：O 行不再是「开工前必答」，或本轮明确不实现对应分支；SC-13 文稿就绪。
 
 ### S1：composeQuestion 去泄漏＋域分支
 
-- 删除 `superstore_orders.${m}` 金标拼接；中性候选模板；`chatbi_intl`／未知域 fail-closed 或中性模板。
+- 删除 `superstore_orders.${m}` 金标拼接；中性候选模板（`candidate_sources`，视 O2）；`chatbi_intl`／未知域走 D4 中性模板，不得回落超店。
 - **验证**：SC-01、SC-02 红→绿。
 
 ### S2：五域骨架＋regex 断言样例
 
-- 建五域目录与最少用例；跨表歧义槽；草稿标记 `needs_review`；带 `tool:` 的断言被拒绝。
+- 建五域目录与最少用例；跨表歧义槽；骨架用例 `review_status: needs_review`；带 `tool:` 的 regex 断言被拒绝。
 - **验证**：SC-03–SC-06、SC-15。
 
 ### S3：019／020 最小面收窄落地（授权后）
@@ -67,8 +76,8 @@
 
 ### S4：Publish smoke＋domain 映射＋RunList
 
-- `mapImpactToEvalDomains`；enqueue smoke 时 `trigger=publish_smoke`；空映射不入队；RunList 消费 `?domain=`；禁止自动回滚。不交付宿主机 cron。
-- **验证**：SC-07–SC-10。
+- `mapImpactToEvalDomains`；enqueue smoke 时 `trigger=publish_smoke`；空映射不入队；入队前 `selectRunnable` 排除 `review_status: needs_review`；RunList 消费 `?domain=`；禁止自动回滚。不交付宿主机 cron。配额／默认 off 若需要，属服务端 enqueue 实现细节（O3＝S 后），**不是**新的开放决策。
+- **验证**：SC-07–SC-10、SC-15。
 
 ### S5：基线切换与文档
 
@@ -101,7 +110,7 @@
 | 通过率骤降引发误判 | S0／S5 基线断裂先于对外汇报 |
 | O1 域名与客户用语不一致 | 映射表＋中文 title 字段 |
 | 019／020 完整面抢带宽 | 最小面清单写死；P1 另排 |
-| Publish enqueue 误伤生产 | smoke 配额／默认 off 开关见 O3 裁定 |
+| Publish enqueue 误伤生产 | O3＝S 时由服务端入队；空映射不入队；可选配额／默认 off 为实现细节，不另开 O 项 |
 
 ## 8. 建议实施序（产品线）
 
