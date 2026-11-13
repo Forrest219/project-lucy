@@ -11,7 +11,7 @@
 | `UAT-SUITE-EMPTY-NEXT-STEP` | P0-5／REQ-030-018 | [suites/empty-result-next-step](suites/empty-result-next-step/suite.md) | 本机 demo Docker + MCP `:57881` | [2026-11-13-cursor-docker-p0-qa](suites/empty-result-next-step/runs/2026-11-13-cursor-docker-p0-qa.md) | **PASS**（0 行事实 → `next_step.kind=empty_result`） |
 | `UAT-SUITE-CATALOG-SEMANTICS` | P0-2／REQ-030-023 | [suites/catalog-business-semantics](suites/catalog-business-semantics/suite.md) | 本机 demo Docker + MCP `:57881` | [2026-11-13-cursor-docker-p0-qa](suites/catalog-business-semantics/runs/2026-11-13-cursor-docker-p0-qa.md) | **PASS**（`superstore_*` 带 `description`／`descriptionState=present`） |
 | `UAT-SUITE-CONN-RELOAD` | P1-15／REQ-030-036 | [suites/connection-runtime-reload](suites/connection-runtime-reload/suite.md) | 本机 demo Docker + supervisor | [2026-11-13-claude-gate-reload-cross](suites/connection-runtime-reload/runs/2026-11-13-claude-gate-reload-cross.md)（交叉复跑 GATE-01／RELOAD-02；Cursor 同批见 [cursor-gate-reload](suites/connection-runtime-reload/runs/2026-11-13-cursor-gate-reload.md)） | **PASS**（交叉复跑两条仍 PASS；此前整套 PASS） |
-| `UAT-SUITE-CATALOG-SCAN` | P1-16／REQ-030-037 | [suites/catalog-scan-read-path](suites/catalog-scan-read-path/suite.md) | demo Docker + `uat_wide_scan` 种子；MySQL 矩阵见 fixtures | [2026-11-13-claude-case-diff-cross](suites/catalog-scan-read-path/runs/2026-11-13-claude-case-diff-cross.md)（CASE-01／DIFF-01 交叉 **PASS**；Cursor 复跑见 [case-diff-rerun](suites/catalog-scan-read-path/runs/2026-11-13-cursor-case-diff-rerun.md)） | **PASS WITH GAP**（CASE-01／DIFF-01 交叉 **PASS**；矩阵 5.7／8.0／8.4 仍 PASS；EXT live 仍 BLOCKED） |
+| `UAT-SUITE-CATALOG-SCAN` | P1-16／REQ-030-037；**P1-20**／REQ-030-041 | [suites/catalog-scan-read-path](suites/catalog-scan-read-path/suite.md) | demo Docker + `uat_wide_scan` 种子；MySQL 矩阵见 fixtures；P1-20 EXT live（现场必验） | [2026-11-13-cursor-p120-uat](suites/catalog-scan-read-path/runs/2026-11-13-cursor-p120-uat.md)（Gate A：SIM／KTX／MYSQL；CASE／DIFF 仍见 [claude-case-diff-cross](suites/catalog-scan-read-path/runs/2026-11-13-claude-case-diff-cross.md)） | **P1-16：PASS WITH GAP**（SEED／MYSQL／SIM／KTX PASS；EXT-01／02 BLOCKED；矩阵／CASE／DIFF 维持既有 PASS）。**P1-20：替身有效＋现场 NOT VERIFIED**（SIM 76/76＋KTX-GUARD PASS；EXT-03…05 BLOCKED——无外部目录库密码；≠ 可上线） |
 | `UAT-SUITE-ACCESS-MAP` | P1-17／REQ-030-038 | [suites/access-map-sankey-empty](suites/access-map-sankey-empty/suite.md) | 本机 demo Docker + WebUI | [2026-11-13-claude-adversarial](suites/access-map-sankey-empty/runs/2026-11-13-claude-adversarial.md)（对抗全真；同场另有 [cursor-docker-sankey](suites/access-map-sankey-empty/runs/2026-11-13-cursor-docker-sankey.md)） | **PASS WITH GAP**（必做空态骨干／图例／confirmed-only **PASS**；可选 begin 触表 **FAIL**——关联写入 confirmed 已达成，但访问面 band E 仍用旧 `outcome='allow'` 词表，usage 流带不可达，见跑次「发现 F-1」） |
 | `UAT-SUITE-ROLES-AGENT-PERF` | P1-13／REQ-030-034 | [suites/roles-agent-page-perf](suites/roles-agent-page-perf/suite.md) | 本机 demo Docker + WebUI | [2026-11-13-cursor-docker-page-perf](suites/roles-agent-page-perf/runs/2026-11-13-cursor-docker-page-perf.md) | **PASS**（必做 Roles／Agent 网络合同与 API 墙钟；可选 release-baseline **SKIPPED**） |
 
@@ -37,12 +37,16 @@ bash scripts/verify/verify-ktx-reload-lifecycle.sh --container
 
 cd webui && npm run e2e:live:connection-reload
 
-# 扫表：替身 + 宽表 live API
+# 扫表：真实 KTX 只读校验（P1-20 KTX-GUARD；容器内）
+bash scripts/uat/verify-ktx-readonly-guard.sh
+
+# 扫表：替身（含 P1-20 EC）+ 宽表 live API
 cd webui && npx vitest run \
   server/__tests__/catalog-show.test.ts \
   server/__tests__/doris-external-catalog.simulation.test.ts \
   server/__tests__/schema-structure.test.ts \
-  server/__tests__/live-tables-wide-schema.test.ts
+  server/__tests__/live-tables-wide-schema.test.ts \
+  server/__tests__/live-catalog.test.ts
 
 node scripts/uat/run-catalog-scan-wide-api.mjs
 

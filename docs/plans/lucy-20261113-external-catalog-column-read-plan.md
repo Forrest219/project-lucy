@@ -46,7 +46,10 @@
 - [x] **Task 2 白名单：** `catalog-show.ts` 正则扩展，仅三段名
 - [x] **Task 3 接线：** `readCatalogTableColumns` 按序探针；终止类失败不回退；失败探针写日志
 - [x] **Task 4 文档镜像：** Spec／Plan／总账／需求池／P1-16 Follow-up 指针同步
-- [ ] **Task 5 收口证据（可选）：** `docs/reviews/` 增 EC 证据审计；测试台 `UAT-SUITE-CATALOG-SCAN` 增可选 EXT 单表字段用例，无 live 时保持 GAP，不得写成 EXT PASS
+- [x] **Task 5a 测试台用例（2026-11-13）：** `UAT-SUITE-CATALOG-SCAN` 已增 SIM 修订（EC→用例名对照）＋`KTX-GUARD`＋EXT-03…05；无点号 MySQL 回归并入 `MYSQL-02` 步骤 3；`scripts/uat/verify-ktx-readonly-guard.sh` 已落地并在本机容器 18/18 PASS（KTX 0.16.0，容器仍是修复前代码，不影响该检查）。无 live 时 P1-20 记 NOT VERIFIED，不得写成 EXT PASS
+- [x] **Task 5b-1 本机复跑（2026-11-13）：** Gate A 已跑，见 [`runs/2026-11-13-cursor-p120-uat.md`](../qa/uat/suites/catalog-scan-read-path/runs/2026-11-13-cursor-p120-uat.md)：SIM 76/76＋KTX-GUARD PASS＝替身有效；EXT-03…05 BLOCKED（无外部目录库密码）→ 现场 NOT VERIFIED
+- [ ] **Task 5b-2 现场复跑（待凭据）：** 有真实 `catalog.database` 连接后跑 EXT-03／04／05，取缺表报错原文；无凭据时由委托人对 P1-20 另行决定降级
+- [ ] **Task 5c 收口证据（可选）：** `docs/reviews/` 增 EC 证据审计
 
 ## 4. 验收
 
