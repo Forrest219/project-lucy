@@ -556,6 +556,20 @@ describe("SC-17 — buildBandED once; ok:false → unavailable", () => {
   });
 });
 
+describe("P1-19 outcome vocabulary", () => {
+  it("ok and legacy allow enter E; denied/error/budget_stop enter D", () => {
+    const { E, D } = bandSetsFromAuditRows([
+      auditRow({ callId: "ok-1", outcome: "ok" }),
+      auditRow({ callId: "allow-1", outcome: "allow" }),
+      auditRow({ callId: "denied-1", outcome: "denied" }),
+      auditRow({ callId: "error-1", outcome: "error" }),
+      auditRow({ callId: "budget-1", outcome: "budget_stop" })
+    ]);
+    expect([...E].sort()).toEqual(["allow-1", "ok-1"]);
+    expect([...D].sort()).toEqual(["budget-1", "denied-1", "error-1"]);
+  });
+});
+
 describe("inquiryKind null → 无关联 field", () => {
   it("null inquiryKind is preserved on detail rows", async () => {
     const rows = [

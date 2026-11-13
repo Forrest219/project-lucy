@@ -138,9 +138,9 @@ function accessSide(rows: AccessMapAuditRow[]): AccessMapAccessSide {
     tokenCallCounts: new Map(),
     tokenLastUsed: new Map(),
     loadSnapshot: () => null,
-    deniedCalls: rows.filter((row) => row.outcome !== "allow").length,
+    deniedCalls: rows.filter((row) => row.outcome !== "allow" && row.outcome !== "ok").length,
     echo: {
-      enteringAllowCallCount: rows.filter((row) => row.outcome === "allow").length,
+      enteringAllowCallCount: rows.filter((row) => row.outcome === "allow" || row.outcome === "ok").length,
       enteringAllowCallCountBasis: "pre_structure"
     }
   };

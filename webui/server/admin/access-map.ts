@@ -40,6 +40,7 @@ import {
 import { isTokenExpired } from "../proxy/identity.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
+import { isAccessMapAllowedOutcome } from "./access-map-outcome.js";
 import {
   enabledUserIdsFromRaw,
   readAccessSnapshot,
@@ -609,7 +610,7 @@ export type AccessLayerResult = {
 /**
  * 构建访问层（§5.2）。
  *
- * - 只有 `outcome === "allow"` 进入访问路径；`deny` 单独计数（§4.9.3）。
+ * - `outcome` 为 `ok`（现行写入）或 `allow`（历史合同词）进入访问路径；其余单独计拒绝。
  * - 同一 `(user, role, conn, schema, table)` 去重；`ts` 与 token **不进路径主键**。
  * - 一次调用在同一张表上只算 1 次调用。
  */
@@ -632,7 +633,7 @@ export function buildAccessLayer(input: {
     // Token 过滤只作用于访问层内核，授权骨架不受影响（§4.5）。
     if (tokenLabel !== null && row.tokenLabel !== tokenLabel) continue;
 
-    if (row.outcome !== "allow") {
+    if (!isAccessMapAllowedOutcome(row.outcome)) {
       deniedCallIds.add(row.callId);
       continue;
     }

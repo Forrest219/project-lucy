@@ -16,6 +16,7 @@ import {
   rebuildInferredTurns
 } from "../proxy/audit.js";
 import { accessGrade } from "../proxy/usage-classification.js";
+import { isAccessMapAllowedOutcome } from "./access-map-outcome.js";
 
 export type AccessMapInquiryKind = InquiryKindFilter;
 
@@ -250,7 +251,7 @@ export async function buildBandED(
       if (!inquiryKindMatches(inquiryKindOfTurn(turn), f.inquiryKind)) continue;
     }
     B.add(row.id);
-    if (row.outcome === "allow") E.add(row.id);
+    if (isAccessMapAllowedOutcome(row.outcome)) E.add(row.id);
     else D.add(row.id);
   }
 

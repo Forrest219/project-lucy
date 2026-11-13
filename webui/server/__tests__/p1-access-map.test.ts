@@ -256,6 +256,20 @@ describe("P1-3 访问关系图 · 访问层（A2）", () => {
     expect(layer.rawCalls).toBe(1);
   });
 
+  it("现行 outcome=ok 进入访问内核；denied/error/budget_stop 只计拒绝", async () => {
+    const rows = [
+      auditRow({ callId: "ok-1", outcome: "ok", sourceName: "orders" }),
+      auditRow({ callId: "legacy-allow", outcome: "allow", sourceName: "returns" }),
+      auditRow({ callId: "denied-1", outcome: "denied", sourceName: "orders" }),
+      auditRow({ callId: "error-1", outcome: "error", sourceName: "orders" }),
+      auditRow({ callId: "budget-1", outcome: "budget_stop", sourceName: "people" })
+    ];
+    const layer = buildAccessLayer({ rows, tokenLabel: null });
+    expect(layer.rawCalls).toBe(2);
+    expect(layer.deniedCalls).toBe(3);
+    expect(layer.paths.map((path) => path.sourceName).sort()).toEqual(["orders", "returns"]);
+  });
+
   it("同一 (user, role, conn, schema, table) 去重；ts 与 token 不进路径主键", async () => {
     const rows = [
       auditRow({ callId: "c1", ts: "2026-10-19T01:00:00.000Z", tokenLabel: "p0-demo", sourceName: "orders" }),
