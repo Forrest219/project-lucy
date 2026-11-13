@@ -14,6 +14,7 @@
 | `UAT-SUITE-CATALOG-SCAN` | P1-16／REQ-030-037；**P1-20**／REQ-030-041 | [suites/catalog-scan-read-path](suites/catalog-scan-read-path/suite.md) | demo Docker + `uat_wide_scan` 种子；MySQL 矩阵见 fixtures；P1-20 EXT live（现场必验） | [2026-11-13-cursor-p120-uat](suites/catalog-scan-read-path/runs/2026-11-13-cursor-p120-uat.md)（Gate A：SIM／KTX／MYSQL；CASE／DIFF 仍见 [claude-case-diff-cross](suites/catalog-scan-read-path/runs/2026-11-13-claude-case-diff-cross.md)） | **P1-16：PASS WITH GAP**（SEED／MYSQL／SIM／KTX PASS；EXT-01／02 BLOCKED；矩阵／CASE／DIFF 维持既有 PASS）。**P1-20：替身有效＋现场 NOT VERIFIED**（SIM 76/76＋KTX-GUARD PASS；EXT-03…05 BLOCKED——无外部目录库密码；≠ 可上线） |
 | `UAT-SUITE-ACCESS-MAP` | P1-17／REQ-030-038 | [suites/access-map-sankey-empty](suites/access-map-sankey-empty/suite.md) | 本机 demo Docker + WebUI | [2026-11-13-claude-adversarial](suites/access-map-sankey-empty/runs/2026-11-13-claude-adversarial.md)（对抗全真；同场另有 [cursor-docker-sankey](suites/access-map-sankey-empty/runs/2026-11-13-cursor-docker-sankey.md)） | **PASS WITH GAP**（必做空态骨干／图例／confirmed-only **PASS**；可选 begin 触表 **FAIL**——关联写入 confirmed 已达成，但访问面 band E 仍用旧 `outcome='allow'` 词表，usage 流带不可达，见跑次「发现 F-1」） |
 | `UAT-SUITE-ROLES-AGENT-PERF` | P1-13／REQ-030-034 | [suites/roles-agent-page-perf](suites/roles-agent-page-perf/suite.md) | 本机 demo Docker + WebUI | [2026-11-13-cursor-docker-page-perf](suites/roles-agent-page-perf/runs/2026-11-13-cursor-docker-page-perf.md) | **PASS**（必做 Roles／Agent 网络合同与 API 墙钟；可选 release-baseline **SKIPPED**） |
+| `UAT-SUITE-EVENT-LOOP-RELIEF` | P1-21／REQ-030-042 | [suites/event-loop-relief](suites/event-loop-relief/suite.md) | 候选构建跑规模脚本；demo Docker 跑概览／探针；客户实例仅维护窗 | [2026-11-13-cursor-demo-event-loop](suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md) | **PASS**（必做 R0／01–04；可选 LOOP-05 **BLOCKED**——客户 0.25 无 `/api/livez`。≠ 可上线） |
 
 ## 一键入口（本机）
 
@@ -49,6 +50,11 @@ cd webui && npx vitest run \
   server/__tests__/live-catalog.test.ts
 
 node scripts/uat/run-catalog-scan-wide-api.mjs
+
+# 重读路径与存活探针（P1-21）— 最近跑次 2026-11-13-cursor-demo-event-loop
+# 规模：npm --prefix webui run perf:event-loop-relief
+# 用例：docs/qa/uat/suites/event-loop-relief/cases.md
+# 客户实例只在含 /api/livez 的镜像上、维护窗执行；高峰禁止 hours=168
 
 # Roles／Agent 页性能体感（P1-13）
 # 浏览器：http://127.0.0.1:55176/admin/roles 与 /admin/agents

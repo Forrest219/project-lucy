@@ -79,7 +79,7 @@ npm run lint:version:test   # 通过：Node 测试全绿（含"错误 tag 被拒
 产品版本在产品线确定时写入 `VERSION`，不绑在候选出包上。日常提交不自动改这个号。
 
 - 2026-11-07 起当前产品线 `VERSION` 为 `0.30.0`。候选构建沿用这个号，不同步再切一版。
-- Chart 包版本当前 `0.2.8`。只有安装行为变了才升 `version`。`appVersion` 保持与 `VERSION` 相同。
+- Chart 包版本当前 `0.2.9`（探针改挂 `/api/livez` 与 `/api/readyz`）。只有安装行为变了才升 `version`。`appVersion` 保持与 `VERSION` 相同。
 
 ---
 

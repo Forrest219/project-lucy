@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.56 / 2026-11-13 |
+| 版本 / 日期 | v0.62 / 2026-11-13 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,12 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.62 | 2026-11-13 | **P1-21／REQ-030-042 测试台首跑 PASS**（[`2026-11-13-cursor-demo-event-loop`](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md)；必做 R0／01–04；可选 LOOP-05 BLOCKED）。不改功能合同收口句的合同结论。≠ 可上线 |
+| v0.61 | 2026-11-13 | **P1-21／REQ-030-042 测试台挂套件** `UAT-SUITE-EVENT-LOOP-RELIEF`。INDEX＝NOT RUN。不改功能合同收口句的合同结论。≠ 可上线 |
+| v0.60 | 2026-11-13 | **P1-21／REQ-030-042 功能合同已收口**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。UAT not_registered。**不入核心分母**。≠ 可上线 |
+| v0.59 | 2026-11-13 | **P1-21／REQ-030-042 终稿确权＋开发授权，实现已落地，SC-14 未过**。`/turns?hours=168` p95 105ms。`/api/livez` p99 359ms（门槛 300ms），max 487ms，BUSY＝0。按 O1 不启用 worker，待委托人决定。O2 只改本分支。UAT not_registered。**不入核心分母**。≠ 可上线 |
+| v0.58 | 2026-11-13 | **P1-20／REQ-030-041 实现落地**：委托人「批准修复」＝终稿确权＋开发授权。外部目录单表字段改走直连 `DESC`→`SHOW COLUMNS`→`DESCRIBE`；根因已在 KTX 0.16.0 验证（只读校验禁止 `Describe`）。vitest 5 文件 76/76；客户 live 未验；**不入核心分母**；≠ 可上线 |
+| v0.57 | 2026-11-13 | **入池 P1-21／REQ-030-042**（事故修复）：客户规模审计数据下，访问日志等读接口同步重算长时间占住事件循环，致 Pod 被 liveness 误杀、系统概览报「页面数据暂时无法完成刷新」。方案 Spec／Plan 已落盘；**待终稿确权＋O1／O2 裁决＋开发授权**；**不入核心分母**；UAT not_registered；≠ 可上线 |
 | v0.56 | 2026-11-13 | **入池 P1-20／REQ-030-041**：外部目录单表读字段（P1-16 续作）。准备表结构能列表、选中表报「没有读到字段」。方案 Spec／Plan 已落盘；**待终稿确权＋开发授权**；**不入核心分母**；≠ 可上线 |
 | v0.55 | 2026-11-13 | **P0 问数六套件 UAT（方案 B）**：测试台挂 P0-3／1／A／4／5／2；INDEX 必做 PASS（P0-1／A PASS WITH GAP）。Plan [`lucy-20261113-p0-qa-uat-six-suites-plan.md`](lucy-20261113-p0-qa-uat-six-suites-plan.md)。**≠ 改跟进状态合同句；≠ 可上线** |
 | v0.54 | 2026-11-13 | **立项并授权实现 P1-19／REQ-030-040**：访问关系图允许词表对齐（`ok`＋历史 `allow` 进 band E）。来源＝空桑基 UAT F-1。**不入核心分母**；≠ 可上线 |
@@ -200,7 +206,8 @@
 | P1-17 | P1 | 访问关系图空桑基修复 | REQ-030-038 | WebUI 修复 | 否 | **CLOSED（2026-11-13）** 中间态出口。**不挡**原 P0；≠ 可上线 | [closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md) · [Plan](lucy-20261113-access-map-sankey-empty-fix-plan.md) |
 | P1-18 | P1 | MCP 客户端 Skill 入口镜像（改挂 `/mcp`） | REQ-030-039 | 工程／接入 | 否 | **CLOSED（2026-11-13）** 中间态出口；工程向。**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md) · [Plan](lucy-20261111-mcp-client-skill-endpoint-fix-plan.md) · [closure](../reviews/2026-11-11-mcp-client-skill-endpoint-fix-closure.md) |
 | P1-19 | P1 | 访问关系图允许词表对齐（`ok`／`allow`） | REQ-030-040 | WebUI 修复 | 否 | **实现已落地（2026-11-13）**。vitest access-map 三文件 **76/76**。UAT 未复跑。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-access-map-outcome-vocabulary-spec.md) |
-| P1-20 | P1 | 外部目录单表读字段（直连 DESC／SHOW COLUMNS） | REQ-030-041 | 连接／事故续作 | 否 | **方案已落盘（2026-11-13）**；待终稿确权＋**开发授权**。P1-16 列表已通、字段仍走 KTX 失败。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-external-catalog-column-read-spec.md) · [Plan](lucy-20261113-external-catalog-column-read-plan.md) |
+| P1-20 | P1 | 外部目录单表读字段（直连 DESC／SHOW COLUMNS） | REQ-030-041 | 连接／事故续作 | 否 | **开发授权已获得（2026-11-13，委托人同句「批准修复」）；实现已落地（2026-11-13）**。根因＝KTX 只读校验禁止 `DESC`。vitest 5 文件 76/76；客户 live 未验，UAT 未复跑。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-external-catalog-column-read-spec.md) · [Plan](lucy-20261113-external-catalog-column-read-plan.md) |
+| P1-21 | P1 | 重读路径与探针减负（访问日志后台重建＋健康探针拆分） | REQ-030-042 | WebUI 稳定性／事故修复 | 否 | **功能合同已收口（2026-11-13）**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做 R0／01–04；可选 LOOP-05 BLOCKED——客户 0.25 无 livez）。≠ 可上线 | [Spec](../specs/lucy-20261113-heavy-read-path-and-probe-relief-spec.md) · [Plan](lucy-20261113-heavy-read-path-and-probe-relief-plan.md) · [性能证据](../reviews/2026-11-13-heavy-read-path-relief-perf-evidence.md) · **测试台** [`UAT-SUITE-EVENT-LOOP-RELIEF`](../qa/uat/suites/event-loop-relief/suite.md)（INDEX：[PASS](../qa/uat/INDEX.md)；跑次 [2026-11-13-cursor-demo-event-loop](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md)） |
 | P2-1 | P2 辅线 | 发布工作台分文件勾选发布 | REQ-030-001 | UX 辅线 | 否 | 草案齐；批次 R1 已修订；**终稿未确权**；**不定义 0.30 成败** | [Spec](../specs/lucy-20261107-publish-workbench-per-file-selection-spec.md) · [Plan](lucy-20261107-publish-workbench-per-file-selection-plan.md) |
 | P2-2 | P2 辅线 | 帮助中心体验 | REQ-030-002 | UX 辅线 | 否 | Deferred／开线对齐既有 Spec | 既有 Spec |
 | P2-3 | P2 辅线 | 运维控制面 W-B（语义发布） | REQ-030-004 | 运维辅线 | 否 | Deferred；阻塞条件见既有 Spec | 既有 Spec |
@@ -332,7 +339,13 @@
 
 - **出口**：外部目录准备表结构**选中单表**时，字段经直连 `DESC` → `SHOW COLUMNS` → `DESCRIBE` 读出；不再经 `ktx sql`。
 - **关系**：**不入核心分母**（P1-16 续作）；**不挡**原 P0。
-- **跟进**：方案 Spec／Plan 已落盘（2026-11-13）；**待终稿确权＋开发授权**。
+- **跟进**：开发授权已获得（2026-11-13，委托人同句「批准修复」）；实现已落地（2026-11-13）；EC-01–EC-13；客户 live 未验，UAT 未复跑。
+
+### P1-21｜重读路径与探针减负（REQ-030-042）
+
+- **出口**：推断问询重建、审计投影追赶移到后台分片；问询补充字段批量查询；`/api/diff` 一次扫描；探针拆 `/api/livez`／`/api/readyz`，Chart 默认改挂。客户规模下 `/turns?hours=168` p95 ≤ 3s、`/api/livez` max ≤ 1s、概览 BUSY＝0；接口返回与改前一致。
+- **关系**：**不入核心分母**（事故修复，客户实例 0.25.0 即存在，非 0.30 回归）；**不挡**原 P0。
+- **跟进**：功能合同已收口（2026-11-13）。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做 R0／01–04；可选 LOOP-05 BLOCKED——客户 0.25 无 livez）。≠ 可上线。现场临时缓解见 Spec §8。持续看守见该套件。
 
 ### P1-19｜访问关系图允许词表（REQ-030-040）
 
@@ -383,12 +396,13 @@
 | [库内扫表 Spec](../specs/lucy-20261111-catalog-scan-read-path-spec.md) · [证据审计](../reviews/2026-11-13-catalog-scan-read-path-sc-evidence-audit.md) | P1-16／REQ-030-037（**功能合同已收口；不入核心分母**） |
 | [空桑基 closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md) | P1-17／REQ-030-038 |
 | [MCP Skill Spec](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md) · [closure](../reviews/2026-11-11-mcp-client-skill-endpoint-fix-closure.md) | P1-18／REQ-030-039 |
+| [重读路径减负 Spec](../specs/lucy-20261113-heavy-read-path-and-probe-relief-spec.md) · [Plan](lucy-20261113-heavy-read-path-and-probe-relief-plan.md) · [性能证据](../reviews/2026-11-13-heavy-read-path-relief-perf-evidence.md) · [UAT](../qa/uat/suites/event-loop-relief/suite.md) | P1-21／REQ-030-042（**功能合同已收口；测试台必做 PASS，可选 LOOP-05 BLOCKED；不入核心分母**） |
 | [`DEVELOPMENT.md` 产品线执行总账（SOT）](../governance/DEVELOPMENT.md) | 仓库级 SOT／差集补录规则正文 |
 
 ---
 
 ## 7. 本池自身验收
 
-- 本文件是 `0.30` **执行总账 SOT**（见 DEVELOPMENT）；清单覆盖需求池 REQ-030-001–039（含已收口 003），无孤儿 REQ。
+- 本文件是 `0.30` **执行总账 SOT**（见 DEVELOPMENT）；清单覆盖需求池 REQ-030-001–042（含已收口 003），无孤儿 REQ。
 - P0 立项范围与 §2／§3 一致；**P0-B O1–O3 已闭合（建议包 F），待 R2-F**；**P1-8／P1-9 仍待立项**；**P1-10 委托人结案**；**P1-11…14 已落地／收口**；**P1-15…18 差集补录（不入核心分母）**；agent 规则可被本分支会话引用。
 - **不构成任何功能验收或上线许可。**
