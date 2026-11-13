@@ -43,6 +43,7 @@
 
 | 日期 | 一句话错题 | 标签 | 文件 |
 |---|---|---|---|
+| 2026-11-13 | 外部目录能列表却读不出字段：`ktx sql` 禁止 `DESC`，测试替身比真实 KTX 宽松 | `contract-stack` `gate-gap` `ux-regression` `sev-high` | [2026-11-13-external-catalog-column-read-ktx-describe.md](2026-11-13-external-catalog-column-read-ktx-describe.md) |
 | 2026-11-13 | 访问关系图：confirmed-only × usage-first 叠出空桑基 | `contract-stack` `data-trust` `viz-geometry` `empty-default` `ux-regression` `sev-high` | [2026-11-13-access-map-sankey-empty.md](2026-11-13-access-map-sankey-empty.md) |
 
 ## 与其他目录的边界
