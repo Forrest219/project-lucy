@@ -16,6 +16,7 @@
     "lint:spec": "node scripts/lint-spec.mjs",
     "lint:spec-docs": "node scripts/lint-spec-docs.mjs",
     "lint:spec-docs:test": "node --test scripts/lint-spec-docs.test.mjs",
+    "lint:e2e-ledger": "node scripts/uat/check-e2e-ledger.mjs",
     "verify:host-ktx": "node scripts/verify/verify-host-ktx-version.mjs",
     "lint:version": "node scripts/release/lucy-version-governance.mjs",
     "lint:version:test": "node --test scripts/release/lucy-version-governance.test.mjs scripts/release/lucy-build-revision.test.mjs",

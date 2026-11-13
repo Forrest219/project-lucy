@@ -1,0 +1,95 @@
+#!/usr/bin/env node
+/**
+ * Fallback checker for end-to-end ledger links (DEVELOPMENT §端到端三台账).
+ * Verifies registered suite paths + latest run files exist.
+ * Does not claim UAT freshness or Spec status consistency.
+ */
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+/** Registered rows that must resolve on disk (keep in sync with docs/governance/e2e-ledger.md §2). */
+const REQUIRED = [
+  {
+    poolId: "P1-15",
+    suiteId: "UAT-SUITE-CONN-RELOAD",
+    suiteDir: "docs/qa/uat/suites/connection-runtime-reload",
+    latestRun: "docs/qa/uat/suites/connection-runtime-reload/runs/2026-11-13-claude-adversarial.md"
+  },
+  {
+    poolId: "P1-16",
+    suiteId: "UAT-SUITE-CATALOG-SCAN",
+    suiteDir: "docs/qa/uat/suites/catalog-scan-read-path",
+    latestRun: "docs/qa/uat/suites/catalog-scan-read-path/runs/2026-11-13-claude-adversarial.md"
+  },
+  {
+    poolId: "P1-17",
+    suiteId: "UAT-SUITE-ACCESS-MAP",
+    suiteDir: "docs/qa/uat/suites/access-map-sankey-empty",
+    latestRun: "docs/qa/uat/suites/access-map-sankey-empty/runs/2026-11-13-claude-adversarial.md"
+  },
+  {
+    poolId: "P1-13",
+    suiteId: "UAT-SUITE-ROLES-AGENT-PERF",
+    suiteDir: "docs/qa/uat/suites/roles-agent-page-perf",
+    latestRun: "docs/qa/uat/suites/roles-agent-page-perf/runs/2026-11-13-cursor-docker-page-perf.md"
+  }
+];
+
+const INDEX = "docs/qa/uat/INDEX.md";
+const LEDGER = "docs/governance/e2e-ledger.md";
+const DEV = "docs/governance/DEVELOPMENT.md";
+
+let failed = 0;
+
+function ok(msg) {
+  console.log(`  ok   — ${msg}`);
+}
+function fail(msg) {
+  failed += 1;
+  console.error(`  FAIL — ${msg}`);
+}
+
+function mustExist(rel, label) {
+  const abs = path.join(root, rel);
+  if (!existsSync(abs)) fail(`${label} missing: ${rel}`);
+  else ok(`${label}: ${rel}`);
+}
+
+console.log("== e2e ledger link check ==");
+
+mustExist(DEV, "DEVELOPMENT");
+mustExist(LEDGER, "e2e-ledger");
+mustExist(INDEX, "UAT INDEX");
+
+const indexText = readFileSync(path.join(root, INDEX), "utf8");
+const ledgerText = readFileSync(path.join(root, LEDGER), "utf8");
+const devText = readFileSync(path.join(root, DEV), "utf8");
+
+if (!devText.includes("端到端三台账")) {
+  fail("DEVELOPMENT.md missing section 端到端三台账");
+} else {
+  ok("DEVELOPMENT.md has 端到端三台账");
+}
+
+for (const row of REQUIRED) {
+  mustExist(path.join(row.suiteDir, "suite.md"), `${row.poolId} suite.md`);
+  mustExist(path.join(row.suiteDir, "cases.md"), `${row.poolId} cases.md`);
+  mustExist(path.join(row.suiteDir, "fixtures.md"), `${row.poolId} fixtures.md`);
+  mustExist(row.latestRun, `${row.poolId} latest run`);
+  if (!indexText.includes(row.suiteId)) fail(`INDEX missing ${row.suiteId}`);
+  else ok(`INDEX lists ${row.suiteId}`);
+  if (!ledgerText.includes(row.poolId) || !ledgerText.includes(row.suiteId)) {
+    fail(`e2e-ledger.md missing link ${row.poolId} ↔ ${row.suiteId}`);
+  } else {
+    ok(`e2e-ledger links ${row.poolId} ↔ ${row.suiteId}`);
+  }
+}
+
+if (failed > 0) {
+  console.error(`\nFAILED: ${failed} check(s)`);
+  process.exit(1);
+}
+console.log("\nPASSED: e2e ledger links");

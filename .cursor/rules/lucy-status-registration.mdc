@@ -5,6 +5,6 @@ alwaysApply: true
 
 # 状态登记
 
-规则正文只在 `docs/governance/DEVELOPMENT.md`「功能闭口与发布取证」。本规则只指向它，不另写一套口径。
+规则正文只在 `docs/governance/DEVELOPMENT.md`「功能闭口与发布取证」（含「状态登记只有一份现值」「产品线执行总账（SOT）」「端到端三台账」）。本规则只指向它，不另写一套口径。
 
-功能的现行状态只以 Spec 头部「状态」行为准。改状态时按该文件改完现值镜像。历史变更行、复核快照和实施笔记不是现值。已作废的「未执行且不排期」和「不可交付 UAT」不得抄回。机器检查是 `lint:spec-docs` 的 `stale-status`。
+功能的现行状态只以 Spec 头部「状态」行为准（**开发台**）；产品线工作项全集以该产品线**执行总账（SOT）**为准（**需求台**；现行 `0.30` → `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`）；客户场景 UAT 结果以 `docs/qa/uat/INDEX.md` 为准（**测试台**）。勾连见 `docs/governance/e2e-ledger.md`。改状态时按 DEVELOPMENT 改完现值镜像（含总账跟进状态同句）。**功能合同收口 ≠ UAT PASS**。历史变更行、复核快照和实施笔记不是现值。已作废的「未执行且不排期」和「不可交付 UAT」不得抄回。机器检查是 `lint:spec-docs` 的 `stale-status`；三台勾连可选 `npm run lint:e2e-ledger`。
