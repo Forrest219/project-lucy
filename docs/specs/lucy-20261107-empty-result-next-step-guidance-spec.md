@@ -6,7 +6,8 @@
 | 日期 / 目标版本 | 2026-11-07 / 产品线 `0.30.0`（分支 `lucy-v0.30`）。不进入 `v0.25` 升级台账，不占用 `L25-*` |
 | 功能编号 / 优先级 | **无**（挂在 `0.30` 需求池 **REQ-030-018**）/ **P0**（清单 **P0-5**；Agent 拿到空结果后的下一步可操作性）——与清单池 P0-5、需求池 REQ-030-018 的 **P0** 同口径 |
 | 台账号 | **无**。`0.30` 台账尚未建立；待 PM 指派台账号后再登记 |
-| 状态 | **v0.8；R2-F＋R4 已闭合（2026-11-09）**。实现已落地；独立复审 **Approve with nits**（与 P0-4 共存合同已齐）；SC-01–SC-30 证据关闭（2026-11-13，见 [证据审计](../reviews/2026-11-13-empty-result-next-step-sc-evidence-audit.md)）。**功能合同已收口**。本条收口不表示可上线 |
+| 状态 | **v0.8；R2-F＋R4 已闭合（2026-11-09）**；**功能合同已收口（2026-11-13）**；**实现 CR 已落盘（PASS，2026-11-13）**（vitest 空结果套件 33/33；D1–D3＝A；与 P0-4 共存 SC-09–SC-30 证据见 [证据审计](../reviews/2026-11-13-empty-result-next-step-sc-evidence-audit.md)）。**本条收口不表示可上线** |
+| 评审记录 | [第 1 轮评审](../reviews/2026-11-07-empty-result-next-step-guidance-review.md)；[Codex 对抗评审](../reviews/2026-11-09-empty-result-next-step-codex-review.md)（R2-F＋R4 已闭合 2026-11-09）；[实现 CR](../reviews/2026-11-13-p0-5-empty-result-next-step-code-review.md)（Wave A；**不表示可上线**） |
 | 决策来源 | The New Stack《Why MCP servers should tell agents what to do next》（Matthew Burns 记 AWS James Ward，2026-11-07）主张「工具响应要带下一步指导」 |
 | 需求来源 | [`docs/plans/lucy-20261107-mcp-next-step-guidance-and-journey-eval-plan.md`](../plans/lucy-20261107-mcp-next-step-guidance-and-journey-eval-plan.md) §3.1 差距 G1；需求池 REQ-030-018 |
 | 实施主体 | Lucy MCP Proxy（`webui/server/proxy/`）。不改 KTX 源码，不改上游语义层 |

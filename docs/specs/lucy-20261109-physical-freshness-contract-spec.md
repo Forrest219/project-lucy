@@ -6,13 +6,13 @@
 | 日期 / 目标版本 | 2026-11-09 / 产品线 `0.30.0`（分支 `lucy-v0.30`）。不进入 `v0.25` 升级台账，不占用 `L25-*` |
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-B**；需求池 **REQ-030-028** / **P0 伴生** |
-| 状态 | **v0.1-draft；2026-11-09 立项开 Spec；终稿未确权；冻结落地；未授权实现**。委托人要求推进 Spec／Plan，本文件只是草案。须过对抗式评审 + 开工前决策闭合 + **另授开发授权** 后才可改代码。本条不表示可上线 |
+| 状态 | **v0.1-draft；O1–O3 已闭合（2026-11-13）＝建议包 F；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口**。须 Codex CLI 终审或委托人明示确权（R2-F）→ 另授开发授权后才可改代码。本条不表示可上线 |
 | 授权边界 | 本文件**不授权改代码**。不修改 P0-4 已落地的 `answer_verifiability.cutoff`（该条 O2＝A：成功块一律 `not_checked`） |
 | 决策来源 | 2026-11-08 能力盘点：呈现闸需要截止期真源；2026-11-09 委托人要求把 P0-B 的 Spec／Plan 往前推 |
 | 需求来源 | [需求池 REQ-030-028](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[功能清单池 P0-B](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[P0-4 可核对 Spec](lucy-20261107-answer-verifiability-spec.md) §4.4 |
 | 实施主体 | Lucy：`lucy_freshness` 的策略合同与水位读取。不改 KTX；不改 WebUI 页面 |
 | 配套 Plan | [lucy-20261109-physical-freshness-contract-plan.md](../plans/lucy-20261109-physical-freshness-contract-plan.md) |
-| 评审记录 | [2026-11-09 过程推进记录](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md)（过程修订，**不是** R2-F） |
+| 评审记录 | [2026-11-09 过程推进记录](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md)（过程修订，**不是** R2-F）；[2026-11-13 O1–O3 决策纸](../reviews/2026-11-13-p0-b-o1-o3-decision-package.md)（**R3：O1–O3 已闭合 2026-11-13＝建议包 F**；**不是** R2-F／R4） |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」「功能闭口与发布取证」「伪代码」 |
 | 与既有 Spec 的关系 | **串联，不改写 P0-4。** P0-4 负责可核对块里诚实的「未校验」。本条负责 `lucy_freshness` 有可声明的物理或业务水位，并且禁止用语义文件 mtime 冒充该水位。把已校验水位写进 `answer_verifiability.cutoff` 必须另升 P0-4，不在本条出口 |
 
@@ -21,6 +21,7 @@
 | 版本 | 说明 |
 |---|---|
 | v0.1-draft | 首立。冻结「未配置即可见、mtime 不得冒充、失败不编造时间、不改 P0-4 cutoff」。O1–O3 给出建议包，**未闭合** |
+| v0.1-draft（O 闭合） | **R3（2026-11-13）**：委托人会话批准整包采纳建议包 F；§4 O1–O3 已闭合。**待 R2-F**；冻结落地；未授权实现。**不改 P0-4 cutoff**。**不构成 R2-F／R4** |
 
 ## 闭口层级
 
@@ -112,15 +113,15 @@ P0-4 已落地的成功查数块把截止期固定为 `not_checked`。现网 `lu
 | **D7** | `dateField` 必须是该 source 已暴露的日期或日期时间维度。否则 `policy_invalid`，零上游执行 | **冻结** |
 | **D8** | 即使本工具返回 `checked`，`answer_verifiability.cutoff.status` 仍必须是 `not_checked` | **冻结** |
 | **D9** | 不建表、不做 CDC、不改页面 | **冻结** |
-| **O1** | 策略声明落点：source overlay，或 connection 级默认 | **开工前必答**。建议见 §4.1 |
-| **O2** | 水位聚合走哪条执行器 | **开工前必答**。建议见 §4.1 |
-| **O3** | 水位是否缓存 | **开工前必答**。建议见 §4.1 |
+| **O1** | 策略声明落点：source overlay 顶层 `freshness`（不设 connection 级默认） | **已闭合（2026-11-13）＝建议包 F** |
+| **O2** | 水位聚合：服务端内部 `max`，复用 ACL；不新增 MCP | **已闭合（2026-11-13）＝建议包 F** |
+| **O3** | 水位缓存：本版不缓存，每次实时读取 | **已闭合（2026-11-13）＝建议包 F** |
 
-> **开放决策守卫**：O1–O3 闭合前不得实现对应分支。缺省 fail-closed：没有闭合的声明落点与执行器时，只允许实现「一律未配置」的可见结果，不得自选水位算法。闭合须由委托人在开发授权前书面裁定。评审通过不等于 O 项闭合。
+> **开放决策守卫**：O1–O3 已由委托人 2026-11-13 整包采纳建议包 F 闭合（R3）。在 R2-F 终稿确权与 R4 开发授权之前仍不得实现对应分支。缺省 fail-closed。**不是** R2-F，**不是** R4。
 
-### 4.1 建议裁定（未闭合）
+### 4.1 裁定（已闭合：建议包 F，2026-11-13）
 
-建议包 F。委托人可整包采纳；未采纳前上表 O 行保持开工前必答。
+委托人 2026-11-13 会话批准整包采纳建议包 F。决策纸见 [2026-11-13-p0-b-o1-o3-decision-package.md](../reviews/2026-11-13-p0-b-o1-o3-decision-package.md)。
 
 | 项 | 建议 |
 |---|---|
@@ -171,7 +172,7 @@ lucyFreshness(identity, connectionId, sourceName):
     return forbidden_or_unknown          # D3；不 stat 文件，不打业务库
 
   metaTime := semanticFileMtime(source)  # 只进入 semanticLayerUpdatedAt
-  policy := readDeclaredPolicy(source)   # O1；未闭合时视为 unconfigured
+  policy := readDeclaredPolicy(source)   # O1（已闭合）：overlay 顶层 freshness
 
   if policy is missing or policy.id == "unconfigured":
     return freshness(status=unconfigured, physical=null, asOf=null,
@@ -208,9 +209,7 @@ lucyFreshness(identity, connectionId, sourceName):
 | SC-09 | 成功路径不再返回 `mode:"metadata_only"` | 单测 |
 | SC-10 | `lint:spec-docs` 对本 Spec／Plan 退出码 0 | 门禁 |
 
-全部 SC **未执行**。本条收口不表示可上线。
-
-O1–O3 未闭合时，SC-04 及依赖真实聚合的 SC-05／SC-07 保持未关闭。SC-01／SC-02／SC-03／SC-08 不依赖 O 项。
+全部 SC **未执行**。O1–O3 已闭合（建议包 F，2026-11-13）后 SC-04／SC-05／SC-07 可依冻结合同在 R4 后实现，但尚无功能合同收口证据。D8／SC-08：**不改 P0-4** `cutoff.status=not_checked`。本条收口不表示可上线。**本版不是 R2-F，不是 R4；待 R2-F 完成之前不可功能合同闭口。**
 
 ## 8. 风险
 
@@ -218,7 +217,7 @@ O1–O3 未闭合时，SC-04 及依赖真实聚合的 SC-05／SC-07 保持未关
 |---|---|
 | 实现时顺手改 P0-4 cutoff | D8／SC-08；本条授权文本写明不改 |
 | `max(日期)` 在大表上拖慢工具调用 | 单字段聚合、独立超时；O3 明确本版不缓存，避免用旧水位冒充 |
-| overlay 校验器拒绝新键 | O1 建议落点；未闭合前不得私自改发布校验器的必填规则 |
+| overlay 校验器拒绝新键 | O1 已闭合落点 overlay 顶层 `freshness`；未获 R4 不得改发布校验器必填规则 |
 | 调用方继续把 mtime 当截止期 | 分字段 + 固定说明句；P0-4 仍写未校验 |
 
 ## 9. 关联

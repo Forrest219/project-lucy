@@ -3,8 +3,8 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **0.30 完整功能清单与跟进池**。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.33 / 2026-11-13 |
-| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**P0 立项已批准**（原 P0-1…P0-7＋P0-A）。**P0-1／P0-2／P0-3／P0-4／P0-5／P0-A 功能合同已收口（2026-11-13）**。**P1-14／REQ-030-035**：**v1.0；R2-F＋R4；开发授权已获得；实现已落地（2026-11-13）**；问询预算复盘审计字段；**不挡**原 P0；≠ 可上线。**P1-13／REQ-030-034**：**v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）**；**不挡**原 P0；≠ 可上线。**P1-12／REQ-030-033**：问询预算默认阈值放宽 **已实现（本分支）**；**不挡**原 P0；≠ 可上线。**P1-11／REQ-030-032**：**v0.5；功能合同层已收口（SC-01–SC-22）；≠ 可上线**。**P1-10**：**委托人结案（2026-11-13）**——本分支不做 CLI／WebUI／效果门跟进；交付只走 P1-11 Ops MCP。**终稿确权**＝Codex CLI 终审，或委托人明示确权（§2.2）。未授权条目禁止改运行代码 |
+| 版本 / 日期 | v0.44 / 2026-11-13 |
+| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**P0 立项已批准**（原 P0-1…P0-7＋P0-A）。**P0-1／P0-2／P0-A／P0-4／P0-5（实现 CR 已落盘 PASS，2026-11-13）／P0-3 功能合同已收口（2026-11-13）**；**P0-6／P0-7／P0-B：O 项已闭合（2026-11-13）；待 R2-F**；**≠ 可上线**（P0 块）。**P1-14／REQ-030-035**：**v1.0；R2-F＋R4；开发授权已获得；实现已落地（2026-11-13）**；问询预算复盘审计字段；**不挡**原 P0；≠ 可上线。**P1-13／REQ-030-034**：**v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）**；**不挡**原 P0；≠ 可上线。**P1-12／REQ-030-033**：问询预算默认阈值放宽 **已实现（本分支）**；**不挡**原 P0；≠ 可上线。**P1-11／REQ-030-032**：**v0.5；功能合同层已收口（SC-01–SC-22）；≠ 可上线**。**P1-10**：**委托人结案（2026-11-13）**——本分支不做 CLI／WebUI／效果门跟进；交付只走 P1-11 Ops MCP。**终稿确权**＝Codex CLI 终审，或委托人明示确权（§2.2）。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
 | 事实源分工 | **方向** → [核心方向](lucy-20261107-lucy-0-30-core-direction.md)；**缺口正文与来源** → [需求池](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；**本文件** → 优先级、立项状态、跟进序、agent 遵从规则 |
@@ -14,6 +14,17 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.44 | 2026-11-13 | **Wave B O 闭合镜像收束**（治理 Plan Task 13）：P0-6／7／B「O 已闭合；待 R2-F」同步 `docs/README.md`／`plans/README.md`／project-overview §9／需求池 REQ-030-025／026／028。头部状态句同句。**不是** R2-F／R4；不可功能合同收口 |
+| v0.43 | 2026-11-13 | **P0-B／REQ-030-028** 委托人会话批准整包采纳建议包 F；**O1–O3 已闭合（2026-11-13）**。Spec／Plan v0.1-draft 同句。**待 R2-F；终稿未确权；冻结落地；未授权实现**。**不改 P0-4 `not_checked`**。**不是** R2-F／R4；不可功能合同收口 |
+| v0.42 | 2026-11-13 | **P0-7／REQ-030-026** 委托人会话批准整包采纳建议包 E；**O1–O6 已闭合（2026-11-13）**。Spec／Plan v0.4-draft 同句。**待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F／R4；不可功能合同收口 |
+| v0.41 | 2026-11-13 | **P0-6／REQ-030-025** 委托人会话批准整包采纳建议包 S；**O1–O3 已闭合（2026-11-13）**。Spec／Plan v0.4-draft 同句。**待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F／R4；不可功能合同收口 |
+| v0.40 | 2026-11-13 | **P0-B／REQ-030-028**（[O1–O3 决策纸](../reviews/2026-11-13-p0-b-o1-o3-decision-package.md) 推荐整包 F；**不改 P0-4 `not_checked`**）。**终稿未确权；冻结落地；未授权实现**。**不是** R2-F／R4；O1–O3 未闭合前不可功能合同收口 |
+| v0.39 | 2026-11-13 | **P0-7／REQ-030-026**（[O1–O6 决策纸](../reviews/2026-11-13-p0-7-o1-o6-decision-package.md) 推荐整包 E）。**终稿未确权；冻结落地；未授权实现**。**不是** R2-F／R4；O1–O6 未闭合前不可功能合同收口 |
+| v0.38 | 2026-11-13 | **Wave A 收束**（[治理优化 Plan](lucy-20261113-p0-governance-optimization-plan.md) Task 5）：四份实现 CR 链接可达；P0-5 镜像 project-overview／需求池 REQ-030-018；`docs/README`／`plans/README` 补 CR 链。**≠ 可上线** |
+| v0.37 | 2026-11-13 | **Wave A P0-5 CR 落盘**（[治理优化 Plan](lucy-20261113-p0-governance-optimization-plan.md) Task 4）：实现 CR PASS；vitest 空结果 33/33 复核；消「Approve with nits」无附件状态句。镜像 Spec／Plan §3 链接列。**≠ 可上线** |
+| v0.36 | 2026-11-13 | **Wave A P0-4 CR 落盘**（[治理优化 Plan](lucy-20261113-p0-governance-optimization-plan.md) Task 3）：实现 CR PASS；vitest `answer-verifiability` 26/26 复核；消「C1／C2／M5」无附件状态句。镜像 Spec／Plan §3 链接列。**≠ 可上线** |
+| v0.35 | 2026-11-13 | **Wave A P0-A CR 落盘**（[治理优化 Plan](lucy-20261113-p0-governance-optimization-plan.md) Task 2）：实现 CR PASS；vitest field-exposure 五文件 75/75 复核。镜像 Spec／Plan §3 链接列。**≠ 可上线** |
+| v0.34 | 2026-11-13 | **Wave A P0-2 CR 落盘**（[治理优化 Plan](lucy-20261113-p0-governance-optimization-plan.md) Task 1）：实现 CR PASS；vitest `catalog-business-semantics` 23/23 复核。镜像 Spec／Plan §3 链接列。**≠ 可上线** |
 | v0.33 | 2026-11-13 | **登记 P1-14／REQ-030-035**（问询预算复盘审计字段；交付面 A）。Claude R1／R2 CONDITIONAL → 文档修订；**委托人 R2-F＋R4**；**实现已落地**（`budgetSnapshot`＋`calls.csv` 表尾；v2 排除）。**不挡**原 P0；≠ 可上线。§7 覆盖扩至 REQ-030-001–035 |
 | v0.32 | 2026-11-13 | **P0-6／REQ-030-025** Spec／Plan 升 **v0.4-draft**（Cursor 过程对抗：D13 对齐 `review_status`；[O1–O3 决策纸](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md) 推荐整包 S）。**终稿未确权；冻结落地；未授权实现**。**不是** R2-F／R4；O1–O3 未闭合前不可功能合同收口 |
 | v0.31 | 2026-11-13 | **P0-A／REQ-030-012 功能合同已收口**：SC-01–SC-30 证据关闭（vitest 5 files／75 passed；含 SC-04／06／12／13／17／18／25）。见 [证据审计](../reviews/2026-11-13-semantic-source-field-exposure-sc-evidence-audit.md)。**≠ 可上线** |
@@ -85,9 +96,9 @@
 | **S1** | P0-1（027） | Spec＋Plan | **v0.9；功能合同已收口（2026-11-13）**；SC-01–SC-30 证据关闭。**≠ 可上线** |
 | **S2** | P0-2（023）∥ P0-A（012） | Spec＋Plan | P0-2＝**功能合同已收口（2026-11-13）**。P0-A＝**功能合同已收口（2026-11-13）**（SC-01–SC-30）。均 **≠ 可上线** |
 | **S3** | P0-3（024） | Spec＋Plan | **v0.5；R2-F＋R4 已闭合；功能合同已收口（2026-11-13）**；SC-01–SC-26 证据关闭。**≠ 可上线** |
-| **S4** | P0-4（022）∥ P0-5（018） | Spec＋Plan＋实现 | P0-4＝**v0.4；功能合同已收口（2026-11-13）**。P0-5＝**v0.8；功能合同已收口（2026-11-13）**。均 **≠ 可上线** |
-| **S5** | P0-6（025＋019／020 最小面） | Spec＋Plan | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；终稿未确权；冻结落地；未授权实现**。O1–O3 未闭合（建议包 S；决策纸已出）。**不是** R2-F，**不是** R4，**不可功能合同收口** |
-| **S6** | P0-7（026） | Spec＋Plan | **v0.3-draft**；过程对抗已修订；**终稿未确权**；冻结落地 |
+| **S4** | P0-4（022）∥ P0-5（018） | Spec＋Plan＋实现 | P0-4＝**v0.4；功能合同已收口；实现 CR PASS（2026-11-13）**。P0-5＝**v0.8；功能合同已收口；实现 CR PASS（2026-11-13）**。均 **≠ 可上线** |
+| **S5** | P0-6（025＋019／020 最小面） | Spec＋Plan | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O3 已闭合（2026-11-13）＝建议包 S；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口** |
+| **S6** | P0-7（026） | Spec＋Plan | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O6 已闭合（2026-11-13）＝建议包 E；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口** |
 
 规则：同一时刻以当前批次主角 Spec／评审为带宽优先；下一批须等本批 Spec 至少进入「待评审」或委托人明示并行。**任何批次在终稿确权 + 开发授权之前不得改运行代码。**
 
@@ -148,14 +159,14 @@
 | 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 跟进状态 | Spec／Plan |
 |---|---|---|---|---|---|---|
 | **P0-1** | P0 | 问题类型 → 唯一表 + 固定口径绑定 | REQ-030-027 | 约束 | **v0.9；R2-F＋R3＋R4 已闭合；功能合同已收口（2026-11-13）**。SC-01–SC-30 证据关闭。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-question-type-caliber-binding-spec.md) · [Plan](lucy-20261107-question-type-caliber-binding-plan.md) · [评审](../reviews/2026-11-07-question-type-caliber-binding-codex-review.md) · [CR](../reviews/2026-11-08-p0-1-caliber-binding-code-review.md) · [证据审计](../reviews/2026-11-13-question-type-caliber-binding-sc-evidence-audit.md) |
-| **P0-2** | P0 | Catalog 业务语义暴露 | REQ-030-023 | 约束 | **v0.6；R2-F＋R3（O1–O3）＋R4 已闭合；功能合同已收口（2026-11-13）**。SC-01–SC-17 证据关闭。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-catalog-business-semantics-spec.md) · [Plan](lucy-20261107-catalog-business-semantics-plan.md) · [评审](../reviews/2026-11-08-catalog-business-semantics-codex-review.md) · [证据审计](../reviews/2026-11-13-catalog-business-semantics-sc-evidence-audit.md) |
+| **P0-2** | P0 | Catalog 业务语义暴露 | REQ-030-023 | 约束 | **v0.6；R2-F＋R3（O1–O3）＋R4 已闭合；功能合同已收口（2026-11-13）**。SC-01–SC-17 证据关闭。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-catalog-business-semantics-spec.md) · [Plan](lucy-20261107-catalog-business-semantics-plan.md) · [评审](../reviews/2026-11-08-catalog-business-semantics-codex-review.md) · [CR](../reviews/2026-11-13-p0-2-catalog-business-semantics-code-review.md) · [证据审计](../reviews/2026-11-13-catalog-business-semantics-sc-evidence-audit.md) |
 | **P0-3** | P0 | 多表命中先问 + 表级歧义门闩 | REQ-030-024 | 约束 | **v0.5；R2-F＋R3（O1／O2／O4）＋R4 已闭合；功能合同已收口（2026-11-13）**。SC-01–SC-26 证据关闭。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-source-ambiguity-gate-spec.md) · [Plan](lucy-20261107-source-ambiguity-gate-plan.md) · [Codex 评审](../reviews/2026-11-08-source-ambiguity-gate-codex-review.md) · [实现复审／独立复验](../reviews/2026-11-13-source-ambiguity-gate-implementation-review.md) · [证据审计](../reviews/2026-11-13-source-ambiguity-gate-sc-evidence-audit.md) |
-| **P0-4** | P0 | 答复可核对块（来源／口径／截止期强制露出） | REQ-030-022 | 呈现 | **v0.4；R2-F＋R3＋R4 已闭合；功能合同已收口（2026-11-13）**。SC-16／17／21／22 夹具证据已补全。O1＝A／O2＝A。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-answer-verifiability-spec.md) · [Plan](lucy-20261107-answer-verifiability-plan.md) · [评审](../reviews/2026-11-09-answer-verifiability-codex-review.md) |
-| **P0-5** | P0 | 空结果结构化下一步指导 | REQ-030-018 | 呈现 | **v0.8；R2-F＋R4 已闭合；功能合同已收口（2026-11-13）**。SC-01–SC-30 证据关闭。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-empty-result-next-step-guidance-spec.md) · [Plan](lucy-20261107-empty-result-next-step-guidance-plan.md) · [Codex 评审](../reviews/2026-11-09-empty-result-next-step-codex-review.md) · [证据审计](../reviews/2026-11-13-empty-result-next-step-sc-evidence-audit.md) |
-| **P0-6** | P0 | Eval 选表正确性 + 真实问句日跑骨架（含 019／020 **最小面**） | REQ-030-025；最小面挂 019／020 | 检出 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；终稿未确权；冻结落地；未授权实现**。O1–O3 未闭合（建议包 S；决策纸已出）。**不是** R2-F，**不是** R4，**不可功能合同收口** | [Spec](../specs/lucy-20261107-eval-source-selection-correctness-spec.md) · [Plan](lucy-20261107-eval-source-selection-correctness-plan.md) · [决策纸](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md)；另 [019 Spec](../specs/lucy-20261107-eval-tool-assertion-authoring-spec.md)／[019 Plan](lucy-20261107-eval-tool-assertion-authoring-plan.md)／[020 Spec](../specs/lucy-20261107-audit-journey-eval-case-draft-spec.md)／[020 Plan](lucy-20261107-audit-journey-eval-case-draft-plan.md) |
-| **P0-7** | P0 | 存量用户体感最小仪表盘 + 主动告警 | REQ-030-026 | 运营 | **v0.3-draft；Cursor 过程对抗已修订（2026-11-09）；终稿未确权；冻结落地；未授权实现**。O1–O6 未闭合（建议包 E） | [Spec](../specs/lucy-20261107-stored-user-experience-dashboard-alerts-spec.md) · [Plan](lucy-20261107-stored-user-experience-dashboard-alerts-plan.md) |
-| **P0-A** | P0 伴生 | Source 级业务字段暴露裁剪 | REQ-030-012 | 约束伴生 | **v0.7；R2-F＋R4 已闭合；功能合同已收口（2026-11-13）**。SC-01–SC-30 证据关闭。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-semantic-source-field-exposure-spec.md) · [Plan](lucy-20261107-semantic-source-field-exposure-plan.md) · [评审](../reviews/2026-11-08-semantic-source-field-exposure-codex-review.md) · [证据审计](../reviews/2026-11-13-semantic-source-field-exposure-sc-evidence-audit.md) |
-| **P0-B** | P0 伴生 | 物理新鲜度合同（答复截止期真源） | REQ-030-028 | 呈现伴生 | **v0.1-draft；2026-11-09 立项开 Spec；终稿未确权；冻结落地；未授权实现**。不改 P0-4 已冻结的 `not_checked`。O1–O3 未闭合（建议包 F） | [Spec](../specs/lucy-20261109-physical-freshness-contract-spec.md) · [Plan](lucy-20261109-physical-freshness-contract-plan.md) · [过程记录](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md) |
+| **P0-4** | P0 | 答复可核对块（来源／口径／截止期强制露出） | REQ-030-022 | 呈现 | **v0.4；R2-F＋R3＋R4 已闭合；功能合同已收口（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**。vitest `answer-verifiability` 26/26。O1＝A／O2＝A。**本条收口不表示可上线** | [Spec](../specs/lucy-20261107-answer-verifiability-spec.md) · [Plan](lucy-20261107-answer-verifiability-plan.md) · [Codex 评审](../reviews/2026-11-09-answer-verifiability-codex-review.md) · [实现 CR](../reviews/2026-11-13-p0-4-answer-verifiability-code-review.md) |
+| **P0-5** | P0 | 空结果结构化下一步指导 | REQ-030-018 | 呈现 | **v0.8；R2-F＋R4 已闭合；功能合同已收口（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**。vitest 空结果 33/33。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-empty-result-next-step-guidance-spec.md) · [Plan](lucy-20261107-empty-result-next-step-guidance-plan.md) · [Codex 评审](../reviews/2026-11-09-empty-result-next-step-codex-review.md) · [实现 CR](../reviews/2026-11-13-p0-5-empty-result-next-step-code-review.md) · [证据审计](../reviews/2026-11-13-empty-result-next-step-sc-evidence-audit.md) |
+| **P0-6** | P0 | Eval 选表正确性 + 真实问句日跑骨架（含 019／020 **最小面**） | REQ-030-025；最小面挂 019／020 | 检出 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O3 已闭合（2026-11-13）＝建议包 S；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口** | [Spec](../specs/lucy-20261107-eval-source-selection-correctness-spec.md) · [Plan](lucy-20261107-eval-source-selection-correctness-plan.md) · [决策纸](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md)；另 [019 Spec](../specs/lucy-20261107-eval-tool-assertion-authoring-spec.md)／[019 Plan](lucy-20261107-eval-tool-assertion-authoring-plan.md)／[020 Spec](../specs/lucy-20261107-audit-journey-eval-case-draft-spec.md)／[020 Plan](lucy-20261107-audit-journey-eval-case-draft-plan.md) |
+| **P0-7** | P0 | 存量用户体感最小仪表盘 + 主动告警 | REQ-030-026 | 运营 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O6 已闭合（2026-11-13）＝建议包 E；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口** | [Spec](../specs/lucy-20261107-stored-user-experience-dashboard-alerts-spec.md) · [Plan](lucy-20261107-stored-user-experience-dashboard-alerts-plan.md) · [决策纸](../reviews/2026-11-13-p0-7-o1-o6-decision-package.md) |
+| **P0-A** | P0 伴生 | Source 级业务字段暴露裁剪 | REQ-030-012 | 约束伴生 | **v0.7；R2-F＋R4 已闭合；功能合同已收口（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**。SC-01–SC-30 证据关闭。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-semantic-source-field-exposure-spec.md) · [Plan](lucy-20261107-semantic-source-field-exposure-plan.md) · [评审](../reviews/2026-11-08-semantic-source-field-exposure-codex-review.md) · [CR](../reviews/2026-11-13-p0-a-semantic-source-field-exposure-code-review.md) · [证据审计](../reviews/2026-11-13-semantic-source-field-exposure-sc-evidence-audit.md) |
+| **P0-B** | P0 伴生 | 物理新鲜度合同（答复截止期真源） | REQ-030-028 | 呈现伴生 | **v0.1-draft；O1–O3 已闭合（2026-11-13）＝建议包 F；待 R2-F；终稿未确权；冻结落地；未授权实现**。不改 P0-4 已冻结的 `not_checked`。**不是** R2-F，**不是** R4，**不可功能合同收口** | [Spec](../specs/lucy-20261109-physical-freshness-contract-spec.md) · [Plan](lucy-20261109-physical-freshness-contract-plan.md) · [决策纸](../reviews/2026-11-13-p0-b-o1-o3-decision-package.md) · [过程记录](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md) |
 | P1-1 | P1 | 语义层孤儿路径治理 | REQ-030-015 | 约束深化 | 草案齐；批次 R1 已修订；**终稿未确权**；冻结落地；**不挡 P0** | [Spec](../specs/lucy-20261107-semantic-orphan-path-governance-spec.md) · [Plan](lucy-20261107-semantic-orphan-path-governance-plan.md) |
 | P1-2 | P1 | 行权限编译门禁 + 各面拒绝码统一 | REQ-030-013／016 | 正确性辅线 | 草案齐；批次 R1 已修订；**终稿未确权**；冻结落地；可与 P0 并行 | [Spec](../specs/lucy-20261107-row-policy-compile-gate-deny-code-spec.md) · [Plan](lucy-20261107-row-policy-compile-gate-deny-code-plan.md) |
 | P1-3 | P1 | `lucy_explain_query` 诊断形状合同 | REQ-030-017 | 正确性辅线 | 草案齐；批次 R1 已修订；**终稿未确权**；冻结落地 | [Spec](../specs/lucy-20261107-explain-diagnostic-shape-contract-spec.md) · [Plan](lucy-20261107-explain-diagnostic-shape-contract-plan.md) |
@@ -221,14 +232,14 @@
 ### P0-6｜Eval 选表可测 + 日跑骨架（REQ-030-025 + 019／020 最小面）
 
 - **出口**：① 禁金标表名喂 prompt；② 必选／禁选表断言可用；③ 五域骨架可日更；④ 可日跑或发布后跑。
-- **跟进**：Spec／Plan **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；终稿未确权；冻结落地；未授权实现**。O1–O3 未闭合（建议包 S；决策纸已出）。**不是** R2-F，**不是** R4，**不可功能合同收口**。`review_status: needs_review` 不进 smoke；`trigger=publish_smoke` 已冻结。
+- **跟进**：Spec／Plan **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O3 已闭合（2026-11-13）＝建议包 S；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口**。`review_status: needs_review` 不进 smoke；`trigger=publish_smoke` 已冻结。
 - **最小面**：能编排路径断言、能从审计旅程导出草稿即够 P0；完整 WebUI 体验归 P1-4／P1-5。
 - **不做**：把 Eval 当自动修复器；P0 不要求 021 自动改工具面。
 
 ### P0-7｜体感 + 告警（REQ-030-026）
 
 - **出口**：最小仪表盘（首次成功率／空结果率／关键失败率等）+ 跌破阈值主动告警（复用既有通知通道）。
-- **跟进**：Spec／Plan **v0.3-draft**（2026-11-09 过程修订）。空窗不得写成 0；读取接口不得入队；O1 未闭合时体感分不可用。O1–O6 仍待委托人裁定（建议包 E，含反馈入口建议延期）。**终稿未确权**；未授权实现。
+- **跟进**：Spec／Plan **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O6 已闭合（2026-11-13）＝建议包 E；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口**。空窗不得写成 0；读取接口不得入队；R2-F 前仍不实现。
 - **不做**：一次性建成完整运营中台或用户反馈社交产品。
 
 ### P0-A｜字段暴露裁剪（REQ-030-012）
@@ -240,7 +251,8 @@
 ### P0-B｜物理新鲜度合同（REQ-030-028）
 
 - **出口**：`lucy_query`／可核对块的「数据截止期」有可声明的物理（或等价业务）新鲜度真源；禁止长期以语义文件 mtime 冒充业务截止期而不登记。
-- **关系**：呈现闸伴生，强化 P0-4。**2026-11-09 已开 Spec／Plan v0.1-draft**。不改 P0-4 已冻结的 `cutoff.status=not_checked`。O1–O3 未闭合（建议包 F）。**终稿未确权**；未授权实现。
+- **跟进**：Spec／Plan **v0.1-draft；O1–O3 已闭合（2026-11-13）＝建议包 F；待 R2-F；终稿未确权；冻结落地；未授权实现**。不改 P0-4 已冻结的 `cutoff.status=not_checked`（D8／SC-08）。**不是** R2-F，**不是** R4，**不可功能合同收口**。
+- **关系**：呈现闸伴生，强化 P0-4。
 - **不做**：不要求一次建成全库 CDC；允许按 connection／source 声明「未配置」并 fail-visible。
 
 ### P1-8｜语义发布 → Eval 门禁（REQ-030-029）
@@ -323,5 +335,5 @@
 ## 7. 本池自身验收
 
 - 清单覆盖需求池 REQ-030-001–035（含已收口 003），无孤儿 REQ。
-- P0 立项范围与 §2／§3 一致；**P0-B Spec v0.1-draft 已开，终稿未确权**；**P1-8／P1-9 仍待立项**；**P1-10 委托人结案（本分支不做 CLI／WebUI）**；**P1-11 功能合同层已收口（本分支概念交付＝Ops MCP）**；**P1-12 阈值放宽已实现（本分支）**；**P1-13 发布取证出口证据齐（本分支）**；agent 规则可被本分支会话引用。
+- P0 立项范围与 §2／§3 一致；**P0-B O1–O3 已闭合（建议包 F），待 R2-F**；**P1-8／P1-9 仍待立项**；**P1-10 委托人结案（本分支不做 CLI／WebUI）**；**P1-11 功能合同层已收口（本分支概念交付＝Ops MCP）**；**P1-12 阈值放宽已实现（本分支）**；**P1-13 发布取证出口证据齐（本分支）**；agent 规则可被本分支会话引用。
 - **不构成任何功能验收或上线许可。**

@@ -2,14 +2,14 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 实施计划／**v0.7**（已获开发授权；实现中） |
+| 文档类型 / 版本 | 实施计划／**v0.7**（功能合同已收口） |
 | 日期 / 目标版本 | 2026-11-07（修订 2026-11-08） / 产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 台账号 | 无。`0.30` 台账尚未建立，待 PM 指派台账号后再登记 |
-| 状态 | **v0.7；终稿已确权；R4 已授予；实现已合入；功能合同已收口（2026-11-13）**（SC-01–SC-30；见证据审计）。不表示可上线 |
+| 状态 | **v0.7；R2-F＋R4 已闭合（2026-11-08）；功能合同已收口（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**（SC-01–SC-30 证据关闭；见 [证据审计](../reviews/2026-11-13-semantic-source-field-exposure-sc-evidence-audit.md)）。**本条收口不表示可上线** |
 | 授权边界 | **不授权改代码。** 本 Plan 只定义步骤、验收与完成定义；开工须先取得本条的终稿确权 **与** 委托人明示开工授权 |
 | 验收 | 各步骤出口见 §4；本条总出口＝Spec 的 **SC-01–SC-30** 全部关闭 |
 | 对应 Spec | [lucy-20261107-semantic-source-field-exposure-spec.md](../specs/lucy-20261107-semantic-source-field-exposure-spec.md)（**v0.7-draft**） |
-| 评审记录 | [第 1 轮](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 过程对抗](../reviews/2026-11-08-semantic-source-field-exposure-codex-review.md) |
+| 评审记录 | [第 1 轮](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 过程对抗](../reviews/2026-11-08-semantic-source-field-exposure-codex-review.md)（**过程对抗 ≠ 终稿确权**）；[实现 CR](../reviews/2026-11-13-p0-a-semantic-source-field-exposure-code-review.md)（Wave A；**不表示可上线**） |
 | 需求池条目 | REQ-030-012 |
 
 

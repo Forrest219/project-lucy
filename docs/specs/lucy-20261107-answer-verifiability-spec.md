@@ -6,11 +6,11 @@
 | 日期 / 目标版本 | 2026-11-07（v0.4 修订 2026-11-09；收口镜像 2026-11-13）/ 产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 台账号 | 无 |
 | 功能编号 / 优先级 | 清单 **P0-4**；需求池 **REQ-030-022** / **P0** |
-| 状态 | **v0.4；R2-F＋R3＋R4 已闭合（2026-11-09）**。实现已落地；独立复审 **Approve with nits**（C1／C2／M5 已闭）；SC-16／17／21／22 夹具证据已补全（2026-11-13）；**功能合同已收口**。O1＝A／O2＝A。本条收口不表示可上线 |
+| 状态 | **v0.4；R2-F＋R3＋R4 已闭合（2026-11-09）**；**功能合同已收口（2026-11-13）**；**实现 CR 已落盘（PASS，2026-11-13）**（SC-16／17／21／22 夹具证据已补全；vitest `answer-verifiability` 26/26）。O1＝A／O2＝A。**本条收口不表示可上线** |
 | 授权边界 | **已获开发授权（R4，2026-11-09）**：可按配套 Plan 改运行代码与测试；不表示可上线 |
 | 需求来源 | [需求池 REQ-030-022](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) |
 | 配套 Plan | [lucy-20261107-answer-verifiability-plan.md](../plans/lucy-20261107-answer-verifiability-plan.md)（**v0.4-draft**） |
-| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 对抗评审](../reviews/2026-11-09-answer-verifiability-codex-review.md)（**R2-F＋R3＋R4 已闭合 2026-11-09**） |
+| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 对抗评审](../reviews/2026-11-09-answer-verifiability-codex-review.md)（**R2-F＋R3＋R4 已闭合 2026-11-09**）；[实现 CR](../reviews/2026-11-13-p0-4-answer-verifiability-code-review.md)（Wave A；**不表示可上线**） |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md) |
 | 实施主体 | Proxy 结果呈现合同 +（可选）只读核对入口。复用既有 provenance／审计故事线 |
 | 与既有 Spec 的关系 | Spec 162 `_meta.lucy`；审计调用链故事线；018 落点教训（本条更强：成功路径禁静默无块）；**不改 ACL**；物理新鲜度真源见 [P0-B Spec](lucy-20261109-physical-freshness-contract-spec.md)（v0.1-draft，终稿未确权，未授权）。本条 O2＝A 不变，cutoff 仍不得改成已校验 |
@@ -446,7 +446,7 @@ function onLucyQueryResponse(ctx):
 
 **出口判定**：SC-01–SC-08、SC-12–SC-23 必须全部关闭；SC-09–SC-11 随 O1 为 N/A 或必做。
 
-未执行。本条收口不表示可上线。**本版不构成终稿确权或开发授权。**
+**出口判定（现值，2026-11-13）**：SC-01–SC-08、SC-12–SC-23 已关闭；SC-09–SC-11 为 N/A（O1＝A）。**功能合同已收口**；**实现 CR 已落盘（PASS，2026-11-13）**（见 [实现 CR](../reviews/2026-11-13-p0-4-answer-verifiability-code-review.md)；vitest `answer-verifiability` 26/26）。**本条收口不表示可上线**。
 
 ## 9. O1／O2 选项影响（写清、不代裁定）
 

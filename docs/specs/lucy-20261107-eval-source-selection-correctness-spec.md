@@ -6,13 +6,13 @@
 | 日期 / 目标版本 | 2026-11-07（v0.4 修订 2026-11-13）/ 产品线 `0.30.0`（分支 `lucy-v0.30`）。不进入 `v0.25` 升级台账，不占用 `L25-*` |
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-6**；需求池 **REQ-030-025**／**P0**；最小面挂 **REQ-030-019**／**REQ-030-020** |
-| 状态 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；终稿未确权；冻结落地；未授权实现**。O1–O3 未闭合（建议包 S；决策纸已出）。**不是** R2-F，**不是** R4，**不可功能合同收口**。须委托人裁定 O1–O3（或整包 S）→ Codex CLI 终审或委托人明示确权（R2-F）→ 另授开发授权后才可改代码。本条不表示可上线 |
+| 状态 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O3 已闭合（2026-11-13）＝建议包 S；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口**。须 Codex CLI 终审或委托人明示确权（R2-F）→ 另授开发授权后才可改代码。本条不表示可上线 |
 | 授权边界 | 本文件**不授权改代码**。现行阶段只接受评审与修订。实施须：§评审门禁 R1–R4（见功能清单池 §2.2）全部通过 |
 | 决策来源 | 2026-11-06 CFO 选表误报（**检出缺口**）＋ 2026-11-07 沟通实录：五域（损益／资金／资产／Token／GPU）日跑测评承诺；误报防线 **G6＋G8** |
 | 需求来源 | [需求池 REQ-030-025](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.6 G6／§4.8 G8](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-6](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[019 Spec](lucy-20261107-eval-tool-assertion-authoring-spec.md)；[020 Spec](lucy-20261107-audit-journey-eval-case-draft-spec.md) |
 | 实施主体 | Lucy：Eval runner prompt 合同、用例骨架、发布后 smoke 接线；WebUI 仅 **019／020 最小面**。不改 KTX；不把 Eval 当自动修复器 |
 | 配套 Plan | [lucy-20261107-eval-source-selection-correctness-plan.md](../plans/lucy-20261107-eval-source-selection-correctness-plan.md) |
-| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[2026-11-09 过程推进](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md)（过程修订，**不是** R2-F）；[2026-11-13 O1–O3 决策纸](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md)（过程，**不是** R2-F／R3／R4） |
+| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[2026-11-09 过程推进](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md)（过程修订，**不是** R2-F）；[2026-11-13 O1–O3 决策纸](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md)（**R3：O1–O3 已闭合 2026-11-13＝建议包 S**；**不是** R2-F／R4） |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」「功能闭口与发布取证」「伪代码」 |
 | 与既有 Spec 的关系 | **串联，不吞并。** 完整 WebUI 路径断言编排＝P1-4／019；完整审计→草稿回流＝P1-5／020。本条只收 **P0 最小面**：YAML 能写必选／禁选 source 断言、能从旅程导出草稿骨架、选表可测、五域骨架可解析、发布后咨询性 smoke。口径绑定（P0-1）内容本身不在本条交付。截止期已校验断言不在本条（P0-B／P0-4） |
 
@@ -23,6 +23,7 @@
 | v0.2-draft | 批次 R1：断言字段必须是 `value`；候选列表与 ACL 形状说明 |
 | v0.3-draft | **Cursor 过程对抗**：冻结未知域中性模板、`needs_review` 不进自动跑批、regex 匹配整段 tool blob、日跑等于同一入队 API、`trigger` 必须能写成 `publish_smoke`。O1–O3 补建议包 S，**未闭合**。行号于 2026-11-09 复核仍成立。**不构成 R2-F／R4** |
 | v0.4-draft | **Cursor 过程对抗（2026-11-13）**：D13／伪代码／SC-15 对齐仓内 `review_status: active \| needs_review`（废除虚构的 `status: executable\|draft`）；publish smoke 入队路径**必须**排除 `needs_review`（收窄 020 RES-01 对本条 smoke 路径）。出 O1–O3 决策纸推荐整包 S。E1–E5 行号 2026-11-13 复核仍成立。O1–O3 **仍未闭合**。**不构成 R2-F／R3／R4** |
+| v0.4-draft（O 闭合） | **R3（2026-11-13）**：委托人会话批准整包采纳建议包 S；§4 O1–O3 已闭合。**待 R2-F**；冻结落地；未授权实现。**不构成 R2-F／R4** |
 
 ## 闭口层级
 
@@ -152,15 +153,15 @@ CFO 选表误报暴露 **检出缺口**（非事故根因）。客户承诺「�
 | **D12** | 「每天跑」的产品通路就是同一条 enqueue API，可由 RunList 或外部调度调用。本条不交付宿主机 cron、密钥或常驻 worker | **冻结** |
 | **D13** | 可跑性对齐仓内字段：`review_status: "active" \| "needs_review"`（缺省／缺字段视为 `active`）。`needs_review` 用例可被解析，但**不得**进入 publish smoke 或本条定义的任何自动入队跑批。只有 `active`（含缺省）可入队。五域目录允许全部为 `needs_review`。**禁止**发明顶层 `status: executable\|draft`；嵌套 `executable` 对象不是本条跑批门闩（见 E7）。本条 smoke／自动入队路径须主动过滤，不得依赖「`review_status` 挡得住 CLI runner」（020 RES-01） | **冻结** |
 | **D14** | 不论 O3 最后由谁调用，写入 `eval_run.trigger` 的 smoke 值必须是 `publish_smoke`。现状把该列写死为 `manual`（`runner.ts` INSERT）必须去掉；禁止用 `trigger_reason` 冒充 `trigger` | **冻结** |
-| **O1** | 五域 domain id：建议 slug `pl`／`cash`／`asset`／`token`／`gpu`，中文只作 title | **开工前必答** |
-| **O2** | 候选表来源：建议只用用例字段 `candidate_sources`，禁止跑批时读在线 catalog | **开工前必答** |
-| **O3** | 谁在发布成功后调用 enqueue：建议服务端在映射出的 domain 上调用；客户端不得把表名当 domain | **开工前必答** |
+| **O1** | 五域 domain id：slug `pl`／`cash`／`asset`／`token`／`gpu`；中文「损益／资金／资产／Token／GPU」只作 title | **已闭合（2026-11-13）＝建议包 S** |
+| **O2** | 候选表来源：只用用例字段 `candidate_sources`；禁止跑批时读在线 catalog | **已闭合（2026-11-13）＝建议包 S** |
+| **O3** | 发布成功后由服务端在映射出的 domain 上调用 enqueue；客户端不得把表名当 domain | **已闭合（2026-11-13）＝建议包 S** |
 
-> **开放决策守卫**：O1–O3 闭合前不得实现对应分支。缺省 fail-closed。闭合须由委托人在开发授权前书面裁定。过程对抗／升 draft 版本不等于 O 项闭合，也不等于 R2-F。
+> **开放决策守卫**：O1–O3 已由委托人 2026-11-13 整包采纳建议包 S 闭合（R3）。在 R2-F 终稿确权与 R4 开发授权之前仍不得实现对应分支。缺省 fail-closed。**不是** R2-F，**不是** R4。
 
-### 4.1 建议裁定（未闭合）
+### 4.1 裁定（已闭合：建议包 S，2026-11-13）
 
-建议包 S。委托人可整包采纳；决策纸见 [2026-11-13-p0-6-o1-o3-decision-package.md](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md)。未采纳前 O1–O3 仍是开工前必答。
+委托人 2026-11-13 会话批准整包采纳建议包 S。决策纸见 [2026-11-13-p0-6-o1-o3-decision-package.md](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md)。
 
 | 项 | 建议 |
 |---|---|
@@ -281,7 +282,7 @@ RunList.mount:
 | SC-14 | `lint:spec-docs` 对本 Spec／Plan 退出码 0 | 门禁 |
 | SC-15 | `review_status: needs_review` 用例不进入 publish smoke 与本条自动入队；带 `tool:` 字段的 regex 断言被拒绝 | 单测 |
 
-全部 SC **未执行**。O1 未闭合时 SC-05 的目录名保持未关闭。O3 未闭合时 SC-08 的调用方保持未关闭，但 D14 的 `trigger` 取值合同已经冻结。本条收口不表示可上线。**本版不是 R2-F，不是 R4，在委托人确认 O1–O3（或包 S）并完成 R2-F 之前不可闭口。**
+全部 SC **未执行**。O1–O3 已闭合（建议包 S）后 SC-05 目录名与 SC-08 调用方合同可依冻结合同实现，但尚无功能合同收口证据。D14 的 `trigger` 取值合同已经冻结。本条收口不表示可上线。**本版不是 R2-F，不是 R4；待 R2-F 完成之前不可功能合同闭口。**
 
 ---
 

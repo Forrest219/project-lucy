@@ -6,10 +6,10 @@
 | 日期 / 目标版本 | 2026-11-07（修订 2026-11-08） / 产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 台账号 | 无。`0.30` 台账尚未建立，待 PM 指派台账号后再登记 |
 | 需求池条目 | REQ-030-012（语义层宽表字段暴露裁剪），来源 [0.30 需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) |
-| 状态 | **v0.7；R2-F＋R4 已闭合（2026-11-08）；实现已合入；SC-01–SC-30 证据关闭（2026-11-13，见 [证据审计](../reviews/2026-11-13-semantic-source-field-exposure-sc-evidence-audit.md)）。功能合同已收口（2026-11-13）。本条收口不表示可上线** |
+| 状态 | **v0.7；R2-F＋R4 已闭合（2026-11-08）；功能合同已收口（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**（SC-01–SC-30 证据关闭；见 [证据审计](../reviews/2026-11-13-semantic-source-field-exposure-sc-evidence-audit.md)）。**本条收口不表示可上线** |
 | 授权边界 | R2-F＋R4 已闭合（R4：2026-11-08）。授权范围＝本 Spec／Plan 实现与测试；**不**表示可上线。实现由 Cursor coder；Cursor reviewer 做 code review。 |
 | 配套 Plan | [lucy-20261107-semantic-source-field-exposure-plan.md](../plans/lucy-20261107-semantic-source-field-exposure-plan.md)（**v0.7-draft**） |
-| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 对抗评审（过程）](../reviews/2026-11-08-semantic-source-field-exposure-codex-review.md)（**过程对抗 ≠ 终稿确权**） |
+| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 对抗评审（过程）](../reviews/2026-11-08-semantic-source-field-exposure-codex-review.md)（**过程对抗 ≠ 终稿确权**）；[实现 CR](../reviews/2026-11-13-p0-a-semantic-source-field-exposure-code-review.md)（Wave A；**不表示可上线**） |
 | 上位合同 | [`docs/governance/DEVELOPMENT.md`](../../docs/governance/DEVELOPMENT.md)「语义层（semantic-layer）分层」、[`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) §4.2／§4.4、[`webui/docs/48-catalog-and-table-semantic-workbench-productization-spec.md`](../../webui/docs/48-catalog-and-table-semantic-workbench-productization-spec.md)、[`webui/docs/00-product-terminology-standard.md`](../../webui/docs/00-product-terminology-standard.md)、[`docs/governance/vision.md`](../../docs/governance/vision.md) |
 
 ### 变更行（v0.7-draft triage · Codex R3c）

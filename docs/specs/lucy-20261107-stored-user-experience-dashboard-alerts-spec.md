@@ -2,17 +2,17 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计草案 / **v0.3-draft** |
-| 日期 / 目标版本 | 2026-11-07（v0.3 修订 2026-11-09）/ 产品线 `0.30.0`（分支 `lucy-v0.30`）。不进入 `v0.25` 升级台账，不占用 `L25-*` |
+| 文档类型 / 版本 | 功能设计草案 / **v0.4-draft** |
+| 日期 / 目标版本 | 2026-11-07（v0.4 修订 2026-11-13）/ 产品线 `0.30.0`（分支 `lucy-v0.30`）。不进入 `v0.25` 升级台账，不占用 `L25-*` |
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-7**；需求池 **REQ-030-026** / **P0** |
-| 状态 | **v0.3-draft；Cursor 过程对抗已修订（2026-11-09）；终稿未确权；冻结落地；未授权实现**。批次 R1 已修订。本版闭合合同缺口（空窗不得写成 0、读取接口不得入队、O1 未闭合时体感分保持不可用）。**不是** R2-F。须 Codex CLI 终审或委托人明示确权，并闭合 O1–O6、另授开发授权后才可改代码。本条不表示可上线 |
+| 状态 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O6 已闭合（2026-11-13）＝建议包 E；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口**。须 Codex CLI 终审或委托人明示确权（R2-F）→ 另授开发授权后才可改代码。本条不表示可上线 |
 | 授权边界 | 本文件**不授权改代码**。现行阶段只接受评审与修订。实施须：§评审门禁 R1–R4（见功能清单池 §2.2）全部通过 |
 | 决策来源 | 2026-11-07 产品对话（100 用户 / C-level 体感）；客户沟通实录两项持续承诺：「每天跑测评、每天迭代」「同步盯后台回复，发现问题当天修正」——目前靠人力；本条是把「发现问题当天修正」变成系统可观测＋可告警的载体 |
 | 需求来源 | [需求池 REQ-030-026](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.7 G7](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-7](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../plans/lucy-20261107-lucy-0-30-core-direction.md) |
 | 实施主体 | Lucy：Admin 读取聚合（`daily-question-kpi` 范式）＋ SMTP outbox 事件类扩展。不改 KTX 源码；不新造体感统计表 |
 | 配套 Plan | [lucy-20261107-stored-user-experience-dashboard-alerts-plan.md](../plans/lucy-20261107-stored-user-experience-dashboard-alerts-plan.md) |
-| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[2026-11-09 过程推进](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md)（过程修订，**不是** R2-F） |
+| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[2026-11-09 过程推进](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md)（过程修订，**不是** R2-F）；[2026-11-13 O1–O6 决策纸](../reviews/2026-11-13-p0-7-o1-o6-decision-package.md)（**R3：O1–O6 已闭合 2026-11-13＝建议包 E**；**不是** R2-F／R4） |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」「功能闭口与发布取证」「伪代码」 |
 | 与既有 Spec 的关系 | **复用，不另造第二套真实问询口径。** 真实问询／会话类／问询活跃 Agent 沿用 Spec 194（[`lucy-20261030-access-grade-and-daily-question-kpi-spec.md`](lucy-20261030-access-grade-and-daily-question-kpi-spec.md)）已收口的 `conversation_turns`＋`access_log` 读取派生。空结果审计标记沿用 Spec 162 `result_empty`。SMTP outbox／去重沿用 L25-05 通知合同；`health-events.ts` 今日只接审计账本健康，本条**扩展事件类**，不替换账本通道。界面使用 `visitorCount`（Spec 148「近 N 访问账户」）继续只表示 WebUI 操作员，**不得**与本条 MCP／问询 DAU 混称 |
 
@@ -22,6 +22,7 @@
 |---|---|
 | v0.2-draft | 批次 R1：补审计库不可用分支；`is_slow_call` 不自定阈值 |
 | v0.3-draft | **Cursor 过程对抗**：空窗率与人数禁止写成 0；Admin 读取不得入队；O1 未闭合时体感分只允许不可用。O1–O6 补建议包 E，**未闭合**。开放决策守卫移出风险表。**不构成 R2-F／R4** |
+| v0.4-draft（O 闭合） | **R3（2026-11-13）**：委托人会话批准整包采纳建议包 E；§4 O1–O6 已闭合。**待 R2-F**；冻结落地；未授权实现。**不构成 R2-F／R4** |
 
 ## 闭口层级
 
@@ -161,18 +162,18 @@ Forbidden:
 | **D11** | 拒绝率：默认用量业务调用或问询旅程上 `outcome=denied`；**不含** `auth_error`；评测探针排除纪律同 Spec 189／194 | **冻结** |
 | **D12** | Admin 读取接口只计算并返回指标，**不得**调用 `enqueueNotification`。入队只发生在 `experienceMonitorTick` | **冻结** |
 | **D13** | O1 未闭合时，`experienceScore` 只能是 `null`，`experienceState` 只能是 `unavailable`。禁止实现者自选权重。首次成功率、空结果率、拒绝率、问询 DAU 不依赖 O1 | **冻结** |
-| **O1** | 体感分公式：输入权重（真实问询数门槛、空结果率、慢标记率、拒绝率、首次成功）与缺失时 `unavailable` 规则 | **开工前必答** |
-| **O2** | 阈值跌破：全局首次成功率／空结果率／拒绝率的默认阈值与窗口（如 24h／7d） | **开工前必答** |
-| **O3** | 连续空结果 N（建议默认 3）与去重键粒度（per-user per-day vs per-incident streak id） | **开工前必答** |
-| **O4** | 最小反馈入口：**P0-min**（单入口写入本地台账或 admin-only API）vs **本版延期** | **开工前必答**；范围紧时允许 defer 并在清单池登记 |
-| **O5** | 邮件是否全文暴露 `user_id` 明文，或仅 token_hash_prefix／角色 | **开工前必答** |
-| **O6** | profile JSON 键名与热加载是否沿用现网 SMTP profile 解析 | **开工前必答** |
+| **O1** | 体感分公式：输入权重（真实问询数门槛、空结果率、慢标记率、拒绝率、首次成功）与缺失时 `unavailable` 规则 | **已闭合（2026-11-13）＝建议包 E** |
+| **O2** | 阈值跌破：全局首次成功率／空结果率／拒绝率的默认阈值与窗口（如 24h／7d） | **已闭合（2026-11-13）＝建议包 E** |
+| **O3** | 连续空结果 N（建议默认 3）与去重键粒度（per-user per-day vs per-incident streak id） | **已闭合（2026-11-13）＝建议包 E** |
+| **O4** | 最小反馈入口：**P0-min**（单入口写入本地台账或 admin-only API）vs **本版延期** | **已闭合（2026-11-13）＝建议包 E（延期）** |
+| **O5** | 邮件是否全文暴露 `user_id` 明文，或仅 token_hash_prefix／角色 | **已闭合（2026-11-13）＝建议包 E** |
+| **O6** | profile JSON 键名与热加载是否沿用现网 SMTP profile 解析 | **已闭合（2026-11-13）＝建议包 E** |
 
-> **开放决策守卫**：O1–O6 闭合前不得实现对应分支。缺省 fail-closed。闭合须由委托人在开发授权前书面裁定。评审通过不等于 O 项闭合。
+> **开放决策守卫**：O1–O6 已由委托人 2026-11-13 整包采纳建议包 E 闭合（R3）。在 R2-F 终稿确权与 R4 开发授权之前仍不得实现对应分支。缺省 fail-closed。**不是** R2-F，**不是** R4。
 
-### 4.1 建议裁定（未闭合）
+### 4.1 裁定（已闭合：建议包 E，2026-11-13）
 
-建议包 E。委托人可整包采纳；未采纳前 O1–O6 仍是开工前必答。
+委托人 2026-11-13 会话批准整包采纳建议包 E。决策纸见 [2026-11-13-p0-7-o1-o6-decision-package.md](../reviews/2026-11-13-p0-7-o1-o6-decision-package.md)。
 
 | 项 | 建议 |
 |---|---|
@@ -332,7 +333,7 @@ on experienceMonitorTick(now):
 | SC-03 | 全局空结果率分子只含 `result_empty` 成功查数；denied／error 不计入空结果分子 | 单测 |
 | SC-04 | 拒绝率不含 `auth_error`；评测探针不计入 | 单测 |
 | SC-05 | 首次成功率分母＝问询活跃人数；分子＝首次非空成功用户数；分母 0 → `no_data` | 单测 |
-| SC-06 | O1 闭合后，per-user `experienceScore` 由该公式得出。O1 未闭合时分数只能是 `null`／`unavailable`，夹具若出现其他分数即失败 | 单测 |
+| SC-06 | per-user `experienceScore` 按 §4.1 O1（建议包 E，2026-11-13 已闭合）计算；`realQuestions < 1` 时只能是 `null`／`unavailable`（D13），夹具若出现其他分数即失败 | 单测 |
 | SC-07 | API／UI 契约**不存在**全局 vanity 加总字段（无 `platformScore`／等价） | 契约单测 |
 | SC-08 | `dailyQuestionDau[].activeUsers` 是去重人数；同日两问同一用户计 1 | 单测 |
 | SC-09 | `roleActiveUsers`／`activeUserCount` 是去重人数，不等于调用次数夹具 | 单测 |
@@ -345,7 +346,7 @@ on experienceMonitorTick(now):
 | SC-16 | `lint:spec-docs` 对本 Spec／Plan 退出码 0；术语小节形状合规 | 门禁 |
 | SC-17 | Admin 读取路径零次 `enqueueNotification`；同一窗口的 tick 在阈值闭合且跌破时才会入队 | 单测 |
 
-全部 SC **未执行**。O1 未闭合时 SC-06 只断言「不可用」。O2／O3 未闭合时 SC-11／SC-12 保持未关闭。O4 未闭合时不存在反馈入口验收。本条收口不表示可上线。
+全部 SC **未执行**。**§4**：O1–O6 已于 2026-11-13 整包闭合（建议包 E；R3 过程记录，**不是** R2-F／R4）。**待 R2-F** 终稿确权；**未授权实现**；夹具可按 §4.1 编写，但不得在本阶段宣称 SC 验收通过。O4＝延期：无反馈入口 SC。本条收口不表示可上线。
 
 ---
 
@@ -355,10 +356,10 @@ on experienceMonitorTick(now):
 |---|---|
 | 体感分被当成考核 | 术语 Forbidden＋UI 无排行榜主模式；文档与帮助文案明示「运维观测」 |
 | 与界面 UV 混读导致「100 用户」误判 | SC-10；卡片标题强制「问询活跃人数」 |
-| O1 公式争议阻塞 | D13：未闭合时分数不可用；建议包 E 可整包采纳 |
+| O1 公式争议阻塞 | O1 已闭合（建议包 E）；R2-F 前 D13 仍适用至实现授权 |
 | 告警风暴 | 去重＋独立开关；读取路径不入队（D12） |
 | 读取聚合变慢 | 窗口有界；禁止无窗口全表扫描；必要时后续另立物化 Spec |
-| 反馈入口拖垮 P0 | O4 建议延期；未裁定前不做入口 |
+| 反馈入口拖垮 P0 | O4＝延期已闭合；本条不建反馈入口 |
 
 ---
 

@@ -4,13 +4,13 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | **v0.6** / 2026-11-07（授权 2026-11-08） |
-| 状态 | **v0.6；终稿已确权；O1／O2／O3 已闭合；R4 已授予（2026-11-08）；功能合同已收口（2026-11-13）**（SC-01–SC-17；见 [证据审计](../reviews/2026-11-13-catalog-business-semantics-sc-evidence-audit.md)）。不表示可上线 |
+| 状态 | **v0.6；终稿已确权；O1／O2／O3 已闭合；R4 已授予（2026-11-08）；功能合同已收口（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**（SC-01–SC-17；见 [证据审计](../reviews/2026-11-13-catalog-business-semantics-sc-evidence-audit.md)）。不表示可上线 |
 | 授权边界 | R2-F＋R3＋R4 已闭合。授权实现本 Plan Task；不表示可上线。 |
 | 验收 | Spec SC-01–SC-17 逐条有证据；`npm run lint:spec-docs` 退出 0；相关 vitest 全绿；D4a 装配隔离与 D10 绑定一致性（含 overlay **可信绑定依据**）断言通过。**不构成发布取证，不表示可上线** |
 | 目标分支 / 产品线 | `lucy-v0.30` / `0.30.0` |
 | 需求来源 | 清单 P0-2；需求池 REQ-030-023 |
 | Spec | [lucy-20261107-catalog-business-semantics-spec.md](../specs/lucy-20261107-catalog-business-semantics-spec.md)（**v0.6-draft**） |
-| 评审记录 | [Codex 对抗评审记录](../reviews/2026-11-08-catalog-business-semantics-codex-review.md)（过程；**不构成终稿确权**） |
+| 评审记录 | [Codex 对抗评审记录](../reviews/2026-11-08-catalog-business-semantics-codex-review.md)（过程；**不构成终稿确权**）；[实现 CR](../reviews/2026-11-13-p0-2-catalog-business-semantics-code-review.md)（Wave A；**不表示可上线**） |
 | 与既有 Spec 的关系 | 串联 REQ-030-027／P0-1（口径轴）、REQ-030-024／P0-3（表级门闩）；**不冲突** REQ-030-012／P0-A（列级裁剪）——本条**不返回任何列**；若日后要在 catalog 返回列预览，须先复用 012 的暴露集读取器，不得另起裁剪口径 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md) 落盘清单与 Plan Mode |
 

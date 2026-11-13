@@ -4,13 +4,13 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | **v0.4-draft** / 2026-11-07（v0.4 修订 2026-11-09） |
-| 状态 | **v0.4；R2-F＋R3＋R4 已闭合（2026-11-09）**。实现已落地；独立复审 **Approve with nits**；SC-16／17／21／22 夹具证据已补全（2026-11-13）；**功能合同已收口**。O1＝A／O2＝A。本条收口不表示可上线 |
+| 状态 | **v0.4；R2-F＋R3＋R4 已闭合（2026-11-09）**；**功能合同已收口（2026-11-13）**；**实现 CR 已落盘（PASS，2026-11-13）**（vitest `answer-verifiability` 26/26）。O1＝A／O2＝A。**本条收口不表示可上线** |
 | 授权边界 | **已获开发授权（R4，2026-11-09）**：按本 Plan 执行实现 Task；不表示可上线 |
 | 验收 | Spec SC 有证据；lint:spec-docs 0。**不表示可上线** |
 | 目标分支 / 产品线 | `lucy-v0.30` / `0.30.0` |
 | Spec | [lucy-20261107-answer-verifiability-spec.md](../specs/lucy-20261107-answer-verifiability-spec.md)（**v0.4-draft**） |
 | 需求来源 | P0-4；REQ-030-022 |
-| 评审记录 | [Codex 对抗评审](../reviews/2026-11-09-answer-verifiability-codex-review.md) |
+| 评审记录 | [Codex 对抗评审](../reviews/2026-11-09-answer-verifiability-codex-review.md)；[实现 CR](../reviews/2026-11-13-p0-4-answer-verifiability-code-review.md)（Wave A；**不表示可上线**） |
 | 落位依据 | DEVELOPMENT.md |
 
 ## 变更记录
