@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261113-access-map-sankey-empty-fix-plan.md](lucy-20261113-access-map-sankey-empty-fix-plan.md) | **v0.2；开发授权已获得；实现已落地（2026-11-13）**：空桑基双轨修复。Spec 见 [lucy-20261113-access-map-sankey-empty-fix-spec.md](../specs/lucy-20261113-access-map-sankey-empty-fix-spec.md)。错题本 [2026-11-13-access-map-sankey-empty](../lessons/2026-11-13-access-map-sankey-empty.md)。本条不表示可上线 |
 | [lucy-20261113-release-perf-baseline-gate-plan.md](lucy-20261113-release-perf-baseline-gate-plan.md) | **v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）**（P1-13／REQ-030-034）。本条通过不表示可上线。Spec 见 [lucy-20261113-release-perf-baseline-gate-spec.md](../specs/lucy-20261113-release-perf-baseline-gate-spec.md)。验收见 [acceptance](../reviews/2026-11-13-release-perf-baseline-gate-acceptance.md) |
 | [lucy-20261111-mcp-client-skill-endpoint-fix-plan.md](lucy-20261111-mcp-client-skill-endpoint-fix-plan.md) | **v0.1 功能合同已收口（2026-11-11）**：`.mcp.json`→`/mcp`；SC-01–SC-11 通过（含 CC 全真复测）。本条收口不表示可上线。Spec 见 [lucy-20261111-mcp-client-skill-endpoint-fix-spec.md](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md)。收口见 [closure](../reviews/2026-11-11-mcp-client-skill-endpoint-fix-closure.md) |
 | [lucy-20261111-catalog-scan-read-path-plan.md](lucy-20261111-catalog-scan-read-path-plan.md) | **v0.2 实施中（2026-11-11）**。外部目录的库内表清单改走 SHOW，并带回每库表数；普通 MySQL 的准备表结构改为一次读取字段。本条收口不表示可上线。Spec 见 [lucy-20261111-catalog-scan-read-path-spec.md](../specs/lucy-20261111-catalog-scan-read-path-spec.md) |

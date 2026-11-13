@@ -4176,7 +4176,8 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     }
   }
   if (rpcMethod === "tools/call" && toolName && toolName !== "lucy_begin_question") {
-    const attribution = reportedTurns.resolve({
+    // 空桑基修复 Spec §2：无 header 时延续同会话已 record 的 begin turn → confirmed。
+    const attribution = reportedTurns.resolveToolCall({
       identity,
       sessionId: requestMeta.lucySessionId,
       explicitTurnId

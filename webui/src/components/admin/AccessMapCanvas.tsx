@@ -85,6 +85,8 @@ export const MIN_HIT_PX = 8;
  * 不进柱高／不进列密度；锁定稿值 ∈[2,4]。
  */
 export const IDLE_GRANT_PX = 3;
+/** 空访问闲置骨干厚度（= IDLE_GRANT_PX；不进 usage 刻度）。 */
+export const BACKBONE_PX = IDLE_GRANT_PX;
 /**
  * 列间距必须大于卡片宽度，否则流带通道会压到下一列的卡片上。
  *
@@ -225,6 +227,8 @@ export type AccessMapLayoutLink = {
   targetSlot: AccessMapBandSlot;
   /** 透明命中 path（厚度 ≥ `MIN_HIT_PX`，不参与计量）。 */
   hitPaths: string[];
+  /** usage = 访问流带；backbone = 空访问闲置骨干（不进刻度）。 */
+  layer?: "usage" | "backbone";
 };
 
 /** 闲置授权端点细空心示意（不撑柱）。 */
@@ -594,7 +598,12 @@ export function layoutAccessMap(
         column.forEach((node, nodeIndex) => {
           const measure = measures.get(node.id) as LabelMeasure;
           let pillarHeight = flowOfNode(node) * currentUnit;
-          if (!accessOk) pillarHeight = Math.min(IDLE_GRANT_PX, Math.max(pillarHeight, IDLE_GRANT_PX));
+          if (!accessOk) {
+            pillarHeight = Math.min(IDLE_GRANT_PX, Math.max(pillarHeight, IDLE_GRANT_PX));
+          } else if (pillarHeight <= 0 && !usageNodeIds.has(node.id)) {
+            // 空桑基修复：闲置端点给骨干附着地板，不进 usage 刻度分母。
+            pillarHeight = BACKBONE_PX;
+          }
           cursor += extra[columnIndex][nodeIndex] ?? 0;
           let y: number;
           if (isMiddle) {
@@ -620,9 +629,15 @@ export function layoutAccessMap(
         heights.push(cursor - contentTop - NODE_GAP);
       });
 
-      // ② 槽位与面积流带（仅使用边）。
+      // ② 槽位与面积流带（使用边）＋空访问闲置骨干（两端均在画布的 idle 边）。
       const built = buildBands(boxes, currentUnit, usageEdges);
-      links = built.links;
+      const backboneEdges = accessOk
+        ? activeEdges.filter(
+            (edge) =>
+              isIdleGrantEdge(edge) && boxes.has(edge.source) && boxes.has(edge.target)
+          )
+        : [];
+      links = [...built.links, ...buildBackboneBands(boxes, backboneEdges)];
 
       // ③ 标签避碰：中间列的标签块必须整块落在流带上下缘之上。
       let changed = false;
@@ -911,11 +926,76 @@ export function layoutAccessMap(
         outlinePath,
         sourceSlot: srcSlot,
         targetSlot: tgtSlot,
-        hitPaths
+        hitPaths,
+        layer: "usage"
       });
     }
     void byId;
     return { links };
+  }
+
+  /** 空访问闲置骨干：固定 BACKBONE_PX，不进 unitPx／usage 槽位。 */
+  function buildBackboneBands(
+    nodeBoxes: Map<string, NodeBox>,
+    scopedEdges: AccessMapEdge[]
+  ): AccessMapLayoutLink[] {
+    const links: AccessMapLayoutLink[] = [];
+    for (const edge of scopedEdges) {
+      const source = nodeBoxes.get(edge.source);
+      const target = nodeBoxes.get(edge.target);
+      if (!source || !target) continue;
+      const thickness = BACKBONE_PX;
+      const srcSlot: AccessMapBandSlot = { top: 0, height: thickness, index: 0 };
+      const tgtSlot: AccessMapBandSlot = { top: 0, height: thickness, index: 0 };
+      const x0 = source.x + PILLAR_WIDTH;
+      const x1 = target.x;
+      const gap = x1 - x0;
+      const y0 = source.y + source.pillarHeight / 2;
+      const y1 = target.y + target.pillarHeight / 2;
+      const curve: [Point, Point, Point, Point] = [
+        { x: x0, y: y0 },
+        { x: x0 + gap / 3, y: y0 },
+        { x: x1 - gap / 3, y: y1 },
+        { x: x1, y: y1 }
+      ];
+      const half = thickness / 2;
+      const upperCurve = offsetCurve(curve, -half);
+      const lowerCurve = offsetCurve(curve, half);
+      const band: AccessMapBandGeometry = {
+        kind: "grant",
+        path: areaPath(upperCurve, lowerCurve),
+        thickness,
+        sourceSlot: srcSlot,
+        targetSlot: tgtSlot,
+        center: sampleCubic(curve),
+        upper: sampleCubic(upperCurve),
+        lower: sampleCubic(lowerCurve),
+        topAligned: true,
+        curve
+      };
+      const hitThickness = Math.max(thickness, MIN_HIT_PX);
+      const hitHalf = hitThickness / 2;
+      links.push({
+        edge,
+        path: band.path,
+        width: thickness,
+        kernelPath: null,
+        kernelWidth: 0,
+        kernelRatio: 1,
+        points: curve,
+        band,
+        grantArea: band,
+        reviewArea: null,
+        kernel: null,
+        midlinePath: null,
+        outlinePath: null,
+        sourceSlot: srcSlot,
+        targetSlot: tgtSlot,
+        hitPaths: [areaPath(offsetCurve(curve, -hitHalf), offsetCurve(curve, hitHalf))],
+        layer: "backbone"
+      });
+    }
+    return links;
   }
 
   /** 上一根柱的底缘（同一列、上一节点）。 */
@@ -1528,8 +1608,17 @@ export function AccessMapCanvas({
                 {link.band ? (
                   <path
                     d={link.band.path}
-                    className={`${bandFillClass(link.edge)} ${faded ? "opacity-10" : onChain ? "opacity-60" : "opacity-30"}`}
-                    data-testid={`access-map-ribbon-${link.edge.id}`}
+                    className={
+                      link.layer === "backbone"
+                        ? `fill-none stroke-fg-muted ${faded ? "opacity-10" : onChain ? "opacity-50" : "opacity-35"}`
+                        : `${bandFillClass(link.edge)} ${faded ? "opacity-10" : onChain ? "opacity-60" : "opacity-30"}`
+                    }
+                    strokeWidth={link.layer === "backbone" ? 1.25 : undefined}
+                    data-testid={
+                      link.layer === "backbone"
+                        ? `access-map-backbone-${link.edge.id}`
+                        : `access-map-ribbon-${link.edge.id}`
+                    }
                     onClick={() => setSelectedEdgeId(link.edge.id)}
                     style={{ cursor: "pointer" }}
                   >

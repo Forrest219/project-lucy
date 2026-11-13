@@ -216,15 +216,64 @@ describe("usage-first layout SC-01–05／08／11／21", () => {
       .sort((a, b) => a.y - b.y);
     expect(agentCol[0]!.node.id).toBe("agent:b");
   });
+
+  // 空桑基修复 Spec SC-05–SC-07
+  it("SC-05 — 仅 dormant 且两端在画布：有闲置骨干；unitPx 不被 grant 撑高", () => {
+    const nodes = [
+      makeNode("agent:a", "agent", "A", 0, 10, 0),
+      makeNode("role:r", "role", "R", 1, 10, 0),
+      makeNode("conn:c", "connection", "C", 2, 10, 0),
+      makeNode("table:t", "table", "T", 3, 10, 0)
+    ];
+    const edges = [
+      makeEdge("agent:a", "role:r", 10, 0),
+      makeEdge("role:r", "conn:c", 10, 0),
+      makeEdge("conn:c", "table:t", 10, 0)
+    ];
+    const layout = layoutAccessMap(nodes, edges);
+    const backbone = layout.links.filter((link) => link.layer === "backbone");
+    expect(backbone.length).toBeGreaterThanOrEqual(2);
+    expect(backbone.every((link) => link.width === IDLE_GRANT_PX)).toBe(true);
+    // 闲置表不进列 → 无到表的骨干
+    expect(layout.nodes.some((item) => item.node.kind === "table")).toBe(false);
+    expect(backbone.every((link) => link.edge.target !== "table:t")).toBe(true);
+    // 刻度仍按 usage（此处无 usage）封顶，不得被 grant=10 放大
+    expect(layout.unitPx).toBeLessThanOrEqual(24);
+    const agent = layout.nodes.find((item) => item.node.id === "agent:a");
+    expect(agent!.height).toBeLessThanOrEqual(IDLE_GRANT_PX + 0.1);
+  });
+
+  it("SC-06 — 有 usage 时厚度仍=accessPaths×unitPx；骨干不替代", () => {
+    const nodes = [
+      makeNode("agent:a", "agent", "A", 0, 10, 2),
+      makeNode("role:r", "role", "R", 1, 10, 2),
+      makeNode("conn:c", "connection", "C", 2, 10, 2),
+      makeNode("table:t", "table", "T", 3, 2, 2),
+      makeNode("table:idle", "table", "idle", 3, 8, 0)
+    ];
+    const edges = [
+      makeEdge("agent:a", "role:r", 10, 2),
+      makeEdge("role:r", "conn:c", 10, 2),
+      makeEdge("conn:c", "table:t", 2, 2),
+      makeEdge("conn:c", "table:idle", 8, 0)
+    ];
+    const layout = layoutAccessMap(nodes, edges);
+    const usage = layout.links.find(
+      (link) => link.layer !== "backbone" && link.edge.id === "e|conn:c|table:t"
+    );
+    expect(usage!.width).toBeCloseTo(2 * layout.unitPx, 5);
+    expect(layout.nodes.some((item) => item.node.id === "table:idle")).toBe(false);
+  });
 });
 
 describe("usage-first legend SC-06／07／15／17", () => {
-  it("图例四项：访问路径宽度＋闲置空心；无授权路径宽度／深色内核；无僵尸授权", () => {
+  it("图例四项：访问路径宽度＋闲置／骨干；无授权路径宽度／深色内核；无僵尸授权", () => {
     render(<AccessMapLegend />);
     const legend = screen.getByTestId("access-map-legend");
     expect(legend.children.length).toBe(4);
     expect(legend.textContent).toContain("流带宽度 = 访问路径数");
-    expect(legend.textContent).toContain("闲置授权");
+    expect(legend.textContent).toMatch(/闲置/);
+    expect(legend.textContent).toMatch(/骨干|空心/);
     expect(legend.textContent).not.toContain("授权路径数");
     expect(legend.textContent).not.toContain("深色内核");
     expect(legend.textContent).not.toContain("僵尸授权");

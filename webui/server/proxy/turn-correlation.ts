@@ -121,6 +121,43 @@ export class TurnCorrelationRegistry {
    * 行为与既有实现等价：显式绑定被拒时保留 conflict + `turn_attribution_rejected`；
    * 会话候选降为 candidate + low；无候选时保持 unassigned + none。
    */
+  /**
+   * tools/call 归属入口（空桑基修复 Spec §2）。
+   *
+   * - 有合法 `x-lucy-turn-id` → 显式绑定；
+   * - 否则若同会话存在已 record 的活跃 turn（begin／稳定作用域恢复）→ **显式问询延续** → confirmed；
+   * - 否则走既有 session／identity 推断（candidate／unassigned），不得升 confirmed。
+   */
+  resolveToolCall(input: {
+    identity: TurnCorrelationIdentity;
+    sessionId?: string;
+    explicitTurnId?: string | null;
+  }, now = Date.now()): TurnAttribution {
+    const header =
+      typeof input.explicitTurnId === "string" && input.explicitTurnId.trim()
+        ? input.explicitTurnId.trim()
+        : null;
+    if (header) {
+      return this.resolve(
+        { identity: input.identity, sessionId: input.sessionId, explicitTurnId: header },
+        now
+      );
+    }
+    if (input.sessionId) {
+      const active = this.activeTurnFor(
+        { identity: input.identity, sessionId: input.sessionId },
+        now
+      );
+      if (active) {
+        return this.resolve(
+          { identity: input.identity, sessionId: input.sessionId, explicitTurnId: active },
+          now
+        );
+      }
+    }
+    return this.resolve({ identity: input.identity, sessionId: input.sessionId }, now);
+  }
+
   resolve(input: {
     identity: TurnCorrelationIdentity;
     sessionId?: string;

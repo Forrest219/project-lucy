@@ -101,4 +101,48 @@ describe("TurnCorrelationRegistry", () => {
       associationStatus: "confirmed"
     });
   });
+
+  // 空桑基修复 Spec SC-01–SC-03
+  it("SC-01 — after begin, same-session tool call without header continues as confirmed", () => {
+    const registry = new TurnCorrelationRegistry(() => 60_000);
+    registry.record({ identity, sessionId: "session-a", turnId: "turn-begin" }, 1_000);
+
+    expect(
+      registry.resolveToolCall({ identity, sessionId: "session-a", explicitTurnId: null }, 2_000)
+    ).toEqual({
+      turnId: "turn-begin",
+      mode: "explicit",
+      confidence: "high",
+      associationStatus: "confirmed"
+    });
+  });
+
+  it("SC-02 — without sessionId, do not elevate begin turn to confirmed (stays candidate inference)", () => {
+    const registry = new TurnCorrelationRegistry(() => 60_000);
+    registry.record({ identity, sessionId: "session-a", turnId: "turn-begin" }, 1_000);
+
+    expect(registry.resolveToolCall({ identity, explicitTurnId: null }, 2_000)).toEqual({
+      turnId: "turn-begin",
+      mode: "identity_inferred",
+      confidence: "low",
+      associationStatus: "candidate"
+    });
+  });
+
+  it("SC-03 — illegal header stays conflict and does not fall back to active turn", () => {
+    const registry = new TurnCorrelationRegistry(() => 60_000);
+    registry.record({ identity, sessionId: "session-a", turnId: "turn-begin" }, 1_000);
+
+    expect(
+      registry.resolveToolCall(
+        { identity, sessionId: "session-a", explicitTurnId: "turn-forged" },
+        2_000
+      )
+    ).toEqual({
+      mode: "unassigned",
+      confidence: "none",
+      associationStatus: "conflict",
+      reason: "turn_attribution_rejected"
+    });
+  });
 });

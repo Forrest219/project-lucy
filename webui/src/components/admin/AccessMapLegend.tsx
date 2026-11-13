@@ -32,7 +32,7 @@ export function AccessMapLegend() {
           className="inline-block h-2 w-6 border border-fg-muted bg-transparent"
           aria-hidden="true"
         />
-        闲置授权 = 端点细空心示意（不撑柱／不进列）
+        闲置授权 = 端点示意／无访问时的连通骨干（不撑使用刻度）
       </span>
       <span className="flex items-center gap-1">
         <span

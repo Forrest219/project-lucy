@@ -6,7 +6,7 @@
 | 标签 | `contract-stack` `data-trust` `viz-geometry` `empty-default` `ux-regression` `sev-high` |
 | 环境 | 本机 demo `http://127.0.0.1:55176`（容器 `0.30.0`）；云端 `124.222.172.229:5174`（`0.30.0` / `36a82a3c`） |
 | 相关 | [`lucy-20261105-access-map-confirmed-only-spec.md`](../specs/lucy-20261105-access-map-confirmed-only-spec.md)；[`lucy-20261105-access-map-usage-first-spec.md`](../specs/lucy-20261105-access-map-usage-first-spec.md)；提交 `556fdc30`、`80ff5bca`；页面 `/admin/access-map` |
-| 状态 | `open`（根因已核实；产品修复未授权） |
+| 状态 | `mitigated`（2026-11-13 双轨修复已合入工作区；本机 vitest 绿；demo 镜像重建因 apt 代理失败未冒烟） |
 
 ## 1. 症状与影响
 
@@ -52,10 +52,12 @@
 
 | 动作 | 状态 | 说明 |
 |---|---|---|
-| 核实 `lucy_query` 为何几乎到不了 `confirmed`（归因／晋升链路） | 未开 | 数据面；可能另开 Spec |
-| 产品：无访问时的授权骨架／降级呈现是否恢复可读 | 未开 | 需委托人授权；可能修订 usage-first 空态 |
-| 门禁：部署冒烟「access-map 打开 → rawCalls 或可读空态」 | 未开 | 发布取证或专项检查 |
-| 需求池登记（若升为 0.30 条目） | 未开 | 登记 ≠ 开工 |
+| 修复计划／Spec | **已拍板并落地** | Plan v0.2；Spec [`lucy-20261113-access-map-sankey-empty-fix-spec.md`](../specs/lucy-20261113-access-map-sankey-empty-fix-spec.md) |
+| 归因：begin 后同会话 tools/call → confirmed | **已修** | `resolveToolCall` + mcp-proxy；SC-01–03 |
+| 空态：闲置骨干连通带 | **已修** | `AccessMapCanvas` `layer=backbone`；SC-05–06 |
+| 门禁：vitest | **通过** | turn-correlation + access-map 前端相关 116+；contract 术语失败为无关脏文件 |
+| demo 重建冒烟 | **阻塞** | `demo:upgrade` apt 经 127.0.0.1:7890 拒绝；需网络恢复后再冒烟 |
+| 历史行回填 confirmed | **不做** | 信任 Spec 禁止静默升级；新调用生效 |
 
 ## 7. 证据指针
 
