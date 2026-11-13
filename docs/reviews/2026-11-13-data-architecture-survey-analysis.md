@@ -255,6 +255,10 @@ flowchart LR
 
 客户级关闭「SelectDB＋Hive 扫表已修好」：须真实环境复测（或委托人书面接受 UAT GAP）。路径见测试台 `UAT-SUITE-CATALOG-SCAN`。
 
+### 7.1 已知续作（2026-11-13）
+
+准备表结构对外部目录：**能列表、选中单表报「没有读到字段」**——字段仍走 KTX `DESC`，与列名直连 `SHOW` 通道分裂。解决方案已入总账 **P1-20／REQ-030-041**（方案落盘，待开发授权）：[`external-catalog-column-read Spec`](../specs/lucy-20261113-external-catalog-column-read-spec.md)。
+
 ---
 
 ## 8. 图示资产
@@ -278,3 +282,4 @@ flowchart LR
 | 2026-11-13 | 增补 Canva 风格架构图 4 张 + Mermaid 结构图；图文对照 |
 | 2026-11-13 | 登记客户 Doris 升级／扩容后版本 **2.0.14**；注明当代主线已到 **4.x**，现网以 2.0.14 为准 |
 | 2026-11-13 | 正题更名为 **数据架构调研分析**；文件更名为 `2026-11-13-data-architecture-survey-analysis.md` |
+| 2026-11-13 | §7.1 登记单表读字段缺口与 P1-20 方案指针 |

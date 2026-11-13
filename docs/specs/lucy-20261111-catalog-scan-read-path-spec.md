@@ -61,6 +61,7 @@ New terms:
 ### Follow-up Needed
 
 - 外部目录准备表结构若在逐表 `DESC` 时超过网关时间，另开一条，不把 `information_schema` 加回外部目录。
+- **2026-11-13：** 单表字段读失败（列表已通、选中表「没有读到字段」）已单独立项 **P1-20／REQ-030-041** → [`lucy-20261113-external-catalog-column-read-spec.md`](lucy-20261113-external-catalog-column-read-spec.md)。本条 **SC-10**（字段走 `ktx sql`＋`DESC`）在 P1-20 收口后由该 Spec **取代字段侧合同**；列库／列表 SC 不变。
 
 ## 1. 现场事实
 

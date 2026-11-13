@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.55 / 2026-11-13 |
+| 版本 / 日期 | v0.56 / 2026-11-13 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,7 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.56 | 2026-11-13 | **入池 P1-20／REQ-030-041**：外部目录单表读字段（P1-16 续作）。准备表结构能列表、选中表报「没有读到字段」。方案 Spec／Plan 已落盘；**待终稿确权＋开发授权**；**不入核心分母**；≠ 可上线 |
 | v0.55 | 2026-11-13 | **P0 问数六套件 UAT（方案 B）**：测试台挂 P0-3／1／A／4／5／2；INDEX 必做 PASS（P0-1／A PASS WITH GAP）。Plan [`lucy-20261113-p0-qa-uat-six-suites-plan.md`](lucy-20261113-p0-qa-uat-six-suites-plan.md)。**≠ 改跟进状态合同句；≠ 可上线** |
 | v0.54 | 2026-11-13 | **立项并授权实现 P1-19／REQ-030-040**：访问关系图允许词表对齐（`ok`＋历史 `allow` 进 band E）。来源＝空桑基 UAT F-1。**不入核心分母**；≠ 可上线 |
 | v0.53 | 2026-11-13 | **P1-13 测试台回链**：Spec 列挂 [`UAT-SUITE-ROLES-AGENT-PERF`](../qa/uat/suites/roles-agent-page-perf/suite.md)；INDEX **PASS**（Roles／Agent 页体感）。**≠ 改跟进状态句；≠ 可上线** |
@@ -199,6 +200,7 @@
 | P1-17 | P1 | 访问关系图空桑基修复 | REQ-030-038 | WebUI 修复 | 否 | **CLOSED（2026-11-13）** 中间态出口。**不挡**原 P0；≠ 可上线 | [closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md) · [Plan](lucy-20261113-access-map-sankey-empty-fix-plan.md) |
 | P1-18 | P1 | MCP 客户端 Skill 入口镜像（改挂 `/mcp`） | REQ-030-039 | 工程／接入 | 否 | **CLOSED（2026-11-13）** 中间态出口；工程向。**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md) · [Plan](lucy-20261111-mcp-client-skill-endpoint-fix-plan.md) · [closure](../reviews/2026-11-11-mcp-client-skill-endpoint-fix-closure.md) |
 | P1-19 | P1 | 访问关系图允许词表对齐（`ok`／`allow`） | REQ-030-040 | WebUI 修复 | 否 | **实现已落地（2026-11-13）**。vitest access-map 三文件 **76/76**。UAT 未复跑。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-access-map-outcome-vocabulary-spec.md) |
+| P1-20 | P1 | 外部目录单表读字段（直连 DESC／SHOW COLUMNS） | REQ-030-041 | 连接／事故续作 | 否 | **方案已落盘（2026-11-13）**；待终稿确权＋**开发授权**。P1-16 列表已通、字段仍走 KTX 失败。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-external-catalog-column-read-spec.md) · [Plan](lucy-20261113-external-catalog-column-read-plan.md) |
 | P2-1 | P2 辅线 | 发布工作台分文件勾选发布 | REQ-030-001 | UX 辅线 | 否 | 草案齐；批次 R1 已修订；**终稿未确权**；**不定义 0.30 成败** | [Spec](../specs/lucy-20261107-publish-workbench-per-file-selection-spec.md) · [Plan](lucy-20261107-publish-workbench-per-file-selection-plan.md) |
 | P2-2 | P2 辅线 | 帮助中心体验 | REQ-030-002 | UX 辅线 | 否 | Deferred／开线对齐既有 Spec | 既有 Spec |
 | P2-3 | P2 辅线 | 运维控制面 W-B（语义发布） | REQ-030-004 | 运维辅线 | 否 | Deferred；阻塞条件见既有 Spec | 既有 Spec |
@@ -324,7 +326,13 @@
 
 - **出口**：Doris／SelectDB 外部目录（`catalog.database`／Hive 类连接）列库／列表走直连 `SHOW`；普通 MySQL 准备表结构一次读完 `information_schema.columns`。
 - **关系**：**不入核心分母**（事故修复）；**不挡**原 P0；直接影响连接配置用户。
-- **跟进**：功能合同已收口（2026-11-13）；SC-01–SC-14。
+- **跟进**：功能合同已收口（2026-11-13）；SC-01–SC-14。字段侧续作见 **P1-20**。
+
+### P1-20｜外部目录单表读字段（REQ-030-041）
+
+- **出口**：外部目录准备表结构**选中单表**时，字段经直连 `DESC` → `SHOW COLUMNS` → `DESCRIBE` 读出；不再经 `ktx sql`。
+- **关系**：**不入核心分母**（P1-16 续作）；**不挡**原 P0。
+- **跟进**：方案 Spec／Plan 已落盘（2026-11-13）；**待终稿确权＋开发授权**。
 
 ### P1-19｜访问关系图允许词表（REQ-030-040）
 

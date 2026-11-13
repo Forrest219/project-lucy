@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 候选需求池。**不是**功能 Spec，**不授权**实现 |
 | 版本 / 日期 | v0.46 / 2026-11-13 |
-| 状态 | **已开线**。跟进主表＝[功能清单池／执行总账 SOT](lucy-20261107-lucy-0-30-feature-inventory-pool.md)（v0.54）。**REQ-030-040**／P1-19 访问面允许词表，委托人授权实现。**REQ-030-036…039** 差集补录（**不入核心分母**）。其余 P0／P1 现值同清单池。本条不表示可上线 |
+| 状态 | **已开线**。跟进主表＝[功能清单池／执行总账 SOT](lucy-20261107-lucy-0-30-feature-inventory-pool.md)（v0.56）。**REQ-030-041**／P1-20 外部目录单表读字段方案已落盘（待开发授权）。**REQ-030-040**／P1-19 已落地。**REQ-030-036…039** 差集补录（**不入核心分母**）。其余 P0／P1 现值同清单池。本条不表示可上线 |
 | 授权边界 | **只登记、不实现**。条目进入实施前须：需求澄清 → 独立 Spec → Plan → 开发授权；本池自身不构成其中任一步。**P0 立项 ≠ 开发授权**；**入池 ≠ 立项** |
 | 验收 | 本池自身的验收＝条目结构完整（ID／标题／来源／优先级／状态齐备）＋ 来源可追。**不构成任何功能验收** |
 | 目标版本 | 产品线 **`0.30.0`**（已开线；池内条目仍须 Spec→Plan→授权后才实现） |
@@ -65,7 +65,8 @@
 | REQ-030-034 | 发版性能基线与相对不回退（WebUI＋MCP） | 2026-11-13 Agent／Roles 卡顿复盘；Spec 174 覆盖缺口 | **P1**（清单 P1-13） | **v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）；书面登记「发布取证 acceptance 代替实现 CR」**；**不挡**原 P0。见 [release-perf-baseline-gate](../specs/lucy-20261113-release-perf-baseline-gate-spec.md) · [acceptance](../reviews/2026-11-13-release-perf-baseline-gate-acceptance.md) · [W1-4 A](../reviews/2026-11-13-p1-13-acceptance-stands-for-impl-cr.md) |
 | REQ-030-035 | 问询预算复盘审计字段（交付面 A） | 2026-11-13 产品对话：60／300 放宽后需可复盘调参；审计快照＋calls.csv | **P1**（清单 P1-14） | **v1.0；R2-F＋R4；实现已落地；实现 CR 已落盘（PASS，2026-11-13）**；**不挡**原 P0；≠ 可上线。见 [question-budget-retrospective-audit](../specs/lucy-20261113-question-budget-retrospective-audit-spec.md) · [实现 CR](../reviews/2026-11-13-p1-14-question-budget-retrospective-audit-code-review.md) |
 | REQ-030-036 | 连接写路径 → 执行层热重载 + 成功面诚实 ack | Spec 191 续作；中间态／user-facing「连接与执行层」 | **P1**（清单 P1-15） | **已落地（2026-11-13）**；**不入核心分母**；**不挡**原 P0。见 [Spec 191](../../webui/docs/191-execution-runtime-reload-spec.md) · [Plan](lucy-20261112-connection-create-execution-runtime-reload-plan.md) · [收口](../reviews/2026-11-13-connection-reload-middev-closure.md) |
-| REQ-030-037 | 库内扫表读法（Doris 外部目录 Hive + 普通 MySQL） | 2026-11-11 客户现场事故（hive-1／hive-jd／marketingapi／tblu） | **P1**（清单 P1-16） | **功能合同已收口（2026-11-13）**；**不入核心分母**；**不挡**原 P0。见 [catalog-scan-read-path](../specs/lucy-20261111-catalog-scan-read-path-spec.md) · [证据审计](../reviews/2026-11-13-catalog-scan-read-path-sc-evidence-audit.md) |
+| REQ-030-037 | 库内扫表读法（Doris 外部目录 Hive + 普通 MySQL） | 2026-11-11 客户现场事故（hive-1／hive-jd／marketingapi／tblu） | **P1**（清单 P1-16） | **功能合同已收口（2026-11-13）**；**不入核心分母**；**不挡**原 P0。字段续作见 REQ-030-041。见 [catalog-scan-read-path](../specs/lucy-20261111-catalog-scan-read-path-spec.md) · [证据审计](../reviews/2026-11-13-catalog-scan-read-path-sc-evidence-audit.md) |
+| REQ-030-041 | 外部目录单表读字段（直连） | 2026-11-13：hive-1／dim 能列表、选中表「没有读到字段」 | **P1**（清单 P1-20） | **方案已落盘**；待终稿确权＋开发授权；**不入核心分母**。见 [external-catalog-column-read Spec](../specs/lucy-20261113-external-catalog-column-read-spec.md) · [Plan](lucy-20261113-external-catalog-column-read-plan.md) |
 | REQ-030-038 | 访问关系图空桑基修复 | 中间态出口半成品收口 | **P1**（清单 P1-17） | **CLOSED（2026-11-13）**；**不入核心分母**。见 [closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md) |
 | REQ-030-039 | MCP 客户端 Skill 入口镜像（改挂 `/mcp`） | 中间态出口半成品收口 | **P1**（清单 P1-18） | **CLOSED（2026-11-13）**；工程向；**不入核心分母**。见 [Spec](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md) · [closure](../reviews/2026-11-11-mcp-client-skill-endpoint-fix-closure.md) |
 | REQ-030-040 | 访问关系图允许词表对齐（`ok`／`allow`） | 空桑基 UAT F-1（2026-11-13） | **P1**（清单 P1-19） | **实现已落地（2026-11-13）**；vitest access-map 三文件 76/76；UAT 未复跑；**不入核心分母**。见 [Spec](../specs/lucy-20261113-access-map-outcome-vocabulary-spec.md) |
