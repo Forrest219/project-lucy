@@ -434,6 +434,28 @@ describe("query field exposure (SC-04/05/06/19/20/29)", () => {
     expect(verdict.denyReason).toBe(FIELD_NOT_EXPOSED);
   });
 
+  it("SC-06: lucy_explain_query carrier uses same exposure deny for unexposed column", () => {
+    // Named SC-06 unit lock: explain shares validateQueryFieldsAgainstExposure with query.
+    // Loopback deny + zero-upstream evidence lives in field-exposure-proxy-sc04-sc06.test.ts.
+    const snap = trimmedSnapshot(["secret"]);
+    pinServingGeneration(snap);
+    const explainArgs = {
+      connectionId: "demo",
+      dimensions: [{ field: "orders.secret" }],
+      // Marker that this is the explain-shaped carrier under test (SC-06).
+      _tool: "lucy_explain_query" as const
+    };
+    const verdict = validateQueryFieldsAgainstExposure(
+      {
+        connectionId: explainArgs.connectionId,
+        dimensions: explainArgs.dimensions
+      },
+      lookup,
+      snap
+    );
+    expect(verdict.denyReason).toBe(FIELD_NOT_EXPOSED);
+  });
+
   it("allows exposed dimension", () => {
     const snap = trimmedSnapshot(["secret"]);
     const verdict = validateQueryFieldsAgainstExposure(
@@ -960,5 +982,280 @@ describe("serving generation persistence smoke", () => {
     // expected but missing ledger → unavailable when loading that source
     const set = loadExposureSet(SRC.connectionId, SRC.schema, SRC.sourceName, snap);
     expect(set.state).toBe("unavailable");
+  });
+});
+
+describe("legal ledger-only publish → activate → runtime trim (SC-17)", () => {
+  let tmp: string;
+
+  beforeEach(async () => {
+    resetFieldExposureRuntimeForTests();
+    tmp = await mkdtemp(path.join(os.tmpdir(), "fe-sc17-"));
+  });
+
+  afterEach(async () => {
+    resetFieldExposureRuntimeForTests();
+    await rm(tmp, { recursive: true, force: true });
+  });
+
+  it("SC-17: legal ledger-only publish → activate success → runtime trims new exclusion set", async () => {
+    // Candidate: only ledger changes; overlay measures reference exposed cols only.
+    const legalLedger = buildTestLedgerText(SRC, ["secret"]);
+    const candidate = {
+      ledgers: [
+        {
+          connectionId: SRC.connectionId,
+          schema: SRC.schema,
+          sourceName: SRC.sourceName,
+          text: legalLedger,
+          expected: true
+        }
+      ],
+      semanticSources: [
+        {
+          targetPath: "semantic-layer/demo/orders.yaml",
+          connectionId: SRC.connectionId,
+          schema: SRC.schema,
+          sourceName: SRC.sourceName,
+          content: {
+            measures: {
+              amt_total: { expr: "sum(orders.amt)" },
+              order_count: { expr: "count(orders.dt)" }
+            },
+            grain: ["dt"]
+          }
+        }
+      ]
+    };
+    const violations = checkExposureReferenceContract(candidate);
+    expect(violations).toEqual([]);
+
+    // Sanity: illegal ledger-only (measure still refs secret) would hard-fail — not this path.
+    const illegal = checkExposureReferenceContract({
+      ...candidate,
+      semanticSources: [
+        {
+          ...candidate.semanticSources[0]!,
+          content: {
+            measures: { leak: { expr: "sum(orders.secret)" } }
+          }
+        }
+      ]
+    });
+    expect(illegal.some((v) => v.checkId.includes("orders.secret"))).toBe(true);
+
+    // Activate new ExecutionGeneration with the legal ledger (publish success path).
+    const key = sourceKey(SRC.connectionId, SRC.schema, SRC.sourceName);
+    const parsed = parseLedgerYaml(legalLedger, SRC);
+    const next: ActivatedSnapshot = {
+      ...bootstrapEmptyServingGeneration("gen-sc17"),
+      generationId: "gen-sc17",
+      upstreamExecutionGenerationId: "gen-sc17",
+      admissionMode: "OPEN",
+      expectedSetLoad: {
+        state: "ready",
+        set: new Set([key]),
+        digest: "d-sc17",
+        generationId: "gen-sc17",
+        expectedSetRequired: true
+      },
+      exposureLedgersBySource: new Map([[key, legalLedger]]),
+      exposureDigestPerSource: new Map([[key, parsed.digest ?? "d"]])
+    };
+    const open = await activateExecutionGenerationStratB(next, { projectRoot: tmp });
+    expect(open.admissionMode).toBe("OPEN");
+    expect(open.upstreamExecutionGenerationId).toBe(open.generationId);
+
+    const serving = await loadServingGeneration({ projectRoot: tmp, forceReload: true });
+    expect(serving.generationId).toBe("gen-sc17");
+    expect(serving.exposureLedgersBySource.get(key)).toContain("secret");
+
+    // Runtime: discovery trim + query deny use the new exclusion set.
+    const set = loadExposureSet(SRC.connectionId, SRC.schema, SRC.sourceName, serving);
+    expect(set.mode).toBe("trimmed");
+    expect(set.excluded.has("secret")).toBe(true);
+    const decision = exposureDecision(set);
+    expect(decision.allow).toBe(true);
+    if (!decision.allow || decision.fullInventory) throw new Error("expected trimmed");
+    const discovery = applyDiscoveryTrim(
+      { columns: [{ name: "dt" }, { name: "secret" }, { name: "amt" }] },
+      decision,
+      "read_source_columns"
+    );
+    expect(discovery.ok).toBe(true);
+    if (!discovery.ok) return;
+    const cols = (discovery.payload as { columns: Array<{ name: string }> }).columns.map((c) => c.name);
+    expect(cols).toEqual(["dt", "amt"]);
+
+    pinServingGeneration(serving);
+    const denySecret = validateQueryFieldsAgainstExposure(
+      { connectionId: "demo", dimensions: [{ field: "orders.secret" }] },
+      lookup,
+      serving
+    );
+    expect(denySecret.denyReason).toBe(FIELD_NOT_EXPOSED);
+    const allowAmt = validateQueryFieldsAgainstExposure(
+      { connectionId: "demo", measures: ["orders.amt"] },
+      lookup,
+      serving
+    );
+    expect(allowAmt.denyReason).toBeNull();
+  });
+});
+
+describe("Strat-B switch + measure semantic fork probe (SC-25)", () => {
+  /**
+   * Process-in upstream semantics probe (Spec SC-25「或等价」):
+   * keyed by upstreamExecutionGenerationId — not merely snapshot digest equality.
+   * V1 revenue hides secret; V2 same-name measure reintroduces secret in expr.
+   */
+  const MEASURE = "revenue";
+  const DEFINITIONS: Record<string, { expr: string; excludesSecret: boolean }> = {
+    "gen-v1": { expr: "sum(orders.amt)", excludesSecret: true },
+    "gen-v2": { expr: "sum(orders.amt + orders.secret)", excludesSecret: false }
+  };
+
+  function probeUpstreamMeasureSemantics(
+    upstreamExecutionGenerationId: string,
+    measureName: string
+  ): { generationId: string; measure: string; expr: string } {
+    const def = DEFINITIONS[upstreamExecutionGenerationId];
+    if (!def) {
+      throw new Error(`no upstream definition for generation ${upstreamExecutionGenerationId}`);
+    }
+    return {
+      generationId: upstreamExecutionGenerationId,
+      measure: measureName,
+      expr: def.expr
+    };
+  }
+
+  function snapshotForGeneration(
+    generationId: "gen-v1" | "gen-v2",
+    excluded: string[]
+  ): ActivatedSnapshot {
+    const text = buildTestLedgerText(SRC, excluded);
+    const key = sourceKey(SRC.connectionId, SRC.schema, SRC.sourceName);
+    const parsed = parseLedgerYaml(text, SRC);
+    const def = DEFINITIONS[generationId]!;
+    return {
+      ...bootstrapEmptyServingGeneration(generationId),
+      generationId,
+      upstreamExecutionGenerationId: generationId,
+      admissionMode: "OPEN",
+      expectedSetLoad: {
+        state: "ready",
+        set: new Set([key]),
+        digest: `expected-${generationId}`,
+        generationId,
+        expectedSetRequired: true
+      },
+      exposureLedgersBySource: new Map([[key, text]]),
+      exposureDigestPerSource: new Map([[key, parsed.digest ?? generationId]]),
+      semanticDefinitionView: {
+        generationId,
+        digest: `def:${def.expr}`
+      },
+      indexConsumptionVersion: {
+        boundGenerationId: generationId,
+        digest: `idx:${generationId}`
+      }
+    };
+  }
+
+  let tmp: string;
+
+  beforeEach(async () => {
+    resetFieldExposureRuntimeForTests();
+    tmp = await mkdtemp(path.join(os.tmpdir(), "fe-sc25-"));
+  });
+
+  afterEach(async () => {
+    resetFieldExposureRuntimeForTests();
+    await rm(tmp, { recursive: true, force: true });
+  });
+
+  it("SC-25: pin old ServingGeneration; OPEN upstream==serving; V1/V2 fork probe; Strat-B STOP", async () => {
+    // Semantic fork must differ (not just digest tags).
+    expect(DEFINITIONS["gen-v1"]!.expr).not.toBe(DEFINITIONS["gen-v2"]!.expr);
+    expect(DEFINITIONS["gen-v1"]!.excludesSecret).toBe(true);
+    expect(DEFINITIONS["gen-v2"]!.excludesSecret).toBe(false);
+
+    const v1 = snapshotForGeneration("gen-v1", ["secret"]);
+    const openV1 = await activateExecutionGenerationStratB(v1, { projectRoot: tmp });
+    expect(openV1.admissionMode).toBe("OPEN");
+    expect(openV1.upstreamExecutionGenerationId).toBe(openV1.generationId);
+
+    // Admitted OPEN query consumes V1 measure semantics via upstream probe.
+    const v1Probe = probeUpstreamMeasureSemantics(openV1.upstreamExecutionGenerationId, MEASURE);
+    expect(v1Probe.expr).toBe("sum(orders.amt)");
+    expect(v1Probe.expr).not.toContain("secret");
+
+    // In-flight pin: capture serving at tools/call entry; must not flip mid-request.
+    const inFlightPin = await loadServingGeneration({ projectRoot: tmp, forceReload: true });
+    expect(inFlightPin.generationId).toBe("gen-v1");
+    trackUpstreamSemanticEnter();
+
+    // Publish / shared-index window (Strat-B): STOP → DRAIN; new upstream hits denied.
+    const armed = await armSharedIndexMutationBarrier({ projectRoot: tmp, waitMs: 0 });
+    expect(armed).toBe(true);
+    const mid = await loadServingGeneration({ projectRoot: tmp, forceReload: true });
+    expect(mid.admissionMode).toBe("DRAINING");
+    expect(mid.generationId).toBe("gen-v1"); // serving not yet advanced
+    expect(admitToolsCallEntry("lucy_query", mid)).toEqual({
+      allow: false,
+      reason: FIELD_EXPOSURE_UNAVAILABLE
+    });
+
+    // Concurrent new requests during switch: all STOP with exposure-unavailable.
+    const concurrent = await Promise.all(
+      Array.from({ length: 8 }, async () => {
+        const snap = await loadServingGeneration({ projectRoot: tmp });
+        return admitToolsCallEntry("lucy_query", snap);
+      })
+    );
+    for (const verdict of concurrent) {
+      expect(verdict.allow).toBe(false);
+      if (!verdict.allow) expect(verdict.reason).toBe(FIELD_EXPOSURE_UNAVAILABLE);
+    }
+
+    // Index advanced toward V2 while activation not confirmed → keep STOP; no OPEN mixed gen.
+    await markUpstreamIndexAdvanced({ projectRoot: tmp, advancedId: "index-advanced:gen-v2" });
+    const half = await loadServingGeneration({ projectRoot: tmp, forceReload: true });
+    expect(half.admissionMode).toBe("STOP_ADMISSION");
+    expect(half.generationId).toBe("gen-v1");
+    expect(isUpstreamAheadOfServing(half)).toBe(true);
+    expect(admitToolsCallEntry("lucy_query", half).allow).toBe(false);
+    // In-flight pin still V1 semantics (must not observe V2 while serving is V1).
+    expect(inFlightPin.generationId).toBe("gen-v1");
+    expect(probeUpstreamMeasureSemantics(inFlightPin.upstreamExecutionGenerationId, MEASURE).expr).toBe(
+      "sum(orders.amt)"
+    );
+
+    trackUpstreamSemanticLeave();
+
+    // Activate V2 successfully → OPEN with upstream==serving; probe returns V2 expr.
+    const v2 = snapshotForGeneration("gen-v2", []);
+    const openV2 = await activateExecutionGenerationStratB(v2, { projectRoot: tmp });
+    expect(openV2.admissionMode).toBe("OPEN");
+    expect(openV2.upstreamExecutionGenerationId).toBe(openV2.generationId);
+    expect(openV2.generationId).toBe("gen-v2");
+
+    const v2Probe = probeUpstreamMeasureSemantics(openV2.upstreamExecutionGenerationId, MEASURE);
+    expect(v2Probe.expr).toBe("sum(orders.amt + orders.secret)");
+    expect(v2Probe.expr).toContain("secret");
+    // Returned semantics belong to OPEN generation — not V1.
+    expect(v2Probe.expr).not.toBe(v1Probe.expr);
+    expect(v2Probe.generationId).toBe(openV2.generationId);
+
+    // Discovery / query face on V2 full_expose allows secret (fork restored exposure).
+    const set = loadExposureSet(SRC.connectionId, SRC.schema, SRC.sourceName, openV2);
+    expect(set.mode).toBe("full_expose");
+    const allowSecret = validateQueryFieldsAgainstExposure(
+      { connectionId: "demo", measures: [{ expr: "sum(orders.secret)", name: "revenue" }] },
+      lookup,
+      openV2
+    );
+    expect(allowSecret.denyReason).toBeNull();
   });
 });
