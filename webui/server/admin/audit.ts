@@ -1130,6 +1130,25 @@ interface QueryRow {
   credential_principal_id?: string | null;
 }
 
+/** REQ-030-035：预算复盘扁平列；不得进入 calls-v2 数据列／v2 metadata。 */
+const BUDGET_RETROSPECTIVE_CSV_HEADERS = [
+  "budget_event_kind",
+  "budget_exhausted_by",
+  "budget_calls",
+  "budget_busy_ms",
+  "budget_elapsed_ms",
+  "budget_attempts",
+  "budget_max_calls",
+  "budget_max_busy_ms",
+  "budget_max_wall_ms",
+  "budget_wall_mode",
+  "budget_window_id",
+  "budget_continuations"
+] as const;
+
+type BudgetRetrospectiveCsvHeader = (typeof BUDGET_RETROSPECTIVE_CSV_HEADERS)[number];
+const BUDGET_RETROSPECTIVE_HEADER_SET: ReadonlySet<string> = new Set(BUDGET_RETROSPECTIVE_CSV_HEADERS);
+
 const ACCESS_LOG_CSV_HEADERS = [
   "id",
   "ts",
@@ -1197,7 +1216,9 @@ const ACCESS_LOG_CSV_HEADERS = [
   "ingress_event_id",
   "endpoint_id",
   "ledger_seq",
-  "error_category"
+  "error_category",
+  // REQ-030-035／P1-14：问询预算复盘扁平列（仅 calls.csv v1 表尾；v2 显式排除）
+  ...BUDGET_RETROSPECTIVE_CSV_HEADERS
 ] as const;
 
 type CsvFieldMetadata = {
@@ -1599,8 +1620,110 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "string|null",
     description: "MCP initialize 的 clientInfo.version。与自报客户端成对。",
     trigger: "握手带了 clientInfo.version 时输出。"
+  },
+  // REQ-030-035／P1-14 — 预算复盘扁平列（从 args_summary.budgetSnapshot 抽取）
+  budget_event_kind: {
+    label: "预算事件种类",
+    format: "enum {budget_stop, continuation_rollover}|空",
+    description: "budget_stop＝预算终止停机行；continuation_rollover＝续查换窗生效行（快照为换窗前读数）。",
+    trigger: "args_summary 含 budgetSnapshot 时输出；非事件行为空。"
+  },
+  budget_exhausted_by: {
+    label: "预算耗尽维度",
+    format: "enum {calls, busy, wall, both}|空",
+    description: "与运行时 classifyExhaustion 同源：次数／忙时／墙钟／同时。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_calls: {
+    label: "预算窗口调用数",
+    format: "integer|空",
+    description: "该事件所涉窗口内的数据工具调用次数。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_busy_ms: {
+    label: "预算窗口忙时毫秒",
+    format: "integer|空",
+    description: "该事件所涉窗口已结算忙时（settled）。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_elapsed_ms: {
+    label: "预算窗口墙钟毫秒",
+    format: "integer|空",
+    description: "elapsed 模式下该窗口墙钟流逝；settled 下为空。",
+    trigger: "wallMode=elapsed 的预算复盘事件行输出。"
+  },
+  budget_attempts: {
+    label: "问询累计尝试次数",
+    format: "integer|空",
+    description: "问询级累计准入次数（跨窗）。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_max_calls: {
+    label: "预算次数上限",
+    format: "integer|空",
+    description: "写入时的 QUESTION_BUDGET_MAX_CALLS 常量。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_max_busy_ms: {
+    label: "预算忙时上限毫秒",
+    format: "integer|空",
+    description: "写入时的 QUESTION_BUDGET_MAX_BUSY_MS 常量。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_max_wall_ms: {
+    label: "预算墙钟上限毫秒",
+    format: "integer|空",
+    description: "写入时的 QUESTION_BUDGET_MAX_WALL_MS 常量。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_wall_mode: {
+    label: "预算墙钟模式",
+    format: "enum {settled, elapsed}|空",
+    description: "写入时的墙钟判定模式。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_window_id: {
+    label: "预算窗口 ID",
+    format: "integer|空",
+    description: "该事件所涉窗口编号。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_continuations: {
+    label: "已用续查次数",
+    format: "integer|空",
+    description: "快照瞬间已消耗的续查次数（换窗前为旧窗读数）。",
+    trigger: "预算复盘事件行输出。"
   }
 };
+
+function budgetRetrospectiveCsvCells(argsSummaryRaw: string | null): string[] {
+  let snap: Record<string, unknown> | undefined;
+  if (argsSummaryRaw) {
+    try {
+      const args = JSON.parse(argsSummaryRaw) as Record<string, unknown>;
+      if (args.budgetSnapshot && typeof args.budgetSnapshot === "object" && args.budgetSnapshot !== null) {
+        snap = args.budgetSnapshot as Record<string, unknown>;
+      }
+    } catch {
+      snap = undefined;
+    }
+  }
+  if (!snap) return BUDGET_RETROSPECTIVE_CSV_HEADERS.map(() => "");
+  return [
+    csvCell(typeof snap.eventKind === "string" ? snap.eventKind : null),
+    csvCell(typeof snap.exhaustedBy === "string" ? snap.exhaustedBy : null),
+    snap.calls == null ? "" : String(snap.calls),
+    snap.busyMs == null ? "" : String(snap.busyMs),
+    snap.elapsedMs == null ? "" : String(snap.elapsedMs),
+    snap.attempts == null ? "" : String(snap.attempts),
+    snap.maxCalls == null ? "" : String(snap.maxCalls),
+    snap.maxBusyMs == null ? "" : String(snap.maxBusyMs),
+    snap.maxWallMs == null ? "" : String(snap.maxWallMs),
+    csvCell(typeof snap.wallMode === "string" ? snap.wallMode : null),
+    snap.windowId == null ? "" : String(snap.windowId),
+    snap.continuations == null ? "" : String(snap.continuations)
+  ];
+}
 
 function renderAccessLogCsv(rows: QueryRow[]): string {
   const lines = [
@@ -1693,7 +1816,8 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.ingress_event_id),
         csvCell(row.endpoint_id),
         row.ledger_seq ?? "",
-        csvCell(row.error_category)
+        csvCell(row.error_category),
+        ...budgetRetrospectiveCsvCells(row.args_summary)
       ].join(",")
     })
   ];
@@ -2625,7 +2749,11 @@ function buildAuditCsvFieldMetadata(kind: "calls" | "turns", generatedAt = new D
 // v2 CSV path: GET /api/admin/audit/v2/export-metadata (this file).
 
 const ACCESS_LOG_CSV_HEADERS_V2 = [
-  ...ACCESS_LOG_CSV_HEADERS,
+  // REQ-030-035 R9：v2 显式排除预算复盘扁平列（声明 ⊆ 实际；不扩散进 calls-v2）
+  ...(ACCESS_LOG_CSV_HEADERS.filter(
+    (h): h is Exclude<(typeof ACCESS_LOG_CSV_HEADERS)[number], BudgetRetrospectiveCsvHeader> =>
+      !BUDGET_RETROSPECTIVE_HEADER_SET.has(h)
+  )),
   // Spec 173 v0.3 / contract §2.3 — 4-axis status + event_type
   "event_type",
   "transport_sub_type",
@@ -2667,7 +2795,10 @@ const ACCESS_LOG_CSV_HEADERS_V2 = [
 ] as const;
 
 const ACCESS_LOG_FIELD_METADATA_V2: Record<(typeof ACCESS_LOG_CSV_HEADERS_V2)[number], Omit<CsvFieldMetadata, "name">> = {
-  ...ACCESS_LOG_FIELD_METADATA,
+  // REQ-030-035 R9：v2 metadata 不得声明预算复盘列
+  ...Object.fromEntries(
+    Object.entries(ACCESS_LOG_FIELD_METADATA).filter(([key]) => !BUDGET_RETROSPECTIVE_HEADER_SET.has(key))
+  ),
   // B27 新增列的元数据已在 ACCESS_LOG_FIELD_METADATA 中声明（单一来源）。
   event_type: {
     label: "事件类型",

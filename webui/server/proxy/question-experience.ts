@@ -65,6 +65,28 @@ export type PublishedVersion = {
   valueKind: "实际" | "预测";
 };
 
+export type BudgetExhaustedBy = "calls" | "busy" | "wall" | "both";
+export type BudgetSnapshotEventKind = "budget_stop" | "continuation_rollover";
+
+/** REQ-030-035／P1-14 — retrospective audit snapshot (args_summary.budgetSnapshot). */
+export type BudgetSnapshot = {
+  schemaVersion: "lucy-budget-snapshot/v1";
+  eventKind: BudgetSnapshotEventKind;
+  exhaustedBy: BudgetExhaustedBy;
+  calls: number;
+  busyMs: number;
+  elapsedMs: number | null;
+  attempts: number;
+  maxCalls: number;
+  maxBusyMs: number;
+  maxWallMs: number;
+  wallMode: "settled" | "elapsed";
+  windowId: number;
+  round: number;
+  continuations: number;
+  archivedBusyMsByWindow: Record<string, number>;
+};
+
 export type BudgetStop = {
   action: "stop";
   reason: "question_budget_exhausted" | "question_budget_unavailable";
@@ -75,6 +97,8 @@ export type BudgetStop = {
   continuationMatched?: boolean;
   continuationCreditLeft?: boolean;
   canContinueByCapability?: boolean;
+  /** Present on real exhaustion stops; never on unavailable. */
+  budgetSnapshot?: BudgetSnapshot;
 };
 
 export type BudgetConcurrencyReject = {
@@ -95,9 +119,58 @@ export type BudgetAllow = {
   action: "allow";
   ticket?: BudgetTicket;
   continued?: boolean;
+  /** Pre-rollover snapshot when `continued` is true (REQ-030-035 R3b). */
+  budgetSnapshot?: BudgetSnapshot;
 };
 
 export type BudgetDecision = BudgetAllow | BudgetStop | BudgetConcurrencyReject;
+
+/**
+ * Classify which budget dimension(s) are exhausted at `now`.
+ * Same predicates as `QuestionBudget.isExhausted` (calls ∪ time).
+ */
+export function classifyExhaustion(state: BudgetState, now: number): BudgetExhaustedBy | null {
+  const wallMode = questionBudgetWallMode();
+  const callsExhausted = (state.calls ?? 0) >= QUESTION_BUDGET_MAX_CALLS;
+  const timeExhausted = wallMode === "elapsed"
+    ? now - state.startedAt >= QUESTION_BUDGET_MAX_WALL_MS
+    : (state.busyMs ?? 0) >= QUESTION_BUDGET_MAX_BUSY_MS;
+  if (!callsExhausted && !timeExhausted) return null;
+  if (callsExhausted && timeExhausted) return "both";
+  if (callsExhausted) return "calls";
+  return wallMode === "elapsed" ? "wall" : "busy";
+}
+
+/** Build a desensitized retrospective snapshot. Throws if state is not exhausted. */
+export function buildBudgetSnapshot(input: {
+  eventKind: BudgetSnapshotEventKind;
+  state: BudgetState;
+  now: number;
+}): BudgetSnapshot {
+  const exhaustedBy = classifyExhaustion(input.state, input.now);
+  if (!exhaustedBy) {
+    throw new Error("buildBudgetSnapshot: state is not exhausted");
+  }
+  const wallMode = questionBudgetWallMode();
+  const archived = { ...(input.state.archivedBusyMsByWindow ?? {}) };
+  return {
+    schemaVersion: "lucy-budget-snapshot/v1",
+    eventKind: input.eventKind,
+    exhaustedBy,
+    calls: input.state.calls ?? 0,
+    busyMs: input.state.busyMs ?? 0,
+    elapsedMs: wallMode === "elapsed" ? Math.max(0, input.now - input.state.startedAt) : null,
+    attempts: input.state.attempts ?? 0,
+    maxCalls: QUESTION_BUDGET_MAX_CALLS,
+    maxBusyMs: QUESTION_BUDGET_MAX_BUSY_MS,
+    maxWallMs: QUESTION_BUDGET_MAX_WALL_MS,
+    wallMode,
+    windowId: input.state.windowId ?? 0,
+    round: input.state.round ?? 0,
+    continuations: input.state.continuations ?? 0,
+    archivedBusyMsByWindow: archived
+  };
+}
 
 export type ContinuationDeclaration =
   | { ok: true; idempotent?: boolean; declared?: boolean; windowId?: number; round?: number }
@@ -323,7 +396,13 @@ export class QuestionBudget {
       const committed = await this.commit(scopeKey, decision.candidate, decision.idempotencyKey, now);
       if (!committed) return this.unavailableStop(state);
       if (decision.kind === "stop") {
-        return this.stopFrom(committed, canContinue, decision.presented, decision.matched);
+        return this.stopFrom(
+          committed,
+          canContinue,
+          decision.presented,
+          decision.matched,
+          decision.exhaustionSnapshot
+        );
       }
       const ticket: BudgetTicket = {
         scopeKey,
@@ -333,7 +412,12 @@ export class QuestionBudget {
         startMonoMs: this.monoNow(),
         settled: false
       };
-      return { action: "allow", ticket, continued: decision.continued };
+      return {
+        action: "allow",
+        ticket,
+        continued: decision.continued,
+        ...(decision.exhaustionSnapshot ? { budgetSnapshot: decision.exhaustionSnapshot } : {})
+      };
     });
   }
 
@@ -445,8 +529,14 @@ export class QuestionBudget {
     }
     Object.assign(state, decided.candidate);
     this.turns.set(scopeKey, state);
-    if (decided.kind === "stop") return this.stopFrom(state, canContinue, decided.presented, decided.matched);
-    return { action: "allow" };
+    if (decided.kind === "stop") {
+      return this.stopFrom(state, canContinue, decided.presented, decided.matched, decided.exhaustionSnapshot);
+    }
+    return {
+      action: "allow",
+      continued: decided.continued,
+      ...(decided.exhaustionSnapshot ? { budgetSnapshot: decided.exhaustionSnapshot } : {})
+    };
   }
 
   /** 释放一次并发占用。稳定作用域下优先按票据结算，这里只服务旧的 `turn:` 键。 */
@@ -572,6 +662,7 @@ export class QuestionBudget {
         continued: boolean;
         presented: boolean;
         matched: boolean;
+        exhaustionSnapshot?: BudgetSnapshot;
       } {
     const headerPresented = typeof continueToken === "string" && continueToken.length > 0;
     // Spec 162 §6.3：可信头部**只有**两种 —— 已下发的 `presentedToken`，
@@ -585,7 +676,14 @@ export class QuestionBudget {
     const exhausted = this.isExhausted(state, now);
     const useContinuation = exhausted && (state.continuations ?? 0) < 1 && (toolTrusted || headerTrusted);
     const candidate = this.cloneState(state);
+    // REQ-030-035 R3：换窗前快照必须用清零前读数。
+    let rolloverSnapshot: BudgetSnapshot | undefined;
     if (useContinuation) {
+      rolloverSnapshot = buildBudgetSnapshot({
+        eventKind: "continuation_rollover",
+        state: candidate,
+        now
+      });
       this.addArchived(candidate, candidate.round ?? 0, candidate.windowId ?? 0, candidate.busyMs ?? 0);
       candidate.calls = 0;
       candidate.busyMs = 0;
@@ -600,6 +698,7 @@ export class QuestionBudget {
     if (this.isExhausted(candidate, now)) {
       if (!candidate.presentedToken) candidate.presentedToken = this.presentToken(candidate, turnId ?? state.turnId ?? undefined);
       const token = candidate.presentedToken;
+      const stopSource = useContinuation ? state : candidate;
       return {
         kind: "stop",
         candidate,
@@ -607,7 +706,12 @@ export class QuestionBudget {
         requestId: "",
         continued: false,
         presented,
-        matched: headerPresented ? Boolean(headerTrusted) : false
+        matched: headerPresented ? Boolean(headerTrusted) : false,
+        exhaustionSnapshot: buildBudgetSnapshot({
+          eventKind: "budget_stop",
+          state: stopSource,
+          now
+        })
       };
     }
     const requestId = randomUUID();
@@ -624,11 +728,18 @@ export class QuestionBudget {
       requestId,
       continued: useContinuation,
       presented,
-      matched
+      matched,
+      ...(rolloverSnapshot ? { exhaustionSnapshot: rolloverSnapshot } : {})
     };
   }
 
-  private stopFrom(state: BudgetState, canContinue: boolean, presented: boolean, matched: boolean): BudgetStop {
+  private stopFrom(
+    state: BudgetState,
+    canContinue: boolean,
+    presented: boolean,
+    matched: boolean,
+    budgetSnapshot?: BudgetSnapshot
+  ): BudgetStop {
     const token = state.presentedToken ?? "";
     return {
       action: "stop",
@@ -639,7 +750,8 @@ export class QuestionBudget {
       continuationPresented: presented,
       continuationMatched: matched,
       continuationCreditLeft: (state.continuations ?? 0) < 1,
-      canContinueByCapability: canContinue
+      canContinueByCapability: canContinue,
+      ...(budgetSnapshot ? { budgetSnapshot } : {})
     };
   }
 

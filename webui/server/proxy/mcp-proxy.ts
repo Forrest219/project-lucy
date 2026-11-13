@@ -131,6 +131,7 @@ import {
   TRUNCATION_REPAIR_HINT,
   type RepairTargetEvidence,
   isBudgetUnavailable,
+  type BudgetSnapshot,
 } from "./question-experience.js";
 import { bindQuestionBudgetSettlement } from "./question-budget-lifecycle.js";
 import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
@@ -5304,7 +5305,11 @@ async function buildDenialRepairPayload(
               continuationMatched: budgetDecision.continuationMatched ?? false,
               continuationCreditLeft: budgetDecision.continuationCreditLeft ?? false,
               canContinueByCapability: budgetDecision.canContinueByCapability ?? false
-            }
+            },
+            // REQ-030-035／P1-14：预算终止行写入可复盘快照（不加进 MCP 响应体）。
+            ...("budgetSnapshot" in budgetDecision && budgetDecision.budgetSnapshot
+              ? { budgetSnapshot: budgetDecision.budgetSnapshot as BudgetSnapshot }
+              : {})
           },
           // 闸序事实：ACL 裁决（上方 aclCheck）先于预算闸。预算终止时授权**已经
           // 裁决通过**，因此显式记录该凭据 —— 预算桶不得覆盖已发生的授权裁决，
@@ -5346,7 +5351,14 @@ async function buildDenialRepairPayload(
           requestId: budgetDecision.ticket?.requestId ?? null
         };
         const previousFact = (argsSummary?.budgetContinuation ?? {}) as Record<string, unknown>;
-        argsSummary = { ...(argsSummary ?? {}), budgetContinuation: { ...previousFact, ...appliedFact } };
+        // REQ-030-035 R3：续查换窗生效行带换窗前快照（eventKind=continuation_rollover）。
+        const rolloverSnap =
+          "budgetSnapshot" in budgetDecision ? budgetDecision.budgetSnapshot : undefined;
+        argsSummary = {
+          ...(argsSummary ?? {}),
+          budgetContinuation: { ...previousFact, ...appliedFact },
+          ...(rolloverSnap ? { budgetSnapshot: rolloverSnap } : {})
+        };
       }
       if (budgetDecision.ticket) {
         const ticket = budgetDecision.ticket;

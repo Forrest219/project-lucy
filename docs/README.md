@@ -26,6 +26,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261113-question-budget-retrospective-audit-spec.md](specs/lucy-20261113-question-budget-retrospective-audit-spec.md) | **v1.0；R2-F＋R4；开发授权已获得；实现已落地（2026-11-13）**（P1-14／REQ-030-035）：问询预算复盘审计字段（交付面 A）。Plan 见 [lucy-20261113-question-budget-retrospective-audit-plan.md](plans/lucy-20261113-question-budget-retrospective-audit-plan.md)。评审见 [claude-review](reviews/2026-11-13-question-budget-retrospective-audit-claude-review.md)。本条不表示可上线 |
 | `governance/DEVELOPMENT.md` | 开发治理总纲：Plan Mode 强制场景、红线、Spec 落位与内容规格（重要功能伪代码）、术语合规 |
 | `governance/project-overview.md` | 项目总览：onboarding、模块索引、当前能力边界（v1.4，持续更新） |
 | `governance/vision.md` | Lucy 产品愿景 |
