@@ -2,7 +2,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | Spec / **v0.3** |
+| 文档类型 / 版本 | Spec / **v0.4** |
 | 日期 / 目标版本 | 2026-11-11／不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（客户现场库内表清单与准备表结构）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
 | 状态 | **功能合同已收口（2026-11-13）**（SC-01–SC-14 证据关闭）。**不入 0.30 产品分母**（事故修复；功能编号无）。本条收口不表示可上线 |
@@ -10,7 +10,7 @@
 | 需求来源 | 客户现场升级到 `9c78b0e3` 之后，库内表清单与准备表结构仍失败 |
 | 实施主体 | WebUI 服务端：`live-catalog`、`live-tables`、`schema-structure`。外部目录的列库、列表新增一条不经过 `ktx sql` 的 MySQL 读法 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」与「功能闭口与发布取证」 |
-| 与既有 Spec 的关系 | 修正当前外部目录扫表对 `catalog.information_schema` 的假设。不改问数、不改 KTX、不改普通 MySQL 的库内表清单语句 |
+| 与既有 Spec 的关系 | 修正当前外部目录扫表对 `catalog.information_schema` 的假设。不改问数、不改 KTX、不改普通 MySQL 的库内表清单语句。**不覆盖** Spec 190 的表结构差异深查（`table-structure-diff`）与单表 preview：那些路径走 `readSchemaColumns` 的 `per-table` 模式 |
 | 实施计划 | [`docs/plans/lucy-20261111-catalog-scan-read-path-plan.md`](../plans/lucy-20261111-catalog-scan-read-path-plan.md) |
 
 ### Changelog
@@ -20,13 +20,14 @@
 | v0.1 | 初稿。外部目录列库、列表改走直连 `SHOW`。普通 MySQL 准备表结构改为一次读取 `information_schema.columns` |
 | v0.2 | 补齐三处合同：每库表数来自直连 `SHOW TABLES` 的行数；生产适配器从连接配置解析 `file:` 密钥并由驱动替身验证；连接与语句 30 秒超时，成功和失败都关闭连接。同日按该合同改服务端读法，本机单测通过，尚未出客户镜像 |
 | v0.3 | SC-06／07：普通 MySQL 准备表结构恢复 Schema 宽一条 `information_schema.columns`，达 10000 行 fail-closed、不退回逐表。SC-14：超时与现有 `ktx sql` 默认 `timeoutMs`／`CATALOG_SCAN_TIMEOUT_MS` 对齐为 **120 秒**（修正 v0.2 误写的 30 秒）。功能合同收口；本条收口不表示可上线 |
+| v0.4 | SC-06／07 **重锚**：只约束 `readSchemaColumns({ mode: "schema-wide" })` 的全量字段读法。有界 `tables` 的单表 preview 与 Spec 190 结构 diff 改走 `mode: "per-table"`（恢复 EE54 按表隔离）。v0.3 把 SC-06／07 锚在单表 preview 上是锚点错误 |
 
 ## 闭口层级
 
 - 层级：功能合同
-- 本条承诺：外部目录连接的库内表清单能列出该目录里已经验证存在的库和表，且每个库的张数等于该库 `SHOW TABLES` 的行数；普通 MySQL 连接的准备表结构用一次字段查询返回列，不再按表逐次查询。
+- 本条承诺：外部目录连接的库内表清单能列出该目录里已经验证存在的库和表，且每个库的张数等于该库 `SHOW TABLES` 的行数；普通 MySQL 连接在 **`mode: "schema-wide"`** 下用一次字段查询返回列，不再按表逐次查询。
 - 本条出口：SC-01–SC-14。验收用注入的 SQL 执行器与驱动替身，复现现场已观察到的成功语句和失败语句，并覆盖生产适配器的连接参数、超时和关闭。
-- 不在本条出口：问数链路、客户环境再升级、浏览器测试、移动窄屏、Hive Metastore Kerberos、HDFS 缺块、外部目录全库逐表 `DESC` 是否在网关超时前结束。
+- 不在本条出口：问数链路、客户环境再升级、浏览器测试、移动窄屏、Hive Metastore Kerberos、HDFS 缺块、外部目录全库逐表 `DESC` 是否在网关超时前结束；**Spec 190 结构 diff / 单表 preview 的 `per-table` 读法**（见 [`lucy-20261113-schema-read-dual-mode-plan.md`](../plans/lucy-20261113-schema-read-dual-mode-plan.md)）。
 - 上线关系：本条收口不表示可上线
 
 ## Terminology Compliance
@@ -92,7 +93,7 @@ New terms:
 1. 库名含且仅含一个点、形如 `catalog.database` 的 MySQL 协议连接，列库使用 `SHOW DATABASES FROM catalog`，每个库的张数使用 `SHOW TABLES FROM catalog.schema` 的行数，列表使用同一条 `SHOW TABLES`。
 2. 这些 `SHOW` 由 Lucy 自己的 MySQL 协议发送，不调用 `ktx sql`。
 3. 无点号库名的 MySQL 连接，库内表清单仍走现有 `information_schema.tables` 语句和 `ktx sql`。
-4. 无点号库名的 MySQL 准备表结构，字段用一条 `information_schema.columns` 读完该 Schema，再加上至多一条表名查询。禁止再按表循环。
+4. 无点号库名的 MySQL 在 **`mode: "schema-wide"`** 下，字段用一条 `information_schema.columns` 读完该 Schema，再加上至多一条表名查询。该模式禁止再按表循环。有界 `tables` 的深查／单表 preview 不在本条约束内。
 5. 外部目录上已知表名的字段读取仍用现有 `DESC`，并仍走 `ktx sql`。
 6. 问数、Postgres、SQL Server、Oracle 的语句不变。
 
@@ -207,8 +208,8 @@ function readDirectParams(conn):
 | SC-03 | 替身把带目录的 `information_schema` 返回为 `Unknown database 'default_cluster:information_schema'`。测试不得把该语句写成成功 | 本机单测 |
 | SC-04 | `ktx sql` 的调用参数里不出现 `SHOW` | 本机单测 |
 | SC-05 | 无点号 MySQL 的库内表清单 SQL 与改前一致，仍走 `ktx sql` | 本机单测 |
-| SC-06 | 无点号 MySQL 的准备表结构对 `information_schema.columns` 只调用一次，表名查询至多一次 | 本机单测 |
-| SC-07 | 字段行数达到 `10000` 时失败为超限，不截断，不退回逐表查询 | 本机单测 |
+| SC-06 | 无点号 MySQL 的 **`mode: "schema-wide"`** 对 `information_schema.columns` 只调用一次（不带 `table_name =` / `LOWER(table_name)`） | 本机单测（`schema-structure.test.ts`） |
+| SC-07 | **`mode: "schema-wide"`** 下字段行数达到 `10000` 时失败为超限，不截断，不退回逐表查询 | 本机单测（`schema-structure.test.ts`） |
 | SC-08 | 直连握手不使用带点号的 `database` 作为默认库 | 本机单测 |
 | SC-09 | 错误文本、日志夹具和 SQL 结果对象不含密码 | 本机单测 |
 | SC-10 | 外部目录已知表的字段语句仍是 `DESC`，并走 `ktx sql` | 本机单测 |

@@ -408,6 +408,23 @@ describe("Spec 190 — GET /api/connections/:connId/table-structure-diff", () =>
     await app.close();
   });
 
+  it("reports a truly missing table as not_in_library instead of QUERY_FAILED", async () => {
+    mockMysqlPerTableColumns({
+      ledger: [["id", "int", "NO", "PRI", ""]]
+    });
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/connections/warehouse/table-structure-diff")
+      .query({ schema: "fin", tables: "ledger,ghost" })
+      .expect(200);
+    const ledger = res.body.data.tables.find((entry: { table: string }) => entry.table === "fin.ledger");
+    const ghost = res.body.data.tables.find((entry: { table: string }) => entry.table === "fin.ghost");
+    expect(ledger.status).toBe("ok");
+    expect(ghost.status).toBe("not_in_library");
+    await app.close();
+  });
+
   it("SC-33: finds the library table even when the caller spells it differently", async () => {
     // The library spells the table in lower case; the caller asked for
     // `Ledger`. Both are the same table, so the deep check must not report it

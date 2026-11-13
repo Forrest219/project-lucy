@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 状态 | **功能合同已收口（2026-11-13）**（SC-01–SC-14 证据关闭）。本条收口不表示可上线 |
-| 主 Spec | [`docs/specs/lucy-20261111-catalog-scan-read-path-spec.md`](../specs/lucy-20261111-catalog-scan-read-path-spec.md) **v0.3** |
+| 主 Spec | [`docs/specs/lucy-20261111-catalog-scan-read-path-spec.md`](../specs/lucy-20261111-catalog-scan-read-path-spec.md) **v0.4**（SC-06／07 重锚 schema-wide；per-table 归 Spec 190） |
 | 授权边界 | 只改外部目录列库、列表的语句和传输，以及普通 MySQL 准备表结构的字段查询次数。不改 KTX，不把 `SHOW` 交给 `ktx sql`，不改问数，不改无点号库名的库内表清单 SQL，不改页面文案，不做浏览器测试 |
 | 验收 | Spec SC-01–SC-14 |
 
@@ -136,3 +136,4 @@ npm run lint:spec-docs
 | v0.1 | 初稿。待确认后按 Task 1–5 开工 |
 | v0.2 | 补齐每库表数、生产适配器的驱动替身测试、30 秒超时与连接关闭。同日按 Task 1–4 改代码，本机单测通过，尚未出客户镜像 |
 | v0.3 | 超时口径与 Spec 对齐为 120 秒（`CATALOG_SCAN_TIMEOUT_MS`）。普通 MySQL 准备表结构恢复 Schema 宽一条 columns、10000 fail-closed。功能合同收口；本条收口不表示可上线 |
+| v0.4 | Spec 升 v0.4：SC-06／07 只约束 `mode: "schema-wide"`；Spec 190 / 单表 preview 的 `per-table` 见 `lucy-20261113-schema-read-dual-mode-plan.md` |

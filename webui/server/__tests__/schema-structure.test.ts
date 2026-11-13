@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SqlResult } from "../ktx";
 import type { ConnectionInfo } from "../model";
-import { previewSchemaStructure } from "../schema-structure";
+import { previewSchemaStructure, readSchemaColumns } from "../schema-structure";
 
 const mysqlConn: ConnectionInfo = {
   id: "demo",
@@ -74,7 +74,7 @@ describe("previewSchemaStructure", () => {
     );
   });
 
-  it("reads checked table columns with one schema-wide columns query", async () => {
+  it("SC-06: schema-wide mode reads columns with one Schema-wide query", async () => {
     const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
       if (isSchemaWideColumnsSql(sql)) {
         return sqlResult({
@@ -84,6 +84,40 @@ describe("previewSchemaStructure", () => {
               ["people", "name", "varchar", "YES", "", ""]
             ]
           }
+        });
+      }
+      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+    });
+
+    const read = await readSchemaColumns("/project", "demo", "dataforai", {
+      readConnectionsImpl: async () => [mysqlConn],
+      runSqlImpl,
+      mode: "schema-wide"
+    });
+
+    expect(read).toMatchObject({ status: "ok" });
+    if (read.status !== "ok") throw new Error("expected ok");
+    expect(read.columns).toHaveLength(2);
+    expect(runSqlImpl).toHaveBeenCalledTimes(1);
+    expect(runSqlImpl).toHaveBeenCalledWith(
+      "/project",
+      "demo",
+      expect.stringContaining("FROM information_schema.columns"),
+      expect.objectContaining({ maxRows: 10_000, timeoutMs: 120_000 })
+    );
+    const sql = String(runSqlImpl.mock.calls[0][2]);
+    expect(sql).not.toContain("table_name = '");
+    expect(sql).not.toContain("LOWER(table_name)");
+  });
+
+  it("reads a checked table with per-table MySQL queries", async () => {
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'orders'")) {
+        return sqlResult({ json: { rows: [["orders"]] } });
+      }
+      if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = 'orders'")) {
+        return sqlResult({
+          json: { rows: [["id", "varchar", "YES", "", "订单"]] }
         });
       }
       return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
@@ -100,29 +134,18 @@ describe("previewSchemaStructure", () => {
     expect(result.columnCount).toBe(1);
     expect(result.yaml).toContain("orders:");
     expect(result.yaml).toContain("name: id");
-    expect(runSqlImpl).toHaveBeenCalledTimes(1);
-    expect(runSqlImpl).toHaveBeenCalledWith(
-      "/project",
-      "demo",
-      expect.stringContaining("FROM information_schema.columns"),
-      expect.objectContaining({ maxRows: 10_000, timeoutMs: 120_000 })
-    );
-    const sql = String(runSqlImpl.mock.calls[0][2]);
-    expect(sql).not.toContain("table_name = '");
-    expect(sql).not.toContain("LOWER(table_name)");
+    expect(runSqlImpl).toHaveBeenCalledTimes(2);
+    expect(String(runSqlImpl.mock.calls[0][2])).toContain("LOWER(table_name)");
+    expect(String(runSqlImpl.mock.calls[1][2])).toContain("table_name = 'orders'");
   });
 
-  it("filters schema-wide columns case-insensitively to the requested table", async () => {
+  it("resolves a checked table case-insensitively on the per-table path", async () => {
     const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
-      if (isSchemaWideColumnsSql(sql)) {
-        return sqlResult({
-          json: {
-            rows: [
-              ["ledger", "id", "int", "NO", "PRI", ""],
-              ["orders", "id", "varchar", "YES", "", ""]
-            ]
-          }
-        });
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'ledger'")) {
+        return sqlResult({ json: { rows: [["ledger"]] } });
+      }
+      if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = 'ledger'")) {
+        return sqlResult({ json: { rows: [["id", "int", "NO", "PRI", ""]] } });
       }
       return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
     });
@@ -134,19 +157,15 @@ describe("previewSchemaStructure", () => {
     });
 
     expect(result.columnCount).toBe(1);
-    expect(result.yaml).toContain("ledger:");
+    expect(result.yaml).toContain("Ledger:");
     expect(result.yaml).toContain("name: id");
-    expect(runSqlImpl).toHaveBeenCalledTimes(1);
+    expect(runSqlImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("rejects a checked table that returns no columns", async () => {
+  it("rejects a checked table that is missing on the per-table path", async () => {
     const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
-      if (isSchemaWideColumnsSql(sql)) {
-        return sqlResult({
-          json: {
-            rows: [["people", "name", "varchar", "YES", "", ""]]
-          }
-        });
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'orders'")) {
+        return sqlResult({ json: { rows: [] } });
       }
       return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
     });
@@ -192,7 +211,7 @@ describe("previewSchemaStructure", () => {
     });
   });
 
-  it("fails closed when schema-wide columns reach 10000 rows without falling back per table", async () => {
+  it("SC-07: schema-wide mode fails closed at 10000 rows without falling back per table", async () => {
     const rows = Array.from({ length: 10_000 }, (_, index) => [
       `t${index % 10}`,
       `c${index}`,
@@ -208,14 +227,12 @@ describe("previewSchemaStructure", () => {
       return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
     });
 
-    await expect(previewSchemaStructure("/project", "demo", "dataforai", {
+    const read = await readSchemaColumns("/project", "demo", "dataforai", {
       readConnectionsImpl: async () => [mysqlConn],
       runSqlImpl,
-      tables: ["orders"]
-    })).rejects.toMatchObject({
-      code: "READ_FAILED",
-      message: "这次读取超过一次可读取的上限。"
+      mode: "schema-wide"
     });
+    expect(read).toEqual({ status: "too_large" });
     expect(runSqlImpl).toHaveBeenCalledTimes(1);
     const sql = String(runSqlImpl.mock.calls[0][2]);
     expect(sql).toContain("FROM information_schema.columns");

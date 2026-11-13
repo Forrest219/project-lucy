@@ -483,6 +483,14 @@ function mysqlTableNamesSql(schema: string): string {
   return `SELECT table_name FROM information_schema.tables WHERE table_schema = ${sqlStringLiteral(schema)} AND table_type = 'BASE TABLE' ORDER BY table_name`;
 }
 
+function mysqlMatchingTablesSql(schema: string, table: string): string {
+  return `SELECT table_name FROM information_schema.tables WHERE table_schema = ${sqlStringLiteral(schema)} AND table_type = 'BASE TABLE' AND LOWER(table_name) = ${sqlStringLiteral(table.toLowerCase())}`;
+}
+
+function mysqlOneTableColumnsSql(schema: string, physicalTable: string): string {
+  return `SELECT column_name, data_type, is_nullable, column_key, column_comment FROM information_schema.columns WHERE table_schema = ${sqlStringLiteral(schema)} AND table_name = ${sqlStringLiteral(physicalTable)} ORDER BY ordinal_position`;
+}
+
 function namesFromRows(rows: unknown[]): string[] {
   const names: string[] = [];
   for (const row of rows) {
@@ -491,6 +499,78 @@ function namesFromRows(rows: unknown[]): string[] {
     names.push(name);
   }
   return names;
+}
+
+function columnsForOneTable(table: string, rows: unknown[]): ColumnInput[] {
+  const columns: ColumnInput[] = [];
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length < 5) continue;
+    const column = String(row[0] ?? "").trim();
+    if (!column) continue;
+    columns.push({
+      table,
+      column,
+      dataType: String(row[1] ?? ""),
+      nullable: String(row[2] ?? "").toUpperCase() !== "NO",
+      primaryKey: String(row[3] ?? "").toUpperCase() === "PRI",
+      comment: String(row[4] ?? "")
+    });
+  }
+  return columns;
+}
+
+function distinctPhysicalNames(rows: unknown[]): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const name = Array.isArray(row) ? String(row[0] ?? "").trim() : "";
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+/**
+ * Resolve one requested MySQL table to a single physical table, then read its columns.
+ * Spec 190 structure-diff and single-table preview use this path so one table's
+ * permission / missing / timeout failure does not blank the others.
+ */
+async function readMysqlTableColumns(
+  projectRoot: string,
+  connectionId: string,
+  schema: string,
+  table: string,
+  execute: typeof runSql
+): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection }> {
+  try {
+    const matchSql = mysqlMatchingTablesSql(schema, table);
+    const matched = await execute(projectRoot, connectionId, matchSql, {
+      maxRows: 10,
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+    });
+    const matchedRows = answeredRows(matched, 11);
+    if ("reason" in matchedRows) return { columns: [], rejection: { table, reason: matchedRows.reason } };
+    const physical = distinctPhysicalNames(matchedRows.rows);
+    if (physical.length > 1) return { columns: [], rejection: { table, reason: "ambiguous" } };
+    if (physical.length === 0) return { columns: [], rejection: { table, reason: "missing" } };
+    const columnSql = mysqlOneTableColumnsSql(schema, physical[0]);
+    const result = await execute(projectRoot, connectionId, columnSql, {
+      maxRows: COLUMN_READ_ROW_LIMIT,
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+    });
+    const columnRows = answeredRows(result, COLUMN_READ_ROW_LIMIT);
+    if ("reason" in columnRows) return { columns: [], rejection: { table, reason: columnRows.reason } };
+    const columns = columnsForOneTable(table, columnRows.rows);
+    if (columns.length === 0) return { columns: [], rejection: { table, reason: "unreadable" } };
+    return { columns };
+  } catch (error) {
+    logSchemaStructureFailure(
+      { connectionId, schema, table, phase: "table-columns" },
+      { ok: false, exitCode: 1, stderr: error instanceof Error ? error.message : String(error), stdout: "", latencyMs: 0 }
+    );
+    return { columns: [], rejection: { table, reason: "unreadable" } };
+  }
 }
 
 function rejectionMessage(rejection: SchemaColumnRejection): string {
@@ -508,24 +588,60 @@ function rejectionMessage(rejection: SchemaColumnRejection): string {
   }
 }
 
+/** Explicit read strategies for shared `readSchemaColumns` consumers. */
+export type SchemaReadMode = "list-names" | "schema-wide" | "per-table";
+
+export type ReadSchemaColumnsDeps = {
+  readConnectionsImpl?: typeof readConnections;
+  runSqlImpl?: typeof runSql;
+  runCatalogShowImpl?: typeof runCatalogShow;
+  tables?: string[];
+  /**
+   * When omitted: no `tables` → `list-names`; with `tables` → `per-table`.
+   * Pass `schema-wide` explicitly for catalog-scan SC-06/07 full-schema reads.
+   */
+  mode?: SchemaReadMode;
+};
+
+type ResolvedSchemaRead =
+  | { mode: "list-names" }
+  | { mode: "schema-wide"; tables?: string[] }
+  | { mode: "per-table"; tables: string[] };
+
+function resolveSchemaReadMode(deps: ReadSchemaColumnsDeps): ResolvedSchemaRead {
+  const tables = deps.tables?.map((table) => table.trim()).filter(Boolean);
+  if (deps.mode === "list-names") {
+    if (tables && tables.length > 0) {
+      throw new SchemaStructureError("READ_FAILED", "list-names 读法不能带 tables。");
+    }
+    return { mode: "list-names" };
+  }
+  if (deps.mode === "schema-wide") {
+    return { mode: "schema-wide", ...(tables && tables.length > 0 ? { tables } : {}) };
+  }
+  if (deps.mode === "per-table") {
+    if (!tables || tables.length === 0) {
+      throw new SchemaStructureError("READ_FAILED", "per-table 读法必须提供 tables。");
+    }
+    return { mode: "per-table", tables };
+  }
+  if (!tables || tables.length === 0) return { mode: "list-names" };
+  return { mode: "per-table", tables };
+}
+
 /**
  * Read table names, or the columns of the requested tables.
  *
- * A call without `tables` lists names and does not read columns. A call with
- * `tables` on plain MySQL / Postgres reads one schema-wide columns query
- * (fail-closed at 10000 rows; no per-table fallback) and filters to the
- * requested names. External catalogs still DESC one checked table at a time.
+ * - `list-names`: table names only (准备表结构·列名).
+ * - `schema-wide`: one Schema-wide `information_schema.columns` read (catalog-scan SC-06/07).
+ * - `per-table`: bounded per-table reads with typed rejections (Spec 190 structure-diff /
+ *   single-table preview). External catalogs still DESC one checked table at a time.
  */
 export async function readSchemaColumns(
   projectRoot: string,
   connectionId: string,
   schema: string,
-  deps: {
-    readConnectionsImpl?: typeof readConnections;
-    runSqlImpl?: typeof runSql;
-    runCatalogShowImpl?: typeof runCatalogShow;
-    tables?: string[];
-  } = {}
+  deps: ReadSchemaColumnsDeps = {}
 ): Promise<SchemaColumnsRead> {
   const safeSchema = assertSchemaIdent(schema);
   const read = deps.readConnectionsImpl ?? readConnections;
@@ -539,10 +655,19 @@ export async function readSchemaColumns(
   }
   const execute = deps.runSqlImpl ?? runSql;
   const catalog = protocolOf(connection) === "mysql" ? splitCatalogDatabase(connection.database) : null;
-  const requested = deps.tables?.map((table) => table.trim()).filter(Boolean);
+  let resolved: ResolvedSchemaRead;
+  try {
+    resolved = resolveSchemaReadMode(deps);
+  } catch (error) {
+    if (error instanceof SchemaStructureError) {
+      return { status: "error", message: error.message };
+    }
+    throw error;
+  }
+  const requested = resolved.mode === "list-names" ? undefined : resolved.tables;
   try {
     if (catalog) {
-      if (!requested) {
+      if (resolved.mode === "list-names") {
         const tableSql = catalogTablesSql(catalog.catalog, safeSchema);
         const tablesResult = await (deps.runCatalogShowImpl ?? runCatalogShow)(
           projectRoot,
@@ -566,10 +691,16 @@ export async function readSchemaColumns(
         if (tableNames.length >= CATALOG_TABLE_NAME_LIMIT) return { status: "too_large" };
         return { status: "ok", columns: [], tables: tableNames };
       }
+      // External catalogs have no schema-wide information_schema path; both
+      // schema-wide (with tables) and per-table use DESC one table at a time.
+      const targetTables = requested ?? [];
+      if (targetTables.length === 0) {
+        return { status: "error", message: "外部目录读字段必须指定 tables。" };
+      }
       const columns: ColumnInput[] = [];
       const rejections: SchemaColumnRejection[] = [];
-      for (const table of requested) {
-        const read = await readCatalogTableColumns(
+      for (const table of targetTables) {
+        const tableRead = await readCatalogTableColumns(
           projectRoot,
           connectionId,
           catalog.catalog,
@@ -577,19 +708,19 @@ export async function readSchemaColumns(
           table,
           execute
         );
-        if (read.rejection) rejections.push(read.rejection);
-        columns.push(...read.columns);
+        if (tableRead.rejection) rejections.push(tableRead.rejection);
+        columns.push(...tableRead.columns);
       }
       const rejected = new Set(rejections.map((item) => item.table));
       return {
         status: "ok",
         columns,
-        tables: requested.filter((table) => !rejected.has(table)),
+        tables: targetTables.filter((table) => !rejected.has(table)),
         ...(rejections.length > 0 ? { rejections } : {})
       };
     }
     const protocol = protocolOf(connection);
-    if (protocol === "mysql" && !requested) {
+    if (resolved.mode === "list-names" && protocol === "mysql") {
       const listSql = mysqlTableNamesSql(safeSchema);
       const listed = await execute(projectRoot, connectionId, listSql, {
         maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
@@ -604,6 +735,31 @@ export async function readSchemaColumns(
       if (tableNames.length >= SCHEMA_STRUCTURE_MAX_ROWS) return { status: "too_large" };
       return { status: "ok", columns: [], tables: tableNames };
     }
+    // Postgres has no separate name-list SQL; list-names falls through to schema-wide
+    // columns (pre-dual-mode behavior). MySQL per-table is handled above.
+    if (resolved.mode === "per-table" && protocol === "mysql") {
+      const columns: ColumnInput[] = [];
+      const rejections: SchemaColumnRejection[] = [];
+      for (const table of resolved.tables) {
+        const tableRead = await readMysqlTableColumns(
+          projectRoot,
+          connectionId,
+          safeSchema,
+          table,
+          execute
+        );
+        if (tableRead.rejection) rejections.push(tableRead.rejection);
+        columns.push(...tableRead.columns);
+      }
+      const rejected = new Set(rejections.map((item) => item.table));
+      return {
+        status: "ok",
+        columns,
+        tables: resolved.tables.filter((table) => !rejected.has(table)),
+        ...(rejections.length > 0 ? { rejections } : {})
+      };
+    }
+    // schema-wide (MySQL/Postgres), or per-table on Postgres (no per-table helper yet).
     const listSql = sqlFor(protocol, safeSchema);
     const result = await execute(projectRoot, connectionId, listSql, {
       maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
@@ -619,16 +775,20 @@ export async function readSchemaColumns(
       return { status: "too_large" };
     }
     const columns = parseColumns(rows);
-    if (requested) {
+    if (requested && requested.length > 0) {
       const wanted = new Set(requested.map((table) => table.toLowerCase()));
       const filtered = columns.filter((column) => wanted.has(column.table.toLowerCase()));
       const found = new Set(filtered.map((column) => column.table.toLowerCase()));
       const rejections = requested
         .filter((table) => !found.has(table.toLowerCase()))
-        .map((table) => ({ table, reason: "unreadable" as const }));
+        .map((table) => ({
+          table,
+          reason: (resolved.mode === "per-table" ? "missing" : "unreadable") as SchemaColumnRejection["reason"]
+        }));
       return {
         status: "ok",
         columns: filtered,
+        tables: requested.filter((table) => found.has(table.toLowerCase())),
         ...(rejections.length > 0 ? { rejections } : {})
       };
     }
@@ -662,12 +822,7 @@ export async function previewSchemaStructure(
   projectRoot: string,
   connectionId: string,
   schema: string,
-  deps: {
-    readConnectionsImpl?: typeof readConnections;
-    runSqlImpl?: typeof runSql;
-    runCatalogShowImpl?: typeof runCatalogShow;
-    tables?: string[];
-  } = {}
+  deps: ReadSchemaColumnsDeps = {}
 ): Promise<SchemaStructurePreview> {
   const safeSchema = assertSchemaIdent(schema);
   const read = await readSchemaColumns(projectRoot, connectionId, schema, deps);
