@@ -6,7 +6,7 @@
 
 **Architecture:** Docker／K8s 入口里 KTX daemon 由 `supervise_ktx` 独占 `7878`；唯一合法热重载通道是 Spec 191 的 `ktx-reload.request` → supervisor `stop child → wait port → start → receipt`。历史缺陷：`reloadKtxMcpAfterConfigWrite` 曾直接调 `ktx mcp stop/start`，与 supervisor 抢端口并失败（`Port 7878 is already in use`）。**2026-11-13 审计：** 主机代码已走 `reloadThroughSupervisor` → `reloadExecutionRuntime`（capability 有效时）；无 capability 才 CLI 回退。修复口径：配置写路径统一走 supervisor 协议；创建／编辑成功面诚实报告三段事实；补齐单测 + 容器进程级 + live E2E 门禁。
 
-**Progress (2026-11-13 · W2 中间态书面收口):** 进程级写路径／单测（UT-RELOAD-01/02、UT-CONN-01）／**VERIFY-191-C01 25/25 PASSED** 已收口；`E2E-CON-07`／`E2E-MCP-02`／**UAT-CONN-RELOAD-01** 登记为**已知债**（**不挡**本波 W2 文档收口；**挡**发布取证缺陷关闭）。详见 [middev 收口](../reviews/2026-11-13-connection-reload-middev-closure.md)。运行中 `compose-lucy-1` 镜像仍可能偏旧；UAT-01 需可用代理环境下 `demo:upgrade` 后再取证。
+**Progress (2026-11-13 · B 轨 live E2E／UAT 收口):** 进程级写路径／单测／**VERIFY-191-C01 25/25** 已收口；**E2E-CON-07**／**E2E-MCP-02**／**UAT-CONN-RELOAD-01** 已由 [B 轨 Plan](lucy-20261113-connection-reload-live-e2e-uat-plan.md) 关闭（`npm run e2e:live:connection-reload` **2/2 PASSED**；本机 demo `:55176`）。Edit／UAT-02 仍 OPEN。详见 [middev 收口](../reviews/2026-11-13-connection-reload-middev-closure.md)。
 
 **Tech Stack:** WebUI Node（`webui/server/ktx-mcp-reload.ts`、`admin/mcp-runtime-reload.ts`）、`scripts/runtime/docker-entrypoint.sh` supervisor、Vitest、Playwright live-e2e、`scripts/verify/verify-ktx-reload-lifecycle.sh --container`
 
@@ -32,7 +32,8 @@
 | `E2E-MCP-01` | 用 `page.route` **注入** `reload_required`；open 模式断言 owner-only 拒绝 | 不创建连接；不碰真实 daemon |
 | `E2E-CON-01…06` | 卡片文案、Schema、Manifest、刷新本地目录 | 无「新建连接 → 执行层可见」断言 |
 | `api.create-connection.test.ts` | mock `reloadKtxMcpAfterConfigWrite` 为成功，且期望 `executionRuntimeAck === false` | 故意不验证执行层真生效 |
-| `verify-ktx-reload-lifecycle.sh --container` | Spec 191 AC-12 ＋ VERIFY-191-C01 **本机已跑通**（2026-11-13，**25/25**） | 浏览器 live E2E／经 WebUI POST 的完整 UAT 仍缺 |
+| `verify-ktx-reload-lifecycle.sh --container` | Spec 191 AC-12 ＋ VERIFY-191-C01 **本机已跑通**（2026-11-13，**25/25**） | 浏览器债见 B 轨 live（已补） |
+| `e2e:live:connection-reload` | E2E-CON-07／E2E-MCP-02／UAT-01 **2/2 PASSED**（2026-11-13） | Edit／UAT-02 仍缺 |
 
 结论：浏览器契约层与单元 mock 都「看起来绿」，运维真实路径（supervisor 管着 7878）从未被断言。
 
@@ -122,15 +123,15 @@
 
 ### Task 5：容器／Live 门禁
 
-- [ ] 实现 `E2E-CON-07`、`E2E-MCP-02`（live-e2e 浏览器路径仍 OPEN；进程级主门禁见 C01）
+- [x] 实现 `E2E-CON-07`、`E2E-MCP-02`（`webui/tests/live-e2e/connection-execution-reload.spec.ts`；`npm run e2e:live:connection-reload` **2/2 PASSED**，2026-11-13）
 - [x] 落地 `VERIFY-191-C01`；本机 `--container` **25/25 PASSED**（含 C01 canary；2026-11-13）
-- [ ] 本机 demo 跑通 UAT-CONN-RELOAD-01（需 `demo:upgrade` 使容器 WebUI 含 supervisor 写路径后再经 UI／POST create 取证）
+- [x] 本机 demo 跑通 UAT-CONN-RELOAD-01（`:55176`；UI 创建＋supervisor；无需 `docker restart`；镜像已含写路径故未强制 upgrade）
 - [x] 清理临时连接 `repro-tmp-conn`（已从 `ktx.yaml` 移除并 supervisor reload）
 
 ### Task 6：收口
 
 - [x] 更新 `docs/qa/changelog.md` 实现落地节
-- [ ] 发布取证清单勾选本缺陷关闭证据（缺 E2E-CON-07／UAT-CONN-RELOAD-01 完整绿证前不关缺陷）
+- [x] 发布取证清单可勾选本缺陷关闭证据（E2E-CON-07／MCP-02／UAT-01 绿证齐；Edit／UAT-02 非关缺陷阻塞项时另记）
 - [x] 删除／归档本机 repro 临时连接 `repro-tmp-conn`
 ---
 

@@ -706,7 +706,7 @@ E2E-<模块>-<序号>[-<变体>]
 **优先级 / 准入层**：P0 / **L3 Live 或 Container**（禁止在无 KTX supervisor 的 `npm run dev` fixture 上宣称通过）
 **关联缺陷**：本机 demo 复现（2026-11-12）——创建成功后 `[ktx-mcp-reload] … Port 7878 is already in use`，`activation=reload_required`
 **关联计划**：[`docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md`](../plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md)
-**源码落点（实现时）**：`webui/tests/live-e2e/` 或 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`（`VERIFY-191-C01`）；不得只加 `page.route` stub
+**源码落点**：`webui/tests/live-e2e/connection-execution-reload.spec.ts`（`npm run e2e:live:connection-reload`）；进程级 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`（`VERIFY-191-C01`）。**2026-11-13 本机 live 2/2 PASSED**。不得只加 `page.route` stub
 
 **前置条件**：
 - 运行中的 Lucy **容器**（入口脚本 `supervise_ktx` 持有 `7878`，存在有效 `ktx-reload.capability`）
@@ -737,6 +737,7 @@ E2E-<模块>-<序号>[-<变体>]
 **优先级 / 准入层**：P0 / L3 Live 或 Container
 **涉及 Selector**：`mcp-runtime-reload-*` / `mcp-runtime-reload-outcome` / `mcp-runtime-remediation`
 **前置**：同 `E2E-CON-07`（必须有 supervisor）
+**源码落点**：同 `connection-execution-reload.spec.ts`（先 bump `ktx.yaml` 制造 `reload_required`，再点「重载执行层」）。**2026-11-13 本机 live PASSED**。
 
 **步骤**：
 1. 制造或沿用一次「配置已写、执行层未加载」状态（创建连接后若自动重载失败，或测试钩子写入 pending digest）。
@@ -752,9 +753,10 @@ E2E-<模块>-<序号>[-<变体>]
 | `E2E-MCP-01` | stub 状态 + open 模式 owner 拒绝；不创建连接、不启动 supervisor |
 | `E2E-CON-01…06` | 无新建连接后的执行层断言 |
 | `api.create-connection.test.ts` | mock reload 成功却长期期望 `executionRuntimeAck=false` |
-| `verify-ktx-reload-lifecycle.sh --container` | AC-12 + VERIFY-191-C01 本机已跑通（2026-11-13，**25/25**）；浏览器 `E2E-CON-07`／`E2E-MCP-02` 仍 OPEN |
+| `verify-ktx-reload-lifecycle.sh --container` | AC-12 + VERIFY-191-C01 本机已跑通（2026-11-13，**25/25**） |
+| `connection-execution-reload.spec.ts`（live） | **2026-11-13** 关闭浏览器债：`E2E-CON-07`／`E2E-MCP-02` **2/2 PASSED** |
 
-因此 v0.3 强制增加 `E2E-CON-07` / `E2E-MCP-02` / `VERIFY-191-C01`，修复 PR 未带进程级证据不得关闭本缺陷。
+因此 v0.3 强制增加 `E2E-CON-07` / `E2E-MCP-02` / `VERIFY-191-C01`；至 B 轨 live 绿证后，进程级＋浏览器证据齐备，可关本缺陷主项。
 
 ---
 

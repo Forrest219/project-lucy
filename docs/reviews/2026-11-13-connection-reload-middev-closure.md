@@ -1,45 +1,33 @@
-# 连接热重载 — W2 中间态书面收口（默认降级）
+# 连接热重载 — 中间态 → B 轨收口
 
 | 元数据 | 内容 |
 |---|---|
 | 日期 | 2026-11-13 |
 | 对象 | [连接创建后执行层热重载 Plan](../plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md) |
-| 依据 | [landed 收口 Plan](../plans/lucy-20261113-landed-middev-closure-batch-plan.md) Task W2-2；审计 [W2-1 report](../../.superpowers/sdd/task-w2-1-report.md) |
-| 性质 | **书面中间态收口**。**不**登记「发布取证缺陷关闭」；**不**表示可上线 |
+| 依据 | W2 书面收口；[B 轨 Plan](../plans/lucy-20261113-connection-reload-live-e2e-uat-plan.md) |
+| 性质 | **B 轨已关闭 E2E／UAT-01 已知债**。**≠ 可上线**（整包发布仍按 DEVELOPMENT 取证） |
 
 ## 结论
 
-**默认路径 A（书面降级）：** 主机写路径、Vitest 与容器进程级门禁 **已收口**；浏览器 live E2E 与经 WebUI 的完整 UAT **仍为已知债**，**不挡**本波 W2 文档收口；**挡**发布取证清单勾选与「运维缺陷关闭」声明。
+W2 书面降级时登记的 P0 三块已知债（`E2E-CON-07`／`E2E-MCP-02`／`UAT-CONN-RELOAD-01`）已由 B 轨关闭：`npm run e2e:live:connection-reload` **2/2 PASSED**（本机 demo `http://127.0.0.1:55176`）。进程级 C01 与单测仍保持 CLOSED。
 
-## 已收口（本中间态认定 CLOSED）
+## 已收口
 
 | 范围 | 证据 |
 |---|---|
-| Task 1–2 supervisor 写路径 | `reloadThroughSupervisor` → `reloadExecutionRuntime`；Plan §4 Task 1–2 `[x]` |
-| Task 3 create 诚实成功面 | Create API／Drawer 三段事实；Plan L112–114 |
-| Task 4 Spec 191 NG2 | Spec 191 v0.3；Plan Task 4 `[x]` |
-| **UT-RELOAD-01/02、UT-CONN-01** | `webui/server/__tests__/ktx-mcp-reload.test.ts`、`api.create-connection.test.ts`；changelog 2026-11-13 |
-| **VERIFY-191-C01** | `scripts/verify/verify-ktx-reload-lifecycle.sh --container`；Plan Progress／changelog：**25/25 PASSED**（2026-11-13） |
+| Task 1–4／C01／UT | 同 W2 middev 表 |
+| **E2E-CON-07** | `webui/tests/live-e2e/connection-execution-reload.spec.ts`；UI 新建 → `executionRuntimeAck=true` → `activation=current` |
+| **E2E-MCP-02** | 同文件；bump digest → remediation →「重载执行层」→ `reloadStatus`／`configVerification` 分字段 |
+| **UAT-CONN-RELOAD-01** | 同上 live 跑绿；API 探测同等路径亦曾 `ack=true`；无 `docker restart` |
 
-## 已知债（仍 OPEN；不挡 W2 文档收口）
+## 仍 OPEN（不挡本缺陷主关闭）
 
-| ID | 层级 | 关闭条件 |
-|---|---|---|
-| **E2E-CON-07** | Playwright live-e2e | `webui/tests/` 落地用例；新建连接后执行层可见断言绿；登记于 QA 套件 §11.5 |
-| **E2E-MCP-02** | Playwright live-e2e | live-e2e 落地 §11.6 用例绿 |
-| **UAT-CONN-RELOAD-01** | 手工／容器 UAT | 本机 `demo:upgrade` 后容器 WebUI 含 supervisor 写路径；经 **WebUI POST create** 全链路取证通过（Plan L127） |
-
-**附带 OPEN（非本表 P0 三块，仍随缺陷未关）：** edit 成功面三段事实（`EditConnectionDialog`）；UAT-CONN-RELOAD-02；Task 6 发布取证清单勾选；运行中 demo 镜像与主机代码对齐（环境）。
+| ID | 说明 |
+|---|---|
+| EditConnectionDialog 三段事实 | Task 3 残留 |
+| UAT-CONN-RELOAD-02 | 失败可观测（可选） |
 
 ## 边界
 
-- **≠ 可上线**；**≠** QA 套件浏览器层全绿；**≠** `docs/qa` 发布取证「本缺陷已关闭」。
-- 关闭已知债后须：补 E2E／UAT 绿证 → 更新 Plan Task 5／6 勾选 → 方可在发布取证清单关缺陷。
-
-## 回链
-
-| 文档 | 链接 |
-|---|---|
-| Implementation Plan | [lucy-20261112-connection-create-execution-runtime-reload-plan.md](../plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md) |
-| Spec 191 | [191-execution-runtime-reload-spec.md](../../webui/docs/191-execution-runtime-reload-spec.md) |
-| W2 批次 Plan | [lucy-20261113-landed-middev-closure-batch-plan.md](../plans/lucy-20261113-landed-middev-closure-batch-plan.md) |
+- **≠ 可上线**；Edit／UAT-02 未做不阻止「创建→重载」主缺陷关闭声明。
+- 回链：[B 轨 Plan](../plans/lucy-20261113-connection-reload-live-e2e-uat-plan.md) · Spec 191 · 父 Plan Task 5／6。

@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-11-13 · B 轨：E2E-CON-07／E2E-MCP-02／UAT-CONN-RELOAD-01 绿证
+
+### 实现落地
+- live-e2e：`webui/tests/live-e2e/connection-execution-reload.spec.ts`；脚本 `npm run e2e:live:connection-reload`。
+- 本机 demo `http://127.0.0.1:55176`：**2/2 PASSED**（MCP-02 手动重载协议；CON-07 UI 新建→执行层 `activation=current`）。
+- UAT-CONN-RELOAD-01：同路径取证；端点闸走「仍要新建连接」；测后 `remove` 清理；无 Pod 重启。
+- Plan：[lucy-20261113-connection-reload-live-e2e-uat-plan.md](../plans/lucy-20261113-connection-reload-live-e2e-uat-plan.md)；父 Plan Task 5／6 勾选；[middev 收口](../reviews/2026-11-13-connection-reload-middev-closure.md) 更新。
+
+### 仍 OPEN（非本缺陷主关闭阻塞）
+- EditConnectionDialog 成功面三段事实；UAT-CONN-RELOAD-02。
+
+---
+
 ## 2026-11-13 · 写路径 supervisor + UT + VERIFY-191-C01 落地
 
 ### 实现落地
@@ -14,13 +27,8 @@
 - 容器门禁：`VERIFY-191-C01` 写入 `scripts/verify/verify-ktx-reload-lifecycle.sh --container` Phase C；本机 **25/25 PASSED**（含 canary `connection_list` 证据）。
 - 顺带修复 AC-3 live PID 探测：排除 `node -e` 自引用，避免伪报 WebUI PID 变化。
 
-### 仍 OPEN（不得据此关闭缺陷）
-- `E2E-CON-07`／`E2E-MCP-02` 浏览器 live-e2e 未落地。
-- `UAT-CONN-RELOAD-01` 经 WebUI POST create 的完整取证：运行中 demo 容器 WebUI 仍为旧镜像，需 `demo:upgrade` 后再验。
-- EditConnectionDialog 成功面尚未对齐三段事实。
-
 ### 计划勾选
-- 见 `docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md` Task 1–6 现值。
+- 见 `docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md` Task 1–6 现值；浏览器债见上一节 B 轨。
 
 ---
 
