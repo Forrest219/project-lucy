@@ -7,7 +7,7 @@
 | 版本 | v1.0 |
 | 撰写日期 | 2026-10-07 |
 | 委托人 | xingchen |
-| 适用范围 | 在 Apple Silicon Mac 上构建、再送到自备 amd64 服务器做客户 K8s 平滑升级模拟的**待测包**。客户正式发放仍走 [`customer-delivery-preflight-checklist.md`](customer-delivery-preflight-checklist.md) 的 Go / No-Go |
+| 适用范围 | 在 Apple Silicon Mac 上构建、再送到自备 amd64 服务器做客户 K8s 平滑升级模拟的**待测包**。客户正式发放走 [`customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md) 门禁与（适用时）[`customer-v2-upgrade-release-checklist.md`](customer-v2-upgrade-release-checklist.md)；经验见 [`docs/lessons/`](../lessons/README.md) |
 | 关联文档 | [`customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md)、[`deploy/k8s/K8S_CONTRACT.md`](../../deploy/k8s/K8S_CONTRACT.md)、[`deploy/k8s/helm/lucy/UPGRADE.md`](../../deploy/k8s/helm/lucy/UPGRADE.md) |
 
 本文件是「Mac 构建 → amd64 服务器模拟升级 → 再决定是否成为客户包」的事实来源。与下文「历史计划」冲突时，以本文件和当前脚本为准。
@@ -17,7 +17,7 @@
 | 产物 | 目的 | 构建机 | 何时算完成 |
 |---|---|---|---|
 | **待测包** | 送到自备 amd64 服务器，模拟客户 K8s 平滑升级。不交给客户 | Apple Silicon Mac 可以构建镜像并组装 tar | 镜像构建成功，且本机 G1、G2 通过。tar 使用测试后缀 |
-| **客户包** | 标注可直接原地升级，发放给客户 | 镜像可以仍由 Mac 构建；G4/G4b 与升级验收在 amd64 原生环境判定 | 预检清单 Go / No-Go 全部满足，包身份（后缀、digest、Chart、git SHA）按该次测试结果重新定稿 |
+| **客户包** | 标注可直接原地升级，发放给客户 | 镜像可以仍由 Mac 构建；G4/G4b 与升级验收在 amd64 原生环境判定 | 镜像 checklist 客户包门禁（含 H3–H5／K6）全部满足，包身份（后缀、digest、Chart、git SHA）按该次测试结果重新定稿 |
 
 待测包升格为客户包之前，不沿用待测后缀，不把测试环境的 MCP 地址、PVC 名、Secret 名写进客户 values。
 
@@ -35,7 +35,7 @@
 - [`docs/plans/wo-202608-27-customer-k8s-delivery.md`](../plans/wo-202608-27-customer-k8s-delivery.md)：仍含「Chart 仅作参考」「可跳过 ELF」「复用历史 tar」「`runAsUser: 0`」「镜像 0.16.0」
 - [`docs/plans/wo-20260901-k8s-delivery-hardening.md`](../plans/wo-20260901-k8s-delivery-hardening.md)：H2–H4 与非 root 镜像的勾选状态已落后于仓库；Chart 现为受支持交付物，运行 UID 为 10001
 
-2026-10-09 的仓库基线：Chart `0.2.4`，`VERSION` `0.17.0`，捆绑 KTX `0.16.0`。以后以文件内容为准，不要从旧 WO 抄版本号。2026-10-24 产品版本更正为 `0.20.0`，Chart 为 `0.2.7`。2026-11-01 起产品版本曾对齐为 `0.25.0`。2026-11-07 起当前产品版本为 `0.30.0`，Chart 包版本仍为 `0.2.8`，捆绑 KTX 仍为 `0.16.0`。
+2026-10-09 的仓库基线：Chart `0.2.4`，`VERSION` `0.17.0`，捆绑 KTX `0.16.0`。以后以文件内容为准，不要从旧 WO 抄版本号。2026-10-24 产品版本更正为 `0.20.0`，Chart 为 `0.2.7`。2026-11-01 起产品版本曾对齐为 `0.25.0`。2026-11-07 起当前产品版本为 `0.30.0`。2026-11-13 起当前 Chart 包版本为 `0.2.9`（探针改挂），捆绑 KTX 仍为 `0.16.0`。
 
 ## Mac 可以构建待测镜像
 
@@ -109,7 +109,7 @@ kind 门禁的 sentinel 不含 `evals/`。契约要求升级后保留 `evals/`�
 
 ```text
 if 目标是客户包:
-  走 customer-delivery-preflight-checklist 的 Go/No-Go
+  走 customer-amd64-image-build-checklist 客户包门禁（及适用的 v2 升级 C 项）
   停止
 
 # 待测包
@@ -136,7 +136,7 @@ docker load
 确认 PVC 上的配置、ACL、audit、semantic、wiki、skills、evals、.git 仍在
 记录 Chart 版本、镜像 tag、config ID、git SHA、包 SHA256
 
-只有上述原生验收通过，才允许另起客户包后缀并走客户 Go/No-Go
+只有上述原生验收通过，才允许另起客户包后缀并走镜像 checklist 客户包门禁
 ```
 
 ## Terminology Compliance
@@ -146,4 +146,4 @@ This runbook follows `webui/docs/00-product-terminology-standard.md`.
 New terms:
 
 - **待测包**：内部交付阶段名称，指尚未在 amd64 上完成平滑升级验收、不发放给客户的 K8s integration tar。不是 WebUI 文案。
-- **客户包**：内部交付阶段名称，指已满足 [`customer-delivery-preflight-checklist.md`](customer-delivery-preflight-checklist.md) Go / No-Go、可以标注原地升级并发放的包。不是 WebUI 文案。
+- **客户包**：内部交付阶段名称，指已满足 [`customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md) 客户包门禁（及适用的 v2 升级清单）、可以标注原地升级并发放的包。不是 WebUI 文案。

@@ -277,7 +277,7 @@ New terms:
 
 - [E2E SOP](../qa/e2e-sop.md)与[测试分层](../governance/test-layers-and-release-gates.md)。
 - [Helm 升级指南](../../deploy/k8s/helm/lucy/UPGRADE.md)与[回滚指南](../../deploy/k8s/helm/lucy/ROLLBACK.md)。
-- [客户交付检查](../runbooks/customer-delivery-preflight-checklist.md)与[会话恢复手册](../runbooks/webui-session-recovery-runbook.md)。
+- [客户 amd64 镜像 checklist](../runbooks/customer-amd64-image-build-checklist.md)（原 preflight 已作废）与[会话恢复手册](../runbooks/webui-session-recovery-runbook.md)。
 - [企业安全及真实 E2E Spec](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md)。
 
 这些入口说明现有契约；本方案不修改其当前效力。

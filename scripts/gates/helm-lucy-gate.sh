@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Helm static gates for Lucy K8s chart (H1 in customer-delivery-preflight-checklist).
+# Helm static gates for Lucy K8s chart (H1; see customer-amd64-image-build-checklist).
 #
 # Runs unchanged from BOTH layouts:
 #   repo:     scripts/gates/helm-lucy-gate.sh     chart deploy/k8s/helm/lucy

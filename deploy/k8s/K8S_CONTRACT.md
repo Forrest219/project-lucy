@@ -238,7 +238,7 @@ Before any K8s delivery:
 5. `bash scripts/gates/k8s-release-gate.sh --with-cluster --test-upgrade …` (orchestrator)
 6. Post-deploy: `bash scripts/gates/k8s-acceptance.sh` (H5; in a package: `scripts/acceptance.sh`, with `--release`, `--deployment`, `--service` kept distinct and the token passed via `LUCY_MCP_TOKEN`)
 
-See [`docs/runbooks/customer-delivery-preflight-checklist.md`](../../docs/runbooks/customer-delivery-preflight-checklist.md).
+See [`docs/runbooks/customer-amd64-image-build-checklist.md`](../../docs/runbooks/customer-amd64-image-build-checklist.md)（操作）与 [`docs/lessons/`](../../docs/lessons/README.md)（交付事故经验；原 preflight 大清单已作废）。
 
 ## Candidate digest and real-user E2E (Spec 20261018 §8.3, Plan T14)
 

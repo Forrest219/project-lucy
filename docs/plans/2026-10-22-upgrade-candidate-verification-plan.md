@@ -9,7 +9,7 @@
 | 状态 | **已收口为 P1-6 Spec，需求审查已签核通过；暂不开发，非门禁** |
 | 设计基线 | [Lucy v0.25 升级候选验证 Spec](../specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md) |
 | 适用范围 | 用现役实例的一致性备份，在隔离环境验证候选镜像的迁移正确性、业务连续性与审计连续性 |
-| 关联 | L25-07 [客户升级 E2E 自动化](2026-10-19-upgrade-e2e-implementation-plan.md)；[全新部署包生成计划](2026-10-21-customer-v2-fresh-install-package-plan.md)；[v1→2.0 客户升级计划](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md)；[客户交付预检清单](../runbooks/customer-delivery-preflight-checklist.md) |
+| 关联 | L25-07 [客户升级 E2E 自动化](2026-10-19-upgrade-e2e-implementation-plan.md)；[全新部署包生成计划](2026-10-21-customer-v2-fresh-install-package-plan.md)；[v1→2.0 客户升级计划](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md)；[客户 amd64 镜像 checklist](../runbooks/customer-amd64-image-build-checklist.md)（原 preflight 已作废） |
 | 发布属性 | 非门禁。不改当前 CI、冻结分母、发布聚合器、客户放行条件或已有 gate 判定 |
 
 ---
@@ -378,7 +378,7 @@ New terms:
 - [P1-6 升级候选验证 Spec](../specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md)
 - [客户 2.0 全新部署包生成计划](2026-10-21-customer-v2-fresh-install-package-plan.md)
 - [客户 20260828-v1 到 Lucy 2.0 升级计划](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md)
-- [客户交付预检清单](../runbooks/customer-delivery-preflight-checklist.md)
+- [客户 amd64 镜像 checklist](../runbooks/customer-amd64-image-build-checklist.md)（原 preflight 已作废 → [`docs/lessons/`](../lessons/README.md)）
 - [K8s 客户原地升级手册](../../deploy/k8s/CUSTOMER-UPGRADE.md)
 - [K8s 升级恢复操作](../../deploy/k8s/examples/RECOVERY.open-mode.md)
 - [开发治理规则](../governance/DEVELOPMENT.md)

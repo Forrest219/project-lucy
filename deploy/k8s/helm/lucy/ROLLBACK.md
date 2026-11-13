@@ -178,4 +178,5 @@ For customer deliveries, archive:
 - Timestamp and operator
 
 Store under `inbox/` or your release evidence package per
-[`docs/runbooks/customer-delivery-preflight-checklist.md`](../../../../docs/runbooks/customer-delivery-preflight-checklist.md).
+[`docs/runbooks/customer-amd64-image-build-checklist.md`](../../../../docs/runbooks/customer-amd64-image-build-checklist.md)
+and [`docs/governance/release-ci.md`](../../../../docs/governance/release-ci.md).

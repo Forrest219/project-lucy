@@ -68,7 +68,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 - 子模块自带的架构 / API / 数据模型等实现细节允许放在 `<module>/docs/`（当前实例：`webui/docs/01–06`），并在 `docs/governance/project-overview.md` 注册索引
 - `webui` 的 M0–M5 开发已由 Codex 串行完成，对应工单包 `webui/docs/codex/` 作为执行历史归档保留，不再领取；后续若新增工单仍遵循「就近放 `<module>/docs/`」原则
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian
-- **错题本**落 [`docs/lessons/`](../lessons/README.md)：已核实错误的复盘与举一反三；按周可增。登记 ≠ 开发授权，也不替代 Spec／发布取证
+- **错题本**落 [`docs/lessons/`](../lessons/README.md)：已核实错误的复盘与举一反三；按周可增。登记 ≠ 开发授权，也不替代 Spec／发布取证。**发现别名**（Agent／口语）：事故清单、问题清单、经验清单、复盘清单 → 均指本目录，不是交付 runbook 勾选表；`AGENTS.md` 有同句发现入口
 - eval cases（YAML，agent 测）与 quiz HTML（人类测）的设计原则、命名约定、数据获取路径见 `docs/governance/eval-quiz-conventions.md`；新增 dataset 的 eval/quiz 前必读
 
 ## 功能闭口与发布取证
@@ -421,7 +421,7 @@ Lucy WebUI 的设计规范事实源在
 - **空目标卷是失败，不是 `preserved=true`**：解析出的目标 named volume 已存在且挂载点下文件数为 0，同时有运行中的容器挂载了另一个同逻辑卷名（例如 `lucy-demo-data`）且其中有文件时，升级失败，不会把 preserve check 报成 ok。
 - 等价手写：`BUILDX_BUILDER=default bash scripts/upgrade/upgrade-lucy.sh -f deploy/compose/docker-compose.demo.yml`。
 - amd64 开发者覆盖：脚本已按 host 自动选择；若直接 compose，传 `TARGETPLATFORM=linux/amd64 TARGETARCH=amd64`。
-- 客户 amd64 离线包 / K8s integration 大包：推荐 `bash scripts/release/build-customer-amd64-image.sh`（含 G1–G4 + G4b + **G8** 门禁）；或 `docker buildx build --builder lucy-amd64 ...` 并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建 builder 时**不要** `--use`，结束后 `docker buildx use default`）。交付前**必须**完整走一遍 [`docs/runbooks/customer-delivery-preflight-checklist.md`](../runbooks/customer-delivery-preflight-checklist.md) 与 [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md)（含 `assert-image-elf-arch.sh` 对 **node+tini** 架构、Python runtime 离线预装 G4b、镜像 UID 10001 + git init **G8**、Helm MCP URL 守卫、**H3 N-1 旧 PVC 升级**及现场验收命令）。K8s 升级方案见 [`deploy/k8s/helm/lucy/UPGRADE.md`](../../deploy/k8s/helm/lucy/UPGRADE.md)。详见 `docs/specs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
+- 客户 amd64 离线包 / K8s integration 大包：推荐 `bash scripts/release/build-customer-amd64-image.sh`（含 G1–G4 + G4b + **G8** 门禁）；或 `docker buildx build --builder lucy-amd64 ...` 并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建 builder 时**不要** `--use`，结束后 `docker buildx use default`）。交付前**必须**完整走一遍 [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md)（含 `assert-image-elf-arch.sh` 对 **node+tini** 架构、Python runtime 离线预装 G4b、镜像 UID 10001 + git init **G8**、Helm MCP URL 守卫、**H3 N-1 旧 PVC 升级**及现场验收命令）。交付事故经验见 [`docs/lessons/`](../lessons/README.md)（原 preflight 大清单已作废）。K8s 升级方案见 [`deploy/k8s/helm/lucy/UPGRADE.md`](../../deploy/k8s/helm/lucy/UPGRADE.md)。详见 `docs/specs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
 - Demo 使用 `LUCY_TEMPLATE_ROOT=examples/docker-demo/project-template`（本地 `demo-mysql`），**不会**把内网测试库打进客户默认 seed。
 
 ## 语义层（semantic-layer）分层

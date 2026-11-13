@@ -203,7 +203,7 @@ docker run --rm --network=none --platform linux/amd64 \
 
 - [v2.0 K8s / K3s 客户交付及首次管理员流程](customer-v2-k8s-first-admin-delivery-flow.md)（两步客户流程、供应方出包准备、旧开放模式升级）
 - `docs/runbooks/customer-k8s-test-package-principles.md`（Mac 构建待测包、amd64 服务器验收、与客户包的分界）
-- `docs/runbooks/customer-delivery-preflight-checklist.md`（全流程通用交付防坑指南）
+- `docs/lessons/README.md`（交付事故错题本；原 `customer-delivery-preflight-checklist.md` 已作废，仅留重定向 stub）
 - `docs/specs/lucy-customer-amd64-offline-delivery-spec.md`
 - `docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`
 - `docs/plans/wo-202608-07-customer-amd64-delivery.md`

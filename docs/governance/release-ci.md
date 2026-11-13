@@ -33,7 +33,7 @@ Manual inputs (`lucy-release.yml`):
 
 ## 2. Required Gates
 
-> ⚡ **Customer Image / Package Delivery Gate**: Any release involving Docker or K8s delivery to customers must strictly follow [`docs/runbooks/customer-delivery-preflight-checklist.md`](../runbooks/customer-delivery-preflight-checklist.md) and pass G0–G8, K1–K6, and **H1–H5**. CI enforces **H1** (`k8s-static`)、**H3/H4**（真实 N-1 `k8s-upgrade-gate` on kind）、以及 release 路径上对**最终 registry digest** 的 G2/G4b/G8。H5 仍需在 lucy-test 或等价集群归档证据后才可发「可直接原地升级」包。
+> ⚡ **Customer Image / Package Delivery Gate**: Any release involving Docker or K8s delivery to customers must follow [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md)（及适用时 [`customer-v2-upgrade-release-checklist.md`](../runbooks/customer-v2-upgrade-release-checklist.md)）and pass G0–G8, K1–K6, and **H1–H5**. CI enforces **H1** (`k8s-static`)、**H3/H4**（真实 N-1 `k8s-upgrade-gate` on kind）、以及 release 路径上对**最终 registry digest** 的 G2/G4b/G8。H5 仍需在 lucy-test 或等价集群归档证据后才可发「可直接原地升级」包。交付事故经验见 [`docs/lessons/`](../lessons/README.md)（原 preflight 大清单已作废）。
 
 | Job | Workflow | Commands / Coverage |
 |---|---|---|

@@ -3,6 +3,8 @@
 开发／交付过程的错题本：登记已经核实的错误，写清根因与漏检点，抽出可迁移的「举一反三」规则。  
 **登记 ≠ 开发授权**；需要改产品时另开 Spec／Plan／需求池条目。
 
+**别名**：事故清单／问题清单／经验清单／复盘清单 → **本目录**（不是 `docs/runbooks/*checklist*` 出包勾选表）。Agent 入口见仓库根 [`AGENTS.md`](../../AGENTS.md)。
+
 ## 何时写入
 
 | 写入 | 不写入 |
@@ -45,6 +47,9 @@
 |---|---|---|---|
 | 2026-11-13 | 外部目录能列表却读不出字段：`ktx sql` 禁止 `DESC`，测试替身比真实 KTX 宽松 | `contract-stack` `gate-gap` `ux-regression` `sev-high` | [2026-11-13-external-catalog-column-read-ktx-describe.md](2026-11-13-external-catalog-column-read-ktx-describe.md) |
 | 2026-11-13 | 访问关系图：confirmed-only × usage-first 叠出空桑基 | `contract-stack` `data-trust` `viz-geometry` `empty-default` `ux-regression` `sev-high` | [2026-11-13-access-map-sankey-empty.md](2026-11-13-access-map-sankey-empty.md) |
+| 2026-09-02 | K8s 原地升级：镜像过门禁仍因 Chart／入口／PVC 契约失败 | `ops-delivery` `gate-gap` `contract-stack` `sev-high` | [2026-09-02-k8s-inplace-upgrade-contract.md](2026-09-02-k8s-inplace-upgrade-contract.md) |
+| 2026-08-28 | 客户 MCP「未就绪」：未配对外 URL 却走 fallback | `ops-delivery` `ux-regression` `gate-gap` `sev-high` | [2026-08-28-mcp-public-url-fallback.md](2026-08-28-mcp-public-url-fallback.md) |
+| 2026-08-27 | 客户 amd64：ELF／离线 uv／盲复用坏 tar | `ops-delivery` `gate-gap` `sev-high` | [2026-08-27-customer-amd64-elf-uv-blind-reuse.md](2026-08-27-customer-amd64-elf-uv-blind-reuse.md) |
 
 ## 与其他目录的边界
 

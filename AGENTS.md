@@ -9,6 +9,8 @@
 
 Vibe coding 双核角色协作（thinker / builder）的可选完整交付流水线见 [`docs/agent-pipeline.md`](docs/agent-pipeline.md)，按需调用，非必经流程。
 
+**错题本（发现入口）**：已核实事故／问题／经验的登记在 [`docs/lessons/`](docs/lessons/README.md)。口语别名含「事故清单」「问题清单」「经验清单」「复盘清单」——先打开该目录索引，不要默认当成交付 runbook 勾选表。登记 ≠ 开发授权；落位细则见 DEVELOPMENT「Spec 落位规则」。客户 amd64 出包操作 SOT 仍是 [`docs/runbooks/customer-amd64-image-build-checklist.md`](docs/runbooks/customer-amd64-image-build-checklist.md)（原 `customer-delivery-preflight-checklist` 已作废，仅留重定向 stub）。
+
 ## 环境与交付背景（勿混淆）
 
 | 环境 | 硬件 / 平台 | 用途 |
