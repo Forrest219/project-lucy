@@ -90,24 +90,24 @@
 
 ### Task W2-1: 现状审计
 
-- [ ] 对照 `lucy-20261112-connection-create-execution-runtime-reload-plan.md`：OPEN 项列表（E2E-CON-07／E2E-MCP-02／UAT-CONN-RELOAD-01 等）
-- [ ] 核对主机代码／容器 verify 已闭合证据
-- [ ] 报告 → `.superpowers/sdd/w2-1-report.md`
+- [x] 对照 `lucy-20261112-connection-create-execution-runtime-reload-plan.md`：OPEN 项列表（E2E-CON-07／E2E-MCP-02／UAT-CONN-RELOAD-01 等）
+- [x] 核对主机代码／容器 verify 已闭合证据
+- [x] 报告 → `.superpowers/sdd/w2-1-report.md`
 
 ### Task W2-2: 收口路径执行（默认书面降级＋门禁边界）
 
 默认路径（除非审计证明 E2E 可当日绿）：
 
-- [ ] 写 `docs/reviews/2026-11-13-connection-reload-middev-closure.md`：区分「进程级／单测已收口」vs「浏览器 live E2E 仍 OPEN」
-- [ ] Plan／相关 Spec 头部镜像：中间态收口口径；OPEN E2E 登记为**已知债／不挡本波文档收口**或排期
-- [ ] **不**强行 `demo:upgrade` 除非环境代理可用且 Task 明示
-- [ ] 报告 → `.superpowers/sdd/w2-2-report.md`
+- [x] 写 `docs/reviews/2026-11-13-connection-reload-middev-closure.md`：区分「进程级／单测已收口」vs「浏览器 live E2E 仍 OPEN」
+- [x] Plan／相关 Spec 头部镜像：中间态收口口径；OPEN E2E 登记为**已知债／不挡本波文档收口**或排期
+- [x] **不**强行 `demo:upgrade` 除非环境代理可用且 Task 明示
+- [x] 报告 → `.superpowers/sdd/w2-2-report.md`
 
 ### Task W2-3: W2 提交与总收束
 
-- [ ] commit
-- [ ] 更新本 Plan 勾选；清单若需旁路「中间态」一行则补
-- [ ] 报告 → `.superpowers/sdd/w2-3-report.md`
+- [x] commit
+- [x] 更新本 Plan 勾选；清单若需旁路「中间态」一行则补
+- [x] 报告 → `.superpowers/sdd/w2-3-report.md`
 
 ---
 

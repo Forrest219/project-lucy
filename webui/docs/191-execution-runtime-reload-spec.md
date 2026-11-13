@@ -12,7 +12,7 @@
 | 排查记录 | `inbox/2026-10-26-ktx-config-restart-only-investigation.md`（过程性材料，未入版本库） |
 | 实施计划 | `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` |
 | 决策 | 只重载 KTX daemon；**写路径自动尝试重载**（失败或跳过时仍可由用户点确认重试）；失败**不回滚** ktx.yaml；不推进上游 KTX reload 能力 |
-| 实施状态 | **已实现，本机验收通过**（2026-10-27 实现；2026-11-10 写路径自动重载；**2026-11-13** AC-12 `--container` 19/19 + `--local` 16/16）。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8／§8.6 |
+| 实施状态 | **已实现，本机验收通过**（2026-10-27 实现；2026-11-10 写路径自动重载；**2026-11-13** VERIFY-191-C01 **25/25 PASSED**）。浏览器 live `E2E-CON-07`／`E2E-MCP-02`／UAT-CONN-RELOAD-01 **仍 OPEN**（已知债，见 [`docs/reviews/2026-11-13-connection-reload-middev-closure.md`](../../docs/reviews/2026-11-13-connection-reload-middev-closure.md)）。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8／§8.6 |
 
 ## v0.2 修订摘要
 

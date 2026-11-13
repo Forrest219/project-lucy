@@ -6,7 +6,7 @@
 
 **Architecture:** Docker／K8s 入口里 KTX daemon 由 `supervise_ktx` 独占 `7878`；唯一合法热重载通道是 Spec 191 的 `ktx-reload.request` → supervisor `stop child → wait port → start → receipt`。历史缺陷：`reloadKtxMcpAfterConfigWrite` 曾直接调 `ktx mcp stop/start`，与 supervisor 抢端口并失败（`Port 7878 is already in use`）。**2026-11-13 审计：** 主机代码已走 `reloadThroughSupervisor` → `reloadExecutionRuntime`（capability 有效时）；无 capability 才 CLI 回退。修复口径：配置写路径统一走 supervisor 协议；创建／编辑成功面诚实报告三段事实；补齐单测 + 容器进程级 + live E2E 门禁。
 
-**Progress (2026-11-13):** Task 1–4 与 VERIFY-191-C01 已闭合；`E2E-CON-07`／`E2E-MCP-02`／完整 UAT-CONN-RELOAD-01（经 WebUI POST create）仍 OPEN。本机 `--container` 含 C01：**25/25 PASSED**。注意：运行中的 `compose-lucy-1` 镜像仍偏旧；主机已修。父会话曾试 `demo:upgrade`，因 Docker build 走系统代理 `127.0.0.1:7890`（无监听）apt 失败；**恢复代理或关掉系统 HTTP 代理后再 upgrade**，WebUI create API 才走 supervisor 写路径。
+**Progress (2026-11-13 · W2 中间态书面收口):** 进程级写路径／单测（UT-RELOAD-01/02、UT-CONN-01）／**VERIFY-191-C01 25/25 PASSED** 已收口；`E2E-CON-07`／`E2E-MCP-02`／**UAT-CONN-RELOAD-01** 登记为**已知债**（**不挡**本波 W2 文档收口；**挡**发布取证缺陷关闭）。详见 [middev 收口](../reviews/2026-11-13-connection-reload-middev-closure.md)。运行中 `compose-lucy-1` 镜像仍可能偏旧；UAT-01 需可用代理环境下 `demo:upgrade` 后再取证。
 
 **Tech Stack:** WebUI Node（`webui/server/ktx-mcp-reload.ts`、`admin/mcp-runtime-reload.ts`）、`scripts/runtime/docker-entrypoint.sh` supervisor、Vitest、Playwright live-e2e、`scripts/verify/verify-ktx-reload-lifecycle.sh --container`
 
