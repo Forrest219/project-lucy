@@ -38,7 +38,8 @@
     "verify:gate": "tsx ../scripts/smoke/verify-202608-access-governance-gate.mjs",
     "verify:test": "tsx --test ../scripts/smoke/verify-202608-access-governance-gate.test.mjs",
     "perf:entry": "tsx scripts/entry-performance.mts",
-    "perf:release-baseline": "tsx scripts/release-perf-baseline.mts"
+    "perf:release-baseline": "tsx scripts/release-perf-baseline.mts",
+    "perf:event-loop-relief": "tsx scripts/event-loop-relief-perf.mts"
   },
   "keywords": [],
   "author": "",

@@ -29,6 +29,7 @@ docs/qa/uat/
 | `UAT-SUITE-CONN-RELOAD` | 连接写后执行层热重载 | Spec 191；连接创建→supervisor 重载 |
 | `UAT-SUITE-CATALOG-SCAN` | 库内扫表读法 | Spec `lucy-20261111-catalog-scan-read-path` |
 | `UAT-SUITE-ACCESS-MAP` | 访问关系图空桑基 | Spec `lucy-20261113-access-map-sankey-empty-fix`；P1-17 |
+| `UAT-SUITE-EVENT-LOOP-RELIEF` | 重读路径与存活探针 | P1-21／REQ-030-042。INDEX＝PASS（可选 LOOP-05 BLOCKED） |
 
 ## 第一性原则
 

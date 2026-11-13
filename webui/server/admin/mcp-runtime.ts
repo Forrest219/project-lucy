@@ -179,6 +179,31 @@ export async function probeExecutionRuntime(
 
 export function resetExecutionRuntimeProbeForTests(): void {
   cachedProbe = undefined;
+  if (probeRefresh) clearInterval(probeRefresh);
+  probeRefresh = undefined;
+}
+
+/** Last probe, including an expired one. Does not open a connection. */
+export function peekExecutionProbe(): ExecutionProbeResult | undefined {
+  return cachedProbe?.result;
+}
+
+let probeRefresh: NodeJS.Timeout | undefined;
+
+/** Refresh the execution probe off the request path. */
+export function startExecutionProbeRefresh(intervalMs = positiveInteger(process.env.LUCY_MCP_RUNTIME_PROBE_TTL_MS, 5_000)): void {
+  if (probeRefresh) return;
+  const tick = () => {
+    void probeExecutionRuntime({ force: true }).catch(() => undefined);
+  };
+  tick();
+  probeRefresh = setInterval(tick, intervalMs);
+  probeRefresh.unref();
+}
+
+export function stopExecutionProbeRefresh(): void {
+  if (probeRefresh) clearInterval(probeRefresh);
+  probeRefresh = undefined;
 }
 
 function summarizeExecution(

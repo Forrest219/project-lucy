@@ -83,7 +83,7 @@ extraSecretData:
 # take a few minutes on a cold local cluster. Use lightweight HTTP probes only.
 startupProbe:
   httpGet:
-    path: /api/health
+    path: /api/readyz
     port: webui
   initialDelaySeconds: 5
   periodSeconds: 5
@@ -93,7 +93,7 @@ startupProbe:
 
 readinessProbe:
   httpGet:
-    path: /api/health
+    path: /api/readyz
     port: webui
   periodSeconds: 5
   timeoutSeconds: 3
@@ -102,12 +102,12 @@ readinessProbe:
 
 livenessProbe:
   httpGet:
-    path: /api/health
+    path: /api/livez
     port: webui
-  initialDelaySeconds: 60
-  periodSeconds: 30
-  timeoutSeconds: 5
-  failureThreshold: 3
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 6
   successThreshold: 1
 
 resources:

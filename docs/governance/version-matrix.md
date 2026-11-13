@@ -37,7 +37,7 @@ The Lucy product version follows the product line. Branch `lucy-v0.30` is produc
 | Identity | When it changes | Current |
 |---|---|---|
 | Lucy product version (`VERSION`) | The product line changes | `0.30.0` |
-| Helm Chart package (`Chart.version`) | The install package's behavior changes | `0.2.8` (optional SMTP). The later product-version alignment did not bump it |
+| Helm Chart package (`Chart.version`) | The install package's behavior changes | `0.2.9` (liveness `/api/livez`, startup and readiness `/api/readyz`). Product version stays `0.30.0` |
 | Bundled KTX | The bundled runtime is upgraded | `0.16.0` |
 | Customer image tag / delivery-package revision | A real build or handoff exists | None for `0.30.0` yet. Form: `customer-amd64-<LUCY_VERSION>-<YYYYMMDD>-<gitSha>` |
 | Docs-only or demo rebuild | No product bump and no chart bump | `npm run demo:upgrade` |

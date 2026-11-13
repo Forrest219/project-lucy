@@ -161,7 +161,8 @@ assert_universal_contract() {
   assert_present "${render}" "workingDir: /data/lucy"
   assert_present "${render}" "runAsUser: 10001"
   assert_present "${render}" "fsGroup: 10001"
-  assert_present "${render}" "path: /api/health"
+  assert_present "${render}" "path: /api/livez"
+  assert_present "${render}" "path: /api/readyz"
   assert_env_value "${render}" "LUCY_VERSION" "0.30.0"
   assert_env_value "${render}" "LUCY_BUNDLED_KTX_VERSION" "0.16.0"
   # A Secret volume is read-only: it must never shadow the WebUI-writable dir.

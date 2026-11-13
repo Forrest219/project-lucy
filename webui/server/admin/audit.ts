@@ -16,7 +16,8 @@ import {
 import { resolveProjectRoot } from "../project.js";
 import { recordProjectionStatus } from "../proxy/audit-write-health.js";
 import { getSecurityStore } from "../security/instance.js";
-import { runProjection, type ProjectionStatus } from "../security/projector.js";
+import { projectionStatus, runProjection, triggerAuditProjection, type ProjectionStatus } from "../security/projector.js";
+import { inferredRebuildStatus } from "./inferred-turn-maintainer.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
 import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
 import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
@@ -649,6 +650,8 @@ export async function getAuditDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
+    CREATE INDEX IF NOT EXISTS idx_al_ts ON access_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_al_lucy_turn_id ON access_log(lucy_turn_id);
   `);
   ensureColumn(db, "config_change_log", "asset_kind", "TEXT NOT NULL DEFAULT 'governance'");
   ensureColumn(db, "config_change_log", "operation", "TEXT");
@@ -1970,36 +1973,43 @@ function turnSpanMs(startedAt: string, endedAt: string): number {
   return Math.max(0, new Date(endedAt).getTime() - new Date(startedAt).getTime());
 }
 
-function loadAccessLogMetrics(
-  database: Database.Database,
-  accessLogIds: number[],
-  p95Ms: number
-): {
+type AccessFact = {
+  id: number;
+  ts: string;
+  tool: string;
+  outcome: string;
+  primary_status: string | null;
+  duration_ms: number;
+  tables: string | null;
+  decision_reason: string | null;
+  client: string | null;
+  client_version: string | null;
+  user_agent: string | null;
+  reported_client: string | null;
+  reported_client_version: string | null;
+};
+
+function emptyTurnMetrics(): {
   totalCallDurationMs: number;
   maxCallDurationMs: number;
   slowCallCount: number;
   outcomeSummary: TurnOutcomeSummary;
-  /** B27：八桶主状态汇总（`budget_stopped` 不再被丢弃）。 */
   primaryStatusSummary: PrimaryStatusSummary;
 } {
-  const empty = {
+  return {
     totalCallDurationMs: 0,
     maxCallDurationMs: 0,
     slowCallCount: 0,
-    outcomeSummary: { ok: 0, denied: 0, error: 0, budgetStop: 0 } as TurnOutcomeSummary,
+    outcomeSummary: { ok: 0, denied: 0, error: 0, budgetStop: 0 },
     primaryStatusSummary: emptyPrimaryStatusCounts() as PrimaryStatusSummary
   };
-  if (accessLogIds.length === 0) return empty;
-  const placeholders = accessLogIds.map(() => "?").join(",");
-  const rows = database
-    .prepare(
-      `SELECT outcome, primary_status, duration_ms FROM access_log WHERE id IN (${placeholders})`
-    )
-    .all(...accessLogIds) as Array<{
-    outcome: string;
-    primary_status: string | null;
-    duration_ms: number;
-  }>;
+}
+
+function metricsFromRows(
+  rows: Array<{ outcome: string; primary_status: string | null; duration_ms: number }>,
+  p95Ms: number
+): ReturnType<typeof emptyTurnMetrics> {
+  if (rows.length === 0) return emptyTurnMetrics();
   let totalCallDurationMs = 0;
   let maxCallDurationMs = 0;
   let slowCallCount = 0;
@@ -2018,6 +2028,25 @@ function loadAccessLogMetrics(
   return { totalCallDurationMs, maxCallDurationMs, slowCallCount, outcomeSummary, primaryStatusSummary };
 }
 
+function loadAccessLogMetrics(
+  database: Database.Database,
+  accessLogIds: number[],
+  p95Ms: number
+): ReturnType<typeof emptyTurnMetrics> {
+  if (accessLogIds.length === 0) return emptyTurnMetrics();
+  const placeholders = accessLogIds.map(() => "?").join(",");
+  const rows = database
+    .prepare(
+      `SELECT outcome, primary_status, duration_ms FROM access_log WHERE id IN (${placeholders})`
+    )
+    .all(...accessLogIds) as Array<{
+    outcome: string;
+    primary_status: string | null;
+    duration_ms: number;
+  }>;
+  return metricsFromRows(rows, p95Ms);
+}
+
 const TABLE_FORBIDDEN_PREFIX = "table_forbidden:";
 
 function parseTableForbiddenPhysicalTable(decisionReason: string | null | undefined): string | null {
@@ -2028,15 +2057,10 @@ function parseTableForbiddenPhysicalTable(decisionReason: string | null | undefi
 }
 
 /** Tool-call count + denied tables from table_forbidden reasons. */
-function loadTurnToolCallStats(
-  database: Database.Database,
-  accessLogIds: number[]
+function toolStatsFromRows(
+  rows: Array<{ tables: string | null; decision_reason: string | null }>
 ): { toolCallCount: number; forbiddenTables: string[] } {
-  if (accessLogIds.length === 0) return { toolCallCount: 0, forbiddenTables: [] };
-  const placeholders = accessLogIds.map(() => "?").join(",");
-  const rows = database
-    .prepare(`SELECT tables, decision_reason FROM access_log WHERE id IN (${placeholders})`)
-    .all(...accessLogIds) as Array<{ tables: string | null; decision_reason: string | null }>;
+  if (rows.length === 0) return { toolCallCount: 0, forbiddenTables: [] };
   let toolCallCount = 0;
   const forbiddenTables: string[] = [];
   const seen = new Set<string>();
@@ -2050,6 +2074,18 @@ function loadTurnToolCallStats(
     }
   }
   return { toolCallCount, forbiddenTables };
+}
+
+function loadTurnToolCallStats(
+  database: Database.Database,
+  accessLogIds: number[]
+): { toolCallCount: number; forbiddenTables: string[] } {
+  if (accessLogIds.length === 0) return { toolCallCount: 0, forbiddenTables: [] };
+  const placeholders = accessLogIds.map(() => "?").join(",");
+  const rows = database
+    .prepare(`SELECT tables, decision_reason FROM access_log WHERE id IN (${placeholders})`)
+    .all(...accessLogIds) as Array<{ tables: string | null; decision_reason: string | null }>;
+  return toolStatsFromRows(rows);
 }
 
 /**
@@ -2215,15 +2251,62 @@ function displayedTurnIdentity(
   };
 }
 
-function enrichTurnEntry(database: Database.Database, entry: TurnEntry, p95Ms: number): TurnEntry {
-  const accessLogIds = listTurnAccessLogIds(database, entry);
-  const metrics = loadAccessLogMetrics(database, accessLogIds, p95Ms);
-  const { toolCallCount, forbiddenTables } = loadTurnToolCallStats(database, accessLogIds);
-  const linkedCallCount = accessLogIds.length;
+function identityFromFacts(
+  rows: AccessFact[],
+  fallback: { client?: string; questionSummary?: string }
+): Pick<TurnEntry, "client" | "reportedClient" | "reportedClientVersion" | "questionSummary"> {
+  const sorted = [...rows].sort((a, b) => {
+    const rank = (tool: string) => (tool === "initialize" ? 0 : 1);
+    const byTool = rank(a.tool) - rank(b.tool);
+    if (byTool !== 0) return byTool;
+    if (a.ts < b.ts) return -1;
+    if (a.ts > b.ts) return 1;
+    return a.id - b.id;
+  });
+  const row = sorted[0];
+  const shown: ResolvedClientIdentity = presentStoredClient(row ?? { client: fallback.client });
+  const client = shown.client ?? fallback.client;
+  const questionSummary = fallback.questionSummary?.startsWith(SESSION_VISIT_SUMMARY_PREFIX)
+    ? sessionVisitSummary(client)
+    : fallback.questionSummary;
+  return {
+    client,
+    reportedClient: shown.reportedClient,
+    reportedClientVersion: shown.reportedClientVersion,
+    questionSummary
+  };
+}
+
+function enrichTurnEntry(
+  database: Database.Database,
+  entry: TurnEntry,
+  p95Ms: number,
+  facts?: AccessFact[]
+): TurnEntry {
+  if (!facts) {
+    const accessLogIds = listTurnAccessLogIds(database, entry);
+    const metrics = loadAccessLogMetrics(database, accessLogIds, p95Ms);
+    const { toolCallCount, forbiddenTables } = loadTurnToolCallStats(database, accessLogIds);
+    const linkedCallCount = accessLogIds.length;
+    const businessCallCount = entry.source === "reported" ? linkedCallCount : toolCallCount;
+    const identity = displayedTurnIdentity(database, accessLogIds, entry);
+    return {
+      ...entry,
+      ...identity,
+      businessCallCount,
+      linkedCallCount,
+      sources: mergeTurnSources(entry.sources, forbiddenTables),
+      turnSpanMs: turnSpanMs(entry.startedAt, entry.endedAt),
+      ...metrics
+    };
+  }
+  const metrics = metricsFromRows(facts, p95Ms);
+  const { toolCallCount, forbiddenTables } = toolStatsFromRows(facts);
+  const linkedCallCount = facts.length;
   // Reported turns already count every linked non-protocol call as a tool call.
   // Inferred turns: tool call = touched table OR table_forbidden deny.
   const businessCallCount = entry.source === "reported" ? linkedCallCount : toolCallCount;
-  const identity = displayedTurnIdentity(database, accessLogIds, entry);
+  const identity = identityFromFacts(facts, entry);
   return {
     ...entry,
     ...identity,
@@ -2261,18 +2344,124 @@ function matchesTurnIdFilter(entry: TurnEntry, raw: string): boolean {
   return entry.id.toLowerCase().includes(raw.toLowerCase());
 }
 
-function presentInquiry(database: Database.Database, entry: TurnEntry): TurnEntry {
-  const inquiryNo = entry.inquiryNo ?? lookupInquiryNo(database, entry.id) ?? undefined;
-  return {
-    ...entry,
-    inquiryNo,
-    correlationKey: entry.id,
-    inquiryKind: inquiryKindOfTurn({
-      source: entry.source,
-      questionSource: entry.questionSource,
-      questionSummary: entry.questionSummary
-    })
-  };
+const TURN_FACT_COLUMNS = `id, ts, tool, outcome, primary_status, duration_ms, tables, decision_reason, client, client_version, user_agent, reported_client, reported_client_version`;
+
+function rowsByJsonEach<T>(database: Database.Database, sql: string, ids: Array<string | number>): T[] {
+  if (ids.length === 0) return [];
+  return database.prepare(sql).all(JSON.stringify(ids)) as T[];
+}
+
+function sourcesForLogIds(
+  ids: number[],
+  sources: Map<number, TurnEntry["sources"]>
+): TurnEntry["sources"] {
+  const seen = new Set<string>();
+  const out: TurnEntry["sources"] = [];
+  for (const id of ids) {
+    for (const source of sources.get(id) ?? []) {
+      const key = sourceIdentityKey(source);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(source);
+    }
+  }
+  return out;
+}
+
+function loadTurnFactBundle(database: Database.Database, inferredIds: string[], reportedIds: string[]): {
+  inferred: Map<string, AccessFact[]>;
+  reportedByTurn: Map<string, AccessFact[]>;
+  sources: Map<number, TurnEntry["sources"]>;
+} {
+  const links = rowsByJsonEach<{ inferred_turn_id: string; access_log_id: number }>(
+    database,
+    `SELECT inferred_turn_id, access_log_id FROM inferred_turn_access_logs
+     WHERE inferred_turn_id IN (SELECT value FROM json_each(?))`,
+    inferredIds
+  );
+  const reported = rowsByJsonEach<AccessFact & { lucy_turn_id: string }>(
+    database,
+    `SELECT ${TURN_FACT_COLUMNS}, lucy_turn_id FROM access_log
+     WHERE lucy_turn_id IN (SELECT value FROM json_each(?))
+     ORDER BY ts ASC, id ASC`,
+    reportedIds
+  );
+  const inferredLogIds = links.map((link) => link.access_log_id);
+  const inferredFacts = rowsByJsonEach<AccessFact>(
+    database,
+    `SELECT ${TURN_FACT_COLUMNS} FROM access_log WHERE id IN (SELECT value FROM json_each(?))`,
+    inferredLogIds
+  );
+  const byId = new Map(inferredFacts.map((row) => [row.id, row]));
+  const inferred = new Map<string, AccessFact[]>();
+  for (const link of links) {
+    const fact = byId.get(link.access_log_id);
+    if (!fact) continue;
+    const list = inferred.get(link.inferred_turn_id) ?? [];
+    list.push(fact);
+    inferred.set(link.inferred_turn_id, list);
+  }
+  for (const list of inferred.values()) {
+    list.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id));
+  }
+  const reportedByTurn = new Map<string, AccessFact[]>();
+  for (const row of reported) {
+    const list = reportedByTurn.get(row.lucy_turn_id) ?? [];
+    list.push(row);
+    reportedByTurn.set(row.lucy_turn_id, list);
+  }
+  const allIds = [...new Set([...inferredLogIds, ...reported.map((row) => row.id)])];
+  const sourceRows = rowsByJsonEach<{
+    access_log_id: number;
+    connection_id: string | null;
+    schema_name: string | null;
+    source_name: string | null;
+    physical_table: string;
+  }>(
+    database,
+    `SELECT access_log_id, connection_id, schema_name, source_name, physical_table
+     FROM access_log_sources WHERE access_log_id IN (SELECT value FROM json_each(?))`,
+    allIds
+  );
+  const sources = new Map<number, TurnEntry["sources"]>();
+  for (const row of sourceRows) {
+    const list = sources.get(row.access_log_id) ?? [];
+    list.push({
+      connectionId: row.connection_id ?? undefined,
+      schema: row.schema_name ?? undefined,
+      sourceName: row.source_name ?? undefined,
+      physicalTable: row.physical_table
+    });
+    sources.set(row.access_log_id, list);
+  }
+  return { inferred, reportedByTurn, sources };
+}
+
+function attachPresentedInquiries(database: Database.Database, entries: TurnEntry[]): TurnEntry[] {
+  const missing = entries.filter((entry) => entry.inquiryNo == null).map((entry) => entry.id);
+  const found = new Map<string, number>();
+  if (missing.length > 0) {
+    const rows = rowsByJsonEach<{ correlation_key: string; inquiry_no: number }>(
+      database,
+      `SELECT correlation_key, inquiry_no FROM inquiry_correlation_serial
+       WHERE correlation_key IN (SELECT value FROM json_each(?))`,
+      missing
+    );
+    for (const row of rows) found.set(row.correlation_key, row.inquiry_no);
+  }
+  return entries.map((entry) => {
+    const inquiryNo = entry.inquiryNo ?? found.get(entry.id);
+    return {
+      ...entry,
+      inquiryNo,
+      correlationKey: entry.id,
+      inquiryKind: inquiryKindOfTurn({
+        source: entry.source,
+        questionSource: entry.questionSource,
+        questionSummary: entry.questionSummary
+      })
+    };
+  });
 }
 
 async function listAuditTurnEntries(
@@ -2291,7 +2480,7 @@ async function listAuditTurnEntries(
   ensureInquirySerialSchema(database);
   ensureBackfillBeforeAllocate(database);
 
-  if (source !== "reported") {
+  if (source !== "reported" && process.env.LUCY_TURN_REBUILD_ON_READ === "1") {
     const cutoff = new Date(Date.now() - INFERRED_TURN_REBUILD_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
     const targetUsers = q.user
       ? [q.user]
@@ -2301,116 +2490,96 @@ async function listAuditTurnEntries(
     }
   }
 
-  const entries: TurnEntry[] = [];
-
-  if (source === "inferred" || source === "all") {
-    const conditions: string[] = [];
-    const params: Record<string, string | null> = {
-      user: q.user ?? null,
-      since: q.since ?? sinceDefault,
-      until: q.until ?? null
-    };
-    if (params.user) conditions.push("user_id = @user");
-    if (params.since) conditions.push("started_at >= @since");
-    if (params.until) conditions.push("started_at <= @until");
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const rows = database.prepare(`SELECT * FROM inferred_turns ${where} ORDER BY started_at DESC`).all(params) as Array<{
-      inferred_turn_id: string;
-      user_id: string;
-      client: string | null;
-      session_id: string | null;
-      started_at: string;
-      ended_at: string;
-      business_call_count: number;
-      tool_summary: string;
-      source_summary: string;
-      question_summary: string | null;
-      confidence: string;
-      inquiry_no: number | null;
-    }>;
-    for (const row of rows) {
-      entries.push(
-        presentInquiry(database, enrichTurnEntry(database, {
-          id: row.inferred_turn_id,
-          source: "inferred",
-          inquiryNo: row.inquiry_no ?? undefined,
-          userId: row.user_id,
-          client: row.client ?? undefined,
-          sessionId: row.session_id ?? undefined,
-          startedAt: row.started_at,
-          endedAt: row.ended_at,
-          businessCallCount: row.business_call_count,
-          linkedCallCount: 0,
-          questionSummary: row.question_summary ?? undefined,
-          confidence: row.confidence,
-          tools: JSON.parse(row.tool_summary) as string[],
-          sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
-        }, p95Ms))
-      );
-    }
+  const built: TurnEntry[] = [];
+  const windowParams = {
+    user: q.user ?? null,
+    since: q.since ?? sinceDefault,
+    until: q.until ?? null
+  };
+  const inferredRows = source === "reported" ? [] : database.prepare(
+    `SELECT * FROM inferred_turns ${[
+      windowParams.user ? "user_id = @user" : "",
+      windowParams.since ? "started_at >= @since" : "",
+      windowParams.until ? "started_at <= @until" : ""
+    ].filter(Boolean).join(" AND ").replace(/^(.+)$/, "WHERE $1")} ORDER BY started_at DESC`
+  ).all(windowParams) as Array<{
+    inferred_turn_id: string;
+    user_id: string;
+    client: string | null;
+    session_id: string | null;
+    started_at: string;
+    ended_at: string;
+    business_call_count: number;
+    tool_summary: string;
+    source_summary: string;
+    question_summary: string | null;
+    confidence: string;
+    inquiry_no: number | null;
+  }>;
+  const reportedRows = source === "inferred" ? [] : database.prepare(
+    `SELECT * FROM conversation_turns ${[
+      windowParams.user ? "user_id = @user" : "",
+      windowParams.since ? "created_at >= @since" : "",
+      windowParams.until ? "created_at <= @until" : ""
+    ].filter(Boolean).join(" AND ").replace(/^(.+)$/, "WHERE $1")} ORDER BY created_at DESC`
+  ).all(windowParams) as Array<{
+    turn_id: string;
+    session_id: string | null;
+    user_id: string;
+    client: string | null;
+    created_at: string;
+    question_summary: string | null;
+    question_preview: string | null;
+    question_source: string | null;
+    inquiry_no: number | null;
+  }>;
+  const bundle = loadTurnFactBundle(
+    database,
+    inferredRows.map((row) => row.inferred_turn_id),
+    reportedRows.map((row) => row.turn_id)
+  );
+  for (const row of inferredRows) {
+    const facts = bundle.inferred.get(row.inferred_turn_id) ?? [];
+    built.push(enrichTurnEntry(database, {
+      id: row.inferred_turn_id,
+      source: "inferred",
+      inquiryNo: row.inquiry_no ?? undefined,
+      userId: row.user_id,
+      client: row.client ?? undefined,
+      sessionId: row.session_id ?? undefined,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+      businessCallCount: row.business_call_count,
+      linkedCallCount: 0,
+      questionSummary: row.question_summary ?? undefined,
+      confidence: row.confidence,
+      tools: JSON.parse(row.tool_summary) as string[],
+      sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
+    }, p95Ms, facts));
   }
-
-  if (source === "reported" || source === "all") {
-    const conditions: string[] = [];
-    const params: Record<string, string | null> = {
-      user: q.user ?? null,
-      since: q.since ?? sinceDefault,
-      until: q.until ?? null
-    };
-    if (params.user) conditions.push("user_id = @user");
-    if (params.since) conditions.push("created_at >= @since");
-    if (params.until) conditions.push("created_at <= @until");
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const rows = database.prepare(`SELECT * FROM conversation_turns ${where} ORDER BY created_at DESC`).all(params) as Array<{
-      turn_id: string;
-      session_id: string | null;
-      user_id: string;
-      client: string | null;
-      created_at: string;
-      question_summary: string | null;
-      question_preview: string | null;
-      question_source: string | null;
-      inquiry_no: number | null;
-    }>;
-    for (const row of rows) {
-      const linked = database.prepare(`
-        SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? ORDER BY ts ASC
-      `).all(row.turn_id) as Array<{ id: number; ts: string; tool: string }>;
-      const accessLogIds = linked.map((l) => l.id);
-      const sourceRows = accessLogIds.length > 0
-        ? database.prepare(`
-            SELECT DISTINCT connection_id, schema_name, source_name, physical_table
-            FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})
-          `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>
-        : [];
-      entries.push(
-        presentInquiry(database, enrichTurnEntry(database, {
-          id: row.turn_id,
-          source: "reported",
-          inquiryNo: row.inquiry_no ?? undefined,
-          questionSource: row.question_source ?? undefined,
-          userId: row.user_id,
-          client: row.client ?? undefined,
-          sessionId: row.session_id ?? undefined,
-          startedAt: row.created_at,
-          endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
-          businessCallCount: linked.length,
-          linkedCallCount: linked.length,
-          questionSummary: row.question_summary ?? undefined,
-          questionPreview: row.question_preview ?? undefined,
-          confidence: "high",
-          tools: [...new Set(linked.map((l) => l.tool))],
-          sources: sourceRows.map((s) => ({
-            connectionId: s.connection_id ?? undefined,
-            schema: s.schema_name ?? undefined,
-            sourceName: s.source_name ?? undefined,
-            physicalTable: s.physical_table
-          }))
-        }, p95Ms))
-      );
-    }
+  for (const row of reportedRows) {
+    const facts = bundle.reportedByTurn.get(row.turn_id) ?? [];
+    const accessLogIds = facts.map((fact) => fact.id);
+    built.push(enrichTurnEntry(database, {
+      id: row.turn_id,
+      source: "reported",
+      inquiryNo: row.inquiry_no ?? undefined,
+      questionSource: row.question_source ?? undefined,
+      userId: row.user_id,
+      client: row.client ?? undefined,
+      sessionId: row.session_id ?? undefined,
+      startedAt: row.created_at,
+      endedAt: facts.length > 0 ? facts[facts.length - 1].ts : row.created_at,
+      businessCallCount: facts.length,
+      linkedCallCount: facts.length,
+      questionSummary: row.question_summary ?? undefined,
+      questionPreview: row.question_preview ?? undefined,
+      confidence: "high",
+      tools: [...new Set(facts.map((fact) => fact.tool))],
+      sources: sourcesForLogIds(accessLogIds, bundle.sources)
+    }, p95Ms, facts));
   }
-
+  const entries = attachPresentedInquiries(database, built);
   entries.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
 
   const filtered = entries.filter((entry) => {
@@ -2992,10 +3161,35 @@ return database.prepare(sql).all(...params) as never;
 async function auditProjectionStatus(database: Database.Database): Promise<ProjectionStatus> {
   const store = await getSecurityStore();
   const status: ProjectionStatus = store.ok
-    ? runProjection(store.value, database).status
+    ? projectionStatus(store.value, database)
     : { complete: false, cursor: 0, latestSeq: 0, lag: 0, delayMs: 0, reason: "security_store_unavailable" };
   recordProjectionStatus(status);
+  triggerAuditProjection();
   return status;
+}
+
+/** Export catch-up: at most one projection batch per slice, then yield. */
+async function waitForProjectionCatchUp(
+  database: Database.Database,
+  upperSeq: number,
+  deadlineMs: number,
+  startedAt: number
+): Promise<boolean> {
+  const store = await getSecurityStore();
+  if (!store.ok) return false;
+  for (;;) {
+    const status = projectionStatus(store.value, database);
+    if (status.complete && status.latestSeq >= upperSeq) {
+      recordProjectionStatus(status);
+      return true;
+    }
+    if (Date.now() - startedAt >= deadlineMs) {
+      recordProjectionStatus(status);
+      return false;
+    }
+    runProjection(store.value, database, { maxBatches: 1 });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
 }
 
 export function registerAuditRoutes(app: FastifyInstance) {
@@ -3951,7 +4145,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     return {
       ok: true,
-      data: { ...result, projection }
+      data: { ...result, projection, inferredRebuild: inferredRebuildStatus() }
     };
   });
 
@@ -4590,15 +4784,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     // B21：自捕获 S 那一刻起算，等待重试不重置。
     const catchUpStartedAt = Date.now();
     const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
-    const waitUntil = async (): Promise<boolean> => {
-      for (;;) {
-        const status = await auditProjectionStatus(database);
-        if (status.complete && status.latestSeq >= upperSeq.value) return true;
-        if (Date.now() - catchUpStartedAt >= deadlineMs) return false;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    };
-    const caughtUp = await waitUntil();
+    const caughtUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
 
     try {
       const result = await performExportV2({
@@ -4683,15 +4869,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const projection = await auditProjectionStatus(database);
     const catchUpStartedAt = Date.now();
     const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
-    const waitUntil = async (): Promise<boolean> => {
-      for (;;) {
-        const status = await auditProjectionStatus(database);
-        if (status.complete && status.latestSeq >= upperSeq.value) return true;
-        if (Date.now() - catchUpStartedAt >= deadlineMs) return false;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    };
-    const caughtUp = await waitUntil();
+    const caughtUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
 
     try {
       const pack = await buildExportPackV2({

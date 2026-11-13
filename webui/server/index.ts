@@ -35,7 +35,7 @@ import {
 import { isSqlServerDriver, normalizeEnabledTableNames } from "../src/lib/enabled-table-identity.js";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { formatConnectionErrorMessage } from "./connection-errors";
-import { readKtxRuntimeStatus } from "./ktx-runtime";
+import { peekKtxRuntimeStatus, readKtxRuntimeStatusCached } from "./ktx-runtime";
 import { resolveLucyVersion } from "./lucy-version.js";
 import { loadRuntimeRevision } from "./lucy-revision.js";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
@@ -68,7 +68,7 @@ import {
   recoverCaliberBindingRegistry
 } from "./proxy/caliber-binding-registry";
 import { withCaliberBindingRegistryExclusion } from "./proxy/caliber-binding-lock";
-import { collectContentLayout, mirrorOnlySemanticRelPaths } from "./content-layout";
+import { collectContentLayout, mirrorOnlySemanticRelPaths, type ContentLayoutStatus } from "./content-layout";
 import { buildSemanticModelIndex } from "./semantic-identity";
 import { applySharedSemanticLegality } from "./semantic-checks";
 import {
@@ -169,9 +169,12 @@ import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
 import {
+  peekExecutionProbe,
   readMcpRuntimeStatus,
   registerMcpRuntimeRoutes,
-  runMcpRuntimeCanary
+  runMcpRuntimeCanary,
+  startExecutionProbeRefresh,
+  stopExecutionProbeRefresh
 } from "./admin/mcp-runtime.js";
 import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
 import { readKtxYamlDigest } from "./mcp-runtime-state.js";
@@ -220,7 +223,11 @@ import {
 import { loadWikiAccessConfigSnapshot } from "./wiki-access-effects.js";
 import { recoverWikiAccessOperations } from "./wiki-access-recovery.js";
 import { recoverInterruptedOperations } from "./security/ledger.js";
-import { AUDIT_PROJECTOR_NAME, createProjectionScheduler, readTargetCursor } from "./security/projector.js";
+import { AUDIT_PROJECTOR_NAME, createProjectionScheduler, readTargetCursor, registerProjectionTrigger } from "./security/projector.js";
+import { bindInferredTurnMaintainer, createInferredTurnMaintainer, stopInferredTurnMaintainer } from "./admin/inferred-turn-maintainer.js";
+import { INFERRED_TURN_REBUILD_LOOKBACK_HOURS, rebuildInferredTurns } from "./proxy/audit.js";
+import { eventLoopDelaySnapshot } from "./runtime/event-loop-delay.js";
+import { isWebuiReady, markWebuiWarmupComplete } from "./runtime/readiness.js";
 import { recoverProjectionCursor } from "./security/recovery.js";
 import { recordProjectionStatus } from "./proxy/audit-write-health.js";
 import { registerWebSecurity } from "./web-security.js";
@@ -261,6 +268,8 @@ import {
 } from "./semantic-assets.js";
 import {
   readPublishPendingSnapshot,
+  scanPublishContent,
+  type PublishContentScan,
   type PublishPendingSnapshot
 } from "./publish-workbench-state.js";
 import {
@@ -607,21 +616,21 @@ function logProbeTiming(request: FastifyRequest, kind: string, purpose: string, 
  */
 async function buildPendingChangedFiles(
   projectRoot: string,
-  snapshot: PublishPendingSnapshot
+  snapshot: PublishPendingSnapshot,
+  scan: PublishContentScan
 ): Promise<Array<{ filePath: string; status: string; diff: string }>> {
-  const files: Array<{ filePath: string; status: string; diff: string }> = [];
-  for (const change of snapshot.changes) {
+  return mapLimit(snapshot.changes, 4, async (change) => {
     const evidence = await readPublishEvidence(
       projectRoot,
-      evidenceRefFor(change.logicalPath, "diff")
+      evidenceRefFor(change.logicalPath, "diff"),
+      scan
     );
-    files.push({
+    return {
       filePath: change.logicalPath,
       status: change.changeType,
       diff: evidence?.kind === "diff" ? evidence.content : ""
-    });
-  }
-  return files;
+    };
+  });
 }
 
 /**
@@ -696,9 +705,99 @@ async function resolvePendingValidationTargets(
   return targets;
 }
 
+let contentLayoutCache: { at: number; value: ContentLayoutStatus | null } | null = null;
+const CONTENT_LAYOUT_TTL_MS = 30_000;
+
+async function readContentLayoutCached(refresh: boolean): Promise<ContentLayoutStatus | null> {
+  const fresh = contentLayoutCache !== null && Date.now() - contentLayoutCache.at < CONTENT_LAYOUT_TTL_MS;
+  if (contentLayoutCache && (fresh || !refresh)) return contentLayoutCache.value;
+  if (!refresh) return null;
+  try {
+    const projectRoot = await resolveProjectRoot();
+    const contentPaths = await resolveContentPaths(projectRoot);
+    const value = await collectContentLayout(projectRoot, contentPaths);
+    contentLayoutCache = { at: Date.now(), value };
+    return value;
+  } catch {
+    return contentLayoutCache?.value ?? null;
+  }
+}
+
+async function dependencyStatus(refresh: boolean) {
+  const policy = getPolicyRuntimeStatus();
+  const contentLayout = await readContentLayoutCached(refresh);
+  const ktxRuntime = refresh ? await readKtxRuntimeStatusCached() : peekKtxRuntimeStatus();
+  const cachedProbe = peekExecutionProbe();
+  const mcpRuntime = await readMcpRuntimeStatus(async () => cachedProbe ?? {
+    status: "reachable" as const,
+    checkedAt: new Date().toISOString()
+  }).catch((error) => ({
+    execution: {
+      status: "error" as const,
+      lastCheckedAt: new Date().toISOString(),
+      lastError: error instanceof Error ? error.message : String(error)
+    }
+  }));
+  const policyHealthy = isPolicyRuntimeHealthy(policy);
+  const executionHardFailure = ["stale", "unavailable", "error"].includes(mcpRuntime.execution.status);
+  const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
+  return {
+    status: healthy ? "ok" : "degraded",
+    ...(resolveCookieSecure().insecureTestProfile ? { insecureTestProfile: true } : {}),
+    lucyVersion: resolveLucyVersion(),
+    ...loadRuntimeRevision(),
+    bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
+    ktxRuntime: {
+      ready: ktxRuntime.ready,
+      status: ktxRuntime.status,
+      ...(ktxRuntime.detail ? { detail: ktxRuntime.detail } : {})
+    },
+    policy: {
+      policyVersion: policy.policyVersion,
+      degradedGlobal: policy.degradedGlobal,
+      degradedAgents: policy.degradedAgents,
+      healthy: policyHealthy
+    },
+    execution: mcpRuntime.execution,
+    dataQaInstructions: getDataQaInstructionsStatus(),
+    ...(contentLayout ? { contentLayout } : {})
+  };
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export function buildServer() {
   assertStartupPolicy(); // invalid mode, Chart-mode override or insecure customer cookie refuses to start
   const app = Fastify({ logger: true });
+  let inferredMaintainer: ReturnType<typeof createInferredTurnMaintainer> | null = null;
+  app.addHook("onReady", async () => {
+    if (inferredMaintainer) return;
+    inferredMaintainer = createInferredTurnMaintainer({
+      getDb: getAuditDb,
+      rebuild: (userId) => rebuildInferredTurns(userId, { lookbackHours: INFERRED_TURN_REBUILD_LOOKBACK_HOURS })
+    });
+    bindInferredTurnMaintainer(inferredMaintainer);
+    // Tests read the audit page as soon as the app is ready, so the first pass
+    // finishes first. Production listen does not wait; users are rebuilt one by one.
+    await inferredMaintainer.start({ awaitInitial: process.env.VITEST === "true" });
+  });
+  app.addHook("onClose", async () => {
+    inferredMaintainer?.stop();
+    bindInferredTurnMaintainer(null);
+    inferredMaintainer = null;
+  });
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
 
@@ -815,71 +914,21 @@ export function buildServer() {
     reply.status(statusCode).send(payload);
   });
 
-  app.get("/api/health", async () => {
-    const policy = getPolicyRuntimeStatus();
-    // Spec 180 §2 — the content layout diagnostic is a *side* check on
-    // `/api/health`. Health must not depend on it resolving: a project root
-    // we cannot locate (early boot, missing ktx.yaml) must still produce
-    // a 200 with the existing policy / ktx / execution signal.
-    let contentLayout: import("./content-layout").ContentLayoutStatus | null = null;
-    try {
-      const projectRoot = await resolveProjectRoot();
-      const contentPaths = await resolveContentPaths(projectRoot);
-      contentLayout = await collectContentLayout(projectRoot, contentPaths);
-    } catch {
-      // leave null; `contentLayout` is omitted from the envelope.
+  app.get("/api/livez", async () => ({ ok: true }));
+
+  app.get("/api/readyz", async (_request, reply) => {
+    const data = await dependencyStatus(false);
+    if (!isWebuiReady()) {
+      reply.code(503);
+      return { ok: false, reason: "warming_up", data };
     }
-    const [ktxRuntime, mcpRuntime] = await Promise.all([
-      readKtxRuntimeStatus(),
-      readMcpRuntimeStatus().catch((error) => ({
-        execution: {
-          status: "error" as const,
-          lastCheckedAt: new Date().toISOString(),
-          lastError: error instanceof Error ? error.message : String(error)
-        }
-      }))
-    ]);
-    const policyHealthy = isPolicyRuntimeHealthy(policy);
-    const executionHardFailure = ["stale", "unavailable", "error"].includes(
-      mcpRuntime.execution.status
-    );
-    // Spec 180 §2 — drift is informational; it must not turn `status` into a
-    // failure. `healthy` only reflects policy + ktx runtime + MCP execution.
-    const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
-    return {
-      ok: true,
-      data: {
-        // Spec 98 §8.4 — align with /api/admin/policy-runtime; empty policyVersion is not healthy.
-        status: healthy ? "ok" : "degraded",
-        // Spec §3.1 item 8: surfaced only while customer mode runs without Secure cookies (test profile).
-        ...(resolveCookieSecure().insecureTestProfile ? { insecureTestProfile: true } : {}),
-        lucyVersion: resolveLucyVersion(),
-        // Commit identity from /app/BUILD_REVISION or the Lucy source checkout. Not LUCY_GIT_SHA.
-        ...loadRuntimeRevision(),
-        bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
-        ktxRuntime: {
-          ready: ktxRuntime.ready,
-          status: ktxRuntime.status,
-          ...(ktxRuntime.detail ? { detail: ktxRuntime.detail } : {})
-        },
-        policy: {
-          policyVersion: policy.policyVersion,
-          degradedGlobal: policy.degradedGlobal,
-          degradedAgents: policy.degradedAgents,
-          healthy: policyHealthy
-        },
-        execution: mcpRuntime.execution,
-        // T9 — guidance is advisory; missing guidance must not fail liveness.
-        // The status is exposed for operator visibility and so an Admin can
-        // confirm the proxy is still functional when the file is being rolled out.
-        dataQaInstructions: getDataQaInstructionsStatus(),
-        // Spec 180 §2 — content root vs. mirror layout snapshot; read-only,
-        // surfaces drift without flipping `status`. Omitted when no project
-        // root can be resolved (e.g. before ktx.yaml is wired up).
-        ...(contentLayout ? { contentLayout } : {})
-      }
-    };
+    return { ok: true, data };
   });
+
+  app.get("/api/health", async () => ({
+    ok: true,
+    data: { ...(await dependencyStatus(true)), eventLoop: eventLoopDelaySnapshot() }
+  }));
 
   app.get("/api/project", async () => {
     const projectRoot = await resolveProjectRoot();
@@ -1092,24 +1141,23 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     let mirrorOnlySemanticFiles: string[] = [];
     let mirrorDriftTruncated = false;
+    let contentPaths: Awaited<ReturnType<typeof resolveContentPaths>> | undefined;
     try {
-      const contentPaths = await resolveContentPaths(projectRoot);
+      contentPaths = await resolveContentPaths(projectRoot);
       const layout = await collectContentLayout(projectRoot, contentPaths);
       mirrorOnlySemanticFiles = mirrorOnlySemanticRelPaths(layout);
       mirrorDriftTruncated = layout.driftTruncated;
     } catch {
       // Spec 180: drift is advisory and must not fail the pending-change read.
     }
-    // Spec §5.1 — the pending list is the difference between the current author
-    // content and the last content version with proven sync evidence. The Git
-    // diff can DISCOVER a change; it cannot prove that the change took effect,
-    // so it is no longer the source of this list.
-    const snapshot = await readPublishPendingSnapshot(projectRoot);
+    // One content scan for the pending list and every per-file evidence read.
+    const scan = await scanPublishContent(projectRoot, contentPaths);
+    const snapshot = await readPublishPendingSnapshot(projectRoot, contentPaths, { scan });
     const impact = await buildPublishImpactSafely(projectRoot, snapshot);
     return {
       ok: true,
       data: {
-        files: await buildPendingChangedFiles(projectRoot, snapshot),
+        files: await buildPendingChangedFiles(projectRoot, snapshot, scan),
         pendingDigest: snapshot.pendingDigest,
         baselineState: snapshot.baselineState,
         baselineGeneration: snapshot.baselineGeneration,
@@ -3275,6 +3323,7 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);
   await app.listen({ host, port });
+  markWebuiWarmupComplete();
   const t3 = performance.now();
   let displayReadyMs: number | null = null;
   if (options.displayPrewarm !== false) {
@@ -3288,10 +3337,23 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
     getTarget: getAuditDb,
     onStatus: recordProjectionStatus
   });
+  registerProjectionTrigger(() => projection.trigger());
+  startExecutionProbeRefresh();
+  void readKtxRuntimeStatusCached();
+  const ktxRefresh = setInterval(() => {
+    void readKtxRuntimeStatusCached();
+  }, 60_000);
+  ktxRefresh.unref();
   const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy({
     onOperationSettled: () => projection.trigger()
   });
-  proxy.on("close", () => projection.stop());
+  proxy.on("close", () => {
+    projection.stop();
+    registerProjectionTrigger(null);
+    stopInferredTurnMaintainer();
+    stopExecutionProbeRefresh();
+    clearInterval(ktxRefresh);
+  });
   projection.start();
   await new Promise<void>((resolve, reject) => {
     proxy.listen(proxyPort, proxyHost, resolve);

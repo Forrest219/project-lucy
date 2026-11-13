@@ -43,6 +43,7 @@ import {
   scanPublishContent,
   type PublishBaseline,
   type PublishContentFile,
+  type PublishContentScan,
   type PublishPendingSnapshot
 } from "./publish-workbench-state";
 
@@ -154,7 +155,8 @@ export type PublishEvidence =
  */
 export async function readPublishEvidence(
   projectRoot: string,
-  reference: string
+  reference: string,
+  scan?: PublishContentScan
 ): Promise<PublishEvidence | null> {
   let kind: "diff" | "snapshot" | "baseline";
   let logicalPath: string;
@@ -182,8 +184,8 @@ export async function readPublishEvidence(
     return { kind, logicalPath, content: bytes.toString("utf8") };
   }
 
-  const scan = await scanPublishContent(projectRoot);
-  const current = scan.files.find((file) => file.logicalPath === logicalPath);
+  const resolvedScan = scan ?? (await scanPublishContent(projectRoot));
+  const current = resolvedScan.files.find((file) => file.logicalPath === logicalPath);
 
   if (kind === "snapshot") {
     if (!current) return null;

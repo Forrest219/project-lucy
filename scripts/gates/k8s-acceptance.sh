@@ -187,6 +187,12 @@ HEALTH="$(kubectl_exec "${NAMESPACE}" "${RELEASE}" curl -fsS "http://127.0.0.1:$
 printf '%s\n' "${HEALTH}" | grep -q '"ok":true' || fail "/api/health envelope not ok"
 printf '%s\n' "${HEALTH}" | grep -q 'bundledKtxVersion' || fail "/api/health missing bundledKtxVersion"
 
+log "GET /api/livez and /api/readyz (in pod)"
+LIVEZ="$(kubectl_exec "${NAMESPACE}" "${RELEASE}" curl -fsS "http://127.0.0.1:${WEBUI_CONTAINER_PORT}/api/livez")"
+printf '%s\n' "${LIVEZ}" | grep -q '"ok":true' || fail "/api/livez envelope not ok"
+READYZ="$(kubectl_exec "${NAMESPACE}" "${RELEASE}" curl -fsS "http://127.0.0.1:${WEBUI_CONTAINER_PORT}/api/readyz")"
+printf '%s\n' "${READYZ}" | grep -q '"ok":true' || fail "/api/readyz envelope not ok"
+
 if [[ -n "${WEBUI_URL}" ]]; then
   log "GET ${WEBUI_URL}/api/health (external)"
   EXT_HEALTH="$(curl -fsS "${WEBUI_URL%/}/api/health")"

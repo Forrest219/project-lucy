@@ -26,7 +26,8 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.7` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Superseded by chart 0.2.8. Corrects the active product line to `0.20.0 > 0.17.0`; chart and product versions remain independent |
 | `0.2.8` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Optional SMTP notification wiring, off by default. Product version was still `0.20.0` when this chart package was cut |
 | `0.2.8` | `0.25.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.25`. Chart package version was not bumped. Superseded as current product line by `0.30.0` |
-| `0.2.8` | `0.30.0` | `0.16.0` | same workload contract as 0.2.5 | **Current**. Product version aligned to branch `lucy-v0.30`. Chart package version was not bumped |
+| `0.2.8` | `0.30.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.30`. Chart package version was not bumped. Superseded as the current chart by `0.2.9` |
+| `0.2.9` | `0.30.0` | `0.16.0` | startup and readiness use `/api/readyz`; liveness uses `/api/livez` | **Current**. Probe split only. Product version stays `0.30.0`. A 0.25 image does not serve `/api/livez`; keep the previous liveness values until that image includes the route |
 
 Image tags must be **immutable**. Recommended form:
 
@@ -70,9 +71,9 @@ service:
 
 | Probe | Mechanism | Path / port |
 |---|---|---|
-| `startupProbe` | `httpGet` | `/api/health` on named port `webui` |
-| `readinessProbe` | `httpGet` | `/api/health` on named port `webui` |
-| `livenessProbe` | `httpGet` | `/api/health` on named port `webui` |
+| `startupProbe` | `httpGet` | `/api/readyz` on named port `webui` |
+| `readinessProbe` | `httpGet` | `/api/readyz` on named port `webui` |
+| `livenessProbe` | `httpGet` | `/api/livez` on named port `webui` |
 
 **Forbidden in probes:**
 
@@ -87,24 +88,24 @@ Recommended defaults (chart `0.2.x`):
 
 ```yaml
 startupProbe:
-  httpGet: { path: /api/health, port: webui }
+  httpGet: { path: /api/readyz, port: webui }
   initialDelaySeconds: 5
   periodSeconds: 5
   timeoutSeconds: 3
   failureThreshold: 60
 
 readinessProbe:
-  httpGet: { path: /api/health, port: webui }
+  httpGet: { path: /api/readyz, port: webui }
   periodSeconds: 5
   timeoutSeconds: 3
   failureThreshold: 6
 
 livenessProbe:
-  httpGet: { path: /api/health, port: webui }
-  initialDelaySeconds: 60
-  periodSeconds: 30
-  timeoutSeconds: 5
-  failureThreshold: 3
+  httpGet: { path: /api/livez, port: webui }
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 6
 ```
 
 ## Init containers

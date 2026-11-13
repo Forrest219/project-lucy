@@ -16,6 +16,7 @@
 | `UAT-SCAN-*` | 库内扫表用例 |
 | `UAT-ACCESS-MAP-*` | 访问关系图／空桑基用例 |
 | `UAT-PERF-*` | Roles／Agent 页性能体感用例 |
+| `UAT-LOOP-*` | 重读路径与存活探针（P1-21 事故看守） |
 | `UAT-SAG-*` | 表级歧义门闩（P0-3） |
 | `UAT-CALIBER-*` | 口径绑定（P0-1） |
 | `UAT-EXPOSURE-*` | 字段暴露（P0-A） |

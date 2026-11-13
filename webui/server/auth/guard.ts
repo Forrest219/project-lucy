@@ -40,7 +40,7 @@ export function isPublicApi(method: string, url: string): boolean {
   const pathOnly = url.split("?")[0] ?? url;
   if (!pathOnly.startsWith("/api/")) return true;
   const m = method.toUpperCase();
-  if (m === "GET" && pathOnly === "/api/health") return true;
+  if (m === "GET" && (pathOnly === "/api/health" || pathOnly === "/api/livez" || pathOnly === "/api/readyz")) return true;
   // Admin OpenAPI is public and exact. Do not open the rest of /api/auth/*.
   if (m === "GET" && pathOnly === "/api/openapi.json") return true;
   if (m === "GET" && pathOnly === "/api/auth/status") return true;
@@ -73,10 +73,17 @@ function isSensitiveApi(method: string, url: string): boolean {
   return pathOnly.startsWith("/api/auth/") || (pathOnly.startsWith("/api/") && !isPublicApi(method, url));
 }
 
+function isProbeApi(method: string, url: string): boolean {
+  const pathOnly = url.split("?")[0] ?? url;
+  return method.toUpperCase() === "GET" && (pathOnly === "/api/livez" || pathOnly === "/api/readyz");
+}
+
 export async function requireWebuiAuthHook(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
+  // Liveness and readiness must not touch admins, sessions, or the audit database.
+  if (isProbeApi(request.method, request.url)) return;
   if (isSensitiveApi(request.method, request.url)) reply.header("Cache-Control", "no-store");
 
   // D3: CSRF already ran. Diagnose with the live router before any session denial.

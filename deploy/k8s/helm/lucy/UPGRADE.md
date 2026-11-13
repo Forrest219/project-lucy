@@ -1,7 +1,9 @@
 # Lucy Helm Chart — Upgrade Guide
 
 Upgrade Lucy on Kubernetes while preserving `/data/lucy` PVC data, Secrets, and MCP tokens.
-Current chart: **0.2.8** (Lucy `0.30.0`, bundled KTX `0.16.0`).
+Current chart: **0.2.9** (Lucy `0.30.0`, bundled KTX `0.16.0`).
+
+Chart 0.2.9 points startup and readiness at `/api/readyz` and liveness at `/api/livez`. A release whose values override those probes must retarget the paths in the same upgrade. Do not use this chart's liveness path with a 0.25 image: that image has no `/api/livez`. Keep the previous liveness values until the image includes the route.
 
 ## Open-mode upgrade to administrator login
 

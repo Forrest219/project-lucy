@@ -71,6 +71,12 @@ const REQUIRED = [
     suiteId: "UAT-SUITE-ROLES-AGENT-PERF",
     suiteDir: "docs/qa/uat/suites/roles-agent-page-perf",
     latestRun: "docs/qa/uat/suites/roles-agent-page-perf/runs/2026-11-13-cursor-docker-page-perf.md"
+  },
+  {
+    poolId: "P1-21",
+    suiteId: "UAT-SUITE-EVENT-LOOP-RELIEF",
+    suiteDir: "docs/qa/uat/suites/event-loop-relief",
+    latestRun: "docs/qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md"
   }
 ];
 
@@ -114,7 +120,8 @@ for (const row of REQUIRED) {
   mustExist(path.join(row.suiteDir, "suite.md"), `${row.poolId} suite.md`);
   mustExist(path.join(row.suiteDir, "cases.md"), `${row.poolId} cases.md`);
   mustExist(path.join(row.suiteDir, "fixtures.md"), `${row.poolId} fixtures.md`);
-  mustExist(row.latestRun, `${row.poolId} latest run`);
+  if (row.latestRun) mustExist(row.latestRun, `${row.poolId} latest run`);
+  else ok(`${row.poolId} has no run yet`);
   if (!indexText.includes(row.suiteId)) fail(`INDEX missing ${row.suiteId}`);
   else ok(`INDEX lists ${row.suiteId}`);
   if (!ledgerText.includes(row.poolId) || !ledgerText.includes(row.suiteId)) {

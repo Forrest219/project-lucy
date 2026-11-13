@@ -629,10 +629,11 @@ export async function prunePublishBlobs(
  */
 export async function readPublishPendingSnapshot(
   projectRoot: string,
-  contentPaths?: ContentPaths
+  contentPaths?: ContentPaths,
+  options?: { scan?: PublishContentScan }
 ): Promise<PublishPendingSnapshot> {
   const paths = contentPaths ?? (await resolveContentPaths(projectRoot));
-  const scan = await scanPublishContent(projectRoot, paths);
+  const scan = options?.scan ?? (await scanPublishContent(projectRoot, paths));
 
   const baselineIssue = await readPublishBaselineIssue(projectRoot, paths);
   const baseline = baselineIssue ? null : await readPublishBaseline(projectRoot);

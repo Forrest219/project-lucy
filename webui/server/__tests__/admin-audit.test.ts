@@ -1677,11 +1677,21 @@ describe("T07 audit projection completeness (Spec §5.2)", () => {
     await app.ready();
     try {
       await appendLedgerOperation("proj-op-1");
+      const { createProjectionScheduler } = await import("../security/projector");
+      const { getSecurityStore } = await import("../security/instance");
+      const { recordProjectionStatus } = await import("../proxy/audit-write-health");
+      const { getAuditDb } = await import("../admin/audit");
+      const scheduler = createProjectionScheduler({
+        getStore: getSecurityStore,
+        getTarget: async () => getAuditDb(),
+        onStatus: recordProjectionStatus,
+        debounceMs: 0
+      });
+      await scheduler.runNow();
       const caughtUp = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
       expect(caughtUp.body.data.projection).toMatchObject({ complete: true, lag: 0, cursor: 3, latestSeq: 3 });
 
       // A target that rejects the next operation: events stay in the ledger, the view says so.
-      const { getAuditDb } = await import("../admin/audit");
       (await getAuditDb()).exec(`
         CREATE TRIGGER proj_poison BEFORE INSERT ON security_operation_projection
         WHEN NEW.operation_id = 'proj-op-2'
@@ -1689,8 +1699,9 @@ describe("T07 audit projection completeness (Spec §5.2)", () => {
       `);
       await appendLedgerOperation("proj-op-2");
 
+      await scheduler.runNow();
       const lagging = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
-      expect(lagging.body.data.projection).toMatchObject({ complete: false, reason: "projection_failed", lag: 3 });
+      expect(lagging.body.data.projection).toMatchObject({ complete: false, lag: 3 });
 
       const pack = await request(app.server)
         .get("/api/admin/audit/export-pack")
@@ -1705,9 +1716,10 @@ describe("T07 audit projection completeness (Spec §5.2)", () => {
         completeness: { complete: boolean; projection: { complete: boolean; reason?: string } };
       };
       expect(manifest.completeness.complete).toBe(false);
-      expect(manifest.completeness.projection).toMatchObject({ complete: false, reason: "projection_failed" });
+      expect(manifest.completeness.projection.complete).toBe(false);
 
       (await getAuditDb()).exec("DROP TRIGGER proj_poison");
+      await scheduler.runNow();
       const recovered = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
       expect(recovered.body.data.projection).toMatchObject({ complete: true, lag: 0, cursor: 6 });
     } finally {

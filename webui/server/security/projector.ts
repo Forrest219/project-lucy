@@ -435,3 +435,15 @@ export function createProjectionScheduler(deps: ProjectionSchedulerDeps): Projec
     runNow
   };
 }
+
+let projectionTrigger: (() => void) | null = null;
+
+/** Register the process-wide background projector. `null` clears it. */
+export function registerProjectionTrigger(trigger: (() => void) | null): void {
+  projectionTrigger = trigger;
+}
+
+/** Ask the background projector to run. A no-op when none is registered. */
+export function triggerAuditProjection(): void {
+  projectionTrigger?.();
+}
