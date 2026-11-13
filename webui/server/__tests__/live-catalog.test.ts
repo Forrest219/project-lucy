@@ -78,6 +78,36 @@ describe("listLiveSchemas", () => {
     expect(sql).toContain("BASE TABLE");
   });
 
+  // catalog-scan-read-path SC-11：无点号库名不得进入直连 SHOW 分支
+  it("keeps chatbi on information_schema and never calls catalog SHOW", async () => {
+    const chatbi: ConnectionInfo = {
+      id: "doris-main",
+      driver: "mysql",
+      engine: "mysql",
+      wireProtocol: "mysql",
+      database: "chatbi",
+      schemas: ["chatbi"],
+      enabledTables: []
+    };
+    const runSqlImpl = vi.fn(async () => okSql([["chatbi", 12]]));
+    const runCatalogShowImpl = vi.fn();
+
+    const result = await listLiveSchemas("/project", "doris-main", { refresh: true }, {
+      readConnectionsImpl: async () => [chatbi],
+      runSqlImpl,
+      runCatalogShowImpl,
+      now: () => 1_000_000
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.schemas).toEqual([{ schema: "chatbi", tableCount: 12 }]);
+    expect(runCatalogShowImpl).not.toHaveBeenCalled();
+    expect(runSqlImpl).toHaveBeenCalledOnce();
+    const sql = String(runSqlImpl.mock.calls[0]?.[2] ?? "");
+    expect(sql).toContain("information_schema.tables");
+    expect(sql).not.toMatch(/\bSHOW\b/i);
+  });
+
   it("returns cached payload within TTL and refresh bypasses cache", async () => {
     let now = 1_000_000;
     const runSqlImpl = vi.fn(async () => okSql([["dataforai", 3]]));

@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | Spec / **v0.2** |
+| 文档类型 / 版本 | Spec / **v0.3** |
 | 日期 / 目标版本 | 2026-11-11／不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（客户现场库内表清单与准备表结构）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.2 实施中（2026-11-11）**。外部目录的库内表清单改走 SHOW，并带回每库表数；普通 MySQL 的准备表结构改为一次读取字段。本条收口不表示可上线 |
+| 状态 | **功能合同已收口（2026-11-13）**（SC-01–SC-14 证据关闭）。本条收口不表示可上线 |
 | 决策来源 | 2026-11-11 现场：`hive-1` / `hive-jd` 的 `information_schema` 在 SelectDB 外部目录上不存在；`SHOW` 已在同一台 SelectDB 返回库名和表名；`ktx sql` 不能发送 `SHOW`。`marketingapi` 表清单已返回，准备表结构因逐表查字段超时 |
 | 需求来源 | 客户现场升级到 `9c78b0e3` 之后，库内表清单与准备表结构仍失败 |
 | 实施主体 | WebUI 服务端：`live-catalog`、`live-tables`、`schema-structure`。外部目录的列库、列表新增一条不经过 `ktx sql` 的 MySQL 读法 |
@@ -19,6 +19,7 @@
 |---|---|
 | v0.1 | 初稿。外部目录列库、列表改走直连 `SHOW`。普通 MySQL 准备表结构改为一次读取 `information_schema.columns` |
 | v0.2 | 补齐三处合同：每库表数来自直连 `SHOW TABLES` 的行数；生产适配器从连接配置解析 `file:` 密钥并由驱动替身验证；连接与语句 30 秒超时，成功和失败都关闭连接。同日按该合同改服务端读法，本机单测通过，尚未出客户镜像 |
+| v0.3 | SC-06／07：普通 MySQL 准备表结构恢复 Schema 宽一条 `information_schema.columns`，达 10000 行 fail-closed、不退回逐表。SC-14：超时与现有 `ktx sql` 默认 `timeoutMs`／`CATALOG_SCAN_TIMEOUT_MS` 对齐为 **120 秒**（修正 v0.2 误写的 30 秒）。功能合同收口；本条收口不表示可上线 |
 
 ## 闭口层级
 
@@ -132,7 +133,7 @@ New terms:
 
 握手不传 `database`。`hive.dw` 这类带点号的库名不得作为默认库。语句本身已经带目录和库名。
 
-连接超时 30 秒，单条语句超时 30 秒，与现有 `ktx sql` 的 `timeoutMs` 相同。成功、认证失败、查询异常、查询挂起超时，都关闭连接。超时后不得把连接留在后台。
+连接超时 120 秒，单条语句超时 120 秒，与现有 `ktx sql` 的默认 `timeoutMs`（`CATALOG_SCAN_TIMEOUT_MS = 120_000`）相同。成功、认证失败、查询异常、查询挂起超时，都关闭连接。超时后不得把连接留在后台。
 
 密码字节只供这次握手使用。驱动异常若包含密码字节，交给现有失败分类之前必须去掉。错误、日志、审计和测试快照不得包含密码字节。
 
@@ -177,7 +178,7 @@ function directMysql(conn, sql):
   assert sql starts with SHOW
   params = readDirectParams(conn)
   connect(params) without default database
-  timeout connect 30s and this statement 30s
+  timeout connect 120s and this statement 120s
   close the connection on success, auth failure, query error, and timeout
   never pass sql to ktx sql
   on failure return the driver error with password bytes removed
@@ -214,7 +215,7 @@ function readDirectParams(conn):
 | SC-11 | `chatbi` 这类无点号库名不进入 `SHOW` 分支 | 本机单测 |
 | SC-12 | 外部目录 `listLiveSchemas` 的 `schema` 为 `SHOW DATABASES` 首列，`tableCount` 等于该库 `SHOW TABLES` 行数。替身至少返回 `hive.dim=44`、`hive.dw=129`、`hive_jd.app=169`。失败的计数不会变成 0。`runSql` 中没有这些 `SHOW`，也没有 `information_schema` 计数语句 | 本机单测 |
 | SC-13 | 生产适配器在驱动工厂被替换时，从 `ktx.yaml` 解析 `host`、`port`、`username` 和 `file:` 路径并读出夹具密码。握手参数不含 `database`。`inline` 与 `env` 不调用驱动。驱动异常含密码时，返回文本不含密码 | 本机单测 |
-| SC-14 | 生产适配器的连接超时和单条语句超时都是 30 秒。成功、认证失败、查询异常、语句挂起四条路径都关闭连接 | 本机单测 |
+| SC-14 | 生产适配器的连接超时和单条语句超时都是 120 秒（与 `CATALOG_SCAN_TIMEOUT_MS`／`ktx sql` 默认一致）。成功、认证失败、查询异常、语句挂起四条路径都关闭连接 | 本机单测 |
 
 客户现场复测不在本条出口。本机通过不得写成客户环境通过。
 

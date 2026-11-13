@@ -2,14 +2,14 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **v0.2 实施中（2026-11-11）**。外部目录的库内表清单改走 SHOW，并带回每库表数；普通 MySQL 的准备表结构改为一次读取字段。本条收口不表示可上线 |
-| 主 Spec | [`docs/specs/lucy-20261111-catalog-scan-read-path-spec.md`](../specs/lucy-20261111-catalog-scan-read-path-spec.md) **v0.2** |
+| 状态 | **功能合同已收口（2026-11-13）**（SC-01–SC-14 证据关闭）。本条收口不表示可上线 |
+| 主 Spec | [`docs/specs/lucy-20261111-catalog-scan-read-path-spec.md`](../specs/lucy-20261111-catalog-scan-read-path-spec.md) **v0.3** |
 | 授权边界 | 只改外部目录列库、列表的语句和传输，以及普通 MySQL 准备表结构的字段查询次数。不改 KTX，不把 `SHOW` 交给 `ktx sql`，不改问数，不改无点号库名的库内表清单 SQL，不改页面文案，不做浏览器测试 |
 | 验收 | Spec SC-01–SC-14 |
 
 **Goal:** 外部目录的库内表清单由 Lucy 直连执行已验证的 `SHOW`，每个库的张数等于该库 `SHOW TABLES` 的行数；普通 MySQL 的准备表结构一次读完字段。
 
-**Architecture:** `database` 含一个点时走新的直连 MySQL 执行器，只允许 `SHOW DATABASES` 与 `SHOW TABLES`。执行器从 `ktx.yaml` 读取 `host`、`port`、`username` 和 `file:` 密码，握手不传默认库，连接与单条语句各 30 秒超时，结束时关闭连接。其余语句仍进 `runSql` / `ktx sql`。普通 MySQL 的 `readMysqlColumnsByTable` 改为一条 `information_schema.columns`。
+**Architecture:** `database` 含一个点时走新的直连 MySQL 执行器，只允许 `SHOW DATABASES` 与 `SHOW TABLES`。执行器从 `ktx.yaml` 读取 `host`、`port`、`username` 和 `file:` 密码，握手不传默认库，连接与单条语句各 120 秒超时（与 `CATALOG_SCAN_TIMEOUT_MS`／`ktx sql` 默认一致），结束时关闭连接。其余语句仍进 `runSql` / `ktx sql`。普通 MySQL 的准备表结构字段改为一条 `information_schema.columns`。
 
 **Tech Stack:** 现有 Vitest。列库、列表仍可注入执行器。生产适配器的测试在驱动工厂注入替身，不打开网络。密码沿用 `safeReadSecretPasswordBytesIfExists`，不新增密钥落点。
 
@@ -40,7 +40,7 @@
 
 | 文件 | 职责 | SC |
 |---|---|---|
-| `webui/server/catalog-show.ts` | 新建。从 `ktx.yaml` 解析直连参数，执行 `SHOW DATABASES` / `SHOW TABLES`。握手无默认库。连接与语句各 30 秒超时。成功和失败都关闭连接。错误不含密码 | SC-01／02／04／08／09／13／14 |
+| `webui/server/catalog-show.ts` | 新建。从 `ktx.yaml` 解析直连参数，执行 `SHOW DATABASES` / `SHOW TABLES`。握手无默认库。连接与语句各 120 秒超时。成功和失败都关闭连接。错误不含密码 | SC-01／02／04／08／09／13／14 |
 | `webui/server/__tests__/catalog-show.test.ts` | 驱动工厂替身。覆盖 `file:` 读取、握手参数、`inline`／`env` 不连接、密码剥离、超时关闭 | SC-13／14 |
 | `webui/server/catalog-database.ts` | 生成 `SHOW` 语句。保留 `DESC` 语句。外部目录不再生成 `information_schema` 作为成功路径 | SC-01／02／03／10 |
 | `webui/server/live-catalog.ts` | 外部目录列库改调用直连。`tableCount` 来自 `SHOW TABLES` 行数。删除 `countExternalCatalogTables` 的 `ktx sql` 计数 | SC-01／11／12 |
@@ -65,7 +65,7 @@
 - [ ] 生产适配器从该连接的 `ktx.yaml` 读取 `host`、`port`、`username`，并用 `password` 的 `file:` 相对路径调用 `safeReadSecretPasswordBytesIfExists`
 - [ ] 测试替换驱动工厂，不替换整个执行器，也不打开网络
 - [ ] 握手参数不含 `database`。缺文件、`inline`、`env` 在调用驱动前失败
-- [ ] 连接超时与单条语句超时都是 30 秒。成功、认证失败、查询异常、语句挂起都关闭连接
+- [x] 连接超时与单条语句超时都是 120 秒。成功、认证失败、查询异常、语句挂起都关闭连接
 - [ ] 失败原文交给现有 `classifyLiveTableFailure` 之前去掉密码字节
 
 ### Task 3: 接上列库与列表
@@ -80,9 +80,9 @@
 
 - [ ] 外部目录的表名来自 Task 2 的 `SHOW TABLES`
 - [ ] 已知表名后的字段语句保持 `DESC`，调用 `runSql`
-- [ ] 普通 MySQL 用一条带 `table_schema` 条件的 `information_schema.columns`。表名查询若保留，全局至多一次
-- [ ] 删除按表名循环调用 `information_schema.columns` 的路径
-- [ ] 行数达到 `10000` 时走现有超限失败
+- [x] 普通 MySQL 用一条带 `table_schema` 条件的 `information_schema.columns`。表名查询若保留，全局至多一次
+- [x] 删除按表名循环调用 `information_schema.columns` 的路径
+- [x] 行数达到 `10000` 时走现有超限失败
 
 ### Task 5: 文档镜像
 
@@ -120,7 +120,7 @@ npm run lint:spec-docs
 | 只替换整个执行器，生产适配器未被测试 | SC-13：测试替换驱动工厂，适配器仍解析 `ktx.yaml` 与 `file:` |
 | 密码进入错误字符串 | SC-09、SC-13：夹具断言密码片段不出现 |
 | 列库把没有第二列的结果写成 0 张表 | SC-12：`tableCount` 等于 `SHOW TABLES` 行数，失败则整次失败 |
-| 查询挂起后连接不关闭 | SC-14：30 秒超时，四条路径都关闭连接 |
+| 查询挂起后连接不关闭 | SC-14：120 秒超时，四条路径都关闭连接 |
 | 再次用模拟器把 `information_schema` 写成成功 | SC-03：该语句必须失败 |
 | 字段超过 10000 行后悄悄退回逐表查询 | SC-07：超限即失败 |
 | `tblu.tblu` 的 789 张表继续逐表查询 | Task 4 删除按表循环。表清单接口保持现有一次查询 |
@@ -133,3 +133,4 @@ npm run lint:spec-docs
 |---|---|
 | v0.1 | 初稿。待确认后按 Task 1–5 开工 |
 | v0.2 | 补齐每库表数、生产适配器的驱动替身测试、30 秒超时与连接关闭。同日按 Task 1–4 改代码，本机单测通过，尚未出客户镜像 |
+| v0.3 | 超时口径与 Spec 对齐为 120 秒（`CATALOG_SCAN_TIMEOUT_MS`）。普通 MySQL 准备表结构恢复 Schema 宽一条 columns、10000 fail-closed。功能合同收口；本条收口不表示可上线 |
