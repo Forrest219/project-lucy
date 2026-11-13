@@ -162,6 +162,27 @@ describe("previewSchemaStructure", () => {
     expect(runSqlImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects a checked table when two physical tables differ only by case", async () => {
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'foo'")) {
+        return sqlResult({ json: { rows: [["Foo"], ["foo"]] } });
+      }
+      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+    });
+
+    await expect(previewSchemaStructure("/project", "demo", "dataforai", {
+      readConnectionsImpl: async () => [mysqlConn],
+      runSqlImpl,
+      tables: ["Foo"]
+    })).rejects.toMatchObject({
+      code: "READ_FAILED",
+      message: "表名「Foo」对应多张表，无法读取字段。"
+    });
+    expect(runSqlImpl).toHaveBeenCalledTimes(1);
+    expect(String(runSqlImpl.mock.calls[0][2])).toContain("LOWER(table_name)");
+    expect(String(runSqlImpl.mock.calls[0][2])).not.toContain("information_schema.columns");
+  });
+
   it("rejects a checked table that is missing on the per-table path", async () => {
     const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, sql: string) => {
       if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'orders'")) {

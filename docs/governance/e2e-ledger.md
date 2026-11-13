@@ -29,8 +29,8 @@
 
 | 清单 ID | REQ | 开发台 Spec | 测试台 Suite | 最近 UAT | 备注 |
 |---|---|---|---|---|---|
-| P1-15 | REQ-030-036 | [Spec 191](../../webui/docs/191-execution-runtime-reload-spec.md) | [`UAT-SUITE-CONN-RELOAD`](../qa/uat/suites/connection-runtime-reload/suite.md) | [2026-11-13 PASS（claude 对抗）](../qa/uat/suites/connection-runtime-reload/runs/2026-11-13-claude-adversarial.md) | 连接热重载；同场另有 cursor-docker-midstate |
-| P1-16 | REQ-030-037 | [catalog-scan Spec](../specs/lucy-20261111-catalog-scan-read-path-spec.md) | [`UAT-SUITE-CATALOG-SCAN`](../qa/uat/suites/catalog-scan-read-path/suite.md) | [矩阵补跑 2026-11-13](../qa/uat/suites/catalog-scan-read-path/runs/2026-11-13-mysql-version-matrix-57.md)（另 [claude 对抗](../qa/uat/suites/catalog-scan-read-path/runs/2026-11-13-claude-adversarial.md)） | **5.7＋8.0＋8.4 PASS**；EXT live **BLOCKED**（委托人暂不补跑） |
+| P1-15 | REQ-030-036 | [Spec 191](../../webui/docs/191-execution-runtime-reload-spec.md) | [`UAT-SUITE-CONN-RELOAD`](../qa/uat/suites/connection-runtime-reload/suite.md) | [Claude 交叉 2026-11-13 PASS](../qa/uat/suites/connection-runtime-reload/runs/2026-11-13-claude-gate-reload-cross.md) | GATE-01／RELOAD-02 交叉仍 PASS；Cursor 同批见 [cursor-gate-reload](../qa/uat/suites/connection-runtime-reload/runs/2026-11-13-cursor-gate-reload.md) |
+| P1-16 | REQ-030-037 | [catalog-scan Spec](../specs/lucy-20261111-catalog-scan-read-path-spec.md) | [`UAT-SUITE-CATALOG-SCAN`](../qa/uat/suites/catalog-scan-read-path/suite.md) | [Claude 交叉 2026-11-13 PASS](../qa/uat/suites/catalog-scan-read-path/runs/2026-11-13-claude-case-diff-cross.md) | CASE-01／DIFF-01 交叉 **PASS**（`Bar`／`bar`，双缺表）；矩阵仍 PASS；EXT live **BLOCKED** |
 | P0-1…5／A | 027／023／024／022／018／012 | 各 P0 Spec（功能合同已收口） | **`not_registered`** | — | 合同收口 ≠ UAT；待补客户场景套件或显式 n/a |
 | P0-6／7／B | 025／026／028 | draft／冻结 | **`n/a`（未授权实现）** | — | 无交付主张前不强制 UAT |
 | P1-11／12／14 | 032／033／035 | 各 Spec（已收口／取证） | **`not_registered`** 或工程向待标 | — | 差集：有用户／运维面者应补 UAT 或标工程向 n/a |
@@ -98,6 +98,8 @@ node scripts/uat/check-e2e-ledger.mjs
 
 | 日期 | 内容 |
 |---|---|
+| 2026-11-13 | CASE-01／DIFF-01 在升级后的 demo 复跑 PASS，Claude 交叉（`Bar`／`bar`、双缺表）仍 PASS。EXT live 仍 BLOCKED |
+| 2026-11-13 | 本机补跑 zhaomin 缺口：GATE-01／RELOAD-02 PASS；CASE-01／DIFF-01 当时 FAIL（镜像 `ea4ef839`） |
 | 2026-11-13 | P1-16 矩阵补跑：5.7／8.0／8.4 PASS；EXT live 仍 BLOCKED。关闭 GAP-UAT-MYSQL-VER |
 | 2026-11-13 | 挂 P1-13 ↔ `UAT-SUITE-ROLES-AGENT-PERF`（Roles／Agent 页体感） |
 | 2026-11-13 | 首立：三台指针、勾连表、兜底队列、基准线追评；挂 P1-15／P1-16 |

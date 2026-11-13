@@ -8,7 +8,8 @@
 | UAT-CONN-RELOAD-E2E-02 | 手动重载同协议 | Playwright live | `E2E-MCP-02` |
 | UAT-CONN-RELOAD-01 | 手工／API 等价新建 | 手工 | 同 E2E-CON-07 |
 | UAT-CONN-EDIT-01 | 编辑连接成功面 ack | 手工／可选 | Edit dialog |
-| UAT-CONN-RELOAD-02 | 失败可观测 | 可选 | — |
+| UAT-CONN-RELOAD-02 | 失败可观测 | 全真／可恢复注入 | `run-zhaomin-local-gaps.mjs reload` |
+| UAT-CONN-GATE-01 | 另一个外部目录确认闸 | 全真 API | `run-zhaomin-local-gaps.mjs gate` |
 
 ---
 
@@ -89,6 +90,49 @@ Supervisor 通道可用；WebUI 可登录（凭据文件见 fixtures）。
 
 ---
 
-## UAT-CONN-RELOAD-02 — 失败可观测（可选）
+## UAT-CONN-GATE-01 — 另一个外部目录先确认
 
-人为破坏重载或依赖历史失败日志 → UI 不得伪报已加载；保留「重载执行层」。
+### 前置
+
+`demo-db:3306` 上已有至少一条连接（`demo-mysql`）。不要带确认标志。
+
+### 步骤
+
+`POST /api/connections`，`dryRun=false`，`host=demo-db`，`database=hive.dw`（点号目录形态），不传 `acknowledgeDifferentDatabase`。
+
+### 期望
+
+- 409
+- 文案为「这是另一个外部目录，不会加到已有连接。确认后将新增一张连接卡片。」
+- `ktx.yaml` 不出现本次 id
+- 不继续做「确认后真连接」：本机没有接受 `目录.库` 的服务器
+
+### 清理
+
+无写入则无需删除。
+
+---
+
+## UAT-CONN-RELOAD-02 — 失败可观测
+
+### 前置
+
+Lucy 容器 supervisor 健康。只短暂停住 supervisor，并把它发布的通道标成 `reloading`，让这一次写配置的重载失败。请求一结束就 `SIGCONT` 并还原能力文件。
+
+### 步骤
+
+1. 快照 `/data/lucy/.ktx-ui/ktx-reload.capability`
+2. 将 `state` 写成 `reloading`（心跳保持新鲜、pid 仍是活着的 supervisor），然后 `SIGSTOP` 该 pid
+3. `POST /api/connections` 新建到 `demo-db`／`e2e_conn_reload`，`dryRun=false`，并带 `acknowledgeSeparateConnection=true`（避开与 `demo-mysql` 的用户名闸）
+4. 立刻 `SIGCONT` 并写回能力文件
+5. 删除这次若已落盘的连接，再看 `/api/health`
+
+### 期望
+
+- 步骤 3：503，`code=EXECUTION_RUNTIME_NOT_LOADED`，文案含「配置已保存，但执行层未加载」
+- 响应不得是 `executionRuntimeAck=true`
+- 清理后 health `ok`，临时 id 不留在 `ktx.yaml`，supervisor 已继续跑
+
+### 清理
+
+无论断言成败，`finally` 里 `SIGCONT`、还原能力文件、删除临时连接。

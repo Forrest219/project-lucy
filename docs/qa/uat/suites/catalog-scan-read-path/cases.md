@@ -9,6 +9,8 @@
 | UAT-SCAN-MYSQL-VER | MySQL 5.7／8.0／8.4 矩阵 | 脚本全真 | `run-mysql-version-matrix.sh` |
 | UAT-SCAN-EXT-01 | 外部目录列库 live | 可选／须授权 | live-schemas |
 | UAT-SCAN-EXT-02 | 外部目录列表 live | 可选／须授权 | live-tables |
+| UAT-SCAN-CASE-01 | 大小写歧义字段拒绝 | 全真 API | `run-zhaomin-local-gaps.mjs case` |
+| UAT-SCAN-DIFF-01 | 结构差异缺表与已读表分开 | 全真 API | 同上 |
 
 ---
 
@@ -87,6 +89,50 @@ bash scripts/uat/run-mysql-version-matrix.sh
 ### 期望
 
 全部 PASS；覆盖直连 `SHOW`、`information_schema` 不得作为外部目录成功路径、宽 Schema 一次 columns、超时关连接等。
+
+---
+
+## UAT-SCAN-CASE-01 — 大小写歧义不共用字段
+
+### 前置
+
+`demo-db` 的 `lower_case_table_names=0`。库 `uat_case_pair` 有表 `Foo`、`foo`、`only_one`。临时连接指向 `demo-db`／`uat_case_pair`。`demo-mysql` 与这次用的用户名不同，新建时带 `acknowledgeSeparateConnection=true`。测后删除。
+
+### 步骤
+
+1. `POST /api/connections/<id>/schema-structure`，body `{ "schema": "uat_case_pair", "tables": ["Foo"] }`
+2. 同一接口请求 `{ "schema": "uat_case_pair", "tables": ["only_one"] }`
+
+### 期望
+
+- 步骤 1：4xx，文案含「对应多张表」，响应无口令明文，且不返回可写入 Manifest 的字段列表
+- 步骤 2：2xx，`namesOnly=false`，`columnCount>=1`
+
+### 清理
+
+删除临时连接。`DROP DATABASE uat_case_pair` 可留到同批结构差异用例结束之后。
+
+---
+
+## UAT-SCAN-DIFF-01 — 缺表与已读表分开
+
+### 前置
+
+同上临时连接。库内有 `only_one`，没有 `missing_tbl`。
+
+### 步骤
+
+`GET /api/connections/<id>/table-structure-diff?schema=uat_case_pair&tables=only_one,missing_tbl`
+
+### 期望
+
+- `only_one` 的 `status=ok`（已读到的表保留）
+- `missing_tbl` 的 `status=not_in_library`（只在表不存在时这样报，不得是 `QUERY_FAILED`）
+- HTTP 2xx
+
+### 清理
+
+删除临时连接与 `uat_case_pair`。
 
 ---
 
