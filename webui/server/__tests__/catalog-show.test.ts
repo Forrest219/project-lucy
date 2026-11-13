@@ -144,6 +144,61 @@ describe("production catalog SHOW adapter", () => {
     expect(injected.createConnectionImpl).not.toHaveBeenCalled();
   });
 
+  it.each([
+    "DESC `hive`.`dim`.`dim_bidding_block_ad_id_2025`",
+    "DESCRIBE `hive`.`dim`.`dim_bidding_block_ad_id_2025`",
+    "SHOW COLUMNS FROM `hive`.`dim`.`dim_bidding_block_ad_id_2025`",
+    "DESC `hive_jd`.`app`.`日活明细`",
+    "DESC `hive`.`dim`.`odd``name`"
+  ])("allows the exact three-part column probe %s", async (sql) => {
+    const root = await fixture();
+    const injected = driver();
+    const actual = await runCatalogShow(root, "hive-1", sql, {}, injected);
+    expect(actual.ok).toBe(true);
+    expect(injected.conn.query.mock.calls[0][0]).toMatchObject({ sql });
+    expect(injected.conn.destroy).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    "DESC `hive`.`dim`",
+    "DESC hive.dim.t",
+    "DESC `hive`.`dim`.`t`; DROP TABLE x",
+    "DESC `hive`.`dim`.`t` -- comment",
+    "DESC `hive`.`dim`.`t` ALL",
+    "SHOW FULL COLUMNS FROM `hive`.`dim`.`t`",
+    "SHOW COLUMNS FROM `hive`.`dim`",
+    "SHOW COLUMNS FROM `t`",
+    "SELECT * FROM `hive`.`information_schema`.`columns`",
+    "EXPLAIN SELECT 1"
+  ])("rejects statements outside the column probe grammar %s", async (sql) => {
+    const root = await fixture();
+    const injected = driver();
+    expect((await runCatalogShow(root, "hive-1", sql, {}, injected)).ok).toBe(false);
+    expect(injected.createConnectionImpl).not.toHaveBeenCalled();
+  });
+
+  it.each(["auth", "query-error"])("redacts password and closes the connection on a column probe %s failure", async (mode) => {
+    const root = await fixture();
+    const injected = driver(mode);
+    const actual = await runCatalogShow(root, "hive-1", "DESC `hive`.`dim`.`t`", {}, injected);
+    expect(actual.ok).toBe(false);
+    expect(JSON.stringify(actual)).not.toContain("fixture-private-password");
+    expect(injected.conn.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("closes a hung column probe at the deadline", async () => {
+    const root = await fixture();
+    const injected = driver("query-hang");
+    vi.useFakeTimers();
+    const pending = runCatalogShow(root, "hive-1", "DESC `hive`.`dim`.`t`", {}, injected);
+    await vi.waitFor(() => expect(injected.conn.query).toHaveBeenCalled());
+    await vi.advanceTimersByTimeAsync(120_000);
+    const actual = await pending;
+    expect(actual.ok).toBe(false);
+    expect(actual.stderr).toMatch(/timed out/i);
+    expect(injected.conn.destroy).toHaveBeenCalledOnce();
+  });
+
   it("does not echo a YAML source line that contains a secret", async () => {
     const root = await fixture();
     await writeFile(path.join(root, "ktx.yaml"), "connections:\n  hive-1: \"super-secret-value\\q\"\n");

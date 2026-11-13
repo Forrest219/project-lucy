@@ -23,7 +23,10 @@ type DriverDeps = {
 
 const DEADLINE_MS = CATALOG_SCAN_TIMEOUT_MS;
 const IDENT = "`(?:``|[^`\\0\\r\\n])+`";
-const SHOW = new RegExp(`^SHOW (?:DATABASES FROM ${IDENT}|TABLES FROM ${IDENT}\\.${IDENT})$`);
+const SHOW = new RegExp(
+  `^(?:SHOW (?:DATABASES FROM ${IDENT}|TABLES FROM ${IDENT}\\.${IDENT}|COLUMNS FROM ${IDENT}\\.${IDENT}\\.${IDENT})` +
+    `|(?:DESC|DESCRIBE) ${IDENT}\\.${IDENT}\\.${IDENT})$`
+);
 
 const PUBLIC_MESSAGES = new Set([
   "Unsupported catalog statement",
@@ -39,7 +42,11 @@ function safeMessage(error: unknown, password: string): string {
   return text.split(password).join("[REDACTED]");
 }
 
-/** Read only the two generated metadata statements. No KTX, default database, or multi-statements. */
+/**
+ * Read only the generated catalog metadata statements: `SHOW DATABASES`, `SHOW TABLES`, and the
+ * three-part column probes `DESC`, `SHOW COLUMNS`, `DESCRIBE`. No KTX, default database, or
+ * multi-statements.
+ */
 export async function runCatalogShow(
   projectRoot: string,
   connectionId: string,

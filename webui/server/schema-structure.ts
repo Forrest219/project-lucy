@@ -1,5 +1,14 @@
 import { stringify } from "yaml";
-import { catalogTablesSql, CATALOG_SCAN_TIMEOUT_MS, CATALOG_TABLE_NAME_LIMIT, describeCatalogTableSql, quoteMysqlIdent, splitCatalogDatabase } from "./catalog-database";
+import {
+  catalogTablesSql,
+  CATALOG_SCAN_TIMEOUT_MS,
+  CATALOG_TABLE_NAME_LIMIT,
+  describeCatalogTableSql,
+  describeTableSql,
+  quoteMysqlIdent,
+  showColumnsSql,
+  splitCatalogDatabase
+} from "./catalog-database";
 import { runCatalogShow } from "./catalog-show";
 import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
@@ -386,6 +395,7 @@ function structureRows(result: SqlResult, context: SchemaStructureLogContext = {
 function sqlFailureReason(result: SqlResult): SchemaColumnRejection["reason"] {
   if (columnScanTimedOut(result)) return "timeout";
   const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+  if (/超过一次可读取的上限/.test(text)) return "too_large";
   if (/access denied|command denied|permission denied|\bprivilege\b/i.test(text)) return "permission";
   if (/unknown table|doesn't exist|does not exist|table not found/i.test(text)) return "missing";
   return "unreadable";
@@ -401,23 +411,55 @@ function answeredRows(
   return { rows };
 }
 
+const CONNECTION_FAILURE =
+  /can't connect|cannot connect|connection refused|connection timed out|connect timed out|unknown host|no such host|econnrefused|enotfound|etimedout/i;
+
+/** A failure another statement cannot fix: stop probing instead of paying the deadline again. */
+function isTerminalProbeFailure(result: SqlResult, reason: SchemaColumnRejection["reason"]): boolean {
+  if (reason !== "unreadable") return true;
+  return CONNECTION_FAILURE.test(`${result.stderr ?? ""}\n${result.stdout ?? ""}`);
+}
+
+/**
+ * External catalogs read one table over the same direct MySQL channel as `SHOW TABLES`.
+ * `ktx sql` rejects `DESC`/`DESCRIBE`/`SHOW` (read/write operation), so no probe goes there.
+ * Probes run in order; the next one is tried only after a server-side refusal or a 0-column mapping.
+ */
 async function readCatalogTableColumns(
   projectRoot: string,
   connectionId: string,
   catalog: string,
   schema: string,
   table: string,
-  execute: typeof runSql
+  show: typeof runCatalogShow
 ): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection }> {
-  const described = await execute(projectRoot, connectionId, describeCatalogTableSql(catalog, schema, table), {
-    maxRows: COLUMN_READ_ROW_LIMIT,
-    timeoutMs: CATALOG_SCAN_TIMEOUT_MS
-  });
-  const answered = answeredRows(described, COLUMN_READ_ROW_LIMIT);
-  if ("reason" in answered) return { columns: [], rejection: { table, reason: answered.reason } };
-  const columns = mapDescribeColumns(table, answered.rows);
-  if (columns.length === 0) return { columns: [], rejection: { table, reason: "unreadable" } };
-  return { columns };
+  const probes = [
+    describeCatalogTableSql(catalog, schema, table),
+    showColumnsSql(catalog, schema, table),
+    describeTableSql(catalog, schema, table)
+  ];
+  let reason: SchemaColumnRejection["reason"] = "unreadable";
+  for (const sql of probes) {
+    const result = await show(projectRoot, connectionId, sql, {
+      maxRows: COLUMN_READ_ROW_LIMIT,
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+    });
+    const answered = answeredRows(result, COLUMN_READ_ROW_LIMIT);
+    if ("reason" in answered) {
+      reason = answered.reason;
+      logSchemaStructureFailure({ connectionId, schema, table, phase: "table-columns", sql }, result);
+      if (isTerminalProbeFailure(result, reason)) break;
+      continue;
+    }
+    const columns = mapDescribeColumns(table, answered.rows);
+    if (columns.length > 0) return { columns };
+    reason = "unreadable";
+    logSchemaStructureFailure(
+      { connectionId, schema, table, phase: "table-columns", sql },
+      { ok: true, exitCode: 0, stderr: "probe returned no mappable columns", stdout: "", latencyMs: result.latencyMs }
+    );
+  }
+  return { columns: [], rejection: { table, reason } };
 }
 
 function resultRows(result: SqlResult): unknown[] | null {
@@ -635,7 +677,7 @@ function resolveSchemaReadMode(deps: ReadSchemaColumnsDeps): ResolvedSchemaRead 
  * - `list-names`: table names only (准备表结构·列名).
  * - `schema-wide`: one Schema-wide `information_schema.columns` read (catalog-scan SC-06/07).
  * - `per-table`: bounded per-table reads with typed rejections (Spec 190 structure-diff /
- *   single-table preview). External catalogs still DESC one checked table at a time.
+ *   single-table preview). External catalogs probe one checked table at a time over the direct channel.
  */
 export async function readSchemaColumns(
   projectRoot: string,
@@ -692,7 +734,7 @@ export async function readSchemaColumns(
         return { status: "ok", columns: [], tables: tableNames };
       }
       // External catalogs have no schema-wide information_schema path; both
-      // schema-wide (with tables) and per-table use DESC one table at a time.
+      // schema-wide (with tables) and per-table probe one table at a time over the direct channel.
       const targetTables = requested ?? [];
       if (targetTables.length === 0) {
         return { status: "error", message: "外部目录读字段必须指定 tables。" };
@@ -706,7 +748,7 @@ export async function readSchemaColumns(
           catalog.catalog,
           safeSchema,
           table,
-          execute
+          deps.runCatalogShowImpl ?? runCatalogShow
         );
         if (tableRead.rejection) rejections.push(tableRead.rejection);
         columns.push(...tableRead.columns);
