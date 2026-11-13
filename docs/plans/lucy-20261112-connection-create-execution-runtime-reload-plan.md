@@ -113,7 +113,7 @@
 - [x] create 响应区分配置写入 vs 执行层生效（reload 失败 → 503 `EXECUTION_RUNTIME_NOT_LOADED`；成功路径 `executionRuntimeAck` 随 canary）
 - [x] CreateConnectionDrawer 成功步展示执行层状态；失败引导「重载执行层」
 - [x] 术语与 Forbidden Terms 自检（用「执行层／重载执行层／尚未确认加载」，未用「已全部生效」伪报）
-- [ ] edit 成功面同等三段事实（EditConnectionDialog 仍只暴露 `executionRuntimePending`；本轮未改）
+- [x] edit 成功面同等三段事实（`EditConnectionDialog` 成功步 + `executionRuntimeAck`；endpoint API 回报 canary；2026-11-13）
 
 ### Task 4：Spec 191 修订
 

@@ -6,7 +6,7 @@ import { queryKeys } from "../../lib/queryKeys";
 import type { ConnectionInfo } from "../../lib/types";
 import { DiffViewer } from "../DiffViewer";
 
-type Step = "input" | "preview" | "submitting";
+type Step = "input" | "preview" | "submitting" | "success";
 
 export type EditConnectionDialogProps = {
   open: boolean;
@@ -24,13 +24,17 @@ type EndpointPreview = {
 type EndpointResult = {
   written: true;
   current: { host: string; port: number; username: string };
-  test: { status: "ok"; message?: string };
+  test: { status: "ok" | "error"; message?: string; durationMs?: number };
   presence: {
     status: "ok" | "missing" | "not_completed";
     missingEnabledTables?: string[];
     reason?: string;
   };
-  executionRuntimePending: true;
+  executionRuntimePending?: boolean;
+  executionRuntimeAck?: boolean;
+  executionRuntimeStatus?: string;
+  executionDecisionReason?: string;
+  executionRuntimeError?: string;
 };
 
 export function EditConnectionDialog({ open, connection, onClose }: EditConnectionDialogProps) {
@@ -44,6 +48,7 @@ export function EditConnectionDialog({ open, connection, onClose }: EditConnecti
   const [password, setPassword] = useState("");
   const [ackShared, setAckShared] = useState(false);
   const [preview, setPreview] = useState<EndpointPreview | null>(null);
+  const [result, setResult] = useState<EndpointResult | null>(null);
   const [gateError, setGateError] = useState<{ message: string; reason?: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -60,6 +65,7 @@ export function EditConnectionDialog({ open, connection, onClose }: EditConnecti
     setPassword("");
     setAckShared(false);
     setPreview(null);
+    setResult(null);
     setGateError(null);
     setLoadError(null);
     const portNumber = Number(connection.port);
@@ -143,16 +149,19 @@ export function EditConnectionDialog({ open, connection, onClose }: EditConnecti
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.project });
+      setResult(data);
+      setStep("success");
       if (data.presence.status === "missing") {
         toast.warning(
           `服务器地址已更新；部分启用表未在新库找到：${(data.presence.missingEnabledTables ?? []).join("、")}`
         );
       } else if (data.presence.status === "not_completed") {
         toast.warning("服务器地址已更新；启用表存在性抽检未完成");
+      } else if (data.executionRuntimeAck === false) {
+        toast.warning("服务器地址已更新；执行层尚未确认加载");
       } else {
         toast.success("服务器地址已更新");
       }
-      onClose();
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "写入失败");
@@ -304,10 +313,59 @@ export function EditConnectionDialog({ open, connection, onClose }: EditConnecti
               <DiffViewer diff={preview.diff || "(无变更)"} />
             </div>
           ) : null}
+          {step === "success" && result ? (
+            <div
+              className="rounded-md border border-success-strong/40 bg-success-soft/30 p-3 notranslate"
+              translate="no"
+              data-testid="edit-connection-success"
+            >
+              <p className="text-sm font-medium text-success-strong">服务器地址已更新并保存</p>
+              <p className="mt-2 text-xs">
+                连通测试：
+                {result.test.status === "ok" ? (
+                  <span className="text-success-strong">
+                    测试通过
+                    {result.test.durationMs != null ? `（${result.test.durationMs} ms）` : ""}
+                  </span>
+                ) : (
+                  <span className="text-danger" data-testid="edit-connection-test-warning">
+                    连通测试未通过（{result.test.message || "连接失败"}），配置已保存
+                  </span>
+                )}
+              </p>
+              <p className="mt-2 text-xs" data-testid="edit-connection-execution-runtime">
+                执行层：
+                {result.executionRuntimeAck === true ? (
+                  <span className="text-success-strong">已加载新连接</span>
+                ) : result.executionRuntimeAck === false ? (
+                  <span className="text-danger">
+                    尚未确认加载
+                    {result.executionRuntimeError
+                      ? `（${result.executionRuntimeError}）`
+                      : result.executionDecisionReason
+                        ? `（${result.executionDecisionReason}）`
+                        : ""}
+                    。请到 MCP 调试台点「重载执行层」重试。
+                  </span>
+                ) : (
+                  <span className="text-fg-muted">状态未回报</span>
+                )}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <footer className="mt-6 flex justify-end gap-2" data-testid="edit-connection-actions">
-          {showSavePrimary ? (
+          {step === "success" ? (
+            <button
+              type="button"
+              className="pl-btn pl-btn--primary"
+              data-testid="edit-connection-done-btn"
+              onClick={onClose}
+            >
+              完成
+            </button>
+          ) : showSavePrimary ? (
             <button
               type="button"
               className="pl-btn pl-btn--primary"

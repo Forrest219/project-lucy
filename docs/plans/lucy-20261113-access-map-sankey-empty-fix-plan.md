@@ -1,12 +1,12 @@
 # 访问关系图空桑基修复 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. **未获委托人「开发授权」前禁止改运行代码。**
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking. **未获委托人「开发授权」前禁止改运行代码。**
 
 | 元数据 | 内容 |
 |---|---|
 | 文档版本 / 日期 | **v0.2** / 2026-11-13 |
 | 优先级 | **P0**（部署侧主视觉失效） |
-| 状态 | **D1–D4 按推荐已拍板；委托人批准推进修复（2026-11-13）；开发授权已获得**。Spec 见 [`lucy-20261113-access-map-sankey-empty-fix-spec.md`](../specs/lucy-20261113-access-map-sankey-empty-fix-spec.md) |
+| 状态 | **功能合同已收口（2026-11-13）**。实现 `f3f88837`；vitest turn-correlation＋usage-first **24/24**；[closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md)。Spec 见 [`lucy-20261113-access-map-sankey-empty-fix-spec.md`](../specs/lucy-20261113-access-map-sankey-empty-fix-spec.md)。**≠ 可上线** |
 | 错题本 | [`docs/lessons/2026-11-13-access-map-sankey-empty.md`](../lessons/2026-11-13-access-map-sankey-empty.md) |
 | 相关合同 | confirmed-only [`lucy-20261105-access-map-confirmed-only-spec.md`](../specs/lucy-20261105-access-map-confirmed-only-spec.md)；usage-first [`lucy-20261105-access-map-usage-first-spec.md`](../specs/lucy-20261105-access-map-usage-first-spec.md)；关联质量 [`lucy-20261019-audit-trust-and-admin-investigation-spec.md`](../specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md) §4.1 |
 | 证据提交 | `556fdc30`、`80ff5bca`；本机／云端 API `accessPaths=0` 同构 |
@@ -89,18 +89,18 @@
 - Create: `docs/specs/lucy-20261113-access-map-sankey-empty-fix-spec.md`（或委托人指定改既有 Spec）
 - Modify: 本 Plan 头部状态；错题本「后续动作」
 
-- [ ] **Step 0.1:** 委托人确认 D1–D4（可回复「D1–D4 按推荐」）
-- [ ] **Step 0.2:** 撰写 Spec：空态几何、关联写入、SC 矩阵、明确「不表示可上线」
-- [ ] **Step 0.3:** 终稿确权 + **开发授权** 后才进入 Task 1
+- [x] **Step 0.1:** 委托人确认 D1–D4（可回复「D1–D4 按推荐」）
+- [x] **Step 0.2:** 撰写 Spec：空态几何、关联写入、SC 矩阵、明确「不表示可上线」
+- [x] **Step 0.3:** 终稿确权 + **开发授权** 后才进入 Task 1
 
 ### Task 1: 归因探针（只读取证，可先于授权做只读）
 
 **Files:**
 - 只读：demo `/data/lucy/.ktx-ui/audit.sqlite`；`webui/server/proxy/audit.ts` 写入路径
 
-- [ ] **Step 1.1:** 统计窗口内 `lucy_query`／`lucy_read_source` 的 `turn_attribution_mode`、`explicit_turn_validated`、`association_status`、是否有 sources
-- [ ] **Step 1.2:** 对照一次「lucy_begin_question → lucy_query」会话：begin 为 confirmed 时，同 turn 触表行实际写入值
-- [ ] **Step 1.3:** 把结论写进 Spec「现状」与错题本 §3（实现缺口 vs 合同本意）
+- [x] **Step 1.1:** 统计窗口内 `lucy_query`／`lucy_read_source` 的 `turn_attribution_mode`、`explicit_turn_validated`、`association_status`、是否有 sources
+- [x] **Step 1.2:** 对照一次「lucy_begin_question → lucy_query」会话：begin 为 confirmed 时，同 turn 触表行实际写入值
+- [x] **Step 1.3:** 把结论写进 Spec「现状」与错题本 §3（实现缺口 vs 合同本意）
 
 **Produces:** 一份短取证笔记（可落 `inbox/` 后链到错题本）；判定 D3 是 bugfix 还是合同补洞。
 
@@ -114,11 +114,11 @@
 - Consumes: 信任 Spec — 合法显式关联 → confirmed
 - Produces: 新写入的触表 `access_log` 行在显式校验成功时 `association_status === "confirmed"`；**不**把 `session_bound`／inferred 升成 confirmed
 
-- [ ] **Step 2.1:** 写失败测试：显式 turn 已校验 + 同 turn 的 `lucy_query` 带 sources → 期望 `association_status=confirmed`
-- [ ] **Step 2.2:** 跑测确认红
-- [ ] **Step 2.3:** 最小修复写入路径（禁止历史 backfill 静默升级；只修新写入／合同允许的投影）
-- [ ] **Step 2.4:** 跑测绿；补「candidate 仍不得进 access-map E」断言
-- [ ] **Step 2.5:** Commit（获授权后）
+- [x] **Step 2.1:** 写失败测试：显式 turn 已校验 + 同 turn 的 `lucy_query` 带 sources → 期望 `association_status=confirmed`
+- [x] **Step 2.2:** 跑测确认红
+- [x] **Step 2.3:** 最小修复写入路径（禁止历史 backfill 静默升级；只修新写入／合同允许的投影）
+- [x] **Step 2.4:** 跑测绿；补「candidate 仍不得进 access-map E」断言
+- [x] **Step 2.5:** Commit（获授权后）
 
 ### Task 3: D2 空访问闲置骨干（TDD）
 
@@ -131,11 +131,11 @@
 - Consumes: `grantPaths>0 && accessPaths===0` 边；usage 边仍仅 `accessPaths>0`
 - Produces: 空访问时 SVG 存在列间连通 path（骨干）；`unitPx`／柱高仍只由 usage 决定；闲置表仍不进列
 
-- [ ] **Step 3.1:** 写失败测试：仅 dormant 授权边 → 布局含骨干 link（厚度常量或独立于 grant 排行），且无 usage 刻度被 grant 撑高
-- [ ] **Step 3.2:** 跑测确认红
-- [ ] **Step 3.3:** 实现骨干带（与 stub／清单共存；着色中性；不冒充 usage）
-- [ ] **Step 3.4:** 跑 usage-first 既有 SC 相关测，确保有使用时行为不变
-- [ ] **Step 3.5:** Commit（获授权后）
+- [x] **Step 3.1:** 写失败测试：仅 dormant 授权边 → 布局含骨干 link（厚度常量或独立于 grant 排行），且无 usage 刻度被 grant 撑高
+- [x] **Step 3.2:** 跑测确认红
+- [x] **Step 3.3:** 实现骨干带（与 stub／清单共存；着色中性；不冒充 usage）
+- [x] **Step 3.4:** 跑 usage-first 既有 SC 相关测，确保有使用时行为不变
+- [x] **Step 3.5:** Commit（获授权后）
 
 ### Task 4: 组合门禁与部署冒烟
 
@@ -143,15 +143,15 @@
 - Test: `webui/server/__tests__/p1-access-map*.test.ts` 新增「稀疏 confirmed」夹具
 - Optional: 文档化本机冒烟步骤（不强制 Playwright，除非另授）
 
-- [ ] **Step 4.1:** 夹具：N 条 candidate 触表 + 0／少条 confirmed → 在 D3 修复后，仅 confirmed 进 E；图在 0 confirmed 时走 D2 骨干
-- [ ] **Step 4.2:** 本机 `demo`：`GET /api/admin/access-map?window=168h&inquiryKind=all&accessGrade=all` 记录 `accessPaths`；有真实显式查数后应 >0
-- [ ] **Step 4.3:** 打开 WebUI 目视：有使用见粗流带；无使用见骨干连通（截图可落 `inbox/`）
-- [ ] **Step 4.4:** 更新错题本状态与本 Plan 状态行
+- [x] **Step 4.1:** 夹具：N 条 candidate 触表 + 0／少条 confirmed → 在 D3 修复后，仅 confirmed 进 E；图在 0 confirmed 时走 D2 骨干
+- [x] **Step 4.2:** 本机 `demo`：`GET /api/admin/access-map?window=168h&inquiryKind=all&accessGrade=all` 记录 `accessPaths`；有真实显式查数后应 >0
+- [x] **Step 4.3:** 打开 WebUI 目视：有使用见粗流带；无使用见骨干连通（截图可落 `inbox/`）
+- [x] **Step 4.4:** 更新错题本状态与本 Plan 状态行
 
 ### Task 5: 文档镜像
 
-- [ ] **Step 5.1:** `docs/README.md`／清单池（若升 REQ）按 `DEVELOPMENT.md` 状态登记改镜像
-- [ ] **Step 5.2:** 不宣称可上线；客户环境另走发布取证
+- [x] **Step 5.1:** `docs/README.md`／清单池（若升 REQ）按 `DEVELOPMENT.md` 状态登记改镜像
+- [x] **Step 5.2:** 不宣称可上线；客户环境另走发布取证
 
 ---
 

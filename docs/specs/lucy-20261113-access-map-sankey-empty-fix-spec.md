@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能合同修订 / **v0.1** |
 | 日期 / 目标版本 | 2026-11-13 / 不绑定产品版本号 |
 | 功能编号 / 优先级 | **无**（事故修复）／**P0** |
-| 状态 | **v0.1 可交付开发（2026-11-13）**。委托人批准推进修复（D1–D4 按推荐）。**不表示可上线** |
+| 状态 | **v0.1；功能合同已收口（2026-11-13）**。实现 `f3f88837`；收口见 [closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md)。**不表示可上线** |
 | 决策来源 | 错题本 [`docs/lessons/2026-11-13-access-map-sankey-empty.md`](../lessons/2026-11-13-access-map-sankey-empty.md)；Plan [`lucy-20261113-access-map-sankey-empty-fix-plan.md`](../plans/lucy-20261113-access-map-sankey-empty-fix-plan.md) |
 | 与既有 Spec | **保持** confirmed-only 硬锁；**修订** usage-first 空访问空态；**澄清** 显式 begin 后续同会话工具调用的关联写入 |
 | 实施计划 | 同上 Plan |

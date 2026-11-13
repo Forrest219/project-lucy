@@ -7,6 +7,8 @@
 | 授权边界 | 只改外部目录列库、列表的语句和传输，以及普通 MySQL 准备表结构的字段查询次数。不改 KTX，不把 `SHOW` 交给 `ktx sql`，不改问数，不改无点号库名的库内表清单 SQL，不改页面文案，不做浏览器测试 |
 | 验收 | Spec SC-01–SC-14 |
 
+
+**Progress (2026-11-13 · 中间态出口)：** 功能合同已收口；任务勾选与 Spec／[证据审计](../reviews/2026-11-13-catalog-scan-read-path-sc-evidence-audit.md) 对齐。**不入 0.30 产品分母**（现场事故修复；功能编号无）。**≠ 可上线**。
 **Goal:** 外部目录的库内表清单由 Lucy 直连执行已验证的 `SHOW`，每个库的张数等于该库 `SHOW TABLES` 的行数；普通 MySQL 的准备表结构一次读完字段。
 
 **Architecture:** `database` 含一个点时走新的直连 MySQL 执行器，只允许 `SHOW DATABASES` 与 `SHOW TABLES`。执行器从 `ktx.yaml` 读取 `host`、`port`、`username` 和 `file:` 密码，握手不传默认库，连接与单条语句各 120 秒超时（与 `CATALOG_SCAN_TIMEOUT_MS`／`ktx sql` 默认一致），结束时关闭连接。其余语句仍进 `runSql` / `ktx sql`。普通 MySQL 的准备表结构字段改为一条 `information_schema.columns`。
@@ -32,7 +34,7 @@
 
 | ID | 条件 | 状态 |
 |---|---|---|
-| P1 | Spec v0.1 与本 Plan 经确认后开工 | 待确认 |
+| P1 | Spec v0.1 与本 Plan 经确认后开工 | 已确认并收口 |
 | P2 | 现场语句已记录在 Spec §1 | 满足 |
 | P3 | 不要求客户环境作为本条出口 | 满足 |
 
@@ -55,39 +57,39 @@
 
 ### Task 1: 替身与失败断言
 
-- [ ] 重写外部目录模拟：`hive.information_schema` 与 `hive_jd.information_schema` 返回 `Unknown database 'default_cluster:information_schema'`
-- [ ] `SHOW DATABASES FROM hive` 返回含 `dim`、`dw` 的库名。`SHOW TABLES FROM hive.dim`、`hive.dw`、`hive_jd.app` 的行数分别为 44、129、169
-- [ ] 断言 `listLiveSchemas` 的完整返回值与这些行数一致，不得为 0，也不得保留旧模拟的 `app=3`、`dw=2`
-- [ ] 断言 `runSql` 记录的 SQL 不含 `SHOW`，也不含外部目录 `information_schema` 计数语句
+- [x] 重写外部目录模拟：`hive.information_schema` 与 `hive_jd.information_schema` 返回 `Unknown database 'default_cluster:information_schema'`
+- [x] `SHOW DATABASES FROM hive` 返回含 `dim`、`dw` 的库名。`SHOW TABLES FROM hive.dim`、`hive.dw`、`hive_jd.app` 的行数分别为 44、129、169
+- [x] 断言 `listLiveSchemas` 的完整返回值与这些行数一致，不得为 0，也不得保留旧模拟的 `app=3`、`dw=2`
+- [x] 断言 `runSql` 记录的 SQL 不含 `SHOW`，也不含外部目录 `information_schema` 计数语句
 
 ### Task 2: 直连执行器
 
-- [ ] 生产适配器从该连接的 `ktx.yaml` 读取 `host`、`port`、`username`，并用 `password` 的 `file:` 相对路径调用 `safeReadSecretPasswordBytesIfExists`
-- [ ] 测试替换驱动工厂，不替换整个执行器，也不打开网络
-- [ ] 握手参数不含 `database`。缺文件、`inline`、`env` 在调用驱动前失败
+- [x] 生产适配器从该连接的 `ktx.yaml` 读取 `host`、`port`、`username`，并用 `password` 的 `file:` 相对路径调用 `safeReadSecretPasswordBytesIfExists`
+- [x] 测试替换驱动工厂，不替换整个执行器，也不打开网络
+- [x] 握手参数不含 `database`。缺文件、`inline`、`env` 在调用驱动前失败
 - [x] 连接超时与单条语句超时都是 120 秒。成功、认证失败、查询异常、语句挂起都关闭连接
-- [ ] 失败原文交给现有 `classifyLiveTableFailure` 之前去掉密码字节
+- [x] 失败原文交给现有 `classifyLiveTableFailure` 之前去掉密码字节
 
 ### Task 3: 接上列库与列表
 
-- [ ] `listLiveSchemas` 与 `readLiveTables` 在外部目录分支调用 Task 2
-- [ ] `listLiveSchemas` 对每个非系统库调用 `SHOW TABLES`，`tableCount` 等于行数。任一库失败则整次列库失败
-- [ ] 删除 `countExternalCatalogTables` 经由 `runSql` 查询 `information_schema` 的实现
-- [ ] 列表只取首列，字段个数保持 0
-- [ ] 无点号连接的 SQL 字符串与改前快照一致
+- [x] `listLiveSchemas` 与 `readLiveTables` 在外部目录分支调用 Task 2
+- [x] `listLiveSchemas` 对每个非系统库调用 `SHOW TABLES`，`tableCount` 等于行数。任一库失败则整次列库失败
+- [x] 删除 `countExternalCatalogTables` 经由 `runSql` 查询 `information_schema` 的实现
+- [x] 列表只取首列，字段个数保持 0
+- [x] 无点号连接的 SQL 字符串与改前快照一致
 
 ### Task 4: 准备表结构
 
-- [ ] 外部目录的表名来自 Task 2 的 `SHOW TABLES`
-- [ ] 已知表名后的字段语句保持 `DESC`，调用 `runSql`
+- [x] 外部目录的表名来自 Task 2 的 `SHOW TABLES`
+- [x] 已知表名后的字段语句保持 `DESC`，调用 `runSql`
 - [x] 普通 MySQL 用一条带 `table_schema` 条件的 `information_schema.columns`。表名查询若保留，全局至多一次
 - [x] 删除按表名循环调用 `information_schema.columns` 的路径
 - [x] 行数达到 `10000` 时走现有超限失败
 
 ### Task 5: 文档镜像
 
-- [ ] 开工、收口时用同一句更新 Spec 头部、Plan 头部、`docs/README.md`、`docs/plans/README.md`
-- [ ] 本轮草案不写收口记录
+- [x] 开工、收口时用同一句更新 Spec 头部、Plan 头部、`docs/README.md`、`docs/plans/README.md`
+- [x] 本轮草案不写收口记录
 
 ## 5. 验收
 

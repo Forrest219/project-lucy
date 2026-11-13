@@ -35,10 +35,26 @@ const ktxMcpReload = vi.hoisted(() => ({
   reloadKtxMcpAfterConfigWrite: vi.fn(async (): Promise<{ status: "reloaded" | "started" | "skipped" | "failed"; detail: string }> => ({ status: "reloaded", detail: "ok" }))
 }));
 
+const mcpRuntimeCanary = vi.hoisted(() => ({
+  runMcpRuntimeCanary: vi.fn(async () => ({
+    executionRuntimeAck: true,
+    decisionReason: "ok",
+    checks: [{ name: "execution_query", status: "pass" as const, detail: "connection loaded" }]
+  }))
+}));
+
 vi.mock("../ktx-mcp-reload.js", () => ({
   reloadKtxMcpAfterConfigWrite: ktxMcpReload.reloadKtxMcpAfterConfigWrite,
   reloadKtxMcpExecutionRuntime: ktxMcpReload.reloadKtxMcpAfterConfigWrite
 }));
+
+vi.mock("../admin/mcp-runtime.js", async () => {
+  const actual = await vi.importActual<typeof import("../admin/mcp-runtime.js")>("../admin/mcp-runtime.js");
+  return {
+    ...actual,
+    runMcpRuntimeCanary: mcpRuntimeCanary.runMcpRuntimeCanary
+  };
+});
 
 let projectRoot: string;
 let auditDbPath: string;
@@ -209,6 +225,8 @@ describe("POST /api/connections/:connId/endpoint (lucy-20261101)", () => {
     expect(response.body.data.written).toBe(true);
     expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot, "mysql-aliyun");
     expect(response.body.data.executionRuntimePending).toBe(false);
+    expect(response.body.data.executionRuntimeAck).toBe(true);
+    expect(mcpRuntimeCanary.runMcpRuntimeCanary).toHaveBeenCalled();
     const yaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
     expect(yaml).toContain("host: db-test.internal");
     await app.close();

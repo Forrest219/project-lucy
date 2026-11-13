@@ -24,8 +24,9 @@ W2 书面降级时登记的 P0 三块已知债（`E2E-CON-07`／`E2E-MCP-02`／`
 
 | ID | 说明 |
 |---|---|
-| EditConnectionDialog 三段事实 | Task 3 残留 |
-| UAT-CONN-RELOAD-02 | 失败可观测（可选） |
+| UAT-CONN-RELOAD-02 | 失败可观测（可选；中间态出口未纳入） |
+
+**已补收口（中间态出口 Task 1）：** EditConnectionDialog 成功面三段事实＋endpoint `executionRuntimeAck`。
 
 ## 边界
 

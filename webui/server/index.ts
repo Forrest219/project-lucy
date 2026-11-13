@@ -2069,7 +2069,18 @@ export function buildServer() {
     const executionRuntimePending = dryRun
       ? false
       : await settleExecutionRuntime(projectRoot, digestBefore, connId);
-    return { ok: true, data: { ...result, executionRuntimePending } };
+    if (dryRun) {
+      return { ok: true, data: { ...result, executionRuntimePending } };
+    }
+    const executionAck = await executionAckForConnection(connId);
+    return {
+      ok: true,
+      data: {
+        ...result,
+        executionRuntimePending,
+        ...executionAck
+      }
+    };
   });
 
   app.post<{

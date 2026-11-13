@@ -6,7 +6,7 @@
 | 标签 | `contract-stack` `data-trust` `viz-geometry` `empty-default` `ux-regression` `sev-high` |
 | 环境 | 本机 demo `http://127.0.0.1:55176`（容器 `0.30.0`）；云端 `124.222.172.229:5174`（`0.30.0` / `36a82a3c`） |
 | 相关 | [`lucy-20261105-access-map-confirmed-only-spec.md`](../specs/lucy-20261105-access-map-confirmed-only-spec.md)；[`lucy-20261105-access-map-usage-first-spec.md`](../specs/lucy-20261105-access-map-usage-first-spec.md)；提交 `556fdc30`、`80ff5bca`；页面 `/admin/access-map` |
-| 状态 | `mitigated`（2026-11-13 双轨修复已合入工作区；本机 vitest 绿；demo 镜像重建因 apt 代理失败未冒烟） |
+| 状态 | `closed`（2026-11-13 功能合同收口；实现 `f3f88837`；[closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md)；demo 重建冒烟非本条出口） |
 
 ## 1. 症状与影响
 

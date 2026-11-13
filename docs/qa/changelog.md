@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-11-13 · Edit 连接成功面执行层三段事实
+
+- `EditConnectionDialog` 成功步对齐 create：`edit-connection-execution-runtime`（已加载／尚未确认加载＋重载引导）。
+- `POST /api/connections/:id/endpoint` 非 dryRun 回报 `executionRuntimeAck`（canary）。
+- 父 Plan Task 3 edit 勾选；中间态出口 Task 1。
+
+---
+
 ## 2026-11-13 · B 轨：E2E-CON-07／E2E-MCP-02／UAT-CONN-RELOAD-01 绿证
 
 ### 实现落地
