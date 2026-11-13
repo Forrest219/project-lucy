@@ -2,11 +2,11 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能 Spec／**v0.6**（已获开发授权；实现中） |
+| 文档类型 / 版本 | 功能 Spec／**v0.6**（已获开发授权；实现已合入） |
 | 日期 / 目标版本 | 2026-11-07（v0.6-draft 修订 2026-11-08）/ 产品线 `0.30.0`（分支 `lucy-v0.30`）。不进入 `v0.25` 升级台账，不占用 `L25-*` |
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-2**；需求池 **REQ-030-023** / **P0** |
-| 状态 | **v0.6，终稿已确权（R2-F）；O1／O2／O3（R3）已闭合；开发授权（R4）已授予（委托人 2026-11-08：确认定稿（R2-F）并授权进入开发（R4）；Cursor coder 实现、Cursor reviewer code review）**；实现进行中。本条不表示可上线 |
+| 状态 | **v0.6；R2-F＋R3（O1–O3）＋R4 已闭合（2026-11-08）；功能合同已收口（2026-11-13）**（SC-01–SC-17 证据关闭；见 [证据审计](../reviews/2026-11-13-catalog-business-semantics-sc-evidence-audit.md)）。**本条收口不表示可上线** |
 | 授权边界 | R2-F＋R3＋R4 已闭合（R4：2026-11-08）。授权范围＝本 Spec／Plan 实现与测试；**不**表示可上线／发布取证。实现由 Cursor coder；Cursor reviewer 做 code review。 |
 | 决策来源 | 2026-11-06 CFO 误报事故 ＋ 2026-11-07 客户沟通实录（翊总／田总）：「AI 取数取错了表」；第二轮沟通自述「**表一多，AI 自己不知道该选哪张**」 |
 | 需求来源 | [需求池 REQ-030-023](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.1 G1](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-2](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向 §4.1 约束闸](../plans/lucy-20261107-lucy-0-30-core-direction.md) |
@@ -462,7 +462,7 @@ on lucy_catalog(args, identity):
 | SC-16 | **绑定一致性·快照后改绑（D10（1））**：先取得含 `{key=K, table=T_old}` 的 D0 最终集合快照；同键 K 的 manifest／overlay 改绑到 `T_new` 并写入仅新目标持有的描述专属标记 `M_new`；再对该快照继续装配／读取。断言：响应条目仍为 `table=T_old`；`descriptionState: "missing"`；**不出现** `M_new`；不得把新目标描述挂到旧 table 条目。对照路径：绑定一致时 `M_new`（或匹配描述）可正常出现 | 单测（同键改绑夹具） |
 | SC-17 | **绑定一致性·overlay 可信归属（D10（2）／F-R2-01／R3b）**，含两条反例路径＋一条对照：（1）**两次读取之间改绑**：目录快照 `{key=K, table=T_old}`；先读与 `T_old` 匹配的旧 manifest；之后同键改绑为 `T_new` 并写入仅新目标持有的专属 grain 标记 `G_new`；再读新 overlay。断言：条目仍为 `table=T_old`；**不出现** `G_new`。（2）**发布中间态（R3b 时序变体）**：目录与 manifest 仍为 `K → T_old`；**仅**落盘新 overlay（自带 `table → T_new` 与 `G_new`），**新 manifest 未落盘**。断言：旧目录条目仍为 `table=T_old`；**不得出现** `G_new`（禁止用后读旧 manifest 表值给新 overlay 盖戳后写 grain）。（3）**正常绑定对照**：overlay 可信依据、已校验 manifest、`source.table` 三者对齐时，匹配 grain 可正常出现。路径（1）（2）若旧 manifest 仍通过 D10（1），description 可按旧 manifest 装配，但 grain 必须省略／null | 单测（跨文件时序＋专属 grain 标记＋对照） |
 
-全部 SC **未执行**。依赖 O3 的 SC-08 在数值裁定前**不得**标关闭。本条收口不表示可上线。
+全部 SC **已关闭**（2026-11-13 证据审计；vitest `catalog-business-semantics.test.ts` 23/23；O3＝8192）。本条收口不表示可上线。
 
 ---
 
