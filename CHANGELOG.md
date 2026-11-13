@@ -8,24 +8,32 @@ All notable user-visible changes to Lucy ship here. Versions follow `<major>.<mi
 
 ## Unreleased — 0.30.0
 
-产品线 `lucy-v0.30`／`VERSION=0.30.0` 开发中捕捉。用户可见一句草稿见 `docs/releases/drafts/0.30.0-user.md`。**未**写正式 `user-facing` 定稿，**未**开 `v0.30.0` 发版台账；合入 ≠ 可上线。对齐 tip `2ca5f939`。
+产品线 `lucy-v0.30`／`VERSION=0.30.0` 开发中捕捉（**中间态已出口**，见 `docs/reviews/2026-11-13-025-to-030-midstate-inventory.md`）。对外叙事定稿见 `docs/releases/v0.30.0-user-facing.md`；草稿捕捉层见 `docs/releases/drafts/0.30.0-user.md`。**未**开 `v0.30.0` 发版台账／tag；合入 ≠ 可上线。对齐 tip `eb38eee5140c`（以 `git rev-parse HEAD` 为准）。
 
 ### Added
 - **P0-1／REQ-030-027 问题类型口径绑定**：运维可发布「问题类型 → 唯一 source + 固定口径」绑定；命中后 `lucy_query`／`lucy_explain_query` 偏离由 Proxy 本机拒绝且零上游执行。
-- **P0-2／REQ-030-023 Catalog 业务语义暴露**：可见表在 catalog 携带业务描述等语义资产，按业务相关排序优于纯字母序。
+- **P0-2／REQ-030-023 Catalog 业务语义暴露**：可见表在 catalog 携带业务描述等语义资产；**首期排序仍为字母序**（清单理想「业务相关排序」已显式降级，见 Spec D7）。
 - **P0-A／REQ-030-012 Source 级字段暴露裁剪**：按 source 裁剪 Agent 可见业务字段。
 - **P0-3／REQ-030-024 表级歧义门闩**：多表命中不得静默成交；限定名错表可拦。
 - **P0-4／REQ-030-022 答复可核对块**：纳入路径成功 `lucy_query` 强制带 `answer_verifiability`（来源／口径／截止期披露）；首期截止期可 `not_checked`。
 - **P0-5／REQ-030-018 空结果下一步**：严格 0 行返回结构化 `next_step`。
-- **P1-10／REQ-030-031 概念注册表 CLI**：ontology-lite 一期 CLI 维护概念资产。
-- **P1-11／REQ-030-032 概念注册表 Lucy Ops 控制面**：`lucy_ops_concept_*` 扫描／人审写；本版无 WebUI 概念页。
+- **P1-11／REQ-030-032 概念注册表 Lucy Ops 控制面**：`lucy_ops_concept_*` 扫描／人审写；本分支概念注册表**唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 已结案不做）。
+- **P1-12／REQ-030-033 问询预算默认阈值**：默认窗口放宽为 60 次／300s（续查仍 1 次）。
+- **P1-13／REQ-030-034 发版性能基线门禁**：WebUI＋MCP 相对不回退 harness；发布取证出口证据齐（acceptance 代替实现 CR）。
+- **P1-14／REQ-030-035 问询预算复盘审计字段**：`budgetSnapshot` 与 `calls.csv` 表尾支持运维复盘。
+
+### Changed
+- **连接创建／编辑 → 执行层重载（Spec 191）**：有 supervisor 时写路径统一走 supervisor；创建／编辑成功面诚实回报 `executionRuntimeAck`；live E2E（`E2E-CON-07`／`E2E-MCP-02`）与 UAT-01 已取证。
 
 ### Fixed
 - **MCP 客户端 Skill 入口**：仓库默认 `.mcp.json` 改挂主面 `/mcp`（不再指向已关闭的 `/mcp/skills`），并加静态门禁与可选 CC 探针，避免 Claude Code／Codex 侧业务 Skill 假连通。
+- **库内扫表读法**：外部目录列库／列表改直连 `SHOW`；普通 MySQL 准备表结构一次读 `information_schema.columns`（**不入 0.30 产品分母**，事故修复）。
+- **访问关系图空桑基**：begin 后同会话触表写入 confirmed；无访问时画闲置骨干连通带（功能合同已收口）。
 
 ### Notes
-- 用户叙事草稿：`docs/releases/drafts/0.30.0-user.md`（双层 RN 设计见 `docs/plans/lucy-20261107-dual-layer-release-notes-design.md`）。本 Fixed 为工程／Agent 接入项，**不进**用户草稿。
-- P0-6／P0-7／P0-B 及未授权 P1／P2 不进本节主张。
+- 用户叙事定稿：`docs/releases/v0.30.0-user-facing.md`；草稿：`docs/releases/drafts/0.30.0-user.md`（双层 RN 设计见 `docs/plans/lucy-20261107-dual-layer-release-notes-design.md`）。Skill／扫表／harness 类 Fixed／Changed 中，仅用户可观察项进定稿／草稿；工程接入项可不进。
+- **P1-10／REQ-030-031**：委托人结案——本分支不做 CLI／WebUI／效果门；不得再写成「已交付 CLI」。
+- P0-6／P0-7／P0-B 及未授权 P1／P2 **不进**本节主张（O 已闭合者仍待 R2-F／未授权实现）。
 
 ---
 

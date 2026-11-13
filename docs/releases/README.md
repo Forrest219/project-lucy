@@ -25,7 +25,8 @@
 
 ## 文件
 
-- `drafts/0.30.0-user.md` — **开发中**用户可见草稿（非正式）。产品版本已开 `0.30.0`／分支 `lucy-v0.30`，但**尚未**打 `v0.30.0` tag，也**没有** `v0.30.0.json` 发版台账或 `v0.30.0-user-facing.md` 定稿。工程条目见 `CHANGELOG.md` §`Unreleased — 0.30.0`。约定见 [`docs/plans/lucy-20261107-dual-layer-release-notes-design.md`](../plans/lucy-20261107-dual-layer-release-notes-design.md)。
+- `v0.30.0-user-facing.md` — **对外叙事定稿**（用户／客户可读；与 tip `eb38eee5140c`／中间态出口对齐）。**尚未**打 `v0.30.0` tag，也**没有** `v0.30.0.json`／`v0.30.0-release-notes.md` 对内台账；本文件**不**表示可上线或客户交付。工程条目见 `CHANGELOG.md` §`Unreleased — 0.30.0`。草稿捕捉层仍见 `drafts/0.30.0-user.md`。约定见 [`docs/plans/lucy-20261107-dual-layer-release-notes-design.md`](../plans/lucy-20261107-dual-layer-release-notes-design.md)。
+- `drafts/0.30.0-user.md` — 开发中用户可见草稿（非正式；与定稿同源，含「暂缓」清单）。
 - `v0.25.0.json` — 上一已 tag 产品版本。annotated tag `v0.25.0` 与正式 GitHub Release 已指向 `e84c9ed4`；main 跑批 `42250111386` 四项 Required checks 通过；tag 跑批 `42252441241` 总体失败（`release/spec-and-webui` 红灯、`customer-amd64-native` G8 失败，`real-e2e`／`release-package` 等跳过），**不**宣称 Required tag checks 通过，也**没有**客户交付包或 `productionReady`。
 - `v0.20.0.json` — 上一已发布版本，annotated tag 已指向 `abb503c`，正式 GitHub Release 已按 `v0.20.0-release-notes.md` 创建。main 跑批 `40088995603` 与 tag 跑批 `40097259604` 的四项 Required checks 均通过；项目所有者确认客户已成功部署且版本与该版本 `0.20.0` 一致，**仅客户实际部署路径按人工验收放行**。两项既有非必需 demo 冒烟检查失败并获准留到下一轮修复；GHCR 权限问题导致 GitHub 客户放行链未执行，其他制品不在放行范围内。本版未新登记交付包、镜像摘要或包哈希。
 - `v0.2.0.json` — 历史版本，已被 `v0.20.0` 取代。原提交、tag、Release 与门禁事实保持不变；其中“版本号不承担大小序”是当时已撤销的错误口径。
