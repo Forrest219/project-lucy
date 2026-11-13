@@ -2,17 +2,17 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能 Spec／**v0.5**（已获开发授权；实现已合入；复审 BLOCK／CHANGE 已修；独立复验 PASS） |
+| 文档类型 / 版本 | 功能 Spec／**v0.5**（已获开发授权；实现已合入；复审 BLOCK／CHANGE 已修；独立复验 PASS；功能合同已收口） |
 | 日期 / 目标版本 | 2026-11-07（本稿修订 2026-11-08；状态镜像 2026-11-13）/ 产品线 `0.30.0`（分支 `lucy-v0.30`）。不进入 `v0.25` 升级台账，不占用 `L25-*` |
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-3**；需求池 **REQ-030-024** / **P0** |
-| 状态 | **v0.5；R2-F＋R3（O1／O2／O4）＋R4 已闭合（2026-11-08）；实现已合入（本分支）；复审 BLOCK／CHANGE 已修；独立复验 PASS（2026-11-13，含 SC-17 HTTP／SC-25 生产装配）；待功能合同收口；本条不表示可上线** |
+| 状态 | **v0.5；R2-F＋R3（O1／O2／O4）＋R4 已闭合（2026-11-08）；实现已合入；复审 BLOCK／CHANGE 已修；独立复验 PASS（2026-11-13）；SC-01–SC-26 证据关闭（2026-11-13，见 [证据审计](../reviews/2026-11-13-source-ambiguity-gate-sc-evidence-audit.md)）。功能合同已收口（2026-11-13）。本条收口不表示可上线** |
 | 授权边界 | R2-F＋R3＋R4 已闭合（R4：2026-11-08）。授权范围＝本 Spec／Plan 实现、测试与复审 BLOCK／CHANGE 修复；**不**表示可上线。 |
 | 决策来源 | 2026-11-06 CFO 误报事故 ＋ 误报防线 G2／G3：instructions 丢弃「问询范围确认」；字段歧义护栏对限定名错表零触发 |
 | 需求来源 | [需求池 REQ-030-024](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.2–4.3](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-3](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../plans/lucy-20261107-lucy-0-30-core-direction.md) |
 | 实施主体 | Lucy：动态 role-aware instructions 合并多表先问条文 ＋ MCP Proxy 在 `lucy_query`（及约定的姊妹工具）前做表级歧义硬门禁。不改 KTX；不改 ACL 裁决口径 |
 | 配套 Plan | [lucy-20261107-source-ambiguity-gate-plan.md](../plans/lucy-20261107-source-ambiguity-gate-plan.md) |
-| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 对抗评审](../reviews/2026-11-08-source-ambiguity-gate-codex-review.md)（R1／R2／R3 BLOCK → 本稿修订；**≠ 终稿确权／开发授权**）；[实现复审 BLOCK](../reviews/2026-11-13-source-ambiguity-gate-implementation-review.md)（2026-11-13） |
+| 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 对抗评审](../reviews/2026-11-08-source-ambiguity-gate-codex-review.md)（R1／R2／R3 BLOCK → 本稿修订；**≠ 终稿确权／开发授权**）；[实现复审／独立复验](../reviews/2026-11-13-source-ambiguity-gate-implementation-review.md)（2026-11-13）；[SC 证据审计](../reviews/2026-11-13-source-ambiguity-gate-sc-evidence-audit.md)（功能合同收口） |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」「功能闭口与发布取证」「伪代码」 |
 | 与既有 Spec 的关系 | **串联，不吞并。** 与 P0-1（REQ-030-027）口径绑定：**024 选表，027 定口径**——仅 `begun_bound` 且 `commitPhase=committed` 时本门闩让位（见 D8）。与 P0-2 catalog 描述暴露串联：命中与候选展示消费投影字段 `description`／`descriptionState`（见 D4／D12）。既有字段级 `ambiguousFieldHint` 保留；本条新增 **source 级**门闩，不删除字段歧义路径 |
 
@@ -636,6 +636,7 @@ on lucy_query | lucy_explain_query(args, identity, session):
 
 | 版本 | 日期 | 说明 |
 |---|---|---|
+| v0.5（状态镜像） | 2026-11-13 | **功能合同已收口**：SC-01–SC-26 证据关闭（vitest 48/48；见 [证据审计](../reviews/2026-11-13-source-ambiguity-gate-sc-evidence-audit.md)）。残余 SUGGEST ASK_FIRST 双写不挡收口。本条收口不表示可上线 |
 | v0.5（状态镜像） | 2026-11-13 | 实现已合入（`c1043fae`／`91a9dfc3`）；独立复审 **BLOCK**（宿主确认可被 Agent Bearer 自证；描述单文件读失败 fail-open 等）。现值改「实现已合入；复审 BLOCK；待修」；**不表示可上线**。评审见 [implementation-review](../reviews/2026-11-13-source-ambiguity-gate-implementation-review.md) |
 | v0.5-draft | 2026-11-08 | Codex R3（BLOCK；major 4）修订：**F-R2-03** §4.4 拆载体（O1）与宿主 attested **用户参与证据**＋核验路径；明确禁止 Agent 自述／Agent 可写提交记录／拒绝 nonce 回传冒充确认（SC-17）；**F-R2-04** §4.5 授权修订 `acl.collect*`，未知 filter／order_by 保留进 unresolved 并 deny（SC-16 `ghost.amount`）；**F-R2-05** §4.7／D14 五项失败对象不得进 `availableCandidates`／「可用候选」文案，与 usableTargets 一致（SC-18）；**F-R2-06** SC-25／SC-26 必验、禁止接线状态 skip（D12）。O1／O2 仍互斥待决。状态：冻结落地；未授权实现；终稿未确权 |
 | v0.4-draft | 2026-11-08 | Codex R2（BLOCK）修订：**F-R2-01**…**F-R2-07**（见该版说明）。状态：冻结落地；未授权实现；终稿未确权 |
