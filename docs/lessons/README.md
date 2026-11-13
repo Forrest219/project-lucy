@@ -45,6 +45,7 @@
 
 | 日期 | 一句话错题 | 标签 | 文件 |
 |---|---|---|---|
+| 2026-11-13 | 7 天访问日志同步重算占住事件循环，存活探针把 Pod 杀掉，概览报无法刷新 | `gate-gap` `ops-delivery` `ux-regression` `sev-high` | [2026-11-13-audit-read-blocks-event-loop.md](2026-11-13-audit-read-blocks-event-loop.md) |
 | 2026-11-13 | 外部目录能列表却读不出字段：`ktx sql` 禁止 `DESC`，测试替身比真实 KTX 宽松 | `contract-stack` `gate-gap` `ux-regression` `sev-high` | [2026-11-13-external-catalog-column-read-ktx-describe.md](2026-11-13-external-catalog-column-read-ktx-describe.md) |
 | 2026-11-13 | 访问关系图：confirmed-only × usage-first 叠出空桑基 | `contract-stack` `data-trust` `viz-geometry` `empty-default` `ux-regression` `sev-high` | [2026-11-13-access-map-sankey-empty.md](2026-11-13-access-map-sankey-empty.md) |
 | 2026-09-02 | K8s 原地升级：镜像过门禁仍因 Chart／入口／PVC 契约失败 | `ops-delivery` `gate-gap` `contract-stack` `sev-high` | [2026-09-02-k8s-inplace-upgrade-contract.md](2026-09-02-k8s-inplace-upgrade-contract.md) |
