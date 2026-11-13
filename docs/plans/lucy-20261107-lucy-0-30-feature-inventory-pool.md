@@ -3,8 +3,8 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **0.30 完整功能清单与跟进池**。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.44 / 2026-11-13 |
-| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**P0 立项已批准**（原 P0-1…P0-7＋P0-A）。**P0-1／P0-2／P0-A／P0-4／P0-5（实现 CR 已落盘 PASS，2026-11-13）／P0-3 功能合同已收口（2026-11-13）**；**P0-6／P0-7／P0-B：O 项已闭合（2026-11-13）；待 R2-F**；**≠ 可上线**（P0 块）。**P1-14／REQ-030-035**：**v1.0；R2-F＋R4；开发授权已获得；实现已落地（2026-11-13）**；问询预算复盘审计字段；**不挡**原 P0；≠ 可上线。**P1-13／REQ-030-034**：**v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）**；**不挡**原 P0；≠ 可上线。**P1-12／REQ-030-033**：问询预算默认阈值放宽 **已实现（本分支）**；**不挡**原 P0；≠ 可上线。**P1-11／REQ-030-032**：**v0.5；功能合同层已收口（SC-01–SC-22）；≠ 可上线**。**P1-10**：**委托人结案（2026-11-13）**——本分支不做 CLI／WebUI／效果门跟进；交付只走 P1-11 Ops MCP。**终稿确权**＝Codex CLI 终审，或委托人明示确权（§2.2）。未授权条目禁止改运行代码 |
+| 版本 / 日期 | v0.48 / 2026-11-13 |
+| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**P0 立项已批准**（原 P0-1…P0-7＋P0-A）。**P0-1／P0-2／P0-A／P0-4／P0-5（实现 CR 已落盘 PASS，2026-11-13）／P0-3 功能合同已收口（2026-11-13）**；**P0-6／P0-7／P0-B：O 项已闭合（2026-11-13）；待 R2-F**；**≠ 可上线**（P0 块）。**P1-14／REQ-030-035**：问询预算复盘审计字段 **v1.0；R2-F＋R4；实现已落地；实现 CR 已落盘（PASS，2026-11-13）**；**不挡**原 P0；≠ 可上线。**P1-13／REQ-030-034**：**v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）；书面登记「发布取证 acceptance 代替实现 CR」（2026-11-13）**；**不挡**原 P0；≠ 可上线。**P1-12／REQ-030-033**：问询预算默认阈值放宽 **已实现（本分支）；实现 CR 已落盘（PASS，2026-11-13）**；**不挡**原 P0；≠ 可上线。**P1-11／REQ-030-032**：**v0.5；功能合同层已收口（SC-01–SC-22）；实现 CR 已落盘（PASS，2026-11-13）；≠ 可上线**。**P1-10**：**委托人结案（2026-11-13）**——本分支不做 CLI／WebUI／效果门跟进；交付只走 P1-11 Ops MCP。**终稿确权**＝Codex CLI 终审，或委托人明示确权（§2.2）。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
 | 事实源分工 | **方向** → [核心方向](lucy-20261107-lucy-0-30-core-direction.md)；**缺口正文与来源** → [需求池](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；**本文件** → 优先级、立项状态、跟进序、agent 遵从规则 |
@@ -14,6 +14,10 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.48 | 2026-11-13 | **W1 P1-13 路径 A**（[landed 收口 Plan](lucy-20261113-landed-middev-closure-batch-plan.md) Task W1-4）：书面「发布取证 acceptance 代替实现 CR」；回链 [acceptance](../reviews/2026-11-13-release-perf-baseline-gate-acceptance.md)＋[登记](../reviews/2026-11-13-p1-13-acceptance-stands-for-impl-cr.md)；镜像 Spec／Plan／需求池。**无**实现 CR PASS。**≠ 可上线** |
+| v0.47 | 2026-11-13 | **W1 P1-14 CR 落盘**（[landed 收口 Plan](lucy-20261113-landed-middev-closure-batch-plan.md) Task W1-3）：实现 CR PASS；vitest retrospective snapshot＋csv **11/11** 复核；镜像 Spec／需求池。**≠ 可上线** |
+| v0.46 | 2026-11-13 | **W1 P1-12 CR 落盘**（[landed 收口 Plan](lucy-20261113-landed-middev-closure-batch-plan.md) Task W1-2）：实现 CR PASS；vitest question-budget 三文件 44/44 复核；镜像 Spec／需求池。**≠ 可上线** |
+| v0.45 | 2026-11-13 | **W1 P1-11 CR 落盘**（[landed 收口 Plan](lucy-20261113-landed-middev-closure-batch-plan.md) Task W1-1）：实现 CR PASS；vitest `ops-concepts` 20/20＋`concepts:test` 29/29 复核；镜像 Spec／Plan §3 链接列。**≠ 可上线** |
 | v0.44 | 2026-11-13 | **Wave B O 闭合镜像收束**（治理 Plan Task 13）：P0-6／7／B「O 已闭合；待 R2-F」同步 `docs/README.md`／`plans/README.md`／project-overview §9／需求池 REQ-030-025／026／028。头部状态句同句。**不是** R2-F／R4；不可功能合同收口 |
 | v0.43 | 2026-11-13 | **P0-B／REQ-030-028** 委托人会话批准整包采纳建议包 F；**O1–O3 已闭合（2026-11-13）**。Spec／Plan v0.1-draft 同句。**待 R2-F；终稿未确权；冻结落地；未授权实现**。**不改 P0-4 `not_checked`**。**不是** R2-F／R4；不可功能合同收口 |
 | v0.42 | 2026-11-13 | **P0-7／REQ-030-026** 委托人会话批准整包采纳建议包 E；**O1–O6 已闭合（2026-11-13）**。Spec／Plan v0.4-draft 同句。**待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F／R4；不可功能合同收口 |
@@ -82,7 +86,7 @@
 |---|---|
 | 批准日 | 2026-11-07 |
 | 批准范围 | 下表 **P0-1…P0-7** 与伴生 **P0-A**；授权进入「澄清 → Spec → Plan」流水线 |
-| 追加入池／跟进立项 | **P0-B**（028）Spec／Plan v0.1-draft 已开，终稿未确权。**P1-8**（029）、**P1-9**（030）仍待立项开 Spec。**P1-10**（031）**委托人结案（2026-11-13）**：本分支不做 CLI／WebUI／效果门；交付只走 P1-11。**P1-11**（032）功能合同层已收口。**P1-12**（033）问询预算阈值放宽 **已实现（本分支）**。**P1-13**（034）发版性能基线 **发布取证出口证据齐（SC-01–SC-16）**；**不挡**原 P0 |
+| 追加入池／跟进立项 | **P0-B**（028）Spec／Plan v0.1-draft 已开，终稿未确权。**P1-8**（029）、**P1-9**（030）仍待立项开 Spec。**P1-10**（031）**委托人结案（2026-11-13）**：本分支不做 CLI／WebUI／效果门；交付只走 P1-11。**P1-11**（032）功能合同层已收口。**P1-12**（033）问询预算阈值放宽 **已实现（本分支）**。**P1-13**（034）发版性能基线 **发布取证出口证据齐（SC-01–SC-16）；acceptance 代替实现 CR**；**不挡**原 P0 |
 | 明确未授权 | 实现代码、客户出包、上线、把辅线抬成主线；**入池条目不得顺手实现** |
 | 建议实施序 | P0-1 → P0-2∥P0-A → P0-3 → P0-4∥P0-5 → P0-6（含 019／020 最小面）→ P0-7 |
 | 已有先行 Spec | P0-4／P0-5＝S4 已落地（功能合同已收口）；P0-A＝REQ-030-012（**功能合同已收口（2026-11-13）**）；P0-6 的 019／020 已有 Spec／Plan（最小面纳入 P0，完整体验见 P1） |
@@ -177,10 +181,10 @@
 | P1-8 | P1 | 语义发布 → Eval 门禁（发布后必跑／失败阻断或告警） | REQ-030-029 | 检出闸强化 | **2026-11-08 入池**；待需求澄清与立项开 Spec；**未授权实现**；**不挡**原 P0；依赖 P0-6 日跑／发布跑骨架 | 未开（前身思路见 [2026-08-26 闭环 Plan](2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md)） |
 | P1-9 | P1 | 质量域 safe-log → Eval 候选回流 | REQ-030-030 | 检出／运营 | **2026-11-08 入池**；挂接既有质量域 Spec（未落地）；待澄清与 0.30 跟进对齐；**未授权实现**；与 P1-5／P1-6 并列质量轴 | 既有 [safe-log-to-quality-eval Spec](../specs/lucy-20261014-safe-log-to-quality-eval-spec.md)（功能合同未收口）· [WO](wo-20261014-safe-log-to-quality-eval.md) |
 | P1-10 | P1 | 轻量概念注册表（ontology-lite；上游合同） | REQ-030-031 | 约束深化／内容治理 | **委托人结案（2026-11-13）**：本分支不做 CLI／WebUI／效果门跟进；交付只走 **P1-11 Ops MCP**；保留上游数据／语义合同。**不挡**原 P0。本条不表示可上线 | [Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) · [Plan](lucy-20261108-concept-registry-ontology-lite-plan.md) · [评审](../reviews/2026-11-09-concept-registry-ontology-lite-codex-review.md) |
-| P1-11 | P1 | 概念注册表接入 Lucy Ops 控制面 | REQ-030-032 | 配置运维／控制面 | **v0.5；功能合同层已收口（SC-01–SC-22）**；**本分支概念注册表唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 已结案不做）；本版 Ops／下版 WebUI（D2b）；**不挡**原 P0。本条不表示可上线 | [Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) · [Plan](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) · [评审](../reviews/2026-11-09-concept-registry-lucy-ops-control-plane-codex-review.md) |
-| P1-12 | P1 | 问询预算默认阈值放宽（60 次／300s） | REQ-030-033 | 体验修调 | **v1.0；委托人批准方案二并已实现（2026-11-11，本分支）**；续查仍 1 次；**不挡**原 P0；≠ 可上线／客户交付 | [Spec](../specs/lucy-20261111-question-budget-threshold-relax-spec.md)（修订 Spec 162 §7.2 默认数字） |
-| P1-13 | P1 | 发版性能基线与相对不回退（WebUI＋MCP；含 Roles 列表债） | REQ-030-034 | 发布取证／harness | **v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-release-perf-baseline-gate-spec.md) · [Plan](lucy-20261113-release-perf-baseline-gate-plan.md) · [acceptance](../reviews/2026-11-13-release-perf-baseline-gate-acceptance.md) |
-| P1-14 | P1 | 问询预算复盘审计字段（交付面 A） | REQ-030-035 | 运营复盘／可观测 | **v1.0；R2-F＋R4；开发授权已获得；实现已落地（2026-11-13）**；`budgetSnapshot`＋`calls.csv` 表尾；无 UI／无响应体变更；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-question-budget-retrospective-audit-spec.md) · [Plan](lucy-20261113-question-budget-retrospective-audit-plan.md) · [评审](../reviews/2026-11-13-question-budget-retrospective-audit-claude-review.md) |
+| P1-11 | P1 | 概念注册表接入 Lucy Ops 控制面 | REQ-030-032 | 配置运维／控制面 | **v0.5；功能合同层已收口（SC-01–SC-22）；实现 CR 已落盘（PASS，2026-11-13）**。vitest `ops-concepts` 20/20＋`concepts:test` 29/29。**本分支概念注册表唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 已结案不做）；本版 Ops／下版 WebUI（D2b）；**不挡**原 P0。本条不表示可上线 | [Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) · [Plan](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) · [Codex 评审](../reviews/2026-11-09-concept-registry-lucy-ops-control-plane-codex-review.md) · [实现 CR](../reviews/2026-11-13-p1-11-concept-registry-ops-code-review.md) |
+| P1-12 | P1 | 问询预算默认阈值放宽（60 次／300s） | REQ-030-033 | 体验修调 | **v1.0；委托人批准方案二并已实现（2026-11-11，本分支）；实现 CR 已落盘（PASS，2026-11-13）**。vitest question-budget 三文件 44/44；续查仍 1 次；**不挡**原 P0；≠ 可上线／客户交付 | [Spec](../specs/lucy-20261111-question-budget-threshold-relax-spec.md) · [实现 CR](../reviews/2026-11-13-p1-12-question-budget-threshold-code-review.md) |
+| P1-13 | P1 | 发版性能基线与相对不回退（WebUI＋MCP；含 Roles 列表债） | REQ-030-034 | 发布取证／harness | **v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）；书面登记「发布取证 acceptance 代替实现 CR」**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-release-perf-baseline-gate-spec.md) · [Plan](lucy-20261113-release-perf-baseline-gate-plan.md) · [acceptance](../reviews/2026-11-13-release-perf-baseline-gate-acceptance.md) · [W1-4 A](../reviews/2026-11-13-p1-13-acceptance-stands-for-impl-cr.md) |
+| P1-14 | P1 | 问询预算复盘审计字段（交付面 A） | REQ-030-035 | 运营复盘／可观测 | **v1.0；R2-F＋R4；实现已落地（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**。vitest retrospective **11/11**；`budgetSnapshot`＋`calls.csv` 表尾；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-question-budget-retrospective-audit-spec.md) · [Plan](lucy-20261113-question-budget-retrospective-audit-plan.md) · [实现 CR](../reviews/2026-11-13-p1-14-question-budget-retrospective-audit-code-review.md) |
 | P2-1 | P2 辅线 | 发布工作台分文件勾选发布 | REQ-030-001 | UX 辅线 | 草案齐；批次 R1 已修订；**终稿未确权**；**不定义 0.30 成败** | [Spec](../specs/lucy-20261107-publish-workbench-per-file-selection-spec.md) · [Plan](lucy-20261107-publish-workbench-per-file-selection-plan.md) |
 | P2-2 | P2 辅线 | 帮助中心体验 | REQ-030-002 | UX 辅线 | Deferred／开线对齐既有 Spec | 既有 Spec |
 | P2-3 | P2 辅线 | 运维控制面 W-B（语义发布） | REQ-030-004 | 运维辅线 | Deferred；阻塞条件见既有 Spec | 既有 Spec |
@@ -279,21 +283,21 @@
 - **出口**：运维经 `lucy_ops_concept_*` 完成概念 scan／人审写；`allow.ops`＋审计；**本分支唯一**概念注册表产品交付面。
 - **关系**：P1-10 数据／语义上游；L25-16 控制面通道；用户模型＝**配置治理**（≠ 问数）。**不挡**原 P0；**不依赖** W-B。
 - **交付序**：R2-F→R3→R4 → **本版 Ops 检查完毕** → **下一产品版本再评估 WebUI**（D2b）。P1-10 CLI／效果门已结案不做。
-- **决策**：R2-F／O1＝A／O2＝B／R4 已闭合；**功能合同层已收口（SC-01–SC-22）**；≠ 可上线。
+- **决策**：R2-F／O1＝A／O2＝B／R4 已闭合；**功能合同层已收口（SC-01–SC-22）；实现 CR 已落盘（PASS，2026-11-13）**；≠ 可上线。
 - **不做（本条）**：本版 WebUI 概念页；问数热路径自动注入；并进 `lucy_ops_reader`；机器自动升权威；不以 P1-10 CLI 作客户交付。
 
 ### P1-12｜问询预算默认阈值放宽（REQ-030-033）
 
 - **出口**：单问默认额度 **60 次数据工具** 或 **300s 已结算忙时**（先到为准）；续查仍 1 次；settled／并发 4／ABS 120s 不变。
 - **关系**：修订 Spec 162 §7.2 默认数字；防火墙语义保留。面向高频分析用户体验；**不挡**原 P0。
-- **决策**：2026-11-11 委托人选方案二并批准实现；本分支已落地（`2032e970`）。
+- **决策**：2026-11-11 委托人选方案二并批准实现；本分支已落地（`2032e970`）；**实现 CR 已落盘（PASS，2026-11-13）**。
 - **不做**：不增续查档数；不做按角色配额；不改 Eval tool-budget。
 
 ### P1-13｜发版性能基线与相对不回退（REQ-030-034）
 
 - **出口**：`perf:release-baseline`（Roles／MCP／相对 D6）；发版列车 P4-9 勾选；`formal/LATEST` 可被下一候选引用。
 - **关系**：扩展 Spec 174，不替代；Wave 0 清 Roles／Agent 列表债。
-- **决策**：2026-11-13 委托人明示 R2-F＋R4；Wave 0–2 已实现；**发布取证出口证据齐（SC-01–SC-16）**。
+- **决策**：2026-11-13 委托人明示 R2-F＋R4；Wave 0–2 已实现；**发布取证出口证据齐（SC-01–SC-16）**；landed W1-4 **路径 A**——[acceptance 代替实现 CR](../reviews/2026-11-13-p1-13-acceptance-stands-for-impl-cr.md)（**非**实现 CR PASS）。
 - **不做**：不宣称可上线；不以客户机手点代替基线。
 
 ---
@@ -326,14 +330,15 @@
 | [Eval 闭环与变更触发回归（前身）](2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md) | P1-8 相关前身思路 |
 | [Safe-log→质量 Eval Spec](../specs/lucy-20261014-safe-log-to-quality-eval-spec.md) | P1-9 既有 Spec（未落地） |
 | [概念注册表 Spec](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) · [Plan](lucy-20261108-concept-registry-ontology-lite-plan.md) | P1-10／REQ-030-031（**委托人结案 2026-11-13**：本分支不做 CLI／WebUI；交付只走 P1-11） |
-| [概念→Ops Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) · [Plan](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) | P1-11／REQ-030-032（**功能合同层已收口；≠ 可上线**） |
-| [问询预算阈值放宽 Spec](../specs/lucy-20261111-question-budget-threshold-relax-spec.md) | P1-12／REQ-030-033（**本分支已实现；≠ 可上线**） |
-| [发版性能基线 Spec](../specs/lucy-20261113-release-perf-baseline-gate-spec.md) · [Plan](lucy-20261113-release-perf-baseline-gate-plan.md) | P1-13／REQ-030-034（**发布取证出口证据齐；≠ 可上线**） |
+| [概念→Ops Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) · [Plan](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) | P1-11／REQ-030-032（**功能合同层已收口；实现 CR PASS；≠ 可上线**） |
+| [问询预算阈值放宽 Spec](../specs/lucy-20261111-question-budget-threshold-relax-spec.md) · [实现 CR](../reviews/2026-11-13-p1-12-question-budget-threshold-code-review.md) | P1-12／REQ-030-033（**已实现；实现 CR PASS；≠ 可上线**） |
+| [发版性能基线 Spec](../specs/lucy-20261113-release-perf-baseline-gate-spec.md) · [Plan](lucy-20261113-release-perf-baseline-gate-plan.md) · [W1-4 A](../reviews/2026-11-13-p1-13-acceptance-stands-for-impl-cr.md) | P1-13／REQ-030-034（**发布取证出口证据齐；acceptance 代替实现 CR；≠ 可上线**） |
+| [问询预算复盘审计 Spec](../specs/lucy-20261113-question-budget-retrospective-audit-spec.md) · [实现 CR](../reviews/2026-11-13-p1-14-question-budget-retrospective-audit-code-review.md) | P1-14／REQ-030-035（**实现 CR PASS；≠ 可上线**） |
 
 ---
 
 ## 7. 本池自身验收
 
 - 清单覆盖需求池 REQ-030-001–035（含已收口 003），无孤儿 REQ。
-- P0 立项范围与 §2／§3 一致；**P0-B O1–O3 已闭合（建议包 F），待 R2-F**；**P1-8／P1-9 仍待立项**；**P1-10 委托人结案（本分支不做 CLI／WebUI）**；**P1-11 功能合同层已收口（本分支概念交付＝Ops MCP）**；**P1-12 阈值放宽已实现（本分支）**；**P1-13 发布取证出口证据齐（本分支）**；agent 规则可被本分支会话引用。
+- P0 立项范围与 §2／§3 一致；**P0-B O1–O3 已闭合（建议包 F），待 R2-F**；**P1-8／P1-9 仍待立项**；**P1-10 委托人结案（本分支不做 CLI／WebUI）**；**P1-11 功能合同层已收口（本分支概念交付＝Ops MCP）**；**P1-12 阈值放宽已实现（本分支）**；**P1-13 发布取证出口证据齐；acceptance 代替实现 CR（本分支）**；agent 规则可被本分支会话引用。
 - **不构成任何功能验收或上线许可。**

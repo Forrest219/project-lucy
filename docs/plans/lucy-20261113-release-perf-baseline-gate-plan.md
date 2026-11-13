@@ -12,9 +12,9 @@
 |---|---|
 | 文档类型 / 版本 | Plan / **v0.2** |
 | 日期 | 2026-11-13 |
-| 状态 | **v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）**。本条通过不表示可上线 |
+| 状态 | **v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）；书面登记「发布取证 acceptance 代替实现 CR」（2026-11-13）**。本条通过不表示可上线 |
 | 授权边界 | **开发授权已获得（2026-11-13）**。可按本 Plan Wave 0–2 改测量脚本与列表批量化路径；不改 ACL deny 语义；本条通过不表示可上线 |
-| 验收 | Spec SC-01–SC-16；本 Plan 完成定义；证据见 [`docs/reviews/2026-11-13-release-perf-baseline-gate-acceptance.md`](../reviews/2026-11-13-release-perf-baseline-gate-acceptance.md) |
+| 验收 | Spec SC-01–SC-16；本 Plan 完成定义；证据见 [`docs/reviews/2026-11-13-release-perf-baseline-gate-acceptance.md`](../reviews/2026-11-13-release-perf-baseline-gate-acceptance.md)。landed W1-4 路径 A：[`acceptance 代替实现 CR`](../reviews/2026-11-13-p1-13-acceptance-stands-for-impl-cr.md)（**非**实现 CR PASS） |
 | Spec | [`docs/specs/lucy-20261113-release-perf-baseline-gate-spec.md`](../specs/lucy-20261113-release-perf-baseline-gate-spec.md) |
 
 ## Global Constraints

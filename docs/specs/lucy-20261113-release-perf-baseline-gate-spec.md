@@ -5,14 +5,14 @@
 | 文档类型 / 版本 | 发布取证 Spec / **v0.2** |
 | 日期 | 2026-11-13 |
 | 功能编号 / 台账号 | **P1-13／REQ-030-034** / **无** |
-| 状态 | **v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）**。本条通过不表示各模块无问题，更不表示可上线 |
+| 状态 | **v0.2；R2-F＋R4；发布取证出口证据齐（SC-01–SC-16；2026-11-13）；书面登记「发布取证 acceptance 代替实现 CR」（2026-11-13）**。本条通过不表示各模块无问题，更不表示可上线 |
 | 决策来源 | 2026-11-13 用户反馈 Agent／Roles 页卡顿；code review 确认 Roles 列表仍为 N× `freshSourceMap`（Spec 174 只修了 Agent）；委托人同意建立跨版本性能基线，覆盖 WebUI 与 MCP，并批准起草本 Spec |
 | 需求来源 | REQ-030-034；触发事件见对话「Agent 和 Roles 页面非常卡顿」 |
 | 实施主体 | 测量脚本／夹具／基线归档／发版门禁登记；首版为使 Roles／Agent 附带请求可过预算，允许有限产品路径改动（§5）。不改 KTX 源码 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」「功能闭口与发布取证」「新增 Spec / Plan 的落盘清单」 |
 | 与既有 Spec 的关系 | **扩展、不替代** [`webui/docs/174-webui-entry-performance-spec.md`](../../webui/docs/174-webui-entry-performance-spec.md)：保留其 fixture／PERF 测量文法与 Agent 批量合同；本条补 **Roles／MCP／相对上版不回退／发版列车挂钩**。权限算法仍服从 ACL／Spec 174／195；不得借性能门禁放宽 deny |
 | 实施计划 | [`docs/plans/lucy-20261113-release-perf-baseline-gate-plan.md`](../plans/lucy-20261113-release-perf-baseline-gate-plan.md) v0.2 |
-| 评审记录 | R2-F＋R4：2026-11-13 委托人明示确权与开发授权。验收证据：[`docs/reviews/2026-11-13-release-perf-baseline-gate-acceptance.md`](../reviews/2026-11-13-release-perf-baseline-gate-acceptance.md) |
+| 评审记录 | R2-F＋R4：2026-11-13 委托人明示确权与开发授权。验收证据：[`docs/reviews/2026-11-13-release-perf-baseline-gate-acceptance.md`](../reviews/2026-11-13-release-perf-baseline-gate-acceptance.md)。landed W1-4 路径 A：[`acceptance 代替实现 CR`](../reviews/2026-11-13-p1-13-acceptance-stands-for-impl-cr.md)（**非**实现 CR PASS） |
 
 ## 闭口层级
 

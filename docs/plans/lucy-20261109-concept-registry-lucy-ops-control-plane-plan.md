@@ -5,14 +5,14 @@
 | 文档类型 / 版本 | 实施计划 / **v0.5** |
 | 日期 / 目标版本 | 2026-11-09 / 产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 台账号 | 无 |
-| 状态 | **v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；功能合同层已收口（SC-01–SC-22 有自动化证据）**；**本分支概念注册表唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 已于 2026-11-13 结案不做）。**本条不表示可上线**（P1-11／REQ-030-032） |
+| 状态 | **v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；功能合同层已收口（SC-01–SC-22 有自动化证据）；实现 CR 已落盘（PASS，2026-11-13）**；**本分支概念注册表唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 已于 2026-11-13 结案不做）。**本条不表示可上线**（P1-11／REQ-030-032） |
 | 授权边界 | **R4 已授予（2026-11-09）**。按 S1–S7 改运行代码；**不含**本版 WebUI；**不含**问数热路径注入 |
 | 验收 | Spec SC-01–SC-22；步骤出口见下表 |
 | 对应 Spec | [lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md)（v0.5） |
 | 需求池条目 | REQ-030-032 |
 | 清单条目 | P1-11 |
 | 上游 | P1-10／REQ-030-031 |
-| 评审记录 | [Codex 对抗](../reviews/2026-11-09-concept-registry-lucy-ops-control-plane-codex-review.md) |
+| 评审记录 | [Codex 对抗](../reviews/2026-11-09-concept-registry-lucy-ops-control-plane-codex-review.md)（过程对抗）；[实现 CR](../reviews/2026-11-13-p1-11-concept-registry-ops-code-review.md)（W1；**不表示可上线**） |
 
 ## 变更记录
 

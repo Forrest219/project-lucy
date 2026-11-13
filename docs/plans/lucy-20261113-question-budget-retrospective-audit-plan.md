@@ -13,7 +13,7 @@
 | 文档版本 / 日期 | **v1.0** / 2026-11-13 |
 | 主 Spec | [lucy-20261113-question-budget-retrospective-audit-spec.md](../specs/lucy-20261113-question-budget-retrospective-audit-spec.md)（**v1.0**） |
 | 编号 | **REQ-030-035／P1-14** |
-| 状态 | **v1.0；R2-F＋R4（委托人明示 2026-11-13）；开发授权已获得；实现已落地（2026-11-13）**。本条不表示可上线 |
+| 状态 | **v1.0；R2-F＋R4（委托人明示 2026-11-13）；开发授权已获得；实现已落地（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**。本条不表示可上线 |
 | 授权边界 | 已获终稿确权与开发授权；不授权客户镜像／上线 |
 | 验收 | Spec SC-R1–R12；证据见 Spec §4 落点 |
 | 优先级 | P1；**不挡**原 P0 |
@@ -173,4 +173,4 @@
 
 ## 10. Claude R1／R2 处置镜像
 
-见 Spec §6；评审记录见 [claude-review](../reviews/2026-11-13-question-budget-retrospective-audit-claude-review.md)。
+见 Spec §6；过程对抗见 [claude-review](../reviews/2026-11-13-question-budget-retrospective-audit-claude-review.md)；实现 CR 见 [p1-14-code-review](../reviews/2026-11-13-p1-14-question-budget-retrospective-audit-code-review.md)（PASS，2026-11-13）。

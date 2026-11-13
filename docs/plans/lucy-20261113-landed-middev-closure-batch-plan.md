@@ -54,35 +54,35 @@
 
 ### Task W1-1: P1-11 Ops 概念控制面 — 实现 CR
 
-- [ ] 复跑 Spec 所指自动化（SC-01–SC-22 相关 vitest）
-- [ ] 写 `docs/reviews/2026-11-13-p1-11-concept-registry-ops-code-review.md`
-- [ ] Spec／Plan／清单回链；清单版本 bump
-- [ ] 报告 → `.superpowers/sdd/w1-1-report.md`
+- [x] 复跑 Spec 所指自动化（SC-01–SC-22 相关 vitest）
+- [x] 写 `docs/reviews/2026-11-13-p1-11-concept-registry-ops-code-review.md`
+- [x] Spec／Plan／清单回链；清单版本 bump
+- [x] 报告 → `.superpowers/sdd/w1-1-report.md`
 
 ### Task W1-2: P1-12 预算阈值放宽 — 实现 CR
 
-- [ ] 复跑相关测或定点断言默认 60／300
-- [ ] 写 `docs/reviews/2026-11-13-p1-12-question-budget-threshold-code-review.md`
-- [ ] 回链；bump
-- [ ] 报告 → `.superpowers/sdd/w1-2-report.md`
+- [x] 复跑相关测或定点断言默认 60／300
+- [x] 写 `docs/reviews/2026-11-13-p1-12-question-budget-threshold-code-review.md`
+- [x] 回链；bump
+- [x] 报告 → `.superpowers/sdd/w1-2-report.md`
 
 ### Task W1-3: P1-14 预算复盘审计 — 实现 CR
 
-- [ ] 复跑相关测
-- [ ] 写 `docs/reviews/2026-11-13-p1-14-question-budget-retrospective-audit-code-review.md`（实现层；区别于既有 Claude Spec 评审）
-- [ ] 回链；bump
-- [ ] 报告 → `.superpowers/sdd/w1-3-report.md`
+- [x] 复跑相关测
+- [x] 写 `docs/reviews/2026-11-13-p1-14-question-budget-retrospective-audit-code-review.md`（实现层；区别于既有 Claude Spec 评审）
+- [x] 回链；bump
+- [x] 报告 → `.superpowers/sdd/w1-3-report.md`
 
 ### Task W1-4: P1-13 处理
 
-- [ ] 二选一写进清单／Spec：**A)** 书面「发布取证 acceptance 代替实现 CR」；或 **B)** 补实现 CR
-- [ ] 推荐默认 **A**（已有 acceptance 证据齐）
-- [ ] 报告 → `.superpowers/sdd/w1-4-report.md`
+- [x] 二选一写进清单／Spec：**A)** 书面「发布取证 acceptance 代替实现 CR」；或 **B)** 补实现 CR
+- [x] 推荐默认 **A**（已有 acceptance 证据齐）
+- [x] 报告 → `.superpowers/sdd/w1-4-report.md`
 
 ### Task W1-5: W1 提交
 
-- [ ] 汇总 commit（docs only）
-- [ ] 报告 → `.superpowers/sdd/w1-5-report.md`
+- [x] 汇总 commit（docs only）
+- [x] 报告 → `.superpowers/sdd/w1-5-report.md`
 
 ---
 

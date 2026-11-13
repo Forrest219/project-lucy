@@ -5,7 +5,8 @@
 | 文档类型 / 版本 | 功能合同 / **v1.0** |
 | 日期 | 2026-11-13 |
 | 功能编号 / 优先级 | **REQ-030-035／清单 P1-14**／P1（运营复盘；**不挡**原 P0） |
-| 状态 | **v1.0；R2-F＋R4（委托人明示 2026-11-13）；开发授权已获得；实现已落地（2026-11-13）**。交付面 **A**。本条收口不表示可上线；不构成客户交付 |
+| 状态 | **v1.0；R2-F＋R4（委托人明示 2026-11-13）；开发授权已获得；实现已落地（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**。交付面 **A**。本条收口不表示可上线；不构成客户交付 |
+| 评审记录 | [Claude Spec 评审](../reviews/2026-11-13-question-budget-retrospective-audit-claude-review.md)（过程对抗）· [实现 CR](../reviews/2026-11-13-p1-14-question-budget-retrospective-audit-code-review.md)（W1；**不表示可上线**） |
 | 决策来源 | 2026-11-13 产品对话；Claude Code R1／R2；同日委托人授权定稿并落地 |
 | 与既有 Spec 的关系 | **补强** Spec 162／问询预算窗口可观测性，**不改**预算配额、结算口径、续查语义、八桶主状态。权威：`webui/docs/162-customer-query-experience-and-usage-evidence-spec.md`；窗口／续查：`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md`；频率：`docs/specs/lucy-20261111-question-budget-threshold-relax-spec.md` |
 | 配对 Plan | [lucy-20261113-question-budget-retrospective-audit-plan.md](../plans/lucy-20261113-question-budget-retrospective-audit-plan.md) |
