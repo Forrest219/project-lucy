@@ -1,0 +1,71 @@
+# Local Doris FE+BE for reproducing:
+#   Lucy → Doris MySQL :19030 → CREATE CATALOG (Hive HMS) → existing Hive
+# Dev/UAT only. Not production. Apple Silicon uses linux/amd64 (QEMU).
+#
+# Usage (repo root):
+#   docker compose -f deploy/compose/docker-compose.doris-hive-uat.yml up -d
+#   bash scripts/uat/setup-doris-hive-catalog.sh
+#
+# Lucy connection (host or container):
+#   host=host.docker.internal  port=19030  (from compose-lucy-1)
+#   host=127.0.0.1             port=19030  (from Mac)
+#   database=hive.<schema>     (after catalog `hive` is created)
+#   username=root              password=(empty by default)
+
+services:
+  doris-fe:
+    image: selectdb/doris.fe-ubuntu:2.1.7
+    platform: linux/amd64
+    container_name: lucy-uat-doris-fe
+    hostname: doris-fe
+    networks:
+      lucy-doris-uat:
+        ipv4_address: 172.30.80.2
+    ports:
+      - "18030:8030"
+      - "19030:9030"
+    environment:
+      FE_SERVERS: fe1:172.30.80.2:9010
+      FE_ID: "1"
+    volumes:
+      - lucy-uat-doris-fe-meta:/opt/apache-doris/fe/doris-meta
+      - lucy-uat-doris-fe-log:/opt/apache-doris/fe/log
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9030'"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 120s
+
+  doris-be:
+    image: selectdb/doris.be-ubuntu:2.1.7
+    platform: linux/amd64
+    container_name: lucy-uat-doris-be
+    hostname: doris-be
+    networks:
+      lucy-doris-uat:
+        ipv4_address: 172.30.80.3
+    ports:
+      - "18040:8040"
+    environment:
+      FE_SERVERS: fe1:172.30.80.2:9010
+      BE_ADDR: 172.30.80.3:9050
+    volumes:
+      - lucy-uat-doris-be-storage:/opt/apache-doris/be/storage
+      - lucy-uat-doris-be-log:/opt/apache-doris/be/log
+    depends_on:
+      - doris-fe
+
+networks:
+  lucy-doris-uat:
+    name: lucy-doris-uat
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.80.0/24
+
+volumes:
+  lucy-uat-doris-fe-meta:
+  lucy-uat-doris-fe-log:
+  lucy-uat-doris-be-storage:
+  lucy-uat-doris-be-log:
