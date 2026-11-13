@@ -140,6 +140,13 @@ npm run lucy:upgrade:customer
 npm run demo:upgrade
 ```
 
+本地 `demo:upgrade` 默认：
+
+- 使用已有 `project-lucy:demo` 作为 `cache_from`，尽量跳过 apt / `npm install -g @kaelio/ktx` / `ktx-runtime`
+- 未设置时默认腾讯云 npm / PyPI（`NPM_REGISTRY`、`UV_INDEX_URL`），减少 cache miss 时官方源超时
+- 构建日志末尾打印 `ktx install layer: CACHED|MISS|UNKNOWN`
+- 关闭默认镜像：`LUCY_DEMO_BUILD_MIRRORS=0`，或显式 `NPM_REGISTRY=` / `UV_INDEX_URL=`
+
 可选：升级前备份 named volume：
 
 ```bash

@@ -18,6 +18,12 @@ npm run demo:upgrade
 
 脚本会缓存构建镜像、`--force-recreate` 容器，**不**删除 `lucy-demo-data` volume。保留 `ktx.yaml`、`access.yaml`、`admins.yaml`、`.ktx-ui/audit.sqlite` 等运行时状态。
 
+本机 demo 优化（仅 `demo:upgrade` / demo compose）：
+
+- 未设置时默认 `NPM_REGISTRY=mirrors.cloud.tencent.com/npm`、`UV_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple/`，避免 KTX 层 cache miss 时先卡官方源。
+- 关闭默认镜像：`LUCY_DEMO_BUILD_MIRRORS=0`，或显式导出空的 `NPM_REGISTRY=` / `UV_INDEX_URL=`（走 Dockerfile 官方优先阶梯）。
+- compose `cache_from: project-lucy:demo`；构建结束打印 `ktx install layer: CACHED|MISS|UNKNOWN`。
+
 可选升级前备份：`npm run demo:upgrade -- --backup-dir inbox/backups`
 
 ## 从零 reseed（仅当用户明确要求清空运行时配置）
@@ -39,6 +45,11 @@ npm run demo:upgrade -- --fresh
 
 **不要用 `--no-cache`**（除非用户明确要求无缓存）。
 
-## 回复时带出 WebUI 地址
+## 回复时带出 WebUI 与 MCP 地址
 
-每次重建或升级完成后，回复里必须写出可打开的 WebUI 地址（不要只写 `/api/health`）。Demo 默认是 `http://127.0.0.1:${LUCY_DEMO_WEBUI_HOST_PORT:-55176}`，以本次容器实际映射端口为准。
+每次重建或升级完成后，回复里必须写出可打开的 WebUI 与 MCP 地址（不要只写 `/api/health`）。Demo 默认：
+
+- WebUI：`http://127.0.0.1:${LUCY_DEMO_WEBUI_HOST_PORT:-55176}`
+- MCP Proxy：`http://127.0.0.1:${LUCY_DEMO_PROXY_HOST_PORT:-57881}`
+
+以本次容器实际映射端口为准。

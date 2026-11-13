@@ -358,3 +358,29 @@ export function diffPreserveSnapshots(before, after) {
   }
   return { missing, shrunk };
 }
+
+/**
+ * Classify the Dockerfile `npm install -g @kaelio/ktx@…` layer from a
+ * BuildKit/compose build log. Used by demo:upgrade to surface CACHED vs MISS.
+ *
+ * @param {string} buildLog
+ * @returns {"CACHED" | "MISS" | "UNKNOWN"}
+ */
+export function parseKtxInstallLayerStatus(buildLog) {
+  const lines = String(buildLog ?? "").split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!/RUN\b/.test(line) || !/@kaelio\/ktx@/.test(line)) continue;
+    for (let j = i + 1; j < Math.min(i + 20, lines.length); j += 1) {
+      const next = lines[j];
+      if (/^\s*#\d+\s+CACHED\b/.test(next) || /^\s*CACHED\b/.test(next.trim())) {
+        return "CACHED";
+      }
+      if (/docker-build-mirrors:\s*npm\b/.test(next)) return "MISS";
+      if (/^\s*#\d+\s+DONE\b/.test(next)) return "MISS";
+      if (/^\s*#\d+\s+ERROR\b/.test(next)) return "MISS";
+      if (/^\s*#\d+\s+\[/.test(next)) break;
+    }
+  }
+  return "UNKNOWN";
+}

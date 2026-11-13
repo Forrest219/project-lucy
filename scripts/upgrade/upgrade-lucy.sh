@@ -204,18 +204,71 @@ export_source_revision() {
   fi
 }
 
+# Local demo builds: prefer Tencent mirrors when unset, so a KTX cache miss
+# does not burn 120s+ on registry.npmjs.org. Opt out:
+#   LUCY_DEMO_BUILD_MIRRORS=0
+#   NPM_REGISTRY=            # empty = Dockerfile official-first ladder
+#   UV_INDEX_URL=            # empty = Dockerfile official-first ladder
+apply_demo_build_defaults() {
+  if ! printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q 'deploy/compose/docker-compose.demo.yml'; then
+    return 0
+  fi
+  if [[ "${LUCY_DEMO_BUILD_MIRRORS:-1}" == "0" ]]; then
+    echo "[lucy-upgrade] demo build mirrors: disabled (LUCY_DEMO_BUILD_MIRRORS=0)"
+    return 0
+  fi
+  if [[ -z "${NPM_REGISTRY+x}" ]]; then
+    export NPM_REGISTRY="mirrors.cloud.tencent.com/npm"
+    echo "[lucy-upgrade] demo NPM_REGISTRY default: ${NPM_REGISTRY}"
+  elif [[ -z "${NPM_REGISTRY}" ]]; then
+    echo "[lucy-upgrade] NPM_REGISTRY empty: using Dockerfile npm mirror ladder"
+  else
+    echo "[lucy-upgrade] NPM_REGISTRY=${NPM_REGISTRY}"
+  fi
+  if [[ -z "${UV_INDEX_URL+x}" ]]; then
+    export UV_INDEX_URL="https://mirrors.cloud.tencent.com/pypi/simple/"
+    echo "[lucy-upgrade] demo UV_INDEX_URL default: ${UV_INDEX_URL}"
+  elif [[ -z "${UV_INDEX_URL}" ]]; then
+    echo "[lucy-upgrade] UV_INDEX_URL empty: using Dockerfile pypi mirror ladder"
+  else
+    echo "[lucy-upgrade] UV_INDEX_URL=${UV_INDEX_URL}"
+  fi
+}
+
+report_ktx_layer_status() {
+  local log_file="$1"
+  local status
+  status="$(
+    node --input-type=module -e '
+      import { readFileSync } from "node:fs";
+      import { pathToFileURL } from "node:url";
+      const lib = await import(pathToFileURL(process.argv[1]).href);
+      const log = readFileSync(process.argv[2], "utf8");
+      process.stdout.write(lib.parseKtxInstallLayerStatus(log));
+    ' "${ROOT}/scripts/upgrade/upgrade-lucy-lib.mjs" "${log_file}" 2>/dev/null || echo UNKNOWN
+  )"
+  echo "[lucy-upgrade] ktx install layer: ${status}"
+}
+
 build_and_up() {
+  local build_log
   export_product_version
   export_source_revision
+  apply_demo_build_defaults
   if printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q 'deploy/compose/docker-compose.demo.yml'; then
     bash "${ROOT}/scripts/demo/sync-demo-skills-template.sh"
   fi
+  build_log="$(mktemp "${TMPDIR:-/tmp}/lucy-upgrade-build.XXXXXX")"
+  # Always build explicitly (with plain progress) so we can report KTX CACHED/MISS,
+  # then recreate the container without a second build.
   if [[ "${NO_CACHE}" -eq 1 ]]; then
-    "${COMPOSE[@]}" build --no-cache "${SERVICE}"
-    "${COMPOSE[@]}" up -d --force-recreate --no-deps "${SERVICE}"
+    BUILDKIT_PROGRESS=plain "${COMPOSE[@]}" build --no-cache --progress=plain "${SERVICE}" 2>&1 | tee "${build_log}"
   else
-    "${COMPOSE[@]}" up -d --build --force-recreate --no-deps "${SERVICE}"
+    BUILDKIT_PROGRESS=plain "${COMPOSE[@]}" build --progress=plain "${SERVICE}" 2>&1 | tee "${build_log}"
   fi
+  report_ktx_layer_status "${build_log}"
+  rm -f "${build_log}"
+  "${COMPOSE[@]}" up -d --force-recreate --no-deps "${SERVICE}"
 }
 
 wait_for_health() {

@@ -2,6 +2,11 @@
 # The init service overrides entrypoint/user; lucy keeps the image USER (10001).
 x-lucy-build: &lucy-build
   context: ../..
+  # Reuse the previous local demo image as a BuildKit cache source so early
+  # layers (apt / ktx install / ktx-runtime) survive Desktop cache pruning.
+  # Missing image is ignored by BuildKit.
+  cache_from:
+    - project-lucy:demo
   args:
     KTX_VERSION: "${KTX_VERSION:-0.16.0}"
     # Dockerfile pins `--platform=$TARGETPLATFORM` (not BUILDPLATFORM) so image
@@ -12,10 +17,12 @@ x-lucy-build: &lucy-build
     TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
     TARGETARCH: "${TARGETARCH:-arm64}"
     # Optional PyPI mirror (see Dockerfile ARG block). Empty = official pypi.org.
+    # `npm run demo:upgrade` may default this for local Mac builds.
     UV_INDEX_URL: "${UV_INDEX_URL:-}"
     # Optional Debian apt mirror host (see Dockerfile ARG block). Empty = deb.debian.org.
     APT_MIRROR: "${APT_MIRROR:-}"
-    # Optional npm registry host (see Dockerfile ARG block). Empty = registry.npmjs.org.
+    # Optional npm registry host without scheme (see Dockerfile ARG block).
+    # Empty = official-first ladder. `npm run demo:upgrade` may default Tencent.
     NPM_REGISTRY: "${NPM_REGISTRY:-}"
     # Source commit for /app/BUILD_REVISION. upgrade-lucy.sh exports these.
     # Empty fails the image build (stamp writer refuses unknown).
