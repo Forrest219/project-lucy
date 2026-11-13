@@ -109,10 +109,14 @@ beforeEach(async () => {
   upstream = createServer((req, res) => {
     upstreamHits += 1;
     res.writeHead(200, { "content-type": "application/json" });
+    // text 须为 JSON object：P0-4 AV 装配会注入 answer_verifiability；纯文本会
+    // 触发 content_text_not_json_object，误伤「本条已放行」断言（F-R1／SC-10）。
     res.end(JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
-      result: { content: [{ type: "text", text: "upstream-ok" }] }
+      result: {
+        content: [{ type: "text", text: JSON.stringify({ rows: [], totalRows: 0 }) }]
+      }
     }));
   });
   await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", () => resolve()));

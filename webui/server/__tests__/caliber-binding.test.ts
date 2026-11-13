@@ -1,16 +1,17 @@
 /**
  * P0-1 问题类型口径绑定 —— 装载／匹配／门禁／会话单测。
  *
- * 覆盖 Spec v0.9 的 SC-01、SC-04–SC-13、SC-15、SC-15b、SC-16、SC-17a/b、
- * SC-19、SC-21、SC-23、SC-25–SC-29。
+ * 覆盖 Spec v0.9 的 SC-01、SC-04–SC-13、SC-15、SC-15b、SC-16、SC-17a/b/c、
+ * SC-19–SC-30（含 SC-22 混合整批／KTX 成功不推进绑定基线／生产装配序）。
  *
  * 夹具沿用 `mcp-proxy-acl.test.ts` 的形态：`KTX_PROJECT_ROOT` 指向临时工程，
  * `LUCY_CONTENT_ROOT="."` 让内容根＝工程根，`semantic-layer/<连接>/_schema/*.yaml`
  * 提供 sourceMap，`caliber-bindings/*.yaml` 提供绑定资产。
  */
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { invalidateContentPathsCache } from "../paths";
 import { resetEffectivePolicyForTests } from "../proxy/acl";
@@ -18,6 +19,7 @@ import {
   clearCaliberBindingCredential,
   commitCaliberBindingRegistry,
   currentCaliberBindingRegistry,
+  currentRegistryCredential,
   loadCaliberBindingCandidate,
   recoverCaliberBindingRegistry,
   registrySyncPending,
@@ -938,6 +940,102 @@ describe("O1 注册表提交与恢复", () => {
     expect(currentCaliberBindingRegistry()!.bindings.has("asset_count")).toBe(true);
   });
 
+  it("SC-22：绑定独立变更与混合整批同一提交窗口推进一代", async () => {
+    // O1 §4.1⑦：绑定单独变更也走整批提交流程；混合批次同一次 release／attempt。
+    await writeContent("caliber-bindings/asset_count.yaml", BINDING_YAML);
+    await publishBindings();
+    expect(currentCaliberBindingRegistry()!.generation).toBe(1);
+
+    await writeContent(
+      "caliber-bindings/asset_count.yaml",
+      BINDING_YAML.replace("title: 资产台数", "title: 资产台数V2")
+    );
+    // 同窗混合：语义层 schema 一并改动（不单独热替换绑定注册表）。
+    await writeContent(
+      `semantic-layer/${CONNECTION}/_schema/dataforai.yaml`,
+      `${SCHEMA_YAML}\n# mixed-batch touch\n`
+    );
+    const candidate = await loadCaliberBindingCandidate();
+    expect(candidate.ok).toBe(true);
+    if (!candidate.ok) return;
+    const committed = await commitCaliberBindingRegistry(candidate, {
+      releaseId: "rel_mixed_batch",
+      attemptId: "att_mixed_batch"
+    });
+    expect(committed.ok).toBe(true);
+    expect(currentCaliberBindingRegistry()!.generation).toBe(2);
+    expect(currentCaliberBindingRegistry()!.bindings.get("asset_count")!.title).toBe("资产台数V2");
+    expect(currentRegistryCredential()?.releaseId).toBe("rel_mixed_batch");
+    expect(currentRegistryCredential()?.attemptId).toBe("att_mixed_batch");
+    expect(currentRegistryCredential()?.generation).toBe(2);
+  });
+
+  it("SC-22：绑定候选失败时不推进绑定基线（不得借 KTX 成功提交）", async () => {
+    await writeContent("caliber-bindings/asset_count.yaml", BINDING_YAML);
+    await publishBindings();
+    const genBefore = currentCaliberBindingRegistry()!.generation;
+    const credBefore = currentRegistryCredential();
+    expect(genBefore).toBe(1);
+
+    // 候选校验失败（重复 id）→ 生产路径抛错且不得调用 commit（本夹具显式不提交）。
+    await writeContent("caliber-bindings/asset_count_copy.yaml", BINDING_YAML);
+    const candidate = await loadCaliberBindingCandidate();
+    expect(candidate.ok).toBe(false);
+    if (candidate.ok) return;
+    expect(candidate.reason).toBe("duplicate_binding_id");
+    expect(currentCaliberBindingRegistry()!.generation).toBe(genBefore);
+    expect(currentRegistryCredential()?.generation).toBe(credBefore?.generation);
+    expect(currentRegistryCredential()?.digest).toBe(credBefore?.digest);
+  });
+
+  it("SC-22：模拟 KTX 成功后绑定提交失败 → 绑定 generation 不推进", async () => {
+    // 生产序：候选 ok → reindex 成功 → commit；commit 失败须 keep_stop，绑定基线不升代。
+    await writeContent("caliber-bindings/asset_count.yaml", BINDING_YAML);
+    await publishBindings();
+    expect(currentCaliberBindingRegistry()!.generation).toBe(1);
+
+    await writeContent(
+      "caliber-bindings/asset_count.yaml",
+      BINDING_YAML.replace("title: 资产台数", "title: 资产台数待提交")
+    );
+    const candidate = await loadCaliberBindingCandidate();
+    expect(candidate.ok).toBe(true);
+    if (!candidate.ok) return;
+    setCaliberBindingFaultHooks({
+      beforeRegistryCredential: () => {
+        throw new Error("sc22_commit_after_ktx");
+      }
+    });
+    const commit = await commitCaliberBindingRegistry(candidate, {
+      releaseId: "rel_sc22_ktx_ok",
+      attemptId: "att_sc22_ktx_ok"
+    });
+    resetCaliberBindingFaultHooks();
+    expect(commit.ok).toBe(false);
+    expect(currentCaliberBindingRegistry()!.generation).toBe(1);
+    expect(currentCaliberBindingRegistry()!.bindings.get("asset_count")!.title).toBe("资产台数");
+    expect(registrySyncPending()).toBe(true);
+  });
+
+  it("SC-22／O1 生产装配序：候选校验 → reindex → 绑定提交；失败不得借 KTX 推进基线", async () => {
+    const indexPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../index.ts");
+    const src = await readFile(indexPath, "utf8");
+    const marker = "P0-1（O1 §4.1②／§4.1⑦）";
+    const start = src.indexOf(marker);
+    expect(start).toBeGreaterThan(0);
+    const window = src.slice(start, start + 5500);
+    const candidateIdx = window.indexOf("await loadCaliberBindingCandidate()");
+    const reindexIdx = window.indexOf("await reindexProject(projectRoot");
+    const commitIdx = window.indexOf("commitCaliberBindingRegistry(bindingCandidate");
+    expect(candidateIdx).toBeGreaterThan(0);
+    expect(reindexIdx).toBeGreaterThan(candidateIdx);
+    expect(commitIdx).toBeGreaterThan(reindexIdx);
+    expect(window).toContain("caliber_binding_candidate_failed");
+    expect(window).toContain("caliber_binding_commit_failed");
+    expect(window).toContain('outcome: "index_succeeded_keep_stop"');
+    expect(window).toContain("不得**借 KTX 成功推进");
+  });
+
   it("SC-23／SC-28：改盘后旧 begin 准备结果跨 generation 失效；核验失败", async () => {
     await writeContent("caliber-bindings/asset_count.yaml", BINDING_YAML);
     await publishBindings();
@@ -954,13 +1052,163 @@ describe("O1 注册表提交与恢复", () => {
     expect(drifted.reason).toBe("content_drift");
   });
 
-  it("SC-29：删盘 → 核验失败", async () => {
-    await writeContent("caliber-bindings/asset_count.yaml", BINDING_YAML);
-    await publishBindings();
-    const generation = currentCaliberBindingRegistry()!.generation;
-    await rm(path.join(projectRoot, "caliber-bindings", "asset_count.yaml"), { force: true });
-    const proof = await verifyCurrentBindingContentAndDependencies(generation);
-    expect(proof.matchesCommitted).toBe(false);
+  it("SC-29：D11 写入前改／删／降 draft／依赖失败；generation 不变 → 核验失败；旧 Session 不变；续查仍按快照", async () => {
+    // Spec：暂停于 begin 准备完成、D11 写入前；保持注册表 generation 不变，
+    // 分别改／删／降 draft／制造扫描失败及解析依赖读取失败；恢复 begin → unresolved；
+    // 旧 Session 不变；已 bound 续查仍按原快照。
+    const scope = bindingScopeKey("asset_agent|hash", "session-sc29");
+    const variants: Array<{
+      label: string;
+      mutate: () => Promise<void>;
+      expectReason?: string | null;
+    }> = [
+      {
+        label: "改盘",
+        mutate: async () => {
+          await writeContent(
+            "caliber-bindings/asset_count.yaml",
+            BINDING_YAML.replace("title: 资产台数", "title: 改过的标题")
+          );
+        },
+        expectReason: "content_drift"
+      },
+      {
+        label: "删盘",
+        mutate: async () => {
+          await rm(path.join(projectRoot, "caliber-bindings", "asset_count.yaml"), { force: true });
+        }
+      },
+      {
+        label: "降 draft",
+        mutate: async () => {
+          await writeContent(
+            "caliber-bindings/asset_count.yaml",
+            BINDING_YAML.replace("status: published", "status: draft")
+          );
+        },
+        expectReason: "content_drift"
+      },
+      {
+        label: "解析依赖读取失败（sourceMap 编译失败）",
+        mutate: async () => {
+          await writeContent(
+            `semantic-layer/${CONNECTION}/_schema/dataforai.yaml`,
+            "tables: [\n  this is not valid schema\n"
+          );
+        }
+      },
+      {
+        label: "扫描失败（超过 SCAN_FILE_LIMIT）",
+        mutate: async () => {
+          // 保留已提交的 asset_count.yaml，再垫到 2001 个 .yaml → scan_truncated。
+          const pads: Promise<void>[] = [];
+          for (let i = 0; i < 2000; i += 1) {
+            pads.push(
+              writeContent(
+                `caliber-bindings/pad_${i}.yaml`,
+                BINDING_YAML.replace("bindingId: asset_count", `bindingId: pad_${i}`)
+              )
+            );
+          }
+          await Promise.all(pads);
+        }
+      }
+    ];
+
+    for (const variant of variants) {
+      if (projectRoot) {
+        await rm(projectRoot, { recursive: true, force: true }).catch(() => undefined);
+      }
+      await makeProject();
+      process.env.KTX_PROJECT_ROOT = projectRoot;
+      process.env.LUCY_CONTENT_ROOT = ".";
+      invalidateContentPathsCache();
+      resetEffectivePolicyForTests();
+      resetCaliberBindingRegistryForTests();
+      setCaliberBindingStateDir(path.join(projectRoot, ".ktx-ui", "caliber-binding"));
+
+      await writeContent("caliber-bindings/asset_count.yaml", BINDING_YAML);
+      await publishBindings();
+      const generation = currentCaliberBindingRegistry()!.generation;
+      const binding = currentCaliberBindingRegistry()!.bindings.get("asset_count")!;
+
+      await beginBindingSessionPreparation(scope, {
+        turnId: "turn-bound",
+        registryGeneration: generation,
+        bindingId: binding.bindingId,
+        boundKey: binding.boundKey,
+        caliberSnapshot: binding.caliber
+      });
+      await commitBindingSession(scope, {
+        turnId: "turn-bound",
+        registryGeneration: generation,
+        bindingId: binding.bindingId,
+        boundKey: binding.boundKey,
+        caliberSnapshot: binding.caliber
+      });
+      const before = await readBindingSession(scope);
+      expect(before.state, variant.label).toBe("begun_bound");
+      expect(before.record?.commitPhase, variant.label).toBe("committed");
+
+      // begin 准备完成（激活判定成功），尚未做任何 D11 写入。
+      const prepared = await prepareCaliberBindingActivation({
+        identity,
+        intentSummary: "查一下资产台数"
+      });
+      expect(prepared.ok, variant.label).toBe(true);
+      if (!prepared.ok) continue;
+      expect(prepared.activation.registryGeneration, variant.label).toBe(generation);
+
+      await variant.mutate();
+      // 关键：注册表 generation 未推进（未重新 commit）。
+      expect(currentCaliberBindingRegistry()!.generation, variant.label).toBe(generation);
+
+      const proof = await verifyCurrentBindingContentAndDependencies(generation);
+      expect(proof.matchesCommitted, variant.label).toBe(false);
+      if (variant.expectReason) {
+        expect(proof.reason, variant.label).toBe(variant.expectReason);
+      }
+
+      // 旧 Session 不变（未进入 D11 写入）。
+      const after = await readBindingSession(scope);
+      expect(after.state, variant.label).toBe("begun_bound");
+      expect(after.record?.turnId, variant.label).toBe("turn-bound");
+      expect(after.record?.commitPhase, variant.label).toBe("committed");
+      expect(after.record?.caliberSnapshot?.measures, variant.label).toEqual([
+        "asset_count.asset_count"
+      ]);
+
+      // 已 bound 续查仍按原快照（不热读改盘后资产）。
+      const allow = await checkCaliberBindingGate({
+        identity,
+        identityKey: "asset_agent|hash",
+        sessionId: "session-sc29",
+        toolName: "lucy_query",
+        args: {
+          connectionId: CONNECTION,
+          measures: ["asset_count.asset_count"],
+          dimensions: [{ field: "asset_count.company_code" }]
+        }
+      });
+      expect(allow.kind, variant.label).toBe("allow");
+      const deny = await checkCaliberBindingGate({
+        identity,
+        identityKey: "asset_agent|hash",
+        sessionId: "session-sc29",
+        toolName: "lucy_query",
+        args: { connectionId: CONNECTION, measures: ["orders.order_count"] }
+      });
+      expect(deny.kind, variant.label).toBe("deny");
+      if (deny.kind === "deny") {
+        expect(deny.denial.code, variant.label).toBe("caliber_binding_violation");
+      }
+
+      // 与 Proxy D11 写入前同一条件：核验失败 ⇒ begin 不得提交（unresolved）。
+      expect(
+        !proof.complete || !proof.matchesCommitted,
+        `${variant.label}: resume begin must stay unresolved`
+      ).toBe(true);
+    }
   });
 
   it("SC-24：无提交证据但有候选 → 拒绝新 begin（不得空注册表放行）", async () => {
@@ -1014,6 +1262,141 @@ describe("O1 注册表提交与恢复", () => {
     expect(recovery.usable).toBe(true);
     expect(recovery.generation).toBe(1);
     expect(currentCaliberBindingRegistry()!.bindings.has("asset_count")).toBe(true);
+  });
+
+  it("SC-30：真实进程局部故障窗口（fault hooks）——凭据写入前／prepared 后／切换后；恢复与新 begin", async () => {
+    // Spec：候选／凭据写入前中断、凭据提交后内存切换前中断、内存切换后终态登记失败及重启；
+    // 断言恢复 generation、新 begin 拒绝、基线与回执关联、恢复幂等；缺完整证据不得激活。
+    // 证据形态＝进程内故障注入（与 SC-17c preparing 中断同口径）；**独立于 SC-17c**。
+    await writeContent("caliber-bindings/asset_count.yaml", BINDING_YAML);
+
+    // ① 凭据写入前中断（覆盖「候选持久化／凭据写入前」失败窗口）。
+    {
+      const candidate = await loadCaliberBindingCandidate();
+      expect(candidate.ok).toBe(true);
+      if (!candidate.ok) return;
+      setCaliberBindingFaultHooks({
+        beforeRegistryCredential: () => {
+          throw new Error("sc30_before_credential");
+        }
+      });
+      const commit = await commitCaliberBindingRegistry(candidate, {
+        releaseId: "rel_sc30_a",
+        attemptId: "att_sc30_a",
+        receipts: [{ consumer: "lucy_mcp_proxy", digest: candidate.registry.digest, fileCount: candidate.registry.fileCount }]
+      });
+      resetCaliberBindingFaultHooks();
+      expect(commit.ok).toBe(false);
+      expect(registrySyncPending()).toBe(true);
+
+      resetCaliberBindingRegistryForTests();
+      const recovery = await recoverCaliberBindingRegistry();
+      expect(recovery.usable).toBe(false);
+      expect(recovery.reason).toBe("no_commit_evidence");
+
+      const activation = await prepareCaliberBindingActivation({
+        identity,
+        intentSummary: "查一下资产台数"
+      });
+      expect(activation.ok).toBe(false);
+      if (!activation.ok) {
+        expect(activation.denial.code).toBe("caliber_binding_unresolved");
+      }
+    }
+
+    // 复位夹具后测 ②：凭据 prepared 已落盘、committed 写入前中断。
+    resetCaliberBindingRegistryForTests();
+    await clearCaliberBindingCredential();
+    await writeContent("caliber-bindings/asset_count.yaml", BINDING_YAML);
+    {
+      const candidate = await loadCaliberBindingCandidate();
+      expect(candidate.ok).toBe(true);
+      if (!candidate.ok) return;
+      setCaliberBindingFaultHooks({
+        afterRegistryCredential: () => {
+          throw new Error("sc30_after_prepared");
+        }
+      });
+      const commit = await commitCaliberBindingRegistry(candidate, {
+        releaseId: "rel_sc30_b",
+        attemptId: "att_sc30_b",
+        receipts: [{ consumer: "lucy_mcp_proxy", digest: candidate.registry.digest, fileCount: candidate.registry.fileCount }]
+      });
+      resetCaliberBindingFaultHooks();
+      expect(commit.ok).toBe(false);
+
+      resetCaliberBindingRegistryForTests();
+      const recovery = await recoverCaliberBindingRegistry();
+      expect(recovery.usable).toBe(false);
+      expect(recovery.reason).toBe("credential_prepared_only");
+      expect(recovery.generation).toBe(1);
+
+      const activation = await prepareCaliberBindingActivation({
+        identity,
+        intentSummary: "查一下资产台数"
+      });
+      expect(activation.ok).toBe(false);
+      if (!activation.ok) {
+        expect(activation.denial.code).toBe("caliber_binding_unresolved");
+      }
+    }
+
+    // ③ 内存切换后／终态登记前中断 → 重启后凭据已 committed 时幂等恢复同一 generation；
+    //    未决期间新 begin 仍拒绝；恢复后回执与 digest 关联完整。
+    resetCaliberBindingRegistryForTests();
+    await clearCaliberBindingCredential();
+    await writeContent("caliber-bindings/asset_count.yaml", BINDING_YAML);
+    {
+      const candidate = await loadCaliberBindingCandidate();
+      expect(candidate.ok).toBe(true);
+      if (!candidate.ok) return;
+      const expectedDigest = candidate.registry.digest;
+      setCaliberBindingFaultHooks({
+        afterRegistrySwitch: () => {
+          throw new Error("sc30_after_switch");
+        }
+      });
+      const commit = await commitCaliberBindingRegistry(candidate, {
+        releaseId: "rel_sc30_c",
+        attemptId: "att_sc30_c",
+        receipts: [{ consumer: "lucy_mcp_proxy", digest: expectedDigest, fileCount: candidate.registry.fileCount }]
+      });
+      resetCaliberBindingFaultHooks();
+      expect(commit.ok).toBe(false);
+      expect(registrySyncPending()).toBe(true);
+
+      // 未决期间：不得激活新 begin。
+      const blocked = await prepareCaliberBindingActivation({
+        identity,
+        intentSummary: "查一下资产台数"
+      });
+      expect(blocked.ok).toBe(false);
+      if (!blocked.ok) {
+        expect(blocked.denial.code).toBe("caliber_binding_unresolved");
+      }
+
+      // 模拟重启：清空内存，从磁盘凭据恢复（幂等补齐终态）。
+      resetCaliberBindingRegistryForTests();
+      const recovery = await recoverCaliberBindingRegistry();
+      expect(recovery.usable).toBe(true);
+      expect(recovery.generation).toBe(1);
+      expect(currentCaliberBindingRegistry()!.digest).toBe(expectedDigest);
+      expect(currentCaliberBindingRegistry()!.receipts).toEqual([
+        { consumer: "lucy_mcp_proxy", digest: expectedDigest, fileCount: candidate.registry.fileCount }
+      ]);
+
+      // 恢复幂等：再 recover 一次 generation／digest 不变。
+      const again = await recoverCaliberBindingRegistry();
+      expect(again.usable).toBe(true);
+      expect(again.generation).toBe(1);
+      expect(currentCaliberBindingRegistry()!.digest).toBe(expectedDigest);
+
+      const activation = await prepareCaliberBindingActivation({
+        identity,
+        intentSummary: "查一下资产台数"
+      });
+      expect(activation.ok).toBe(true);
+    }
   });
 });
 

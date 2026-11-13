@@ -2,11 +2,11 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能 Spec／**v0.9**（已获开发授权；实现中） |
+| 文档类型 / 版本 | 功能 Spec／**v0.9**（功能合同已收口） |
 | 日期 / 目标版本 | 2026-11-07 / 产品线 `0.30.0`（分支 `lucy-v0.30`）。不进入 `v0.25` 升级台账，不占用 `L25-*` |
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-1**；需求池 **REQ-030-027** / **P0** |
-| 状态 | **v0.9，终稿已确权；O1／O2（R3）已闭合；开发授权（R4）已授予（委托人 2026-11-08：授权 Claude Code 实现、Cursor Agent 做 code review）**；实现进行中。本条不表示可上线 |
+| 状态 | **v0.9；R2-F＋R3（O1／O2）＋R4 已闭合（2026-11-08）；实现已合入；CR PASS；SC-01–SC-30 证据关闭（2026-11-13，见 [证据审计](../reviews/2026-11-13-question-type-caliber-binding-sc-evidence-audit.md)）。功能合同已收口（2026-11-13）。本条收口不表示可上线** |
 | 授权边界 | R2-F＋R3＋R4 已闭合（R4：2026-11-08）。授权范围＝本 Spec／Plan 实现与测试；**不**表示可上线／发布取证。实现由 Claude Code；Cursor Agent 做 code review。 |
 | 决策来源 | 2026-11-06 CFO 误报事故 ＋ 2026-11-07 客户沟通实录（翊总／田总）：「固定口径，不再让 AI 自行加工」；手工改语义文件已复测通过 |
 | 需求来源 | [需求池 REQ-030-027](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.9 G9](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-1](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../plans/lucy-20261107-lucy-0-30-core-direction.md) |
@@ -369,7 +369,7 @@ after_caliber:
 | SC-29 | 暂停于 begin 准备完成、D11 写入前；**保持注册表 generation 不变**，分别改／删／降 draft 资产、制造扫描失败及解析依赖读取失败；恢复 begin → unresolved，旧 Session 不变；已 bound 续查仍按原快照＋当前 ACL | 夹具／单测 |
 | SC-30 | 真实进程局部故障：候选持久化失败、凭据写入前中断、凭据提交后内存切换前中断、内存切换后基线／终态登记失败及重启；断言恢复 generation、新 begin 拒绝、基线与回执关联、恢复幂等；缺完整证据不得激活候选。**独立于 SC-17c** | 真实进程局部故障 |
 
-全部 SC **未执行**。本条收口不表示可上线。
+SC-01–SC-30 **证据关闭**（2026-11-13；见 [证据审计](../reviews/2026-11-13-question-type-caliber-binding-sc-evidence-audit.md)）。本条收口不表示可上线。
 
 ---
 
@@ -377,6 +377,7 @@ after_caliber:
 
 | 版本 | 日期 | 说明 |
 |---|---|---|
+| v0.9 | 2026-11-13 | 功能合同已收口：SC-01–SC-30 证据关闭（含 SC-22 混合整批／KTX 不推进绑定基线夹具）；委托人批准补测收口。≠ 可上线 |
 | v0.9 | 2026-11-08 | 委托人授予 R4：Claude Code 实现、Cursor Agent code review；未宣称可上线 |
 | v0.8 | 2026-11-07 | 委托人确认闭合 O1／O2（选项 1＝全采纳闭合包）；R3 闭合；仍待 R4；未授权实现 |
 | v0.7 | 2026-11-07 | O1／O2 对抗 R2：内容有效性证明、activeGeneration 提交／恢复、`toLowerCase` 唯一算法、SC-29／30、伪代码互斥核验 |
