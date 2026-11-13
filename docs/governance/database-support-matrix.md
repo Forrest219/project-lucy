@@ -123,7 +123,7 @@ grep -c "lucy-starrocks-max-execution-compat" \
 
 ### 4.2 Doris / SelectDB 外部 Catalog
 
-`default_init_catalog` 依赖 SelectDB / Doris 版本能力，客户版本未确认；外部目录上的表一般只可查、不可写。详见 `docs/reviews/2026-10-20-selectdb-hive-catalog-review.md` §7。
+`default_init_catalog` 依赖 SelectDB / Doris 版本能力；外部目录上的表一般只可查、不可写。详见 `docs/reviews/2026-10-20-selectdb-hive-catalog-review.md` §7。客户现场 Doris 升级／扩容后版本备忘为 **2.0.14**（当代主线参照 **4.x**，现网勿默认已在 4.x）；见 [数据架构调研分析 §1.1](../reviews/2026-11-13-data-architecture-survey-analysis.md)。能力是否具备仍须在该版本上做现场三条验证，不得用 4.x 文档直接代替。
 
 ### 4.3 Oracle Instant Client
 

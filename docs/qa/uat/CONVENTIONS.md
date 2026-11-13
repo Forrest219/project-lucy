@@ -16,6 +16,12 @@
 | `UAT-SCAN-*` | 库内扫表用例 |
 | `UAT-ACCESS-MAP-*` | 访问关系图／空桑基用例 |
 | `UAT-PERF-*` | Roles／Agent 页性能体感用例 |
+| `UAT-SAG-*` | 表级歧义门闩（P0-3） |
+| `UAT-CALIBER-*` | 口径绑定（P0-1） |
+| `UAT-EXPOSURE-*` | 字段暴露（P0-A） |
+| `UAT-AV-*` | 答复可核对块（P0-4） |
+| `UAT-EMPTY-*` | 空结果下一步（P0-5） |
+| `UAT-CATSEM-*` | Catalog 业务语义（P0-2） |
 | `UAT-R0` | 环境门禁（各套件共用可引用） |
 
 自动化脚本 ID（`E2E-*`／`VERIFY-*`／`UT-*`）可写在用例「自动化指针」栏，但 UAT 编号保持稳定，便于跨 Agent 引用。
