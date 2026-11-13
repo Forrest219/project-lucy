@@ -4,7 +4,9 @@
 
 **Goal:** 修复「WebUI 新建／改写连接后执行层仍读旧 `ktx.yaml`、必须手动重启 KTX」的运维级缺陷，并把「创建成功 ⇒ 执行层已加载新连接」变成可自动拦截的回归门禁。
 
-**Architecture:** Docker／K8s 入口里 KTX daemon 由 `supervise_ktx` 独占 `7878`；唯一合法热重载通道是 Spec 191 的 `ktx-reload.request` → supervisor `stop child → wait port → start → receipt`。当前 `reloadKtxMcpAfterConfigWrite` 却直接调 `ktx mcp stop/start`，与 supervisor 抢端口并失败（`Port 7878 is already in use`），配置已落盘但执行层不换代。修复口径：配置写路径统一走 supervisor 协议；创建／编辑成功面诚实报告三段事实；补齐单测 + 容器进程级 + live E2E 门禁。
+**Architecture:** Docker／K8s 入口里 KTX daemon 由 `supervise_ktx` 独占 `7878`；唯一合法热重载通道是 Spec 191 的 `ktx-reload.request` → supervisor `stop child → wait port → start → receipt`。历史缺陷：`reloadKtxMcpAfterConfigWrite` 曾直接调 `ktx mcp stop/start`，与 supervisor 抢端口并失败（`Port 7878 is already in use`）。**2026-11-13 审计：** 主机代码已走 `reloadThroughSupervisor` → `reloadExecutionRuntime`（capability 有效时）；无 capability 才 CLI 回退。修复口径：配置写路径统一走 supervisor 协议；创建／编辑成功面诚实报告三段事实；补齐单测 + 容器进程级 + live E2E 门禁。
+
+**Progress (2026-11-13):** Task 1–4 与 VERIFY-191-C01 已闭合；`E2E-CON-07`／`E2E-MCP-02`／完整 UAT-CONN-RELOAD-01（经 WebUI POST create）仍 OPEN。本机 `--container` 含 C01：**25/25 PASSED**。注意：运行中的 `compose-lucy-1` 镜像仍偏旧；主机已修。父会话曾试 `demo:upgrade`，因 Docker build 走系统代理 `127.0.0.1:7890`（无监听）apt 失败；**恢复代理或关掉系统 HTTP 代理后再 upgrade**，WebUI create API 才走 supervisor 写路径。
 
 **Tech Stack:** WebUI Node（`webui/server/ktx-mcp-reload.ts`、`admin/mcp-runtime-reload.ts`）、`scripts/runtime/docker-entrypoint.sh` supervisor、Vitest、Playwright live-e2e、`scripts/verify/verify-ktx-reload-lifecycle.sh --container`
 
@@ -30,7 +32,7 @@
 | `E2E-MCP-01` | 用 `page.route` **注入** `reload_required`；open 模式断言 owner-only 拒绝 | 不创建连接；不碰真实 daemon |
 | `E2E-CON-01…06` | 卡片文案、Schema、Manifest、刷新本地目录 | 无「新建连接 → 执行层可见」断言 |
 | `api.create-connection.test.ts` | mock `reloadKtxMcpAfterConfigWrite` 为成功，且期望 `executionRuntimeAck === false` | 故意不验证执行层真生效 |
-| `verify-ktx-reload-lifecycle.sh --container` | Spec 191 AC-12 **本机已跑通**（2026-11-13，19/19）；本计划的 VERIFY-191-C01「新建连接 canary」仍待补 | 生命周期门禁已有；创建连接进程级 canary 仍缺 |
+| `verify-ktx-reload-lifecycle.sh --container` | Spec 191 AC-12 ＋ VERIFY-191-C01 **本机已跑通**（2026-11-13，**25/25**） | 浏览器 live E2E／经 WebUI POST 的完整 UAT 仍缺 |
 
 结论：浏览器契约层与单元 mock 都「看起来绿」，运维真实路径（supervisor 管着 7878）从未被断言。
 
@@ -94,41 +96,42 @@
 
 ### Task 1：单测钉死错误路径（先红后绿）
 
-- [ ] 新增 `UT-RELOAD-01` / `UT-RELOAD-02` 失败用例
-- [ ] 调整 `api.create-connection.test.ts` 的 ack 期望为「随 reload 结果变化」
-- [ ] 跑 Vitest 确认红灯原因是实现缺失而非断言写错
+- [x] 新增 `UT-RELOAD-01` / `UT-RELOAD-02` 失败用例（`ktx-mcp-reload.test.ts`）
+- [x] 调整 `api.create-connection.test.ts` 的 ack 期望为「随 reload 结果变化」（`UT-CONN-01`）
+- [x] Vitest 相关文件绿灯（2026-11-13：3 files / 47 tests）
 
 ### Task 2：写路径改走 supervisor 协议
 
-- [ ] 抽取／复用 Spec 191 reload controller
-- [ ] 改 `reloadKtxMcpAfterConfigWrite`：capability 有效 → request/wait/verify；否则 CLI 回退
-- [ ] 所有调用点（create／endpoint update／remove／其它写 `ktx.yaml`）共用该入口
-- [ ] 单测转绿
+- [x] 抽取／复用 Spec 191 reload controller（`reloadExecutionRuntime`）
+- [x] 改 `reloadKtxMcpAfterConfigWrite`：capability 有效 → request/wait/verify；否则 CLI 回退（审计确认已实现；本轮补 `already in use` CLI 失败判定）
+- [x] 所有调用点（create／endpoint update／remove／其它写 `ktx.yaml`）共用该入口（经 `settleExecutionRuntime`／`reloadKtxMcpAfterConfigWrite`）
+- [x] 单测转绿
 
 ### Task 3：API／UI 诚实成功面
 
-- [ ] create／edit 响应区分配置写入 vs 执行层生效
-- [ ] CreateConnectionDrawer 成功步展示执行层状态；失败引导重试
-- [ ] 术语与 Forbidden Terms 自检
+- [x] create 响应区分配置写入 vs 执行层生效（reload 失败 → 503 `EXECUTION_RUNTIME_NOT_LOADED`；成功路径 `executionRuntimeAck` 随 canary）
+- [x] CreateConnectionDrawer 成功步展示执行层状态；失败引导「重载执行层」
+- [x] 术语与 Forbidden Terms 自检（用「执行层／重载执行层／尚未确认加载」，未用「已全部生效」伪报）
+- [ ] edit 成功面同等三段事实（EditConnectionDialog 仍只暴露 `executionRuntimePending`；本轮未改）
 
 ### Task 4：Spec 191 修订
 
-- [ ] NG2 改为：首版**手动**重载仍保留；**配置写路径允许自动触发同一协议**
-- [ ] 登记本缺陷复现证据与 AC（含端口占用不得伪报成功）
-- [ ] 状态行按 `DEVELOPMENT.md` 更新
+- [x] NG2 改为：首版**手动**重载仍保留；**配置写路径允许自动触发同一协议**（Spec 191 v0.3 已含）
+- [x] 登记本缺陷复现证据与 AC（含端口占用不得伪报成功）
+- [x] 状态行按 `DEVELOPMENT.md` 更新（Spec 头：已实现，本机验收通过）
 
 ### Task 5：容器／Live 门禁
 
-- [ ] 实现 `E2E-CON-07`、`E2E-MCP-02`（live-e2e 或 container verify，二选一主门禁 + 另一为辅）
-- [ ] 落地 `VERIFY-191-C01`；`--container` 不得再以 exit 2 空过
-- [ ] 本机 demo 跑通 UAT-CONN-RELOAD-01；清理临时连接
+- [ ] 实现 `E2E-CON-07`、`E2E-MCP-02`（live-e2e 浏览器路径仍 OPEN；进程级主门禁见 C01）
+- [x] 落地 `VERIFY-191-C01`；本机 `--container` **25/25 PASSED**（含 C01 canary；2026-11-13）
+- [ ] 本机 demo 跑通 UAT-CONN-RELOAD-01（需 `demo:upgrade` 使容器 WebUI 含 supervisor 写路径后再经 UI／POST create 取证）
+- [x] 清理临时连接 `repro-tmp-conn`（已从 `ktx.yaml` 移除并 supervisor reload）
 
 ### Task 6：收口
 
-- [ ] 更新 `docs/qa/changelog.md` 实现落地节
-- [ ] 发布取证清单勾选本缺陷关闭证据
-- [ ] 删除／归档本机 repro 临时连接 `repro-tmp-conn`（若仍在）
-
+- [x] 更新 `docs/qa/changelog.md` 实现落地节
+- [ ] 发布取证清单勾选本缺陷关闭证据（缺 E2E-CON-07／UAT-CONN-RELOAD-01 完整绿证前不关缺陷）
+- [x] 删除／归档本机 repro 临时连接 `repro-tmp-conn`
 ---
 
 ## 5. 非目标（本轮不做）

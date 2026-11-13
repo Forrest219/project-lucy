@@ -752,7 +752,7 @@ E2E-<模块>-<序号>[-<变体>]
 | `E2E-MCP-01` | stub 状态 + open 模式 owner 拒绝；不创建连接、不启动 supervisor |
 | `E2E-CON-01…06` | 无新建连接后的执行层断言 |
 | `api.create-connection.test.ts` | mock reload 成功却长期期望 `executionRuntimeAck=false` |
-| `verify-ktx-reload-lifecycle.sh --container` | AC-12 本机已跑通（2026-11-13，19/19）；新建连接 canary（VERIFY-191-C01）仍见 2026-11-12 计划 |
+| `verify-ktx-reload-lifecycle.sh --container` | AC-12 + VERIFY-191-C01 本机已跑通（2026-11-13，**25/25**）；浏览器 `E2E-CON-07`／`E2E-MCP-02` 仍 OPEN |
 
 因此 v0.3 强制增加 `E2E-CON-07` / `E2E-MCP-02` / `VERIFY-191-C01`，修复 PR 未带进程级证据不得关闭本缺陷。
 

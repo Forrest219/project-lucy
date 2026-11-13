@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-11-13 · 写路径 supervisor + UT + VERIFY-191-C01 落地
+
+### 实现落地
+- 审计确认：`reloadKtxMcpAfterConfigWrite` 在 capability 有效时已委托 `reloadExecutionRuntime`（方案 C）；CLI 回退补齐 `already in use` → `failed`。
+- 单测：`UT-RELOAD-01`／`UT-RELOAD-02`／`UT-CONN-01`（create ack 随 reload+canary 变化；禁止固定 ack=false）。
+- UI：`CreateConnectionDrawer` 成功步展示执行层三段事实；失败引导「重载执行层」。
+- 容器门禁：`VERIFY-191-C01` 写入 `scripts/verify/verify-ktx-reload-lifecycle.sh --container` Phase C；本机 **25/25 PASSED**（含 canary `connection_list` 证据）。
+- 顺带修复 AC-3 live PID 探测：排除 `node -e` 自引用，避免伪报 WebUI PID 变化。
+
+### 仍 OPEN（不得据此关闭缺陷）
+- `E2E-CON-07`／`E2E-MCP-02` 浏览器 live-e2e 未落地。
+- `UAT-CONN-RELOAD-01` 经 WebUI POST create 的完整取证：运行中 demo 容器 WebUI 仍为旧镜像，需 `demo:upgrade` 后再验。
+- EditConnectionDialog 成功面尚未对齐三段事实。
+
+### 计划勾选
+- 见 `docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md` Task 1–6 现值。
+
+---
+
 ## 2026-11-12 · 登记新建连接执行层生效门禁（缺陷复现后补网）
 
 ### 新增
@@ -18,7 +37,7 @@
 - `docs/qa/impact-map.json` → `0.6.0`：挂接 `/connections`、`CreateConnectionDrawer`、`POST /api/connections`、`mcp-runtime/*`、`create-connection-*` selector。
 
 ### 范围声明
-- **本轮只登记用例与计划，不改运行代码、不落地自动化脚本。** 修复实现须另获开发授权后按计划 Task 1–6 执行；关闭缺陷前必须有 `E2E-CON-07`／`VERIFY-191-C01` 进程级绿证。
+- **当时只登记用例与计划。** 2026-11-13 起见上一节实现落地；关闭缺陷前仍须 `E2E-CON-07` 或等价 UAT 绿证（C01 已具备）。
 
 ### 缺陷摘要（2026-11-12 本机 demo）
 - 症状：新建连接后 Agent／MCP 看不到新连接，需重启 KTX。

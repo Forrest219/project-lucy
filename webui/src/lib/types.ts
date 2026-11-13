@@ -211,6 +211,14 @@ export type CreateConnectionResult = {
     message?: string;
     durationMs?: number;
   };
+  /** Spec 191 / connection-create plan: three-layer ack after write. */
+  policyRuntimeAck?: boolean;
+  catalogRuntimeAck?: boolean;
+  executionRuntimeAck?: boolean;
+  executionRuntimeStatus?: ExecutionRuntimeStatus;
+  executionDecisionReason?: string;
+  executionRuntimeError?: string;
+  executionRuntimePending?: boolean;
 };
 
 export type RemoveSchemaImpact = {

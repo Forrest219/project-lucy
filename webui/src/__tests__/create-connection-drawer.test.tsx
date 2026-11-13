@@ -228,7 +228,10 @@ describe("CreateConnectionDrawer", () => {
                   schemas: [],
                   enabledTables: []
                 },
-                test: { status: "ok", durationMs: 12 }
+                test: { status: "ok", durationMs: 12 },
+                executionRuntimeAck: true,
+                executionRuntimeStatus: "ok",
+                executionDecisionReason: "ok"
               }
             })
           );
@@ -268,12 +271,70 @@ describe("CreateConnectionDrawer", () => {
     await waitFor(() => {
       expect(screen.getByTestId("create-connection-success")).toBeInTheDocument();
     });
+    expect(screen.getByTestId("create-connection-execution-runtime")).toHaveTextContent("已加载新连接");
     expect(bodies[1]).toMatchObject({
       dryRun: false,
       id: "demo-mysql",
       password: "s3cret"
     });
     expect(toastMocks.success).toHaveBeenCalledWith("连接已创建：demo-mysql");
+  });
+
+  it("shows honest execution-runtime failure on the success step when ack is false", async () => {
+    stubFetch({
+      "POST /api/connections": (body) => {
+        if ((body as { dryRun?: boolean }).dryRun === false) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                written: true,
+                secretRelPath: ".ktx/secrets/demo-mysql-password",
+                connection: {
+                  id: "demo-mysql",
+                  driver: "mysql",
+                  schemas: [],
+                  enabledTables: []
+                },
+                test: { status: "ok", durationMs: 12 },
+                executionRuntimeAck: false,
+                executionRuntimeStatus: "stale",
+                executionDecisionReason: "execution_connection_not_loaded",
+                executionRuntimeError: "connection missing from daemon"
+              }
+            })
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              diff: "+demo-mysql",
+              proposedYaml: "connections:\n  demo-mysql: {}\n",
+              secretRelPath: ".ktx/secrets/demo-mysql-password",
+              connection: { id: "demo-mysql", driver: "mysql", schemas: [], enabledTables: [] }
+            }
+          })
+        );
+      }
+    });
+
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-confirm-btn")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("create-connection-confirm-btn"));
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-execution-runtime")).toBeInTheDocument();
+    });
+    const execution = screen.getByTestId("create-connection-execution-runtime");
+    expect(execution).toHaveTextContent("尚未确认加载");
+    expect(execution).toHaveTextContent("重载执行层");
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "连接已创建：demo-mysql（配置已保存，执行层尚未确认加载）"
+    );
   });
 
   it("maps CONNECTION_ALREADY_EXISTS on dryRun", async () => {

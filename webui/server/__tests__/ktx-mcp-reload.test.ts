@@ -77,6 +77,65 @@ describe("reloadKtxMcpExecutionRuntime", () => {
     }
   });
 
+  it("UT-RELOAD-02: CLI fallback fails when start reports port already in use", async () => {
+    const previous = process.env.LUCY_KTX_MCP_RELOAD;
+    process.env.LUCY_KTX_MCP_RELOAD = "1";
+    supervisor.reloadExecutionRuntime.mockResolvedValue({
+      reloadStatus: "unsupported",
+      configVerification: "unverified",
+      detail: "当前部署不支持执行层重载"
+    });
+    const execFileImpl = execFileMock((args) => {
+      if (args.includes("stop")) return { stdout: "ktx MCP daemon stopped.\n" };
+      return {
+        stdout: "",
+        stderr: "Error: Port 7878 is already in use.",
+        error: { code: 1 } as ExecFileException
+      };
+    }) as never;
+    try {
+      // Force the CLI path by calling the execution runtime helper directly
+      // (write-path falls through here when capability is unsupported).
+      const result = await reloadKtxMcpExecutionRuntime("/tmp/lucy-project", {
+        execFileImpl,
+        waitForReady: async () => true
+      });
+      expect(result.status).toBe("failed");
+      expect(result.detail).toMatch(/already in use|not restarted/i);
+      expect(result.detail).toContain("7878");
+    } finally {
+      if (previous === undefined) delete process.env.LUCY_KTX_MCP_RELOAD;
+      else process.env.LUCY_KTX_MCP_RELOAD = previous;
+    }
+  });
+
+  it("UT-RELOAD-01: with supervisor capability, write path uses request/controller and not CLI start", async () => {
+    const previous = process.env.LUCY_KTX_MCP_RELOAD;
+    // If the write path wrongly fell through to CLI, LUCY_KTX_MCP_RELOAD=1 would
+    // attempt a real `ktx mcp start`. Keeping reload enabled proves the supervisor
+    // branch short-circuits before that.
+    process.env.LUCY_KTX_MCP_RELOAD = "1";
+    supervisor.reloadExecutionRuntime.mockClear();
+    supervisor.reloadExecutionRuntime.mockResolvedValue({
+      reloadStatus: "succeeded",
+      configVerification: "verified",
+      detail: "执行层已重读 ktx.yaml"
+    });
+    try {
+      const result = await reloadKtxMcpAfterConfigWrite("/tmp/lucy-project", "hive-jd");
+      expect(result).toEqual({ status: "reloaded", detail: "执行层已重读 ktx.yaml" });
+      expect(supervisor.reloadExecutionRuntime).toHaveBeenCalledTimes(1);
+      expect(supervisor.reloadExecutionRuntime).toHaveBeenCalledWith({
+        projectRoot: "/tmp/lucy-project",
+        connectionId: "hive-jd",
+        reason: "ktx.yaml write"
+      });
+    } finally {
+      if (previous === undefined) delete process.env.LUCY_KTX_MCP_RELOAD;
+      else process.env.LUCY_KTX_MCP_RELOAD = previous;
+    }
+  });
+
   it("asks the supervisor to re-read ktx.yaml before touching the CLI daemon", async () => {
     const previous = process.env.LUCY_KTX_MCP_RELOAD;
     process.env.LUCY_KTX_MCP_RELOAD = "0";

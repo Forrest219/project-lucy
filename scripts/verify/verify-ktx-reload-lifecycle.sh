@@ -16,6 +16,9 @@
 #                ktx (first-start failure, reload, spontaneous exit, backoff
 #                exhaustion, SIGTERM). Phase B optionally checks a live lucy
 #                container (AC-3 WebUI PID unchanged + /api/health during reload).
+#                Phase C (VERIFY-191-C01) writes a canary connection into the
+#                live project, asks the supervisor to reload, then asserts
+#                connection_list evidence includes the new id (no docker restart).
 #
 # Usage:
 #   scripts/verify/verify-ktx-reload-lifecycle.sh --local
@@ -24,7 +27,8 @@
 #   Optional live phase:
 #     LUCY_RELOAD_VERIFY_CONTAINER=<name>   # default: auto-detect running image
 #     LUCY_RELOAD_VERIFY_HEALTH_URL=http://127.0.0.1:55176/api/health
-#     LUCY_RELOAD_VERIFY_SKIP_LIVE=1        # skip Phase B
+#     LUCY_RELOAD_VERIFY_SKIP_LIVE=1        # skip Phase B + Phase C
+#     LUCY_RELOAD_VERIFY_SKIP_C01=1         # skip only VERIFY-191-C01
 set -Eeuo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
@@ -669,13 +673,16 @@ run_container_phase_b() {
   local lucy_pid_before
   lucy_pid_before="$(docker exec "${live}" node -e '
 const fs = require("fs");
+const self = String(process.pid);
 const pids = fs.readdirSync("/proc").filter((n) => /^\d+$/.test(n));
 let best = "";
 for (const pid of pids) {
+  if (pid === self) continue;
   let cmd = "";
-  try { cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8"); } catch { continue; }
-  if (cmd.includes("server/index.ts") || cmd.includes("tsx")) {
-    best = pid; // last match is fine; typically one Lucy process
+  try { cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").replace(/\0/g, " "); } catch { continue; }
+  // Prefer the real Lucy entry; never this finder (`node -e …server/index.ts…`).
+  if (cmd.includes("server/index.ts") && !/\bnode\s+-e\b/.test(cmd)) {
+    best = pid;
   }
 }
 process.stdout.write(best);
@@ -748,12 +755,14 @@ fs.renameSync(tmp, dest);
   local lucy_pid_after
   lucy_pid_after="$(docker exec "${live}" node -e '
 const fs = require("fs");
+const self = String(process.pid);
 const pids = fs.readdirSync("/proc").filter((n) => /^\d+$/.test(n));
 let best = "";
 for (const pid of pids) {
+  if (pid === self) continue;
   let cmd = "";
-  try { cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8"); } catch { continue; }
-  if (cmd.includes("server/index.ts") || cmd.includes("tsx")) {
+  try { cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").replace(/\0/g, " "); } catch { continue; }
+  if (cmd.includes("server/index.ts") && !/\bnode\s+-e\b/.test(cmd)) {
     best = pid;
   }
 }
@@ -771,6 +780,260 @@ process.stdout.write(best);
   else
     fail "AC-1 live KTX daemon PID changed (${ktx_pid_before} → ${ktx_pid_after})"
   fi
+}
+
+# VERIFY-191-C01 — write ktx.yaml canary connection → supervisor reload →
+# connection_list evidence includes the new id. Equivalence of POST create
+# (config write + Spec 191 request/receipt); does not require WebUI auth.
+write_verify191_c01_helper() {
+  local dest="$1"
+  cat > "${dest}" <<'HELPER'
+#!/usr/bin/env node
+const fs = require("fs");
+const [cmd, ...args] = process.argv.slice(2);
+
+function writeRequest(requestId, digest) {
+  const payload = JSON.stringify({
+    requestId,
+    requestedDigest: digest,
+    requestedAt: new Date().toISOString()
+  }) + "\n";
+  const tmp = "/data/lucy/.ktx-ui/ktx-reload.request.tmp";
+  const destPath = "/data/lucy/.ktx-ui/ktx-reload.request";
+  fs.writeFileSync(tmp, payload);
+  fs.renameSync(tmp, destPath);
+}
+
+function injectCanary(id) {
+  const path = "/data/lucy/ktx.yaml";
+  const text = fs.readFileSync(path, "utf8");
+  if (new RegExp("^\\s*" + id + ":", "m").test(text)) {
+    process.stderr.write("canary id already present\n");
+    process.exit(2);
+  }
+  const block = [
+    "  " + id + ":",
+    "    driver: mysql",
+    "    host: 127.0.0.1",
+    "    port: 3306",
+    "    database: verify191c01",
+    "    username: verify191c01",
+    "    password: verify191c01-not-a-secret",
+    "    schemas:",
+    "      - verify191c01",
+    ""
+  ].join("\n");
+  let next;
+  if (/^connections:\s*\n/m.test(text)) {
+    next = text.replace(/^(connections:\s*\n)/m, "$1" + block);
+  } else {
+    next = text + "\nconnections:\n" + block;
+  }
+  fs.writeFileSync(path, next);
+}
+
+function parseEnvelope(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("{")) {
+    try { return JSON.parse(trimmed); } catch { /* fall through */ }
+  }
+  const lines = trimmed.split(/\n/).map((line) => line.replace(/^data:\s?/, "")).filter(Boolean);
+  for (const line of lines) {
+    try { return JSON.parse(line); } catch { /* continue */ }
+  }
+  return null;
+}
+
+async function assertConnectionList(target) {
+  const token = fs.readFileSync("/data/lucy/.ktx-ui/ktx-internal-token", "utf8").trim();
+  const endpoint = "http://127.0.0.1:7878/mcp";
+  const headers = {
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+    authorization: "Bearer " + token
+  };
+  const initRes = await fetch(endpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "verify191-c01-init",
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "verify-191-c01", version: "1.0" }
+      }
+    })
+  });
+  const sessionId = initRes.headers.get("mcp-session-id");
+  if (!initRes.ok || !sessionId) {
+    process.stderr.write("initialize failed\n");
+    process.exit(3);
+  }
+  await fetch(endpoint, {
+    method: "POST",
+    headers: { ...headers, "mcp-session-id": sessionId },
+    body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })
+  });
+  const callRes = await fetch(endpoint, {
+    method: "POST",
+    headers: { ...headers, "mcp-session-id": sessionId },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "verify191-c01-list",
+      method: "tools/call",
+      params: { name: "connection_list", arguments: {} }
+    })
+  });
+  const envelope = parseEnvelope(await callRes.text());
+  const result = envelope && envelope.result ? envelope.result : null;
+  let payload = result && result.structuredContent;
+  if (!payload) {
+    const content = result && Array.isArray(result.content) ? result.content : [];
+    const text = content.map((item) => (item && item.text) || "").join("\n");
+    try { payload = JSON.parse(text); } catch { payload = null; }
+  }
+  const raw = payload && Array.isArray(payload.connections) ? payload.connections : [];
+  const ids = raw.map((row) => {
+    if (typeof row === "string") return row;
+    return row && (row.id || row.connectionId || row.connection_id || row.name);
+  }).filter(Boolean);
+  if (!ids.includes(target)) {
+    process.stderr.write("missing " + target + " in " + JSON.stringify(ids) + "\n");
+    process.exit(4);
+  }
+  process.stdout.write(ids.join(","));
+}
+
+if (cmd === "inject") injectCanary(args[0]);
+else if (cmd === "request") writeRequest(args[0], args[1]);
+else if (cmd === "assert-list") {
+  assertConnectionList(args[0]).catch((err) => {
+    process.stderr.write(String(err && err.message ? err.message : err) + "\n");
+    process.exit(5);
+  });
+} else {
+  process.stderr.write("usage: verify191-c01-helper.js inject|request|assert-list ...\n");
+  process.exit(2);
+}
+HELPER
+}
+
+run_container_phase_c_verify_191_c01() {
+  echo "-- Phase C: VERIFY-191-C01 create-connection canary --"
+  if [[ "${LUCY_RELOAD_VERIFY_SKIP_LIVE:-0}" == "1" || "${LUCY_RELOAD_VERIFY_SKIP_C01:-0}" == "1" ]]; then
+    echo "  skip — LUCY_RELOAD_VERIFY_SKIP_LIVE or LUCY_RELOAD_VERIFY_SKIP_C01 set"
+    return 0
+  fi
+
+  local live
+  live="$(find_live_lucy_container)"
+  if [[ -z "${live}" ]]; then
+    fail "VERIFY-191-C01 live lucy container is running"
+    return 0
+  fi
+  echo "  using live container ${live}"
+
+  if ! docker exec "${live}" test -f /data/lucy/.ktx-ui/ktx-reload.capability >/dev/null 2>&1; then
+    fail "VERIFY-191-C01 ktx-reload.capability is present"
+    return 0
+  fi
+  pass "VERIFY-191-C01 ktx-reload.capability is present"
+
+  local canary_id="verify191c01-$$"
+  local request_id="verify191-c01-$$"
+  local backup="/data/lucy/ktx.yaml.verify191c01.bak"
+  local helper_host helper_ctr
+  helper_host="$(mktemp "${TMPDIR:-/tmp}/verify191-c01-helper-XXXXXX.js")"
+  # Must land under the lucy-owned project tree: image /tmp is often root-only.
+  helper_ctr="/data/lucy/.ktx-ui/verify191-c01-helper.js"
+  write_verify191_c01_helper "${helper_host}"
+  docker cp "${helper_host}" "${live}:${helper_ctr}" >/dev/null
+  docker exec -u 0 "${live}" chown lucy:lucy "${helper_ctr}" >/dev/null 2>&1 \
+    || docker exec "${live}" chmod a+r "${helper_ctr}" >/dev/null 2>&1 \
+    || true
+  rm -f "${helper_host}"
+
+  if ! docker exec "${live}" cp /data/lucy/ktx.yaml "${backup}" >/dev/null 2>&1; then
+    fail "VERIFY-191-C01 backup ktx.yaml"
+    return 0
+  fi
+  pass "VERIFY-191-C01 backup ktx.yaml"
+
+  restore_c01() {
+    docker exec "${live}" sh -c "
+      if [ -f '${backup}' ]; then
+        mv -f '${backup}' /data/lucy/ktx.yaml
+      fi
+      rm -f /data/lucy/.ktx-ui/ktx-reload.result '${helper_ctr}'
+    " >/dev/null 2>&1 || true
+    local restore_digest
+    restore_digest="$(container_sha256 "${live}" /data/lucy/ktx.yaml 2>/dev/null || true)"
+    if [[ -n "${restore_digest}" ]]; then
+      docker exec "${live}" node -e '
+const fs = require("fs");
+const [id, digest] = process.argv.slice(1);
+const payload = JSON.stringify({
+  requestId: id,
+  requestedDigest: digest,
+  requestedAt: new Date().toISOString()
+}) + "\n";
+const tmp = "/data/lucy/.ktx-ui/ktx-reload.request.tmp";
+const dest = "/data/lucy/.ktx-ui/ktx-reload.request";
+fs.writeFileSync(tmp, payload);
+fs.renameSync(tmp, dest);
+' "verify191-c01-restore-$$" "${restore_digest}" >/dev/null 2>&1 || true
+      wait_container_file "${live}" /data/lucy/.ktx-ui/ktx-reload.result 40 || true
+    fi
+  }
+
+  if ! docker exec "${live}" node "${helper_ctr}" inject "${canary_id}"; then
+    fail "VERIFY-191-C01 write canary connection into ktx.yaml"
+    restore_c01
+    return 0
+  fi
+  pass "VERIFY-191-C01 write canary connection (${canary_id})"
+
+  docker exec "${live}" rm -f /data/lucy/.ktx-ui/ktx-reload.result >/dev/null 2>&1 || true
+  local digest
+  digest="$(container_sha256 "${live}" /data/lucy/ktx.yaml)"
+  docker exec "${live}" node "${helper_ctr}" request "${request_id}" "${digest}"
+
+  if wait_container_file "${live}" /data/lucy/.ktx-ui/ktx-reload.result 60; then
+    local c01_status c01_rid
+    c01_status="$(read_container_json_field "${live}" /data/lucy/.ktx-ui/ktx-reload.result status)"
+    c01_rid="$(read_container_json_field "${live}" /data/lucy/.ktx-ui/ktx-reload.result requestId)"
+    if [[ "${c01_rid}" == "${request_id}" && "${c01_status}" == "succeeded" ]]; then
+      pass "VERIFY-191-C01 supervisor receipt succeeded"
+    else
+      fail "VERIFY-191-C01 supervisor receipt succeeded (requestId=${c01_rid} status=${c01_status})"
+      restore_c01
+      return 0
+    fi
+  else
+    fail "VERIFY-191-C01 supervisor receipt is written"
+    restore_c01
+    return 0
+  fi
+
+  local list_err list_out list_rc
+  list_err="$(mktemp "${TMPDIR:-/tmp}/verify191-c01-list-XXXXXX.err")"
+  set +e
+  list_out="$(docker exec "${live}" node "${helper_ctr}" assert-list "${canary_id}" 2>"${list_err}")"
+  list_rc=$?
+  set -e
+  if [[ "${list_rc}" -eq 0 && "${list_out}" == *"${canary_id}"* ]]; then
+    pass "VERIFY-191-C01 connection_list includes canary id"
+  else
+    fail "VERIFY-191-C01 connection_list includes canary id"
+    sed -E 's/Bearer[[:space:]]+[A-Za-z0-9._-]+/Bearer [redacted]/g' "${list_err}" >&2 || true
+  fi
+  rm -f "${list_err}"
+
+  restore_c01
+  pass "VERIFY-191-C01 restored ktx.yaml after canary"
 }
 
 run_container() {
@@ -792,6 +1055,7 @@ run_container() {
   trap cleanup_container EXIT
   run_container_phase_a
   run_container_phase_b
+  run_container_phase_c_verify_191_c01
   cleanup_container
   trap - EXIT
 }

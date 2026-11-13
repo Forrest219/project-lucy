@@ -114,12 +114,14 @@ async function reloadKtxMcpExecutionRuntimeUnqueued(
     const started = await runKtx(execFileImpl, startArgs, projectRoot, timeoutMs, token ? { KTX_MCP_TOKEN: token } : {});
     const startedText = `${started.stdout}\n${started.stderr}`;
     // An old daemon that is still listening did not load the new ktx.yaml.
-    // Port readiness alone is not a successful reload.
-    if (started.exitCode !== 0 || /already running/i.test(startedText) || !/daemon started/i.test(started.stdout)) {
+    // Port readiness alone is not a successful reload. "already in use" is the
+    // supervised-port collision (Spec 191 / connection-create plan UT-RELOAD-02).
+    const portBusy = /already running|already in use/i.test(startedText);
+    if (started.exitCode !== 0 || portBusy || !/daemon started/i.test(started.stdout)) {
       return {
         status: "failed",
         detail: scrubSecrets(
-          /already running/i.test(startedText)
+          portBusy
             ? `KTX MCP was not restarted, so the new ktx.yaml is not loaded. ${startedText}`
             : startedText || `KTX MCP did not start a new daemon (exit ${started.exitCode})`
         ).trim()

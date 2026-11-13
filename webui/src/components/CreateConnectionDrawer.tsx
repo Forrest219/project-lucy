@@ -171,6 +171,8 @@ function mapCreateErrorMessage(err: unknown): string {
       return "数据库密码为必填项";
     case "FORBIDDEN_PATH":
       return "无法写入连接配置或密码文件";
+    case "EXECUTION_RUNTIME_NOT_LOADED":
+      return err.message || "配置已保存，但执行层未加载。请到 MCP 调试台点「重载执行层」重试。";
     default:
       return err.message;
   }
@@ -352,10 +354,16 @@ export function CreateConnectionDrawer({
       void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
       void queryClient.invalidateQueries({ queryKey: queryKeys.catalogReloads });
+      const executionHint =
+        data.executionRuntimeAck === true
+          ? ""
+          : data.executionRuntimeAck === false
+            ? "（配置已保存，执行层尚未确认加载）"
+            : "";
       toast.success(
         data.test.status === "error"
-          ? `连接已创建：${data.connection.id}（连通测试未通过，配置已保存）`
-          : `连接已创建：${data.connection.id}`
+          ? `连接已创建：${data.connection.id}（连通测试未通过，配置已保存）${executionHint}`
+          : `连接已创建：${data.connection.id}${executionHint}`
       );
     },
     onError: (err) => {
@@ -1076,6 +1084,24 @@ export function CreateConnectionDrawer({
                   <span className="text-danger" data-testid="create-connection-test-warning">
                     连通测试未通过（{created.test.message || "连接失败"}），配置已保存
                   </span>
+                )}
+              </p>
+              <p className="mt-2 text-xs" data-testid="create-connection-execution-runtime">
+                执行层：
+                {created.executionRuntimeAck === true ? (
+                  <span className="text-success-strong">已加载新连接</span>
+                ) : created.executionRuntimeAck === false ? (
+                  <span className="text-danger">
+                    尚未确认加载
+                    {created.executionRuntimeError
+                      ? `（${created.executionRuntimeError}）`
+                      : created.executionDecisionReason
+                        ? `（${created.executionDecisionReason}）`
+                        : ""}
+                    。请到 MCP 调试台点「重载执行层」重试。
+                  </span>
+                ) : (
+                  <span className="text-fg-muted">状态未回报</span>
                 )}
               </p>
             </div>
