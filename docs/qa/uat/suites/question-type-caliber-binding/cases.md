@@ -3,6 +3,7 @@
 | ID | 标题 | 层级 | 自动化指针 | 期望摘要 |
 |---|---|---|---|---|
 | UAT-R0 | 环境门禁 | 手工／脚本 | health | demo／MCP 可用 |
+| UAT-R0-UPGRADE | 升级后镜像门禁 | 手工／脚本 | health `gitSha` | 同 SOURCE-AMBIGUITY：`gitSha` 不得仍为 `3aa402c9` |
 | UAT-CALIBER-01 | 零绑定不强制 | MCP 全真 | Spec SC-06 | 成功查数；`caliberBinding.status=none` |
 | UAT-CALIBER-02 | 绑定偏离 deny（可选） | MCP＋夹具 | Spec SC-07／08 | `caliber_binding_violation`；上游 0 |
 
@@ -11,6 +12,10 @@
 ## UAT-R0 — 环境门禁
 
 同 [source-ambiguity-gate fixtures](../source-ambiguity-gate/fixtures.md) 的 WebUI／MCP 门禁。
+
+## UAT-R0-UPGRADE — 升级后镜像门禁
+
+步骤与期望同 [`source-ambiguity-gate/cases.md`](../source-ambiguity-gate/cases.md)「UAT-R0-UPGRADE」（本套件跑次须自记 `gitSha`）。
 
 ---
 

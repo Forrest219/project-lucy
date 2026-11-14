@@ -3,8 +3,15 @@
 | ID | 标题 | 层级 | 自动化指针 | 期望摘要 |
 |---|---|---|---|---|
 | UAT-R0 | 环境门禁 | 手工／脚本 | health | demo／MCP 可用 |
+| UAT-R0-UPGRADE | 升级后镜像门禁 | 手工／脚本 | health `gitSha` | 同 SOURCE-AMBIGUITY：`gitSha` 不得仍为 `3aa402c9` |
 | UAT-AV-01 | 成功查数强制可核对块 | MCP 全真 | Spec D6／SC 主路径 | text／`_meta.lucy` 含 `answer_verifiability` |
 | UAT-AV-02 | 三载体一致（可选） | MCP | Spec D2 | text／structuredContent／`_meta` 同块 |
+
+---
+
+## UAT-R0-UPGRADE — 升级后镜像门禁
+
+步骤与期望同 [`source-ambiguity-gate/cases.md`](../source-ambiguity-gate/cases.md)「UAT-R0-UPGRADE」。
 
 ---
 

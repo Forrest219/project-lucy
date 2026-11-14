@@ -3,8 +3,15 @@
 | ID | 标题 | 层级 | 自动化指针 | 期望摘要 |
 |---|---|---|---|---|
 | UAT-R0 | 环境门禁 | 手工／脚本 | health | demo／MCP 可用 |
+| UAT-R0-UPGRADE | 升级后镜像门禁 | 手工／脚本 | health `gitSha` | 同 SOURCE-AMBIGUITY：`gitSha` 不得仍为 `3aa402c9` |
 | UAT-CATSEM-01 | 可见表带业务描述 | MCP 全真 | Spec SC 主路径 | `sources[].description` 非空；`descriptionState=present`（或等价） |
 | UAT-CATSEM-02 | 范围裁剪（可选） | MCP | 可见性 | 仅当前 token 可见连接／源 |
+
+---
+
+## UAT-R0-UPGRADE — 升级后镜像门禁
+
+步骤与期望同 [`source-ambiguity-gate/cases.md`](../source-ambiguity-gate/cases.md)「UAT-R0-UPGRADE」。
 
 ---
 

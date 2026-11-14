@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.72 / 2026-11-14 |
+| 版本 / 日期 | v0.73 / 2026-11-14 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,7 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.73 | 2026-11-14 | **P0 六套升级后复跑**：委托人批准；Cursor 新增 `UAT-R0-UPGRADE`＋Plan／brief；Claude 全真。INDEX／e2e／lint 指 [`…-p0-post-upgrade`](../qa/uat/suites/source-ambiguity-gate/runs/2026-11-14-claude-macmini-p0-post-upgrade.md)；容器 `gitSha=9d59337d`（≠ 上午 Wave A `3aa402c9`）。P0-3／4／5／2 PASS；P0-1／A PASS WITH GAP（Wave B 仍推迟）；SAG-02 BLOCKED。Plan [`lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md`](lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md)。**≠ 改跟进状态合同句；≠ 可上线** |
 | v0.72 | 2026-11-14 | **P1-19／REQ-030-040 测试台复跑 PASS**：主线 A 多 Agent（Cursor 编排＋Claude 全真）。[`UAT-SUITE-ACCESS-MAP`](../qa/uat/suites/access-map-sankey-empty/suite.md) 跑次 [`2026-11-14-claude-macmini-p119-access-map`](../qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md)：必做＋04 PASS；F-1 关闭（`ok` 进 band E）。INDEX／e2e-ledger 已挂；Spec 状态「UAT 未复跑」已改指针。**≠ 改功能合同收口句为可上线；≠ 可上线**。Plan [`lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md`](lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md) |
 | v0.71 | 2026-11-14 | **测试台唯一 SOT 对齐**：委托人要求只保留唯一 UAT SOT。现行＝[`docs/qa/uat/`](../qa/uat/README.md)＋[`INDEX.md`](../qa/uat/INDEX.md)；旧 [`docs/uat/`](../uat/README.md) 改为归档／重定向（文件头提示＋README stub）。**≠ 改功能合同；≠ 可上线** |
 | v0.70 | 2026-11-14 | **P0 问数六套件本机 Mac mini 复跑（Wave A）**：委托人批准后 Claude Code 全真执行；Cursor 验收。测试台 INDEX／`e2e-ledger` 已指 [`2026-11-14-claude-macmini-p0-qa`](../qa/uat/suites/source-ambiguity-gate/runs/2026-11-14-claude-macmini-p0-qa.md) 等六跑次；Plan [`lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md`](lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md)。必做：P0-3／4／5／2 **PASS**（含 AV-02／EMPTY-02／CATSEM-02）；P0-1／A **PASS WITH GAP**（CALIBER-02／EXPOSURE-02 Wave B 推迟）；SAG-02 **BLOCKED**（无 person）。验容器 `gitSha=3aa402c9`（原样、未 upgrade）。**≠ 改跟进状态合同句；≠ 改 Spec 头部；≠ 可上线；≠ P0-6／7／B 已推进** |

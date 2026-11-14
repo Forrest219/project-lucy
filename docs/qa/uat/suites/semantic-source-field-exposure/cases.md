@@ -3,8 +3,15 @@
 | ID | 标题 | 层级 | 自动化指针 | 期望摘要 |
 |---|---|---|---|---|
 | UAT-R0 | 环境门禁 | 手工／脚本 | health | demo／MCP 可用 |
+| UAT-R0-UPGRADE | 升级后镜像门禁 | 手工／脚本 | health `gitSha` | 同 SOURCE-AMBIGUITY：`gitSha` 不得仍为 `3aa402c9` |
 | UAT-EXPOSURE-01 | 未配置台账不误杀 | MCP 全真 | Spec SC-02／24 | 合法 `lucy_query` 成功 |
 | UAT-EXPOSURE-02 | 未暴露列 fail-closed（可选） | MCP＋夹具 | Spec SC-04 | `field_not_exposed`；上游 0 |
+
+---
+
+## UAT-R0-UPGRADE — 升级后镜像门禁
+
+步骤与期望同 [`source-ambiguity-gate/cases.md`](../source-ambiguity-gate/cases.md)「UAT-R0-UPGRADE」。
 
 ---
 

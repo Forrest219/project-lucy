@@ -3,8 +3,15 @@
 | ID | 标题 | 层级 | 自动化指针 | 期望摘要 |
 |---|---|---|---|---|
 | UAT-R0 | 环境门禁 | 手工／脚本 | health | demo／MCP 可用 |
+| UAT-R0-UPGRADE | 升级后镜像门禁 | 手工／脚本 | health `gitSha` | 同 SOURCE-AMBIGUITY：`gitSha` 不得仍为 `3aa402c9` |
 | UAT-EMPTY-01 | 0 行事实 → next_step | MCP 全真 | Spec 主路径 | `rows=[]`／`totalRows=0` 且有 `next_step` |
 | UAT-EMPTY-02 | 聚合 0 对照（可选） | MCP | 边界 | `rows=[[0]]` 可有 AV；**不**当作 EMPTY-01 替代 |
+
+---
+
+## UAT-R0-UPGRADE — 升级后镜像门禁
+
+步骤与期望同 [`source-ambiguity-gate/cases.md`](../source-ambiguity-gate/cases.md)「UAT-R0-UPGRADE」。
 
 ---
 
