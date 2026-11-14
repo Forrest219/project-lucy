@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.62 / 2026-11-13 |
+| 版本 / 日期 | v0.69 / 2026-11-14 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,14 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.69 | 2026-11-14 | **入池 P1-25／REQ-030-046**：行权限能力评审（面向约 100 用户、其中 30–40 人行级受限）。委托人 2026-11-14 授权审阅既有行权限 Spec（主 Spec、模板与视图、展示、P1-2 编译门禁草案、ADR）、核对已落地代码并做浏览器实地探查，输出认同／反对意见。同日 [评审报告 v1.0](../reviews/2026-11-14-row-policy-capability-assessment.md) 已出。**仅评审，不含开发授权**；不改任何 Spec 状态。UAT not_registered；**不入核心分母**；**不挡**原 P0；≠ 可上线 |
+| v0.69 | 2026-11-14 | **P1-24 Spec／Plan 升 v0.2：纳入浏览器盘点**（委托人指示「用浏览器探查，只做优化的 Spec 和 Plan，不做开发」）。新增 UXR-10–15（对比度、小字号、点击目标、无标签输入、行权限哈希被裁、1280×800 容器内溢出）与裁决项 D-1–D-4；UXR-07 经浏览器核实为假阳性，已关闭；UXR-02 补浏览器证据（`新建 Agent`、`续期`、`吊销` 浮层无名称／不响应 `Esc`／焦点不进入）。批次改为 B1–B5。**仍无开发授权**，仅文档。≠ 可上线 |
+| v0.68 | 2026-11-14 | **入池 P1-24／REQ-030-045**：WebUI 存量 UI/UX 整改（逐页）。委托人 2026-11-14 同意「提出整改意见、落盘为新 Spec、后期逐页修改」＝立项；**不含开发授权**。[Spec v0.1-draft](../specs/lucy-20261114-webui-uiux-remediation-spec.md) 登记 UXR-01–09、批次 B1–B4；进度唯一现值在该 Spec §7。同时更正 v0.67 所述存量数：手写 Drawer 17、`pl-modal-*` 7（不含测试文件口径），`pl-wiki-preflight-*` 仍为 8。UAT not_registered；**不入核心分母**；≠ 可上线 |
+| v0.67 | 2026-11-14 | **P1-23：浮层收敛方向裁决**。委托人批准：行为基座统一 Radix Dialog，样式保留 `pl-drawer-*`／`pl-dialog-*` 两族；`15-components-overlay.md` 升 v1.1，TD-20261114-01 升格归档。**存量迁移（手写 Drawer 18、`pl-modal-*` 9、`pl-wiki-preflight-*` 8）是运行代码改动，未获开发授权，不在本次范围**，须另入总账行并取得授权。仅文档；≠ 可上线 |
+| v0.66 | 2026-11-14 | **P1-23 门禁落地**（委托人「加门禁」）：`lint:spec-docs` 新增 `ds-index`／`ds-meta`／`ds-td-expiry`／`ds-ref` 四条，附 4 个单测。仅改 `scripts/lint-spec-docs.mjs` 与测试，不触运行代码。仓库既有 87 条存量违规未变（基线本就为红，非本次引入）。≠ 可上线 |
+| v0.65 | 2026-11-14 | **P1-23 推进**：委托人批准后续步骤；新增设计系统 `15-components-overlay.md`、`16-patterns-states.md`，`DEVELOPMENT.md` 改为「WebUI UI/UX 标准总入口」，`99-governance.md` 登记 TD-20261114-01（浮层类名族收敛，待委托人裁决）。**未新增 lint 门禁**（待另行确认）。仅文档；≠ 可上线 |
+| v0.64 | 2026-11-14 | **入池 P1-23／REQ-030-044**：UI/UX 标准收敛并与 DEVELOPMENT 绑定（设计系统过期核对、临时决策清账、缺章补齐、总入口表）。委托人 2026-11-14 批准核对与「先登记、清临时决策」两步，范围**仅文档**，不含运行代码／`app.css`／组件改动。核对报告 `inbox/20261114-0130-uiux-standard-audit.md`。UAT not_registered；**不入核心分母**；**不挡**原 P0；≠ 可上线 |
+| v0.63 | 2026-11-14 | **入池 P1-22／REQ-030-043**：Doris／SelectDB 多版本对比环境（客户现网 2.0.14 → 4.x，具体版本不详）。委托人 2026-11-14 同句「我决定以你为准，构建长期测试对比环境」＝立项＋测试环境搭建授权，范围**仅**对比环境、版本探测与证据，**不含**适配代码改动。Spec／Plan 待补；UAT not_registered；**不入核心分母**；**不挡**原 P0；≠ 可上线 |
 | v0.62 | 2026-11-13 | **P1-21／REQ-030-042 测试台首跑 PASS**（[`2026-11-13-cursor-demo-event-loop`](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md)；必做 R0／01–04；可选 LOOP-05 BLOCKED）。不改功能合同收口句的合同结论。≠ 可上线 |
 | v0.61 | 2026-11-13 | **P1-21／REQ-030-042 测试台挂套件** `UAT-SUITE-EVENT-LOOP-RELIEF`。INDEX＝NOT RUN。不改功能合同收口句的合同结论。≠ 可上线 |
 | v0.60 | 2026-11-13 | **P1-21／REQ-030-042 功能合同已收口**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。UAT not_registered。**不入核心分母**。≠ 可上线 |
@@ -208,6 +216,10 @@
 | P1-19 | P1 | 访问关系图允许词表对齐（`ok`／`allow`） | REQ-030-040 | WebUI 修复 | 否 | **实现已落地（2026-11-13）**。vitest access-map 三文件 **76/76**。UAT 未复跑。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-access-map-outcome-vocabulary-spec.md) |
 | P1-20 | P1 | 外部目录单表读字段（直连 DESC／SHOW COLUMNS） | REQ-030-041 | 连接／事故续作 | 否 | **开发授权已获得（2026-11-13，委托人同句「批准修复」）；实现已落地（2026-11-13）**。根因＝KTX 只读校验禁止 `DESC`。vitest 5 文件 76/76；客户 live 未验，UAT 未复跑。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-external-catalog-column-read-spec.md) · [Plan](lucy-20261113-external-catalog-column-read-plan.md) |
 | P1-21 | P1 | 重读路径与探针减负（访问日志后台重建＋健康探针拆分） | REQ-030-042 | WebUI 稳定性／事故修复 | 否 | **功能合同已收口（2026-11-13）**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做 R0／01–04；可选 LOOP-05 BLOCKED——客户 0.25 无 livez）。≠ 可上线 | [Spec](../specs/lucy-20261113-heavy-read-path-and-probe-relief-spec.md) · [Plan](lucy-20261113-heavy-read-path-and-probe-relief-plan.md) · [性能证据](../reviews/2026-11-13-heavy-read-path-relief-perf-evidence.md) · **测试台** [`UAT-SUITE-EVENT-LOOP-RELIEF`](../qa/uat/suites/event-loop-relief/suite.md)（INDEX：[PASS](../qa/uat/INDEX.md)；跑次 [2026-11-13-cursor-demo-event-loop](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md)） |
+| P1-22 | P1 | Doris／SelectDB 多版本对比环境（2.0.14 基线 vs 4.0.8；高频分析路径回归＋版本探测） | REQ-030-043 | 连接／发布取证 | 否 | **入池（2026-11-14）**。委托人同句「我决定以你为准，构建长期测试对比环境」＝立项＋测试环境搭建授权；范围**仅**对比环境、版本探测与证据，**不含**适配代码改动（改代码须另行终稿确权＋开发授权）。行权限在 Doris 上的专项验证暂缓（客户未启用）；客户 SelectDB 版本串暂缺。Spec／Plan 待补；UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | 待补（与 P2-5 `升级候选验证环境` 相邻但对象不同：本条是数据库引擎版本，P2-5 是 Lucy 升级候选） |
+| P1-23 | P1 | UI/UX 标准收敛并与 DEVELOPMENT 绑定（设计系统 `webui/docs/design-system/` 清账、补缺章、DEVELOPMENT 总入口表） | REQ-030-044 | 文档治理 | 否 | **入池（2026-11-14）**。委托人批准：只读核对（已出报告）＋登记＋清理 `99-governance.md` 临时决策。**范围仅文档**；补缺章、改 DEVELOPMENT 总入口、新增 lint 门禁须各自另获委托人确认；不含运行代码。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [核对报告](../../inbox/20261114-0130-uiux-standard-audit.md)（临时文件，定稿后迁入 `docs/reviews/`） |
+| P1-24 | P1 | WebUI 存量 UI/UX 整改（逐页；UXR-01–09，批次 B1–B4） | REQ-030-045 | WebUI 整改 | 否 | **入池／立项（2026-11-14），Spec／Plan v0.2-draft（已含浏览器盘点）待委托人确认范围、批次与 D-1–D-4**。**不含开发授权，本阶段只做优化方案**：各批改运行代码须各自入子 Plan、终稿确权、委托人另发开发授权。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261114-webui-uiux-remediation-spec.md) |
+| P1-25 | P1 | 行权限能力评审（100 用户／30–40 人行级受限目标） | REQ-030-046 | 评审／正确性辅线 | 否 | **评审报告 v1.0 已出（2026-11-14），待委托人裁决**。结论：安全内核实测成立；默认部署不可用（proven 全局开关）、BY-01／BY-18 回归为红、取值无校验、受限用户工具面缩水，提出 P0 四项建议。**仅评审，不含开发授权**；不改 P1-2／P1-7 及已收口 Spec 状态。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [评审报告](../reviews/2026-11-14-row-policy-capability-assessment.md) |
 | P2-1 | P2 辅线 | 发布工作台分文件勾选发布 | REQ-030-001 | UX 辅线 | 否 | 草案齐；批次 R1 已修订；**终稿未确权**；**不定义 0.30 成败** | [Spec](../specs/lucy-20261107-publish-workbench-per-file-selection-spec.md) · [Plan](lucy-20261107-publish-workbench-per-file-selection-plan.md) |
 | P2-2 | P2 辅线 | 帮助中心体验 | REQ-030-002 | UX 辅线 | 否 | Deferred／开线对齐既有 Spec | 既有 Spec |
 | P2-3 | P2 辅线 | 运维控制面 W-B（语义发布） | REQ-030-004 | 运维辅线 | 否 | Deferred；阻塞条件见既有 Spec | 既有 Spec |
@@ -403,6 +415,6 @@
 
 ## 7. 本池自身验收
 
-- 本文件是 `0.30` **执行总账 SOT**（见 DEVELOPMENT）；清单覆盖需求池 REQ-030-001–042（含已收口 003），无孤儿 REQ。
+- 本文件是 `0.30` **执行总账 SOT**（见 DEVELOPMENT）；清单覆盖需求池 REQ-030-001–046（含已收口 003），无孤儿 REQ。
 - P0 立项范围与 §2／§3 一致；**P0-B O1–O3 已闭合（建议包 F），待 R2-F**；**P1-8／P1-9 仍待立项**；**P1-10 委托人结案**；**P1-11…14 已落地／收口**；**P1-15…18 差集补录（不入核心分母）**；agent 规则可被本分支会话引用。
 - **不构成任何功能验收或上线许可。**
