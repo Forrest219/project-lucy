@@ -21,6 +21,15 @@
 - **适用**：修改 `webui/`、`ktx.yaml`、`semantic-layer/`、`skills/`、`.ktx/` 等仓库源码与配置的任何会话
 - **不适用**：纯数据问答场景——那部分规则在 `webui/config/data-qa-instructions.md`（由 Lucy MCP Proxy 注入，见 `webui/docs/07-mcp-auth-proxy-spec.md` §4.4），不要把本文档内容同步进去
 
+## Docker 对齐：功能优先，默认不谈客户部署环境
+
+开发和测试以**功能本身**为准（需求台总账、Spec 功能合同、测试台 UAT），运行与验证环境对齐 **Docker**（本机 compose / demo），不是客户用什么环境部署。
+
+- **默认对齐功能 + Docker**：解释概念、排期、实现、验收、日常对话，都以功能合同与可观察行为为准；本地跑通与回归默认走 Docker demo / compose，不默认假设客户 K8s / Helm。
+- **默认不关心客户部署环境**：除非用户或当前任务**明确**要求出包、发布取证、客户现场、Helm / K8s / 离线镜像等交付工作，否则不要把讨论、解释或验证默认导向客户拓扑、Helm Chart、K8s 契约或客户环境证据。
+- **仓库里仍有交付章节与 runbook**：那是交付任务的事实源，不是日常开发/测试的默认上下文。看到 Helm、Chart、客户 amd64 等词，先按制品/路径名理解；不要自动展开成「我们必须关心客户怎么部署」。
+- 与下文「证据等级门槛」一致：**客户环境证据不是功能合同收口的必要条件**；功能收口 ≠ 可上线 ≠ 客户现场已验。
+
 ## 强制流程：Plan Mode
 
 以下改动，必须先输出计划（Claude Code 用 Plan Mode / EnterPlanMode，Codex 用等价的"先列步骤"机制），经人工确认后才能落地：
@@ -365,17 +374,30 @@ New terms:
 - Code Review 必须检查术语一致性、禁用词和浏览器翻译防御。
 - WebUI 变更提交前运行 `cd webui && npm run lint:terminology`；根目录也可运行 `npm run lint:terminology`。
 
-## WebUI 设计规范（Design System）
+## WebUI UI/UX 标准总入口
 
-Lucy WebUI 的设计规范事实源在
-[`webui/docs/design-system/README.md`](../../webui/docs/design-system/README.md)。
+WebUI 的 UI/UX 约束分散在下表几处；**各自只有一份正文**，本节只做导航和硬规则，不复述内容。
+
+| 约束 | 事实源（正文） | 机器检查 |
+|---|---|---|
+| 视觉与交互规范（颜色、网格、字体、按钮、数据网格、指标卡、Toast、筛选输入、浮层、页面布局、空／加载／错误态） | [`webui/docs/design-system/README.md`](../../webui/docs/design-system/README.md) | `lint:spec-docs` 规则 `ds-shape`（形态）、`ds-ref`（引用章节存在）、`ds-index`／`ds-meta`（章节入 README、头部有版本与日期）、「新模式」引用规则 |
+| 设计规范缺口与临时决策 | [`webui/docs/design-system/99-governance.md`](../../webui/docs/design-system/99-governance.md) | `lint:spec-docs` 规则 `ds-td-expiry`（每条须有「升级期限：YYYY-MM-DD」且未过期） |
+| 术语与浏览器翻译防御 | [`webui/docs/00-product-terminology-standard.md`](../../webui/docs/00-product-terminology-standard.md) | `lint:terminology` |
+| 信息架构边界 | [`webui/docs/06-navigation-ia.md`](../../webui/docs/06-navigation-ia.md) | `lint:ia-boundary` |
+| 受控输入与 IME | [`14-components-filter-input.md`](../../webui/docs/design-system/14-components-filter-input.md) | `lint:url-driven-input` |
+| UI 交互合同 | [交互合同门禁 Spec](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md) | 见该 Spec |
+| 发版前界面检查 | [`docs/runbooks/webui-release-ux-checklist.md`](../runbooks/webui-release-ux-checklist.md) · [发版 UX 评审 Spec](../specs/lucy-20261030-webui-release-ux-review-spec.md) | `release-ux-invariants.test.ts` |
+| 页面级问题与验收事实 | [`docs/ui-ux-feedback/README.md`](../ui-ux-feedback/README.md) | 无 |
+| 浏览器测试默认边界 | 本文件「验证策略：浏览器测试约束」 | 无 |
 
 强约束如下：
 
 - 涉及 UI 视觉或交互的改动，必须先对照对应章节（Foundations / Components / Patterns / Governance）。
 - 新增视觉模式（如新按钮分层、新网格策略、新颜色语义）必须先补规范再落代码。
 - PR / 交付说明必须包含 `Design System Compliance` 小节，至少写明“引用章节 + 本次遵循点”。
-- 若需求超出已定义章节，先在 `webui/docs/design-system/99-governance.md` 记录临时决策，再在后续迭代升级为正式规范。
+- 若需求超出已定义章节，先在 `webui/docs/design-system/99-governance.md` 记录临时决策，再在后续迭代升级为正式规范；临时决策对应 Spec 收口后，应升格为正式章节并归档，不得长期悬挂。
+- 设计规范的现行版本以各章头部「版本」为准；改规范正文时同步更新该章版本与日期。
+- 未经 Spec 登记，不得新增与既有章节并列的另一套组件类名族。
 
 ## Onboarding（首次拉取本仓库）
 

@@ -2,6 +2,8 @@
 
 本仓库的开发治理规则只以 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 为正文。本文件不复述第二套口径。功能闭口、发布取证、状态登记、**产品线执行总账（SOT）**、**端到端三台账**和新 Spec 的文件名，都见该文件「功能闭口与发布取证」。
 
+**Docker 对齐（强制）**：开发与测试以**功能**为主（总账 / Spec / UAT），环境与验证路径对齐 **Docker**（本机 compose / demo），**默认不关心客户部署环境**。除非用户或当前任务明确要求出包、发布取证或客户现场交付，否则不要把解释、排期、实现或验证默认导向 Helm / K8s / 客户拓扑。正文见 DEVELOPMENT「Docker 对齐：功能优先，默认不谈客户部署环境」。
+
 **产品线 `0.30.0` / 分支 `lucy-v0.30`**：**需求台（执行总账 SOT）**＝[`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；**开发台**＝各 Spec 头部「状态」；**测试台**＝[`docs/qa/uat/INDEX.md`](docs/qa/uat/INDEX.md)；勾连／基准线追评＝[`docs/governance/e2e-ledger.md`](docs/governance/e2e-ledger.md)。方向见 [`docs/plans/lucy-20261107-lucy-0-30-core-direction.md`](docs/plans/lucy-20261107-lucy-0-30-core-direction.md)。**先入总账再动手／再叙事**；主张 UAT 须挂测试台。**功能合同收口 ≠ UAT PASS ≠ 可上线**。中间态出口或 `user-facing` 定稿前做差集补录（见 DEVELOPMENT）。**P0 立项 ≠ 开发授权**。**终稿确权**＝Codex CLI 终审，或无 Codex 时委托人明示确权。未授权条目禁止改运行代码。
 
 功能的现行状态只以 Spec 头部「状态」行为准；总账「跟进状态」是其镜像，须同句。改状态时按 DEVELOPMENT 改完现值镜像。历史变更行、复核快照和实施笔记不是现值。已作废的「未执行且不排期」和「不可交付 UAT」不得抄回。机器检查是 `lint:spec-docs` 的 `stale-status`；三台勾连可选 `node scripts/uat/check-e2e-ledger.mjs`。
@@ -11,14 +13,16 @@ Vibe coding 双核角色协作（thinker / builder）的可选完整交付流水
 
 **错题本（发现入口）**：已核实事故／问题／经验的登记在 [`docs/lessons/`](docs/lessons/README.md)。口语别名含「事故清单」「问题清单」「经验清单」「复盘清单」——先打开该目录索引，不要默认当成交付 runbook 勾选表。登记 ≠ 开发授权；落位细则见 DEVELOPMENT「Spec 落位规则」。客户 amd64 出包操作 SOT 仍是 [`docs/runbooks/customer-amd64-image-build-checklist.md`](docs/runbooks/customer-amd64-image-build-checklist.md)（原 `customer-delivery-preflight-checklist` 已作废，仅留重定向 stub）。
 
-## 环境与交付背景（勿混淆）
+## 环境与交付背景（仅出包／交付任务时用；日常功能工作对齐 Docker）
+
+> 日常开发/测试对齐 **Docker**（compose / demo）与功能合同，不是本节默认话题。本节是**交付任务**的硬约束事实源；只有明确做 amd64 出包、K8s 安装升级、客户现场验收时才按本节执行。
 
 | 环境 | 硬件 / 平台 | 用途 |
 |---|---|---|
 | 开发环境 | Apple Silicon Mac（arm64）+ Docker Desktop | 本地开发、demo、冒烟验证、出客户镜像包 |
 | 客户环境 | amd64（x86_64）服务器；部署方式按客户环境确定 | 最终交付与运行；当前已验证的正式交付形态为 Kubernetes |
 
-由此派生的硬约束：
+由此派生的硬约束（**交付任务适用**）：
 
 - **客户镜像是 linux/amd64 单架构**，但构建发生在 arm64 Mac 上：允许 `lucy-amd64` builder + QEMU 跨架构构建，**必须**完整过 G1–G4 硬门禁（ELF 架构门禁不得以元数据代替），禁止 `FROM --platform=$BUILDPLATFORM`，禁止 `docker buildx create --use`（会污染本机 demo 默认 builder）。口径见 [`docs/specs/lucy-customer-amd64-offline-delivery-spec.md`](docs/specs/lucy-customer-amd64-offline-delivery-spec.md) v0.3+ 与 [`docs/runbooks/customer-amd64-image-build-checklist.md`](docs/runbooks/customer-amd64-image-build-checklist.md)。
 - **本地脚本必须兼容 stock macOS bash 3.2**（`readarray` / `mapfile` / 负数数组下标均不可用），相关回归门禁见 `scripts/upgrade/upgrade-lucy.test.mjs`。
