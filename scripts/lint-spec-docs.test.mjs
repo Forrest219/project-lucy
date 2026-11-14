@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   checkInteractionContract,
   classifyViolations,
+  collectDesignSystemViolations,
   collectDocViolations,
   collectFilenameViolation,
   collectStaleStatusViolations,
@@ -606,4 +607,57 @@ test("SC-14：生产 grandfather 名单内的现行 Spec 不因交互合同失�
   const listed = new Set(JSON.parse(readFileSync(new URL("../docs/governance/ui-interaction-contract-grandfather.json", import.meta.url), "utf8")).files);
   const hits = scanRepo().violations.filter((item) => item.rule === "interaction-contract" && listed.has(item.file));
   assert.deepEqual(hits, []);
+});
+
+function makeDesignSystem(files) {
+  const root = mkdtempSync(path.join(tmpdir(), "ds-lint-"));
+  const dir = path.join(root, "webui/docs/design-system");
+  mkdirSync(dir, { recursive: true });
+  for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text);
+  return root;
+}
+
+const DS_CHAPTER_OK = "# 章\n\n| 元数据 | 内容 |\n|---|---|\n| 版本 | v1.0 |\n| 撰写日期 | 2026-11-14 |\n";
+
+test("设计系统：章节齐备且被 README 链接 → 无违规", () => {
+  const root = makeDesignSystem({ "README.md": "- `10-a.md`：A\n", "10-a.md": DS_CHAPTER_OK });
+  try {
+    assert.deepEqual(collectDesignSystemViolations(root, "2026-11-14"), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("设计系统：章节未入 README、缺版本 → ds-index、ds-meta", () => {
+  const root = makeDesignSystem({ "README.md": "无\n", "10-a.md": "# 章\n\n无头部\n" });
+  try {
+    const rules = collectDesignSystemViolations(root, "2026-11-14").map((v) => v.rule);
+    assert.ok(rules.includes("ds-index"));
+    assert.ok(rules.includes("ds-meta"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("设计系统：临时决策缺期限或已过期 → ds-td-expiry；有效期内通过", () => {
+  const gov = (rows) => DS_CHAPTER_OK + "\n### 当前临时决策\n\n| 编号 | 模式 |\n|---|---|\n" + rows + "\n### 已升格临时决策\n\n| TD-OLD | x |\n";
+  const run = (rows) => {
+    const root = makeDesignSystem({ "README.md": "`99-governance.md`\n", "99-governance.md": gov(rows) });
+    try {
+      return collectDesignSystemViolations(root, "2026-11-14").filter((v) => v.rule === "ds-td-expiry");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+  assert.equal(run("| TD-1 | a | 升级期限：2026-12-31 |").length, 0);
+  assert.equal(run("| TD-2 | a | 无期限 |").length, 1);
+  assert.equal(run("| TD-3 | a | 升级期限：2026-11-01 |").length, 1);
+});
+
+test("Design System Compliance：引用不存在的章节 → ds-ref；引用存在的章节不报", () => {
+  const body = (ref) =>
+    SPEC_HEADER + SPEC_BODY + "\n## 10. Design System Compliance\n\n### Referenced Specs\n\n- `webui/docs/design-system/" + ref + "`\n\n" +
+    "### What This Change Follows\n\n- x\n\n### Exceptions (If Any)\n\n- None\n\n### Follow-up Needed\n\n- None\n";
+  assert.ok(rulesOf(collectDocViolations(SPEC, body("99-nope-missing.md"))).includes("ds-ref"));
+  assert.ok(!rulesOf(collectDocViolations(SPEC, body("10-components-button.md"))).includes("ds-ref"));
 });

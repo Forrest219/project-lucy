@@ -14,6 +14,10 @@
  *   metadata    Spec 须有 文档类型·版本·状态；Plan 须有 状态·授权边界·验收
  *   filename    新 Spec / Plan 使用唯一文件名；模块 docs 数字流水号 Spec 已封板
  *   close-layer 新功能 Spec 必须有「闭口层级」，且层级只能是功能合同或发布取证
+ *   ds-index    设计系统章节（NN-*.md）必须被 webui/docs/design-system/README.md 链接
+ *   ds-meta     设计系统章节头部必须有「版本」「撰写日期」
+ *   ds-td-expiry 99-governance.md「当前临时决策」每条必须有「升级期限：YYYY-MM-DD」且未过期
+ *   ds-ref      Design System Compliance 小节引用的 design-system/*.md 必须存在
  *   stale-status 「未执行且不排期」「不可交付 UAT」不得裸写；作废标记必须紧贴该句，且不走基线豁免
  *   interaction-contract 触发的 Spec 须有可解析的交互合同与元素清单，或一份有效豁免。文法见
  *     docs/specs/lucy-20261107-ui-interaction-contract-gate-spec.md。grandfather 名单内的文件，
@@ -59,6 +63,11 @@ const STALE_STATUS_EXTRA = [
 ];
 const STALE_STATUS_PREFIX = /(?:不再写|不构成功能阻断|已作废的?)[「"\s]*$/;
 const STALE_STATUS_SUFFIX = /^(?:[」"'*\s。，、；：|（）()]|和|或|并|推出|的现在时|已就地标|已于同日|该句|该记法|这两句|这句|「[^」]{0,24}」)*(?:(?<!未)已?作废|不再写|不得当作现值|不构成功能阻断)/;
+
+const DS_DIR = "webui/docs/design-system";
+const DS_CHAPTER = /^\d{2}-.+\.md$/;
+const DS_GOVERNANCE = `${DS_DIR}/99-governance.md`;
+const DS_TD_DEADLINE = /升级期限[：:]\s*(\d{4}-\d{2}-\d{2})/;
 
 const DS_TEMPLATE_PARTS = [
   { re: /Referenced\s+Specs/i, label: "Referenced Specs" },
@@ -366,6 +375,18 @@ export function collectDocViolations(relPath, text) {
     }
   }
 
+  if (dsHeading) {
+    const body = sectionBody(text, /Design System Compliance/i) ?? "";
+    const seen = new Set();
+    for (const m of body.matchAll(/design-system\/([A-Za-z0-9_.-]+\.md)/g)) {
+      if (seen.has(m[1])) continue;
+      seen.add(m[1]);
+      if (!existsSync(path.join(repoRoot, DS_DIR, m[1]))) {
+        violations.push({ file: relPath, rule: "ds-ref", message: `Design System Compliance 引用的章节不存在：design-system/${m[1]}` });
+      }
+    }
+  }
+
   violations.push(...collectStaleStatusViolations(relPath, text));
 
   if (hs.some((h) => /Terminology Compliance/i.test(h.title))) {
@@ -435,6 +456,44 @@ export function classifyViolations(violations, baselineEntries, trackedFiles = n
   };
 }
 
+/**
+ * 设计系统自身的仓库级检查（索引、头部、临时决策期限）。root 与 today 仅供测试注入。
+ */
+export function collectDesignSystemViolations(root = repoRoot, today = new Date().toISOString().slice(0, 10)) {
+  const violations = [];
+  const dsAbs = path.join(root, DS_DIR);
+  if (!existsSync(dsAbs)) return violations;
+  const readmeRel = `${DS_DIR}/README.md`;
+  const readmePath = path.join(root, readmeRel);
+  const readme = existsSync(readmePath) ? readFileSync(readmePath, "utf8") : "";
+  const chapters = readdirSync(dsAbs).filter((n) => DS_CHAPTER.test(n)).sort();
+  for (const name of chapters) {
+    const rel = `${DS_DIR}/${name}`;
+    if (!readme.includes(`\`${name}\``) && !readme.includes(`](${name})`)) {
+      violations.push({ file: rel, rule: "ds-index", message: `设计系统章节未被 ${readmeRel} 链接` });
+    }
+    const text = readFileSync(path.join(dsAbs, name), "utf8");
+    if (!headerHas(text, "版本") || !headerHas(text, "撰写日期")) {
+      violations.push({ file: rel, rule: "ds-meta", message: "设计系统章节头部缺少「版本」或「撰写日期」" });
+    }
+  }
+  const govPath = path.join(root, DS_GOVERNANCE);
+  if (existsSync(govPath)) {
+    const body = sectionBody(readFileSync(govPath, "utf8"), /当前临时决策/) ?? "";
+    for (const line of body.split("\n")) {
+      const id = /^\|\s*(TD-[\w-]+)\s*\|/.exec(line)?.[1];
+      if (!id) continue;
+      const deadline = DS_TD_DEADLINE.exec(line)?.[1];
+      if (!deadline) {
+        violations.push({ file: DS_GOVERNANCE, rule: "ds-td-expiry", message: `${id} 缺少「升级期限：YYYY-MM-DD」` });
+      } else if (deadline < today) {
+        violations.push({ file: DS_GOVERNANCE, rule: "ds-td-expiry", message: `${id} 升级期限 ${deadline} 已过期，须升格为正式章节、移除或经委托人延期` });
+      }
+    }
+  }
+  return violations;
+}
+
 /** 全量扫描：返回 { violations, blocking, stale, baseline, scanned }。 */
 export function scanRepo() {
   const specFiles = listMarkdown(SPEC_DIR);
@@ -468,6 +527,7 @@ export function scanRepo() {
       violations.push(...checkInteractionContract(relPath, text, planText, { grandfatherFiles, registeredRoutes }));
     }
   }
+  violations.push(...collectDesignSystemViolations());
   for (const relPath of STALE_STATUS_EXTRA) {
     if (!existsSync(path.join(repoRoot, relPath))) continue;
     violations.push(...collectStaleStatusViolations(relPath, read(relPath)));
