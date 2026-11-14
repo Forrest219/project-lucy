@@ -60,10 +60,10 @@
 
 | 数据库类型 | UI driver | 协议 | 默认端口 | 状态 | 证据 / 依据 | 对外口径 |
 |---|---|---|---|---|---|---|
-| MySQL | `mysql` | MySQL | 3306 | `verified` | `npm run smoke:p0:demo`（`mysql:8.4` demo）；`npm run smoke:p0:customer`（Aliyun RDS MySQL 客户路径）；`npm run smoke:p0:headless-config`；UAT `docs/uat/uat-mysql-aliyun-data-qa.md` | 支持 |
+| MySQL | `mysql` | MySQL | 3306 | `verified` | `npm run smoke:p0:demo`（`mysql:8.4` demo）；`npm run smoke:p0:customer`（Aliyun RDS MySQL 客户路径）；`npm run smoke:p0:headless-config`；现行测试台 [`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md)（历史问数草稿归档见 [`docs/uat/uat-mysql-aliyun-data-qa.md`](../uat/uat-mysql-aliyun-data-qa.md)，**非**测试台 SOT） | 支持 |
 | PostgreSQL | `postgres` | PostgreSQL | 5432 | `verified` | `npm run smoke:p0:postgres-demo`（`postgres:16-alpine`）；`deploy/compose/docker-compose.postgres-demo.yml` | 支持 |
 | StarRocks（MySQL 协议） | `mysql` | MySQL（wire） | 9030 | `gated` | 支持计划 `docs/specs/starrocks-r1-support-plan.md`；`npm run smoke:p1:starrocks-certification`（无真实配置时 blocked）；`npm run r1:starrocks-smoke`；evidence 环境变量 `LUCY_R1_STARROCKS_EVIDENCE` | 受限支持；live certification 前不进发布 verified matrix |
-| Apache Doris | `mysql` | MySQL（wire） | 9030 | `gated` | R1 计划 `docs/specs/lucy-r1-controlled-data-service-plan.md`；`npm run r1:doris-smoke`；`npm run r1:readiness:strict`；`npm run r1:release-bundle`；evidence 环境变量 `LUCY_R1_DORIS_EVIDENCE`；UAT 复测 `docs/uat/uat-mcp-session-regression.md` §7；客户环境审阅 `docs/reviews/2026-10-20-selectdb-hive-catalog-review.md` | 受限支持；R1 默认目标源，每个环境需各自举证 |
+| Apache Doris | `mysql` | MySQL（wire） | 9030 | `gated` | R1 计划 `docs/specs/lucy-r1-controlled-data-service-plan.md`；`npm run r1:doris-smoke`；`npm run r1:readiness:strict`；`npm run r1:release-bundle`；evidence 环境变量 `LUCY_R1_DORIS_EVIDENCE`；现行测试台 [`docs/qa/uat/`](../qa/uat/README.md)；历史 MCP 会话草稿归档 [`docs/uat/uat-mcp-session-regression.md`](../uat/uat-mcp-session-regression.md) §7（**非**测试台 SOT）；客户环境审阅 `docs/reviews/2026-10-20-selectdb-hive-catalog-review.md` | 受限支持；R1 默认目标源，每个环境需各自举证 |
 | SQL Server | `sqlserver` | TDS | 1433 | `experimental` | UI 与 KTX 驱动均存在（KTX 0.16.0 `dist/connectors/sqlserver`）；**`scripts/` 与 `deploy/` 零命中——无 smoke、无 compose demo、无 UAT、无论文级实机记录** | 不得写「支持」；需另立支持计划 |
 | Oracle | `oracle` | Oracle | 1521 | `roadmap` | `docs/specs/lucy-platform-goal-checklist.md` v0.3 / v0.4：Oracle 并入 Open Risk，仍为 roadmap candidate，未启动协议兼容 spike | 不得写「支持」 |
 | SQLite | `sqlite` | 文件 | — | `verified` | 本地文件型连接与 Lucy 内部存储（`storage.state: sqlite`）：`npm run smoke:p0:demo`、`customer-config.example/ktx.yaml` | 支持，**但仅限本地文件场景**，不是客户生产目标库 |

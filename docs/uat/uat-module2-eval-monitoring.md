@@ -1,3 +1,5 @@
+> **非测试台 SOT（历史归档）**。现行唯一 UAT／测试台入口：[`docs/qa/uat/`](../qa/uat/README.md)；判定真源 [`INDEX.md`](../qa/uat/INDEX.md)。本文件不得用于主张现行 INDEX PASS。
+
 # Module 2 Eval 配置与监控人工 UAT 用例
 
 | 元数据 | 内容 |

@@ -222,7 +222,7 @@ gh release create v2.0.0 \
 | ② 实现分支 | `feature/lucy-2.5/<L25-id>-<slug>`，从 `lucy-v2.5` 切。一个 L25 一条线，≤5 天 |
 | ③ 验收 | 按该 Spec 自己的 V 矩阵逐条过，写"未执行"及原因，不留空 |
 | ④ 合回 | 回 `lucy-v2.5`，不是回 `main`（§1.2） |
-| ⑤ 批次回归 | `lucy-v2.5` 上的完整门禁；证据按 L25 归档到 `docs/uat/` 或 `docs/specs/` 对应位置 |
+| ⑤ 批次回归 | `lucy-v2.5` 上的完整门禁；客户场景 UAT 证据归档到 **测试台唯一 SOT** [`docs/qa/uat/`](../qa/uat/README.md)（`suites/*/runs/`＋[`INDEX.md`](../qa/uat/INDEX.md)）；合同／取证材料仍按 Spec／reviews 落位。旧 `docs/uat/` 仅为历史归档 |
 | ⑥ 合回 `main` | 只在 P4 发版时做 |
 
 **排期优先级**（取自 2.5 建议书自身的建议，不另造）：

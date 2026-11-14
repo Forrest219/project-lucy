@@ -6,7 +6,7 @@
 | UAT-ACCESS-MAP-01 | 空访问闲置骨干可读 | 浏览器＋API | Spec SC-05／SC-11 | accessPaths=0 时仍有骨干连通带 |
 | UAT-ACCESS-MAP-02 | 图例披露闲置骨干 | 浏览器 | Spec SC-08 | 图例含连通骨干／不撑使用刻度 |
 | UAT-ACCESS-MAP-03 | 访问面仍 confirmed-only | API | Spec SC-04／D1 | trust 口径已确认；非法 trust 拒 |
-| UAT-ACCESS-MAP-04 | begin 后同会话触表进访问流带 | 浏览器／MCP＋刷新图 | Spec SC-01／SC-10 | 可选；confirmed 后 accessPaths>0 |
+| UAT-ACCESS-MAP-04 | begin 后同会话触表进访问流带 | 浏览器／MCP＋刷新图 | P1-17 SC-01／SC-10；**P1-19** 关 F-1 | 可选（主线 A **必实跑**）；confirmed＋`outcome=ok` 后 accessPaths>0，不得仅抬 deniedCalls |
 
 ---
 
@@ -75,22 +75,23 @@ UAT-R0 PASS；窗口内尽量无 confirmed 触表（demo 常见：`accessPaths=0
 
 ---
 
-## UAT-ACCESS-MAP-04 — begin 后同会话触表进访问流带（可选）
+## UAT-ACCESS-MAP-04 — begin 后同会话触表进访问流带（可选；P1-19 主线必实跑）
 
 ### 前置
 
-MCP Proxy 可用；持有可触表连接／源。
+MCP Proxy 可用；持有可触表连接／源。已知历史 FAIL：[`2026-11-13-claude-adversarial`](runs/2026-11-13-claude-adversarial.md) **F-1**（成功触表写 `outcome=ok` 却进 denied／accessPaths=0）。P1-19 修复后本条应收口。
 
 ### 步骤
 
-1. 同会话：`lucy_begin_question` → 再 `lucy_query`／`lucy_read_source`（无冲突 turn header）  
+1. 同会话：`lucy_begin_question` → 再 `lucy_query`（推荐 `superstore_orders.order_count`＋`active_rows`；无冲突 turn header）  
 2. 刷新 `/admin/access-map`（可缩短窗口或保持 168h）  
-3. 核对 API `counts.accessPaths > 0` 且画布出现 usage 流带
+3. 核对 API `counts.accessPaths > 0` 且画布出现 usage 流带；对照 `rawCalls`／`deniedCalls`／`enteringAllowCallCount`
 
 ### 期望
 
 - audit 新触表行为 `association_status=confirmed`  
 - 图上出现访问流带；骨干不替代 usage 厚度  
+- **P1-19**：`outcome=ok` 的成功调用进入访问面，**不得**仅抬 `deniedCalls` 而 `accessPaths` 仍 0  
 
 ### 清理
 

@@ -16,37 +16,37 @@ const REQUIRED = [
     poolId: "P0-3",
     suiteId: "UAT-SUITE-SOURCE-AMBIGUITY",
     suiteDir: "docs/qa/uat/suites/source-ambiguity-gate",
-    latestRun: "docs/qa/uat/suites/source-ambiguity-gate/runs/2026-11-13-cursor-docker-p0-qa.md"
+    latestRun: "docs/qa/uat/suites/source-ambiguity-gate/runs/2026-11-14-claude-macmini-p0-qa.md"
   },
   {
     poolId: "P0-1",
     suiteId: "UAT-SUITE-CALIBER-BINDING",
     suiteDir: "docs/qa/uat/suites/question-type-caliber-binding",
-    latestRun: "docs/qa/uat/suites/question-type-caliber-binding/runs/2026-11-13-cursor-docker-p0-qa.md"
+    latestRun: "docs/qa/uat/suites/question-type-caliber-binding/runs/2026-11-14-claude-macmini-p0-qa.md"
   },
   {
     poolId: "P0-A",
     suiteId: "UAT-SUITE-FIELD-EXPOSURE",
     suiteDir: "docs/qa/uat/suites/semantic-source-field-exposure",
-    latestRun: "docs/qa/uat/suites/semantic-source-field-exposure/runs/2026-11-13-cursor-docker-p0-qa.md"
+    latestRun: "docs/qa/uat/suites/semantic-source-field-exposure/runs/2026-11-14-claude-macmini-p0-qa.md"
   },
   {
     poolId: "P0-4",
     suiteId: "UAT-SUITE-ANSWER-VERIFIABILITY",
     suiteDir: "docs/qa/uat/suites/answer-verifiability",
-    latestRun: "docs/qa/uat/suites/answer-verifiability/runs/2026-11-13-cursor-docker-p0-qa.md"
+    latestRun: "docs/qa/uat/suites/answer-verifiability/runs/2026-11-14-claude-macmini-p0-qa.md"
   },
   {
     poolId: "P0-5",
     suiteId: "UAT-SUITE-EMPTY-NEXT-STEP",
     suiteDir: "docs/qa/uat/suites/empty-result-next-step",
-    latestRun: "docs/qa/uat/suites/empty-result-next-step/runs/2026-11-13-cursor-docker-p0-qa.md"
+    latestRun: "docs/qa/uat/suites/empty-result-next-step/runs/2026-11-14-claude-macmini-p0-qa.md"
   },
   {
     poolId: "P0-2",
     suiteId: "UAT-SUITE-CATALOG-SEMANTICS",
     suiteDir: "docs/qa/uat/suites/catalog-business-semantics",
-    latestRun: "docs/qa/uat/suites/catalog-business-semantics/runs/2026-11-13-cursor-docker-p0-qa.md"
+    latestRun: "docs/qa/uat/suites/catalog-business-semantics/runs/2026-11-14-claude-macmini-p0-qa.md"
   },
   {
     poolId: "P1-15",
@@ -64,7 +64,13 @@ const REQUIRED = [
     poolId: "P1-17",
     suiteId: "UAT-SUITE-ACCESS-MAP",
     suiteDir: "docs/qa/uat/suites/access-map-sankey-empty",
-    latestRun: "docs/qa/uat/suites/access-map-sankey-empty/runs/2026-11-13-claude-adversarial.md"
+    latestRun: "docs/qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md"
+  },
+  {
+    poolId: "P1-19",
+    suiteId: "UAT-SUITE-ACCESS-MAP",
+    suiteDir: "docs/qa/uat/suites/access-map-sankey-empty",
+    latestRun: "docs/qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md"
   },
   {
     poolId: "P1-13",

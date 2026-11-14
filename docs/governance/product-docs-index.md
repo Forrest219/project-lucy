@@ -37,7 +37,8 @@ Lucy 的正式产品定位是 **data agent context compiler + governed MCP runti
 | `docs/customer-deployer-quickstart.md` | Minimal customer installer guide for Docker deployment, Doris validation, and future `customer-config` maintenance |
 | `docs/runbooks/customer-k8s-deployer-quickstart.md` | Minimal Helm installer guide for single-replica K8s deployment, Doris validation, persistence, and rollback |
 | `docs/runbooks/customer-mcp-session-400-upgrade.md` | MCP Session 400 root cause, version comparison, upgrade action sheet and customer-facing brief |
-| `docs/uat/uat-mcp-session-customer-verification.md` | Customer-environment evidence capture and acceptance for the MCP Session fix |
+| `docs/qa/uat/INDEX.md` | **测试台唯一 SOT**（suite＋最近跑次）。旧 `docs/uat/*` 仅为历史归档／重定向 |
+| `docs/uat/uat-mcp-session-customer-verification.md` | （归档）Customer-environment evidence capture for the MCP Session fix — **not** the live UAT SOT |
 | `docs/customer-ops-deployment-runbook.md` | Customer operations manager deployment, acceptance, monitoring, load-test evidence, rollback, and incident runbook |
 | `docs/runbooks/deployment-docker.md` | Docker Compose details and `customer-config/` bind mount |
 | `docs/governance/release-ci.md` | Release CI and KTX upgrade gates |

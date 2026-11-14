@@ -115,7 +115,7 @@
 | `docs/design/design-row-level-acl-feasibility.md` | `docs/access-control/feasibility-row-acl.SUPERSEDED.md` |
 | `docs/design/access-governance-design.md` | `docs/access-control/design-governance-baseline.md` |
 | `docs/design/design-agent-permissions.md` | `docs/access-control/design-agent-permissions-v1.md` |
-| `docs/uat/uat-agent-permissions.md` | `docs/access-control/uat-agent-permissions-v1.md` |
+| `docs/uat/uat-agent-permissions.md`（**历史归档**；测试台 SOT＝[`docs/qa/uat/`](../qa/uat/README.md)） | `docs/access-control/uat-agent-permissions-v1.md`（本域现行） |
 | `docs/reviews/review-module1-agent-permissions.md` | `docs/access-control/review-agent-permissions-v1.md` |
 | `docs/specs/lucy-202608-access-governance-gap-analysis.md` | `docs/access-control/gap-analysis-202608.md` |
 

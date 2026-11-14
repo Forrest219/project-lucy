@@ -165,7 +165,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 |---|---|---|---|
 | **需求台** | 产品线执行总账（上节）＋需求池正文 | 要不要做、优先级、核心分母、跟进序、REQ | 单条 Spec 合同是否收口；UAT 是否绿 |
 | **开发台** | 该功能 Spec 头部「状态」行（镜像规则见「状态登记只有一份现值」） | 功能合同／实现／CR 到哪一步 | 「已 UAT」「可上线」 |
-| **测试台** | [`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md)（套件＋最近跑次） | 哪套 UAT、最近结果 PASS／PASS WITH GAP／FAIL／SKIPPED | 改写 Spec 合同状态；代替发布取证整包 |
+| **测试台** | [`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md)（套件＋最近跑次；树根 [`docs/qa/uat/`](../qa/uat/README.md) 为**唯一** UAT SOT；旧 `docs/uat/` 仅归档） | 哪套 UAT、最近结果 PASS／PASS WITH GAP／FAIL／SKIPPED | 改写 Spec 合同状态；代替发布取证整包；用 `docs/uat/` 历史稿冒充现行 PASS |
 
 **勾连图（只链 ID，不复制状态）：** 总账清单 ID／REQ → Spec 文件名 → UAT Suite ID。现行产品线勾连表与缺口见 [`docs/governance/e2e-ledger.md`](e2e-ledger.md)。
 

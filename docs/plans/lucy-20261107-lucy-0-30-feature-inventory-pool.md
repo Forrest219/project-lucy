@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.69 / 2026-11-14 |
+| 版本 / 日期 | v0.72 / 2026-11-14 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,9 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.72 | 2026-11-14 | **P1-19／REQ-030-040 测试台复跑 PASS**：主线 A 多 Agent（Cursor 编排＋Claude 全真）。[`UAT-SUITE-ACCESS-MAP`](../qa/uat/suites/access-map-sankey-empty/suite.md) 跑次 [`2026-11-14-claude-macmini-p119-access-map`](../qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md)：必做＋04 PASS；F-1 关闭（`ok` 进 band E）。INDEX／e2e-ledger 已挂；Spec 状态「UAT 未复跑」已改指针。**≠ 改功能合同收口句为可上线；≠ 可上线**。Plan [`lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md`](lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md) |
+| v0.71 | 2026-11-14 | **测试台唯一 SOT 对齐**：委托人要求只保留唯一 UAT SOT。现行＝[`docs/qa/uat/`](../qa/uat/README.md)＋[`INDEX.md`](../qa/uat/INDEX.md)；旧 [`docs/uat/`](../uat/README.md) 改为归档／重定向（文件头提示＋README stub）。**≠ 改功能合同；≠ 可上线** |
+| v0.70 | 2026-11-14 | **P0 问数六套件本机 Mac mini 复跑（Wave A）**：委托人批准后 Claude Code 全真执行；Cursor 验收。测试台 INDEX／`e2e-ledger` 已指 [`2026-11-14-claude-macmini-p0-qa`](../qa/uat/suites/source-ambiguity-gate/runs/2026-11-14-claude-macmini-p0-qa.md) 等六跑次；Plan [`lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md`](lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md)。必做：P0-3／4／5／2 **PASS**（含 AV-02／EMPTY-02／CATSEM-02）；P0-1／A **PASS WITH GAP**（CALIBER-02／EXPOSURE-02 Wave B 推迟）；SAG-02 **BLOCKED**（无 person）。验容器 `gitSha=3aa402c9`（原样、未 upgrade）。**≠ 改跟进状态合同句；≠ 改 Spec 头部；≠ 可上线；≠ P0-6／7／B 已推进** |
 | v0.69 | 2026-11-14 | **入池 P1-25／REQ-030-046**：行权限能力评审（面向约 100 用户、其中 30–40 人行级受限）。委托人 2026-11-14 授权审阅既有行权限 Spec（主 Spec、模板与视图、展示、P1-2 编译门禁草案、ADR）、核对已落地代码并做浏览器实地探查，输出认同／反对意见。同日 [评审报告 v1.0](../reviews/2026-11-14-row-policy-capability-assessment.md) 已出。**仅评审，不含开发授权**；不改任何 Spec 状态。UAT not_registered；**不入核心分母**；**不挡**原 P0；≠ 可上线 |
 | v0.69 | 2026-11-14 | **P1-24 Spec／Plan 升 v0.2：纳入浏览器盘点**（委托人指示「用浏览器探查，只做优化的 Spec 和 Plan，不做开发」）。新增 UXR-10–15（对比度、小字号、点击目标、无标签输入、行权限哈希被裁、1280×800 容器内溢出）与裁决项 D-1–D-4；UXR-07 经浏览器核实为假阳性，已关闭；UXR-02 补浏览器证据（`新建 Agent`、`续期`、`吊销` 浮层无名称／不响应 `Esc`／焦点不进入）。批次改为 B1–B5。**仍无开发授权**，仅文档。≠ 可上线 |
 | v0.68 | 2026-11-14 | **入池 P1-24／REQ-030-045**：WebUI 存量 UI/UX 整改（逐页）。委托人 2026-11-14 同意「提出整改意见、落盘为新 Spec、后期逐页修改」＝立项；**不含开发授权**。[Spec v0.1-draft](../specs/lucy-20261114-webui-uiux-remediation-spec.md) 登记 UXR-01–09、批次 B1–B4；进度唯一现值在该 Spec §7。同时更正 v0.67 所述存量数：手写 Drawer 17、`pl-modal-*` 7（不含测试文件口径），`pl-wiki-preflight-*` 仍为 8。UAT not_registered；**不入核心分母**；≠ 可上线 |
@@ -213,7 +216,7 @@
 | P1-16 | P1 | 库内扫表读法（Doris 外部目录 Hive + 普通 MySQL） | REQ-030-037 | 连接／事故修复 | 否 | **功能合同已收口（2026-11-13）**；SC-01–SC-14。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261111-catalog-scan-read-path-spec.md) · [Plan](lucy-20261111-catalog-scan-read-path-plan.md) · [证据审计](../reviews/2026-11-13-catalog-scan-read-path-sc-evidence-audit.md) · **测试台** [`UAT-SUITE-CATALOG-SCAN`](../qa/uat/suites/catalog-scan-read-path/suite.md)（INDEX：[PASS WITH GAP](../qa/uat/INDEX.md)） |
 | P1-17 | P1 | 访问关系图空桑基修复 | REQ-030-038 | WebUI 修复 | 否 | **CLOSED（2026-11-13）** 中间态出口。**不挡**原 P0；≠ 可上线 | [closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md) · [Plan](lucy-20261113-access-map-sankey-empty-fix-plan.md) |
 | P1-18 | P1 | MCP 客户端 Skill 入口镜像（改挂 `/mcp`） | REQ-030-039 | 工程／接入 | 否 | **CLOSED（2026-11-13）** 中间态出口；工程向。**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md) · [Plan](lucy-20261111-mcp-client-skill-endpoint-fix-plan.md) · [closure](../reviews/2026-11-11-mcp-client-skill-endpoint-fix-closure.md) |
-| P1-19 | P1 | 访问关系图允许词表对齐（`ok`／`allow`） | REQ-030-040 | WebUI 修复 | 否 | **实现已落地（2026-11-13）**。vitest access-map 三文件 **76/76**。UAT 未复跑。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-access-map-outcome-vocabulary-spec.md) |
+| P1-19 | P1 | 访问关系图允许词表对齐（`ok`／`allow`） | REQ-030-040 | WebUI 修复 | 否 | **实现已落地（2026-11-13）**。vitest access-map 三文件 **76/76**。**测试台已复跑 PASS（2026-11-14）**（UAT-04 关闭 F-1）。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-access-map-outcome-vocabulary-spec.md) · **测试台** [`UAT-SUITE-ACCESS-MAP`](../qa/uat/suites/access-map-sankey-empty/suite.md)（INDEX：[PASS](../qa/uat/INDEX.md)；跑次 [2026-11-14-claude-macmini-p119-access-map](../qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md)） |
 | P1-20 | P1 | 外部目录单表读字段（直连 DESC／SHOW COLUMNS） | REQ-030-041 | 连接／事故续作 | 否 | **开发授权已获得（2026-11-13，委托人同句「批准修复」）；实现已落地（2026-11-13）**。根因＝KTX 只读校验禁止 `DESC`。vitest 5 文件 76/76；客户 live 未验，UAT 未复跑。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-external-catalog-column-read-spec.md) · [Plan](lucy-20261113-external-catalog-column-read-plan.md) |
 | P1-21 | P1 | 重读路径与探针减负（访问日志后台重建＋健康探针拆分） | REQ-030-042 | WebUI 稳定性／事故修复 | 否 | **功能合同已收口（2026-11-13）**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做 R0／01–04；可选 LOOP-05 BLOCKED——客户 0.25 无 livez）。≠ 可上线 | [Spec](../specs/lucy-20261113-heavy-read-path-and-probe-relief-spec.md) · [Plan](lucy-20261113-heavy-read-path-and-probe-relief-plan.md) · [性能证据](../reviews/2026-11-13-heavy-read-path-relief-perf-evidence.md) · **测试台** [`UAT-SUITE-EVENT-LOOP-RELIEF`](../qa/uat/suites/event-loop-relief/suite.md)（INDEX：[PASS](../qa/uat/INDEX.md)；跑次 [2026-11-13-cursor-demo-event-loop](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md)） |
 | P1-22 | P1 | Doris／SelectDB 多版本对比环境（2.0.14 基线 vs 4.0.8；高频分析路径回归＋版本探测） | REQ-030-043 | 连接／发布取证 | 否 | **入池（2026-11-14）**。委托人同句「我决定以你为准，构建长期测试对比环境」＝立项＋测试环境搭建授权；范围**仅**对比环境、版本探测与证据，**不含**适配代码改动（改代码须另行终稿确权＋开发授权）。行权限在 Doris 上的专项验证暂缓（客户未启用）；客户 SelectDB 版本串暂缺。Spec／Plan 待补；UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | 待补（与 P2-5 `升级候选验证环境` 相邻但对象不同：本条是数据库引擎版本，P2-5 是 Lucy 升级候选） |
@@ -364,6 +367,7 @@
 - **出口**：成功调用 `outcome=ok` 进入访问路径；历史 `allow` 仍进入；拒绝／错误／预算停止不进。
 - **关系**：**不入核心分母**；不改空桑基几何；不回填历史 audit。
 - **授权**：委托人 2026-11-13「立项修一下」。
+- **跟进**：实现已落地（2026-11-13）。**测试台已复跑 PASS（2026-11-14）**——UAT-04 关闭 F-1。≠ 可上线。
 
 ### P1-17｜访问关系图空桑基（REQ-030-038）／P1-18｜MCP Skill 入口（REQ-030-039）
 

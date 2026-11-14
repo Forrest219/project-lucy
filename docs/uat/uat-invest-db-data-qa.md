@@ -1,3 +1,5 @@
+> **非测试台 SOT（历史归档）**。现行唯一 UAT／测试台入口：[`docs/qa/uat/`](../qa/uat/README.md)；判定真源 [`INDEX.md`](../qa/uat/INDEX.md)。本文件不得用于主张现行 INDEX PASS。
+
 # invest-db 数据问答 UAT
 
 | 元数据 | 内容 |

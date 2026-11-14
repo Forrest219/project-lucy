@@ -1,5 +1,7 @@
 # UAT 约定
 
+> **唯一测试台 SOT**＝本目录 [`docs/qa/uat/`](README.md)；判定真源 [`INDEX.md`](INDEX.md)。旧 [`docs/uat/`](../../uat/README.md) 仅为历史归档，不是现行 SOT。
+
 ## 第一性原则（强制）
 
 1. **全真模拟构建／执行测试用例。** 交叉验证与对抗性测试必须以**真实环境**（现行默认：本机 demo Docker／真实 WebUI／真实 API／真实 supervisor）构造并跑通用例，产出可复查的 `runs/` 证据。  
