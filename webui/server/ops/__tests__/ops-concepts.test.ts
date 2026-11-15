@@ -2,13 +2,18 @@
  * P1-11 S2–S4 — 概念 Ops 控制面（授权、只读不建目录、scan 计划形状）。
  */
 
-import { access, cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { constants } from "node:fs";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { constants, existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OpsConceptScanAdapter, OPS_EMPTY_PLAN } from "../concepts-adapter";
+import {
+  OpsConceptScanAdapter,
+  OPS_EMPTY_PLAN,
+  OPS_CONCEPT_RUNTIME_UNAVAILABLE,
+  resolveConceptCodeRoot
+} from "../concepts-adapter";
 import { conceptsDirExists } from "../concepts-read";
 import { invokeOpsTool } from "../ops-tools";
 
@@ -86,9 +91,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 beforeEach(async () => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-ops-concepts-"));
-  await cp(path.join(repoRoot, "scripts", "concepts"), path.join(projectRoot, "scripts", "concepts"), {
-    recursive: true
-  });
+  // P1-27：不把 scripts/concepts 拷进 projectRoot（部署态拆卷）；代码根由 resolveConceptCodeRoot 解析
   await mkdir(path.join(projectRoot, "config"), { recursive: true });
   await mkdir(path.join(projectRoot, "config", "semantic-layer"), { recursive: true });
   await mkdir(path.join(projectRoot, "config", "wiki", "global"), { recursive: true });
@@ -247,11 +250,11 @@ measures:
 `,
       "utf8"
     );
-    const scanUrl = pathToFileURL(path.join(projectRoot, "scripts/concepts/scan.mjs")).href;
+    const scanUrl = pathToFileURL(path.join(resolveConceptCodeRoot(), "scripts/concepts/scan.mjs")).href;
     const scan = await import(scanUrl);
     const pure = scan.planScan({
       contentRoot: path.join(projectRoot, "config"),
-      whitelistPath: path.join(projectRoot, "scripts/concepts/seed-whitelist.yaml")
+      whitelistPath: path.join(resolveConceptCodeRoot(), "scripts/concepts/seed-whitelist.yaml")
     });
     const adapter = new OpsConceptScanAdapter();
     const draft = await adapter.buildPlan({
@@ -333,11 +336,11 @@ measures:
     const digest = (preview as { data?: { confirm_digest?: string } }).data?.confirm_digest as string;
 
     // External mutate: seed concepts outside the plan commit path
-    const scanUrl = pathToFileURL(path.join(projectRoot, "scripts/concepts/scan.mjs")).href;
+    const scanUrl = pathToFileURL(path.join(resolveConceptCodeRoot(), "scripts/concepts/scan.mjs")).href;
     const scan = await import(scanUrl);
     scan.runScan({
       contentRoot: path.join(projectRoot, "config"),
-      whitelistPath: path.join(projectRoot, "scripts/concepts/seed-whitelist.yaml")
+      whitelistPath: path.join(resolveConceptCodeRoot(), "scripts/concepts/seed-whitelist.yaml")
     });
 
     const commit = await invokeOpsTool({
@@ -399,7 +402,7 @@ measures:
 
   it("SC-03 set_canonical then rescan keeps pointer/summary", async () => {
     await seedAndScan();
-    const storeUrl = pathToFileURL(path.join(projectRoot, "scripts/concepts/store.mjs")).href;
+    const storeUrl = pathToFileURL(path.join(resolveConceptCodeRoot(), "scripts/concepts/store.mjs")).href;
     const store = await import(storeUrl);
     const dir = path.join(projectRoot, "config", "concepts");
     const revenue = store.readConcept(dir, "revenue");
@@ -470,7 +473,7 @@ measures:
 
   it("SC-04 reject stays rejected across rescan", async () => {
     await seedAndScan();
-    const storeUrl = pathToFileURL(path.join(projectRoot, "scripts/concepts/store.mjs")).href;
+    const storeUrl = pathToFileURL(path.join(resolveConceptCodeRoot(), "scripts/concepts/store.mjs")).href;
     const store = await import(storeUrl);
     const dir = path.join(projectRoot, "config", "concepts");
     const revenue = store.readConcept(dir, "revenue");
@@ -503,11 +506,11 @@ measures:
     });
     expect(commit.ok).toBe(true);
 
-    const scanUrl = pathToFileURL(path.join(projectRoot, "scripts/concepts/scan.mjs")).href;
+    const scanUrl = pathToFileURL(path.join(resolveConceptCodeRoot(), "scripts/concepts/scan.mjs")).href;
     const scan = await import(scanUrl);
     scan.runScan({
       contentRoot: path.join(projectRoot, "config"),
-      whitelistPath: path.join(projectRoot, "scripts/concepts/seed-whitelist.yaml")
+      whitelistPath: path.join(resolveConceptCodeRoot(), "scripts/concepts/seed-whitelist.yaml")
     });
     const after = store.readConcept(dir, "revenue");
     const binding = after.bindings.find((b: { bindingId: string }) => b.bindingId === hit.bindingId);
@@ -659,7 +662,7 @@ describe("P1-11 SC-07/08/20/22", () => {
 
   it("SC-20 summary mismatch on commit is rejected", async () => {
     await mkdir(path.join(projectRoot, "config", "concepts"), { recursive: true });
-    const storeUrl = pathToFileURL(path.join(projectRoot, "scripts/concepts/store.mjs")).href;
+    const storeUrl = pathToFileURL(path.join(resolveConceptCodeRoot(), "scripts/concepts/store.mjs")).href;
     const store = await import(storeUrl);
     const dir = path.join(projectRoot, "config", "concepts");
     store.writeConceptAtomic(dir, {
@@ -714,7 +717,7 @@ describe("P1-11 SC-07/08/20/22", () => {
   });
 
   it("SC-22 verify after-image mismatch fails closed", async () => {
-    const applyUrl = pathToFileURL(path.join(projectRoot, "scripts/concepts/apply.mjs")).href;
+    const applyUrl = pathToFileURL(path.join(resolveConceptCodeRoot(), "scripts/concepts/apply.mjs")).href;
     const apply = await import(applyUrl);
     const dir = path.join(projectRoot, "config", "concepts");
     await mkdir(dir, { recursive: true });
@@ -734,5 +737,32 @@ describe("P1-11 SC-07/08/20/22", () => {
       }
     ]);
     expect(verified.members.some((m: { state: string }) => m.state !== "succeeded")).toBe(true);
+  });
+});
+
+describe("P1-27 concept code root runtime", () => {
+  it("projectRoot has no scripts/concepts copy; codeRoot resolves to repo", () => {
+    expect(existsSync(path.join(projectRoot, "scripts", "concepts"))).toBe(false);
+    expect(resolveConceptCodeRoot()).toBe(repoRoot);
+  });
+
+  it("list succeeds without scripts under projectRoot", async () => {
+    const envelope = await invokeOpsTool({
+      toolName: "lucy_ops_concept_list",
+      args: {},
+      userId: "concept_agent",
+      projectRoot
+    });
+    expect(envelope.ok).toBe(true);
+    expect(Array.isArray((envelope as { data?: { concepts?: unknown[] } }).data?.concepts)).toBe(true);
+  });
+
+  it("preloadConceptRuntimeModules succeeds from codeRoot", async () => {
+    const { preloadConceptRuntimeModules } = await import("../concepts-adapter");
+    await expect(preloadConceptRuntimeModules()).resolves.toBeUndefined();
+  });
+
+  it("runtime unavailable code is stable", () => {
+    expect(OPS_CONCEPT_RUNTIME_UNAVAILABLE).toBe("ops_concept_runtime_unavailable");
   });
 });

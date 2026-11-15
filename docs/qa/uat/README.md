@@ -42,8 +42,12 @@ docs/qa/uat/
 | `UAT-SUITE-ACCESS-MAP` | P1-17／**P1-19** | 访问关系图空桑基；P1-19 词表／UAT-04 |
 | `UAT-SUITE-ROLES-AGENT-PERF` | P1-13 | Roles／Agent 页性能体感 |
 | `UAT-SUITE-EVENT-LOOP-RELIEF` | P1-21 | 重读路径与存活探针 |
+| `UAT-SUITE-OPS-CONCEPTS` | P1-11 | 概念运维工具（Ops MCP） |
+| `UAT-SUITE-QUESTION-BUDGET` | P1-12 | 问询预算默认阈值 60／300 |
+| `UAT-SUITE-BUDGET-AUDIT` | P1-14 | 问询预算复盘审计字段 |
+| `UAT-SUITE-ROW-POLICY` | **P1-28** | 行级隔离：十几人 × 一批表 × 不同行范围 |
 
-**最近结果与跑次指针以 [`INDEX.md`](INDEX.md) 为准**；本表不复制 PASS／FAIL 句。
+**最近结果与跑次指针以 [`INDEX.md`](INDEX.md) 为准**；本表不复制 PASS／FAIL 句。P1-11（`UAT-SUITE-OPS-CONCEPTS`）已入 INDEX＝FAIL；P1-27 复测 NOT RUN。P1-12／14 套件已挂树，以 INDEX 当次跑次为准。
 
 ## 第一性原则
 

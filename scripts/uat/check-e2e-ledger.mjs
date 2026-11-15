@@ -89,6 +89,19 @@ const REQUIRED = [
     suiteId: "UAT-SUITE-CONTEXT-CONTENT",
     suiteDir: "docs/qa/uat/suites/context-content",
     latestRun: "docs/qa/uat/suites/context-content/runs/2026-11-15-claude-ctx-content.md"
+  },
+  {
+    poolId: "P1-11",
+    suiteId: "UAT-SUITE-OPS-CONCEPTS",
+    suiteDir: "docs/qa/uat/suites/ops-concepts",
+    latestRun: "docs/qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md"
+  },
+  {
+    poolId: "P1-27",
+    suiteId: "UAT-SUITE-OPS-CONCEPTS",
+    suiteDir: "docs/qa/uat/suites/ops-concepts",
+    // Fix retest not run yet; keep FAIL baseline run for link existence.
+    latestRun: "docs/qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md"
   }
 ];
 

@@ -18,6 +18,7 @@
 | `UAT-SUITE-ROLES-AGENT-PERF` | P1-13／REQ-030-034 | [suites/roles-agent-page-perf](suites/roles-agent-page-perf/suite.md) | 本机 demo Docker + WebUI | [2026-11-13-cursor-docker-page-perf](suites/roles-agent-page-perf/runs/2026-11-13-cursor-docker-page-perf.md) | **PASS**（必做 Roles／Agent 网络合同与 API 墙钟；可选 release-baseline **SKIPPED**） |
 | `UAT-SUITE-EVENT-LOOP-RELIEF` | P1-21／REQ-030-042 | [suites/event-loop-relief](suites/event-loop-relief/suite.md) | 候选构建跑规模脚本；demo Docker 跑概览／探针；客户实例仅维护窗 | [2026-11-13-cursor-demo-event-loop](suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md) | **PASS**（必做 R0／01–04；可选 LOOP-05 **BLOCKED**——客户 0.25 无 `/api/livez`。≠ 可上线） |
 | `UAT-SUITE-CONTEXT-CONTENT` | **P1-30**／REQ-030-051 | [suites/context-content](suites/context-content/suite.md) | 本机 demo Docker + MCP；宿主＝Claude Code CLI + Cursor Agent CLI | [claude](suites/context-content/runs/2026-11-15-claude-ctx-content.md)／[cursor-cli](suites/context-content/runs/2026-11-15-cursor-cli-ctx-content.md) | **PASS WITH GAP**（必做 R0／R0-SEED／WIKI-01…04／SKILL-01…04 PASS；WIKI-01S **BLOCKED**=GAP-2；`gitSha=9d59337d`；判定 JSON `inbox/uat-ctx-content-2026-11-15/verdict-cases.json`）。≠ 可上线 |
+| `UAT-SUITE-OPS-CONCEPTS` | **P1-11**／REQ-030-032；**P1-27**／REQ-030-048 | [suites/ops-concepts](suites/ops-concepts/suite.md) | 本机 demo Docker + WebUI + MCP `:57881` | [2026-11-15-claude-macmini-p1-11-ops](suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md) | **FAIL**（R0／01／03 PASS；**02 FAIL**——授权可见，业务受理 502／`ERR_MODULE_NOT_FOUND` at `/data/lucy`；见 GAP-UAT-P1-11-RUNTIME）。**P1-27 修复复测＝NOT RUN**（须干净 `demo:upgrade` 且 health `gitDirty=false`＋`gitSha`＝修复提交后再跑；本登记不重建）。≠ 可上线 |
 
 ## 一键入口（本机）
 
@@ -65,6 +66,12 @@ node scripts/uat/run-catalog-scan-wide-api.mjs
 # Network 合同见 suites/roles-agent-page-perf/cases.md
 # 可选发布取证 runner：
 # npm run perf:release-baseline -- --tier ci-small --skip-build --output inbox/perf-baselines/uat-roles-agent
+
+# 概念运维 Ops MCP（P1-11／P1-27 复测）
+# 用例：docs/qa/uat/suites/ops-concepts/cases.md
+# 复测前置：干净 demo:upgrade；health gitSha＝修复提交且 gitDirty=false（UAT-R0-FIX）
+# 勿手工补 /data/lucy/scripts；测后清理 uat-ops-concept-* Role／Agent
+# 最近判定：FAIL（2026-11-15）；P1-27 修复复测尚未执行
 
 # 三台勾连兜底
 npm run lint:e2e-ledger

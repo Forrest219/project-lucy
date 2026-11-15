@@ -1,12 +1,19 @@
 /**
  * P1-11 — Concept Ops 只读路径（Spec D15）：授权后直接读，不 mkdir、不走计划机。
+ * P1-27 — 概念核心动态 import 锚定代码根（非 projectRoot）。
  */
 
 import { access, constants } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { opsDeny, opsOk, type OpsEnvelope } from "./ops-envelope.js";
-import { resolveOpsConceptContentRoot, type OpsConceptRoots } from "./concepts-adapter.js";
+import {
+  OpsConceptError,
+  OPS_CONCEPT_RUNTIME_UNAVAILABLE,
+  resolveConceptCodeRoot,
+  resolveOpsConceptContentRoot,
+  type OpsConceptRoots
+} from "./concepts-adapter.js";
 import { recoveringBlock, OPS_CONCEPT_RECOVERING } from "./concepts-recovery-fence.js";
 
 export const OPS_CONCEPT_NOT_FOUND = "ops_concept_not_found";
@@ -35,9 +42,15 @@ export function rejectConceptRootOverrides(args: Record<string, unknown>): OpsEn
   return undefined;
 }
 
-async function importFromProject<T>(projectRoot: string, rel: string): Promise<T> {
-  const href = pathToFileURL(path.join(projectRoot, rel)).href;
-  return import(href) as Promise<T>;
+async function importFromCodeRoot<T>(rel: string): Promise<T> {
+  try {
+    const codeRoot = resolveConceptCodeRoot();
+    return (await import(pathToFileURL(path.join(codeRoot, rel)).href)) as T;
+  } catch (err) {
+    if (err instanceof OpsConceptError) throw err;
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new OpsConceptError(OPS_CONCEPT_RUNTIME_UNAVAILABLE, cause);
+  }
 }
 
 async function loadRoots(projectRoot: string): Promise<OpsConceptRoots> {
@@ -50,8 +63,12 @@ export async function opsConceptList(projectRoot: string): Promise<OpsEnvelope> 
     return opsDeny(OPS_CONCEPT_RECOVERING, { concept_ids: blocked.concept_ids }, "概念写集处于恢复中");
   }
   const { contentRoot } = await loadRoots(projectRoot);
-  const store = await importFromProject(projectRoot, "scripts/concepts/store.mjs");
-  const scan = await importFromProject(projectRoot, "scripts/concepts/scan.mjs");
+  const store = await importFromCodeRoot<typeof import("../../../scripts/concepts/store.mjs")>(
+    "scripts/concepts/store.mjs"
+  );
+  const scan = await importFromCodeRoot<typeof import("../../../scripts/concepts/scan.mjs")>(
+    "scripts/concepts/scan.mjs"
+  );
   const dir = store.resolveFencedConceptsDir(contentRoot, { create: false });
   const ids = store.listConceptIds(dir);
   const concepts = [];
@@ -87,8 +104,12 @@ export async function opsConceptShow(
     return opsDeny(OPS_CONCEPT_RECOVERING, { concept_ids: blocked.concept_ids }, "概念处于恢复中");
   }
   const { contentRoot } = await loadRoots(projectRoot);
-  const store = await importFromProject(projectRoot, "scripts/concepts/store.mjs");
-  const scan = await importFromProject(projectRoot, "scripts/concepts/scan.mjs");
+  const store = await importFromCodeRoot<typeof import("../../../scripts/concepts/store.mjs")>(
+    "scripts/concepts/store.mjs"
+  );
+  const scan = await importFromCodeRoot<typeof import("../../../scripts/concepts/scan.mjs")>(
+    "scripts/concepts/scan.mjs"
+  );
   const dir = store.resolveFencedConceptsDir(contentRoot, { create: false });
   const concept = store.readConcept(dir, trimmed);
   if (!concept) {
@@ -107,8 +128,12 @@ export async function opsConceptSummary(
   conceptId?: string
 ): Promise<OpsEnvelope> {
   const { contentRoot } = await loadRoots(projectRoot);
-  const store = await importFromProject(projectRoot, "scripts/concepts/store.mjs");
-  const scan = await importFromProject(projectRoot, "scripts/concepts/scan.mjs");
+  const store = await importFromCodeRoot<typeof import("../../../scripts/concepts/store.mjs")>(
+    "scripts/concepts/store.mjs"
+  );
+  const scan = await importFromCodeRoot<typeof import("../../../scripts/concepts/scan.mjs")>(
+    "scripts/concepts/scan.mjs"
+  );
   const dir = store.resolveFencedConceptsDir(contentRoot, { create: false });
   if (conceptId?.trim()) {
     const id = conceptId.trim();

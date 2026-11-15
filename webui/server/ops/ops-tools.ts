@@ -26,7 +26,8 @@ import { OpsSourceImportAdapter } from "./ops-source-batch.js";
 import {
   OPS_CONCEPT_SCAN,
   assertConceptCommitRequestMatchesPlan,
-  conceptWriteAdapters
+  conceptWriteAdapters,
+  preloadConceptRuntimeModules
 } from "./concepts-adapter.js";
 import { invokeConceptReadTool, rejectConceptRootOverrides } from "./concepts-read.js";
 import type { OpsPlan } from "./ops-batch.js";
@@ -274,8 +275,22 @@ export interface OpsToolInvocation {
  * 控制面工具的统一调用入口（Spec §6.1）。
  *
  * 任何失败都返回 `{ ok: false, error: { code } }`——**不抛异常**给协议层。
+ * P1-27：概念工具读写分支均不得向外抛（含 actor／DB／owner／模块加载）。
  */
 export async function invokeOpsTool(invocation: OpsToolInvocation): Promise<OpsEnvelope> {
+  try {
+    return await invokeOpsToolInner(invocation);
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    return opsDeny(
+      typeof code === "string" ? code : "ops_tool_failed",
+      undefined,
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+}
+
+async function invokeOpsToolInner(invocation: OpsToolInvocation): Promise<OpsEnvelope> {
   const spec = getOpsToolSpec(invocation.toolName);
   if (!spec) {
     return opsDeny(OPS_TOOL_CODES.notControlPlane, undefined, `未登记的控制面工具：${invocation.toolName}`);
@@ -390,48 +405,41 @@ export async function invokeOpsTool(invocation: OpsToolInvocation): Promise<OpsE
     }
   }
 
-  try {
-    if (dryRun) {
-      return await runOpsPreview({
-        adapter,
-        projectRoot: invocation.projectRoot,
-        actor,
-        delegatedFrom,
-        request: args
-      });
-    }
-    if (invocation.toolName.startsWith("lucy_ops_concept_")) {
-      const planId = (args.plan_id as string).trim();
-      const database = await (await import("./ops-idempotency.js")).getOpsDatabase();
-      const stored = loadPlanRow(database, planId);
-      if (stored) {
-        assertConceptCommitRequestMatchesPlan(
-          invocation.toolName,
-          args,
-          stored.plan as unknown as OpsPlan
-        );
-      }
-    }
-    return await runOpsCommit({
+  if (dryRun) {
+    return await runOpsPreview({
       adapter,
       projectRoot: invocation.projectRoot,
       actor,
       delegatedFrom,
-      idempotencyKey: (args.idempotency_key as string).trim(),
-      planId: (args.plan_id as string).trim(),
-      confirmDigest: (args.confirm_digest as string).trim(),
-      requestTargetIds,
-      grants,
-      tool: spec
+      request: args
     });
-  } catch (err) {
-    const code = (err as { code?: string }).code;
-    return opsDeny(
-      typeof code === "string" ? code : "ops_tool_failed",
-      undefined,
-      err instanceof Error ? err.message : String(err)
-    );
   }
+  if (invocation.toolName.startsWith("lucy_ops_concept_")) {
+    // P1-27 D10：claim 前预加载；失败 → 信封、不 claim
+    await preloadConceptRuntimeModules();
+    const planId = (args.plan_id as string).trim();
+    const database = await (await import("./ops-idempotency.js")).getOpsDatabase();
+    const stored = loadPlanRow(database, planId);
+    if (stored) {
+      assertConceptCommitRequestMatchesPlan(
+        invocation.toolName,
+        args,
+        stored.plan as unknown as OpsPlan
+      );
+    }
+  }
+  return await runOpsCommit({
+    adapter,
+    projectRoot: invocation.projectRoot,
+    actor,
+    delegatedFrom,
+    idempotencyKey: (args.idempotency_key as string).trim(),
+    planId: (args.plan_id as string).trim(),
+    confirmDigest: (args.confirm_digest as string).trim(),
+    requestTargetIds,
+    grants,
+    tool: spec
+  });
 }
 
 export { opsOk, opsDeny, type OpsEnvelope };

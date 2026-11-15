@@ -4,9 +4,10 @@
  * 内容根：仅信 Proxy `projectRoot` + ktx.yaml `paths.content_root` 或 `<project>/config`（D11/D12）。
  */
 
+import { existsSync } from "node:fs";
 import { access, readFile, constants } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse } from "yaml";
 import { withOpsWriteLocks } from "./ops-locks.js";
 import {
@@ -37,6 +38,8 @@ export const OPS_EXTERNAL_MODIFICATION_DETECTED = "ops_external_modification_det
 export const OPS_CONTENT_ROOT_UNAVAILABLE = "ops_content_root_unavailable";
 export const OPS_CONCEPT_SUMMARY_REQUIRED = "ops_concept_summary_required";
 export const OPS_CONCEPT_REQUEST_MISMATCH = "ops_concept_request_mismatch";
+/** P1-27：概念核心／默认 whitelist 模块加载失败的稳定机器码 */
+export const OPS_CONCEPT_RUNTIME_UNAVAILABLE = "ops_concept_runtime_unavailable";
 export { OPS_CONCEPT_RECOVERING };
 
 export const CONCEPT_WRITE_TOOLS = new Set<string>([
@@ -96,15 +99,41 @@ export async function resolveOpsConceptContentRoot(projectRoot: string): Promise
   return { contentRoot, conceptsDir: path.join(contentRoot, "concepts") };
 }
 
-async function importConceptModule<T>(projectRoot: string, rel: string): Promise<T> {
-  return import(pathToFileURL(path.join(projectRoot, rel)).href) as Promise<T>;
+/**
+ * P1-27 D3：从本模块 `import.meta.url` 祖先查找含 `scripts/concepts/store.mjs` 的安装根。
+ * **禁止** `process.cwd()`。
+ */
+export function resolveConceptCodeRoot(fromUrl: string = import.meta.url): string {
+  let dir = path.dirname(fileURLToPath(fromUrl));
+  for (let i = 0; i < 16; i += 1) {
+    const marker = path.join(dir, "scripts", "concepts", "store.mjs");
+    if (existsSync(marker)) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new OpsConceptError(
+    OPS_CONCEPT_RUNTIME_UNAVAILABLE,
+    "无法解析概念代码根（未找到 scripts/concepts/store.mjs）"
+  );
 }
 
-export function resolveConceptWhitelistPath(
-  projectRoot: string,
-  whitelistRef: unknown
-): string {
-  const defaultPath = path.join(projectRoot, "scripts/concepts/seed-whitelist.yaml");
+async function importConceptModule<T>(rel: string): Promise<T> {
+  try {
+    const codeRoot = resolveConceptCodeRoot();
+    return (await import(pathToFileURL(path.join(codeRoot, rel)).href)) as T;
+  } catch (err) {
+    if (err instanceof OpsConceptError) throw err;
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new OpsConceptError(OPS_CONCEPT_RUNTIME_UNAVAILABLE, cause);
+  }
+}
+
+/**
+ * P1-27 D9：默认 whitelist 随安装树（codeRoot）分发；首参语义＝codeRoot。
+ */
+export function resolveConceptWhitelistPath(codeRoot: string, whitelistRef: unknown): string {
+  const defaultPath = path.join(codeRoot, "scripts/concepts/seed-whitelist.yaml");
   if (whitelistRef === undefined || whitelistRef === null || whitelistRef === "") {
     return defaultPath;
   }
@@ -117,6 +146,22 @@ export function resolveConceptWhitelistPath(
   }
   if (ref === "seed") return defaultPath;
   throw new OpsConceptError(OPS_WHITELIST_REF_INVALID, `whitelist_ref 未登记：${ref}`);
+}
+
+/** P1-27 D10：commit／claim 前预加载概念核心与默认 whitelist。 */
+export async function preloadConceptRuntimeModules(): Promise<void> {
+  const codeRoot = resolveConceptCodeRoot();
+  await importConceptModule("scripts/concepts/store.mjs");
+  await importConceptModule("scripts/concepts/scan.mjs");
+  await importConceptModule("scripts/concepts/apply.mjs");
+  await importConceptModule("scripts/concepts/plan.mjs");
+  const whitelistPath = resolveConceptWhitelistPath(codeRoot, "seed");
+  try {
+    await access(whitelistPath, constants.R_OK);
+  } catch (err) {
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new OpsConceptError(OPS_CONCEPT_RUNTIME_UNAVAILABLE, cause);
+  }
 }
 
 export function conceptTargetId(conceptId: string): string {
@@ -240,14 +285,8 @@ async function reassertBeforeFingerprints(
   members: OpsPlanTarget[]
 ): Promise<void> {
   const { contentRoot } = await resolveOpsConceptContentRoot(projectRoot);
-  const store = await importConceptModule<typeof import("../../../scripts/concepts/store.mjs")>(
-    projectRoot,
-    "scripts/concepts/store.mjs"
-  );
-  const apply = await importConceptModule<typeof import("../../../scripts/concepts/apply.mjs")>(
-    projectRoot,
-    "scripts/concepts/apply.mjs"
-  );
+  const store = await importConceptModule<typeof import("../../../scripts/concepts/store.mjs")>("scripts/concepts/store.mjs");
+  const apply = await importConceptModule<typeof import("../../../scripts/concepts/apply.mjs")>("scripts/concepts/apply.mjs");
   const dir = store.resolveFencedConceptsDir(contentRoot, { create: false });
   for (const member of members) {
     const conceptId = String(member.payload.conceptId ?? "");
@@ -267,14 +306,8 @@ async function executeConceptGroup(ctx: OpsGroupContext, _changeType: string): P
   const applyTargets = decodeApplyTargets(ctx.members);
   const conceptIds = applyTargets.map((target) => target.conceptId);
   const { contentRoot } = await resolveOpsConceptContentRoot(ctx.projectRoot);
-  const store = await importConceptModule<typeof import("../../../scripts/concepts/store.mjs")>(
-    ctx.projectRoot,
-    "scripts/concepts/store.mjs"
-  );
-  const apply = await importConceptModule<typeof import("../../../scripts/concepts/apply.mjs")>(
-    ctx.projectRoot,
-    "scripts/concepts/apply.mjs"
-  );
+  const store = await importConceptModule<typeof import("../../../scripts/concepts/store.mjs")>("scripts/concepts/store.mjs");
+  const apply = await importConceptModule<typeof import("../../../scripts/concepts/apply.mjs")>("scripts/concepts/apply.mjs");
   const dir = store.resolveFencedConceptsDir(contentRoot, { create: true });
 
   await withOpsWriteLocks(
@@ -313,10 +346,7 @@ async function rollbackConceptGroup(ctx: OpsGroupContext): Promise<OpsRollbackRe
   }
   try {
     const fs = await import("node:fs");
-    const store = await importConceptModule<typeof import("../../../scripts/concepts/store.mjs")>(
-      ctx.projectRoot,
-      "scripts/concepts/store.mjs"
-    );
+    const store = await importConceptModule<typeof import("../../../scripts/concepts/store.mjs")>("scripts/concepts/store.mjs");
     const dir = store.resolveFencedConceptsDir(state.conceptsDir, { create: false });
     for (const target of state.targets) {
       const file = store.safeConceptPath(dir, target.conceptId);
@@ -343,17 +373,11 @@ async function rollbackConceptGroup(ctx: OpsGroupContext): Promise<OpsRollbackRe
 
 async function verifyConceptGroup(ctx: OpsGroupContext): Promise<OpsGroupVerifyResult> {
   const state = CONCEPT_GROUP_STATES.get(ctx.executionId);
-  const apply = await importConceptModule<typeof import("../../../scripts/concepts/apply.mjs")>(
-    ctx.projectRoot,
-    "scripts/concepts/apply.mjs"
-  );
+  const apply = await importConceptModule<typeof import("../../../scripts/concepts/apply.mjs")>("scripts/concepts/apply.mjs");
   const contentRoot = state?.conceptsDir
     ? path.dirname(state.conceptsDir)
     : (await resolveOpsConceptContentRoot(ctx.projectRoot)).contentRoot;
-  const store = await importConceptModule<typeof import("../../../scripts/concepts/store.mjs")>(
-    ctx.projectRoot,
-    "scripts/concepts/store.mjs"
-  );
+  const store = await importConceptModule<typeof import("../../../scripts/concepts/store.mjs")>("scripts/concepts/store.mjs");
   const dir = state?.conceptsDir ?? store.resolveFencedConceptsDir(contentRoot, { create: false });
   const applyTargets = decodeApplyTargets(ctx.members);
   const plannedAfter = applyTargets.map((target) => ({
@@ -436,14 +460,11 @@ export class OpsConceptScanAdapter extends ConceptWriteAdapterBase {
       throw new OpsConceptError(OPS_CONCEPT_RECOVERING, "概念写集处于恢复中，暂不可 scan");
     }
     const whitelistPath = resolveConceptWhitelistPath(
-      ctx.projectRoot,
+      resolveConceptCodeRoot(),
       (ctx.request as { whitelist_ref?: unknown }).whitelist_ref
     );
     const { contentRoot } = await resolveOpsConceptContentRoot(ctx.projectRoot);
-    const scan = await importConceptModule<typeof import("../../../scripts/concepts/scan.mjs")>(
-      ctx.projectRoot,
-      "scripts/concepts/scan.mjs"
-    );
+    const scan = await importConceptModule<typeof import("../../../scripts/concepts/scan.mjs")>("scripts/concepts/scan.mjs");
     const pure = scan.planScan({ contentRoot, whitelistPath });
     const blockers: string[] = [];
     if (!pure.targets.length) {
@@ -505,10 +526,7 @@ export class OpsConceptSetCanonicalAdapter extends ConceptWriteAdapterBase {
       throw new OpsConceptError(OPS_CONCEPT_RECOVERING, `概念 '${parsed.conceptId}' 处于恢复中`);
     }
     const { contentRoot } = await resolveOpsConceptContentRoot(ctx.projectRoot);
-    const plan = await importConceptModule<typeof import("../../../scripts/concepts/plan.mjs")>(
-      ctx.projectRoot,
-      "scripts/concepts/plan.mjs"
-    );
+    const plan = await importConceptModule<typeof import("../../../scripts/concepts/plan.mjs")>("scripts/concepts/plan.mjs");
     const blockers: string[] = [];
     let perTarget: OpsPlanTarget[] = [];
     try {
@@ -559,10 +577,7 @@ export class OpsConceptRejectAdapter extends ConceptWriteAdapterBase {
       throw new OpsConceptError(OPS_CONCEPT_RECOVERING, `概念 '${parsed.conceptId}' 处于恢复中`);
     }
     const { contentRoot } = await resolveOpsConceptContentRoot(ctx.projectRoot);
-    const plan = await importConceptModule<typeof import("../../../scripts/concepts/plan.mjs")>(
-      ctx.projectRoot,
-      "scripts/concepts/plan.mjs"
-    );
+    const plan = await importConceptModule<typeof import("../../../scripts/concepts/plan.mjs")>("scripts/concepts/plan.mjs");
     const blockers: string[] = [];
     let perTarget: OpsPlanTarget[] = [];
     try {
