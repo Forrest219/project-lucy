@@ -48,6 +48,8 @@
 | P1-18 | REQ-030-039 | Skill closure | **`n/a`（工程向）** | — | 中间态 CLOSED；工程向入口，不强制客户场景 UAT |
 | P1-21 | REQ-030-042 | [重读路径 Spec](../specs/lucy-20261113-heavy-read-path-and-probe-relief-spec.md) | [`UAT-SUITE-EVENT-LOOP-RELIEF`](../qa/uat/suites/event-loop-relief/suite.md) | [2026-11-13 PASS](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md) | 必做 R0／01–04 PASS；可选 LOOP-05 BLOCKED（客户 0.25 无 livez）。≠ 可上线 |
 | P1-30 | REQ-030-051 | 设计 [context-content](../design/design-2026-11-15-uat-context-content-wiki-skill.md)（测试台合同；无运行代码 Spec） | [`UAT-SUITE-CONTEXT-CONTENT`](../qa/uat/suites/context-content/suite.md) | [2026-11-15 Claude](../qa/uat/suites/context-content/runs/2026-11-15-claude-ctx-content.md)／[Cursor CLI](../qa/uat/suites/context-content/runs/2026-11-15-cursor-cli-ctx-content.md) | **PASS WITH GAP**（WIKI-01S BLOCKED＝GAP-2）。**不入核心分母**；≠ 可上线 |
+| P1-28 | REQ-030-049 | 无独立 Spec（不改既有行权限 Spec 状态） | [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md) | [2026-11-15 FAIL](../qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md) | **入核心分母**。判定以 INDEX 为准。≠ 可上线 |
+| P1-29 | REQ-030-050 | 无实现 Spec | [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md)（UAT-ROW-07） | [2026-11-15 FAIL](../qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md) | 取值存在性缺口。**不入核心分母**。≠ 可上线 |
 | 其余 P1／P2 | … | 见总账 | **`not_registered` 或 `n/a`** | — | 出门前按 DEVELOPMENT 兜底扫 |
 
 取值约定：
@@ -71,6 +73,8 @@
 | GAP-LINK-POOL | 总账行未普遍挂 Suite 列 | 以本勾连表为准；总账 Spec／Plan 列逐步回链 | P2 |
 | GAP-UAT-P1-21 | ~~套件尚未执行~~；可选客户维护窗 LOOP-05 仍 BLOCKED | **必做已 PASS**（[2026-11-13-cursor-demo-event-loop](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md)）。客户升到含 `/api/livez` 后维护窗再跑 LOOP-05；高峰禁止 `hours=168`。≠ 可上线 | P2 |
 | GAP-UAT-P1-11-RUNTIME | P1-11 测试台 **FAIL**：`allow.ops` 可见工具，但容器拆卷下 `list`／`summary` 502、`scan` `ERR_MODULE_NOT_FOUND`（锚在 `/data/lucy`） | **已挂套件＋首跑**；承接修复 **P1-27／REQ-030-048**。用例已落盘（`UAT-R0-FIX`＋强化 02）。关闭条件：干净升级后复测 R0-FIX／01／02／03 PASS，INDEX 更新，本行划掉。**当前 NOT RUN 复测；本登记不重建**。≠ 可上线 | P1 |
+| GAP-UAT-P1-28 | 行级隔离场景首跑未过 | 套件与用例已落盘。关闭条件：必做全部达到期望且 INDEX＝PASS。当前 [首跑](../qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md) 为 **FAIL**（ROW-02／03／05 BLOCKED）。≠ 可上线 | P1 |
+| GAP-UAT-P1-28-VALUE | 配错取值仍能保存 | 归 **P1-29／REQ-030-050**。UAT-ROW-07 在现行代码上预期 FAIL。关闭条件：保存被拒绝或出现「取值不存在」警告，且 INDEX 中该条不再 FAIL。未授权实现 | P1 |
 
 机器兜底：
 
@@ -110,6 +114,7 @@ node scripts/uat/check-e2e-ledger.mjs
 
 | 日期 | 内容 |
 |---|---|
+| 2026-11-15 | **P1-28／P1-29 测试台首跑 FAIL**：挂 `UAT-SUITE-ROW-POLICY`；跑次 [cursor-row-policy-first](../qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md)；ROW-02／03／05 BLOCKED；ROW-07 预期 FAIL（GAP-UAT-P1-28-VALUE）；ROW-08 已清理且 proven 恢复未设置。≠ 可上线 |
 | 2026-11-15 | **P1-11／P1-27 测试台登记**：INDEX 挂 `UAT-SUITE-OPS-CONCEPTS`＝**FAIL**（[claude-macmini-p1-11-ops](../qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md)）；勾连 P1-11＋P1-27；开 GAP-UAT-P1-11-RUNTIME；cases 落盘 `UAT-R0-FIX`／强化 02 供复跑；**复测 NOT RUN、不重建**；≠ 可上线 |
 | 2026-11-15 | **P1-30／REQ-030-051 首跑 PASS WITH GAP**：挂 `UAT-SUITE-CONTEXT-CONTENT`；双宿主 CLI；WIKI-01S BLOCKED（GAP-2）；证据 `inbox/uat-ctx-content-2026-11-15/`；≠ 可上线 |
 | 2026-11-14 | **P0 六套升级后复跑**：Claude＋Cursor；新增 `UAT-R0-UPGRADE`；INDEX／本表／lint 指 `2026-11-14-claude-macmini-p0-post-upgrade`；`gitSha=9d59337d`。Plan [`lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md`](../plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md)。≠ 可上线 |

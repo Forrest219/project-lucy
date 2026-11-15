@@ -3,8 +3,8 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.88 / 2026-11-15 |
-| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
+| 版本 / 日期 | v0.89 / 2026-11-15 |
+| 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
 | 事实源分工 | **仓库级 SOT 规则** → [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「产品线执行总账（SOT）」；**方向** → [核心方向](lucy-20261107-lucy-0-30-core-direction.md)；**缺口正文** → [需求池](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；**本文件** → 本产品线工作项全集、优先级、核心分母属性、跟进序 |
@@ -14,7 +14,7 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
-| v0.88 | 2026-11-15 | **可信证据／认证能力两类拆分（委托人批准）**：第一类设计口径吸收进 **P0-4／P0-B／P0-5／ACL 默认**（见 [split](lucy-20261115-trust-evidence-capability-split.md)）；第二类未开工项 **REQ-TE-001–008** 进 [post-0.30 需求池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不新增本总账行、不改已收口合同、不授权实现**。≠ 可上线 |
+| v0.89 | 2026-11-15 | **入池 P1-28／REQ-030-049、P1-29／REQ-030-050**。行级隔离入核心分母；取值存在性不入核心分母。测试台 [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md) 已挂，判定只看 INDEX。无独立实现 Spec，未授权改运行代码。≠ 可上线 |
 | v0.87 | 2026-11-15 | **P1-11 测试台 FAIL 入账＋P1-27／REQ-030-048 入池镜像**：INDEX／e2e 挂 `UAT-SUITE-OPS-CONCEPTS`＝FAIL（[claude-macmini-p1-11-ops](../qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md)）；GAP-UAT-P1-11-RUNTIME 开放；cases 落盘 `UAT-R0-FIX` 供复跑；**P1-27 复测 NOT RUN、不重建**；≠ 可上线 |
 | v0.86 | 2026-11-15 | **P1-30／REQ-030-051**：挂 `UAT-SUITE-CONTEXT-CONTENT`；首跑 **PASS WITH GAP**（WIKI-01S BLOCKED）；设计 `docs/design/design-2026-11-15-uat-context-content-wiki-skill.md`；≠ 可上线 |
 | v0.73 | 2026-11-14 | **P0 六套升级后复跑**：委托人批准；Cursor 新增 `UAT-R0-UPGRADE`＋Plan／brief；Claude 全真。INDEX／e2e／lint 指 [`…-p0-post-upgrade`](../qa/uat/suites/source-ambiguity-gate/runs/2026-11-14-claude-macmini-p0-post-upgrade.md)；容器 `gitSha=9d59337d`（≠ 上午 Wave A `3aa402c9`）。P0-3／4／5／2 PASS；P0-1／A PASS WITH GAP（Wave B 仍推迟）；SAG-02 BLOCKED。Plan [`lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md`](lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md)。**≠ 改跟进状态合同句；≠ 可上线** |
@@ -105,7 +105,7 @@
 4. **现行阶段只做规格**：允许写／改／过程评审 Spec 与 Plan；**暂时一律不开工落地**（§2.2），直至委托人按条授权。**已获授权或事故修复授权的条目除外**（须在总账有行）。
 5. **先入总账再动手／再叙事**：新功能、旧功能修复、事故修复、尚未开发项——先追加本池行（并回写需求池 REQ），再开 Spec 或改代码。**禁止无行旁路。**「不入核心分母」只写在「核心分母」列，不得省略入账。
 6. **状态只改本池镜像列 + 需求池／Spec 头部**：收口、授权、Deferred 以 Spec 头部为功能事实源；本池「跟进状态」须同句对齐，禁止两套现值。过程评审深度与终稿确权分列，禁止混成一句「评审通过」。
-7. **P0 七项 + P0-A 未齐前**，不得宣称「0.30 核心升级完成」（判据见核心方向 §9）。不入核心分母的已落地项（如 P1-15…18）**不替代**该判据，但仍须在本池跟踪。
+7. **P0 七项 + P0-A 未齐，或核心方向 §9 第 5 条（行级隔离，P1-28）测试台未 PASS 前**，不得宣称「0.30 核心升级完成」。不入核心分母的已落地项（如 P1-15…18、P1-29）**不替代**该判据，但仍须在本池跟踪。
 8. **兜底差集**：中间态出口或 `user-facing`／发版叙事定稿出门前，用事实面减本池；**事实有、池没有 → 当日补行**；**池有、事实无却已主张交付 → 改状态或撤回主张**（细则见 DEVELOPMENT）。
 9. **三台账**：本池＝需求台 SOT；Spec 头部＝开发台；[`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md)＝测试台。主张 UAT 须挂测试台；勾连见 [`e2e-ledger.md`](../governance/e2e-ledger.md)。**功能合同收口 ≠ UAT PASS**。
 
@@ -228,7 +228,9 @@
 | P1-22 | P1 | Doris／SelectDB 多版本对比环境（2.0.14 基线 vs 4.0.8；高频分析路径回归＋版本探测） | REQ-030-043 | 连接／发布取证 | 否 | **入池（2026-11-14）**。委托人同句「我决定以你为准，构建长期测试对比环境」＝立项＋测试环境搭建授权；范围**仅**对比环境、版本探测与证据，**不含**适配代码改动（改代码须另行终稿确权＋开发授权）。行权限在 Doris 上的专项验证暂缓（客户未启用）；客户 SelectDB 版本串暂缺。Spec／Plan 待补；UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | 待补（与 P2-5 `升级候选验证环境` 相邻但对象不同：本条是数据库引擎版本，P2-5 是 Lucy 升级候选） |
 | P1-23 | P1 | UI/UX 标准收敛并与 DEVELOPMENT 绑定（设计系统 `webui/docs/design-system/` 清账、补缺章、DEVELOPMENT 总入口表） | REQ-030-044 | 文档治理 | 否 | **入池（2026-11-14）**。委托人批准：只读核对（已出报告）＋登记＋清理 `99-governance.md` 临时决策。**范围仅文档**；补缺章、改 DEVELOPMENT 总入口、新增 lint 门禁须各自另获委托人确认；不含运行代码。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [核对报告](../../inbox/20261114-0130-uiux-standard-audit.md)（临时文件，定稿后迁入 `docs/reviews/`） |
 | P1-24 | P1 | WebUI 存量 UI/UX 整改（逐页；UXR-01–09，批次 B1–B4） | REQ-030-045 | WebUI 整改 | 否 | **入池／立项（2026-11-14），Spec／Plan v0.2-draft（已含浏览器盘点）待委托人确认范围、批次与 D-1–D-4**。**不含开发授权，本阶段只做优化方案**：各批改运行代码须各自入子 Plan、终稿确权、委托人另发开发授权。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261114-webui-uiux-remediation-spec.md) |
-| P1-25 | P1 | 行权限能力评审（100 用户／30–40 人行级受限目标） | REQ-030-046 | 评审／正确性辅线 | 否 | **评审报告 v1.0 已出（2026-11-14），待委托人裁决**。结论：安全内核实测成立；默认部署不可用（proven 全局开关）、BY-01／BY-18 回归为红、取值无校验、受限用户工具面缩水，提出 P0 四项建议。**仅评审，不含开发授权**；不改 P1-2／P1-7 及已收口 Spec 状态。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [评审报告](../reviews/2026-11-14-row-policy-capability-assessment.md) |
+| P1-25 | P1 | 行权限能力评审（100 用户／30–40 人行级受限目标） | REQ-030-046 | 评审／正确性辅线 | 否 | **评审报告 v1.0 已出（2026-11-14），待委托人裁决**。结论：安全内核实测成立；默认部署不可用（proven 全局开关）、BY-01／BY-18 回归为红、取值无校验、受限用户工具面缩水，提出 P0 四项建议。**仅评审，不含开发授权**；不改 P1-2／P1-7 及已收口 Spec 状态。场景验收见 **P1-28**。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [评审报告](../reviews/2026-11-14-row-policy-capability-assessment.md) |
+| P1-28 | P1 | 行级隔离场景（十几人 × 一批表 × 不同行范围） | REQ-030-049 | 正确性／核心分母 | 是 | **方向已入主线（2026-11-15）**。无独立 Spec，未授权实现，不改既有行权限 Spec 状态。测试台已挂，判定以 INDEX 为准。≠ 可上线 | **测试台** [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md)（INDEX） |
+| P1-29 | P1 | 行级取值存在性校验 | REQ-030-050 | 正确性缺口 | 否 | **缺口登记（2026-11-15）**。无实现 Spec，未授权实现。由同一套件 UAT-ROW-07 承接，判定以 INDEX 为准。≠ 可上线 | **测试台** [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md)（INDEX） |
 | P2-1 | P2 辅线 | 发布工作台分文件勾选发布 | REQ-030-001 | UX 辅线 | 否 | 草案齐；批次 R1 已修订；**终稿未确权**；**不定义 0.30 成败** | [Spec](../specs/lucy-20261107-publish-workbench-per-file-selection-spec.md) · [Plan](lucy-20261107-publish-workbench-per-file-selection-plan.md) |
 | P2-2 | P2 辅线 | 帮助中心体验 | REQ-030-002 | UX 辅线 | 否 | Deferred／开线对齐既有 Spec | 既有 Spec |
 | P2-3 | P2 辅线 | 运维控制面 W-B（语义发布） | REQ-030-004 | 运维辅线 | 否 | Deferred；阻塞条件见既有 Spec | 既有 Spec |
@@ -270,14 +272,12 @@
 
 - **出口**：纳入路径成功 `lucy_query` 强制带 `answer_verifiability`（来源／口径／截止期披露）；首期截止期诚实 `not_checked`（物理真源见 P0-B）。
 - **跟进**：Spec／Plan **v0.4**；R2-F＋R3＋R4 已闭合；**功能合同已收口（2026-11-13）**；SC-16／17／21／22 夹具证据已补全。O1＝A／O2＝A。截止期真源见 P0-B（v0.1-draft，未授权，不得回写本条 cutoff）。本条收口不表示可上线。
-- **可信证据吸收（2026-11-15）**：分轨证据／`not_checked` 诚实披露原则见 [split A2](lucy-20261115-trust-evidence-capability-split.md)；**不回写**已冻 cutoff。路径覆盖（certified_route／report_template）等续作 → [REQ-TE-001](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，不得静默扩已收口出口。
 - **不做**：重造 provenance 同义结构；静默成功无块；未授权前接真实 freshness；默认不做 WebUI 核对页（O1）。
 
 ### P0-5｜空结果下一步（REQ-030-018）
 
 - **出口**：`lucy_query` 严格 0 行 → 结构化 `next_step`（已存在承载位一致；模型可读 MCP content）。
 - **跟进**：Spec／Plan **v0.8**；R2-F＋R4 已闭合；**功能合同已收口（2026-11-13）**；SC-01–SC-30 证据关闭。D1＝结构化、D2＝只提示不阻断、**D3＝A**；与 P0-4 共存合同已齐。本条收口不表示可上线。
-- **可信证据吸收（2026-11-15）**：「只揭示不拦截」与 D2 对齐，见 [split A3](lucy-20261115-trust-evidence-capability-split.md)；不因本裁决新增质量阻断。
 
 ### P0-6｜Eval 选表可测 + 日跑骨架（REQ-030-025 + 019／020 最小面）
 
@@ -303,7 +303,6 @@
 - **出口**：`lucy_query`／可核对块的「数据截止期」有可声明的物理（或等价业务）新鲜度真源；禁止长期以语义文件 mtime 冒充业务截止期而不登记。
 - **跟进**：Spec／Plan **v0.1-draft；O1–O3 已闭合（2026-11-13）＝建议包 F；待 R2-F；终稿未确权；冻结落地；未授权实现**。不改 P0-4 已冻结的 `cutoff.status=not_checked`（D8／SC-08）。**不是** R2-F，**不是** R4，**不可功能合同收口**。
 - **关系**：呈现闸伴生，强化 P0-4。
-- **可信证据吸收（2026-11-15）**：物理真源／`not_checked`≠正常／禁语义 mtime 冒充见 [split A1](lucy-20261115-trust-evidence-capability-split.md)。监控型管道失败揭示整包 → [REQ-TE-003](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，不塞进本条未授权出口。
 - **不做**：不要求一次建成全库 CDC；允许按 connection／source 声明「未配置」并 fail-visible。
 
 ### P1-8｜语义发布 → Eval 门禁（REQ-030-029）
@@ -436,6 +435,6 @@
 
 ## 7. 本池自身验收
 
-- 本文件是 `0.30` **执行总账 SOT**（见 DEVELOPMENT）；清单覆盖需求池 REQ-030-001–046（含已收口 003），无孤儿 REQ。
+- 本文件是 `0.30` **执行总账 SOT**（见 DEVELOPMENT）。v0.89 补入 REQ-030-049／050。测试台判定只看 INDEX，不写进本表跟进状态代替 INDEX。
 - P0 立项范围与 §2／§3 一致；**P0-B O1–O3 已闭合（建议包 F），待 R2-F**；**P1-8／P1-9 仍待立项**；**P1-10 委托人结案**；**P1-11…14 已落地／收口**；**P1-15…18 差集补录（不入核心分母）**；agent 规则可被本分支会话引用。
 - **不构成任何功能验收或上线许可。**

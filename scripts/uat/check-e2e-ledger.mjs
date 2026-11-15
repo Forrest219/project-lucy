@@ -102,6 +102,18 @@ const REQUIRED = [
     suiteDir: "docs/qa/uat/suites/ops-concepts",
     // Fix retest not run yet; keep FAIL baseline run for link existence.
     latestRun: "docs/qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md"
+  },
+  {
+    poolId: "P1-28",
+    suiteId: "UAT-SUITE-ROW-POLICY",
+    suiteDir: "docs/qa/uat/suites/row-policy-finance-scenario",
+    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md"
+  },
+  {
+    poolId: "P1-29",
+    suiteId: "UAT-SUITE-ROW-POLICY",
+    suiteDir: "docs/qa/uat/suites/row-policy-finance-scenario",
+    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md"
   }
 ];
 

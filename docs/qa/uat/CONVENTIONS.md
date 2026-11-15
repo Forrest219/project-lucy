@@ -27,6 +27,7 @@
 | `UAT-CATSEM-*` | Catalog 业务语义（P0-2） |
 | `UAT-CTX-*` | MCP Wiki／Skill 真读真用＋ACL（P1-30；含 `UAT-CTX-R0-SEED`） |
 | `UAT-OPS-CONCEPT-*` | 概念运维 Ops MCP（P1-11／P1-27；含 `UAT-R0-FIX`） |
+| `UAT-ROW-*` | 行级隔离场景（P1-28／P1-29） |
 | `UAT-R0` | 环境门禁（各套件共用可引用） |
 
 自动化脚本 ID（`E2E-*`／`VERIFY-*`／`UT-*`）可写在用例「自动化指针」栏，但 UAT 编号保持稳定，便于跨 Agent 引用。

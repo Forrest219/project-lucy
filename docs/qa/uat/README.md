@@ -47,7 +47,7 @@ docs/qa/uat/
 | `UAT-SUITE-BUDGET-AUDIT` | P1-14 | 问询预算复盘审计字段 |
 | `UAT-SUITE-ROW-POLICY` | **P1-28** | 行级隔离：十几人 × 一批表 × 不同行范围 |
 
-**最近结果与跑次指针以 [`INDEX.md`](INDEX.md) 为准**；本表不复制 PASS／FAIL 句。P1-11（`UAT-SUITE-OPS-CONCEPTS`）已入 INDEX＝FAIL；P1-27 复测 NOT RUN。P1-12／14 套件已挂树，以 INDEX 当次跑次为准。
+**最近结果与跑次指针以 [`INDEX.md`](INDEX.md) 为准**；本表不复制 PASS／FAIL 句。P1-11（`UAT-SUITE-OPS-CONCEPTS`）已入 INDEX＝FAIL；P1-27 复测 NOT RUN。P1-28（`UAT-SUITE-ROW-POLICY`）已入 INDEX＝FAIL。P1-12／14 套件已挂树，以 INDEX 当次跑次为准。
 
 ## 第一性原则
 

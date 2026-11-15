@@ -19,6 +19,7 @@
 | `UAT-SUITE-EVENT-LOOP-RELIEF` | P1-21／REQ-030-042 | [suites/event-loop-relief](suites/event-loop-relief/suite.md) | 候选构建跑规模脚本；demo Docker 跑概览／探针；客户实例仅维护窗 | [2026-11-13-cursor-demo-event-loop](suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md) | **PASS**（必做 R0／01–04；可选 LOOP-05 **BLOCKED**——客户 0.25 无 `/api/livez`。≠ 可上线） |
 | `UAT-SUITE-CONTEXT-CONTENT` | **P1-30**／REQ-030-051 | [suites/context-content](suites/context-content/suite.md) | 本机 demo Docker + MCP；宿主＝Claude Code CLI + Cursor Agent CLI | [claude](suites/context-content/runs/2026-11-15-claude-ctx-content.md)／[cursor-cli](suites/context-content/runs/2026-11-15-cursor-cli-ctx-content.md) | **PASS WITH GAP**（必做 R0／R0-SEED／WIKI-01…04／SKILL-01…04 PASS；WIKI-01S **BLOCKED**=GAP-2；`gitSha=9d59337d`；判定 JSON `inbox/uat-ctx-content-2026-11-15/verdict-cases.json`）。≠ 可上线 |
 | `UAT-SUITE-OPS-CONCEPTS` | **P1-11**／REQ-030-032；**P1-27**／REQ-030-048 | [suites/ops-concepts](suites/ops-concepts/suite.md) | 本机 demo Docker + WebUI + MCP `:57881` | [2026-11-15-claude-macmini-p1-11-ops](suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md) | **FAIL**（R0／01／03 PASS；**02 FAIL**——授权可见，业务受理 502／`ERR_MODULE_NOT_FOUND` at `/data/lucy`；见 GAP-UAT-P1-11-RUNTIME）。**P1-27 修复复测＝NOT RUN**（须干净 `demo:upgrade` 且 health `gitDirty=false`＋`gitSha`＝修复提交后再跑；本登记不重建）。≠ 可上线 |
+| `UAT-SUITE-ROW-POLICY` | **P1-28**／REQ-030-049；**P1-29**／REQ-030-050 | [suites/row-policy-finance-scenario](suites/row-policy-finance-scenario/suite.md) | 本机 demo Docker；自造 `uat_row_policy_` 两表；WebUI `:55176`；MCP `:57881` | [2026-11-15-cursor-row-policy-first](suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md) | **FAIL**（R0／ROW-01／04／06 PASS；ROW-08 登记修复时清理 PASS；**ROW-02／03／05 BLOCKED**——`source_ambiguity_gate`／`need_begin_or_confirm`，未完成来源确认，没有隔离结果；**ROW-07 FAIL**＝预期，GAP-UAT-P1-28-VALUE）。`gitSha=f9549135`。≠ 可上线；≠ 核心升级完成 |
 
 ## 一键入口（本机）
 
@@ -72,6 +73,12 @@ node scripts/uat/run-catalog-scan-wide-api.mjs
 # 复测前置：干净 demo:upgrade；health gitSha＝修复提交且 gitDirty=false（UAT-R0-FIX）
 # 勿手工补 /data/lucy/scripts；测后清理 uat-ops-concept-* Role／Agent
 # 最近判定：FAIL（2026-11-15）；P1-27 修复复测尚未执行
+
+# 行级隔离（P1-28／P1-29）
+# 用例：docs/qa/uat/suites/row-policy-finance-scenario/cases.md
+# 夹具：同目录 fixtures.md（自造 uat_row_policy_；proven 用同一 compose project 重建）
+# 最近判定：FAIL（2026-11-15-cursor-row-policy-first）
+# 复跑前确认 printenv LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN 未设置，且没有 uat-row-policy-* / uat_row_policy_ 残留
 
 # 三台勾连兜底
 npm run lint:e2e-ledger

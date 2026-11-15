@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.141 |
+| 版本 | v1.142 |
+| v1.142 更新 | 2026-11-15，**行级隔离升入 0.30 核心分母**：方向 v0.5 §4.5／§9 第 5 条；清单池 v0.89 **P1-28／REQ-030-049**；需求池 v0.59。测试台 `UAT-SUITE-ROW-POLICY`＝**FAIL**。不新开实现 Spec，未改运行代码。**≠ 可上线；≠ 核心升级完成。** 台账号无。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.141 更新 | 2026-11-13，**端到端三台账**：DEVELOPMENT 增需求台／开发台／测试台 SOT；勾连＋基准线追评 [`e2e-ledger.md`](e2e-ledger.md)；测试台 [`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md)；清单池 v0.52 挂 P1-15／16 UAT。**≠ 可上线；≠ 核心升级完成。** 台账号无。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.140 更新 | 2026-11-13，**中间态已出口**：[盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](../plans/lucy-20261113-midstate-exit-closure-plan.md)。Edit 成功面＋桑基功能合同收口＋扫表不入分母＋Skill 镜像 CLOSED；P0-6／7／B 仍冻结。**≠ 可上线；≠ 0.30 核心升级完成。** 台账号无。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.139 更新 | 2026-11-13，**中间态出口收口盘点**：[盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)。规则＝未开工不开工；半成品必收口。P0-6／7／B 不动。**≠ 可上线；≠ 0.30 核心升级完成。** 台账号无。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
@@ -279,7 +280,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 主题 | 文档 |
 |---|---|
 | **中间态已出口（2026-11-13）** | [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md) · [执行 Plan](../plans/lucy-20261113-midstate-exit-closure-plan.md)。半成品四项 CLOSED；P0-6／7／B 冻结。**≠ 可上线；≠ 核心升级完成** |
-| **0.30 功能清单池（跟进主表；立项已批准；现行＝严格评审 Spec／Plan，冻结落地）** | [功能清单池](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)（**v0.48**）· [核心方向](../plans/lucy-20261107-lucy-0-30-core-direction.md)· [需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)。§2.2 三层进度。P0-6／7／B：**O 已闭合；待 R2-F；本轮暂不推进**。台账号无。本条不表示可上线 |
+| **0.30 功能清单池（跟进主表；立项已批准；现行＝严格评审 Spec／Plan，冻结落地）** | [功能清单池](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)（**v0.89**）· [核心方向](../plans/lucy-20261107-lucy-0-30-core-direction.md)（**v0.5**，含行级隔离 §4.5）· [需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)（**v0.59**）。**P1-28 入核心分母**；测试台 INDEX＝**FAIL**。§2.2 三层进度。P0-6／7／B：**O 已闭合；待 R2-F；本轮暂不推进**。台账号无。本条不表示可上线 |
 | **0.30 MCP next-step 分支计划（不是 Spec，不授权实现）** | [Plan](../plans/lucy-20261107-mcp-next-step-guidance-and-journey-eval-plan.md)。把外部文章主张逐条对拍 Lucy——缺口登记为 REQ-030-018–021。分支级 D1–D5 已裁定；**G1（018／P0-5）已 R2-F＋R4、功能合同已收口（2026-11-13）、实现 CR 已落盘（PASS，2026-11-13）**（vitest 空结果 33/33）。019–021 仍待各自门禁。台账号无。本条不表示可上线 |
 | **0.30 误报防线分支计划（不是 Spec，不授权实现）** | [Plan](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)。**按 2026-11-06 CFO 选表误报事故 ＋ 2026-11-07 客户沟通实录（客户：翊总／田总）**做定性——错表为 GPU 计提成本表（客户有权访问）⇒ **语义误报，ACL 越权排除**；事故有**两条独立故障轴**（选错表 ＋ 口径被 AI 自行加工）；**止血已落地**（改语义文件、客户真实账号复测通过）。八个缺口登记为 REQ-030-022–027。**终稿未确权**；暂不开工落地。台账号无（0.30 台账未建立）。本条不表示可上线 |
 | **问题类型口径绑定（0.30 Batch S1／P0-1／REQ-030-027，v0.9；功能合同已收口（2026-11-13））** | [Spec](../specs/lucy-20261107-question-type-caliber-binding-spec.md) · [Plan](../plans/lucy-20261107-question-type-caliber-binding-plan.md) · [评审](../reviews/2026-11-07-question-type-caliber-binding-codex-review.md) · [CR](../reviews/2026-11-08-p0-1-caliber-binding-code-review.md) · [证据审计](../reviews/2026-11-13-question-type-caliber-binding-sc-evidence-audit.md)。SC-01–SC-30 证据关闭。台账号无。本条收口不表示可上线 |
