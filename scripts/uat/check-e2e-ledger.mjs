@@ -83,6 +83,12 @@ const REQUIRED = [
     suiteId: "UAT-SUITE-EVENT-LOOP-RELIEF",
     suiteDir: "docs/qa/uat/suites/event-loop-relief",
     latestRun: "docs/qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md"
+  },
+  {
+    poolId: "P1-30",
+    suiteId: "UAT-SUITE-CONTEXT-CONTENT",
+    suiteDir: "docs/qa/uat/suites/context-content",
+    latestRun: "docs/qa/uat/suites/context-content/runs/2026-11-15-claude-ctx-content.md"
   }
 ];
 

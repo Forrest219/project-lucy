@@ -291,3 +291,5 @@
 |---|---|
 | [prompts/lucy-20261101-access-map-chart-first-coder-prompt.md](prompts/lucy-20261101-access-map-chart-first-coder-prompt.md) | 访问关系图图优先呈现的 coder 交付提示词 |
 | [prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md](prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md) | Agent 管理台高权限呈现的审阅者交付提示词 |
+
+- [UAT：Wiki／Skill 真读真用＋ACL（P1-30）](design/design-2026-11-15-uat-context-content-wiki-skill.md)

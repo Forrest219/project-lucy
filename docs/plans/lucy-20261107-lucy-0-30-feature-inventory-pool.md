@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v0.73 / 2026-11-14 |
+| 版本 / 日期 | v0.86 / 2026-11-15 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,7 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.86 | 2026-11-15 | **P1-30／REQ-030-051**：挂 `UAT-SUITE-CONTEXT-CONTENT`；首跑 **PASS WITH GAP**（WIKI-01S BLOCKED）；设计 `docs/design/design-2026-11-15-uat-context-content-wiki-skill.md`；≠ 可上线 |
 | v0.73 | 2026-11-14 | **P0 六套升级后复跑**：委托人批准；Cursor 新增 `UAT-R0-UPGRADE`＋Plan／brief；Claude 全真。INDEX／e2e／lint 指 [`…-p0-post-upgrade`](../qa/uat/suites/source-ambiguity-gate/runs/2026-11-14-claude-macmini-p0-post-upgrade.md)；容器 `gitSha=9d59337d`（≠ 上午 Wave A `3aa402c9`）。P0-3／4／5／2 PASS；P0-1／A PASS WITH GAP（Wave B 仍推迟）；SAG-02 BLOCKED。Plan [`lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md`](lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md)。**≠ 改跟进状态合同句；≠ 可上线** |
 | v0.72 | 2026-11-14 | **P1-19／REQ-030-040 测试台复跑 PASS**：主线 A 多 Agent（Cursor 编排＋Claude 全真）。[`UAT-SUITE-ACCESS-MAP`](../qa/uat/suites/access-map-sankey-empty/suite.md) 跑次 [`2026-11-14-claude-macmini-p119-access-map`](../qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md)：必做＋04 PASS；F-1 关闭（`ok` 进 band E）。INDEX／e2e-ledger 已挂；Spec 状态「UAT 未复跑」已改指针。**≠ 改功能合同收口句为可上线；≠ 可上线**。Plan [`lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md`](lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md) |
 | v0.71 | 2026-11-14 | **测试台唯一 SOT 对齐**：委托人要求只保留唯一 UAT SOT。现行＝[`docs/qa/uat/`](../qa/uat/README.md)＋[`INDEX.md`](../qa/uat/INDEX.md)；旧 [`docs/uat/`](../uat/README.md) 改为归档／重定向（文件头提示＋README stub）。**≠ 改功能合同；≠ 可上线** |
@@ -220,6 +221,7 @@
 | P1-19 | P1 | 访问关系图允许词表对齐（`ok`／`allow`） | REQ-030-040 | WebUI 修复 | 否 | **实现已落地（2026-11-13）**。vitest access-map 三文件 **76/76**。**测试台已复跑 PASS（2026-11-14）**（UAT-04 关闭 F-1）。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-access-map-outcome-vocabulary-spec.md) · **测试台** [`UAT-SUITE-ACCESS-MAP`](../qa/uat/suites/access-map-sankey-empty/suite.md)（INDEX：[PASS](../qa/uat/INDEX.md)；跑次 [2026-11-14-claude-macmini-p119-access-map](../qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md)） |
 | P1-20 | P1 | 外部目录单表读字段（直连 DESC／SHOW COLUMNS） | REQ-030-041 | 连接／事故续作 | 否 | **开发授权已获得（2026-11-13，委托人同句「批准修复」）；实现已落地（2026-11-13）**。根因＝KTX 只读校验禁止 `DESC`。vitest 5 文件 76/76；客户 live 未验，UAT 未复跑。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261113-external-catalog-column-read-spec.md) · [Plan](lucy-20261113-external-catalog-column-read-plan.md) |
 | P1-21 | P1 | 重读路径与探针减负（访问日志后台重建＋健康探针拆分） | REQ-030-042 | WebUI 稳定性／事故修复 | 否 | **功能合同已收口（2026-11-13）**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做 R0／01–04；可选 LOOP-05 BLOCKED——客户 0.25 无 livez）。≠ 可上线 | [Spec](../specs/lucy-20261113-heavy-read-path-and-probe-relief-spec.md) · [Plan](lucy-20261113-heavy-read-path-and-probe-relief-plan.md) · [性能证据](../reviews/2026-11-13-heavy-read-path-relief-perf-evidence.md) · **测试台** [`UAT-SUITE-EVENT-LOOP-RELIEF`](../qa/uat/suites/event-loop-relief/suite.md)（INDEX：[PASS](../qa/uat/INDEX.md)；跑次 [2026-11-13-cursor-demo-event-loop](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md)） |
+| P1-30 | P1 | Wiki／Skill 真读真用＋ACL UAT（测试台合同；防假通） | REQ-030-051 | 测试台／正确性辅线 | 否 | **PASS WITH GAP（2026-11-15 首跑）**。必做 R0／R0-SEED／WIKI-01…04／SKILL-01…04 PASS；WIKI-01S **BLOCKED**（GAP-2）。双宿主 Claude Code CLI＋Cursor Agent CLI。**不入核心分母**；≠ 可上线 | [设计](../design/design-2026-11-15-uat-context-content-wiki-skill.md) · [落地 Plan](lucy-20261115-uat-context-content-landing-plan.md) · **测试台** [`UAT-SUITE-CONTEXT-CONTENT`](../qa/uat/suites/context-content/suite.md)（INDEX：[PASS WITH GAP](../qa/uat/INDEX.md)） |
 | P1-22 | P1 | Doris／SelectDB 多版本对比环境（2.0.14 基线 vs 4.0.8；高频分析路径回归＋版本探测） | REQ-030-043 | 连接／发布取证 | 否 | **入池（2026-11-14）**。委托人同句「我决定以你为准，构建长期测试对比环境」＝立项＋测试环境搭建授权；范围**仅**对比环境、版本探测与证据，**不含**适配代码改动（改代码须另行终稿确权＋开发授权）。行权限在 Doris 上的专项验证暂缓（客户未启用）；客户 SelectDB 版本串暂缺。Spec／Plan 待补；UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | 待补（与 P2-5 `升级候选验证环境` 相邻但对象不同：本条是数据库引擎版本，P2-5 是 Lucy 升级候选） |
 | P1-23 | P1 | UI/UX 标准收敛并与 DEVELOPMENT 绑定（设计系统 `webui/docs/design-system/` 清账、补缺章、DEVELOPMENT 总入口表） | REQ-030-044 | 文档治理 | 否 | **入池（2026-11-14）**。委托人批准：只读核对（已出报告）＋登记＋清理 `99-governance.md` 临时决策。**范围仅文档**；补缺章、改 DEVELOPMENT 总入口、新增 lint 门禁须各自另获委托人确认；不含运行代码。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [核对报告](../../inbox/20261114-0130-uiux-standard-audit.md)（临时文件，定稿后迁入 `docs/reviews/`） |
 | P1-24 | P1 | WebUI 存量 UI/UX 整改（逐页；UXR-01–09，批次 B1–B4） | REQ-030-045 | WebUI 整改 | 否 | **入池／立项（2026-11-14），Spec／Plan v0.2-draft（已含浏览器盘点）待委托人确认范围、批次与 D-1–D-4**。**不含开发授权，本阶段只做优化方案**：各批改运行代码须各自入子 Plan、终稿确权、委托人另发开发授权。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261114-webui-uiux-remediation-spec.md) |
@@ -362,6 +364,14 @@
 - **出口**：推断问询重建、审计投影追赶移到后台分片；问询补充字段批量查询；`/api/diff` 一次扫描；探针拆 `/api/livez`／`/api/readyz`，Chart 默认改挂。客户规模下 `/turns?hours=168` p95 ≤ 3s、`/api/livez` max ≤ 1s、概览 BUSY＝0；接口返回与改前一致。
 - **关系**：**不入核心分母**（事故修复，客户实例 0.25.0 即存在，非 0.30 回归）；**不挡**原 P0。
 - **跟进**：功能合同已收口（2026-11-13）。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做 R0／01–04；可选 LOOP-05 BLOCKED——客户 0.25 无 livez）。≠ 可上线。现场临时缓解见 Spec §8。持续看守见该套件。
+
+### P1-30｜Wiki／Skill 真读真用＋ACL UAT（REQ-030-051）
+
+- **定位**：测试台合同（防假通）；无运行代码 Spec。
+- **跟进**：**PASS WITH GAP**（2026-11-15）；WIKI-01S BLOCKED＝GAP-2。
+- **套件**：`UAT-SUITE-CONTEXT-CONTENT`；复跑入口见 suite／fixtures；播种 `scripts/uat/seed-context-content.mjs`；判定 `scripts/uat/judge-context-content.mjs`。
+- **≠ 可上线**。
+
 
 ### P1-19｜访问关系图允许词表（REQ-030-040）
 
