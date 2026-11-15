@@ -112,7 +112,7 @@
 
 ### 1.3 取证缺口（写明「未核实」，不得当作事实）
 
-- **KTX 上游 loader 是否忽略 `semantic-layer/<conn>/` 下除 `_schema` 外的下划线目录**：未核实（KTX 上游不在本仓，`node_modules/@kaelio/ktx` 不含 Python loader 源码）。这直接决定暴露台账的落点（见 D2 与 Plan「开工前置」）。
+- **KTX 上游 loader 是否忽略 `semantic-layer/<conn>/` 下除 `_schema` 外的下划线目录**：**已于 2026-11-14 Wave B 实测证伪**——KTX `@kaelio/ktx 0.16.0` **会**把 `semantic-layer/<conn>/_exposure/<与 enabled table 同名>.yaml` 当 overlay 装载，拒绝 ledger 键 → publish `reindex_failed`（见 [`GAP-UAT-P0-A-EXPOSURE`](../governance/e2e-ledger.md)）。正式落点改走 D3 备选路径；修复合同见 [P1-26 Spec](lucy-20261114-field-exposure-ledger-landing-fix-spec.md)（**尚未开发授权**）。
 - **KTX `sl_read_source` 返回体的确切字段形状**（列数组的键名与层级）：未核实（本仓只看到 Proxy 的改写与转发，见 E3）。裁剪实现须在开工前以真实上游返回体固化形状。
 - **KTX 是否接受语义层 overlay 顶层新键**：未核实。因此暴露集**不**放进 overlay 文件（见 D2）。
 - **四个上游透传入口的返回体是否含列／字段名**（F-R2-04／D26）：`entity_details` / `sl_validate`（`acl.ts:86-93` 的 `DATA_PLANE_TOOLS`）、`dictionary_search` / `discover_data`（`acl.ts:180` 的 `DEFAULT_SENSITIVE_METADATA_TOOLS`）**不在 Proxy 本地执行集内**——本地执行点只有 `mcp-proxy.ts:4456`（`connection_list`／`lucy_catalog`／`kx_catalog`）与 `:4579-4581`（`lucy_explain_query`／`lucy_freshness`）；专用语义响应出口（`mcp-proxy.ts` ≈ `:6246`）仅接管 `lucy_query`／`lucy_read_source`，**不能**证明四工具已覆盖。仓内仅有 ACL／审计／参数表抽取取证，**无真实成功载荷样本证明是否含字段名**。逐项合同见 D26／SC-30；**首期默认对 trimmed 作用域 fail-closed（零上游），不得假装 A1 已闭环**。取证完成后：含字段名 → 纳入统一读取器并补 SC；不含 → 登记证据与适用版本后可改为放行。
@@ -127,7 +127,7 @@
 |---|---|---|
 | D1 | **库存与暴露分离**：Manifest／扫描保留全量物理库存（不改 KTX「全物理列」合同、不手删 Manifest 列、不改库表结构）；暴露集是 Lucy 侧**另册**，只作用于 Agent 数据面 | 需求池方向；E9/E10/E22 表明「删列」路径要么违反上游合同要么退化成 VIEW 兜底 |
 | D2 | **暴露台账是内容根内的版本化文件**，仅随**成功发布激活**进入运行内容根；浏览器本地状态**不参与**判定。运行面只读**已激活**台账，不把「内容根里任意文件＝已发布」当作充分条件——须满足 D18 激活边界 | 硬约束①。内容根由发布提升（E14），台账随成功激活批次走即版本化；读取口是 `loadContentPaths()`（E19），与发布写集同源 |
-| D3 | **落点候选**：`semantic-layer/<conn>/_exposure/<source>.yaml`；**若 KTX loader 会把该目录当 source 加载**（未核实），改落 `<contentRoot>/exposure/<conn>/<source>.yaml`，并扩 `CONTENT_DIR_NAMES`（E19 的四个目录是硬编码常量）与发布扫描根（E13） | 两条候选路径的改动面都可在本仓指认；KTX 侧行为未核实，故列为 Plan 前置而非既成事实 |
+| D3 | **落点候选**：`semantic-layer/<conn>/_exposure/<source>.yaml`；**若 KTX loader 会把该目录当 source 加载**（~~未核实~~ → **2026-11-14 已核实会加载**），改落 `<contentRoot>/exposure/<conn>/<source>.yaml`，并扩 `CONTENT_DIR_NAMES`（E19 的四个目录是硬编码常量）与发布扫描根（E13）。**正式冻结与实现授权见 [P1-26／REQ-030-047](lucy-20261114-field-exposure-ledger-landing-fix-spec.md)**（本父 Spec 合同收口句不因该伴生事故回退） | 两条候选路径的改动面都可在本仓指认；KTX 侧行为已实测证伪「忽略 `_exposure`」；伴生修复另条跟踪 |
 | D4 | **发布扫描必须新增台账种类，且要改的是四处判定点**：真正决定「什么被当 overlay 上传给 KTX」的**不是** `semanticKind()`，而是 `semantic-assets.ts` 的 `kindForPendingPath`（不含 `/_schema/` 一律 `semanticSource`，`:1714-1718`）与 `classifyYaml`（无 `tables:`／`name:` 一律 `UNKNOWN_SHAPE` **硬失败**，`:637-726`）；`semanticKind()`（`publish-workbench-state.ts:169-172`）只判 `parts[0] === "_schema"`，在现行布局 `semantic-layer/<conn>/_schema/<schema>.yaml` 下**匹配不到 manifest**（`kindForLogicalPath` 才按 `parts[2] === "_schema"` 判，`:752-757`）。**台账 yaml 会落 `classifyYaml` 的 `UNKNOWN_SHAPE` 硬失败**——这不是「被当成 overlay 上传」，因此新增种类必须同时改：`semanticKind`／`kindForLogicalPath`／`kindForPendingPath`／`classifyYaml` 四处 | 新增 `field_exposure` 种类，且该种类**不**参与 KTX 上传；⚠️ 只改 `semanticKind` 不改其余三处 → 台账要么被判 `semanticSource` 上传，要么在 `classifyYaml` 硬失败，两条都不是本条要的行为 |
 | D5 | **台账以「排除集」编码**：`excluded_columns`（未暴露物理列），暴露集 = 库存 − 排除集 | 直接满足 C2（新物理列默认暴露，无需在扫描时改台账）与「存量无显式配置 = 全库存暴露」（排除集为空／无台账文件）两个口径，且不需要在扫描管线里插入写操作 |
 | D6 | **暴露粒度 = Source，跨实例一致**：暴露集按 Source 唯一（`connectionId` + `schema` + `sourceName`）定义，**不按 Role／Agent 异列**；所有实例看同一套采用集 | 需求池「全实例同一套采用集」；这是本条与列级 ACL 的分界 |
@@ -841,7 +841,7 @@ Forbidden terms:
 | 四透传未取证却宣称 A1 闭环 | 专用语义出口未接管四工具，载荷未知 | D26／SC-30；首期 trimmed fail-closed；取证前不宣称 A1 全覆盖 |
 | 四透传门禁嵌错分支 | `dictionary_search`／`discover_data` 不在 tableTouching，嵌在该分支＝永不执行 | D26／§3.3 路径 A／B 分接；SC-30 插入点锁 |
 | 四透传空抽取放行 | `entity_details`／`sl_validate` 无源／空表 → `involved=[]` 空循环 `touchesTrimmed=false`；ACL 须通配 ∧ 全敏感表显式才可越过空表拒绝 | D26／`resolvePassthroughScope`：EMPTY→`INSTANCE_WIDE`；实例有 trimmed／故障则拒；SC-30 已过 ACL＋空作用域用例 |
-| KTX 侧行为未核实 | 台账落点依赖 KTX loader 对下划线目录的处理（§1.3） | Plan 前置项写死验证步骤；两条候选落点均可在本仓实现 |
+| KTX 侧行为（已核实） | 台账若落 `_exposure` 会被 KTX 0.16.0 当 overlay 装载（§1.3／Wave B） | 正式落点改走 `<contentRoot>/exposure/…`；伴生合同 [P1-26](lucy-20261114-field-exposure-ledger-landing-fix-spec.md)（未开发授权前不改代码） |
 | 与既有「全物理列」叙事冲突 | 交付方可能误以为暴露裁剪＝删列 | D17 + 术语小节 Forbidden terms + D15 交付口径三处写明 |
 | 暴露裁剪被误当安全能力交付 | 客户可能据此认为数据已脱敏 | 工作台／帮助／发布说明三处固定文案（SC-14） |
 

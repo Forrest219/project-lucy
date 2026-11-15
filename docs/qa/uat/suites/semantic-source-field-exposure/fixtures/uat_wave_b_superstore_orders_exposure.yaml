@@ -1,0 +1,11 @@
+# UAT Wave B — trimmed field-exposure ledger（排除未参与 order_count／active_rows 的物理列）
+# 安装：经 WebUI `/api/semantic-assets/validate`＋`publish` 上传本文件（种类 fieldExposure）
+# 清理：再 publish 同路径、`excluded_columns: []` 的 full_expose 台账（见 sibling cleanup 文件）
+version: 1
+source:
+  connectionId: demo-mysql
+  schema: dataforai
+  sourceName: superstore_orders
+excluded_columns:
+  - customer_name
+updated_at: "2026-11-14T13:00:00.000Z"

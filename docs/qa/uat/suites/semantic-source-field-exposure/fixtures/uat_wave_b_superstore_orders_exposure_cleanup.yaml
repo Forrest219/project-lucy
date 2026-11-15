@@ -1,0 +1,8 @@
+# UAT Wave B cleanup — full_expose（恢复合法查数；测后必跑）
+version: 1
+source:
+  connectionId: demo-mysql
+  schema: dataforai
+  sourceName: superstore_orders
+excluded_columns: []
+updated_at: "2026-11-14T13:30:00.000Z"

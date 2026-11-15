@@ -1,0 +1,19 @@
+# UAT Wave B — published caliber binding（demo-mysql／superstore_orders）
+# 安装：拷入容器 contentRoot `caliber-bindings/uat_wave_b_order_count.yaml` 后走 reindex／publish 提交注册表
+# 清理：删除该文件后再次 reindex，使绑定注册表回到空 published 集
+bindingId: uat_wave_b_order_count
+title: UAT订单数口径
+status: published
+triggers:
+  - UAT订单数口径绑定
+connectionId: demo-mysql
+source: superstore_orders
+caliber:
+  measures:
+    - superstore_orders.order_count
+  dimensions: []
+  segments:
+    - superstore_orders.active_rows
+  filterFields: []
+  requireMeasures:
+    - superstore_orders.order_count
