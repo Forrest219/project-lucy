@@ -6,6 +6,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { QUESTION_BUDGET_MAX_BUSY_MS, QUESTION_BUDGET_MAX_CALLS } from "../proxy/question-experience";
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 //
@@ -212,7 +213,12 @@ describe("MCP proxy initialize instructions injection", () => {
       expect(body.result.instructions).toContain("Never substitute forecast");
       expect(body.result.instructions).toContain("labeled hybrid");
       expect(body.result.instructions).toContain("realized unit price");
-      expect(body.result.instructions).toContain("at most 12 business tool calls");
+      // Spec lucy-20261111 SC-T4：有可见 catalog 的 role-aware 路径也必须是 60／300，不得残留旧 12／120s／8 分钟。
+      expect(body.result.instructions).toContain(`${QUESTION_BUDGET_MAX_CALLS} data-tool calls`);
+      expect(body.result.instructions).toContain(`${QUESTION_BUDGET_MAX_BUSY_MS / 1000} seconds of settled data-processing time`);
+      expect(body.result.instructions).not.toContain("at most 12 business tool calls");
+      expect(body.result.instructions).not.toContain("within 120 seconds");
+      expect(body.result.instructions).not.toContain("within 8 minutes");
       expect(body.result.instructions).toContain("Partial evidence still requires a final response");
       expect(body.result.instructions).not.toContain("lucy_begin_question");
     } finally {
@@ -273,6 +279,53 @@ defaults:
     } finally {
       await closeAll(upstream, server);
     }
+  });
+
+  // Spec lucy-20261111 / 高密度分析用户：触顶后唯一的缓冲是 1 次续查，模型须在 initialize 就知道。
+  async function initializeInstructionsWithTools(extraTools: string[], id: string): Promise<string> {
+    const yaml = ACCESS_YAML.replace(
+      "        - sl_read_source\n",
+      `        - sl_read_source\n${extraTools.map((tool) => `        - ${tool}\n`).join("")}`
+    );
+    await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), yaml, "utf8");
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      await readRequestBody(req);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        result: { protocolVersion: "2024-11-05", serverInfo: { name: "ktx", version: "0.12.0" }, capabilities: { tools: {} }, instructions: "" }
+      }));
+    });
+    try {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: initializeRequest(id)
+      });
+      expect(res.status).toBe(200);
+      return ((await res.json()) as { result: { instructions: string } }).result.instructions;
+    } finally {
+      await closeAll(upstream, server);
+    }
+  }
+
+  it("tells the model how to continue after question_budget_exhausted when lucy_continue_question is visible", async () => {
+    const instructions = await initializeInstructionsWithTools(["lucy_continue_question"], "init-continue-visible");
+    expect(instructions).toContain("question_budget_exhausted");
+    expect(instructions).toContain("`continuable` is true");
+    expect(instructions).toContain("call `lucy_continue_question`");
+    expect(instructions).toContain("`continueToken`");
+    expect(instructions).toContain("only once");
+    expect(instructions).toContain("`continuable` is false");
+  });
+
+  it("still says to stop and deliver partial results, without naming lucy_continue_question, when it is not visible", async () => {
+    const instructions = await initializeInstructionsWithTools([], "init-continue-hidden");
+    expect(instructions).toContain("question_budget_exhausted");
+    expect(instructions).toContain("deliver the verified partial results");
+    expect(instructions).not.toContain("lucy_continue_question");
+    expect(instructions).not.toContain("continueToken");
   });
 
   it("injects instructions when upstream result has no instructions field at all", async () => {

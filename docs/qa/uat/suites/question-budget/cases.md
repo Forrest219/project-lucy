@@ -6,6 +6,7 @@
 | UAT-BUDGET-01 | 指导文案 60／300 | MCP | Spec SC-T4 | initialize instructions 含 60／300，非 20／120 |
 | UAT-BUDGET-02 | 第 21 次不误耗尽 | MCP 全真 | 旧阈值回归 | 同问询连续 ≥21 次数据工具仍未 exhausted |
 | UAT-BUDGET-03 | 第 61 次耗尽（可选／推荐） | MCP 全真 | Spec SC-T1 | 第 61 次 → `question_budget_exhausted` |
+| UAT-BUDGET-04 | 触顶后续查（含续查工具身份；可选／推荐） | MCP 全真 | Spec SC-T3 + SC-T4 | 触顶返回 `continuable=true`＋`continueToken`；`lucy_continue_question` 后同问询可再查数；该身份 initialize 指导含续查处置 |
 
 ---
 
@@ -79,3 +80,37 @@
 
 - 若本波跳过：标 `SKIPPED` 并说明；P1-14 套件必须自行跑满 61 次  
 - **禁止**改源码常量图快  
+
+---
+
+## UAT-BUDGET-04 — 触顶后续查（含续查工具身份）
+
+> 新增原因：高密度分析用户触顶后唯一缓冲是 1 次续查；initialize 指导须告知该通道（Spec SC-T4 修复后补入）。`demo_readonly` 无 `lucy_continue_question`，不能用来验证本条。
+
+### 前置
+
+- UAT-BUDGET-01 已记录
+- 自造临时 Role `uat-budget-continue-role`（克隆 `demo_readonly` 的连接／表范围，工具集**额外**含 `lucy_continue_question`）、Agent `uat-budget-continue-agent`、Token（明文只留本机临时文件，不写 runs）
+- 可与 BUDGET-02／03 共用同一问询窗：同窗从 0 计到 61，再续查
+
+### 步骤
+
+1. 该 Token MCP `initialize`，读 `instructions`；`tools/list` 确认含 `lucy_continue_question`
+2. `lucy_begin_question` 开新问询
+3. 连续 61 次计费数据工具（同 fixtures 推荐查询）；记第 21 次与第 61 次结果（兼作 BUDGET-02／03 证据）
+4. 第 61 次返回耗尽时，读返回里的 `continuable`、`continueToken`
+5. 调 `lucy_continue_question`（传入 `continueToken`）
+6. 再发 1 次计费数据工具
+
+### 期望
+
+- 步骤 1：`instructions` 含 `question_budget_exhausted`、`continuable`、`continueToken`、`lucy_continue_question`，且仍含 60／300、不含旧 12／120s／8 分钟
+- 步骤 4：第 61 次含 `question_budget_exhausted`；`continuable=true`；有 `continueToken`
+- 步骤 5：续查成功；不得被计为第 N 次数据工具
+- 步骤 6：**未**返回 `question_budget_exhausted`（续查后额度已重开）
+- 不要求本波验证「第二次续查被拒」（SC-T3 另由单测覆盖；本波标 `NOT RUN`）
+
+### 清理
+
+- 删 Agent（连带吊销 Token）→ 删 Role；明文 Token 再调 MCP → 401；Admin 列表与 `access.yaml` 无 `uat-budget-continue` 残留
+

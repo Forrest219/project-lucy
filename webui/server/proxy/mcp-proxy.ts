@@ -119,6 +119,8 @@ import {
   budgetIdentityKey,
   budgetScopeKey,
   QUESTION_BUDGET_ABS_EXEC_MS,
+  QUESTION_BUDGET_MAX_BUSY_MS,
+  QUESTION_BUDGET_MAX_CALLS,
   installBudgetPersistence,
   type BudgetPersistence,
   type NextStep,
@@ -1941,6 +1943,10 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
           ""
         ]
       : [];
+    // 与 md「失败预算与交付时限」同一处置：触顶后停止循环；续查通道只在该工具可见时点名。
+    const budgetExhaustedLine = visibleTools.has("lucy_continue_question")
+      ? "- When a data tool returns `question_budget_exhausted`, stop looping. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` and then keep querying; a question can be continued only once. If `continuable` is false, deliver the verified partial results, state the gaps, and do not retry."
+      : "- When a data tool returns `question_budget_exhausted`, stop looping, deliver the verified partial results, state the gaps, and do not retry.";
     return [
       "# Lucy Data QA Runtime Instructions",
       "",
@@ -1963,7 +1969,9 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       "- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.",
       "- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.",
       "- Fingerprint failures by tool, source, normalized reason, and relevant argument shape. Retry the same fingerprint at most once and only with an information-gaining correction; cycling among eq, =, and in is not a correction.",
-      "- For complex analysis, use at most 12 business tool calls, avoid reading a successful source twice, target the first verified result within 120 seconds, and deliver a complete or partial answer within 8 minutes.",
+      // Spec lucy-20261111 SC-T4：数字取自代理实际执行的预算常量，避免与 md／运行时分叉。
+      `- Per question, use at most ${QUESTION_BUDGET_MAX_CALLS} data-tool calls or ${QUESTION_BUDGET_MAX_BUSY_MS / 1000} seconds of settled data-processing time (thinking time excluded), whichever comes first. Repeat the same input at most once, do not re-read a successful source, and retry only transient errors once. Protocol methods (question declaration and continuation) do not count toward this budget.`,
+      budgetExhaustedLine,
       "- Partial evidence still requires a final response. Give each subquestion an ok, no_data, unavailable, or partial status, plus period, batch/version, scenario, failure impact, and provenance.",
       "- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.",
       "- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.",

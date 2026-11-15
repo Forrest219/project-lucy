@@ -14,7 +14,7 @@
 
 | 必做 | 可选 |
 |---|---|
-| UAT-R0、UAT-BUDGET-01、UAT-BUDGET-02 | UAT-BUDGET-03（第 61 次耗尽；**推荐**，供 P1-14 复用） |
+| UAT-R0、UAT-BUDGET-01、UAT-BUDGET-02 | UAT-BUDGET-03（第 61 次耗尽；**推荐**，供 P1-14 复用）；UAT-BUDGET-04（触顶后续查；**推荐**，需自造含 `lucy_continue_question` 的临时身份） |
 
 ## 边界
 

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { QUESTION_BUDGET_MAX_BUSY_MS, QUESTION_BUDGET_MAX_CALLS } from "../proxy/question-experience";
 
 describe("data QA fallback instructions contract", () => {
   it("contains the enterprise answerability and delivery gates", async () => {
@@ -15,6 +16,9 @@ describe("data QA fallback instructions contract", () => {
     // (20 data-tool calls / 120s wall clock, with one continuation).
     // Spec 162 修订（D8 / SC-40）：口径改为「已结算数据处理时长」，不含思考时间。
     expect(text).toContain("同一问询最多 60 次数据工具调用，或累计 300 秒数据处理时长（不含思考时间）");
+    // 防漂移：md 里的数字必须等于代理实际执行的预算常量（initialize role-aware 路径同样取这两个常量）。
+    expect(text).toContain(`同一问询最多 ${QUESTION_BUDGET_MAX_CALLS} 次`);
+    expect(text).toContain(`累计 ${QUESTION_BUDGET_MAX_BUSY_MS / 1000} 秒`);
     expect(text).toContain("question_budget_exhausted");
     expect(text).toContain("部分可回答时仍必须回复");
     expect(text).toContain("`ok` / `no_data` / `unavailable` / `partial`");
