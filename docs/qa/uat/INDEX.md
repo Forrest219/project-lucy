@@ -22,6 +22,7 @@
 | `UAT-SUITE-ROW-POLICY` | **P1-28**／REQ-030-049；**P1-29**／REQ-030-050 | [suites/row-policy-finance-scenario](suites/row-policy-finance-scenario/suite.md) | 本机 demo Docker；自造 `uat_row_policy_` 两表；WebUI `:55176`；MCP `:57881` | [2026-11-15-cursor-row-policy-first](suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md) | **FAIL**（R0／ROW-01／04／06 PASS；ROW-08 登记修复时清理 PASS；**ROW-02／03／05 BLOCKED**——`source_ambiguity_gate`／`need_begin_or_confirm`，未完成来源确认，没有隔离结果；**ROW-07 FAIL**＝预期，GAP-UAT-P1-28-VALUE）。`gitSha=f9549135`。≠ 可上线；≠ 核心升级完成 |
 | `UAT-SUITE-PAGE-SWEEP` | **P1-31**／REQ-030-052；整改 **P1-32**／REQ-030-053、**P1-33**／REQ-030-054 | [suites/page-event-loop-sweep](suites/page-event-loop-sweep/suite.md) | 本机沙箱（首跑 demo `docker cp` 副本；整改后复跑复用该副本）+ Chromium；合成审计账本夹具 | [2026-11-16-claude-page-sweep-after-fix](suites/page-event-loop-sweep/runs/2026-11-16-claude-page-sweep-after-fix.md)（首跑 [2026-11-15 FAIL](suites/page-event-loop-sweep/runs/2026-11-15-claude-page-sweep-first.md)） | **PASS WITH GAP**（01 40/43 通过；02 **0 越线／0 失败**，96 通过、25 未测——含 `export-v2`／`export-pack-v2`（夹具缺派生列）；03 门禁 PASS、基线 `tracked` 清零；04 对本次报告回放 PASS。`governance/overview` livez p99 372ms 贴线。≠ 可上线） |
 | `UAT-SUITE-EQUIV-GUARD` | **P1-32**／REQ-030-053；**P1-33**／REQ-030-054 | [suites/audit-scale-equivalence-guard](suites/audit-scale-equivalence-guard/suite.md) | 本机 vitest＋better-sqlite3 真库；冻结旧实现与改前金样本；性能面引 `UAT-SUITE-PAGE-SWEEP` | [2026-11-16-claude-equiv-first](suites/audit-scale-equivalence-guard/runs/2026-11-16-claude-equiv-first.md) | **PASS WITH GAP**（必做 R0／01／02／03 PASS：71 条等价用例全绿；04 变异自检 8 类全部被拦下，`daily-question-kpi` 变异未实跑；等价守卫拦不住纯性能回退，靠 EQ-03。≠ 可上线） |
+| `UAT-SUITE-LARGE-SCHEMA` | **P1-34**／REQ-030-055 | [suites/large-schema-ingestion](suites/large-schema-ingestion/suite.md) | 本机 demo Docker + `lucy-uat-hive`（Doris→Hive 元数据）+ demo-db 大库夹具；**规模下限不得降低** | [2026-11-16-claude-large-schema-after-impl](suites/large-schema-ingestion/runs/2026-11-16-claude-large-schema-after-impl.md) | **PASS WITH GAP**：必做 R0／01…10 共 11 条，同日完整跑 4 次，第 1、3、4 次全绿；**第 2 次 SCALE-09 一次 FAIL（171 秒，原因未定位，之后 6 次单跑未复现）**。可选 11／12 未执行；容器 `gitDirty=true`。≠ 稳定 PASS；≠ 可上线 |
 
 ## 一键入口（本机）
 
@@ -76,6 +77,10 @@ node scripts/uat/run-catalog-scan-wide-api.mjs
 # 勿手工补 /data/lucy/scripts；测后清理 uat-ops-concept-* Role／Agent
 # 最近判定：FAIL（2026-11-15）；P1-27 修复复测尚未执行
 
+# 大 Schema 接入（P1-34）— 最近跑次 2026-11-16-claude-large-schema-after-impl（PASS WITH GAP：第 2 次 SCALE-09 异常，原因未定位）
+# 造数据：bash scripts/uat/seed-large-schema-fixtures.sh all
+# 跑套件：cd webui && LUCY_E2E_WEBUI_ADMIN_ID=<管理员 id> npx tsx ../scripts/uat/run-large-schema-ingestion.mts --out ../inbox/uat-large-schema-$(date +%F)
+# 规模下限（不得降低）与用例：docs/qa/uat/suites/large-schema-ingestion/{suite,cases,fixtures}.md
 
 # 行级隔离（P1-28／P1-29）
 # 用例：docs/qa/uat/suites/row-policy-finance-scenario/cases.md

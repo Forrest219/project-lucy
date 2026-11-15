@@ -10,6 +10,15 @@ import {
   splitCatalogDatabase
 } from "./catalog-database";
 import { runCatalogShow } from "./catalog-show";
+import {
+  CALL_BUDGET_MS,
+  channelAsShow,
+  COLUMN_READ_ROW_LIMIT,
+  createChannelHolder,
+  PER_TABLE_TIMEOUT_MS,
+  readMysqlTablesBatch
+} from "./schema-structure-batch";
+import { MetadataChannelUnavailable, openMetadataChannel } from "./metadata-channel";
 import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
@@ -85,7 +94,7 @@ export type SchemaColumnRow = {
  */
 export type SchemaColumnRejection = {
   table: string;
-  reason: "missing" | "ambiguous" | "unreadable" | "permission" | "timeout" | "too_large";
+  reason: "missing" | "ambiguous" | "unreadable" | "permission" | "timeout" | "too_large" | "too_wide";
 };
 
 export type SchemaColumnsRead =
@@ -95,6 +104,8 @@ export type SchemaColumnsRead =
       tables?: string[];
       /** Requested tables that must not be written with an empty or mixed column list. */
       rejections?: SchemaColumnRejection[];
+      /** Requested tables a call budget left unread; the caller asks again. */
+      deferred?: string[];
     }
   | { status: "too_large" }
   | {
@@ -118,12 +129,14 @@ export type SchemaStructurePreview = {
   namesOnly: boolean;
   mapped: { number: number; string: number; time: number };
   downgraded: SchemaStructureColumn[];
+  /** Batch reads only: tables that could not be read, with a sentence naming the table. */
+  rejections?: Array<{ table: string; reason: SchemaColumnRejection["reason"]; message: string }>;
+  /** Batch reads only: tables left unread by the call budget; ask again. */
+  deferred?: string[];
 };
 
 /** `ktx sql --max-rows` accepts 1–10000. A full page is treated as truncated / too_large. */
 const SCHEMA_STRUCTURE_MAX_ROWS = 10_000;
-/** External-catalog DESC reads one table; one DESC stops at this many column rows. */
-const COLUMN_READ_ROW_LIMIT = 2_000;
 
 export class SchemaStructureError extends Error {
   code: "CONNECTION_NOT_FOUND" | "SCHEMA_UNSUPPORTED" | "INVALID_SCHEMA" | "READ_FAILED";
@@ -431,7 +444,8 @@ async function readCatalogTableColumns(
   catalog: string,
   schema: string,
   table: string,
-  show: typeof runCatalogShow
+  show: typeof runCatalogShow,
+  limits: { rowLimit: number; timeoutMs: number } = { rowLimit: COLUMN_READ_ROW_LIMIT, timeoutMs: CATALOG_SCAN_TIMEOUT_MS }
 ): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection }> {
   const probes = [
     describeCatalogTableSql(catalog, schema, table),
@@ -441,10 +455,10 @@ async function readCatalogTableColumns(
   let reason: SchemaColumnRejection["reason"] = "unreadable";
   for (const sql of probes) {
     const result = await show(projectRoot, connectionId, sql, {
-      maxRows: COLUMN_READ_ROW_LIMIT,
-      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+      maxRows: limits.rowLimit,
+      timeoutMs: limits.timeoutMs
     });
-    const answered = answeredRows(result, COLUMN_READ_ROW_LIMIT);
+    const answered = answeredRows(result, limits.rowLimit);
     if ("reason" in answered) {
       reason = answered.reason;
       logSchemaStructureFailure({ connectionId, schema, table, phase: "table-columns", sql }, result);
@@ -621,6 +635,8 @@ function rejectionMessage(rejection: SchemaColumnRejection): string {
       return `表名「${rejection.table}」对应多张表，无法读取字段。`;
     case "too_large":
       return "这次读取超过一次可读取的上限。";
+    case "too_wide":
+      return `表「${rejection.table}」的字段数达到 ${COLUMN_READ_ROW_LIMIT} 个，超过一次可读取的上限。`;
     case "permission":
       return `没有权限读取表「${rejection.table}」的字段。`;
     case "timeout":
@@ -637,6 +653,16 @@ export type ReadSchemaColumnsDeps = {
   readConnectionsImpl?: typeof readConnections;
   runSqlImpl?: typeof runSql;
   runCatalogShowImpl?: typeof runCatalogShow;
+  /**
+   * Direct metadata channel for batch reads. When given it is used even if `runSqlImpl` /
+   * `runCatalogShowImpl` are injected; without it, injecting either keeps the legacy per-table read.
+   */
+  openChannelImpl?: typeof openMetadataChannel;
+  /** Batch reads stop starting new tables after this; the rest returns as `deferred`. */
+  callBudgetMs?: number;
+  now?: () => number;
+  /** Column rows one statement may return (tests lower it). */
+  columnRowLimit?: number;
   tables?: string[];
   /**
    * When omitted: no `tables` → `list-names`; with `tables` → `per-table`.
@@ -669,6 +695,32 @@ function resolveSchemaReadMode(deps: ReadSchemaColumnsDeps): ResolvedSchemaRead 
   }
   if (!tables || tables.length === 0) return { mode: "list-names" };
   return { mode: "per-table", tables };
+}
+
+type BatchChannel = ReturnType<typeof createChannelHolder>;
+
+/** The direct channel for a batch read, or null when the legacy per-table read must run (LS-14). */
+async function openBatchChannel(
+  projectRoot: string,
+  connectionId: string,
+  deps: ReadSchemaColumnsDeps,
+  injectedLegacyImpl: unknown
+): Promise<BatchChannel | null> {
+  if (process.env.LUCY_SCHEMA_READ_LEGACY === "1") return null;
+  if (!deps.openChannelImpl && injectedLegacyImpl) return null;
+  const open = deps.openChannelImpl ?? openMetadataChannel;
+  const holder = createChannelHolder(() => open(projectRoot, connectionId));
+  try {
+    await holder.ensure();
+  } catch (error) {
+    if (error instanceof MetadataChannelUnavailable) return null;
+    throw error;
+  }
+  return holder;
+}
+
+function uniqueInOrder(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 /**
@@ -739,31 +791,69 @@ export async function readSchemaColumns(
       if (targetTables.length === 0) {
         return { status: "error", message: "外部目录读字段必须指定 tables。" };
       }
+      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runCatalogShowImpl);
+      const show = holder ? channelAsShow(holder.run) : (deps.runCatalogShowImpl ?? runCatalogShow);
+      const limits = holder
+        ? { rowLimit: deps.columnRowLimit ?? COLUMN_READ_ROW_LIMIT, timeoutMs: PER_TABLE_TIMEOUT_MS }
+        : undefined;
+      const now = deps.now ?? Date.now;
+      const started = now();
+      const wanted = holder ? uniqueInOrder(targetTables) : targetTables;
       const columns: ColumnInput[] = [];
       const rejections: SchemaColumnRejection[] = [];
-      for (const table of targetTables) {
-        const tableRead = await readCatalogTableColumns(
-          projectRoot,
-          connectionId,
-          catalog.catalog,
-          safeSchema,
-          table,
-          deps.runCatalogShowImpl ?? runCatalogShow
-        );
-        if (tableRead.rejection) rejections.push(tableRead.rejection);
-        columns.push(...tableRead.columns);
+      let deferred: string[] = [];
+      try {
+        for (const [index, table] of wanted.entries()) {
+          if (index > 0 && deps.callBudgetMs !== undefined && now() - started >= deps.callBudgetMs) {
+            deferred = wanted.slice(index);
+            break;
+          }
+          const tableRead = await readCatalogTableColumns(
+            projectRoot,
+            connectionId,
+            catalog.catalog,
+            safeSchema,
+            table,
+            show,
+            limits
+          );
+          if (tableRead.rejection) {
+            const { reason } = tableRead.rejection;
+            rejections.push(holder && reason === "too_large" ? { table, reason: "too_wide" } : tableRead.rejection);
+          }
+          columns.push(...tableRead.columns);
+        }
+      } finally {
+        holder?.close();
       }
-      const rejected = new Set(rejections.map((item) => item.table));
+      const unread = new Set([...rejections.map((item) => item.table), ...deferred]);
       return {
         status: "ok",
         columns,
-        tables: targetTables.filter((table) => !rejected.has(table)),
-        ...(rejections.length > 0 ? { rejections } : {})
+        tables: wanted.filter((table) => !unread.has(table)),
+        ...(rejections.length > 0 ? { rejections } : {}),
+        ...(deferred.length > 0 ? { deferred } : {})
       };
     }
     const protocol = protocolOf(connection);
     if (resolved.mode === "list-names" && protocol === "mysql") {
       const listSql = mysqlTableNamesSql(safeSchema);
+      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runSqlImpl);
+      if (holder) {
+        const context = { connectionId, schema: safeSchema, phase: "catalog-list-tables", sql: listSql };
+        try {
+          const answer = await holder.run(listSql, { maxRows: CATALOG_TABLE_NAME_LIMIT, timeoutMs: CATALOG_SCAN_TIMEOUT_MS });
+          if (answer.truncated) return { status: "too_large" };
+          return { status: "ok", columns: [], tables: namesFromRows(answer.rows) };
+        } catch (error) {
+          logSchemaStructureFailure(context, {
+            ok: false, exitCode: 1, stderr: error instanceof Error ? error.message : String(error), stdout: "", latencyMs: 0
+          });
+          throw new SchemaStructureError("READ_FAILED", formatSchemaStructureUserMessage(context), 400, safeStructureDetail(context));
+        } finally {
+          holder.close();
+        }
+      }
       const listed = await execute(projectRoot, connectionId, listSql, {
         maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
         timeoutMs: CATALOG_SCAN_TIMEOUT_MS
@@ -780,9 +870,37 @@ export async function readSchemaColumns(
     // Postgres has no separate name-list SQL; list-names falls through to schema-wide
     // columns (pre-dual-mode behavior). MySQL per-table is handled above.
     if (resolved.mode === "per-table" && protocol === "mysql") {
+      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runSqlImpl);
+      if (holder) {
+        try {
+          const batch = await readMysqlTablesBatch(holder.run, safeSchema, resolved.tables, {
+            rowLimit: deps.columnRowLimit ?? COLUMN_READ_ROW_LIMIT,
+            timeoutMs: PER_TABLE_TIMEOUT_MS,
+            ...(deps.callBudgetMs !== undefined ? { budgetMs: deps.callBudgetMs } : {}),
+            now: deps.now ?? Date.now
+          });
+          const unread = new Set([...batch.rejections.map((item) => item.table), ...batch.deferred]);
+          return {
+            status: "ok",
+            columns: batch.columns,
+            tables: uniqueInOrder(resolved.tables).filter((table) => !unread.has(table)),
+            ...(batch.rejections.length > 0 ? { rejections: batch.rejections } : {}),
+            ...(batch.deferred.length > 0 ? { deferred: batch.deferred } : {})
+          };
+        } finally {
+          holder.close();
+        }
+      }
       const columns: ColumnInput[] = [];
       const rejections: SchemaColumnRejection[] = [];
-      for (const table of resolved.tables) {
+      const now = deps.now ?? Date.now;
+      const started = now();
+      let deferred: string[] = [];
+      for (const [index, table] of resolved.tables.entries()) {
+        if (index > 0 && deps.callBudgetMs !== undefined && now() - started >= deps.callBudgetMs) {
+          deferred = resolved.tables.slice(index);
+          break;
+        }
         const tableRead = await readMysqlTableColumns(
           projectRoot,
           connectionId,
@@ -793,12 +911,13 @@ export async function readSchemaColumns(
         if (tableRead.rejection) rejections.push(tableRead.rejection);
         columns.push(...tableRead.columns);
       }
-      const rejected = new Set(rejections.map((item) => item.table));
+      const unread = new Set([...rejections.map((item) => item.table), ...deferred]);
       return {
         status: "ok",
         columns,
-        tables: resolved.tables.filter((table) => !rejected.has(table)),
-        ...(rejections.length > 0 ? { rejections } : {})
+        tables: resolved.tables.filter((table) => !unread.has(table)),
+        ...(rejections.length > 0 ? { rejections } : {}),
+        ...(deferred.length > 0 ? { deferred } : {})
       };
     }
     // schema-wide (MySQL/Postgres), or per-table on Postgres (no per-table helper yet).
@@ -875,7 +994,8 @@ export async function previewSchemaStructure(
     throw new SchemaStructureError("READ_FAILED", read.message, 400, read.detail);
   }
   const requested = deps.tables?.map((table) => table.trim()).filter(Boolean) ?? [];
-  if (requested.length > 0 && (read.rejections?.length ?? 0) > 0) {
+  const batch = requested.length > 1;
+  if (!batch && requested.length > 0 && (read.rejections?.length ?? 0) > 0) {
     const rejection = read.rejections?.[0];
     throw new SchemaStructureError(
       "READ_FAILED",
@@ -884,5 +1004,15 @@ export async function previewSchemaStructure(
   }
   const preview = buildMinimalSchemaManifest(safeSchema, read.columns, read.tables ?? []);
   const namesOnly = requested.length === 0 && read.columns.length === 0 && (read.tables?.length ?? 0) > 0;
-  return { ...preview, namesOnly };
+  const rejections = (read.rejections ?? []).map((item) => ({
+    table: item.table,
+    reason: item.reason,
+    message: rejectionMessage(item)
+  }));
+  return {
+    ...preview,
+    namesOnly,
+    ...(batch && rejections.length > 0 ? { rejections } : {}),
+    ...(batch && read.deferred && read.deferred.length > 0 ? { deferred: read.deferred } : {})
+  };
 }

@@ -78,7 +78,7 @@ function structureDiffFailureReason(
   reason: SchemaColumnRejection["reason"]
 ): LiveTableFailureReason {
   if (reason === "permission") return "SCHEMA_NOT_VISIBLE";
-  if (reason === "too_large") return "TABLE_LIST_TOO_LARGE";
+  if (reason === "too_large" || reason === "too_wide") return "TABLE_LIST_TOO_LARGE";
   return "QUERY_FAILED";
 }
 

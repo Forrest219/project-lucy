@@ -17,6 +17,9 @@ export type SchemaStructurePreview = {
   namesOnly?: boolean;
   mapped: { number: number; string: number; time: number };
   downgraded: Array<{ table: string; column: string; rawType: string }>;
+  /** Batch reads only; see `server/schema-structure.ts`. */
+  rejections?: Array<{ table: string; reason: string; message: string }>;
+  deferred?: string[];
 };
 
 export type WriteManifestResult =
@@ -58,7 +61,35 @@ export async function fetchSchemaStructure(
   );
 }
 
-/** Read columns for the checked tables, one request per table, and merge the YAML. */
+/** Same as `MAX_TABLES_PER_CALL` in `server/schema-structure-batch.ts`. */
+const TABLES_PER_REQUEST = 50;
+const REJECTION_LISTED_LIMIT = 10;
+
+const REJECTION_REASON_TEXT: Record<string, string> = {
+  ambiguous: "对应多张表",
+  permission: "没有读取权限",
+  timeout: "读取超时",
+  too_wide: "字段数超过一次可读取的上限",
+  too_large: "字段数超过一次可读取的上限"
+};
+
+type TableRejection = { table: string; reason: string; message?: string };
+
+function readFailureMessage(failures: TableRejection[]): string {
+  const listed = failures
+    .slice(0, REJECTION_LISTED_LIMIT)
+    .map((item) => `表「${item.table}」${REJECTION_REASON_TEXT[item.reason] ?? "没有读到字段"}`)
+    .join("；");
+  const rest = failures.length - REJECTION_LISTED_LIMIT;
+  return `有 ${failures.length} 张表没有读到字段：${listed}${rest > 0 ? `；另有 ${rest} 张未列出` : ""}。`;
+}
+
+/**
+ * Read columns for the checked tables in batches of 50. Tables the server leaves unread
+ * (`deferred`) are asked for again; failures are collected and reported together after
+ * every other table has been read. Entries accumulate in one map, so the YAML is parsed
+ * once per batch and written once.
+ */
 export async function readCheckedTableColumns(
   connectionId: string,
   schema: string,
@@ -68,28 +99,46 @@ export async function readCheckedTableColumns(
   if (tables.length === 0) {
     throw new ApiError({ code: "BAD_REQUEST", message: "请至少选择一张表。" });
   }
-  let yaml = "tables: {}\n";
+  const entries: Record<string, unknown> = Object.create(null);
   const downgraded: SchemaStructurePreview["downgraded"] = [];
   const mapped = { number: 0, string: 0, time: 0 };
+  const failures: TableRejection[] = [];
   let columnCount = 0;
-  for (let index = 0; index < tables.length; index += 1) {
-    const table = tables[index];
-    onProgress?.(index, tables.length, table);
-    const part = await fetchSchemaStructure(connectionId, schema, [table]);
+  let done = 0;
+  let pending = [...tables];
+  while (pending.length > 0) {
+    const batch = pending.slice(0, TABLES_PER_REQUEST);
+    onProgress?.(done, tables.length, batch[0]);
+    const part = await fetchSchemaStructure(connectionId, schema, batch);
     if (part.namesOnly) {
-      throw new ApiError({ code: "READ_FAILED", message: `读取表「${table}」的字段失败。` });
+      throw new ApiError({ code: "READ_FAILED", message: `读取表「${batch[0]}」的字段失败。` });
     }
-    yaml = mergeManifestTables(yaml, part.yaml, [table]);
+    const deferred = part.deferred ?? [];
+    const rejections = part.rejections ?? [];
+    const unread = new Set([...deferred, ...rejections.map((item) => item.table)]);
+    if (unread.size >= batch.length && rejections.length === 0) {
+      throw new ApiError({ code: "READ_FAILED", message: "读取表结构没有进展，请稍后重试。" });
+    }
+    const readTables = tablesMapping(part.yaml);
+    for (const name of batch) {
+      if (!unread.has(name) && Object.prototype.hasOwnProperty.call(readTables, name)) entries[name] = readTables[name];
+    }
+    failures.push(...rejections);
     downgraded.push(...part.downgraded);
     mapped.number += part.mapped.number;
     mapped.string += part.mapped.string;
     mapped.time += part.mapped.time;
     columnCount += part.columnCount;
+    done += batch.length - deferred.length;
+    pending = [...deferred, ...pending.slice(batch.length)];
+  }
+  if (failures.length > 0) {
+    throw new ApiError({ code: "READ_FAILED", message: readFailureMessage(failures) });
   }
   return {
     schema,
     readable: downgraded.length === 0,
-    yaml,
+    yaml: stringifyYaml({ tables: entries }),
     tableCount: tables.length,
     columnCount,
     namesOnly: false,

@@ -47,6 +47,7 @@ import {
   peekLiveSchemasCache
 } from "./live-catalog";
 import { previewSchemaStructure, SchemaStructureError } from "./schema-structure";
+import { CALL_BUDGET_MS, parseRequestedTables } from "./schema-structure-batch";
 import {
   addSchema,
   createConnection,
@@ -1864,13 +1865,12 @@ export function buildServer() {
     if (typeof schema !== "string" || !schema.trim()) {
       throw enabledTableError("BAD_REQUEST", "schema is required");
     }
-    const tables = request.body?.tables;
-    if (tables !== undefined && (!Array.isArray(tables) || tables.length !== 1 || typeof tables[0] !== "string" || !tables[0].trim())) {
-      throw enabledTableError("BAD_REQUEST", "一次只读取一张表的字段。");
-    }
+    const parsed = parseRequestedTables(request.body?.tables);
+    if (!parsed.ok) throw enabledTableError("BAD_REQUEST", parsed.message);
+    const { tables } = parsed;
     try {
       const data = await previewSchemaStructure(projectRoot, request.params.connId, schema, {
-        ...(tables ? { tables } : {})
+        ...(tables ? { tables, callBudgetMs: CALL_BUDGET_MS } : {})
       });
       return { ok: true, data };
     } catch (err) {

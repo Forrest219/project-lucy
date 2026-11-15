@@ -17,13 +17,13 @@ export type CatalogShowConnection = {
   destroy(): void;
 };
 
-type DriverDeps = {
+export type DriverDeps = {
   createConnectionImpl?: (options: ConnectionOptions) => CatalogShowConnection;
 };
 
 const DEADLINE_MS = CATALOG_SCAN_TIMEOUT_MS;
 const IDENT = "`(?:``|[^`\\0\\r\\n])+`";
-const SHOW = new RegExp(
+export const CATALOG_SHOW_STATEMENT = new RegExp(
   `^(?:SHOW (?:DATABASES FROM ${IDENT}|TABLES FROM ${IDENT}\\.${IDENT}|COLUMNS FROM ${IDENT}\\.${IDENT}\\.${IDENT})` +
     `|(?:DESC|DESCRIBE) ${IDENT}\\.${IDENT}\\.${IDENT})$`
 );
@@ -36,7 +36,51 @@ const PUBLIC_MESSAGES = new Set([
   "Catalog password file is missing"
 ]);
 
-function safeMessage(error: unknown, password: string): string {
+export type DirectConnectionConfig = {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  /** Connection options the direct driver does not carry (TLS, sockets, URLs). */
+  unsupportedOptions: string[];
+};
+
+const UNSUPPORTED_DIRECT_OPTIONS = ["ssl", "tls", "ssl_mode", "sslmode", "socket", "socket_path", "url", "dsn"];
+
+/**
+ * Read host, port, user and password file of one `ktx.yaml` connection for the direct MySQL channel.
+ * Errors are the public messages in `PUBLIC_MESSAGES`; the password never appears in them.
+ */
+export async function readDirectConnectionConfig(
+  projectRoot: string,
+  connectionId: string
+): Promise<DirectConnectionConfig> {
+  const config = parse(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8")) as {
+    connections?: Record<string, { host?: unknown; port?: unknown; username?: unknown; password?: unknown }>;
+  };
+  const conn = config?.connections?.[connectionId];
+  if (!conn || typeof conn.host !== "string" || !conn.host.trim() || typeof conn.username !== "string" || !conn.username.trim()) {
+    throw new Error("Invalid catalog connection configuration");
+  }
+  const port = Number(conn.port ?? 3306);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid catalog port");
+  if (typeof conn.password !== "string" || !conn.password.startsWith("file:")) {
+    throw new Error("Catalog password must use a file reference");
+  }
+  const ref = conn.password.slice("file:".length);
+  const relative = path.isAbsolute(ref) ? path.relative(path.resolve(projectRoot), ref) : ref;
+  const bytes = await safeReadSecretPasswordBytesIfExists(projectRoot, relative.replaceAll(path.sep, "/"));
+  if (bytes === null) throw new Error("Catalog password file is missing");
+  return {
+    host: conn.host,
+    port,
+    user: conn.username,
+    password: bytes.toString("utf8"),
+    unsupportedOptions: UNSUPPORTED_DIRECT_OPTIONS.filter((key) => (conn as Record<string, unknown>)[key] !== undefined)
+  };
+}
+
+export function safeMessage(error: unknown, password: string): string {
   const text = error instanceof Error ? error.message : "读取表结构失败。";
   if (!password) return PUBLIC_MESSAGES.has(text) ? text : "读取表结构失败。";
   return text.split(password).join("[REDACTED]");
@@ -59,24 +103,11 @@ export async function runCatalogShow(
   let connection: CatalogShowConnection | undefined;
   const base = { command: "mysql SHOW", args: [] as string[], stdout: "" };
   try {
-    if (!SHOW.test(sql)) throw new Error("Unsupported catalog statement");
-    const config = parse(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8")) as {
-      connections?: Record<string, { host?: unknown; port?: unknown; username?: unknown; password?: unknown }>;
-    };
-    const conn = config?.connections?.[connectionId];
-    if (!conn || typeof conn.host !== "string" || !conn.host.trim() || typeof conn.username !== "string" || !conn.username.trim()) {
-      throw new Error("Invalid catalog connection configuration");
-    }
-    const port = Number(conn.port ?? 3306);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid catalog port");
-    if (typeof conn.password !== "string" || !conn.password.startsWith("file:")) {
-      throw new Error("Catalog password must use a file reference");
-    }
-    const ref = conn.password.slice("file:".length);
-    const relative = path.isAbsolute(ref) ? path.relative(path.resolve(projectRoot), ref) : ref;
-    const bytes = await safeReadSecretPasswordBytesIfExists(projectRoot, relative.replaceAll(path.sep, "/"));
-    if (bytes === null) throw new Error("Catalog password file is missing");
-    password = bytes.toString("utf8");
+    if (!CATALOG_SHOW_STATEMENT.test(sql)) throw new Error("Unsupported catalog statement");
+    const direct = await readDirectConnectionConfig(projectRoot, connectionId);
+    const { port } = direct;
+    password = direct.password;
+    const conn = { host: direct.host, username: direct.user };
     const factory = deps.createConnectionImpl ?? ((params: ConnectionOptions) => createConnection(params) as unknown as CatalogShowConnection);
     connection = factory({
       host: conn.host,
