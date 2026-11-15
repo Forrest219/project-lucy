@@ -14,7 +14,7 @@ import {
 import {
   INFERRED_TURN_REBUILD_LOOKBACK_HOURS
 } from "../proxy/audit.js";
-import { markInferredUserDirty } from "./inferred-turn-maintainer.js";
+import { refreshInferredStaleUsers } from "./inferred-turn-maintainer.js";
 import { accessGrade } from "../proxy/usage-classification.js";
 import { isAccessMapAllowedOutcome } from "./access-map-outcome.js";
 
@@ -121,7 +121,8 @@ export async function defaultEnsureInquiryRebuild(input: {
   userIds: string[];
 }): Promise<void> {
   void input.db;
-  for (const userId of input.userIds) markInferredUserDirty(userId);
+  void input.userIds; // freshness is by watermark, not by "every user in the window" (P1-33 / F-2)
+  await refreshInferredStaleUsers();
 }
 
 /**

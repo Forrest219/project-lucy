@@ -28,6 +28,8 @@
 | `UAT-CTX-*` | MCP Wiki／Skill 真读真用＋ACL（P1-30；含 `UAT-CTX-R0-SEED`） |
 | `UAT-OPS-CONCEPT-*` | 概念运维 Ops MCP（P1-11／P1-27；含 `UAT-R0-FIX`） |
 | `UAT-ROW-*` | 行级隔离场景（P1-28／P1-29） |
+| `UAT-SWEEP-*` | 全页面／全 GET 路由事件循环看守（P1-31） |
+| `UAT-EQ-*` | 审计与概览读路径等价守卫（P1-32／P1-33；冻结旧实现＋改前金样本） |
 | `UAT-R0` | 环境门禁（各套件共用可引用） |
 
 自动化脚本 ID（`E2E-*`／`VERIFY-*`／`UT-*`）可写在用例「自动化指针」栏，但 UAT 编号保持稳定，便于跨 Agent 引用。

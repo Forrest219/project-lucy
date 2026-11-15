@@ -18,6 +18,9 @@ import { recordProjectionStatus } from "../proxy/audit-write-health.js";
 import { getSecurityStore } from "../security/instance.js";
 import { projectionStatus, runProjection, triggerAuditProjection, type ProjectionStatus } from "../security/projector.js";
 import { inferredRebuildStatus } from "./inferred-turn-maintainer.js";
+import { selectInquiryPackCallRows } from "./audit-inquiry-pack-rows.js";
+import { mapSlicesYielding, yieldToEventLoop } from "./yield-slices.js";
+import { formatAuditLocalTimestamp as formatAuditLocalTimestampIn } from "./audit-local-timestamp.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
 import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
 import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
@@ -414,22 +417,7 @@ function ensureColumn(database: Database.Database, table: string, column: string
 }
 
 function formatAuditLocalTimestamp(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: AUDIT_EXPORT_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  }).formatToParts(date);
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "00";
-  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+  return formatAuditLocalTimestampIn(iso, AUDIT_EXPORT_TIMEZONE);
 }
 
 function auditExportFilename(kind: string, ext: "csv" | "json", now = new Date()): string {
@@ -652,6 +640,7 @@ export async function getAuditDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
     CREATE INDEX IF NOT EXISTS idx_al_ts ON access_log(ts);
     CREATE INDEX IF NOT EXISTS idx_al_lucy_turn_id ON access_log(lucy_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_ital_access_log ON inferred_turn_access_logs(access_log_id);
   `);
   ensureColumn(db, "config_change_log", "asset_kind", "TEXT NOT NULL DEFAULT 'governance'");
   ensureColumn(db, "config_change_log", "operation", "TEXT");
@@ -1728,7 +1717,7 @@ function budgetRetrospectiveCsvCells(argsSummaryRaw: string | null): string[] {
   ];
 }
 
-function renderAccessLogCsv(rows: QueryRow[]): string {
+export function renderAccessLogCsv(rows: QueryRow[]): string {
   const lines = [
     ACCESS_LOG_CSV_HEADERS.join(","),
     ...rows.map((row) => {
@@ -1825,6 +1814,13 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
     })
   ];
   return lines.join("\n");
+}
+
+/** Same text as `renderAccessLogCsv`, rendered in slices that yield to the event loop. */
+export async function renderAccessLogCsvYielding(rows: QueryRow[]): Promise<string> {
+  const header = ACCESS_LOG_CSV_HEADERS.join(",");
+  const bodies = await mapSlicesYielding(rows, (slice) => [renderAccessLogCsv(slice).slice(header.length + 1)]);
+  return [header, ...bodies].join("\n");
 }
 
 function filterSnapshotForManifest(
@@ -2173,8 +2169,13 @@ function attachInquiryNumbers(database: Database.Database, rows: QueryRow[]): Qu
   });
 }
 
-function presentCallRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
+export function presentCallRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
   return attachInquiryNumbers(database, attachInferredTurnIds(database, rows));
+}
+
+/** Same rows as `presentCallRows`, built in slices that yield to the event loop (P1-32 / P1-33). */
+export function presentCallRowsYielding(database: Database.Database, rows: QueryRow[]): Promise<QueryRow[]> {
+  return mapSlicesYielding(rows, (slice) => presentCallRows(database, slice));
 }
 
 /** Spec 173: evidence packs include handshake rows already linked to the exported inquiries. */
@@ -2837,7 +2838,7 @@ function turnSourceLabel(source: TurnEntry["source"]): string {
   return source === "reported" ? "用户原始问询" : "系统推断问询";
 }
 
-function renderTurnCsv(rows: TurnEntry[]): string {
+export function renderTurnCsv(rows: TurnEntry[]): string {
   const lines = [
     TURN_CSV_HEADERS.join(","),
     ...rows.map((row) =>
@@ -2872,6 +2873,13 @@ function renderTurnCsv(rows: TurnEntry[]): string {
     )
   ];
   return lines.join("\n");
+}
+
+/** Same text as `renderTurnCsv`, rendered in slices that yield to the event loop. */
+export async function renderTurnCsvYielding(rows: TurnEntry[]): Promise<string> {
+  const header = TURN_CSV_HEADERS.join(",");
+  const bodies = await mapSlicesYielding(rows, (slice) => [renderTurnCsv(slice).slice(header.length + 1)]);
+  return [header, ...bodies].join("\n");
 }
 
 // `T` is the header element type (not the array type) so that `headers.map`
@@ -3847,13 +3855,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
       .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @pageSizePlusOne`)
       .all({ ...resumed.params, pageSizePlusOne: pageSize + 1 }) as QueryRow[];
     const hasMore = fetched.length > pageSize;
-    const rows = presentCallRows(database, hasMore ? fetched.slice(0, pageSize) : fetched);
+    const rows = await presentCallRowsYielding(database, hasMore ? fetched.slice(0, pageSize) : fetched);
     const last = fetched[pageSize - 1] ?? fetched[fetched.length - 1];
     const nextCursor = hasMore && last
       ? encodeAuditExportCursor({ ts: last.ts, id: last.id })
       : undefined;
 
-    const body = renderAccessLogCsv(rows);
+    const body = await renderAccessLogCsvYielding(rows);
     const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
     reply.header("Content-Type", "text/csv; charset=utf-8");
     reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("calls", "csv")}"`);
@@ -4156,7 +4164,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const q = request.query;
     const database = await getAuditDb();
     const result = await listAuditTurnEntries(database, q, { paginate: false });
-    const body = renderTurnCsv(result.entries);
+    await yieldToEventLoop();
+    const body = await renderTurnCsvYielding(result.entries);
     const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
     reply.header("Content-Type", "text/csv; charset=utf-8");
     reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("turns", "csv")}"`);
@@ -4171,6 +4180,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const q = request.query;
     const database = await getAuditDb();
     const turns = await listAuditTurnEntries(database, q, { paginate: false });
+    await yieldToEventLoop(); // do not chain the turn listing and the call query into one block
     const turnIds = turns.entries.map((entry) => entry.id);
     const callFilter: AccessLogFilterQuery = {
       user: q.user,
@@ -4181,28 +4191,12 @@ export function registerAuditRoutes(app: FastifyInstance) {
       includeProtocol: "true"
     };
     const { conditions, params } = buildAccessLogFilter(callFilter, { applyAccessGrade: false });
-    if (turnIds.length > 0) {
-      const placeholders = turnIds.map((_, index) => `@turn${index}`);
-      turnIds.forEach((id, index) => {
-        params[`turn${index}`] = id;
-      });
-      conditions.push(`(
-        IFNULL(lucy_turn_id, '') IN (${placeholders.join(", ")})
-        OR EXISTS (
-          SELECT 1 FROM inferred_turn_access_logs ital
-          WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id IN (${placeholders.join(", ")})
-        )
-      )`);
-    } else {
-      conditions.push("1 = 0");
-    }
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const callRows = presentCallRows(
-      database,
-      database.prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC`).all(params) as QueryRow[]
-    );
-    const turnsCsv = Buffer.from(`\uFEFF${renderTurnCsv(turns.entries)}`, "utf8");
-    const callsCsv = Buffer.from(`\uFEFF${renderAccessLogCsv(callRows)}`, "utf8");
+    // Set-based selection (P1-32 / F-1): the inquiry ids are joined once, not expanded into IN lists.
+    const selected = selectInquiryPackCallRows(database, { conditions, params }, turnIds) as unknown as QueryRow[];
+    await yieldToEventLoop();
+    const callRows = await presentCallRowsYielding(database, selected);
+    const turnsCsv = Buffer.from(`\uFEFF${await renderTurnCsvYielding(turns.entries)}`, "utf8");
+    const callsCsv = Buffer.from(`\uFEFF${await renderAccessLogCsvYielding(callRows)}`, "utf8");
     const zip = buildStoredZip([
       { name: "turns.csv", data: turnsCsv },
       { name: "calls.csv", data: callsCsv }

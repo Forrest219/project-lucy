@@ -20,6 +20,8 @@
 | `UAT-SUITE-CONTEXT-CONTENT` | **P1-30**／REQ-030-051 | [suites/context-content](suites/context-content/suite.md) | 本机 demo Docker + MCP；宿主＝Claude Code CLI + Cursor Agent CLI | [claude](suites/context-content/runs/2026-11-15-claude-ctx-content.md)／[cursor-cli](suites/context-content/runs/2026-11-15-cursor-cli-ctx-content.md) | **PASS WITH GAP**（必做 R0／R0-SEED／WIKI-01…04／SKILL-01…04 PASS；WIKI-01S **BLOCKED**=GAP-2；`gitSha=9d59337d`；判定 JSON `inbox/uat-ctx-content-2026-11-15/verdict-cases.json`）。≠ 可上线 |
 | `UAT-SUITE-OPS-CONCEPTS` | **P1-11**／REQ-030-032；**P1-27**／REQ-030-048 | [suites/ops-concepts](suites/ops-concepts/suite.md) | 本机 demo Docker + WebUI + MCP `:57881` | [2026-11-15-claude-macmini-p1-11-ops](suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md) | **FAIL**（R0／01／03 PASS；**02 FAIL**——授权可见，业务受理 502／`ERR_MODULE_NOT_FOUND` at `/data/lucy`；见 GAP-UAT-P1-11-RUNTIME）。**P1-27 修复复测＝NOT RUN**（须干净 `demo:upgrade` 且 health `gitDirty=false`＋`gitSha`＝修复提交后再跑；本登记不重建）。≠ 可上线 |
 | `UAT-SUITE-ROW-POLICY` | **P1-28**／REQ-030-049；**P1-29**／REQ-030-050 | [suites/row-policy-finance-scenario](suites/row-policy-finance-scenario/suite.md) | 本机 demo Docker；自造 `uat_row_policy_` 两表；WebUI `:55176`；MCP `:57881` | [2026-11-15-cursor-row-policy-first](suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md) | **FAIL**（R0／ROW-01／04／06 PASS；ROW-08 登记修复时清理 PASS；**ROW-02／03／05 BLOCKED**——`source_ambiguity_gate`／`need_begin_or_confirm`，未完成来源确认，没有隔离结果；**ROW-07 FAIL**＝预期，GAP-UAT-P1-28-VALUE）。`gitSha=f9549135`。≠ 可上线；≠ 核心升级完成 |
+| `UAT-SUITE-PAGE-SWEEP` | **P1-31**／REQ-030-052；整改 **P1-32**／REQ-030-053、**P1-33**／REQ-030-054 | [suites/page-event-loop-sweep](suites/page-event-loop-sweep/suite.md) | 本机沙箱（首跑 demo `docker cp` 副本；整改后复跑复用该副本）+ Chromium；合成审计账本夹具 | [2026-11-16-claude-page-sweep-after-fix](suites/page-event-loop-sweep/runs/2026-11-16-claude-page-sweep-after-fix.md)（首跑 [2026-11-15 FAIL](suites/page-event-loop-sweep/runs/2026-11-15-claude-page-sweep-first.md)） | **PASS WITH GAP**（01 40/43 通过；02 **0 越线／0 失败**，96 通过、25 未测——含 `export-v2`／`export-pack-v2`（夹具缺派生列）；03 门禁 PASS、基线 `tracked` 清零；04 对本次报告回放 PASS。`governance/overview` livez p99 372ms 贴线。≠ 可上线） |
+| `UAT-SUITE-EQUIV-GUARD` | **P1-32**／REQ-030-053；**P1-33**／REQ-030-054 | [suites/audit-scale-equivalence-guard](suites/audit-scale-equivalence-guard/suite.md) | 本机 vitest＋better-sqlite3 真库；冻结旧实现与改前金样本；性能面引 `UAT-SUITE-PAGE-SWEEP` | [2026-11-16-claude-equiv-first](suites/audit-scale-equivalence-guard/runs/2026-11-16-claude-equiv-first.md) | **PASS WITH GAP**（必做 R0／01／02／03 PASS：71 条等价用例全绿；04 变异自检 8 类全部被拦下，`daily-question-kpi` 变异未实跑；等价守卫拦不住纯性能回退，靠 EQ-03。≠ 可上线） |
 
 ## 一键入口（本机）
 
@@ -74,11 +76,22 @@ node scripts/uat/run-catalog-scan-wide-api.mjs
 # 勿手工补 /data/lucy/scripts；测后清理 uat-ops-concept-* Role／Agent
 # 最近判定：FAIL（2026-11-15）；P1-27 修复复测尚未执行
 
+
 # 行级隔离（P1-28／P1-29）
 # 用例：docs/qa/uat/suites/row-policy-finance-scenario/cases.md
 # 夹具：同目录 fixtures.md（自造 uat_row_policy_；proven 用同一 compose project 重建）
 # 最近判定：FAIL（2026-11-15-cursor-row-policy-first）
 # 复跑前确认 printenv LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN 未设置，且没有 uat-row-policy-* / uat_row_policy_ 残留
+
+# 全页面／全 GET 路由事件循环看守（P1-31；整改 P1-32／P1-33）— 最近判定：PASS WITH GAP（2026-11-16-claude-page-sweep-after-fix；首跑 FAIL）
+# 全量：npm --prefix webui run sweep:event-loop（约 8–15 分钟，自行 docker cp＋vite build）
+# 门禁：npm --prefix webui run sweep:event-loop:gate（新增越线／新增未测即退出码 1；基线 webui/scripts/page-event-loop-sweep.baseline.json 只减不增）
+# 严格：SWEEP_STRICT=1 npm --prefix webui run sweep:event-loop:gate（已登记越线清零后预期 0；基线 tracked 已于 2026-11-16 清零）
+# 用例：docs/qa/uat/suites/page-event-loop-sweep/cases.md
+
+# 审计与概览读路径等价守卫（P1-32／P1-33；防旧病复发）— 最近判定：PASS WITH GAP（2026-11-16-claude-equiv-first）
+# 改动受守卫文件必跑（秒级）：npm --prefix webui run test:equivalence
+# 用例：docs/qa/uat/suites/audit-scale-equivalence-guard/cases.md（含变异自检 UAT-EQ-04）
 
 # 三台勾连兜底
 npm run lint:e2e-ledger

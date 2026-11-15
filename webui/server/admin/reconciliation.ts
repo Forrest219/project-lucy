@@ -741,24 +741,31 @@ function isoMs(value: string | null | undefined): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-/** 问询详情查询条件：登记 turn、修订后 turn、原始 turn、推断分组关联行。 */
-function inquiryWhere(
+/**
+ * 问询详情查询条件：登记 turn、修订后 turn、原始 turn、推断分组关联行。
+ *
+ * 列比较写成 `col = ?`（可走索引）。旧写法 `IFNULL(col, '') = ?` 对每个问询整表扫描一次，
+ * 对账导出按问询逐个调用，规模下是 N 次全表扫描（P1-33 / F-7）。问询 ID 为空串时才需要
+ * 把 NULL 当作空串匹配，这一分支保留旧写法，语义与旧实现逐字一致。
+ */
+export function inquiryWhere(
   db: Database.Database,
   turnId: string,
   columns: Set<string>
 ): { where: string; params: unknown[] } {
   const clauses: string[] = [];
   const params: unknown[] = [];
+  const equalsTurn = (column: string) => (turnId === "" ? `IFNULL(${column}, '') = ?` : `${column} = ?`);
   if (columns.has("lucy_turn_id")) {
-    clauses.push("IFNULL(lucy_turn_id, '') = ?");
+    clauses.push(equalsTurn("lucy_turn_id"));
     params.push(turnId);
   }
   if (columns.has("effective_turn_id")) {
-    clauses.push("IFNULL(effective_turn_id, '') = ?");
+    clauses.push(equalsTurn("effective_turn_id"));
     params.push(turnId);
   }
   if (columns.has("original_turn_id")) {
-    clauses.push("IFNULL(original_turn_id, '') = ?");
+    clauses.push(equalsTurn("original_turn_id"));
     params.push(turnId);
   }
   if (tableExists(db, "inferred_turn_access_logs")) {

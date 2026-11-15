@@ -324,6 +324,8 @@ async function ensureUiPageViews(db: Awaited<ReturnType<typeof getAuditDb>>): Pr
       group_id  TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_ui_page_views_ts ON ui_page_views(ts);
+    -- Covering index for the overview aggregates (P1-33 / F-5): window scans never touch the table rows.
+    CREATE INDEX IF NOT EXISTS idx_ui_page_views_ts_cover ON ui_page_views(ts, page_key, menu_id, admin_id);
   `);
 }
 
@@ -578,6 +580,7 @@ export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
     return new Map(rows.map((row) => [row.id, row.visits]));
   };
 
+  const pageCounts = countRows("page_key"); // one scan feeds both the group and the page rankings
   return {
     windowHours: hours,
     pageViews: totals.page_views ?? 0,
@@ -585,11 +588,11 @@ export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
     activeMenuCount: totals.active_menu_count ?? 0,
     unmappedViews: totals.unmapped_views ?? 0,
     pageViewSeries,
-    groups: rankByVisits(UI_USAGE_GROUPS, groupVisitsByCurrentCatalog(countRows("page_key"))),
+    groups: rankByVisits(UI_USAGE_GROUPS, groupVisitsByCurrentCatalog(pageCounts)),
     menus: rankByVisits(UI_USAGE_MENUS, countRows("menu_id")),
     pages: rankByVisits(
       UI_USAGE_PAGES.map((page) => ({ id: page.pageKey, label: page.label })),
-      countRows("page_key")
+      pageCounts
     )
   };
 }

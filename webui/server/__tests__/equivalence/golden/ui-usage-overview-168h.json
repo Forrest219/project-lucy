@@ -1,0 +1,410 @@
+{
+  "windowHours": 168,
+  "pageViews": 4679,
+  "visitorCount": 9,
+  "activeMenuCount": 26,
+  "unmappedViews": 234,
+  "pageViewSeries": {
+    "bucket": "day",
+    "since": "2026-11-08T12:00:00.000Z",
+    "until": "2026-11-15T12:00:00.000Z",
+    "points": [
+      {
+        "start": "2026-11-08T12:00:00.000Z",
+        "end": "2026-11-09T12:00:00.000Z",
+        "pageViews": 668
+      },
+      {
+        "start": "2026-11-09T12:00:00.000Z",
+        "end": "2026-11-10T12:00:00.000Z",
+        "pageViews": 653
+      },
+      {
+        "start": "2026-11-10T12:00:00.000Z",
+        "end": "2026-11-11T12:00:00.000Z",
+        "pageViews": 704
+      },
+      {
+        "start": "2026-11-11T12:00:00.000Z",
+        "end": "2026-11-12T12:00:00.000Z",
+        "pageViews": 614
+      },
+      {
+        "start": "2026-11-12T12:00:00.000Z",
+        "end": "2026-11-13T12:00:00.000Z",
+        "pageViews": 630
+      },
+      {
+        "start": "2026-11-13T12:00:00.000Z",
+        "end": "2026-11-14T12:00:00.000Z",
+        "pageViews": 703
+      },
+      {
+        "start": "2026-11-14T12:00:00.000Z",
+        "end": "2026-11-15T12:00:00.000Z",
+        "pageViews": 707
+      }
+    ]
+  },
+  "groups": [
+    {
+      "id": "governance",
+      "label": "访问治理",
+      "visits": 1546
+    },
+    {
+      "id": "evaluation",
+      "label": "质量评测",
+      "visits": 827
+    },
+    {
+      "id": "semantic-modeling",
+      "label": "业务上下文",
+      "visits": 545
+    },
+    {
+      "id": "system-settings",
+      "label": "系统设置",
+      "visits": 370
+    },
+    {
+      "id": "runtime-status",
+      "label": "运行状态",
+      "visits": 344
+    },
+    {
+      "id": "connections",
+      "label": "数据接入",
+      "visits": 332
+    },
+    {
+      "id": "publish",
+      "label": "语义发布",
+      "visits": 232
+    }
+  ],
+  "menus": [
+    {
+      "id": "admin-roles",
+      "label": "角色权限",
+      "visits": 349
+    },
+    {
+      "id": "semantic-catalog",
+      "label": "语义资产",
+      "visits": 336
+    },
+    {
+      "id": "admin-agents",
+      "label": "Agent",
+      "visits": 268
+    },
+    {
+      "id": "eval-runs",
+      "label": "运行历史",
+      "visits": 253
+    },
+    {
+      "id": "admin-tokens",
+      "label": "Token 凭据",
+      "visits": 241
+    },
+    {
+      "id": "connections-overview",
+      "label": "连接概览",
+      "visits": 240
+    },
+    {
+      "id": "admin-row-policies",
+      "label": "行权限视图",
+      "visits": 230
+    },
+    {
+      "id": "eval-cases",
+      "label": "评测用例",
+      "visits": 226
+    },
+    {
+      "id": "eval-field-questions",
+      "label": "现场提问",
+      "visits": 131
+    },
+    {
+      "id": "admin-version",
+      "label": "版本信息",
+      "visits": 130
+    },
+    {
+      "id": "admin-branding",
+      "label": "品牌外观",
+      "visits": 129
+    },
+    {
+      "id": "admin-audit",
+      "label": "访问日志",
+      "visits": 120
+    },
+    {
+      "id": "overview",
+      "label": "系统概览",
+      "visits": 119
+    },
+    {
+      "id": "publish-history",
+      "label": "发布记录",
+      "visits": 118
+    },
+    {
+      "id": "eval-monitor",
+      "label": "趋势监控",
+      "visits": 117
+    },
+    {
+      "id": "admin-access-map",
+      "label": "访问关系图",
+      "visits": 116
+    },
+    {
+      "id": "publish-workbench",
+      "label": "发布工作台",
+      "visits": 114
+    },
+    {
+      "id": "admin-governance",
+      "label": "使用概况",
+      "visits": 113
+    },
+    {
+      "id": "admin-mcp-playground",
+      "label": "MCP 调试台",
+      "visits": 113
+    },
+    {
+      "id": "ops-calls",
+      "label": "调用监控",
+      "visits": 112
+    },
+    {
+      "id": "admin-accounts",
+      "label": "登录账户",
+      "visits": 111
+    },
+    {
+      "id": "admin-config-audit",
+      "label": "配置审计",
+      "visits": 109
+    },
+    {
+      "id": "semantic-wiki",
+      "label": "业务 Wiki",
+      "visits": 106
+    },
+    {
+      "id": "semantic-skills",
+      "label": "业务 Skill",
+      "visits": 103
+    },
+    {
+      "id": "eval-security-candidates",
+      "label": "安全评测候选",
+      "visits": 100
+    },
+    {
+      "id": "connections-enabled-tables",
+      "label": "启用表范围",
+      "visits": 92
+    }
+  ],
+  "pages": [
+    {
+      "id": "agent-detail",
+      "label": "Agent 详情",
+      "visits": 146
+    },
+    {
+      "id": "eval-runs",
+      "label": "运行历史",
+      "visits": 141
+    },
+    {
+      "id": "eval-field-questions",
+      "label": "现场提问",
+      "visits": 131
+    },
+    {
+      "id": "admin-version",
+      "label": "版本信息",
+      "visits": 130
+    },
+    {
+      "id": "admin-branding",
+      "label": "品牌外观",
+      "visits": 129
+    },
+    {
+      "id": "admin-authorization-summary",
+      "label": "授权摘要",
+      "visits": 125
+    },
+    {
+      "id": "help",
+      "label": "帮助中心",
+      "visits": 124
+    },
+    {
+      "id": "issue-token",
+      "label": "签发 Token",
+      "visits": 124
+    },
+    {
+      "id": "admin-row-policy-templates",
+      "label": "行策略模板",
+      "visits": 124
+    },
+    {
+      "id": "admin-agents",
+      "label": "Agent",
+      "visits": 122
+    },
+    {
+      "id": "connections",
+      "label": "连接概览",
+      "visits": 121
+    },
+    {
+      "id": "admin-audit",
+      "label": "访问日志",
+      "visits": 120
+    },
+    {
+      "id": "admin-roles",
+      "label": "角色权限",
+      "visits": 120
+    },
+    {
+      "id": "eval-case-editor",
+      "label": "评测用例编辑",
+      "visits": 120
+    },
+    {
+      "id": "connection-test",
+      "label": "连通测试",
+      "visits": 119
+    },
+    {
+      "id": "overview",
+      "label": "系统概览",
+      "visits": 119
+    },
+    {
+      "id": "publish-history",
+      "label": "发布记录",
+      "visits": 118
+    },
+    {
+      "id": "role-create",
+      "label": "新建角色",
+      "visits": 118
+    },
+    {
+      "id": "eval-monitor",
+      "label": "趋势监控",
+      "visits": 117
+    },
+    {
+      "id": "catalog",
+      "label": "语义资产",
+      "visits": 117
+    },
+    {
+      "id": "admin-tokens",
+      "label": "Token 凭据",
+      "visits": 117
+    },
+    {
+      "id": "admin-access-map",
+      "label": "访问关系图",
+      "visits": 116
+    },
+    {
+      "id": "publish-workbench",
+      "label": "发布工作台",
+      "visits": 114
+    },
+    {
+      "id": "admin-usage",
+      "label": "使用概况",
+      "visits": 113
+    },
+    {
+      "id": "mcp-playground",
+      "label": "MCP 调试台",
+      "visits": 113
+    },
+    {
+      "id": "ops-calls",
+      "label": "调用监控",
+      "visits": 112
+    },
+    {
+      "id": "eval-run-detail",
+      "label": "运行详情",
+      "visits": 112
+    },
+    {
+      "id": "admin-accounts",
+      "label": "登录账户",
+      "visits": 111
+    },
+    {
+      "id": "role-detail",
+      "label": "角色详情",
+      "visits": 111
+    },
+    {
+      "id": "joins",
+      "label": "关联关系",
+      "visits": 110
+    },
+    {
+      "id": "table-editor",
+      "label": "表语义编辑",
+      "visits": 109
+    },
+    {
+      "id": "config-audit",
+      "label": "配置审计",
+      "visits": 109
+    },
+    {
+      "id": "eval-cases",
+      "label": "评测用例",
+      "visits": 106
+    },
+    {
+      "id": "admin-row-policies",
+      "label": "行权限视图",
+      "visits": 106
+    },
+    {
+      "id": "wiki",
+      "label": "业务 Wiki",
+      "visits": 106
+    },
+    {
+      "id": "skills",
+      "label": "业务 Skill",
+      "visits": 103
+    },
+    {
+      "id": "eval-security-candidates",
+      "label": "安全评测候选",
+      "visits": 100
+    },
+    {
+      "id": "enabled-tables",
+      "label": "启用表范围",
+      "visits": 92
+    }
+  ]
+}

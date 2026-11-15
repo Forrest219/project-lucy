@@ -85,6 +85,36 @@ const REQUIRED = [
     latestRun: "docs/qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md"
   },
   {
+    poolId: "P1-31",
+    suiteId: "UAT-SUITE-PAGE-SWEEP",
+    suiteDir: "docs/qa/uat/suites/page-event-loop-sweep",
+    latestRun: "docs/qa/uat/suites/page-event-loop-sweep/runs/2026-11-16-claude-page-sweep-after-fix.md"
+  },
+  {
+    poolId: "P1-32",
+    suiteId: "UAT-SUITE-PAGE-SWEEP",
+    suiteDir: "docs/qa/uat/suites/page-event-loop-sweep",
+    latestRun: "docs/qa/uat/suites/page-event-loop-sweep/runs/2026-11-16-claude-page-sweep-after-fix.md"
+  },
+  {
+    poolId: "P1-33",
+    suiteId: "UAT-SUITE-PAGE-SWEEP",
+    suiteDir: "docs/qa/uat/suites/page-event-loop-sweep",
+    latestRun: "docs/qa/uat/suites/page-event-loop-sweep/runs/2026-11-16-claude-page-sweep-after-fix.md"
+  },
+  {
+    poolId: "P1-32",
+    suiteId: "UAT-SUITE-EQUIV-GUARD",
+    suiteDir: "docs/qa/uat/suites/audit-scale-equivalence-guard",
+    latestRun: "docs/qa/uat/suites/audit-scale-equivalence-guard/runs/2026-11-16-claude-equiv-first.md"
+  },
+  {
+    poolId: "P1-33",
+    suiteId: "UAT-SUITE-EQUIV-GUARD",
+    suiteDir: "docs/qa/uat/suites/audit-scale-equivalence-guard",
+    latestRun: "docs/qa/uat/suites/audit-scale-equivalence-guard/runs/2026-11-16-claude-equiv-first.md"
+  },
+  {
     poolId: "P1-30",
     suiteId: "UAT-SUITE-CONTEXT-CONTENT",
     suiteDir: "docs/qa/uat/suites/context-content",

@@ -761,6 +761,11 @@ async function getDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_attempt_id ON access_log(attempt_id);
     CREATE INDEX IF NOT EXISTS idx_al_event_type ON access_log(event_type);
     CREATE INDEX IF NOT EXISTS idx_al_instance_id ON access_log(instance_id);
+    -- P1-32/P1-33: lookups that scale with audit volume (inquiry detail, export link join) must not scan.
+    CREATE INDEX IF NOT EXISTS idx_al_lucy_turn_id ON access_log(lucy_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_al_effective_turn_id ON access_log(effective_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_al_original_turn_id ON access_log(original_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_ital_access_log ON inferred_turn_access_logs(access_log_id);
   `);
   // F-02：归属改写日志基线必须在表建好之后登记（表不存在时无法登记）。
   await ensureAsOfBaseline(db);

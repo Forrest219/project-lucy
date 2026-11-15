@@ -24,6 +24,8 @@ export type InferredTurnMaintainer = {
   catchUp(): Promise<void>;
   /** One watermark poll. Does not itself rebuild. */
   pollOnce(): Promise<void>;
+  /** Poll the watermark now and start a pass for users with newer calls. Unchanged users are not touched. */
+  refreshStale(): Promise<void>;
   runPass(): Promise<void>;
 };
 
@@ -157,6 +159,10 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
       await runPass();
     },
     pollOnce,
+    async refreshStale() {
+      await pollOnce();
+      void runPass();
+    },
     runPass
   };
 }
@@ -171,8 +177,14 @@ export function inferredRebuildStatus(): InferredRebuildStatus {
   return active?.status() ?? { complete: true, pendingUsers: 0, lastCompletedAt: null };
 }
 
-export function markInferredUserDirty(userId: string): void {
-  active?.markDirty(userId);
+/**
+ * Read-time freshness for callers that want recent calls reflected (access map).
+ * Rebuilds only users with calls newer than the maintainer's watermark; marking every
+ * reader-visible user dirty forced a full delete+reinsert rebuild per user per request
+ * (P1-33 / F-2).
+ */
+export async function refreshInferredStaleUsers(): Promise<void> {
+  await active?.refreshStale();
 }
 
 export function stopInferredTurnMaintainer(): void {
