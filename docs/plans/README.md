@@ -4,6 +4,8 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261115-trust-evidence-capability-split.md](lucy-20261115-trust-evidence-capability-split.md) | **v0.1；委托人批准（2026-11-15）**：可信证据两类拆分——0.30 吸收 P0-4／B／5；未开工进 post-0.30 池。**≠ Spec；≠ 开发授权；≠ 可上线** |
+| [lucy-20261115-post-030-trust-evidence-requirement-pool.md](lucy-20261115-post-030-trust-evidence-requirement-pool.md) | **v0.1 未来需求池（未开线）**：REQ-TE-001–008（可核对覆盖／证据槽位／认证／质量预警等）。**入池 ≠ 立项；≠ 可上线**。拆分见上条 |
 | [lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md](lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md) | **P1-19／ACCESS-MAP UAT 已执行 PASS（2026-11-14）**：多 Agent；F-1 关闭。**≠ 可上线**。测试台 [`UAT-SUITE-ACCESS-MAP`](../qa/uat/suites/access-map-sankey-empty/suite.md) |
 | [lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md](lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md) | **P0 问数六套件本机 Mac mini UAT Wave A 已执行（2026-11-14）**：Claude 全真＋Cursor 验收；INDEX 已更新。Wave B 推迟。**≠ 改 Spec 合同；≠ 可上线**。测试台见 [`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md) |
 | [lucy-20261113-access-map-sankey-empty-fix-plan.md](lucy-20261113-access-map-sankey-empty-fix-plan.md) | **功能合同已收口（2026-11-13）**；[closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md)。Spec 见 [lucy-20261113-access-map-sankey-empty-fix-spec.md](../specs/lucy-20261113-access-map-sankey-empty-fix-spec.md)。**≠ 可上线** |
