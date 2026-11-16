@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { resolveProjectRoot } from "../project.js";
+import { redactStorageDetail } from "../security/redaction.js";
 import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
@@ -14,6 +15,13 @@ import {
   type ExecutionEvidence
 } from "./audit-classification.js";
 import { DERIVATION_VERSION } from "./audit-derivation.js";
+import {
+  REASON_CODES,
+  SPAN_DERIVATION_VERSION,
+  SPAN_STATUSES,
+  TRACE_STAGES,
+  type TraceSpanRow
+} from "./audit-trace-span.js";
 import { resolveLedgerSeq } from "./audit-reconcile.js";
 import {
   MCP_HANDSHAKE_METHODS,
@@ -140,6 +148,14 @@ export interface AccessLogEntry {
   durationMs: number;
   requestId: string | number;
   traceId?: string;
+  /** P1-36：本次调用的 span（与行同一事务写入；有 span 的行派生版本为 v2p5-2）。 */
+  spans?: TraceSpanRow[];
+  /** P1-36 D8：`client_ip` 的取值来源（socket / xff / real_ip）。 */
+  ipSource?: string;
+  /** P1-36 D8：`classifyTrustedSource()` 的结果。 */
+  trustedSource?: string;
+  /** P1-37 U2：被拒请求的 HMAC 指纹（`rf1:` 前缀），只用于 M3 同版本内比较。 */
+  rejectionFingerprint?: string;
   responseBytes?: number;
   responseRowCount?: number;
   responseColumnCount?: number;
@@ -244,6 +260,7 @@ export interface AccessLogSourceRecord {
 }
 
 let db: Database.Database | null = null;
+let spanInsertStmt: Database.Statement | null = null;
 
 /**
  * audit-trust-2026-10-19-r1 / T03a: audit.sqlite schema version (independent
@@ -378,7 +395,11 @@ export const ACCESS_LOG_COLUMNS = [
   ["inference_confidence", "TEXT"],
   ["inference_rule_version", "TEXT"],
   // S07 七分类（与 162 四维并行披露）。
-  ["error_category", "TEXT"]
+  ["error_category", "TEXT"],
+  // P1-36 D8：client_ip 取值来源与可信度落账（历史行 NULL）。
+  ["ip_source", "TEXT"],
+  ["rejection_fingerprint", "TEXT"],
+  ["trusted_source", "TEXT"]
 ] as const;
 export type AccessLogColumnName = (typeof ACCESS_LOG_COLUMNS)[number][0];
 const PERMISSION_SNAPSHOT_COLUMNS = [
@@ -392,6 +413,93 @@ function ensureColumn(database: Database.Database, table: string, column: string
   database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
+const sqlList = (values: readonly string[]): string => values.map((v) => `'${v}'`).join(", ");
+
+/** P1-36 §5.1：span 表。列约束落 DB CHECK；与 `access_log` 外键级联。 */
+const TRACE_SPAN_DDL = `
+  CREATE TABLE IF NOT EXISTS access_trace_span (
+    span_id            TEXT PRIMARY KEY,
+    trace_id           TEXT NOT NULL,
+    access_log_id      INTEGER NOT NULL REFERENCES access_log(id) ON DELETE CASCADE,
+    parent_span_id     TEXT,
+    seq                INTEGER NOT NULL CHECK (seq >= 1),
+    stage              TEXT NOT NULL CHECK (stage IN (${sqlList(TRACE_STAGES)})),
+    started_at_ms      INTEGER NOT NULL,
+    duration_ms        INTEGER NOT NULL CHECK (duration_ms >= 0),
+    status             TEXT NOT NULL CHECK (status IN (${sqlList(SPAN_STATUSES)})),
+    reason_code        TEXT CHECK (reason_code IS NULL OR reason_code IN (${sqlList(REASON_CODES)})),
+    reason_param       TEXT,
+    error_category     TEXT,
+    attrs_json         TEXT CHECK (attrs_json IS NULL OR (json_valid(attrs_json) AND length(CAST(attrs_json AS BLOB)) <= 1024)),
+    derivation_version TEXT NOT NULL CHECK (derivation_version = '${SPAN_DERIVATION_VERSION}'),
+    UNIQUE(trace_id, seq)
+  );
+  CREATE INDEX IF NOT EXISTS idx_ats_access_log ON access_trace_span(access_log_id);
+  CREATE INDEX IF NOT EXISTS idx_ats_stage_ts ON access_trace_span(stage, started_at_ms);
+`;
+
+const SPAN_INSERT_SQL = `
+  INSERT INTO access_trace_span
+    (span_id, trace_id, access_log_id, parent_span_id, seq, stage, started_at_ms, duration_ms,
+     status, reason_code, reason_param, error_category, attrs_json, derivation_version)
+  VALUES
+    (@spanId, @traceId, @accessLogId, @parentSpanId, @seq, @stage, @startedAtMs, @durationMs,
+     @status, @reasonCode, @reasonParam, @errorCategory, @attrsJson, @derivationVersion)
+`;
+
+export type AuditSqliteStatus = {
+  /** 服务单例连接上 `PRAGMA foreign_keys` 的实际值。 */
+  foreignKeys: boolean;
+  /** 指向 `access_log` 的子表盘点（开启外键前的盘点结果）。 */
+  foreignKeyChildren: Array<{ table: string; onDelete: string }>;
+  /** 开启时 `PRAGMA foreign_key_check` 的存量违规数（null＝尚未检查）。 */
+  foreignKeyViolations: number | null;
+};
+
+let auditSqliteStatus: AuditSqliteStatus = { foreignKeys: false, foreignKeyChildren: [], foreignKeyViolations: null };
+
+/** 只读：admin 审计状态接口据此报告服务连接的 `foreign_keys`（不另开连接自查）。 */
+export async function getAuditSqliteStatus(): Promise<AuditSqliteStatus> {
+  const database = await getDb();
+  const live = database.pragma("foreign_keys", { simple: true });
+  return { ...auditSqliteStatus, foreignKeys: Number(live) === 1 };
+}
+
+/**
+ * P1-36 §5.1：开启外键前先盘点指向 `access_log` 的子表并做存量孤儿扫描。
+ * 存量违规不阻断启动（外键只约束新写入与父行删除），但数量如实上报。
+ */
+function enableForeignKeysWithInventory(database: Database.Database): void {
+  const tables = database
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+    .all() as Array<{ name: string }>;
+  const children: AuditSqliteStatus["foreignKeyChildren"] = [];
+  for (const { name } of tables) {
+    const fks = database.prepare(`PRAGMA foreign_key_list("${name.replace(/"/g, '""')}")`).all() as Array<{
+      table: string;
+      on_delete: string;
+    }>;
+    for (const fk of fks) {
+      if (fk.table === "access_log") children.push({ table: name, onDelete: fk.on_delete });
+    }
+  }
+  let violations: number | null = null;
+  try {
+    violations = (database.prepare(`PRAGMA foreign_key_check`).all() as unknown[]).length;
+  } catch {
+    violations = null;
+  }
+  database.pragma("foreign_keys = ON");
+  auditSqliteStatus = {
+    foreignKeys: Number(database.pragma("foreign_keys", { simple: true })) === 1,
+    foreignKeyChildren: children,
+    foreignKeyViolations: violations
+  };
+  if (violations) {
+    console.warn(`[lucy-proxy] audit db has ${violations} pre-existing foreign key violation(s); new writes are enforced`);
+  }
+}
+
 export function closeAuditDb(): void {
   if (db) {
     try {
@@ -399,6 +507,8 @@ export function closeAuditDb(): void {
     } catch {}
     db = null;
     insertStmt = null;
+    spanInsertStmt = null;
+    auditSqliteStatus = { foreignKeys: false, foreignKeyChildren: [], foreignKeyViolations: null };
     sourceInsertStmt = null;
     snapshotStmt = null;
     conversationTurnInsertStmt = null;
@@ -741,6 +851,7 @@ async function getDb(): Promise<Database.Database> {
   for (const [column, definition] of PERMISSION_SNAPSHOT_COLUMNS) {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
+  db.exec(TRACE_SPAN_DDL);
   // F-02：来源行也要有账本序号，否则「关联事实 as-of S」不可证明 ——
   // 晚于 S 写入的来源行会被当前视图读到，成为混入的 >S 事实。
   ensureColumn(db, "access_log_sources", "ledger_seq", "INTEGER");
@@ -766,7 +877,10 @@ async function getDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_effective_turn_id ON access_log(effective_turn_id);
     CREATE INDEX IF NOT EXISTS idx_al_original_turn_id ON access_log(original_turn_id);
     CREATE INDEX IF NOT EXISTS idx_ital_access_log ON inferred_turn_access_logs(access_log_id);
+    -- P1-36：仅约束新版本（v2p5-2）行；旧行 trace_id 可空或重复，不受约束。
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_al_trace_v2p5_2 ON access_log(trace_id) WHERE derivation_version = '${SPAN_DERIVATION_VERSION}';
   `);
+  enableForeignKeysWithInventory(db);
   // F-02：归属改写日志基线必须在表建好之后登记（表不存在时无法登记）。
   await ensureAsOfBaseline(db);
   return db;
@@ -1027,9 +1141,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     // B18: 四轴分类结果与主状态由**同一个**分类函数产出（写路径与读路径共用）。
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, association_status, original_turn_id, original_attribution_mode, original_association_status, original_attribution_confidence, original_reason, effective_turn_id, effective_attribution_mode, effective_association_status, effective_attribution_confidence, effective_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version, attempt_id, parent_attempt_id, event_type, instance_id, credential_principal_id, classification_version, attribution_rule_version, transport_sub_type, transport_status, authorization_status, execution_status, usability_status, primary_status, derivation_version, delivery_status, null_reason, legacy_outcome, digest_kind, digest_version, preview_version, ingress_event_id, endpoint_id, ledger_seq, client_call_id, client_event_id, upstream_operation_id, rpc_request_id, retry_of, reported_role, observed_role_ids, observed_protocol, inferred_client, inference_method, inference_confidence, inference_rule_version, error_category)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, association_status, original_turn_id, original_attribution_mode, original_association_status, original_attribution_confidence, original_reason, effective_turn_id, effective_attribution_mode, effective_association_status, effective_attribution_confidence, effective_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version, attempt_id, parent_attempt_id, event_type, instance_id, credential_principal_id, classification_version, attribution_rule_version, transport_sub_type, transport_status, authorization_status, execution_status, usability_status, primary_status, derivation_version, delivery_status, null_reason, legacy_outcome, digest_kind, digest_version, preview_version, ingress_event_id, endpoint_id, ledger_seq, client_call_id, client_event_id, upstream_operation_id, rpc_request_id, retry_of, reported_role, observed_role_ids, observed_protocol, inferred_client, inference_method, inference_confidence, inference_rule_version, error_category, ip_source, trusted_source, rejection_fingerprint)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @associationStatus, @originalTurnId, @originalAttributionMode, @originalAssociationStatus, @originalAttributionConfidence, @originalReason, @effectiveTurnId, @effectiveAttributionMode, @effectiveAssociationStatus, @effectiveAttributionConfidence, @effectiveReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion, @attemptId, @parentAttemptId, @eventType, @instanceId, @credentialPrincipalId, @classificationVersion, @attributionRuleVersion, @transportSubType, @transportStatus, @authorizationStatus, @executionStatus, @usabilityStatus, @primaryStatus, @derivationVersion, @deliveryStatus, @nullReason, @legacyOutcome, @digestKind, @digestVersion, @previewVersion, @ingressEventId, @endpointId, @ledgerSeq, @clientCallId, @clientEventId, @upstreamOperationId, @rpcRequestId, @retryOf, @reportedRole, @observedRoleIds, @observedProtocol, @inferredClient, @inferenceMethod, @inferenceConfidence, @inferenceRuleVersion, @errorCategory)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @associationStatus, @originalTurnId, @originalAttributionMode, @originalAssociationStatus, @originalAttributionConfidence, @originalReason, @effectiveTurnId, @effectiveAttributionMode, @effectiveAssociationStatus, @effectiveAttributionConfidence, @effectiveReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion, @attemptId, @parentAttemptId, @eventType, @instanceId, @credentialPrincipalId, @classificationVersion, @attributionRuleVersion, @transportSubType, @transportStatus, @authorizationStatus, @executionStatus, @usabilityStatus, @primaryStatus, @derivationVersion, @deliveryStatus, @nullReason, @legacyOutcome, @digestKind, @digestVersion, @previewVersion, @ingressEventId, @endpointId, @ledgerSeq, @clientCallId, @clientEventId, @upstreamOperationId, @rpcRequestId, @retryOf, @reportedRole, @observedRoleIds, @observedProtocol, @inferredClient, @inferenceMethod, @inferenceConfidence, @inferenceRuleVersion, @errorCategory, @ipSource, @trustedSource, @rejectionFingerprint)
     `);
   }
   // B18: 生产写路径接入 v2p5-1 分类（读路径共用同一函数）。
@@ -1045,7 +1159,8 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     authorizationStatusHint: entry.associationStatus === "conflict" ? "unknown" : undefined,
     evidence: entry.executionEvidence
   });
-  const result = insertStmt.run({
+  const resolvedLedgerSeq = entry.ledgerSeq ?? (await resolveLedgerSeq());
+  const rowParams = {
     ts: entry.ts,
     userId: entry.userId,
     tokenLabel: entry.tokenLabel ?? null,
@@ -1085,7 +1200,7 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     queryArtifactRef: entry.queryArtifactRef ?? null,
     generatedSql: entry.generatedSql ?? null,
     outcome: entry.outcome,
-    errorDetail: entry.errorDetail ? truncateErrorDetail(entry.errorDetail) : null,
+    errorDetail: entry.errorDetail ? truncateErrorDetail(redactStorageDetail(entry.errorDetail)) : null,
     durationMs: entry.durationMs,
     responseBytes: entry.responseBytes ?? null,
     responseRowCount: entry.responseRowCount ?? null,
@@ -1136,11 +1251,14 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     executionStatus: classified.executionStatus,
     usabilityStatus: classified.usabilityStatus,
     primaryStatus: classified.primaryStatus,
-    derivationVersion: classified.derivationVersion,
+    derivationVersion: entry.spans && entry.spans.length > 0 ? SPAN_DERIVATION_VERSION : classified.derivationVersion,
     deliveryStatus: classified.deliveryStatus,
     nullReason: classified.nullReason,
     legacyOutcome: entry.outcome,
     errorCategory: classified.errorCategory ?? null,
+    ipSource: entry.ipSource ?? null,
+    trustedSource: entry.trustedSource ?? null,
+    rejectionFingerprint: entry.rejectionFingerprint ?? null,
     // ─── U11：摘要 / 预览版本 ────────────────────────────────────────────
     digestKind: entry.digestKind ?? null,
     digestVersion: entry.digestVersion ?? (entry.digestKind ? DIGEST_VERSION_V2P5 : null),
@@ -1148,7 +1266,7 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     // ─── S02 / S03：入口与标识 ───────────────────────────────────────────
     ingressEventId: entry.ingressEventId ?? null,
     endpointId: entry.endpointId ?? null,
-    ledgerSeq: entry.ledgerSeq ?? (await resolveLedgerSeq()),
+    ledgerSeq: resolvedLedgerSeq,
     clientCallId: entry.clientCallId ?? null,
     clientEventId: entry.clientEventId ?? null,
     upstreamOperationId: entry.upstreamOperationId ?? null,
@@ -1162,8 +1280,20 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     inferenceMethod: entry.inferenceMethod ?? null,
     inferenceConfidence: entry.inferenceConfidence ?? null,
     inferenceRuleVersion: entry.inferenceRuleVersion ?? null
+  };
+  const spans = entry.spans ?? [];
+  if (spans.length === 0) {
+    return Number(insertStmt.run(rowParams).lastInsertRowid);
+  }
+  // P1-36 D4：行与全部 span 同一事务提交；任一失败整笔回滚（无孤儿行 / 孤儿 span）。
+  const stmt = insertStmt;
+  const spanStmt = (spanInsertStmt ??= database.prepare(SPAN_INSERT_SQL));
+  const writeAll = database.transaction((): number => {
+    const accessLogId = Number(stmt.run(rowParams).lastInsertRowid);
+    for (const span of spans) spanStmt.run({ ...span, accessLogId });
+    return accessLogId;
   });
-  return Number(result.lastInsertRowid);
+  return writeAll.immediate();
 }
 
 /** Ensures the idempotent access-log migration completed before returning Skill bodies. */

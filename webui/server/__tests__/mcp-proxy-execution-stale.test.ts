@@ -139,6 +139,7 @@ describe("MCP execution stale classification", () => {
             arguments: {
               connectionId: "zijin",
               sourceName: "funds",
+              measures: ["funds.fund_count"],
               dimensions: [{ field: "funds.fund_id" }]
             }
           }
@@ -199,6 +200,7 @@ describe("MCP execution stale classification", () => {
             arguments: {
               connectionId: "zijin",
               sourceName: "funds",
+              measures: ["funds.fund_count"],
               dimensions: [{ field: "funds.fund_id" }]
             }
           }
@@ -220,7 +222,7 @@ describe("MCP execution stale classification", () => {
       res.end(JSON.stringify({
         jsonrpc: "2.0",
         id: "successful-query",
-        result: { content: [{ type: "text", text: "[]" }] }
+        result: { content: [{ type: "text", text: JSON.stringify({ rows: [] }) }] }
       }));
     });
     await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
@@ -247,6 +249,7 @@ describe("MCP execution stale classification", () => {
             arguments: {
               connectionId: "zijin",
               sourceName: "funds",
+              measures: ["funds.fund_count"],
               dimensions: [{ field: "funds.fund_id" }]
             }
           }

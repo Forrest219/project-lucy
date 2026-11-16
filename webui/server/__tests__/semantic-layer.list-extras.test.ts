@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { invalidateContentPathsCache } from "../paths";
-import { listSources } from "../semantic-layer";
+import { listSources, listSourcesWithManifests } from "../semantic-layer";
 import type { SourceSummary } from "../model";
 
 let projectRoot: string;
@@ -199,5 +199,19 @@ describe("listSources — semanticUpdatedAt", () => {
     const summary = findSummary(summaries, "superstore_orders");
     expect(summary.semanticUpdatedAt).toBe(manifestTime.toISOString());
     expect(summary.semanticUpdatedAtSource).toBe("manifest");
+  });
+});
+describe("listSources — skipAuthorizedCounts（P1-37 U4：拒绝路径不为提示编译全员权限）", () => {
+  it("只丢掉授权计数；其余字段与完整列表逐项一致", async () => {
+    await writeSchema(projectRoot, "dataforai", ["superstore_orders", "superstore_returns"]);
+    await writeOverlay(projectRoot, "superstore_orders", "name: superstore_orders\ngrain: [id]\n");
+    const full = await listSourcesWithManifests(projectRoot);
+    const light = await listSourcesWithManifests(projectRoot, { skipAuthorizedCounts: true });
+    expect(full.authorizedCountsState).toBe("ok");
+    expect(light.authorizedCountsState).toBe("unavailable");
+    expect(light.tables.every((t) => t.authorizedAgentCount === 0)).toBe(true);
+    const strip = (rows: SourceSummary[]) => rows.map(({ authorizedAgentCount: _ignored, ...rest }) => rest);
+    expect(strip(light.tables)).toEqual(strip(full.tables));
+    expect(findSummary(full.tables, "superstore_orders").authorizedAgentCount).toBeGreaterThan(0);
   });
 });

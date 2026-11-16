@@ -279,7 +279,7 @@ describe("T08b.1 manifest v2 schema conformance", () => {
     // Get the canonical key set by reading the type at compile time via
     // a fixture-shape check. We mirror the spec by listing expected keys.
     // B13 / U7：manifest 增补来源声明三字段 + 跨文件关系声明 + 排除项声明
-    // + 版本链 / 规则版本 / 文件清单 + 追平时限。
+    // + 版本链 / 规则版本 / 文件清单 + 追平时限 + P1-36 spanCoverage / spans。
     const expectedKeys = [
       "schemaVersion",
       "classificationVersion",
@@ -310,7 +310,10 @@ describe("T08b.1 manifest v2 schema conformance", () => {
       "timeRange",
       "cutoffAt",
       "files",
-      "catchUpDeadlineSeconds"
+      "catchUpDeadlineSeconds",
+      // P1-36：span 台账对账（C7–C9）与 spans.csv 截止序号。
+      "spanCoverage",
+      "spans"
     ];
     const m: ExportV2Manifest = await buildManifest();
     expect(Object.keys(m).sort()).toEqual(expectedKeys.slice().sort());

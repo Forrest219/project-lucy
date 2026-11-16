@@ -457,14 +457,14 @@ export function classifyAuditEvent(input: ClassifyAuditEventInput): ClassifiedAu
 
 // ─── B14 统一错误七分类 → Spec 162 四维映射（同一分类函数产出）─────────────
 
-const ACL_DENIAL_REASONS = new Set([
+export const ACL_DENIAL_REASONS = new Set([
   "sensitive_metadata_forbidden",
   "wiki_forbidden",
   "raw_query_forbidden",
   "agent_disabled"
 ]);
 
-const VALIDATION_REASONS = new Set([
+export const VALIDATION_REASONS = new Set([
   "count_without_source",
   "ambiguous_field",
   "aggregate_of_aggregate",
@@ -472,7 +472,7 @@ const VALIDATION_REASONS = new Set([
   "completeness_denominator_required"
 ]);
 
-const SCHEMA_FAILURE_REASONS = new Set([
+export const SCHEMA_FAILURE_REASONS = new Set([
   "invalid_arguments",
   "invalidArguments",
   "schema_validation_failed",
@@ -483,7 +483,7 @@ const SCHEMA_FAILURE_REASONS = new Set([
  * Spec 162 §6.3 —— 续查声明被拒的四种原因。它们都是**调用者用错了续查通道**
  * （额度已用、已有待兑现声明、预算尚未用尽、凭证不匹配），归「用法与语义」。
  */
-const CONTINUATION_DECLARATION_REJECTIONS = new Set([
+export const CONTINUATION_DECLARATION_REJECTIONS = new Set([
   "pending_exists",
   "no_credit",
   "not_exhausted",
@@ -565,7 +565,9 @@ export function classifyErrorCategory(input: ClassifyErrorInput): ClassifiedErro
   }
 
   // client_schema_failure：入参校验失败（-32602 形状）。
-  if (SCHEMA_FAILURE_REASONS.has(reason) || reason === "invalid_arguments") {
+  // P1-37 M6：代理侧入参校验的真实理由码带工具与原因后缀（`invalid_arguments:<tool>:<why>`），
+  // 之前只精确匹配无后缀形式，导致入参错误被记为 upstream_failed。
+  if (SCHEMA_FAILURE_REASONS.has(reason) || reason === "invalid_arguments" || reason.startsWith("invalid_arguments:")) {
     return { category: "client_schema_failure", failureDimension: "用法与语义", nullReason: "not_applicable" };
   }
 

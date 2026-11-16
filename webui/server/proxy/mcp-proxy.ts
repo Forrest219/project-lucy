@@ -29,10 +29,10 @@ import {
   upstreamSessionKeepaliveEnabled,
   upstreamSessionOwner
 } from "./upstream-session.js";
-import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
+import { extractRequestClientMeta, resolveClientIdentity, resolveClientIpEvidence } from "./request-client-meta.js";
 import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, loadBudgetState, saveBudgetState, listBudgetScopes, type AccessLogSourceRecord } from "./audit.js";
 import { setLedgerSeqResolver } from "./audit-reconcile.js";
-import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, formatIdentityCompilerReason, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { absoluteDenyOrUnclassifiedReason, allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, getPolicyRuntimeStatus, extractTables, extractSourceRefs, formatIdentityCompilerReason, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
@@ -98,9 +98,13 @@ import {
 import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
 import { extractSqlFromToolResult, mergeIncludeSql } from "../audit/query-artifact-capture.js";
 import { canonicalizeLucyQueryArgs } from "./lucy-query-normalization.js";
+import { recallObservedToolNames, rememberObservedToolNames } from "./observed-tool-names.js";
+import { REPEAT_REJECTION_HINT, computeRejectionFingerprint, repeatRejections } from "./rejection-guard.js";
 import { applyLucyQueryForcedFilters, buildExplainForcedPredicateDiagnostics, isScopeIntersectionEmpty } from "./row-policy.js";
 import { TurnCorrelationRegistry } from "./turn-correlation.js";
 import { beginAuditWrite, completeAuditWrite, failAuditWrite } from "./audit-write-health.js";
+import { TraceRequestContext, currentTrace, currentTraceContext, runWithTrace } from "./audit-trace-context.js";
+import { TraceRecorder, completeTrace, mapReasonCode, type SpanHandle, type TraceStage } from "./audit-trace-span.js";
 import {
   buildEmptyResultNextStep,
   classifyFailure,
@@ -303,6 +307,35 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
   });
 }
 
+/** P1-36：在当前请求的 trace 上登记一个上游阶段 span；无请求上下文（后台、passthrough）时原样执行。 */
+async function withUpstreamSpan<T extends IncomingMessage | string | undefined>(
+  stage: TraceStage,
+  run: () => Promise<T>,
+  options: { parent?: SpanHandle; attrs?: Record<string, unknown> } = {}
+): Promise<T> {
+  const trace = currentTrace();
+  if (!trace) return run();
+  const span = trace.start(stage, options.parent);
+  try {
+    const result = await run();
+    const statusCode = typeof result === "object" && result !== null ? result.statusCode : undefined;
+    span.end({
+      status: "ok",
+      reasonCode: "allowed",
+      attrs: { ...options.attrs, ...(statusCode !== undefined ? { upstream_status: statusCode } : {}) }
+    });
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const mapped = mapReasonCode({
+      decisionReason: /timeout/i.test(message) ? "timeout" : "upstream_error",
+      outcome: "error"
+    });
+    span.end({ status: "error", reasonCode: mapped.code, reasonParam: mapped.param, errorCategory: mapped.errorCategory, attrs: options.attrs });
+    throw err;
+  }
+}
+
 function forwardToKtx(
   method: string,
   url: string,
@@ -409,7 +442,24 @@ function readUpstreamBody(upstream: IncomingMessage): Promise<string> {
  * plain-text 400 as missing session traffic), then the `notifications/initialized`
  * the protocol requires before session traffic is accepted.
  */
-async function handshakeUpstreamSession(identity: Identity): Promise<string | undefined> {
+/** P1-37 U3a：恢复握手的显式结果。任何异常都落成结果，不依赖异常路径。 */
+export type RecoveryFailureCause =
+  | "initialize_failed"
+  | "no_session_id"
+  | "invalid_initialize_response"
+  | "initialized_failed"
+  | "handshake_threw";
+export type RecoveryResult = { ok: true; sessionId: string } | { ok: false; cause: RecoveryFailureCause };
+
+async function handshakeUpstreamSession(identity: Identity, parent?: SpanHandle): Promise<RecoveryResult> {
+  try {
+    return await handshakeUpstreamSessionUnsafe(identity, parent);
+  } catch {
+    return { ok: false, cause: "handshake_threw" };
+  }
+}
+
+async function handshakeUpstreamSessionUnsafe(identity: Identity, parent?: SpanHandle): Promise<RecoveryResult> {
   const handshakeHeaders = { "content-type": "application/json" } satisfies IncomingMessage["headers"];
   const initializeBody = Buffer.from(JSON.stringify({
     jsonrpc: "2.0",
@@ -422,24 +472,28 @@ async function handshakeUpstreamSession(identity: Identity): Promise<string | un
     }
   }));
 
-  const initializeResponse = await forwardToKtx("POST", "/mcp", handshakeHeaders, initializeBody);
+  const initializeResponse = await withUpstreamSpan("upstream_handshake", () => forwardToKtx("POST", "/mcp", handshakeHeaders, initializeBody), { parent });
   const initializeResponseBody = await readUpstreamBody(initializeResponse);
   const sessionId = normalizeHeader(initializeResponse.headers["mcp-session-id"]);
-  if ((initializeResponse.statusCode ?? 200) >= 400 || !sessionId) return undefined;
+  if ((initializeResponse.statusCode ?? 200) >= 400) return { ok: false, cause: "initialize_failed" };
+  if (!sessionId) return { ok: false, cause: "no_session_id" };
   if (!isJsonRpcShaped(decodeUpstreamPayload(
     initializeResponseBody,
     String(initializeResponse.headers["content-type"] ?? ""),
     ""
   ))) {
-    return undefined;
+    return { ok: false, cause: "invalid_initialize_response" };
   }
 
   const initializedBody = Buffer.from(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
-  const initializedResponse = await forwardToKtx("POST", "/mcp", handshakeHeaders, initializedBody, sessionId);
+  const initializedResponse = await withUpstreamSpan("upstream_handshake", () => forwardToKtx("POST", "/mcp", handshakeHeaders, initializedBody, sessionId), { parent });
   await readUpstreamBody(initializedResponse);
+  // U3a：`notifications/initialized` 须被上游以 2xx 接受才算握手成功；否则不缓存新会话。
+  const initializedStatus = initializedResponse.statusCode ?? 200;
+  if (initializedStatus < 200 || initializedStatus >= 300) return { ok: false, cause: "initialized_failed" };
 
   setUpstreamSession(upstreamSessionOwner(identity), sessionId);
-  return sessionId;
+  return { ok: true, sessionId };
 }
 
 /**
@@ -503,7 +557,7 @@ async function forwardToKtxWithSession(
   const sessionId = resolveOutboundSession(identity, incomingHeaders);
   session.gatewaySupplied = Boolean(sessionId) && sessionId !== clientSessionId;
 
-  let upstream = await forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId, onRequest);
+  let upstream = await withUpstreamSpan("upstream_call", () => forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId, onRequest));
   let upstreamBody = await readUpstreamBody(upstream);
   if (!keepalive) return { upstream, body: upstreamBody, session };
 
@@ -517,18 +571,22 @@ async function forwardToKtxWithSession(
 
   if (sessionId) clearUpstreamSession(upstreamSessionOwner(identity), sessionId);
   session.handshakeAttempted = true;
-  const freshSession = await handshakeUpstreamSession(identity).catch(() => undefined);
-  if (!freshSession) {
+  const recoverSpan = currentTrace()?.start("session_recover");
+  const recovery = await handshakeUpstreamSession(identity, recoverSpan);
+  if (!recovery.ok) {
     session.recoveryFailed = true;
+    recoverSpan?.end({ status: "error", reasonCode: "session_lost", errorCategory: "upstream_failed", attrs: { recovered: false, reason: recovery.cause } });
     return { upstream, body: upstreamBody, session };
   }
+  const freshSession = recovery.sessionId;
+  recoverSpan?.end({ status: "ok", reasonCode: "upstream_session_recovered", attrs: { recovered: true } });
 
   // Retry once with the fresh session, dropping the stale client-supplied one.
   const retryHeaders: IncomingMessage["headers"] = { ...incomingHeaders };
   for (const key of Object.keys(retryHeaders)) {
     if (key.toLowerCase() === "mcp-session-id") delete retryHeaders[key];
   }
-  upstream = await forwardToKtx(method, url, retryHeaders, body, freshSession, onRequest);
+  upstream = await withUpstreamSpan("upstream_call", () => forwardToKtx(method, url, retryHeaders, body, freshSession, onRequest), { attrs: { retry_count: 1 } });
   upstreamBody = await readUpstreamBody(upstream);
   const stillRefused = isSessionRequiredFailure(
     upstream.statusCode,
@@ -578,6 +636,75 @@ function _bindOpenSessionTurn_REMOVED_v0_3(
   return;
 }
 
+function finalizeTracedEntry(
+  context: TraceRequestContext,
+  entry: Parameters<typeof writeLog>[0]
+): Parameters<typeof writeLog>[0] {
+  const { evidence, root } = completeTrace(context.recorder, {
+    tool: entry.tool,
+    outcome: entry.outcome,
+    decisionReason: entry.decisionReason,
+    errorDetail: entry.errorDetail,
+    policyVersion: entry.policyVersion,
+    isToolCall: context.rpcMethod === "tools/call"
+  });
+  const finished = context.recorder.finish(root);
+  return {
+    ...entry,
+    traceId: finished.traceId,
+    ts: new Date(finished.wallEndMs).toISOString(),
+    durationMs: finished.durationMs,
+    spans: finished.spans,
+    ipSource: context.ipSource,
+    trustedSource: context.trustedSource,
+    executionEvidence: entry.executionEvidence ?? evidence
+  };
+}
+
+/**
+ * P1-37 U2：登记一次被拒请求并判断是否「相同请求刚被拒绝」。
+ * 指纹只对规范化后的入参取 HMAC；密钥不可用时返回无指纹，不影响拒绝响应本身。
+ */
+async function trackRejection(
+  context: TraceRequestContext | undefined,
+  reason: string
+): Promise<{ fingerprint?: string; repeated: boolean }> {
+  const rejection = context?.rejection;
+  if (!rejection) return { repeated: false };
+  rejection.fingerprint ??= await computeRejectionFingerprint(rejection.args);
+  if (!rejection.fingerprint) return { repeated: false };
+  const parts = {
+    identityId: rejection.identityId,
+    sessionScope: rejection.sessionScope,
+    tool: rejection.tool,
+    fingerprint: rejection.fingerprint,
+    reason,
+    policyVersion: getPolicyRuntimeStatus().policyVersion
+  };
+  const repeated = repeatRejections.isRepeated(parts);
+  repeatRejections.remember(parts);
+  return { fingerprint: rejection.fingerprint, repeated };
+}
+
+/** 重复被拒时返回要追加到拒绝文案末尾的提示（含前导空格），否则返回空串。 */
+async function repeatRejectionSuffix(context: TraceRequestContext | undefined, reason: string): Promise<string> {
+  const tracked = await trackRejection(context, reason);
+  return tracked.repeated ? ` ${REPEAT_REJECTION_HINT}` : "";
+}
+
+/** 审计出口：被拒行（denied 或入参校验失败）补上指纹，并登记到重复被拒状态。 */
+async function withRejectionFingerprint(
+  context: TraceRequestContext | undefined,
+  entry: Parameters<typeof writeLog>[0]
+): Promise<Parameters<typeof writeLog>[0]> {
+  const rejection = context?.rejection;
+  if (!rejection || entry.tool !== rejection.tool || entry.rejectionFingerprint) return entry;
+  const reason = entry.decisionReason ?? entry.errorDetail ?? "";
+  if (entry.outcome !== "denied" && !reason.startsWith("invalid_arguments")) return entry;
+  const tracked = await trackRejection(context, reason);
+  return tracked.fingerprint ? { ...entry, rejectionFingerprint: tracked.fingerprint } : entry;
+}
+
 function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]): void {
   beginAuditWrite();
   // A known User-Agent product replaces an empty name or Lucy's own placeholder.
@@ -600,12 +727,19 @@ function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[
       entry.requestId == null || entry.requestId === "" ? undefined : String(entry.requestId)
     )
   };
-  writeLog(normalized)
-    .then((accessLogId) => {
+  // P1-36：该请求的 trace 由第一行审计行认领；响应发出后再收尾并同事务写入行与 span。
+  const traceContext = currentTraceContext();
+  const traced = traceContext?.claim(normalized.traceId) === true;
+  const ready: Promise<Parameters<typeof writeLog>[0]> = (traced && traceContext
+    ? traceContext.settled.then(() => finalizeTracedEntry(traceContext, normalized))
+    : Promise.resolve(normalized)
+  ).then((finalEntry) => withRejectionFingerprint(traceContext, finalEntry));
+  ready
+    .then((finalEntry) => writeLog(finalEntry).then((accessLogId) => {
       if (sources && sources.length > 0) {
-        return writeAccessLogSources(accessLogId, normalized.ts, normalized.userId, normalized.tool, toSourceRecords(sources));
+        return writeAccessLogSources(accessLogId, finalEntry.ts, finalEntry.userId, finalEntry.tool, toSourceRecords(sources));
       }
-    })
+    }))
     .then(() => {
       completeAuditWrite();
     })
@@ -873,7 +1007,7 @@ function queryOperation(query: string): string {
   return "unknown";
 }
 
-function queryAuditMeta(toolArgs: unknown): Partial<Parameters<typeof writeLog>[0]> & { queryTables?: string[] } {
+function queryAuditMeta(toolArgs: unknown, toolName?: string): Partial<Parameters<typeof writeLog>[0]> & { queryTables?: string[] } {
   const rawQuery = findRawQuery(toolArgs);
   if (!rawQuery) return {};
   const preview = buildAuditQueryPreview(rawQuery);
@@ -886,7 +1020,8 @@ function queryAuditMeta(toolArgs: unknown): Partial<Parameters<typeof writeLog>[
     previewTruncated: preview.previewTruncated,
     previewOriginalBytes: preview.previewOriginalBytes,
     // U11：摘要基于完整的受控规范化输入，digest_kind 区分来源类型。
-    digestKind: "sql",
+    // P1-36 D10：wiki_search 的摘要是检索文本，不得标成 sql。
+    digestKind: toolName === "wiki_search" ? "search_text" : "sql",
     queryTables: extractQueryTables(rawQuery)
   };
 }
@@ -1473,7 +1608,9 @@ function generatedSqlAuditFields(
     generatedSql: sql,
     queryHash: createHash("sha256").update(sql).digest("hex"),
     queryLength: sql.length,
-    queryOperation: queryOperation(sql)
+    queryOperation: queryOperation(sql),
+    // P1-36 D10：lucy_query 的摘要来自上游编译出的 SQL。
+    digestKind: "sql"
   };
 }
 
@@ -1586,6 +1723,17 @@ function invalidLucyQueryShapeReason(toolName: string, record: Record<string, un
     ?? invalidOrderByFieldReason(toolName, record, "orderBy");
 }
 
+const LUCY_QUERY_MEASURES_HINT =
+  "lucy_query requires a non-empty \"measures\" array, for example {\"connectionId\":\"<connection>\",\"measures\":[\"<source>.<measure>\"],\"dimensions\":[{\"field\":\"<source>.<dimension>\"}]}";
+
+/** P1-37 U2：`measures` 缺失或为空数组＝KTX 必然拒绝的形状（见 O6 取证）。 */
+function lucyQueryMeasuresRequiredReason(args: unknown): string | undefined {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
+  const measures = (args as Record<string, unknown>).measures;
+  if (Array.isArray(measures) && measures.length > 0) return undefined;
+  return "invalid_arguments:lucy_query:measures_required";
+}
+
 function validateLucyToolArgs(toolName: string, args: unknown): string | undefined {
   if (
     !toolName.startsWith("lucy_") ||
@@ -1600,7 +1748,10 @@ function validateLucyToolArgs(toolName: string, args: unknown): string | undefin
     // 这里按**前缀**豁免（而不是按登记表）：登记表之外的 `lucy_ops_*` 也必须走
     // 分类闸门（ACL → `tool_unclassified:<tool>`）得到准确的原因码，而不是先被
     // 数据面的入参规则拦下、报出误导性的 `connection_required`。
-    toolName.startsWith("lucy_ops_")
+    toolName.startsWith("lucy_ops_") ||
+    // P1-37 U2：未登记的工具名先走分类闸门（ACL → `tool_unclassified:<tool>`），
+    // 而不是被数据面入参规则先拦下、报出误导性的 `connection_required`。
+    absoluteDenyOrUnclassifiedReason(toolName)?.startsWith("tool_unclassified:")
   ) {
     return undefined;
   }
@@ -1908,15 +2059,33 @@ export function formatVisibleScopeSourceLine(source: {
 }
 
 async function buildRoleAwareInstructions(identity: Identity): Promise<string | undefined> {
+  // P1-37 U1 取证：握手阶段计时（P1-36 的 instructions_build 及其下 catalog_resolve / skills_load）。
+  const buildSpan = currentTrace()?.start("instructions_build");
+  try {
+    const text = await buildRoleAwareInstructionsUntimed(identity, buildSpan);
+    buildSpan?.end({ status: "ok", reasonCode: "allowed", attrs: { cache_hit: false, bytes: text ? Buffer.byteLength(text) : 0 } });
+    return text;
+  } catch (err) {
+    buildSpan?.end({ status: "error", reasonCode: "upstream_error" });
+    throw err;
+  }
+}
+
+async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: SpanHandle | undefined): Promise<string | undefined> {
   const fallback = await loadDataQaInstructions();
   try {
+    const catalogSpan = currentTrace()?.start("catalog_resolve", buildSpan);
     const catalog = await lucyCatalog(identity);
+    catalogSpan?.end({ status: "ok", reasonCode: "allowed" });
     let accessibleSkills: Awaited<ReturnType<typeof filterAccessibleSkills>> = [];
+    const skillsSpan = currentTrace()?.start("skills_load", buildSpan);
     try {
       const allSkills = await loadAllSkillsFresh();
       accessibleSkills = await filterAccessibleSkills(identity, allSkills, "discover");
+      skillsSpan?.end({ status: "ok", reasonCode: "allowed", attrs: { skill_count: allSkills.length, cache_hit: false } });
     } catch {
       // Best-effort loading of skills for instructions
+      skillsSpan?.end({ status: "error", reasonCode: "upstream_error" });
     }
 
     if (catalog.connections.length === 0 && catalog.sources.length === 0 && accessibleSkills.length === 0) return fallback;
@@ -2650,7 +2819,9 @@ async function recordSuccessfulQueryObservation(toolName: string, args: unknown)
 /** KTX rejects session traffic that arrives before a successful `initialize`
  * with a plain-text 400. Matching the text is the only signal available: the
  * rejection happens in KTX's transport layer, outside the JSON-RPC envelope. */
-const UPSTREAM_SESSION_REQUIRED_RE = /initialize request is required/i;
+// P1-37 O6 取证（2026-11-17，KTX 0.16.0 真实重启）：失效会话＝404 `Unknown MCP session: <id>`
+// （text/plain，对 tools/list、tools/call、ping、notifications 一致）；无会话＝400 `initialize request is required`。
+const UPSTREAM_SESSION_REQUIRED_RE = /initialize request is required|unknown mcp session/i;
 const UPSTREAM_BODY_EXCERPT_MAX = 200;
 
 export type UpstreamFailureReason = "upstream_session_required" | "upstream_protocol_error";
@@ -3739,7 +3910,7 @@ async function collectRepairEvidence(input: {
   let schemaByName: Map<string, { compiled: boolean; measureCount: number }> | null = null;
   try {
     const projectRoot = await resolveProjectRoot();
-    const sources = await listSources(projectRoot);
+    const sources = await listSources(projectRoot, { skipAuthorizedCounts: true });
     schemaByName = new Map(
       sources.map((source) => [
         source.table,
@@ -3938,12 +4109,24 @@ async function writeToolsListResponse(
     forceJson = true;
   }
 
+  if (!filterFailed) rememberToolsListNames(identity, body);
   const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
   const responseBytes = Buffer.byteLength(body);
   headers["content-length"] = responseBytes;
   res.writeHead(upstream.statusCode ?? 200, headers);
   res.end(body);
   return { filterFailed, errorDetail, responseBytes };
+}
+
+/** P1-37 U2：记下本次真实下发给该身份的工具名，供未知工具名拒绝时作为可见清单。 */
+function rememberToolsListNames(identity: Identity, servedBody: string): void {
+  try {
+    const parsed = JSON.parse(servedBody) as { result?: { tools?: Array<{ name?: unknown }> } };
+    const names = (parsed.result?.tools ?? []).map((tool) => tool.name).filter((name): name is string => typeof name === "string");
+    rememberObservedToolNames(identity.userId, identity.tokenHashPrefix ?? "", getPolicyRuntimeStatus().policyVersion, names);
+  } catch {
+    // 记录是尽力而为，不影响 tools/list 响应。
+  }
 }
 
 // Rewrites the upstream `initialize` response so `result.instructions` is the
@@ -4008,6 +4191,22 @@ async function writeInitializeResponse(
 }
 
 async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
+  const trace = new TraceRecorder({ traceId: `trace_${randomUUID()}` });
+  const traceContext = new TraceRequestContext(trace);
+  const evidence = resolveClientIpEvidence(req);
+  traceContext.ipSource = evidence.ipSource;
+  traceContext.trustedSource = evidence.trustedSource;
+  traceContext.instrumentResponse(res);
+  await runWithTrace(traceContext, () => handlePostTraced(req, res, admitted, trace, traceContext));
+}
+
+async function handlePostTraced(
+  req: IncomingMessage,
+  res: ServerResponse,
+  admitted: AdmittedRequest,
+  trace: TraceRecorder,
+  traceContext: TraceRequestContext
+): Promise<void> {
   const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
   const explicitTurnId = normalizeHeader(req.headers["x-lucy-turn-id"]);
   const { identity, body } = admitted;
@@ -4023,7 +4222,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     ...(networkMeta.deviceName ? { deviceName: networkMeta.deviceName } : {})
   };
   const start = Date.now();
-  const traceId = `trace_${randomUUID()}`;
+  const traceId = trace.traceId;
 
   let rpcMethod: string | undefined;
   let toolName: string | undefined;
@@ -4069,6 +4268,8 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
     parsedRpc = parsed;
     rpcMethod = parsed.method as string | undefined;
+    traceContext.rpcMethod = rpcMethod;
+    trace.upstreamStage = rpcMethod === "initialize" ? "upstream_handshake" : "upstream_call";
     requestId = (parsed.id as string | number | undefined) ?? "";
 
     if (rpcMethod === "initialize") {
@@ -4106,7 +4307,13 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
         // Keep only a safe subset of args for logging (Spec 137 — no raw question)
         argsSummary = summarizeArgsForAudit(toolName, args);
       }
-      const rawQueryAudit = queryAuditMeta(toolArgs);
+      traceContext.rejection = {
+        identityId: identity.userId,
+        tool: toolName ?? "",
+        args: toolArgs ?? null,
+        sessionScope: sessionId || "default"
+      };
+      const rawQueryAudit = queryAuditMeta(toolArgs, toolName);
       const { queryTables: extractedQueryTables, ...safeQueryMeta } = rawQueryAudit;
       queryMeta = safeQueryMeta;
       queryTables = extractedQueryTables ?? [];
@@ -4132,6 +4339,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     results: Awaited<ReturnType<typeof searchAccessibleWikiPages>>,
     upstreamError?: string
   ): Promise<void> => {
+    // P1-36 §6.2：上游失败后本地回退须同时留下 upstream_call(error) 与 local_handler(wiki_fallback)。
+    trace.mark("local_handler", {
+      status: query ? "ok" : "error",
+      attrs: { handler: upstreamError ? "wiki_fallback" : "wiki_search" }
+    });
     // SC-12 — only articles this role can read are injected, and each one
     // is audited with its key and wiki version.
     const wikiInjectedKeys = results.map((hit) => hit.key);
@@ -4253,8 +4465,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
       ? validateLucyToolArgs(toolName, toolArgs)
       : undefined
   );
-  if (invalidArgumentsReason) {
-    const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${invalidArgumentsReason}`, { isError: true });
+  const respondInvalidArguments = async (invalidArgumentsReason: string, baseHint?: string): Promise<void> => {
+    const tracked = await trackRejection(traceContext, invalidArgumentsReason);
+    const hint = [baseHint, tracked.repeated ? REPEAT_REJECTION_HINT : undefined].filter(Boolean).join(" ") || undefined;
+    const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${invalidArgumentsReason}${hint ? `. ${hint}` : ""}`, { isError: true });
     res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
     res.end(responseBody);
     recordRequestAudit({
@@ -4293,6 +4507,13 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
       reason: invalidArgumentsReason,
       policySource: "other"
     });
+  };
+  if (invalidArgumentsReason) {
+    // SC-05：整个查询形状缺失同样是 KTX 必然拒绝的形状，文案同样带示例（只加提示，不新增拒绝条件）。
+    const shapeHint = invalidArgumentsReason === "invalid_arguments:lucy_query:query_shape_required"
+      ? LUCY_QUERY_MEASURES_HINT
+      : undefined;
+    await respondInvalidArguments(invalidArgumentsReason, shapeHint);
     return;
   }
 
@@ -4684,6 +4905,26 @@ const DENIAL_REPAIR_TOOLS = new Set([
 ]);
 
 /**
+ * P1-37 U2：未知工具名的拒绝指引。清单＝该身份在当前策略版本下真实 `tools/list` 返回过的名称；
+ * 没有记录时退回 `allowedToolNames`（其上界，已排除 absolute-deny 与未授权控制面）。
+ * 不复用 `DENIAL_REPAIR_TOOLS` 的数据来源载荷。
+ */
+async function unknownToolGuidance(
+  identity: Identity,
+  toolName: string
+): Promise<{ text: string; payload: Record<string, unknown> }> {
+  const policyVersion = getPolicyRuntimeStatus().policyVersion;
+  const observed = recallObservedToolNames(identity.userId, identity.tokenHashPrefix ?? "", policyVersion);
+  const names = observed ?? await allowedToolNames(identity).catch(() => [] as string[]);
+  const text = ` "${toolName}" is not a tool this server provides. Do not guess tool names; `
+    + (names.length > 0 ? `use one of: ${names.join(", ")}.` : "call tools/list to see the tools available to you.");
+  return {
+    text,
+    payload: { reason: "tool_unclassified", unknownTool: toolName, availableTools: names }
+  };
+}
+
+/**
  * Builds the ACL-scoped repair payload shared by every permission denial.
  * Only connections and sources inside the caller's effective permissions are
  * returned; a resolution failure degrades to no list rather than guessing.
@@ -4788,7 +5029,14 @@ async function buildDenialRepairPayload(
 
   // ACL check for tool calls
   if (rpcMethod === "tools/call" && toolName) {
+    const aclSpan = trace.start("acl");
     const decision = await aclCheck(identity, toolName, toolArgs);
+    if (decision.allowed) {
+      aclSpan.end({ status: "ok", reasonCode: "allowed", attrs: { decision: "allow" } });
+    } else {
+      const aclMapped = mapReasonCode({ decisionReason: decision.reason ?? "denied", outcome: "denied" });
+      aclSpan.end({ status: "denied", reasonCode: aclMapped.code, reasonParam: aclMapped.param, errorCategory: aclMapped.errorCategory, attrs: { decision: "deny" } });
+    }
     if (!decision.allowed) {
       const errorMsg = decision.reason ?? "denied";
       const compiled = await effectivePermissions(identity).catch(() => null);
@@ -4802,13 +5050,18 @@ async function buildDenialRepairPayload(
       const denial = DENIAL_REPAIR_TOOLS.has(toolName)
         ? await buildDenialRepairPayload(identity, errorMsg)
         : null;
+      const tracked = await trackRejection(traceContext, errorMsg);
+      const unknownTool = errorMsg.startsWith("tool_unclassified:")
+        ? await unknownToolGuidance(identity, toolName)
+        : null;
+      const repeatText = tracked.repeated ? ` ${REPEAT_REJECTION_HINT}` : "";
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
         result: {
           isError: true,
-          content: [{ type: "text", text: `Access denied: ${errorMsg}${denial?.text ?? ""}` }],
-          ...(denial ? { data: denial.payload } : {})
+          content: [{ type: "text", text: `Access denied: ${errorMsg}${denial?.text ?? ""}${unknownTool?.text ?? ""}${repeatText}` }],
+          ...(denial ? { data: denial.payload } : unknownTool ? { data: unknownTool.payload } : {})
         }
       });
       res.writeHead(200, { "content-type": "application/json" });
@@ -4867,12 +5120,13 @@ async function buildDenialRepairPayload(
       });
       if (caliberGate.kind === "deny") {
         const denial: CaliberBindingDenial = caliberGate.denial;
+        const caliberRepeatText = await repeatRejectionSuffix(traceContext, denial.code);
         const responseBody = JSON.stringify({
           jsonrpc: "2.0",
           id: requestId,
           result: {
             isError: true,
-            content: [{ type: "text", text: denial.text }],
+            content: [{ type: "text", text: `${denial.text}${caliberRepeatText}` }],
             data: denial.payload
           }
         });
@@ -4936,7 +5190,7 @@ async function buildDenialRepairPayload(
       const sagResolved = await effectivePermissions(identity).catch(() => null);
       // 权限／目录不可读 → fail-closed（D10／SC-24），禁止静默跳过门闩。
       if (!sagResolved?.ok) {
-        const denialText = "Access denied: source_ambiguity_gate（表级歧义：目录或权限不可读，请先确认来源表）";
+        const denialText = `Access denied: source_ambiguity_gate（表级歧义：目录或权限不可读，请先确认来源表）${await repeatRejectionSuffix(traceContext, "source_ambiguity_gate")}`;
         const denialPayload = {
           reason: "source_ambiguity_gate",
           failureDimension: "source_selection",
@@ -5006,7 +5260,7 @@ async function buildDenialRepairPayload(
         let sourceMapReliable = true;
         try {
           const projectRoot = await resolveProjectRoot();
-          const listed = await listSources(projectRoot);
+          const listed = await listSources(projectRoot, { skipAuthorizedCounts: true });
           for (const src of listed) {
             const key = repairEvidenceIdentityKey({
               connectionId: src.conn,
@@ -5053,12 +5307,13 @@ async function buildDenialRepairPayload(
           sourceSelectionForAv = toSelectionDisclosure(sagOutcome.selection);
         }
         if (sagOutcome.kind === "deny_caliber_unresolved") {
+          const unresolvedRepeatText = await repeatRejectionSuffix(traceContext, "caliber_binding_unresolved");
           const responseBody = JSON.stringify({
             jsonrpc: "2.0",
             id: requestId,
             result: {
               isError: true,
-              content: [{ type: "text", text: sagOutcome.text }],
+              content: [{ type: "text", text: `${sagOutcome.text}${unresolvedRepeatText}` }],
               data: { reason: "caliber_binding_unresolved", failureDimension: "口径绑定" }
             }
           });
@@ -5102,7 +5357,7 @@ async function buildDenialRepairPayload(
         }
         if (sagOutcome.kind === "deny") {
           const denial: SourceAmbiguityDenial = sagOutcome.denial;
-          const denialText = `Access denied: ${denial.reason}（${denial.message}）`;
+          const denialText = `Access denied: ${denial.reason}（${denial.message}）${await repeatRejectionSuffix(traceContext, denial.reason)}`;
           const responseBody = JSON.stringify({
             jsonrpc: "2.0",
             id: requestId,
@@ -6777,6 +7032,17 @@ async function buildDenialRepairPayload(
     if (hiveHandled) return;
   }
 
+  // P1-37 U2（O6 取证，KTX 0.16.0）：`sl_query` 要求 `measures` 为非空数组，与其他入参无关；
+  // 缺失或为空时上游必然拒绝，且其错误文案会泄露内部工具名 `sl_query`。这里只复制该必然拒绝的条件，
+  // 在转发前以 Lucy 工具名＋示例返回；放在 Hive 分流之后，只影响真正要转发给 KTX 的请求。
+  if (rpcMethod === "tools/call" && toolName === "lucy_query") {
+    const measuresReason = lucyQueryMeasuresRequiredReason(toolArgs);
+    if (measuresReason) {
+      await respondInvalidArguments(measuresReason, LUCY_QUERY_MEASURES_HINT);
+      return;
+    }
+  }
+
   let outboundBody = body;
   if (rpcMethod === "tools/call" && parsedRpc && toolName === "lucy_read_source") {
     outboundBody = rewriteToolCall(parsedRpc, "sl_read_source", lucyReadSourceUpstreamArgs(toolArgs));
@@ -6791,7 +7057,8 @@ async function buildDenialRepairPayload(
   // `initialize`, `tools/list` and `tools/call` responses are all buffered before
   // being rewritten, so they are read here once and passed down. Only these paths
   // can recover a refused upstream session (a piped response cannot be retried).
-  const bufferedUpstream = rpcMethod === "initialize" || rpcMethod === "tools/list" || rpcMethod === "tools/call";
+  // P1-37 U3a：`ping` 也走带恢复的缓冲路径（失效会话上 ping 同样得到 404）。
+  const bufferedUpstream = rpcMethod === "initialize" || rpcMethod === "tools/list" || rpcMethod === "tools/call" || rpcMethod === "ping";
   // Strat-B DRAIN：KTX 上游语义 tools/call 计入在途，供 beginAdmissionDrain 有界排空。
   const trackKtxUpstream =
     rpcMethod === "tools/call" &&
@@ -6804,7 +7071,7 @@ async function buildDenialRepairPayload(
   try {
     if (rpcMethod === "initialize") {
       // `initialize` is what establishes the session; never inject one into it.
-      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody, undefined, captureUpstreamRequest);
+      upstream = await withUpstreamSpan("upstream_handshake", () => forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody, undefined, captureUpstreamRequest));
       upstreamBody = await readUpstreamBody(upstream);
     } else if (bufferedUpstream) {
       const forwarded = await forwardToKtxWithSession(
@@ -6819,14 +7086,14 @@ async function buildDenialRepairPayload(
       upstreamBody = forwarded.body;
       upstreamSession = forwarded.session;
     } else {
-      upstream = await forwardToKtx(
+      upstream = await withUpstreamSpan("upstream_call", () => forwardToKtx(
         req.method ?? "POST",
         MCP_UPSTREAM_PATH,
         headersWithOwnedSession(identity, req.headers),
         outboundBody,
         resolveOutboundSession(identity, req.headers),
         captureUpstreamRequest
-      );
+      ));
     }
   } catch (err) {
     if (rpcMethod === "initialize") {
@@ -6834,6 +7101,7 @@ async function buildDenialRepairPayload(
       // this Token is stale; drop it and let the next data call re-handshake.
       clearUpstreamSession(upstreamSessionOwner(identity));
       const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity) : undefined;
+      currentTrace()?.mark("local_handler", { status: "ok", attrs: { handler: "initialize_fallback" } });
       const payload = localInitializePayload(requestId, instructions);
       const responseBody = JSON.stringify(payload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -7447,7 +7715,11 @@ export async function forwardAuthorizedLucyQuery(
     return { ok: true, payload };
   }
   try {
-    const sessionId = getUpstreamSession(upstreamSessionOwner(identity)) ?? await handshakeUpstreamSession(identity);
+    const held = getUpstreamSession(upstreamSessionOwner(identity));
+    const sessionId = held ?? (await (async () => {
+      const recovery = await handshakeUpstreamSession(identity);
+      return recovery.ok ? recovery.sessionId : undefined;
+    })());
     if (!sessionId) return { ok: false, reason: "execution_interrupted" };
     const body = Buffer.from(JSON.stringify({
       jsonrpc: "2.0",

@@ -438,7 +438,19 @@ export type SourcesListing = {
 };
 
 /** Spec 174 §3.1 — tables and manifestSchemas derived from one Manifest scan. */
-export async function listSourcesWithManifests(projectRoot: string): Promise<SourcesListing> {
+export type ListSourcesOptions = {
+  /**
+   * 跳过「按 Agent 统计可用数」。该统计会为每个 Agent 编译一遍权限（宽目录下数百毫秒），
+   * 只有管理端列表展示需要；MCP 拒绝路径的修复提示只读 completion／measureCount（P1-37 U4）。
+   * 跳过时 `authorizedAgentCount` 恒为 0、`authorizedCountsState` 为 `unavailable`，不得用于展示。
+   */
+  skipAuthorizedCounts?: boolean;
+};
+
+export async function listSourcesWithManifests(
+  projectRoot: string,
+  options: ListSourcesOptions = {}
+): Promise<SourcesListing> {
   type Pending = {
     file: SchemaFile;
     table: string;
@@ -484,7 +496,9 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
     }
   });
 
-  const authorized = await timeAsync("permissions", () => computeAuthorizedAgentCounts(projectRoot, authorizedInputs));
+  const authorized: Awaited<ReturnType<typeof computeAuthorizedAgentCounts>> = options.skipAuthorizedCounts
+    ? { counts: new Map(), state: "unavailable", policyInputs: null }
+    : await timeAsync("permissions", () => computeAuthorizedAgentCounts(projectRoot, authorizedInputs));
   const authorizedCounts = authorized.counts;
 
   const summaries: SourceSummary[] = pending.map((entry) => {
@@ -567,8 +581,8 @@ export function sourcesDisplayMeta(
   };
 }
 
-export async function listSources(projectRoot: string): Promise<SourceSummary[]> {
-  return (await listSourcesWithManifests(projectRoot)).tables;
+export async function listSources(projectRoot: string, options: ListSourcesOptions = {}): Promise<SourceSummary[]> {
+  return (await listSourcesWithManifests(projectRoot, options)).tables;
 }
 
 export async function listManifestSchemas(projectRoot: string): Promise<ManifestSchemaSummary[]> {

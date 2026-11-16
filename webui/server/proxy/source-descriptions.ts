@@ -6,7 +6,7 @@
  * 禁止仅复读 manifest 表值盖戳。
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { glob } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
@@ -236,7 +236,102 @@ function connectionDir(semanticLayerRoot: string, connectionId: string): string 
  * 在 connectionScope 内扫盘建索引。
  * 索引可含同连接下暂不可见 source 的映射；装配侧只 lookup 最终可见键。
  */
+/**
+ * 描述索引缓存（P1-37 U1）。
+ *
+ * 根因（沙箱实测，320 Source）：每次 `initialize`／`lucy_catalog`／门闩都完整解析一遍
+ * `_schema/*.yaml` 与 overlay，占握手 ~90%（≈75 ms／次），并发握手在单线程上线性排队。
+ *
+ * 命中条件＝范围内所有相关文件的（路径、mtimeMs、ctimeMs、size、ino）与上次构建时逐项一致；
+ * 因此**任何**写入路径（含绕过写入事件的外部改文件）下一次调用即生效，没有陈旧窗口。
+ * 命中时不读文件内容、不解析 YAML；只做目录列举与 stat。指纹计算失败＝不缓存、走原路径。
+ * 返回值是浅拷贝，调用方改动不会污染缓存。
+ */
+const INDEX_CACHE_MAX_ENTRIES = 64;
+type IndexCacheEntry = { fingerprint: string; value: DescriptionIndexes };
+const indexCache = new Map<string, IndexCacheEntry>();
+const indexCacheStats = { hits: 0, misses: 0, uncacheable: 0 };
+
+/** 读取缓存命中／未命中计数（只读；供测试与取证）。 */
+export function descriptionIndexCacheStats(): { hits: number; misses: number; uncacheable: number; entries: number } {
+  return { ...indexCacheStats, entries: indexCache.size };
+}
+
+export function resetDescriptionIndexCacheForTests(): void {
+  indexCache.clear();
+  indexCacheStats.hits = 0;
+  indexCacheStats.misses = 0;
+  indexCacheStats.uncacheable = 0;
+}
+
+async function descriptionScopeFingerprint(semanticLayerRoot: string, scope: string[]): Promise<string | null> {
+  const parts: string[] = [];
+  try {
+    for (const connectionId of scope) {
+      const base = connectionDir(semanticLayerRoot, connectionId);
+      const files: string[] = [];
+      for await (const entry of glob("**/_schema/*.yaml", { cwd: base })) files.push(path.join(base, entry));
+      for await (const entry of glob("*.yaml", { cwd: base })) {
+        if (entry.includes("/") || entry.includes("\\")) continue;
+        files.push(path.join(base, entry));
+      }
+      files.sort();
+      parts.push(`@${connectionId}`);
+      for (const file of files) {
+        const info = await stat(file);
+        parts.push(`${file}|${info.mtimeMs}|${info.ctimeMs}|${info.size}|${info.ino}`);
+      }
+    }
+  } catch {
+    return null;
+  }
+  return parts.join("\n");
+}
+
+const cloneIndexes = (value: DescriptionIndexes): DescriptionIndexes => ({
+  manifestIndex: new Map(value.manifestIndex),
+  overlayIndex: new Map(value.overlayIndex),
+  contentRoot: value.contentRoot,
+  failedConnections: new Set(value.failedConnections),
+  failedSourceKeys: new Set(value.failedSourceKeys)
+});
+
 export async function loadDescriptionIndexes(
+  semanticLayerRoot: string,
+  connectionScope: string[]
+): Promise<DescriptionIndexes> {
+  const scope = [...new Set(connectionScope.map(normalizeCatalogRef).filter(Boolean))].sort();
+  const fingerprint = await descriptionScopeFingerprint(semanticLayerRoot, scope);
+  if (fingerprint === null) {
+    indexCacheStats.uncacheable += 1;
+    return loadDescriptionIndexesUncached(semanticLayerRoot, connectionScope);
+  }
+  const key = `${semanticLayerRoot}\u0000${scope.join(",")}`;
+  const cached = indexCache.get(key);
+  if (cached && cached.fingerprint === fingerprint) {
+    indexCacheStats.hits += 1;
+    indexCache.delete(key);
+    indexCache.set(key, cached);
+    return cloneIndexes(cached.value);
+  }
+  indexCacheStats.misses += 1;
+  const value = await loadDescriptionIndexesUncached(semanticLayerRoot, connectionScope);
+  // 构建期间文件又变了：不缓存这份结果（下次调用重建），避免把新旧混合的索引当成新指纹下的值。
+  const after = await descriptionScopeFingerprint(semanticLayerRoot, scope);
+  if (after === fingerprint) {
+    indexCache.delete(key);
+    indexCache.set(key, { fingerprint, value });
+    while (indexCache.size > INDEX_CACHE_MAX_ENTRIES) {
+      const oldest = indexCache.keys().next().value;
+      if (oldest === undefined) break;
+      indexCache.delete(oldest);
+    }
+    return cloneIndexes(value);
+  }
+  return value;
+}
+
+export async function loadDescriptionIndexesUncached(
   semanticLayerRoot: string,
   connectionScope: string[]
 ): Promise<DescriptionIndexes> {

@@ -14,7 +14,7 @@ import {
   targetLabel
 } from "../../src/lib/configAuditLabels.js";
 import { resolveProjectRoot } from "../project.js";
-import { recordProjectionStatus } from "../proxy/audit-write-health.js";
+import { readAuditWriteHealth, recordProjectionStatus } from "../proxy/audit-write-health.js";
 import { getSecurityStore } from "../security/instance.js";
 import { projectionStatus, runProjection, triggerAuditProjection, type ProjectionStatus } from "../security/projector.js";
 import { inferredRebuildStatus } from "./inferred-turn-maintainer.js";
@@ -23,7 +23,7 @@ import { mapSlicesYielding, yieldToEventLoop } from "./yield-slices.js";
 import { formatAuditLocalTimestamp as formatAuditLocalTimestampIn } from "./audit-local-timestamp.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
 import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
-import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
+import { getAuditSqliteStatus, rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
 import {
   inquiryKindLabelZh,
   inquiryKindMatches,
@@ -3467,6 +3467,21 @@ export function registerAuditRoutes(app: FastifyInstance) {
     reply.header("Content-Type", "text/csv; charset=utf-8");
     reply.header("Content-Disposition", `attachment; filename="config-audit-${dateStr}.csv"`);
     return reply.send(`\uFEFF${csvLines.join("\n")}`);
+  });
+
+  // P1-36 §5.1：只读诊断。`sqlite.foreign_keys` 是**服务单例连接**的实际 PRAGMA 值
+  // （PRAGMA 逐连接生效，另开连接自查不能代表服务）；`writeHealth.pendingWrites` 供 UAT
+  // 在两次导出之间确认审计写入已排空。
+  app.get("/api/admin/audit/status", async () => {
+    const sqlite = await getAuditSqliteStatus();
+    return {
+      sqlite: {
+        foreign_keys: sqlite.foreignKeys,
+        foreign_key_children: sqlite.foreignKeyChildren,
+        foreign_key_violations: sqlite.foreignKeyViolations
+      },
+      writeHealth: readAuditWriteHealth()
+    };
   });
 
   app.get("/api/admin/audit/sources", async () => {
