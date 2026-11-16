@@ -68,6 +68,9 @@ async function stateDir(): Promise<string> {
   return path.join(await resolveProjectRoot(), STATE_DIR_REL);
 }
 
+/** P1-35 v0.4 D14：容错审计与旅程同目录。 */
+export const sourceAmbiguityStateDir = stateDir;
+
 function journeyFilePath(base: string, scopeKey: string): string {
   const digest = createHash("sha256").update(scopeKey).digest("hex").slice(0, 32);
   return path.join(base, "journeys", `${JOURNEY_FILE_PREFIX}${digest}.json`);

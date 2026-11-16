@@ -33,7 +33,7 @@ describe("scope restatement instructions (SC-25)", () => {
   it("states the source ambiguity tool gate (P0-3)", async () => {
     const text = await instructions();
     expect(text).toContain("source_ambiguity_gate");
-    expect(text).toContain("Proxy 硬门闩");
+    expect(text).toContain("放行并披露");
     expect(text).toContain("不得自行挑选最高分表");
     expect(text).not.toContain("代理不实现确认门闩");
   });

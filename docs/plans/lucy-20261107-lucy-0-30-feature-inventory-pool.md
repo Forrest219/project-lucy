@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v1.05 / 2026-11-16 |
+| 版本 / 日期 | v1.09 / 2026-11-16 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,9 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v1.09 | 2026-11-16 | **P1-35 Spec v0.4 终稿确权＋授权开发（免 Codex）并实现、UAT 复测 PASS**：委托人明示「不用 Codex 终审，授权定稿、开发」；容错三档（D10–D15）落地；ESCAPE INDEX＝PASS（R0／ESC-01～10，[v0.4 跑次](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-v04.md)）；GAP-UAT-P0-3-ESCAPE 关闭。跟进状态与 Spec 头部同句。不入核心分母；**≠ D5／功能合同收口 ≠ 可上线** |
+| v1.07 | 2026-11-16 | **P1-35 Spec v0.4-draft**：容错三档（选表歧义降为披露＋审计；B 方向；披露＝响应字段；审计只记录）；D10–D15／§4.5 支持矩阵／SC-E20–E30。跟进状态与 Spec 头部同句。**待 Codex 终审与开发授权；未授权不改运行代码；不入核心分母；≠ 可上线**。注意：修订父 P0-3「强门禁」定位，P0-3 状态不变 |
+| v1.06 | 2026-11-16 | **P1-35 ESCAPE UAT v2 升必做并 FAIL**：ESC-04～08 按分析师主路径通用性升必做；ESC-07（合法多表 join）／ESC-08（拒绝载荷 `usableTargets` 恒空）FAIL；INDEX＝FAIL；GAP-UAT-P0-3-ESCAPE 重开。**≠ 开发授权 ≠ 可上线** |
 | v1.05 | 2026-11-16 | **P1-35 ESCAPE UAT PASS**：复测翻绿；GAP-UAT-P0-3-ESCAPE 已关。**≠ 功能合同收口 ≠ 可上线** |
 | v1.04 | 2026-11-16 | **P1-35 实现合入**：钉选放行（D1／D3／D9）＋schemaProbe D5＋instructions；vitest 30/30。待 demo 升级后 UAT。**≠ 可上线** |
 | v1.03 | 2026-11-16 | **P1-35 R2-F＋R4**：委托人明示「授权进入开发」（2026-11-16）＝终稿确权＋开发授权。Spec／Plan **v0.3**；实现进行中。**不入核心分母**；≠ 可上线 |
@@ -245,7 +248,7 @@
 | P1-32 | P1 | 审计导出路径规模整改（F-1 inquiry-pack 杀探针；F-6 v2 导出撞 SQLite 变量上限） | REQ-030-053 | WebUI 稳定性／审计导出 | 否 | **开发授权已获得，实现已落地（2026-11-15／16），待终稿复核**（授权：委托人 2026-11-15 23:47，按明示确权＋开发授权处理）。F-1 单次 115 秒→约 0.8 秒、livez p99 266ms；F-6 不再撞变量上限，v2 导出完整路径因夹具缺派生列仍**未测**。真实环境复测证据（2026-11-16）见变更 v0.96：审计页面与 `/audit/turns` 在 1 条、1 天窗口下仍挂起，运行版本未确认。UAT＝[`UAT-SUITE-EQUIV-GUARD`](../qa/uat/suites/audit-scale-equivalence-guard/suite.md)（PASS WITH GAP）＋`UAT-SUITE-PAGE-SWEEP`（PASS WITH GAP）。**不入核心分母**；≠ UAT PASS；≠ 可上线 | [Spec](../specs/lucy-20261115-audit-export-scale-and-equivalence-guard-spec.md) · [排查报告](../reviews/2026-11-15-page-by-page-event-loop-sweep-report.md) · [O1 复评](../reviews/2026-11-15-p1-21-o1-worker-thread-reassessment.md) |
 | P1-33 | P1 | 并发压测越线接口整改（F-2／F-3／F-4／F-5／F-7） | REQ-030-054 | WebUI 稳定性 | 否 | **开发授权已获得，实现已落地（2026-11-15／16），待终稿复核**（授权同 P1-32）。六条路由在客户规模夹具下 livez 均不越线（`governance/overview` p99 372ms 贴线）；未引入 worker（O1 维持）。真实环境复测证据（2026-11-16）见变更 v0.96。UAT＝`UAT-SUITE-EQUIV-GUARD`＋`UAT-SUITE-PAGE-SWEEP`（均 PASS WITH GAP）。**不入核心分母**；≠ UAT PASS；≠ 可上线 | [Spec](../specs/lucy-20261115-audit-export-scale-and-equivalence-guard-spec.md) · [排查报告](../reviews/2026-11-15-page-by-page-event-loop-sweep-report.md) · [O1 复评](../reviews/2026-11-15-p1-21-o1-worker-thread-reassessment.md) |
 | P1-34 | P1 | 大 Schema 接入（宽表与多表）：顺利接入，而不是超时报错 | REQ-030-055 | WebUI 稳定性／接入规模 | 否 | **开发授权已获得（2026-11-15）；实现已落地（代码、单测与 demo 容器已升级）；测试台 `UAT-SUITE-LARGE-SCHEMA` 于 2026-11-16 必做 11 条 PASS（共 5 次完整跑中 1 次 SCALE-09 异常 FAIL 未定位；INDEX 现值＝PASS WITH GAP）**。Spec v0.2。**不入核心分母**；≠ 可上线 | [Spec](../specs/lucy-20261115-large-schema-ingestion-spec.md) · [Plan](lucy-20261115-large-schema-ingestion-plan.md) · **测试台** [`UAT-SUITE-LARGE-SCHEMA`](../qa/uat/suites/large-schema-ingestion/suite.md)（INDEX） |
-| P1-35 | P1 | 表级歧义门闩：纯 MCP 逃生与拒绝载荷持久修复（P0-3 伴生） | REQ-030-056 | 约束／事故修复 | 否 | **v0.3；R2-F＋R4 已闭合（2026-11-16）；实现已合入；ESCAPE UAT INDEX＝PASS（cursor-sag-escape-retest）；GAP-UAT-P0-3-ESCAPE 已关。≠ D5／功能合同收口 ≠ 可上线** | [Spec](../specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md) · [Plan](lucy-20261116-source-ambiguity-mcp-escape-plan.md) · 错题 [deadlock](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md) · 评审 [Codex](../reviews/2026-11-16-source-ambiguity-mcp-escape-codex-review.md) · **测试台** [`UAT-SUITE-SOURCE-AMBIGUITY-ESCAPE`](../qa/uat/suites/source-ambiguity-mcp-escape/suite.md)（INDEX：[PASS](../qa/uat/INDEX.md)） |
+| P1-35 | P1 | 表级歧义门闩：纯 MCP 逃生与拒绝载荷持久修复（P0-3 伴生） | REQ-030-056 | 约束／事故修复 | 否 | **v0.4；委托人明示确权＋授权进入开发（2026-11-16 夜，免 Codex 终审）：选表歧义由强拦降为「放行＋披露＋审计」（D10–D15）；v0.4 已实现并全真复测，ESCAPE UAT INDEX＝PASS（R0／ESC-01～10，[v0.4 跑次](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-v04.md)）；GAP-UAT-P0-3-ESCAPE 关闭。≠ D5／功能合同收口 ≠ 可上线** | [Spec](../specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md) · [Plan](lucy-20261116-source-ambiguity-mcp-escape-plan.md) · 错题 [deadlock](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md) · 评审 [Codex](../reviews/2026-11-16-source-ambiguity-mcp-escape-codex-review.md) · **测试台** [`UAT-SUITE-SOURCE-AMBIGUITY-ESCAPE`](../qa/uat/suites/source-ambiguity-mcp-escape/suite.md)（INDEX：[PASS](../qa/uat/INDEX.md)） |
 | P1-30 | P1 | Wiki／Skill 真读真用＋ACL UAT（测试台合同；防假通） | REQ-030-051 | 测试台／正确性辅线 | 否 | **PASS WITH GAP（2026-11-15 首跑）**。必做 R0／R0-SEED／WIKI-01…04／SKILL-01…04 PASS；WIKI-01S **BLOCKED**（GAP-2）。双宿主 Claude Code CLI＋Cursor Agent CLI。**不入核心分母**；≠ 可上线 | [设计](../design/design-2026-11-15-uat-context-content-wiki-skill.md) · [落地 Plan](lucy-20261115-uat-context-content-landing-plan.md) · **测试台** [`UAT-SUITE-CONTEXT-CONTENT`](../qa/uat/suites/context-content/suite.md)（INDEX：[PASS WITH GAP](../qa/uat/INDEX.md)） |
 | P1-22 | P1 | Doris／SelectDB 多版本对比环境（2.0.14 基线 vs 4.0.8；高频分析路径回归＋版本探测） | REQ-030-043 | 连接／发布取证 | 否 | **入池（2026-11-14）**。委托人同句「我决定以你为准，构建长期测试对比环境」＝立项＋测试环境搭建授权；范围**仅**对比环境、版本探测与证据，**不含**适配代码改动（改代码须另行终稿确权＋开发授权）。行权限在 Doris 上的专项验证暂缓（客户未启用）；客户 SelectDB 版本串暂缺。Spec／Plan 待补；UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | 待补（与 P2-5 `升级候选验证环境` 相邻但对象不同：本条是数据库引擎版本，P2-5 是 Lucy 升级候选） |
 | P1-23 | P1 | UI/UX 标准收敛并与 DEVELOPMENT 绑定（设计系统 `webui/docs/design-system/` 清账、补缺章、DEVELOPMENT 总入口表） | REQ-030-044 | 文档治理 | 否 | **入池（2026-11-14）**。委托人批准：只读核对（已出报告）＋登记＋清理 `99-governance.md` 临时决策。**范围仅文档**；补缺章、改 DEVELOPMENT 总入口、新增 lint 门禁须各自另获委托人确认；不含运行代码。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [核对报告](../../inbox/20261114-0130-uiux-standard-audit.md)（临时文件，定稿后迁入 `docs/reviews/`） |
@@ -293,8 +296,18 @@
 ### P1-35｜表级歧义门闩纯 MCP 逃生（REQ-030-056）
 
 - **出口**：钉选唯一可见 Source Identity 可成交；拒绝载荷无假 Schema 刷屏；`UAT-SAG-ESC-01` 翻绿；不以 kill switch 结案。
-- **跟进**：**v0.3；R2-F＋R4 已闭合（2026-11-16）；实现已合入；ESCAPE UAT INDEX＝PASS（cursor-sag-escape-retest）；GAP-UAT-P0-3-ESCAPE 已关。≠ D5／功能合同收口 ≠ 可上线**。**不入核心分母**。
+- **跟进**：**v0.4；委托人明示确权＋授权进入开发（2026-11-16 夜，免 Codex 终审）：选表歧义由强拦降为「放行＋披露＋审计」（D10–D15）；v0.4 已实现并全真复测，ESCAPE UAT INDEX＝PASS（R0／ESC-01～10，[v0.4 跑次](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-v04.md)）；GAP-UAT-P0-3-ESCAPE 关闭。≠ D5／功能合同收口 ≠ 可上线**。**不入核心分母**。
 - **不做**：全面关闭门闩；削弱 person 宿主 confirm 安全门。
+
+
+- **出口**：每条请求（含协议与 wiki）有 `trace_id` 与阶段记录；流水行与阶段记录同事务；封存包带 `spans.csv` 并可对账；协议与 wiki 主状态不再大面积 `unknown`；审计库不存内网地址与存储路径；热路径开销在门槛内。
+- **跟进**：**入池／立项（2026-11-16，仅文档）；Spec／Plan v0.1-draft；终稿未确权；未获开发授权**。**不入核心分母**；≠ 可上线。
+- **不做**：防篡改链与外送（第 2、3 层）；历史行回写；采样。
+
+
+- **出口**：握手稳态 P50 ≤ 200 ms／P99 ≤ 2 s；未知工具名与入参错误给可操作信息；会话失效自动恢复且持续失效时短路有界；拒绝类请求快速返回；合法主路径不退化；M1–M9 有口径。
+- **跟进**：**入池／立项（2026-11-16，仅文档）；Spec／Plan v0.1-draft；终稿未确权；未获开发授权**。**不入核心分母**；≠ 可上线。
+- **不做**：门闩判定改写（P1-35）；解冻 P0-7；U5–U8；改 KTX 源码。
 
 ### P0-4｜答复可核对（REQ-030-022）
 

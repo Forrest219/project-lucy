@@ -46,10 +46,12 @@
 
 - 问询**原文**里出现指代（"这个""上次那个""它"）或一句包含两个意图时，先复述账户、月份和产品线，等用户确认后再发 `lucy_query`。
 - 没有用户原文的推断问询（例如从历史日志或工具报错反推出来的需求）跳过复述，直接按已确认范围查数。
-- 当多个可见来源表都可能回答同一业务词时，必须先澄清选哪张表，再发 `lucy_query`／`lucy_explain_query`。
-- 工具面可能返回表级歧义拒绝（`source_ambiguity_gate`）。纯 MCP 下可在同次或下次 `lucy_query`／`lucy_explain_query` 中钉选**唯一**完整来源身份（`connectionId`＋source-qualified measures／dimensions／filters）后重试；钉选成功不等于「用户已确认」，只是门闩放行条件。
-- 宿主 person＋attestation 确认仍可用于 WebUI；Agent 不得伪造宿主 confirm HTTP。未形成唯一钉选时，多表歧义仍会硬拦。
-- 指代／双意图的复述仍约束模型行为；表级选表由 Proxy 硬门闩执行。
+- 当多个可见来源表都可能回答同一业务词时，优先向用户澄清选哪张表，再发 `lucy_query`／`lucy_explain_query`；用户无法即时确认时，按最贴近问题的来源直接查，并在答复里说明所用来源。
+- Proxy 对选表歧义采用「放行并披露」：单来源、或经语义层已声明 join 连通的同连接多来源（至多 4 个）直接放行；集外钉选或未连通的多来源同样放行，但 `answer_verifiability.sourceSelection` 会标注 `tolerated`——此时你**必须**在答复里如实告知所用来源，并说明该选表未经用户确认。
+- 仍会拦截（`source_ambiguity_gate`）：无法解析的引用、目录健康失败、跨连接多来源、来源数超过 4、ACL／行权限限制。被拦后按返回的 `usableTargets` 改写为**单来源查询**重试；跨连接则按连接分别查。
+- 宿主 person＋attestation 确认仍可用于 WebUI；Agent 不得伪造宿主 confirm HTTP。
+- 支持／暂不支持的组合场景见 `docs/specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md` §4.5。
+- 指代／双意图的复述仍约束模型行为。
 
 ## 失败预算与交付时限
 

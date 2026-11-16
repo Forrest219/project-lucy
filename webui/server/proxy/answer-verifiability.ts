@@ -16,6 +16,7 @@ import {
   type BoundCaliber
 } from "./caliber-binding-session.js";
 import type { CanonicalSourceKey, SourceRef } from "./acl.js";
+import type { SourceSelectionDisclosure } from "./source-selection-tolerance.js";
 
 export const ANSWER_VERIFIABILITY_KEY = "answer_verifiability" as const;
 export const ANSWER_VERIFIABILITY_SCHEMA_VERSION = "1" as const;
@@ -114,6 +115,8 @@ export type AnswerVerifiabilityBlock = {
   sources: SourceIdentity[];
   caliber: CaliberSummary;
   cutoff: CutoffDisclosure;
+  /** P1-35 v0.4 D13：仅档②放行时存在；档①无此字段（schema_version 不变）。 */
+  sourceSelection?: SourceSelectionDisclosure;
   carriers?: {
     structuredContent?: "projected" | "omitted_not_object";
   };
@@ -140,6 +143,7 @@ export type BuildAnswerVerifiabilityInput = {
   argsBeforeRewrite: Record<string, unknown>;
   systemConstraints: SystemConstraintSummary[];
   requestPinnedCaliber: RequestPinnedCaliberEvidence;
+  sourceSelection?: SourceSelectionDisclosure;
   /** 测试注入；生产路径禁止用其冒充 checked。 */
   cutoffOverrideForbidden?: never;
 };
@@ -531,7 +535,8 @@ export function buildAnswerVerifiability(
       schema_version: ANSWER_VERIFIABILITY_SCHEMA_VERSION,
       sources: input.sources.map((s) => ({ ...s })),
       caliber,
-      cutoff: buildDefaultCutoff()
+      cutoff: buildDefaultCutoff(),
+      ...(input.sourceSelection ? { sourceSelection: input.sourceSelection } : {})
     }
   };
 }
@@ -1168,6 +1173,7 @@ export function applyAnswerVerifiabilityToLucyQuery(input: {
   argsBeforeRewrite: Record<string, unknown>;
   requestPinnedCaliber: RequestPinnedCaliberEvidence;
   systemConstraints?: SystemConstraintSummary[];
+  sourceSelection?: SourceSelectionDisclosure;
 }): ProjectOk | BuildFail | ProjectFail {
   const pinned = validateRequestPinnedCaliber(input.requestPinnedCaliber);
   if (!pinned.ok) return { ok: false, reason: pinned.reason };
@@ -1179,7 +1185,8 @@ export function applyAnswerVerifiabilityToLucyQuery(input: {
     sources: sources.items,
     argsBeforeRewrite: input.argsBeforeRewrite,
     systemConstraints: input.systemConstraints ?? [],
-    requestPinnedCaliber: pinned.evidence
+    requestPinnedCaliber: pinned.evidence,
+    sourceSelection: input.sourceSelection
   });
   if (!built.ok) return built;
 

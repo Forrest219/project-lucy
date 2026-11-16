@@ -189,6 +189,7 @@ import {
   type SourceAmbiguityDenial,
   type SourceIdentity,
 } from "./source-ambiguity-gate.js";
+import { toSelectionDisclosure, type SourceSelectionDisclosure } from "./source-selection-tolerance.js";
 
 export { registerPublishedVersion };
 export {
@@ -1132,7 +1133,7 @@ function lucyBeginQuestionTool() {
   return {
     name: "lucy_begin_question",
     description:
-      "Recommended at the start of each new user business question. Prefer the user's original wording in `question`; always provide `intentSummary`. When multiple visible sources may match the same business term, Lucy may return source_ambiguity_gate; pin a single full source identity on lucy_query/lucy_explain_query to proceed without host confirm. Skipping begin does not bypass the gate when no unique pin is present. Do not call for protocol checks or tool discovery only.",
+      "Recommended at the start of each new user business question. Prefer the user's original wording in `question`; always provide `intentSummary`. When multiple visible sources may match the same business term, Lucy allows the query but discloses the selection in answer_verifiability.sourceSelection (tell the user which source you used and that it was unconfirmed). source_ambiguity_gate is returned only for hard failures (unresolved refs, catalog health, cross-connection, more than 4 sources); then retry as a single-source query. Skipping begin does not bypass these hard checks. Do not call for protocol checks or tool discovery only.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2176,6 +2177,7 @@ async function maybeWriteHiveDivertedResponse(input: {
   /** P0-4：改写前口径快照与门禁 pin 证据（仅 lucy_query 成功路径消费）。 */
   argsBeforeRewrite?: Record<string, unknown>;
   requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+  sourceSelection?: SourceSelectionDisclosure;
   forcedFilters?: unknown;
   /**
    * 审计写入回调 —— 由 `handlePost` 传入。
@@ -2279,7 +2281,8 @@ async function maybeWriteHiveDivertedResponse(input: {
           ? input.toolArgs as Record<string, unknown>
           : {}),
       requestPinnedCaliber: input.requestPinnedCaliber ?? { status: "none" },
-      systemConstraints: systemConstraintsFromForcedFilters(input.forcedFilters)
+      systemConstraints: systemConstraintsFromForcedFilters(input.forcedFilters),
+      sourceSelection: input.sourceSelection
     });
     if (!applied.ok) {
       hiveAvFailedReason = applied.reason;
@@ -2963,6 +2966,7 @@ function projectLucyQueryAnswerVerifiability(input: {
   options: {
     argsBeforeRewrite?: Record<string, unknown>;
     requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+    sourceSelection?: SourceSelectionDisclosure;
     forcedFilters?: unknown;
   };
 }): string | null {
@@ -2981,7 +2985,8 @@ function projectLucyQueryAnswerVerifiability(input: {
     sourceRefs: input.sourceRefs,
     argsBeforeRewrite: input.options.argsBeforeRewrite ?? {},
     requestPinnedCaliber: input.options.requestPinnedCaliber ?? { status: "none" },
-    systemConstraints: systemConstraintsFromForcedFilters(input.options.forcedFilters)
+    systemConstraints: systemConstraintsFromForcedFilters(input.options.forcedFilters),
+    sourceSelection: input.options.sourceSelection
   });
   if (!applied.ok) {
     // P0-5 共存：AV 错误信封必须保留 018 已写入的 next_step／skipped_reason。
@@ -3010,6 +3015,7 @@ function applyLucyQueryAnswerVerifiabilityOrFailClosed(input: {
   options: {
     argsBeforeRewrite?: Record<string, unknown>;
     requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+    sourceSelection?: SourceSelectionDisclosure;
     forcedFilters?: unknown;
   };
   currentBody: string;
@@ -3351,6 +3357,7 @@ async function writeLucySemanticResponse(
     originalUserFilters?: unknown;
     argsBeforeRewrite?: Record<string, unknown>;
     requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+    sourceSelection?: SourceSelectionDisclosure;
     forcedFilters?: unknown;
   } = {}
 ): Promise<void> {
@@ -4028,6 +4035,8 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
   // P0-4 —— 改写前完整口径快照＋门禁当拍 pin 证据（随请求携带，禁止响应期重读）。
   let argsBeforeRewrite: Record<string, unknown> | undefined;
   let requestPinnedCaliber: RequestPinnedCaliberEvidence | undefined;
+  // P1-35 v0.4 D13：门闩档②放行披露，随请求携带到 lucy_query 成功投影。
+  let sourceSelectionForAv: SourceSelectionDisclosure | undefined;
   let forcedFiltersForAv: unknown;
   let requestId: string | number = "";
   let argsSummary: Record<string, unknown> | undefined;
@@ -5040,6 +5049,9 @@ async function buildDenialRepairPayload(
           sourceMapReliable,
           schemaProbeByIdentity
         });
+        if (sagOutcome.kind === "allow" && sagOutcome.selection) {
+          sourceSelectionForAv = toSelectionDisclosure(sagOutcome.selection);
+        }
         if (sagOutcome.kind === "deny_caliber_unresolved") {
           const responseBody = JSON.stringify({
             jsonrpc: "2.0",
@@ -6758,6 +6770,7 @@ async function buildDenialRepairPayload(
       traceId,
       argsBeforeRewrite,
       requestPinnedCaliber,
+      sourceSelection: sourceSelectionForAv,
       forcedFilters: forcedFiltersForAv,
       recordAuditEntry: recordRequestAudit
     });
@@ -7190,6 +7203,7 @@ async function buildDenialRepairPayload(
         originalUserFilters,
         argsBeforeRewrite,
         requestPinnedCaliber,
+        sourceSelection: sourceSelectionForAv,
         forcedFilters: forcedFiltersForAv
       }
     );

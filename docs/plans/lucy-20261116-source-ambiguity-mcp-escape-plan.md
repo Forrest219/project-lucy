@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | **v0.3**／2026-11-16 |
-| 状态 | **v0.3；R2-F＋R4 已闭合（2026-11-16）；实现已合入；ESCAPE UAT INDEX＝PASS（cursor-sag-escape-retest）；GAP-UAT-P0-3-ESCAPE 已关。≠ D5／功能合同收口 ≠ 可上线** |
+| 状态 | **v0.4；委托人明示确权＋授权进入开发（2026-11-16 夜，免 Codex 终审）：选表歧义由强拦降为「放行＋披露＋审计」（D10–D15）；v0.4 已实现并全真复测，ESCAPE UAT INDEX＝PASS（R0／ESC-01～10，[v0.4 跑次](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-v04.md)）；GAP-UAT-P0-3-ESCAPE 关闭。≠ D5／功能合同收口 ≠ 可上线** |
 | 授权边界 | R2-F＋R4 已闭合（2026-11-16）。可按本 Plan 改运行代码；**≠ 可上线** |
 | 验收 | Spec SC-E01–SC-E19；ESCAPE INDEX＝**PASS**（收紧后 ESC-01／02／03 全绿）；SAG-01 v2 deny；D5＝H1／H2／F1 vitest；`lint:spec-docs`。**GAP 关闭 ≠ 功能合同收口**。**≠ 发布取证／可上线** |
 | 台账号 | 无 |
@@ -106,7 +106,8 @@
 
 - [x] 获 R4 且实现合入 demo 后：全真跑 ESCAPE → INDEX＝**PASS**（[cursor-sag-escape-retest](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-retest.md)）
 - [x] SAG-01 v2 回归 deny（同跑次伴生）
-- [x] 关 `GAP-UAT-P0-3-ESCAPE`（逃生缺口；**叙事禁止**写成 D5／P1-35 已收口）
+- [x] 关 `GAP-UAT-P0-3-ESCAPE`：2026-11-16 夜曾重开，**v0.4 实现后 ESC-01～10 全绿，已再关**。重开时记录：：v2 必做 ESC-07／08 FAIL（[fidelity](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-fidelity.md)）；**叙事禁止**写成 D5／P1-35 已收口
+- [x] 修复 ESC-07（D12 join 连通放行）与 ESC-08（删除 `argsReferencesIdentity`，argsShape 按单身份重试形态）——v0.4 授权后落地，见 [v0.4 跑次](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-v04.md)
 - [ ] 功能合同收口另证 SC-E07–09／E18／E19
 - [x] INDEX／ledger／总账跟进状态**同句**
 - **验证：** 上句；**≠** 可上线

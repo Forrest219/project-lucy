@@ -772,6 +772,47 @@ describe("applyAnswerVerifiabilityToLucyQuery（与 018 合并／SSE raw）", ()
   });
 });
 
+describe("P1-35 v0.4 D13：sourceSelection 披露随块投影", () => {
+  const wire =
+    `{"jsonrpc":"2.0","id":9,"result":{"content":[{"type":"text","text":"{\\"rows\\":[[1]]}"}],` +
+    `"structuredContent":{"rows":[[1]]}}}`;
+  const run = (sourceSelection?: unknown) =>
+    applyAnswerVerifiabilityToLucyQuery({
+      originalEnvelopeWire: wire,
+      enrichedEnvelope: JSON.parse(wire),
+      requestId: 9,
+      sourceRefs: [sampleSources()[0]!],
+      argsBeforeRewrite: { measures: ["sales"] },
+      requestPinnedCaliber: nonePinned(),
+      sourceSelection: sourceSelection as never
+    });
+
+  it("档②：block 与三载体均含 sourceSelection；schema_version 仍为 1", () => {
+    const disclosure = {
+      status: "tolerated",
+      reason: "unjoined_multi_source",
+      usedSources: [{ connectionId: "c", sourceName: "a", table: "s.a" }],
+      termHits: []
+    };
+    const applied = run(disclosure);
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+    expect(applied.block.sourceSelection).toEqual(disclosure);
+    expect(applied.block.schema_version).toBe("1");
+    expect(applied.finalWire).toContain("unjoined_multi_source");
+    const sc = extractTopLevelMemberRaw(applied.finalWire, ["result", "structuredContent"]);
+    expect(sc).toContain("sourceSelection");
+  });
+
+  it("档①：不带 sourceSelection 字段", () => {
+    const applied = run(undefined);
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+    expect("sourceSelection" in applied.block).toBe(false);
+    expect(applied.finalWire).not.toContain("sourceSelection");
+  });
+});
+
 describe("answer-verifiability 排除与错误形状（SC-07／SC-15／SC-16 文档夹具）", () => {
   it("错误信封不含来源泄露", () => {
     const body = buildAnswerVerifiabilityErrorEnvelope({

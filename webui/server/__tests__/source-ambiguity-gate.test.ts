@@ -136,7 +136,7 @@ describe("P0-3 source ambiguity gate", () => {
     );
     expect(md).toContain("问询范围确认／多表命中先问");
     expect(md).toContain("source_ambiguity_gate");
-    expect(md).toContain("钉选**唯一**完整来源身份");
+    expect(md).toContain("单来源查询");
     expect(ASK_FIRST_SECTION).toContain("多表命中先问");
     expect(ASK_FIRST_SECTION).toContain("source_ambiguity_gate");
     expect(ASK_FIRST_SECTION).toContain("指代");
@@ -144,15 +144,15 @@ describe("P0-3 source ambiguity gate", () => {
     // 与 md 同事实源：关键规则不得漂移
     for (const needle of [
       "多个可见来源表都可能回答同一业务词",
-      "Proxy 硬门闩",
-      "钉选**唯一**完整来源身份"
+      "放行并披露",
+      "单来源查询"
     ]) {
       expect(md).toContain(needle);
       expect(ASK_FIRST_SECTION).toContain(needle);
     }
     const proxy = await readFile(path.join(process.cwd(), "server", "proxy", "mcp-proxy.ts"), "utf8");
     expect(proxy).toContain("ASK_FIRST_SECTION");
-    expect(proxy).toContain("pin a single full source identity");
+    expect(proxy).toContain("answer_verifiability.sourceSelection");
     expect(proxy).toContain("schemaProbeByIdentity");
     expect(proxy).not.toMatch(/Skipping this call never blocks catalog or query tools/);
     expect(proxy).not.toMatch(/可省略.*门闩|never blocks catalog or query tools/);
@@ -1502,7 +1502,7 @@ describe("P0-3 source ambiguity gate", () => {
     expect(pinned.kind).toBe("allow");
   });
 
-  it("P1-35 SC-E05: unique pin outside termHits still denies", async () => {
+  it("P1-35 SC-E05 (v0.4 D11 supersedes): unique pin outside termHits → tolerated allow with disclosure", async () => {
     const identityKey = "agent:tok-p135-out";
     const sessionId = "s-p135-out";
     const cbScope = `cb:${identityKey}:${sessionId}`;
@@ -1565,7 +1565,10 @@ describe("P0-3 source ambiguity gate", () => {
       permissions,
       matchableSources: sources
     });
-    expect(out.kind).toBe("deny");
+    expect(out.kind).toBe("allow");
+    if (out.kind === "allow") {
+      expect(out.selection).toMatchObject({ status: "tolerated", reason: "pin_outside_hits" });
+    }
   });
 
   it("P1-35 SC-E06: never_begun + unique visible pin allows", async () => {

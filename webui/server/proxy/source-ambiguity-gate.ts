@@ -48,6 +48,12 @@ import {
   type SourceAmbiguityJourney,
   type SourceIdentity
 } from "./source-ambiguity-journey.js";
+import { joinConnected, loadDeclaredJoinEdges } from "./source-join-graph.js";
+import {
+  appendToleratedEvent,
+  decideSourceSelection,
+  type SourceSelection
+} from "./source-selection-tolerance.js";
 
 // re-export for callers that only need the gate surface
 export type { DescriptionReadHealth, DescriptionState, SourceIdentity };
@@ -78,10 +84,12 @@ export const ASK_FIRST_SECTION = `## 问询范围确认／多表命中先问
 
 - 问询**原文**里出现指代（"这个""上次那个""它"）或一句包含两个意图时，先复述账户、月份和产品线，等用户确认后再发 \`lucy_query\`。
 - 没有用户原文的推断问询（例如从历史日志或工具报错反推出来的需求）跳过复述，直接按已确认范围查数。
-- 当多个可见来源表都可能回答同一业务词时，必须先澄清选哪张表，再发 \`lucy_query\`／\`lucy_explain_query\`。
-- 工具面可能返回表级歧义拒绝（\`source_ambiguity_gate\`）。纯 MCP 下可在同次或下次 \`lucy_query\`／\`lucy_explain_query\` 中钉选**唯一**完整来源身份（\`connectionId\`＋source-qualified measures／dimensions／filters）后重试；钉选成功不等于「用户已确认」，只是门闩放行条件。
-- 宿主 person＋attestation 确认仍可用于 WebUI；Agent 不得伪造宿主 confirm HTTP。未形成唯一钉选时，多表歧义仍会硬拦。
-- 指代／双意图的复述仍约束模型行为；表级选表由 Proxy 硬门闩执行。
+- 当多个可见来源表都可能回答同一业务词时，优先向用户澄清选哪张表，再发 \`lucy_query\`／\`lucy_explain_query\`；用户无法即时确认时，按最贴近问题的来源直接查，并在答复里说明所用来源。
+- Proxy 对选表歧义采用「放行并披露」：单来源、或经语义层已声明 join 连通的同连接多来源（至多 4 个）直接放行；集外钉选或未连通的多来源同样放行，但 \`answer_verifiability.sourceSelection\` 会标注 \`tolerated\`——此时你**必须**在答复里如实告知所用来源，并说明该选表未经用户确认。
+- 仍会拦截（\`source_ambiguity_gate\`）：无法解析的引用、目录健康失败、跨连接多来源、来源数超过 4、ACL／行权限限制。被拦后按返回的 \`usableTargets\` 改写为**单来源查询**重试；跨连接则按连接分别查。
+- 宿主 person＋attestation 确认仍可用于 WebUI；Agent 不得伪造宿主 confirm HTTP。
+- 支持／暂不支持的组合场景见 \`docs/specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md\` §4.5。
+- 指代／双意图的复述仍约束模型行为。
 `;
 
 /** CJK／Han 判定（与 Spec §4.1 夹具一致）。 */
@@ -349,7 +357,7 @@ export type SourceAmbiguityDenial = {
 };
 
 export type SourceAmbiguityGateOutcome =
-  | { kind: "allow" }
+  | { kind: "allow"; selection?: SourceSelection } // selection＝档②披露（v0.4 D13）
   | { kind: "skip_bound" } // begun_bound：跳过本门闩，交 P0-1
   | { kind: "deny_caliber_unresolved"; text: string }
   | { kind: "deny"; denial: SourceAmbiguityDenial; executed: false };
@@ -411,54 +419,6 @@ export type GateSchemaProbe = {
   dimensionNames?: readonly string[];
 };
 
-function argsReferencesIdentity(
-  args: Record<string, unknown> | undefined,
-  sourceKey: SourceIdentity
-): { measureOk: boolean; fieldOk: boolean } {
-  if (!args) return { measureOk: true, fieldOk: true };
-  const sourcePrefixes = new Set([
-    sourceKey.sourceName,
-    sourceKey.physicalTable,
-    `${sourceKey.schema}.${sourceKey.sourceName}`,
-    sourceKey.physicalTable.includes(".")
-      ? sourceKey.physicalTable
-      : `${sourceKey.schema}.${sourceKey.sourceName}`
-  ]);
-  const refsOtherSource = (qualified: string): boolean => {
-    const dot = qualified.indexOf(".");
-    if (dot <= 0) return false;
-    const prefix = qualified.slice(0, dot);
-    // source-qualified：前缀不是本身份 → 相对本候选不合法（多身份残留）
-    if (sourcePrefixes.has(prefix) || sourcePrefixes.has(qualified.slice(0, qualified.lastIndexOf(".")))) {
-      return false;
-    }
-    // 短名前缀若等于其他常见表名形态，视为他表引用
-    return prefix.length > 0 && prefix !== sourceKey.sourceName;
-  };
-  const measures = Array.isArray(args.measures) ? args.measures : [];
-  for (const m of measures) {
-    if (typeof m !== "string") continue;
-    if (refsOtherSource(m)) return { measureOk: false, fieldOk: false };
-  }
-  const walkFields = (value: unknown): boolean => {
-    if (!value) return true;
-    if (typeof value === "string") return !refsOtherSource(value);
-    if (Array.isArray(value)) return value.every(walkFields);
-    if (typeof value === "object") {
-      const rec = value as Record<string, unknown>;
-      if (typeof rec.field === "string" && refsOtherSource(rec.field)) return false;
-      return Object.values(rec).every(walkFields);
-    }
-    return true;
-  };
-  const fieldOk =
-    walkFields(args.dimensions)
-    && walkFields(args.filters)
-    && walkFields(args.order_by)
-    && walkFields(args.orderBy);
-  return { measureOk: true, fieldOk };
-}
-
 export function buildRepairEvidenceForGate(input: {
   candidates: readonly AmbiguityCandidateRow[];
   permissions: Pick<EffectivePermissions, "sources" | "tools">;
@@ -467,7 +427,7 @@ export function buildRepairEvidenceForGate(input: {
   sourceMapReliable?: boolean;
   /** 按完整身份键的真实探测；缺省则 schemaExists=null、compiled=false。 */
   schemaProbeByIdentity?: ReadonlyMap<string, GateSchemaProbe>;
-  /** 本次请求；用于相对候选的 argsShape（多身份残留 → 不合法）。 */
+  /** 本次请求；仅用于 argsShape 的度量存在性核验（单身份重试形态）。 */
   args?: Record<string, unknown>;
 }): Map<string, Omit<RepairTargetEvidence, "target">> {
   const visible = new Set(
@@ -490,12 +450,12 @@ export function buildRepairEvidenceForGate(input: {
           ? probe.schemaExists
           : null;
     const compiled = probe?.completion === "done";
-    // 无探测入口时 argsShape 一律 false（fail-closed）；有探测后再相对本次 args 校验。
+    // 无探测入口时 argsShape 一律 false（fail-closed）。
+    // 校验对象是「单身份重试形态」（Spec §4.4），不是原请求：原请求含他表引用不使候选失效。
     let parameterShapeValid = false;
     if (probe) {
-      const shape = argsReferencesIdentity(input.args, c.sourceKey);
-      parameterShapeValid = shape.measureOk && shape.fieldOk;
-      if (parameterShapeValid && Array.isArray(input.args?.measures) && input.args.measures.length > 0) {
+      parameterShapeValid = true;
+      if (Array.isArray(input.args?.measures) && input.args.measures.length > 0) {
         const names = probe.measureNames;
         if (names && names.length === 0) parameterShapeValid = false;
       }
@@ -727,6 +687,17 @@ export function projectDescriptionForGate(input: {
   return { description: raw, descriptionState: "present", descriptionHealth: health };
 }
 
+/** P1-35 v0.4 D15：硬线拦截的下一步直接写进 message（MCP 可达＝拆成单来源／单连接）。 */
+export function denialMessageFor(detail: string | undefined): string {
+  if (detail === "cross_connection") {
+    return "跨连接多来源不能在一次查询中合并：请按连接拆分为单连接查询";
+  }
+  if (detail === "source_count_over_cap") {
+    return "单次查询引用的来源过多：请拆成单来源（或不超过 4 个已声明 join 的来源）查询";
+  }
+  return SOURCE_AMBIGUITY_MESSAGE;
+}
+
 function denialPayload(
   candidates: AmbiguityCandidateRow[],
   repair: RepairClosure,
@@ -736,7 +707,7 @@ function denialPayload(
   return {
     reason: SOURCE_AMBIGUITY_GATE,
     failureDimension: SOURCE_AMBIGUITY_FAILURE_DIMENSION,
-    message: SOURCE_AMBIGUITY_MESSAGE,
+    message: denialMessageFor(detail),
     detail,
     candidates,
     repair,
@@ -782,13 +753,13 @@ function sourceVisibleToPrincipal(
 function catalogHealthFailed(
   input: CheckSourceAmbiguityGateInput,
   sources: readonly MatchableSource[],
-  pinned?: SourceIdentity | null
+  requested: readonly SourceIdentity[]
 ): string | null {
   if (input.catalogReadFailed) {
     return input.catalogReadReason ?? "catalog_read_failure";
   }
-  if (pinned) {
-    const row = sources.find((s) => canonicalSourceKeyEquals(s.identity, pinned));
+  for (const key of requested) {
+    const row = sources.find((s) => canonicalSourceKeyEquals(s.identity, key));
     if (row?.descriptionHealth?.status === "read_failed") {
       return row.descriptionHealth.reason ?? "description_read_unreliable";
     }
@@ -846,115 +817,83 @@ export async function checkSourceAmbiguityGate(
     };
   }
 
-  const pinned =
-    collected.keys.length === 1 ? collected.keys[0]! : null;
-  const healthFail = catalogHealthFailed(input, sources, pinned);
-  if (healthFail) {
-    const emptyRepair = buildAmbiguityRepairClosure([]);
-    return {
-      kind: "deny",
-      executed: false,
-      denial: denialPayload([], emptyRepair, healthFail, input.fieldAmbiguity)
-    };
+  const ctx: GateContext = { input, state, journey, generation, sagScope, sources };
+  if (collected.keys.length > 0) {
+    return gateForRequestedSources(ctx, collected.keys);
   }
 
-  // P1-35 D1／D3：never_begun 词源为空 hits；唯一可见钉选 → allow（健康已过）
-  if (state === "never_begun" && pinned && sourceVisibleToPrincipal(pinned, input.permissions)) {
-    return { kind: "allow" };
-  }
-
+  // keys=0（无 source-qualified 引用）：保持 v0.3 行为
+  const healthFail = catalogHealthFailed(input, sources, []);
+  if (healthFail) return denyEmpty(input, healthFail);
   const termOutcome = resolveBusinessTermsByPriority({
     bindingState: state,
     args: input.args,
     journey
   });
-
-  if (termOutcome.kind === "context_missing") {
-    const emptyRepair = buildAmbiguityRepairClosure([]);
-    return {
-      kind: "deny",
-      executed: false,
-      denial: denialPayload([], emptyRepair, "need_begin_or_confirm", input.fieldAmbiguity)
-    };
-  }
-
+  if (termOutcome.kind === "context_missing") return denyEmpty(input, "need_begin_or_confirm");
   if (
     termOutcome.kind === "catalog_read_failure"
     || termOutcome.kind === "read_partial_indeterminate"
     || termOutcome.kind === "description_read_unreliable"
   ) {
-    const emptyRepair = buildAmbiguityRepairClosure([]);
-    return {
-      kind: "deny",
-      executed: false,
-      denial: denialPayload([], emptyRepair, "catalog_unreliable", input.fieldAmbiguity)
-    };
+    return denyEmpty(input, "catalog_unreliable");
   }
-
-  if (termOutcome.kind === "zero_hits") {
-    return { kind: "allow" };
-  }
-
+  if (termOutcome.kind === "zero_hits") return { kind: "allow" };
   const matchOutcome = matchVisibleSources(termOutcome.terms, sources, {
     catalogReadFailed: input.catalogReadFailed,
     catalogReadReason: input.catalogReadReason
   });
-
   if (
     matchOutcome.kind === "catalog_read_failure"
     || matchOutcome.kind === "description_read_unreliable"
     || matchOutcome.kind === "read_partial_indeterminate"
   ) {
-    const emptyRepair = buildAmbiguityRepairClosure([]);
-    return {
-      kind: "deny",
-      executed: false,
-      denial: denialPayload([], emptyRepair, matchOutcome.reason, input.fieldAmbiguity)
-    };
+    return denyEmpty(input, matchOutcome.reason);
   }
+  if (matchOutcome.kind === "zero_hits" || matchOutcome.hits.length < 2) return { kind: "allow" };
 
-  if (matchOutcome.kind === "zero_hits" || matchOutcome.hits.length < 2) {
-    return { kind: "allow" };
-  }
-
-  // ≥2 命中 — P1-35 D1：唯一可见钉选且 ∈ termHits → allow（无需宿主 attested）
-  if (
-    pinned
-    && sourceVisibleToPrincipal(pinned, input.permissions)
-    && matchOutcome.hits.some((h) => canonicalSourceKeyEquals(h, pinned))
-  ) {
-    return { kind: "allow" };
-  }
-
-  const confirmedKey = journey.confirmedSourceKey;
-  if (confirmedKey) {
-    const inHits = matchOutcome.hits.some((h) => canonicalSourceKeyEquals(h, confirmedKey));
-    const participation = verifyUserParticipationEvidence({
-      journey,
-      expectedGeneration: generation,
-      confirmedKey
-    });
-    const singletonOk =
-      collected.keys.length === 1
-      && canonicalSourceKeyEquals(collected.keys[0]!, confirmedKey);
-    if (inHits && participation.ok && singletonOk) {
-      return { kind: "allow" };
-    }
-  }
-
-  const allow = denialAllowList({
-    connections: input.permissions.connections,
-    sources: input.permissions.sources
-  });
-  const allowSet = new Set(allow.sources);
+  const allowSet = new Set(
+    denialAllowList({
+      connections: input.permissions.connections,
+      sources: input.permissions.sources
+    }).sources
+  );
   const matchedRows = matchOutcome.matched
     .filter((m) => allowSet.has(m.sourceName || m.table))
     .map(toCandidateRow);
+  return denyWithCandidates(ctx, matchedRows, undefined);
+}
 
+type GateContext = {
+  input: CheckSourceAmbiguityGateInput;
+  state: BindingSessionState;
+  journey: SourceAmbiguityJourney;
+  generation: number;
+  sagScope: string;
+  sources: readonly MatchableSource[];
+};
+
+function denyEmpty(
+  input: CheckSourceAmbiguityGateInput,
+  detail: string
+): SourceAmbiguityGateOutcome {
+  return {
+    kind: "deny",
+    executed: false,
+    denial: denialPayload([], buildAmbiguityRepairClosure([]), detail, input.fieldAmbiguity)
+  };
+}
+
+async function denyWithCandidates(
+  ctx: GateContext,
+  rows: AmbiguityCandidateRow[],
+  detail: string | undefined
+): Promise<SourceAmbiguityGateOutcome> {
+  const { input } = ctx;
   const evidenceMap =
     input.repairEvidenceByName
     ?? buildRepairEvidenceForGate({
-      candidates: matchedRows,
+      candidates: rows,
       permissions: {
         sources: input.permissions.sources,
         tools: input.permissions.tools ?? [input.toolName]
@@ -964,20 +903,124 @@ export async function checkSourceAmbiguityGate(
       schemaProbeByIdentity: input.schemaProbeByIdentity,
       args: input.args
     });
-  const evidences = toRepairTargetEvidence(matchedRows, evidenceMap);
-  const closure = buildAmbiguityRepairClosure(evidences);
-
+  const closure = buildAmbiguityRepairClosure(toRepairTargetEvidence(rows, evidenceMap));
   await persistAmbiguityCandidateSnapshot({
-    scopeKey: sagScope,
-    generation,
-    candidates: matchedRows.map((r) => r.sourceKey)
+    scopeKey: ctx.sagScope,
+    generation: ctx.generation,
+    candidates: rows.map((r) => r.sourceKey)
   });
-
   return {
     kind: "deny",
     executed: false,
-    denial: denialPayload(matchedRows, closure, undefined, input.fieldAmbiguity)
+    denial: denialPayload(rows, closure, detail, input.fieldAmbiguity)
   };
+}
+
+/** 词源命中集；never_begun／无词源／零命中＝空集；健康类失败返回 deny 原因。 */
+function resolveTermHits(
+  ctx: GateContext
+): { ok: true; hits: SourceIdentity[] } | { ok: false; reason: string } {
+  const { input, state, journey, sources } = ctx;
+  if (state === "never_begun") return { ok: true, hits: [] };
+  const termOutcome = resolveBusinessTermsByPriority({
+    bindingState: state,
+    args: input.args,
+    journey
+  });
+  if (termOutcome.kind === "zero_hits" || termOutcome.kind === "context_missing") {
+    return { ok: true, hits: [] };
+  }
+  if (
+    termOutcome.kind === "catalog_read_failure"
+    || termOutcome.kind === "read_partial_indeterminate"
+    || termOutcome.kind === "description_read_unreliable"
+  ) {
+    return { ok: false, reason: "catalog_unreliable" };
+  }
+  const match = matchVisibleSources(termOutcome.terms, sources, {
+    catalogReadFailed: input.catalogReadFailed,
+    catalogReadReason: input.catalogReadReason
+  });
+  if (
+    match.kind === "catalog_read_failure"
+    || match.kind === "description_read_unreliable"
+    || match.kind === "read_partial_indeterminate"
+  ) {
+    return { ok: false, reason: match.reason };
+  }
+  return { ok: true, hits: match.kind === "zero_hits" ? [] : [...match.hits] };
+}
+
+function requestedRows(
+  ctx: GateContext,
+  keys: readonly SourceIdentity[]
+): AmbiguityCandidateRow[] {
+  return keys.map((key) => {
+    const row = ctx.sources.find((s) => canonicalSourceKeyEquals(s.identity, key));
+    return row
+      ? toCandidateRow(row)
+      : {
+          sourceKey: key,
+          displayName: key.sourceName,
+          allowListName: key.sourceName,
+          measures: []
+        };
+  });
+}
+
+function hostConfirmedPin(ctx: GateContext, key: SourceIdentity): boolean {
+  const confirmedKey = ctx.journey.confirmedSourceKey;
+  if (!confirmedKey || !canonicalSourceKeyEquals(confirmedKey, key)) return false;
+  return verifyUserParticipationEvidence({
+    journey: ctx.journey,
+    expectedGeneration: ctx.generation,
+    confirmedKey
+  }).ok;
+}
+
+/**
+ * keys≥1：v0.4 三档（D10–D15）。硬线（健康／不可见／跨连接／超上限）先于容错。
+ */
+async function gateForRequestedSources(
+  ctx: GateContext,
+  keys: readonly SourceIdentity[]
+): Promise<SourceAmbiguityGateOutcome> {
+  const { input } = ctx;
+  const healthFail = catalogHealthFailed(input, ctx.sources, keys);
+  if (healthFail) return denyEmpty(input, healthFail);
+  if (keys.some((k) => !sourceVisibleToPrincipal(k, input.permissions))) {
+    // never_begun 沿用 v0.3 文案（SC-10）；其余 fail-closed。均为硬线，不降档。
+    return denyEmpty(input, ctx.state === "never_begun" ? "need_begin_or_confirm" : "unresolved_source_refs");
+  }
+  const termHits = resolveTermHits(ctx);
+  if (!termHits.ok) return denyEmpty(input, termHits.reason);
+
+  const singleConnection = new Set(keys.map((k) => k.connectionId)).size === 1;
+  const connected =
+    keys.length <= 1 || !singleConnection
+      ? true
+      : joinConnected(keys, await loadDeclaredJoinEdges(keys));
+  const decision = decideSourceSelection({ keys, termHits: termHits.hits, connected });
+
+  if (decision.kind === "deny") {
+    return denyWithCandidates(ctx, requestedRows(ctx, keys), decision.detail);
+  }
+  if (decision.kind === "allow") return { kind: "allow" };
+  if (keys.length === 1 && hostConfirmedPin(ctx, keys[0]!)) return { kind: "allow" };
+
+  const selection: SourceSelection = {
+    status: "tolerated",
+    reason: decision.reason,
+    usedSources: [...keys],
+    termHits: termHits.hits
+  };
+  await appendToleratedEvent({
+    selection,
+    tool: input.toolName,
+    identityKey: input.identityKey,
+    sessionId: input.sessionId
+  });
+  return { kind: "allow", selection };
 }
 
 /** SC-21：O2＝否 — read_source 不纳入本门闩。 */

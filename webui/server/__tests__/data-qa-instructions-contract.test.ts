@@ -63,7 +63,7 @@ describe("data QA fallback instructions contract", () => {
     expect(text).toContain("用户确认后再发 `lucy_query`");
     expect(text).toContain("跳过复述");
     expect(text).toContain("source_ambiguity_gate");
-    expect(text).toContain("Proxy 硬门闩");
+    expect(text).toContain("放行并披露");
     expect(text).not.toContain("代理不实现确认门闩");
   });
 

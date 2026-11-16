@@ -14,4 +14,4 @@
 
 | 必做 | 可选 |
 |---|---|
-| UAT-R0、UAT-SAG-01 v2（多表词且未形成 D1 钉选 → deny；见 cases） | UAT-SAG-02（宿主 attested 确认后放行；需 person token + `x-lucy-host-attestation`） |
+| UAT-R0、UAT-SAG-01 v3（硬线仍拦：幽灵引用／跨连接／超上限；v2「多表词 deny」已被 P1-35 v0.4 取代；见 cases） | UAT-SAG-02（宿主 attested 确认后放行；需 person token + `x-lucy-host-attestation`） |

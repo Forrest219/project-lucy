@@ -41,25 +41,25 @@ WebUI／MCP 同实例可用。
 
 ---
 
-## UAT-SAG-01 — 多表业务词未形成 D1 钉选 → 门闩 deny（v2）
+## UAT-SAG-01 — 硬线仍拦（v3；v0.4 起取代 v2「多表词 deny」）
 
-> **用例版本 v2（2026-11-16）**：对齐 P1-35 Spec §5.2。历史步骤（单度量 `superstore_orders.order_count`）在钉选放行落地后与 ESC-01 同构、期望改为 allow，**不再**作为本条 deny 合同。2026-11-13／14 跑次保留为 pre-D1 对照。
+> **v3（2026-11-16 夜）**：P1-35 Spec D10／D12 起，多表词不再 deny（已声明 join＝放行；其余放行＋披露＋审计）。本条改验**硬线仍拦**：门闩降级不得放过未知引用、跨连接、超上限。v2 步骤（orders＋returns 双身份 deny）为 v0.3 构建证据，**不再**是合同；2026-11-13／14 跑次保留为历史对照。
 
 ### 前置
 
-UAT-R0 PASS；可见源含 ≥2 张「超市」相关表（demo：`superstore_orders`／`people`／`returns`）；第二张表上存在可引用度量（或第二处完整身份引用），使 `collectCanonicalSourceKeys` → `keys.length≥2`。
+UAT-R0 PASS；可见源含 `superstore_orders`；跨连接／超上限夹具见 ESCAPE 套件 ESC-08／10（UAT 自造，用后还原）。
 
 ### 步骤
 
-1. MCP `initialize` → `notifications/initialized`  
-2. `lucy_begin_question`：`question`＝「超市最近怎么样」，`intentSummary`＝未选表概况  
-3. `lucy_query`：`connectionId=demo-mysql`，`measures` **同时**引用 ≥2 个可见超市相关 Source Identity（推荐：`superstore_orders.order_count`＋`superstore_returns` 上存在的度量；若后者无度量则改用第二完整身份的合法引用），**故意不形成**唯一钉选
+1. begin（`超市最近怎么样`）  
+2. `lucy_query`：`measures=["superstore_orders.order_count"]`，`filters=["foo_table.bar = 1"]`  
+3. （挂 ESCAPE）ESC-08：5 来源超上限；ESC-10：跨连接
 
 ### 期望
 
-- `result.isError === true`  
-- 文本含 `source_ambiguity_gate`／「请先确认来源表」  
-- 不得返回成功 `rows` 成交；上游成功体执行计数＝0
+- 步骤 2：`source_ambiguity_gate`，`detail=unresolved_source_refs`，零上游执行  
+- 步骤 3：见 ESC-08／10（拒绝，message 与 `usableTargets` 给可执行下一步）  
+- 合法单来源／已声明 join 多来源**不得**被拦（ESC-01／07）
 
 ### 清理
 
