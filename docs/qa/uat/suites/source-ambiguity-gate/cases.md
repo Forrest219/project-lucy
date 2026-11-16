@@ -41,23 +41,25 @@ WebUI／MCP 同实例可用。
 
 ---
 
-## UAT-SAG-01 — 多表业务词未确认 → 门闩 deny
+## UAT-SAG-01 — 多表业务词未形成 D1 钉选 → 门闩 deny（v2）
+
+> **用例版本 v2（2026-11-16）**：对齐 P1-35 Spec §5.2。历史步骤（单度量 `superstore_orders.order_count`）在钉选放行落地后与 ESC-01 同构、期望改为 allow，**不再**作为本条 deny 合同。2026-11-13／14 跑次保留为 pre-D1 对照。
 
 ### 前置
 
-UAT-R0 PASS；可见源含 ≥2 张「超市」相关表（demo：`superstore_orders`／`people`／`returns`）。
+UAT-R0 PASS；可见源含 ≥2 张「超市」相关表（demo：`superstore_orders`／`people`／`returns`）；第二张表上存在可引用度量（或第二处完整身份引用），使 `collectCanonicalSourceKeys` → `keys.length≥2`。
 
 ### 步骤
 
 1. MCP `initialize` → `notifications/initialized`  
 2. `lucy_begin_question`：`question`＝「超市最近怎么样」，`intentSummary`＝未选表概况  
-3. `lucy_query`：`connectionId=demo-mysql`，`measures=["superstore_orders.order_count"]`
+3. `lucy_query`：`connectionId=demo-mysql`，`measures` **同时**引用 ≥2 个可见超市相关 Source Identity（推荐：`superstore_orders.order_count`＋`superstore_returns` 上存在的度量；若后者无度量则改用第二完整身份的合法引用），**故意不形成**唯一钉选
 
 ### 期望
 
 - `result.isError === true`  
 - 文本含 `source_ambiguity_gate`／「请先确认来源表」  
-- 不得返回成功 `rows` 成交
+- 不得返回成功 `rows` 成交；上游成功体执行计数＝0
 
 ### 清理
 
@@ -79,4 +81,6 @@ person actor Bearer；可调用 `POST /mcp/host/source-ambiguity/confirm` 且带
 
 ### 期望
 
-确认后查数可成功；缺 attestation／非 person → 403，查询仍 deny。
+- person＋attestation 确认后，同会话再查可成功（可选通道）  
+- 缺 attestation／非 person → confirm **HTTP 403**（SC-17 HTTP 部分）  
+- **不得**把「confirm 403」推成「后续单钉选 query 必 deny」：若后续 `lucy_query` 已满足 D1（唯一可见钉选∈命中集），按 P1-35 D1／D9 **可独立 allow**；本条对「确认失败后的 query」仅在**未形成 D1**时仍期望 deny

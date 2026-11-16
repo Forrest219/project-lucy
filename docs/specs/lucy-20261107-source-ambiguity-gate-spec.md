@@ -6,7 +6,7 @@
 | 日期 / 目标版本 | 2026-11-07（本稿修订 2026-11-08；状态镜像 2026-11-13）/ 产品线 `0.30.0`（分支 `lucy-v0.30`）。不进入 `v0.25` 升级台账，不占用 `L25-*` |
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-3**；需求池 **REQ-030-024** / **P0** |
-| 状态 | **v0.5；R2-F＋R3（O1／O2／O4）＋R4 已闭合（2026-11-08）；实现已合入；复审 BLOCK／CHANGE 已修；独立复验 PASS（2026-11-13）；SC-01–SC-26 证据关闭（2026-11-13，见 [证据审计](../reviews/2026-11-13-source-ambiguity-gate-sc-evidence-audit.md)）。功能合同已收口（2026-11-13）。本条收口不表示可上线** |
+| 状态 | **v0.5；R2-F＋R3（O1／O2／O4）＋R4 已闭合（2026-11-08）；实现已合入；复审 BLOCK／CHANGE 已修；独立复验 PASS（2026-11-13）；SC-01–SC-26 证据关闭（2026-11-13，见 [证据审计](../reviews/2026-11-13-source-ambiguity-gate-sc-evidence-audit.md)）。功能合同已收口（2026-11-13）。本条收口不表示可上线。可用性续作（纯 MCP 逃生）→ [P1-35 Spec](lucy-20261116-source-ambiguity-mcp-escape-spec.md)（修订指针；未授权前不改本文件正文）** |
 | 授权边界 | R2-F＋R3＋R4 已闭合（R4：2026-11-08）。授权范围＝本 Spec／Plan 实现、测试与复审 BLOCK／CHANGE 修复；**不**表示可上线。 |
 | 决策来源 | 2026-11-06 CFO 误报事故 ＋ 误报防线 G2／G3：instructions 丢弃「问询范围确认」；字段歧义护栏对限定名错表零触发 |
 | 需求来源 | [需求池 REQ-030-024](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.2–4.3](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-3](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../plans/lucy-20261107-lucy-0-30-core-direction.md) |

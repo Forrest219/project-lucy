@@ -2,6 +2,8 @@
 
 本仓库的开发治理规则只以 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 为正文。本文件不复述第二套口径。功能闭口、发布取证、状态登记、**产品线执行总账（SOT）**、**端到端三台账**和新 Spec 的文件名，都见该文件「功能闭口与发布取证」。
 
+**第一性原理（强制）**：**主路径可用性优先**——迭代／新功能可以加约束，但不得把最终用户既有主路径变成无逃生的不可用；验收须同时覆盖「约束生效」与「合法用户仍可用」（含纯 MCP）。正文只在 DEVELOPMENT「第一性原理：主路径可用性优先」，本文件不另写第二套。
+
 **Docker 对齐（强制）**：开发与测试以**功能**为主（总账 / Spec / UAT），环境与验证路径对齐 **Docker**（本机 compose / demo），**默认不关心客户部署环境**。除非用户或当前任务明确要求出包、发布取证或客户现场交付，否则不要把解释、排期、实现或验证默认导向 Helm / K8s / 客户拓扑。正文见 DEVELOPMENT「Docker 对齐：功能优先，默认不谈客户部署环境」。
 
 **产品线 `0.30.0` / 分支 `lucy-v0.30`**：**需求台（执行总账 SOT）**＝[`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；**开发台**＝各 Spec 头部「状态」；**测试台**＝[`docs/qa/uat/INDEX.md`](docs/qa/uat/INDEX.md)；勾连／基准线追评＝[`docs/governance/e2e-ledger.md`](docs/governance/e2e-ledger.md)。方向见 [`docs/plans/lucy-20261107-lucy-0-30-core-direction.md`](docs/plans/lucy-20261107-lucy-0-30-core-direction.md)。**先入总账再动手／再叙事**；主张 UAT 须挂测试台。**功能合同收口 ≠ UAT PASS ≠ 可上线**。中间态出口或 `user-facing` 定稿前做差集补录（见 DEVELOPMENT）。**P0 立项 ≠ 开发授权**。**终稿确权**＝Codex CLI 终审，或无 Codex 时委托人明示确权。未授权条目禁止改运行代码。

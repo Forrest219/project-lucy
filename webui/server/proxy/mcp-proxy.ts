@@ -182,8 +182,10 @@ import {
   checkSourceAmbiguityGate,
   admitHostConfirmRequest,
   LUCY_HOST_ATTESTATION_HEADER,
+  repairEvidenceIdentityKey,
   sourceAmbiguityGateAppliesToTool,
   upsertJourneyOnBegin,
+  type GateSchemaProbe,
   type SourceAmbiguityDenial,
   type SourceIdentity,
 } from "./source-ambiguity-gate.js";
@@ -1130,7 +1132,7 @@ function lucyBeginQuestionTool() {
   return {
     name: "lucy_begin_question",
     description:
-      "Recommended at the start of each new user business question. Prefer the user's original wording in `question`; always provide `intentSummary`. When multiple visible sources may match the same business term, Lucy may return source_ambiguity_gate until the host confirms a source identity — skipping begin does not bypass that gate for asserted-source queries. Do not call for protocol checks or tool discovery only.",
+      "Recommended at the start of each new user business question. Prefer the user's original wording in `question`; always provide `intentSummary`. When multiple visible sources may match the same business term, Lucy may return source_ambiguity_gate; pin a single full source identity on lucy_query/lucy_explain_query to proceed without host confirm. Skipping begin does not bypass the gate when no unique pin is present. Do not call for protocol checks or tool discovery only.",
     inputSchema: {
       type: "object",
       properties: {
@@ -4985,16 +4987,58 @@ async function buildDenialRepairPayload(
       {
         // Critical：必须装配描述／度量／健康态；缺省仅 sourceName＋table 会让中文 description 场景 zero_hits 假放行。
         const enriched = await buildMatchableSourcesForGate(sagResolved.permissions.sources);
+        const toolArgsRecord =
+          (toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs))
+            ? toolArgs as Record<string, unknown>
+            : {};
+        // P1-35 D5：按完整身份装配真实 schema／completion 探测（仅 done＝compiled）。
+        // SourceSummary：conn／schema／table(=sourceName)／qualifiedName(=physical)。
+        const schemaProbeByIdentity = new Map<string, GateSchemaProbe>();
+        let sourceMapReliable = true;
+        try {
+          const projectRoot = await resolveProjectRoot();
+          const listed = await listSources(projectRoot);
+          for (const src of listed) {
+            const key = repairEvidenceIdentityKey({
+              connectionId: src.conn,
+              schema: src.schema,
+              sourceName: src.table,
+              physicalTable: src.qualifiedName || `${src.schema}.${src.table}`
+            });
+            schemaProbeByIdentity.set(key, {
+              schemaExists: true,
+              completion: src.completion,
+              measureNames: src.measureCount > 0 ? ["*"] : []
+            });
+          }
+          // 权限可见但 listSources 未收录 → schemaExists=false（已知不存在于语义清单）
+          for (const s of sagResolved.permissions.sources) {
+            const key = repairEvidenceIdentityKey({
+              connectionId: s.connectionId,
+              schema: s.schema,
+              sourceName: s.sourceName,
+              physicalTable: s.table
+            });
+            if (!schemaProbeByIdentity.has(key)) {
+              schemaProbeByIdentity.set(key, {
+                schemaExists: false,
+                completion: null,
+                measureNames: []
+              });
+            }
+          }
+        } catch {
+          sourceMapReliable = false;
+        }
         const sagOutcome = await checkSourceAmbiguityGate({
           identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
           sessionId: requestMeta.lucySessionId,
           toolName,
-          args: (toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs))
-            ? toolArgs as Record<string, unknown>
-            : {},
+          args: toolArgsRecord,
           permissions: sagResolved.permissions,
           matchableSources: enriched.matchableSources,
-          sourceMapReliable: true
+          sourceMapReliable,
+          schemaProbeByIdentity
         });
         if (sagOutcome.kind === "deny_caliber_unresolved") {
           const responseBody = JSON.stringify({

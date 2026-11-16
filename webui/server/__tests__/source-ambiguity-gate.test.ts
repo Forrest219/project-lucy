@@ -34,6 +34,7 @@ import {
   matchVisibleSources,
   persistAmbiguityCandidateSnapshot,
   projectDescriptionForGate,
+  repairEvidenceIdentityKey,
   requestAssertsSource,
   resolveBusinessTermsByPriority,
   setSourceAmbiguityStateDir,
@@ -135,7 +136,7 @@ describe("P0-3 source ambiguity gate", () => {
     );
     expect(md).toContain("问询范围确认／多表命中先问");
     expect(md).toContain("source_ambiguity_gate");
-    expect(md).toContain("不得自行挑选最高分表");
+    expect(md).toContain("钉选**唯一**完整来源身份");
     expect(ASK_FIRST_SECTION).toContain("多表命中先问");
     expect(ASK_FIRST_SECTION).toContain("source_ambiguity_gate");
     expect(ASK_FIRST_SECTION).toContain("指代");
@@ -144,14 +145,15 @@ describe("P0-3 source ambiguity gate", () => {
     for (const needle of [
       "多个可见来源表都可能回答同一业务词",
       "Proxy 硬门闩",
-      "不得自行挑选最高分表"
+      "钉选**唯一**完整来源身份"
     ]) {
       expect(md).toContain(needle);
       expect(ASK_FIRST_SECTION).toContain(needle);
     }
     const proxy = await readFile(path.join(process.cwd(), "server", "proxy", "mcp-proxy.ts"), "utf8");
     expect(proxy).toContain("ASK_FIRST_SECTION");
-    expect(proxy).toContain("Skipping begin does not bypass the source ambiguity gate");
+    expect(proxy).toContain("pin a single full source identity");
+    expect(proxy).toContain("schemaProbeByIdentity");
     expect(proxy).not.toMatch(/Skipping this call never blocks catalog or query tools/);
     expect(proxy).not.toMatch(/可省略.*门闩|never blocks catalog or query tools/);
   });
@@ -748,18 +750,18 @@ describe("P0-3 source ambiguity gate", () => {
       opsTools: []
     } as never;
 
-    // 首次歧义
+    // 首次歧义：未形成唯一钉选 → deny
     const first = await checkSourceAmbiguityGate({
       identityKey,
       sessionId,
       toolName: "lucy_query",
-      args: { sourceName: "a", connectionId: CONNECTION },
+      args: {},
       permissions,
       matchableSources: sources
     });
     expect(first.kind).toBe("deny");
 
-    // 拒绝后立即自填（无宿主证据）→ 仍 deny
+    // P1-35 SC-E13／D9：拒绝后立即以集内唯一钉选重试 → allow（无宿主证据）
     const selfFill = await checkSourceAmbiguityGate({
       identityKey,
       sessionId,
@@ -768,7 +770,7 @@ describe("P0-3 source ambiguity gate", () => {
       permissions,
       matchableSources: sources
     });
-    expect(selfFill.kind).toBe("deny");
+    expect(selfFill.kind).toBe("allow");
 
     // 宿主 attested 正例（进程内 API；HTTP 路径见 SOURCE_AMBIGUITY_CONFIRM_PATH）
     const snap = await persistAmbiguityCandidateSnapshot({
@@ -1436,5 +1438,244 @@ describe("P0-3 source ambiguity gate", () => {
       { fresh: true }
     );
     expect(collected.unresolved.some((u) => /ghost/i.test(u))).toBe(true);
+  });
+
+  // ─── P1-35：钉选放行／D5 五项证据 ────────────────────────────────────────
+
+  it("P1-35 SC-E01/E13: dual termHits + unique in-set pin allows without host attest", async () => {
+    const identityKey = "agent:tok-p135";
+    const sessionId = "s-p135";
+    const cbScope = `cb:${identityKey}:${sessionId}`;
+    const sagScope = ambiguityScopeKey(identityKey, sessionId);
+    await beginBindingSessionPreparation(cbScope, {
+      turnId: "t",
+      registryGeneration: 1,
+      bindingId: null,
+      boundKey: null,
+      caliberSnapshot: null
+    });
+    await commitBindingSession(cbScope, {
+      turnId: "t",
+      registryGeneration: 1,
+      bindingId: null,
+      boundKey: null,
+      caliberSnapshot: null
+    });
+    const sess = await readBindingSession(cbScope);
+    await upsertJourneyOnBegin({
+      scopeKey: sagScope,
+      generation: sess.record!.generation,
+      intentSummary: "今年收入是多少"
+    });
+    const sources = [
+      matchable(CONNECTION, "dataforai", "a", "s.a", {
+        description: "销售收入金额",
+        descriptionState: "present"
+      }),
+      matchable(CONNECTION, "dataforai", "b", "s.b", {
+        description: "营业收入金额",
+        descriptionState: "present"
+      })
+    ];
+    const permissions = {
+      roleIds: [],
+      tools: ["lucy_query"],
+      tables: [],
+      connections: [CONNECTION],
+      sources: [
+        { connectionId: CONNECTION, schema: "dataforai", sourceName: "a", table: "s.a" },
+        { connectionId: CONNECTION, schema: "dataforai", sourceName: "b", table: "s.b" }
+      ],
+      capabilities: [],
+      metaTools: [],
+      opsTools: []
+    } as never;
+    resetEffectivePolicyForTests();
+    const pinned = await checkSourceAmbiguityGate({
+      identityKey,
+      sessionId,
+      toolName: "lucy_query",
+      args: { connectionId: CONNECTION, sourceName: "a", measures: ["a.amt"] },
+      permissions,
+      matchableSources: sources
+    });
+    expect(pinned.kind).toBe("allow");
+  });
+
+  it("P1-35 SC-E05: unique pin outside termHits still denies", async () => {
+    const identityKey = "agent:tok-p135-out";
+    const sessionId = "s-p135-out";
+    const cbScope = `cb:${identityKey}:${sessionId}`;
+    const sagScope = ambiguityScopeKey(identityKey, sessionId);
+    await beginBindingSessionPreparation(cbScope, {
+      turnId: "t",
+      registryGeneration: 1,
+      bindingId: null,
+      boundKey: null,
+      caliberSnapshot: null
+    });
+    await commitBindingSession(cbScope, {
+      turnId: "t",
+      registryGeneration: 1,
+      bindingId: null,
+      boundKey: null,
+      caliberSnapshot: null
+    });
+    const sess = await readBindingSession(cbScope);
+    await upsertJourneyOnBegin({
+      scopeKey: sagScope,
+      generation: sess.record!.generation,
+      intentSummary: "今年收入是多少"
+    });
+    // orders 不在「收入」命中集内
+    const sources = [
+      matchable(CONNECTION, "dataforai", "a", "s.a", {
+        description: "销售收入金额",
+        descriptionState: "present"
+      }),
+      matchable(CONNECTION, "dataforai", "b", "s.b", {
+        description: "营业收入金额",
+        descriptionState: "present"
+      }),
+      matchable(CONNECTION, "dataforai", "orders", "dataforai.orders", {
+        description: "订单明细",
+        descriptionState: "present"
+      })
+    ];
+    const permissions = {
+      roleIds: [],
+      tools: ["lucy_query"],
+      tables: [],
+      connections: [CONNECTION],
+      sources: [
+        { connectionId: CONNECTION, schema: "dataforai", sourceName: "a", table: "s.a" },
+        { connectionId: CONNECTION, schema: "dataforai", sourceName: "b", table: "s.b" },
+        { connectionId: CONNECTION, schema: "dataforai", sourceName: "orders", table: "dataforai.orders" }
+      ],
+      capabilities: [],
+      metaTools: [],
+      opsTools: []
+    } as never;
+    resetEffectivePolicyForTests();
+    const out = await checkSourceAmbiguityGate({
+      identityKey,
+      sessionId,
+      toolName: "lucy_query",
+      args: { connectionId: CONNECTION, sourceName: "orders", measures: ["orders.order_count"] },
+      permissions,
+      matchableSources: sources
+    });
+    expect(out.kind).toBe("deny");
+  });
+
+  it("P1-35 SC-E06: never_begun + unique visible pin allows", async () => {
+    resetEffectivePolicyForTests();
+    const identityKey = "agent:tok-nb";
+    const sessionId = "s-nb";
+    const out = await checkSourceAmbiguityGate({
+      identityKey,
+      sessionId,
+      toolName: "lucy_query",
+      args: { connectionId: CONNECTION, sourceName: "orders", measures: ["orders.order_count"] },
+      permissions: {
+        roleIds: [],
+        tools: ["lucy_query"],
+        tables: [],
+        connections: [CONNECTION],
+        sources: [
+          { connectionId: CONNECTION, schema: "dataforai", sourceName: "orders", table: "dataforai.orders" }
+        ],
+        capabilities: [],
+        metaTools: [],
+        opsTools: []
+      } as never,
+      matchableSources: [
+        matchable(CONNECTION, "dataforai", "orders", "dataforai.orders")
+      ]
+    });
+    expect(out.kind).toBe("allow");
+  });
+
+  it("P1-35 SC-E19: never_begun + pin but description read_failed denies", async () => {
+    resetEffectivePolicyForTests();
+    const out = await checkSourceAmbiguityGate({
+      identityKey: "agent:tok-nb-bad",
+      sessionId: "s-nb-bad",
+      toolName: "lucy_query",
+      args: { connectionId: CONNECTION, sourceName: "orders", measures: ["orders.order_count"] },
+      permissions: {
+        roleIds: [],
+        tools: ["lucy_query"],
+        tables: [],
+        connections: [CONNECTION],
+        sources: [
+          { connectionId: CONNECTION, schema: "dataforai", sourceName: "orders", table: "dataforai.orders" }
+        ],
+        capabilities: [],
+        metaTools: [],
+        opsTools: []
+      } as never,
+      matchableSources: [
+        matchable(CONNECTION, "dataforai", "orders", "dataforai.orders", {
+          descriptionHealth: { status: "read_failed", reason: "boom" }
+        })
+      ]
+    });
+    expect(out.kind).toBe("deny");
+  });
+
+  it("P1-35 D5 H1: wired probes put five-true candidates into usableTargets", async () => {
+    const a = id(CONNECTION, "dataforai", "a", "s.a");
+    const b = id(CONNECTION, "dataforai", "b", "s.b");
+    const rows = [
+      {
+        sourceKey: a,
+        displayName: "a",
+        allowListName: "a",
+        measures: ["amt"],
+        description: "销售收入金额",
+        descriptionState: "present" as const
+      },
+      {
+        sourceKey: b,
+        displayName: "b",
+        allowListName: "b",
+        measures: ["amt"],
+        description: "营业收入金额",
+        descriptionState: "present" as const
+      }
+    ];
+    const probe = new Map([
+      [
+        repairEvidenceIdentityKey(a),
+        { schemaExists: true as boolean | null, completion: "done", measureNames: ["amt"] }
+      ],
+      [
+        repairEvidenceIdentityKey(b),
+        { schemaExists: true as boolean | null, completion: "partial", measureNames: ["amt"] }
+      ]
+    ]);
+    const map = buildRepairEvidenceForGate({
+      candidates: rows,
+      permissions: {
+        sources: [
+          { connectionId: CONNECTION, schema: "dataforai", sourceName: "a", table: "s.a" },
+          { connectionId: CONNECTION, schema: "dataforai", sourceName: "b", table: "s.b" }
+        ],
+        tools: ["lucy_query"]
+      } as never,
+      toolName: "lucy_query",
+      sourceMapReliable: true,
+      schemaProbeByIdentity: probe,
+      args: { connectionId: CONNECTION, measures: ["a.amt"] }
+    });
+    const evidences = toRepairTargetEvidence(rows, map);
+    const closure = buildAmbiguityRepairClosure(evidences);
+    expect(closure.usableTargets).toContain("a");
+    expect(closure.usableTargets).not.toContain("b"); // partial ≠ done
+    expect(
+      closure.rejected.every((r) => r.reason !== "schema_evidence_unavailable")
+      || closure.usableTargets.length > 0
+    ).toBe(true);
   });
 });

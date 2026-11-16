@@ -2,6 +2,7 @@
  * P0-3 表级歧义门闩（REQ-030-024）— 命中算法、分态、候选构造与门禁裁决。
  *
  * 权威合同：docs/specs/lucy-20261107-source-ambiguity-gate-spec.md v0.5
+ * 可用性续作：docs/specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md（P1-35 D1／D3／D5／D9）
  * O1＝旅程字段 confirmedSourceKey；O2＝否（read_source 不纳入）；O4＝度量摘要 8。
  *
  * 既有字段级 `ambiguousFieldHint`（source-ambiguity.ts）保留；本模块是 source 级。
@@ -72,14 +73,15 @@ export const SOURCE_AMBIGUITY_MESSAGE = "表级歧义：请先确认来源表";
 /** O4 闭合：度量覆盖摘要最大条数。 */
 export const MEASURE_SUMMARY_MAX = 8;
 
-/** 多表命中先问 — instructions 事实源片段（D13）。 */
+/** 多表命中先问 — instructions 事实源片段（D13；P1-35 钉选放行）。 */
 export const ASK_FIRST_SECTION = `## 问询范围确认／多表命中先问
 
 - 问询**原文**里出现指代（"这个""上次那个""它"）或一句包含两个意图时，先复述账户、月份和产品线，等用户确认后再发 \`lucy_query\`。
 - 没有用户原文的推断问询（例如从历史日志或工具报错反推出来的需求）跳过复述，直接按已确认范围查数。
 - 当多个可见来源表都可能回答同一业务词时，必须先澄清选哪张表，再发 \`lucy_query\`／\`lucy_explain_query\`。
-- 工具面可能返回表级歧义拒绝（\`source_ambiguity_gate\`）；须按候选完整身份经宿主确认后重试，不得自行挑选最高分表或静默换表。
-- 指代／双意图的复述仍约束模型行为；表级选表由 Proxy 硬门闩执行，缺少可信确认时不会放行歧义查数。
+- 工具面可能返回表级歧义拒绝（\`source_ambiguity_gate\`）。纯 MCP 下可在同次或下次 \`lucy_query\`／\`lucy_explain_query\` 中钉选**唯一**完整来源身份（\`connectionId\`＋source-qualified measures／dimensions／filters）后重试；钉选成功不等于「用户已确认」，只是门闩放行条件。
+- 宿主 person＋attestation 确认仍可用于 WebUI；Agent 不得伪造宿主 confirm HTTP。未形成唯一钉选时，多表歧义仍会硬拦。
+- 指代／双意图的复述仍约束模型行为；表级选表由 Proxy 硬门闩执行。
 `;
 
 /** CJK／Han 判定（与 Spec §4.1 夹具一致）。 */
@@ -401,12 +403,72 @@ export function toRepairTargetEvidence(
  * 短名只用于 denialAllowList；Map 键＝完整身份串，避免双连接同名覆盖。
  */
 
+export type GateSchemaProbe = {
+  schemaExists: boolean | null;
+  /** 仅 `done` 计为 compiled；`partial` 及其他均 false（P1-35 §4.4）。 */
+  completion?: string | null;
+  measureNames?: readonly string[];
+  dimensionNames?: readonly string[];
+};
+
+function argsReferencesIdentity(
+  args: Record<string, unknown> | undefined,
+  sourceKey: SourceIdentity
+): { measureOk: boolean; fieldOk: boolean } {
+  if (!args) return { measureOk: true, fieldOk: true };
+  const sourcePrefixes = new Set([
+    sourceKey.sourceName,
+    sourceKey.physicalTable,
+    `${sourceKey.schema}.${sourceKey.sourceName}`,
+    sourceKey.physicalTable.includes(".")
+      ? sourceKey.physicalTable
+      : `${sourceKey.schema}.${sourceKey.sourceName}`
+  ]);
+  const refsOtherSource = (qualified: string): boolean => {
+    const dot = qualified.indexOf(".");
+    if (dot <= 0) return false;
+    const prefix = qualified.slice(0, dot);
+    // source-qualified：前缀不是本身份 → 相对本候选不合法（多身份残留）
+    if (sourcePrefixes.has(prefix) || sourcePrefixes.has(qualified.slice(0, qualified.lastIndexOf(".")))) {
+      return false;
+    }
+    // 短名前缀若等于其他常见表名形态，视为他表引用
+    return prefix.length > 0 && prefix !== sourceKey.sourceName;
+  };
+  const measures = Array.isArray(args.measures) ? args.measures : [];
+  for (const m of measures) {
+    if (typeof m !== "string") continue;
+    if (refsOtherSource(m)) return { measureOk: false, fieldOk: false };
+  }
+  const walkFields = (value: unknown): boolean => {
+    if (!value) return true;
+    if (typeof value === "string") return !refsOtherSource(value);
+    if (Array.isArray(value)) return value.every(walkFields);
+    if (typeof value === "object") {
+      const rec = value as Record<string, unknown>;
+      if (typeof rec.field === "string" && refsOtherSource(rec.field)) return false;
+      return Object.values(rec).every(walkFields);
+    }
+    return true;
+  };
+  const fieldOk =
+    walkFields(args.dimensions)
+    && walkFields(args.filters)
+    && walkFields(args.order_by)
+    && walkFields(args.orderBy);
+  return { measureOk: true, fieldOk };
+}
+
 export function buildRepairEvidenceForGate(input: {
   candidates: readonly AmbiguityCandidateRow[];
   permissions: Pick<EffectivePermissions, "sources" | "tools">;
   toolName: string;
   /** false → 全体 schemaExists=null。缺省亦为不可判定（无真实探测）。 */
   sourceMapReliable?: boolean;
+  /** 按完整身份键的真实探测；缺省则 schemaExists=null、compiled=false。 */
+  schemaProbeByIdentity?: ReadonlyMap<string, GateSchemaProbe>;
+  /** 本次请求；用于相对候选的 argsShape（多身份残留 → 不合法）。 */
+  args?: Record<string, unknown>;
 }): Map<string, Omit<RepairTargetEvidence, "target">> {
   const visible = new Set(
     input.permissions.sources.map(
@@ -415,16 +477,34 @@ export function buildRepairEvidenceForGate(input: {
     )
   );
   const callable = input.permissions.tools.includes(input.toolName);
+  const reliable = input.sourceMapReliable === true;
   const out = new Map<string, Omit<RepairTargetEvidence, "target">>();
   for (const c of input.candidates) {
     const key = repairEvidenceIdentityKey(c.sourceKey);
     const isVisible = visible.has(key);
+    const probe = input.schemaProbeByIdentity?.get(key);
+    const schemaExists =
+      !reliable
+        ? null
+        : probe
+          ? probe.schemaExists
+          : null;
+    const compiled = probe?.completion === "done";
+    // 无探测入口时 argsShape 一律 false（fail-closed）；有探测后再相对本次 args 校验。
+    let parameterShapeValid = false;
+    if (probe) {
+      const shape = argsReferencesIdentity(input.args, c.sourceKey);
+      parameterShapeValid = shape.measureOk && shape.fieldOk;
+      if (parameterShapeValid && Array.isArray(input.args?.measures) && input.args.measures.length > 0) {
+        const names = probe.measureNames;
+        if (names && names.length === 0) parameterShapeValid = false;
+      }
+    }
     out.set(key, {
-      // 无独立 schema／编译探测入口时不得用可见性冒充
-      schemaExists: null,
+      schemaExists,
       visibleToPrincipal: isVisible,
-      compiled: false,
-      parameterShapeValid: false,
+      compiled,
+      parameterShapeValid,
       callable
     });
   }
@@ -675,17 +755,50 @@ export type CheckSourceAmbiguityGateInput = {
   catalogReadFailed?: boolean;
   catalogReadReason?: string;
   /**
-   * 五项证据覆盖。缺省走 `buildRepairEvidenceForGate`（基于 permissions）；
+   * 五项证据覆盖。缺省走 `buildRepairEvidenceForGate`（基于 permissions＋探测）；
    * 未传入且不想用默认探测时显式传空 Map → fail-closed（不假装全绿）。
    */
   repairEvidenceByName?: ReadonlyMap<string, Omit<RepairTargetEvidence, "target">>;
   /** 与 repairEvidenceByName 联用：sourceMap 不可靠时 schemaExists=null。 */
   sourceMapReliable?: boolean;
+  /** 生产须传入按完整身份的 schema／completion 探测（P1-35 D5）。 */
+  schemaProbeByIdentity?: ReadonlyMap<string, GateSchemaProbe>;
   fieldAmbiguity?: { field: string; repair: string } | null;
 };
 
+function sourceVisibleToPrincipal(
+  key: SourceIdentity,
+  permissions: Pick<EffectivePermissions, "sources">
+): boolean {
+  return permissions.sources.some(
+    (s) =>
+      s.connectionId === key.connectionId
+      && s.schema === key.schema
+      && s.sourceName === key.sourceName
+      && s.table === key.physicalTable
+  );
+}
+
+function catalogHealthFailed(
+  input: CheckSourceAmbiguityGateInput,
+  sources: readonly MatchableSource[],
+  pinned?: SourceIdentity | null
+): string | null {
+  if (input.catalogReadFailed) {
+    return input.catalogReadReason ?? "catalog_read_failure";
+  }
+  if (pinned) {
+    const row = sources.find((s) => canonicalSourceKeyEquals(s.identity, pinned));
+    if (row?.descriptionHealth?.status === "read_failed") {
+      return row.descriptionHealth.reason ?? "description_read_unreliable";
+    }
+  }
+  return null;
+}
+
 /**
  * 表级歧义门闩主入口。须在 ACL 通过后、上游／explain 成功体前调用。
+ * 优先级：lost → bound skip → catalog 健康 → unresolved → D1 钉选放行 → never_begun context_missing → hits＜2 allow → deny。
  */
 export async function checkSourceAmbiguityGate(
   input: CheckSourceAmbiguityGateInput
@@ -719,6 +832,37 @@ export async function checkSourceAmbiguityGate(
     session.record?.generation
     ?? (state === "never_begun" ? NEVER_BEGUN_GENERATION_SENTINEL : journey.generation);
 
+  const sources =
+    input.matchableSources
+    ?? input.permissions.sources.map((s) => effectiveSourceToMatchable(s));
+
+  const collected = await collectCanonicalSourceKeys(input.toolName, input.args);
+  if (collected.unresolved.length > 0) {
+    const emptyRepair = buildAmbiguityRepairClosure([]);
+    return {
+      kind: "deny",
+      executed: false,
+      denial: denialPayload([], emptyRepair, "unresolved_source_refs", input.fieldAmbiguity)
+    };
+  }
+
+  const pinned =
+    collected.keys.length === 1 ? collected.keys[0]! : null;
+  const healthFail = catalogHealthFailed(input, sources, pinned);
+  if (healthFail) {
+    const emptyRepair = buildAmbiguityRepairClosure([]);
+    return {
+      kind: "deny",
+      executed: false,
+      denial: denialPayload([], emptyRepair, healthFail, input.fieldAmbiguity)
+    };
+  }
+
+  // P1-35 D1／D3：never_begun 词源为空 hits；唯一可见钉选 → allow（健康已过）
+  if (state === "never_begun" && pinned && sourceVisibleToPrincipal(pinned, input.permissions)) {
+    return { kind: "allow" };
+  }
+
   const termOutcome = resolveBusinessTermsByPriority({
     bindingState: state,
     args: input.args,
@@ -751,10 +895,6 @@ export async function checkSourceAmbiguityGate(
     return { kind: "allow" };
   }
 
-  const sources =
-    input.matchableSources
-    ?? input.permissions.sources.map((s) => effectiveSourceToMatchable(s));
-
   const matchOutcome = matchVisibleSources(termOutcome.terms, sources, {
     catalogReadFailed: input.catalogReadFailed,
     catalogReadReason: input.catalogReadReason
@@ -777,15 +917,13 @@ export async function checkSourceAmbiguityGate(
     return { kind: "allow" };
   }
 
-  // ≥2 命中 — 检查引用集合与确认
-  const collected = await collectCanonicalSourceKeys(input.toolName, input.args);
-  if (collected.unresolved.length > 0) {
-    const emptyRepair = buildAmbiguityRepairClosure([]);
-    return {
-      kind: "deny",
-      executed: false,
-      denial: denialPayload([], emptyRepair, "unresolved_source_refs", input.fieldAmbiguity)
-    };
+  // ≥2 命中 — P1-35 D1：唯一可见钉选且 ∈ termHits → allow（无需宿主 attested）
+  if (
+    pinned
+    && sourceVisibleToPrincipal(pinned, input.permissions)
+    && matchOutcome.hits.some((h) => canonicalSourceKeyEquals(h, pinned))
+  ) {
+    return { kind: "allow" };
   }
 
   const confirmedKey = journey.confirmedSourceKey;
@@ -800,12 +938,10 @@ export async function checkSourceAmbiguityGate(
       collected.keys.length === 1
       && canonicalSourceKeyEquals(collected.keys[0]!, confirmedKey);
     if (inHits && participation.ok && singletonOk) {
-      // 选表已确认；字段级护栏仍继续（由调用方）
       return { kind: "allow" };
     }
   }
 
-  // 构造候选：可见 ∩ allow-list
   const allow = denialAllowList({
     connections: input.permissions.connections,
     sources: input.permissions.sources
@@ -824,7 +960,9 @@ export async function checkSourceAmbiguityGate(
         tools: input.permissions.tools ?? [input.toolName]
       },
       toolName: input.toolName,
-      sourceMapReliable: input.sourceMapReliable
+      sourceMapReliable: input.sourceMapReliable,
+      schemaProbeByIdentity: input.schemaProbeByIdentity,
+      args: input.args
     });
   const evidences = toRepairTargetEvidence(matchedRows, evidenceMap);
   const closure = buildAmbiguityRepairClosure(evidences);

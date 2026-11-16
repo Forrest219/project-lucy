@@ -214,7 +214,8 @@ describe("P0-3 SC-17 host confirm HTTP", () => {
       expect(personOk.status).not.toBe(403);
       expect([200, 409]).toContain(personOk.status);
 
-      // Agent 自证失败后：begin + query 仍因歧义 deny，零上游
+      // Agent 自证失败后：未形成唯一钉选的多表词 query 仍 deny，零上游。
+      // P1-35：confirm 403 ≠ 单钉选 query 必 deny（钉选放行另测）。
       const before = upstreamHits();
       await fetch(`http://127.0.0.1:${port}/mcp`, {
         method: "POST",
@@ -247,9 +248,8 @@ describe("P0-3 SC-17 host confirm HTTP", () => {
           params: {
             name: "lucy_query",
             arguments: {
-              connectionId: CONNECTION,
-              sourceName: "a",
-              measures: ["a.amt"]
+              connectionId: CONNECTION
+              // 故意不钉唯一身份 → 仍应 source_ambiguity_gate
             }
           }
         })
