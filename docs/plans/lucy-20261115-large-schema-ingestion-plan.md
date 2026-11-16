@@ -4,7 +4,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **v0.2；开发授权已获得（2026-11-15，委托人「授权 spec 定稿，进入落地开发」，含终稿确权）；实现已落地（代码、单测与 demo 容器已升级）；测试台 `UAT-SUITE-LARGE-SCHEMA` 于 2026-11-16 必做 11 条 PASS（同日 4 次完整跑中 1 次 SCALE-09 异常 FAIL 未定位；INDEX 现值＝PASS WITH GAP）**：Task 1–5、7 已落地并通过 vitest；Task 6 已于 2026-11-16 复跑 4 次，必做 11 条在第 1、3、4 次全 PASS，第 2 次 SCALE-09 异常 FAIL 未定位（可选 11／12 未执行）。功能合同逐条收口另行判定；≠ 可上线 |
+| 状态 | **v0.2；开发授权已获得（2026-11-15，委托人「授权 spec 定稿，进入落地开发」，含终稿确权）；实现已落地（代码、单测与 demo 容器已升级）；测试台 `UAT-SUITE-LARGE-SCHEMA` 于 2026-11-16 必做 11 条 PASS（共 5 次完整跑中 1 次 SCALE-09 异常 FAIL 未定位；INDEX 现值＝PASS WITH GAP）**：Task 1–5、7 已落地并通过 vitest；Task 6 已于 2026-11-16 复跑 4 次，必做 11 条在第 1、3、4、5 次全 PASS，第 2 次 SCALE-09 异常 FAIL 未定位（可选 11／12 未执行）。功能合同逐条收口另行判定；≠ 可上线 |
 | 主 Spec | [`docs/specs/lucy-20261115-large-schema-ingestion-spec.md`](../specs/lucy-20261115-large-schema-ingestion-spec.md) **v0.2** |
 | 总账 | **P1-34**／REQ-030-055；**不入核心分母**；P1-16、P1-20 的续作 |
 | 授权边界 | 只改「准备表结构」的读字段通道：服务端 `schema-structure`／`catalog-show`／`live-discovery` 与前端库层 `prepareSchemaStructure`。不改 KTX、不改问数、不改页面组件、不做浏览器测试、不改写入链路（O3 另议） |
@@ -150,9 +150,9 @@ cd webui && npx vitest run \
 
 ### Task 6：测试台复跑（真实环境）
 
-- [x] **Step 1（部分满足）：** 受测镜像重建。按仓库规则平滑升级：`npm run demo:upgrade`，核对 `/api/health` 的 `gitSha` 等于实现提交且 `gitDirty=false`。回复里带出 WebUI／MCP 地址。**未满足 `gitDirty=false`**：工作区含其他会话的在途改动、且未提交（本仓库规则禁止代提交），容器 `gitDirty=true`。
+- [x] **Step 1：** 受测镜像重建。按仓库规则平滑升级：`npm run demo:upgrade`，核对 `/api/health` 的 `gitSha` 等于实现提交且 `gitDirty=false`。回复里带出 WebUI／MCP 地址。前 4 次跑时容器 `gitDirty=true`（工作区含其他会话在途改动）；2026-11-16 委托人重建后第 5 次在干净提交 `299de2c9`、`gitDirty=false` 上跑，已满足。
 - [x] **Step 2（部分满足）：** 夹具必须来自当次 `bash scripts/uat/seed-large-schema-fixtures.sh all`。**实际**：当次跑了该脚本自检，库已存在，脚本跳过造数，夹具为 2026-11-15 从零造出的同一批。
-- [x] **Step 3：** 跑 runner（命令同 Task 0 Step 1）。目标：R0／01…10 全部 PASS。任何一条 FAIL 或 BLOCKED 都不得宣称收口。**结果**：同日 4 次完整跑，第 1、3、4 次 11 条全 PASS，第 2 次 SCALE-09 一次异常 FAIL（原因未定位），按此不宣称「稳定 PASS」。
+- [x] **Step 3：** 跑 runner（命令同 Task 0 Step 1）。目标：R0／01…10 全部 PASS。任何一条 FAIL 或 BLOCKED 都不得宣称收口。**结果**：共 5 次完整跑，第 1、3、4、5 次 11 条全 PASS，第 2 次 SCALE-09 一次异常 FAIL（原因未定位），按此不宣称「稳定 PASS」。
 - [x] **Step 4（部分）：** 写入新的跑次文件、更新 INDEX 与 e2e-ledger（GAP-UAT-P1-34 已改为剩余项，未关闭），Spec 头部状态与总账同句。
 
 ### Task 7：回滚开关与文档同句

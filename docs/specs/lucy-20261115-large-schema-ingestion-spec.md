@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | Spec / **v0.2** |
 | 日期 / 目标版本 | 2026-11-15／不绑定产品版本号 |
 | 功能编号 / 优先级 | **P1-34**／REQ-030-055／**P1**（事故续作，客户规模）。**不入 0.30 核心分母** |
-| 状态 | **v0.2；终稿确权＝委托人明示确权（2026-11-15，「授权 spec 定稿，进入落地开发」）；决策 O1–O6 已闭合（见 §9）；开发授权已获得（2026-11-15，同句）；实现已落地（代码、单测与 demo 容器已升级）；测试台 `UAT-SUITE-LARGE-SCHEMA` 于 2026-11-16 必做 11 条 PASS（同日 4 次完整跑中 1 次 SCALE-09 异常 FAIL 未定位；INDEX 现值＝PASS WITH GAP）。** 跑次 2026-11-16-claude-large-schema-after-impl：必做 11 条 PASS，可选 11／12 未执行，SCALE-09 测量对象已更换（见跑次备注）。功能合同逐条收口（LS-01…15）另行判定；功能合同收口 ≠ UAT PASS；≠ 可上线 |
+| 状态 | **v0.2；终稿确权＝委托人明示确权（2026-11-15，「授权 spec 定稿，进入落地开发」）；决策 O1–O6 已闭合（见 §9）；开发授权已获得（2026-11-15，同句）；实现已落地（代码、单测与 demo 容器已升级）；测试台 `UAT-SUITE-LARGE-SCHEMA` 于 2026-11-16 必做 11 条 PASS（共 5 次完整跑中 1 次 SCALE-09 异常 FAIL 未定位；INDEX 现值＝PASS WITH GAP）。** 跑次 2026-11-16-claude-large-schema-after-impl：必做 11 条 PASS，可选 11／12 未执行，SCALE-09 测量对象已更换（见跑次备注）。功能合同逐条收口（LS-01…15）另行判定；功能合同收口 ≠ UAT PASS；≠ 可上线 |
 | 决策来源 | 2026-11-15 委托人：客户存在列非常多的表、表数非常多的 Schema，普通 MySQL 上曾出现「小库很快、大库拉取失败」的先例。委托人要求把此规模写进 UAT 并制定优化 Spec／Plan，目标是**顺利接入，而不是超时报错** |
 | 需求来源 | [P1-16 库内扫表读法](lucy-20261111-catalog-scan-read-path-spec.md) 的 `tblu` 先例（789 张表，逐表查字段，20 秒内无响应体）；[P1-20 外部目录读字段](lucy-20261113-external-catalog-column-read-spec.md) 把「整库逐表批量准备耗时」明确划出本条并记 Follow-up；本次本机规模实测（[`inbox/hive-lab/REPORT.md`](../../inbox/hive-lab/REPORT.md)，诊断证据，非 UAT） |
 | 实施主体 | WebUI 服务端读字段通道（`schema-structure`、`catalog-show`、`live-discovery`）与前端 `prepareSchemaStructure` 库层。不改页面组件、不改 KTX、不改问数 |
