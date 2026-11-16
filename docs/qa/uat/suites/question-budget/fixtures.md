@@ -12,7 +12,8 @@
 | 不计预算 | `lucy_catalog`、`lucy_begin_question`、`lucy_continue_question`、协议 `initialize`／`tools/list` | 不得用这些充「第 N 次数据工具」 |
 | 期望文案 | `60` 次；`300` 秒 | initialize instructions |
 | WebUI 登录凭据 | `/Users/forrest/Desktop/lucywebui logi.txt`（缺失则 `/Users/forrest/Projects/config-for-agents/lucywebui logi.txt`；本机 Docker 回退 `/Users/zhangxingchen/Projects/config_for_agents/lucy-docker-login.txt`） | 路径 only；三行：地址／账号／口令；仅 BUDGET-04 建临时身份用 |
-| 临时身份（BUDGET-04） | Role `uat-budget-continue-role`；Agent `uat-budget-continue-agent`；Token label `uat-budget-continue` | 克隆 `demo_readonly` + `lucy_continue_question`；测后必须删 |
+| 临时身份（BUDGET-04） | Role `uat-budget-continue-role-<后缀>`；Agent `uat-budget-continue-agent-<后缀>`；Token label `uat-budget-continue` | 克隆 `demo_readonly` + `lucy_continue_question`；测后必须删。**已删除的 Role id 永久保留，再建同名返回 409 `ROLE_ID_RETIRED`**，每跑一次换新后缀（已用 `-b`、`-c`；旧无后缀名已退役） |
+| Admin API 写入要点（BUDGET-04） | `POST /api/admin/roles` `{dryRun:false,roleId,role}`；`POST /api/admin/agents` `{dryRun:false,agent:{id,name,roles:[…]}}`；`POST …/tokens` 必须带 `expires_at`；`DELETE …/agents/:id` 须带 JSON 体 `{}`；`DELETE …/roles/:id` 须带 `{dryRun:false}`（默认只预演） | 口令由委托人在会话内给出，只走环境变量，不入库 |
 
 ## 禁止
 

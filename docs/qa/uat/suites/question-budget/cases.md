@@ -90,7 +90,7 @@
 ### 前置
 
 - UAT-BUDGET-01 已记录
-- 自造临时 Role `uat-budget-continue-role`（克隆 `demo_readonly` 的连接／表范围，工具集**额外**含 `lucy_continue_question`）、Agent `uat-budget-continue-agent`、Token（明文只留本机临时文件，不写 runs）
+- 自造临时 Role `uat-budget-continue-role-<后缀>`（后缀每跑一次更换，见 fixtures；克隆 `demo_readonly` 的连接／表范围，工具集**额外**含 `lucy_continue_question`）、Agent `uat-budget-continue-agent-<后缀>`、Token（明文只留本机临时文件，不写 runs）
 - 可与 BUDGET-02／03 共用同一问询窗：同窗从 0 计到 61，再续查
 
 ### 步骤
@@ -99,7 +99,7 @@
 2. `lucy_begin_question` 开新问询
 3. 连续 61 次计费数据工具（同 fixtures 推荐查询）；记第 21 次与第 61 次结果（兼作 BUDGET-02／03 证据）
 4. 第 61 次返回耗尽时，读返回里的 `continuable`、`continueToken`
-5. 调 `lucy_continue_question`（传入 `continueToken`）
+5. 调 `lucy_continue_question`（**参数名为 `token`**，值取自步骤 4 返回的 `continueToken`；传 `continueToken` 会返回 `{"ok":false,"reason":"mismatch"}`）
 6. 再发 1 次计费数据工具
 
 ### 期望
