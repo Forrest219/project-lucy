@@ -7,7 +7,7 @@
 | UAT-TRC-02 | span 结构完整性 | SQL | Spec SC-02 | 恰一个根 span；全部节点可达根且无环；序号连续；枚举／白名单／`reason_code` 注册表；DB `CHECK` 存在；外键与唯一键生效且既有子表写路径不被拒 |
 | UAT-TRC-03 | 同事务原子性＋合法请求结果不变 | 故障注入＋SQL | Spec SC-03；D4 | span 插入失败时行与 span 都不落库；合法请求客户端结果与注入前一致；审计写入失败计数增加；清理触发器后恢复 |
 | UAT-TRC-04 | 阶段时间一致性 | SQL | Spec SC-04 | C9a–C9d 零违规（取整容差 1 ms 固定） |
-| UAT-TRC-05 | 封存包含 `spans.csv`，与库对账 | HTTP＋文件 | Spec SC-05；D12 | 行数、sha256、截止序号与库一致（`ledger_seq` 经 JOIN）；`unsequenced` 单列；pending＝0 且 S 相等时两次导出规范化内容一致；前缀比较一致；既有文件逐字不变 |
+| UAT-TRC-05 | 封存包含 `spans.csv`，与库对账 | HTTP＋文件 | Spec SC-05；D12 | 行数、sha256、截止序号与库一致（`ledger_seq` 经 JOIN）；`unsequenced` 单列；pending＝0 且 S 相等时两次导出规范化内容一致；前缀比较一致；既有文件的既有列逐字不变（`calls-v2.csv` 仅末尾追加 D8／P1-37 列） |
 | UAT-TRC-06 | 协议、wiki 与 `tools/call` 的主状态与必有 span 集合 | SQL | Spec SC-06；E2 | 各请求类（含 `tools/call` 最小集合）必有 span 集合齐全；主状态与结果一致且不为 `unknown`；被拒＝`denied`＋`error_category=policy_denied`；旧行不变 |
 | UAT-TRC-07 | 脱敏与摘要类型 | MCP＋SQL | Spec SC-07；E5／E6 | 真实内网 IP 与 `sl_query` 错误按预期输出表脱敏，占位保留、无空串／NULL、公网 IP 等不误伤；`digest_kind` 补全（`hdfs://` 由 vitest 表覆盖，不入本用例） |
 | UAT-TRC-08 | `ip_source` 与 `trusted_source` 联合取值 | HTTP＋SQL | Spec SC-08；D8 | 两列存在且落账；四种场景联合取值正确；伪造 XFF 不改变 ACL／限流所用地址 |
@@ -131,11 +131,11 @@ UAT-R0 通过。记下当前最大 `access_log.id` 为起点 `ID0`。
 2. 校验 `spans.csv`：`wc -l`、`sha256`，与 manifest 登记一致；与库内 `access_trace_span JOIN access_log`（`access_log.ledger_seq ≤ S1`）行数一致；manifest 报出的 `unsequenced` 计数与库内 `ledger_seq IS NULL` 的所属行对应 span 数一致。导出**前**确认审计写入 pending＝0。
 3. 保持账本静止并确认 pending＝0，再导一次；记录 S2。若 `S2 ≠ S1`，本次比较**作废**并重做。比较两份 `spans.csv` 的**规范化内容**（按 `trace_id, seq` 排序后逐行）；允许 `exportId`、`exportedAt`、整包字节与 manifest 不同，但版本链字段须按 S06 关联前版。
 4. 发一轮新流量并待 pending＝0 后第三次导出（S3 > S1）；`S3` 包中 `ledger_seq ≤ S1` 的 `spans.csv` 行须与第一次逐行一致（前缀比较）。
-5. 与改前导出对比既有文件（调用流水 CSV 等）逐字相同。
+5. 与改前导出对比既有文件（调用流水 CSV 等）：既有列逐字相同；`calls-v2.csv` 仅在末尾多出 `ip_source`／`trusted_source`／`rejection_fingerprint` 三列，历史行这三列为空。
 
 ### 期望
 
-- 行数／哈希／截止序号一致；规范化内容与前缀比较一致；既有文件不变。**不要求整包字节一致。**
+- 行数／哈希／截止序号一致；规范化内容与前缀比较一致；既有文件的既有列不变。**不要求整包字节一致。**
 
 ### 清理
 

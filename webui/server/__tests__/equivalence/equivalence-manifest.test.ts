@@ -30,6 +30,9 @@ export const FINDINGS: Finding[] = [
   { id: "F-5", oracle: { kind: "golden", files: ["golden/ui-usage-overview-24h.json", "golden/ui-usage-overview-168h.json"] }, test: "ui-usage-overview.equivalence.test.ts", goldenRevision: 1 },
   { id: "F-6", oracle: { kind: "legacy", files: ["legacy/audit-as-of-proof.legacy.ts"] }, test: "audit-as-of-proof.equivalence.test.ts" },
   { id: "F-7", oracle: { kind: "legacy", files: ["legacy/inquiry-where.legacy.ts"] }, test: "inquiry-where.equivalence.test.ts" },
+  // P1-36／P1-37：封存导出文件列守卫（CR-07）。calls-v2.csv 的 golden 由追加列之前（28cad205）的实现产出；spans.csv 是新文件，冻结首个收口版本。
+  { id: "F-8", oracle: { kind: "golden", files: ["golden/audit-export-v2-calls-prefix.json"] }, test: "audit-export-v2-columns.equivalence.test.ts", goldenRevision: 1 },
+  { id: "F-9", oracle: { kind: "golden", files: ["golden/audit-export-v2-spans.json"] }, test: "audit-export-v2-columns.equivalence.test.ts", goldenRevision: 1 },
   { id: "F-yield", oracle: { kind: "sql-derived", files: [] }, test: "export-yielding.equivalence.test.ts" },
   { id: "F-idx", oracle: { kind: "sql-derived", files: [] }, test: "audit-schema-indexes.test.ts" }
 ];

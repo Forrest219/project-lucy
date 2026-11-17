@@ -71,3 +71,29 @@ export function seedAsOfScenario(db: Database.Database, n: number, seed = 7): As
   })();
   return { rows, bound };
 }
+
+/**
+ * Fixed legacy-shaped `access_log` rows (no span / ip / fingerprint data) for the export column guard.
+ * Only columns that exist in every audit schema generation are written, so the same fixture runs on the
+ * pre-P1-36 code (which produced the golden) and on current code. Includes CSV-hostile text.
+ */
+export function seedLegacyCallRows(db: Database.Database): number[] {
+  const ins = db.prepare(`INSERT INTO access_log
+    (ts, user_id, tool, outcome, lucy_session_id, lucy_turn_id, args_summary, tables, error_detail, duration_ms, request_id, decision_reason)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const hostile = ["plain", "has,comma", 'has "quote"', "multi\nline", "=SUM(A1)", "中文，逗号"];
+  const ids: number[] = [];
+  db.transaction(() => {
+    for (let i = 0; i < 6; i += 1) {
+      const info = ins.run(
+        new Date(Date.UTC(2026, 10, 10, 8, i, 0)).toISOString(), `user-${i % 2}`, i % 3 === 0 ? "lucy_catalog" : "lucy_query",
+        i % 4 === 3 ? "error" : "ok", `sess-${i % 2}`, i % 2 ? `turn-${i}` : null,
+        JSON.stringify({ q: hostile[i] }), JSON.stringify([`db.schema.t${i % 3}`]), i % 4 === 3 ? hostile[i] : null,
+        10 + i, `req-${i}`, "allowed"
+      );
+      ids.push(Number(info.lastInsertRowid));
+    }
+    db.prepare("UPDATE access_log SET ledger_seq = id").run();
+  })();
+  return ids;
+}

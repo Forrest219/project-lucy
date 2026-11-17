@@ -269,6 +269,7 @@ describe("P1-35 v0.4 source selection tolerance", () => {
     expect(out.selection?.reason).toBe("multi_hit_unconfirmed");
   });
 
+  // 委托人 2026-11-17 确权（Spec §4.1 v0.4 修订句）：never_begun 无词源命中集，连通多钉选维持档①，不披露不审计。
   it("never_begun: connected pair → plain allow; unjoined pair → tolerated", async () => {
     const connected = await gate(await session(null), {
       measures: ["orders.order_count"],

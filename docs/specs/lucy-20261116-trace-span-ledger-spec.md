@@ -14,7 +14,7 @@
 | 适用范围 | 调用流水（`access_log`）的 trace 级关联、封存导出与对账；不改任何运行代码 |
 | 实施主体 | WebUI 服务端：`webui/server/proxy/`（埋点、写入、派生）、`webui/server/admin/audit-export-v2.ts`（导出）；测试 `webui/server/__tests__/` |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」与「功能闭口与发布取证」 |
-| 与既有 Spec 的关系 | **延伸**（不改写）v0.25 审计增量 S01（主状态八桶）、S03（标识）、S05（对账）、S06（导出封存与版本链）；**不改** S07 七分类取值、不改已收口的导出文件列与顺序；与 [P1-37](lucy-20261116-mcp-ux-resilience-spec.md) 共用阶段枚举与**理由码登记表**（§5.4，登记权在本 Spec）；与 P1-32／P1-33 的等价守卫 [`UAT-SUITE-EQUIV-GUARD`](../qa/uat/suites/audit-scale-equivalence-guard/suite.md) 同改动面，须一并跑 |
+| 与既有 Spec 的关系 | **延伸**（不改写）v0.25 审计增量 S01（主状态八桶）、S03（标识）、S05（对账）、S06（导出封存与版本链）；**不改** S07 七分类取值、不改已收口的导出文件的既有列与顺序（`calls-v2.csv` 只允许在**末尾追加** additive 列：D8 的 `ip_source`／`trusted_source` 与 [P1-37](lucy-20261116-mcp-ux-resilience-spec.md) 的 `rejection_fingerprint`；追加不改既有列取值，历史行追加列为空）；与 [P1-37](lucy-20261116-mcp-ux-resilience-spec.md) 共用阶段枚举与**理由码登记表**（§5.4，登记权在本 Spec）；与 P1-32／P1-33 的等价守卫 [`UAT-SUITE-EQUIV-GUARD`](../qa/uat/suites/audit-scale-equivalence-guard/suite.md) 同改动面，须一并跑 |
 | 实施计划 | [`docs/plans/lucy-20261116-trace-span-ledger-plan.md`](../plans/lucy-20261116-trace-span-ledger-plan.md) |
 | 测试台 | [`UAT-SUITE-TRACE-LEDGER`](../qa/uat/suites/trace-span-ledger/suite.md)（INDEX：NOT RUN） |
 | 输出位置 | `docs/specs/lucy-20261116-trace-span-ledger-spec.md` |
@@ -23,6 +23,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v1.0 CR-07 确权 | 2026-11-17 委托人确权：`calls-v2.csv` 末尾追加 `ip_source`／`trusted_source`／`rejection_fingerprint` 属 D8／P1-37 允许的 additive 变化，批准豁免；第 17 行与豁免条款由「列与顺序不改」改为「既有列与顺序不改、仅末尾追加」；等价守卫登记 F-8（`calls-v2.csv` 既有列，golden 由追加前 `28cad205` 的实现产出）与 F-9（`spans.csv` 冻结首版） |
 | v1.0 复核修订 | 2026-11-17 代码审查后的实现对齐，不改合同：manifest `derivationVersion` 取现行派生版本 `v2p5-2`（D7，与 `spanCoverage.version` 一致）；基础导出路径的 `spans.unsequenced` 与 pack 路径同口径计数（不再硬编码 0；仍为被排除 span 数，与 `spanCoverage.unsequenced` 的行数量纲不同）；Trace ID／Trace Span 并入术语标准 §4.7；`redactStorageDetail` 补 `scheme://user:password@host` 口令段；TRC-11 事件环度量改为先锚点再补尾（Node 直方图首个回调只作锚点），脚本默认规模降为 2 万条、10 万条须显式 `--traces 100000` |
 | v1.0 | 2026-11-17 **终稿确权（委托人授权代理修正后定稿，免 Codex 终审；≠ 开发授权）**：O1–O8 全部闭合（O6 冻结为每 trace span 表＋索引平均 ≤ 8 KB、平均 span 数协议 ≤ 6／业务 ≤ 14，span 与父行同寿命、不新增清理；O2／O7／O8 取建议值）；`session_shortcircuit` 注明为 P1-37 U3b 预留。R3 修订**未经第 4 轮复审**，为已知缺口。|
 | v0.4-draft | 2026-11-17 对抗性审阅 R3（终轮；GPT 5.6 子代理，**非 Codex CLI**；8 条，逐项状态见评审记录）修订：§5.4 理由码注册表 v1 冻结为 17 项粗粒度码＋全函数映射（原始 `decision_reason` 留旧列与 `reason_param`，DB `CHECK`）；`sl_query` 脱敏 UAT 改为「基线能用合法入参真实触发才入 UAT，否则 vitest」；D8 补 `X-Real-IP` 分类修正；C9c 墙钟锚定（`v2p5-2` 行 `ts` 与根终点同读数）；`attrs_json` 按 UTF-8 字节＋`json_valid`；`foreign_keys` 由 admin 状态接口读服务连接值；O1 去掉已冻结的 20 ms。总账出口同步改为「已落库行」。|
@@ -47,7 +48,7 @@ New terms: **调用链路 ID**（Trace ID；调用流水列 `trace_id` 的展示
 ## 交互合同豁免
 
 - 原因：本条只改服务端写入、派生与导出文件，不改变用户可见 WebUI 表面（WebUI 页面、组件、按钮、文案与布局）。
-- 不改变：页面路由与组件；调用流水页、问询记录页的既有列与筛选；既有导出文件的列、顺序与文本（新增文件不替换旧文件）。
+- 不改变：页面路由与组件；调用流水页、问询记录页的既有列与筛选；既有导出文件的既有列、顺序与文本（新增文件不替换旧文件；`calls-v2.csv` 仅在末尾追加上述三列，由等价守卫 F-8 冻结既有列）。
 
 ## 1. 背景与证据
 
@@ -108,7 +109,7 @@ New terms: **调用链路 ID**（Trace ID；调用流水列 `trace_id` 的展示
 | D9 | 审计库存储侧脱敏：`error_detail` 写入前去除内网地址（IPv4／IPv6／带端口）、`hdfs://` 等存储路径、内部工具名 `sl_query`，**替换为带类别的占位（`[REDACTED_ADDR]`／`[REDACTED_PATH]`／`[REDACTED_TOOL]`），保留稳定原因码与非敏感上下文；禁止用空串／NULL 代替**。**脱敏范围**：内网＝RFC1918（`10/8`、`172.16/12`、`192.168/16`）、回环（`127/8`、`::1`）、链路本地（`169.254/16`、`fe80::/10`）、ULA（`fc00::/7`）；**公网 IP、版本号、时间戳、端口样式串保持原样**。规则集中在写入前的单一函数，复用既有 `redactAuditText` 链 | E5；不依赖客户端文案修复（后者属 P1-37）；防止「全删」作弊 |
 | D10 | `digest_kind` 补全：`lucy_query` 的 SQL 摘要标 `sql`；`wiki_search` 的检索文本摘要标 `search_text` | E6 |
 | D11 | **保留与清理**：现状 `access_log` 无清理任务；本条**不引入**清理。span 与行的一致性由 §5.1 的外键级联保证；`access_log` 另有多个无 CASCADE 的子表，若日后引入保留清理，必须在**单事务内先删全部子表（含 span）、后删父表**，或把相关外键统一改为级联，按同一截止集执行，不得留下孤儿。**O6 已冻结（定稿决策，见 §9）**：span 与父行同寿命、不设更短保留期；容量门槛为每 trace 体积与平均 span 数（SC-11） | 存档完整性；不把未经证明的容量写成事实 |
-| D12 | 封存导出（v2）**新增** `spans.csv`，manifest 登记行数、sha256、`ledgerUpperSeq`；不替换既有文件 | 向后兼容 |
+| D12 | 封存导出（v2）**新增** `spans.csv`，manifest 登记行数、sha256、`ledgerUpperSeq`；不替换既有文件；`calls-v2.csv` 追加列只在末尾（见 D8），既有列字节不变 | 向后兼容 |
 | D13 | 理由码登记（§5.4，v1 已冻结 17 项）：`reason_code` 是粗粒度有限集合，原始 `decision_reason` 保留在旧列与 `reason_param`；**新增取值只能先改 §5.4 并升版本**，P1-37 的 `session_lost`／`session_shortcircuit` 已在册；登记不等于实现授权 | 两个 Spec 不各自解释同一个词表 |
 
 ## 5. 数据模型
@@ -297,14 +298,14 @@ reconcile(cutoff_seq):
 | SC-02 | 每个 trace 恰一个根 span；全部节点可达根且无环；`parent.seq<child.seq`、`seq` 连续；阶段在枚举内；`attrs` 键在白名单内；`reason_code` 在有限注册表内（未知值 FAIL）；列约束由 DB `CHECK` 保证；真实流量 `attrs.dropped` 恒为 0；32 上限与 `truncated` 汇总（31＋1、`dropped` 计算）由 vitest 契约覆盖；外键与唯一键生效（`foreign_keys=ON`），既有子表写路径不被拒 | `UAT-TRC-02`＋vitest |
 | SC-03 | 原子性：对 span 插入注入失败，行与 span **都不落库**（无孤儿）；客户端响应与注入前一致、不新增失败形态；审计写入失败计数增加；清除注入后恢复 | `UAT-TRC-03` |
 | SC-04 | 时间一致性（C9a–C9d，取整容差 1 ms 固定；根终点与行 `duration_ms` 同一读数） | `UAT-TRC-04` |
-| SC-05 | 封存包含 `spans.csv`；行数、sha256、截止序号与库一致（`ledger_seq` 经 JOIN 所属行；`unsequenced` 单列上报）；审计写入 pending＝0 且 S 相等时两次导出规范化内容一致，前缀比较一致；既有文件不变 | `UAT-TRC-05` |
+| SC-05 | 封存包含 `spans.csv`；行数、sha256、截止序号与库一致（`ledger_seq` 经 JOIN 所属行；`unsequenced` 单列上报）；审计写入 pending＝0 且 S 相等时两次导出规范化内容一致，前缀比较一致；既有文件的既有列不变（`calls-v2.csv` 仅末尾追加 D8／P1-37 列） | `UAT-TRC-05` |
 | SC-06 | 新版本写入的协议、wiki 与其他 `tools/call` 行：必有 span 集合齐全（§6.2，含 `tools/call` 最小集合），`primary_status` 与最终结果一致且不为 `unknown`；被拒为 `denied`＋`error_category=policy_denied`；旧行不变且 `derivation_version` 仍为 `v2p5-1` | `UAT-TRC-06` |
 | SC-07 | `error_detail` 对固定输入按预期输出表脱敏（占位保留、无空串／NULL、无误伤：公网 IPv4／IPv6、版本号、时间戳、端口样式串保持原样）；`digest_kind` 补全。**`hdfs://` 等存储路径的脱敏由 vitest 契约表覆盖（纯字符串函数），不入必做 UAT**（需 hive／hdfs 环境，见 O8）；UAT 用真实内网 IP 连接错误验证脱敏函数确实接在写入路径上；`[REDACTED_TOOL]`（`sl_query`）仅当基线跑次能用**合法入参**触发含 `sl_query` 的真实上游错误时才入 UAT，否则降为 vitest（缺 `measures` 的入参会被 `validateLucyToolArgs()` 本地拦截，错误不含 `sl_query`，不得用作夹具） | `UAT-TRC-07`＋vitest |
 | SC-08 | **两列均存在且落账**；`ip_source` 与 `trusted_source` 在五种场景（默认、可信代理 XFF、`X-Real-IP`、不可信对端伪造 XFF、不可信对端伪造 `X-Real-IP`）下联合取值正确；默认配置下明示为 `socket`；不可信对端分别伪造 `X-Forwarded-For` 与 `X-Real-IP` 都不得被标为 `customer`／`trusted_proxy`；UAT 记录伪造头对 ACL／限流地址的现状（既有风险，不在本条修） | `UAT-TRC-08` |
 | SC-09 | 热路径开销：`lucy_query` P95 相对写入前基线增量 ≤ 5 ms；`initialize` P95 增量 ≤ 3 ms（建议值，见 O1）；合法请求成功率不降 | `UAT-TRC-09` |
 | SC-10 | 给定 `trace_id` 可还原请求→阶段→结果→导出行（至少抽：合法查询、协议、本地处理、拒绝、上游失败各一条）；给定会话可列出全部 trace | `UAT-TRC-10` |
 | SC-11 | 容量：沙箱审计库扩到 10 万 trace，导出与对账不撞 SQLite 变量上限，`/api/livez` p99 ≤ 400 ms、max ≤ 1000 ms；索引与库体积不超过 O6 冻结的预算（每 trace 的 span 表＋索引平均 ≤ 8 KB；平均 span 数：协议类 ≤ 6、业务类 ≤ 14）（每 trace 的 span 表＋索引平均 ≤ 8 KB；平均 span 数：协议类 ≤ 6、业务类 ≤ 14） | `UAT-TRC-11`（**必做**）＋`UAT-SUITE-PAGE-SWEEP` |
-| SC-12 | 等价守卫：既有导出文件逐字等价；`spans.csv` 登记入册 | `UAT-SUITE-EQUIV-GUARD`（UAT-EQ-01／02） |
+| SC-12 | 等价守卫：既有导出文件的既有列逐字等价（`calls-v2.csv` 去掉末尾追加列后与 P1-36 之前一致，golden F-8）；`spans.csv` 登记入册（golden F-9） | `UAT-SUITE-EQUIV-GUARD`（UAT-EQ-01／02） |
 
 ## 8. 主路径可用性自检（DEVELOPMENT 四问）
 

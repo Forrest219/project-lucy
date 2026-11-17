@@ -152,7 +152,7 @@ Forbidden:
 
 **词源 vs 健康（Normative）**：`never_begun` 只决定「不读旅程文本 → hits 为空」；**不**等于「目录健康＝ok」。健康裁定必须在构造空 hits **之前或并行、且独立于 hits** 完成；健康失败时禁止进入 D1 allow。
 
-**v0.4 修订（D10–D12）**：第 5–8 步改为按 §4.5 三档裁决；第 1–4 步（BindingSession、健康、unresolved）为**硬线，不变**；`never_begun` 且 **无任何钉选**（`keys.length==0`）仍 `context_missing`（请求本身未显式，不属选表歧义容错）。
+**v0.4 修订（D10–D12）**：第 5–8 步改为按 §4.5 三档裁决；第 1–4 步（BindingSession、健康、unresolved）为**硬线，不变**；`never_begun` 且 **无任何钉选**（`keys.length==0`）仍 `context_missing`（请求本身未显式，不属选表歧义容错）。**`never_begun`＋多钉选（词源命中集为空＝无可比对象，视作无歧义）且已声明 join 连通＝档①，不披露、不写审计——委托人 2026-11-17 确权维持**：无业务词则「未经确认」无参照，披露的 `termHits` 恒空；若记为 tolerated 会以无歧义的正常查询稀释 D14 的容错率度量；硬线先于本条裁决。若日后要观察「未 begin 的连通多表」，另立只记审计、不进响应的计数，须另行授权。
 
 ### 4.2 伪代码
 
@@ -340,4 +340,4 @@ D1 allow **只**解除本门闩。随后仍须：
 | v0.4-draft | 2026-11-16 夜｜全真复核 ce8610f7（ESC-07／08 FAIL）；委托人以「分析师群体通用性」升 v2 必做，并批准方向 B＋容错披露三档（选表歧义降为披露＋审计；披露载体＝响应字段；审计只记录）；新增 D10–D15、§4.5 支持矩阵、SC-E20–E30、O3；SC-E02／E05／E10／E14 修订；**待 Codex 终审与开发授权** |
 | v0.4 | 2026-11-16 夜｜委托人明示免 Codex 终审、授权定稿与开发；O3 闭合（上限 4／传递连通／`sourceSelection`／`schema_version` 不升）；D12 补读 overlay＋manifest 两处 join 且排除 candidate、对端无 yaml 亦连通；D13 仅 `lucy_query` 带披露；D14 存储＝JSONL；SC-E23／E30 夹具按 demo 实测修正 |
 | v0.4 实现 | 2026-11-16 夜｜按授权实现：`source-join-graph.ts`／`source-selection-tolerance.ts` 新增；门闩 keys≥1 走三档；`argsReferencesIdentity` 删除；`sourceSelection` 披露＋`tolerated-events.jsonl` 审计；跨连接／超上限拒绝 message 直写下一步；ASK_FIRST／data-qa-instructions 改「放行并披露」；UAT 夹具 `uat_sag_*`／`demo-mysql-b` 用后已还原；ESCAPE v0.4 跑次 PASS（观察：KTX 对未连通多来源必拒，M6 披露不可达，取证靠审计）；D13 `status` 固定 `tolerated` |
-| v0.4 复核修订 | 2026-11-17｜代码审查（[P1-35／36／37 审查记录](../reviews/2026-11-17-p1-35-p1-36-p1-37-code-review.md)）后的文字与实现对齐，不改 D10–D15 决策：SC-E06 标注 v0.4 修订（never_begun＋多钉选按三档，与 §4.1 修订句／M2／M12 一致）；D12 补节点身份＝完整 Source Identity；§4.4 argsShape 的度量存在性按候选真实度量名核验（生产探针不再用通配）；Terminology Compliance 补登「放行并披露」「集外钉选」「未连通的多来源」；运行时指导与 `lucy_begin_question` 描述补列「无来源限定引用」拦截面，上限引用 `SOURCE_COUNT_CAP` |
+| v0.4 复核修订 | 2026-11-17｜代码审查（[P1-35／36／37 审查记录](../reviews/2026-11-17-p1-35-p1-36-p1-37-code-review.md)）后的文字与实现对齐，不改 D10–D15 决策：SC-E06 标注 v0.4 修订（never_begun＋多钉选按三档，与 §4.1 修订句／M2／M12 一致）；D12 补节点身份＝完整 Source Identity；§4.4 argsShape 的度量存在性按候选真实度量名核验（生产探针不再用通配）；Terminology Compliance 补登「放行并披露」「集外钉选」「未连通的多来源」；运行时指导与 `lucy_begin_question` 描述补列「无来源限定引用」拦截面，上限引用 `SOURCE_COUNT_CAP`；委托人 2026-11-17 确权 CR-01：`never_begun`＋连通多钉选维持档①（见 §4.1 v0.4 修订句） |
