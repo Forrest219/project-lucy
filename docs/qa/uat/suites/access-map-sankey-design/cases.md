@@ -2,7 +2,7 @@
 
 | ID | 标题 | profile | 层级 | 自动化指针 | 期望摘要 | 关联 SC |
 |---|---|---|---|---|---|---|
-| UAT-SANKEY-R0 | 沙箱与种子数据门禁 | 全部 | 脚本＋API | `webui/scripts/uat-access-map-sankey-sandbox.mts`（`SANKEY_EMIT=1`） | 沙箱起得来；`/api/admin/access-map` 数字等于 [fixtures 期望值](fixtures.md#期望值) | SC-A7 |
+| UAT-SANKEY-R0 | 沙箱与种子数据门禁 | 全部 | 脚本＋API | `scripts/uat/sankey-docker/run-uat.mjs`（R0；沙箱备选 `webui/scripts/uat-access-map-sankey-sandbox.mts`） | 沙箱起得来；`/api/admin/access-map` 数字等于 [fixtures 期望值](fixtures.md#期望值) | SC-A7 |
 | UAT-SANKEY-01 | 使用桑基可读 | `rich` | 浏览器＋API | `webui/src/__tests__/access-map-usage-first.test.tsx` | 四列；使用流带 ≥ 20 条、柱高 > 0；四态齐全；`deniedCalls=2` 不进访问路径 | SC-A7 |
 | UAT-SANKEY-02 | 零访问仍是桑基 | `grants-only` | 浏览器 | `webui/src/__tests__/access-map-sankey-restoration.test.tsx` | 表列存在；每个连接有可见带；不是文字或发丝线 | SC-B1 |
 | UAT-SANKEY-03 | 宽授权不淹没使用、也不消失 | `sparse` | 浏览器 | `webui/src/__tests__/access-map.test.tsx` | 使用带可读；闲置授权以聚合节点＋幽灵带可见；图例四项 | SC-B2–B6 |

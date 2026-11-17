@@ -5,7 +5,7 @@
 | 日期 | 2026-11-17 |
 | 标签 | `viz-geometry` `empty-default` `data-trust` `gate-gap` `sev-med` |
 | 环境 | 线上 `http://10.69.95.109:8276`（`lucyVersion=0.25.0`、`gitSha=6d2664b3`）；沙箱旧码 `6d2664b3`／HEAD `65f40847` |
-| 相关 | [Spec](../specs/lucy-20261117-access-map-sankey-restoration-spec.md)（v0.2，已实现并提交）· [测试台](../qa/uat/suites/access-map-sankey-design/suite.md)（沙箱 PASS WITH GAP，线上 07 BLOCKED）· 前序错题 [2026-11-13-access-map-sankey-empty](2026-11-13-access-map-sankey-empty.md) |
+| 相关 | [Spec](../specs/lucy-20261117-access-map-sankey-restoration-spec.md)（v0.2，已实现并提交）· [测试台](../qa/uat/suites/access-map-sankey-design/suite.md)（Docker 种子容器全真 PASS WITH GAP，线上 07 BLOCKED）· 前序错题 [2026-11-13-access-map-sankey-empty](2026-11-13-access-map-sankey-empty.md) |
 | 状态 | `open`（修复已提交；线上未升级、未核对） |
 
 ## 1. 症状与影响
@@ -53,7 +53,7 @@
 | 委托人裁定 D0（设计意图编码哪一版，推荐 C） | 已完成 | D0＝C，2026-11-17 |
 | 线上核对（登录后跑 SANKEY-07，或取线上 Agent 数与关联分布） | 未开 | 需委托人给登录或自行登录；升级另行授权 |
 | 线上升级到含 `e2ca2ca7` 的版本 | 未开 | 发布线待裁定（Spec Q2）；≠ 开发授权 |
-| 按 Spec Track A／B 实现 | 已完成（已提交） | 授权不含线上升级；沙箱 PASS WITH GAP 见 restoration run |
+| 按 Spec Track A／B 实现 | 已完成（已提交） | 授权不含线上升级；Docker 全真 PASS WITH GAP 见 docker-seeded run |
 
 ## 7. 证据指针
 

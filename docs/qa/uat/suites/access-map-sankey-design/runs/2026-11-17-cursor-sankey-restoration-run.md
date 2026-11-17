@@ -7,7 +7,7 @@
 | 性质 | **改后沙箱复验**。目标：Spec v0.2（D0＝C）已实现并提交，在同一批确定性种子上重跑 R0／01～05，对照 [改前基线](2026-11-17-cursor-sankey-probe-baseline.md) |
 | 环境 | 宿主隔离沙箱（关闭鉴权，不碰 demo 容器与 `lucy-demo-data`）；前端为工作树 `vite build` 产物；五个 profile 各一个端口（58201–58205） |
 | 线上实例 | 未触碰（`gitSha=6d2664b3`，未升级，无凭据） |
-| 总判定 | **PASS WITH GAP（沙箱范围：必做 R0／01～05 与可选 06；沙箱是降级环境，01／03／05 仅沙箱；02／04 已在 demo Docker 复验）；07 BLOCKED**。**≠ UAT 对线上通过；≠ 可上线** |
+| 总判定 | **沙箱范围 PASS**（必做 R0／01～05 与可选 06）；沙箱是降级环境，设计用例的 Docker 全真执行见 [docker-seeded-run](2026-11-17-cursor-sankey-docker-seeded-run.md)（PASS WITH GAP，仅 06 沿用基线、07 BLOCKED）。**≠ UAT 对线上通过；≠ 可上线** |
 
 | Case ID | 结果 | 证据摘要 |
 |---|---|---|

@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | v0.2 / 2026-11-17 |
-| 状态 | **v0.2，开发授权已获得；功能已实现并提交（2026-11-17）**。沙箱测试台必做 R0／01～05 PASS WITH GAP（沙箱降级），07 线上 BLOCKED。Spec 见 [lucy-20261117-access-map-sankey-restoration-spec.md](../specs/lucy-20261117-access-map-sankey-restoration-spec.md) v0.2。**≠ 可上线** |
+| 状态 | **v0.2，开发授权已获得；功能已实现并提交（2026-11-17）**。沙箱测试台Docker 种子容器全真必做 R0／01～05 PASS WITH GAP（06 沿用基线），07 线上 BLOCKED。Spec 见 [lucy-20261117-access-map-sankey-restoration-spec.md](../specs/lucy-20261117-access-map-sankey-restoration-spec.md) v0.2。**≠ 可上线** |
 | 授权边界 | 委托人 2026-11-17「批准方案 C，授权定稿开发」。授权范围：Spec §9 所列 A2、A3 与 Track B 方案 C。**不授权**线上升级、出包、改 `include_candidate`、提交 git。 |
 | 验收 | Spec §7 SC-A2–A7、SC-B1–B6 逐条有证据；测试台 `UAT-SUITE-ACCESS-MAP-SANKEY` 必做用例沙箱全绿；`npx vitest run src/__tests__/access-map server/__tests__/p1-access-map` 只剩既有的术语 lint 失败。**不构成发布取证** |
 | 目标 | 让访问关系图在零访问、多 Agent、全未确认、宽授权四种数据下仍是四列带状流的桑基，并披露被排除的未确认调用 |

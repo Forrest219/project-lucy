@@ -93,3 +93,15 @@ cd /tmp/lucy-sankey/old-src/webui && npx vite build --outDir /tmp/lucy-sankey/di
 - 把线上实例或 demo 的密码、token 写入本树
 - 用沙箱结果替代 SANKEY-07 的线上判定
 - 放开 `trust=include_candidate`
+
+## Docker 全真执行（设计用例的默认路径）
+
+每个 profile 一个一次性容器，同一镜像 `project-lucy:demo`，数据目录由夹具生成并挂到 `/data/lucy`；不碰 demo 容器与 `lucy-demo-data`。
+
+```bash
+bash scripts/uat/sankey-docker/up.sh        # 生成种子、起 5 个容器（58301–58305），约 60 秒 healthy
+node scripts/uat/sankey-docker/run-uat.mjs  # 按 cases.md 执行 R0／01～05，输出 JSON，截图写入 runs/evidence/
+bash scripts/uat/sankey-docker/down.sh      # 删容器与 /tmp/lucy-sankey-docker
+```
+
+端口：grants-only 58301、rich 58302、sparse 58303、candidate-only 58304、dense 58305。降级项：容器以 `development`＋`LUCY_WEBUI_AUTH=off` 启动，种子连接指向 `sandbox.invalid`。
