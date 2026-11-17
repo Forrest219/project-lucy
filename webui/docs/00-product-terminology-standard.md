@@ -878,6 +878,9 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Grant Path | 授权路径 | — | 权限、授权项、访问路径 | 去重 `(Agent, Role, Connection, Schema, Table)` 存在性实例 |
 | Access Path | 访问路径 | — | 调用次数、请求数 | 窗口内至少一次允许调用的去重 `(Agent, Role, Connection, Schema, Table)` 路径 |
 | Dormant Grant | 闲置授权 | 有权未用 | 僵尸授权；未使用权限；闲置资源 | 授权路径数 > 0 且访问路径数 = 0 |
+| Idle Grant Aggregate | 闲置授权 · {k} 张表 | — | 逐表铺开闲置表；闲置资源；僵尸授权 | 访问关系图表列里每个连接（或 Schema）至多一个聚合节点，收纳其下窗口内无任何访问路径的表；访问面不可用时不出现。见 `docs/specs/lucy-20261117-access-map-sankey-restoration-spec.md` |
+| Ghost Band Legend | 虚线轮廓 = 闲置授权（示意宽度，封顶，不与实心带同尺度） | — | 流带宽度 = 授权路径数；骨干；空心 | 访问关系图图例第 2 项；幽灵带宽度是示意量，不参与使用刻度 |
+| Unconfirmed Calls Disclosure | 窗口内另有 {N} 次调用因问询关联未确认，未计入本图（口径：已确认关联） | 对照访问日志（链接文案） | 可调整筛选后再看（在 N>0 时）；越权；异常 | 访问关系图空态说明；{N} 来自 `meta.access.unconfirmedCalls`，只读披露，不放开 `include_candidate` |
 | Needs-review Signal | 需复核信号 | 需复核 | 越权（无调用当时快照证据时） | 当前授权无对应路径但历史有允许访问；快照缺失不得升级结论 |
 | Credential List | 凭证清单 | Token 清单 | 权限节点、凭证流 | 挂在 Agent 下的 Token 附属区，不承载授权、不参与流守恒 |
 | Association Scope | 关联口径 | 关联口径：已确认关联（静态披露） | **问询计入**；把「含候选关联」当作访问关系图可切换筛选项 | 访问关系图对 `trust`／`association_status` 的口径披露；固定已确认关联，只影响访问面。主筛选为问询种类／访问等级。见 `docs/specs/lucy-20261105-access-map-confirmed-only-spec.md`（废止可切换含候选） |

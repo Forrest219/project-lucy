@@ -3,7 +3,7 @@
  *
  * Authority: usage-first Spec v0.4.2 Terminology Compliance
  *   流带宽度 = 访问路径数
- *   闲置授权 = 端点细空心示意（不撑柱／不进列）
+ *   虚线轮廓 = 闲置授权（示意宽度，封顶，不与实心带同尺度）——桑基还原 Spec D0＝C
  *   虚线 = 需复核；实线 = 确凿越权
  *
  * Forbidden：授权路径宽度主释义；深色内核主释义。
@@ -29,10 +29,10 @@ export function AccessMapLegend() {
       </span>
       <span className="flex items-center gap-1">
         <span
-          className="inline-block h-2 w-6 border border-fg-muted bg-transparent"
+          className="inline-block h-2 w-6 border border-dashed border-fg-muted bg-fg-muted/10"
           aria-hidden="true"
         />
-        闲置授权 = 端点示意／无访问时的连通骨干（不撑使用刻度）
+        虚线轮廓 = 闲置授权（示意宽度，封顶，不与实心带同尺度）
       </span>
       <span className="flex items-center gap-1">
         <span

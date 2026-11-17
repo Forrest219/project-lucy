@@ -16,6 +16,9 @@
  *   §5.4  四态面积流带；按对端 y 分槽；计量厚度与命中区解耦
  *   §5.5  列间距与横向滚动；§5.6 着色 token；§5.7 与 quiet-reading §5.3 的关系
  *
+ * 桑基还原（D0＝C）: `docs/specs/lucy-20261117-access-map-sankey-restoration-spec.md`
+ *   使用带不变；授权余量画成虚线轮廓幽灵带；闲置表聚合为每连接一个「闲置授权 · k 张表」。
+ *
  * 前序呈现: `docs/specs/lucy-20261030-access-map-quiet-reading-spec.md`
  *   §5.3  流带着色（僵尸授权流带回到中性；需复核 warning 虚线；确凿越权 danger 实线）
  *   §5.5  边明细进右侧抽屉；Esc 先关抽屉
@@ -81,12 +84,21 @@ export const NODE_GAP = 16;
 /** 透明命中区的最小厚度（**只用于命中**，不参与计量）。 */
 export const MIN_HIT_PX = 8;
 /**
- * 闲置授权端点示意厚度（usage-first Spec §5.4）。
- * 不进柱高／不进列密度；锁定稿值 ∈[2,4]。
+ * 使用流带每条路径的最小计量厚度（Spec lucy-20261117-access-map-sankey-restoration D2）。
+ * 列太满时画布增高并纵向滚动，**不再**把刻度压向 0。
  */
-export const IDLE_GRANT_PX = 3;
-/** 空访问闲置骨干厚度（= IDLE_GRANT_PX；不进 usage 刻度）。 */
-export const BACKBONE_PX = IDLE_GRANT_PX;
+export const UNIT_MIN = 2;
+/**
+ * 幽灵层（闲置授权，方案 C）：示意厚度 = clamp(余量 × GHOST_UNIT, GHOST_MIN, GHOST_MAX)。
+ * 与 `unitPx` 无关，不进使用刻度，不与实心带同尺度。
+ */
+export const GHOST_UNIT = 0.5;
+export const GHOST_MIN = 6;
+export const GHOST_MAX = 40;
+/** 闲置授权聚合节点 id 前缀：`idle-agg:<父节点 id>`。 */
+export const IDLE_AGGREGATE_PREFIX = "idle-agg:";
+/** 图区纵向滚动上限：超出即在容器内滚动。 */
+export const ACCESS_MAP_PLOT_MAX_HEIGHT = "clamp(480px, 78vh, 960px)";
 /**
  * 列间距必须大于卡片宽度，否则流带通道会压到下一列的卡片上。
  *
@@ -170,6 +182,11 @@ export type AccessMapLayoutNode = {
   labelBox: Box;
   /** 外标块（名称 + 副标题 + 状态）。 */
   labelBlock: AccessMapLabelBlock;
+  /**
+   * 幽灵区高度：紧贴柱体下方，容纳该节点的闲置授权余量带（虚线轮廓）。
+   * `height` 仍只表示使用柱高；纯闲置节点 `height=0`、`ghostHeight>0`。
+   */
+  ghostHeight: number;
 };
 
 /** 一条边在某根柱上占用的槽位（相对柱顶）。 */
@@ -227,25 +244,24 @@ export type AccessMapLayoutLink = {
   targetSlot: AccessMapBandSlot;
   /** 透明命中 path（厚度 ≥ `MIN_HIT_PX`，不参与计量）。 */
   hitPaths: string[];
-  /** usage = 访问流带；backbone = 空访问闲置骨干（不进刻度）。 */
-  layer?: "usage" | "backbone";
+  /** usage = 访问流带；ghost = 闲置授权余量（示意厚度，不进刻度）。 */
+  layer?: "usage" | "ghost";
 };
 
-/** 闲置授权端点细空心示意（不撑柱）。 */
-export type AccessMapIdleStub = {
+/** 闲置授权聚合节点：每个父节点（连接）一个，收纳其下无访问的表。 */
+export type AccessMapIdleAggregate = {
   nodeId: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  idleEdges: AccessMapEdge[];
+  parentId: string;
+  tableIds: string[];
+  /** 父节点到各闲置表的真实边（点击聚合节点后的清单行）。 */
+  tableEdges: AccessMapEdge[];
 };
 
 export type AccessMapLayout = {
   nodes: AccessMapLayoutNode[];
   links: AccessMapLayoutLink[];
-  /** 闲置端点示意（fill=none；不进 pillarHeight）。 */
-  idleStubs: AccessMapIdleStub[];
+  /** 闲置授权聚合节点（已同时出现在 `nodes` 里）。 */
+  idleAggregates: AccessMapIdleAggregate[];
   columns: AccessMapLayoutColumn[];
   width: number;
   /** SVG 高度（= contentHeight）。 */
@@ -276,6 +292,82 @@ function isIdleGrantEdge(edge: AccessMapEdge): boolean {
 
 function isUsageEdge(edge: AccessMapEdge): boolean {
   return edge.accessPaths > 0;
+}
+
+export function isIdleAggregateId(id: string): boolean {
+  return id.startsWith(IDLE_AGGREGATE_PREFIX);
+}
+
+/** 授权余量（路径数）：访问面不可用时全部授权都算余量，且不称「闲置」。 */
+function ghostPathsOf(edge: AccessMapEdge, accessOk: boolean): number {
+  if (!accessOk) return Math.max(0, edge.grantPaths);
+  return Math.max(0, edge.grantPaths - edge.accessPaths);
+}
+
+/** 幽灵带示意厚度：与 unitPx 无关，封顶。 */
+export function ghostThickness(idlePaths: number): number {
+  return Math.min(GHOST_MAX, Math.max(GHOST_MIN, idlePaths * GHOST_UNIT));
+}
+
+/**
+ * 闲置授权聚合：每个父节点（连接／schema）一个，收纳其下**零访问**的表。
+ * 数表按未折叠全量图（census）；缺省退回传入图，此时「其他（n）」折叠节点按成员数计。
+ */
+function deriveIdleAggregates(
+  census: { nodes: AccessMapNode[]; edges: AccessMapEdge[] }
+): Array<{ node: AccessMapNode; edge: AccessMapEdge; aggregate: AccessMapIdleAggregate }> {
+  const byId = new Map(census.nodes.map((node) => [node.id, node]));
+  const groups = new Map<string, { tableIds: string[]; edges: AccessMapEdge[] }>();
+  // 「零访问」按入边判定：任一入边有访问路径，该表就是使用表。
+  const usedTargets = new Set(
+    census.edges.filter((edge) => edge.accessPaths > 0).map((edge) => edge.target)
+  );
+  for (const edge of census.edges) {
+    if (edge.grantPaths <= 0) continue;
+    const table = byId.get(edge.target);
+    const parent = byId.get(edge.source);
+    if (!table || table.kind !== "table" || !parent) continue;
+    if (parent.kind === "table" || parent.kind === "token") continue;
+    if (usedTargets.has(table.id)) continue;
+    const group = groups.get(parent.id) ?? { tableIds: [], edges: [] };
+    group.tableIds.push(...(table.meta.foldedMemberIds ?? [table.id]));
+    group.edges.push(edge);
+    groups.set(parent.id, group);
+  }
+  const out: Array<{ node: AccessMapNode; edge: AccessMapEdge; aggregate: AccessMapIdleAggregate }> = [];
+  for (const [parentId, group] of groups) {
+    const parent = byId.get(parentId) as AccessMapNode;
+    const nodeId = `${IDLE_AGGREGATE_PREFIX}${parentId}`;
+    const grantPaths = group.edges.reduce((sum, edge) => sum + edge.grantPaths, 0);
+    const node: AccessMapNode = {
+      id: nodeId,
+      kind: "table",
+      label: `闲置授权 · ${group.tableIds.length} 张表`,
+      depth: parent.depth + 1,
+      parentId,
+      meta: { grantPaths, accessPaths: 0, accessUsers: 0, idleTableIds: group.tableIds }
+    };
+    const edge: AccessMapEdge = {
+      id: `e|${parentId}|${nodeId}`,
+      source: parentId,
+      target: nodeId,
+      grantPaths,
+      grantUsers: Math.max(...group.edges.map((item) => item.grantUsers)),
+      accessPaths: 0,
+      accessUsers: 0,
+      accessCalls: 0,
+      state: "dormant",
+      confirmedUnauthorized: false,
+      reviewEvaluations: [],
+      snapshotCoverage: { reviewPaths: 0, matched: 0, missingOrInvalid: 0, ratio: 0 }
+    };
+    out.push({
+      node,
+      edge,
+      aggregate: { nodeId, parentId, tableIds: group.tableIds, tableEdges: group.edges }
+    });
+  }
+  return out.sort((a, b) => a.node.id.localeCompare(b.node.id));
 }
 
 /**
@@ -430,8 +522,13 @@ function measureLabel(node: AccessMapNode, statusState: AccessMapEdgeState | nul
 /** 布局可选项。`maxPxPerPath` 只用于「刻度封顶」的对照实验与测试。 */
 export type AccessMapLayoutOptions = {
   maxPxPerPath?: number;
-  /** 访问面是否可用；false 时仅闲置示意（§5.6）。 */
+  /** 访问面是否可用；false 时只画授权余量，不声称「闲置」。 */
   accessOk?: boolean;
+  /**
+   * 未折叠的全量图。闲置授权聚合按它计数；缺省退回传入的节点与边。
+   * 渲染图里闲置表可能已并入「其他（n）」，不能用它数表。
+   */
+  census?: { nodes: AccessMapNode[]; edges: AccessMapEdge[] };
 };
 
 type NodeBox = {
@@ -440,7 +537,10 @@ type NodeBox = {
   nodeIndex: number;
   x: number;
   y: number;
+  /** 使用柱高（= max(入, 出) × unitPx）。 */
   pillarHeight: number;
+  /** 柱体下方的幽灵区高度。 */
+  ghostHeight: number;
   measure: LabelMeasure;
 };
 
@@ -463,7 +563,24 @@ export function layoutAccessMap(
 ): AccessMapLayout {
   const maxPxPerPath = options?.maxPxPerPath ?? MAX_PX_PER_PATH;
   const accessOk = options?.accessOk ?? true;
-  const flowNodes = selectAccessMapCanvasNodes(nodes, edges, accessOk);
+  const selected = selectAccessMapCanvasNodes(nodes, edges, accessOk);
+  const derived = accessOk
+    ? deriveIdleAggregates(options?.census ?? { nodes, edges })
+    : [];
+  // 父节点若因零使用未被选中（其下闲置表在渲染图里已折叠），补上作为闲置端点。
+  const renderById = new Map(nodes.map((node) => [node.id, node]));
+  const selectedIds = new Set(selected.map((node) => node.id));
+  const extraParents: AccessMapNode[] = [];
+  for (const item of derived) {
+    const parent = renderById.get(item.aggregate.parentId);
+    if (parent && !selectedIds.has(parent.id)) {
+      selectedIds.add(parent.id);
+      extraParents.push(parent);
+    }
+  }
+  const aggregates = derived.filter((item) => selectedIds.has(item.aggregate.parentId));
+  const flowNodes = [...selected, ...extraParents, ...aggregates.map((item) => item.node)];
+  const allEdges = [...edges, ...aggregates.map((item) => item.edge)];
   const usageNodeIds = new Set(
     flowNodes.filter((node) => (node.meta.accessPaths ?? 0) > 0).map((node) => node.id)
   );
@@ -506,10 +623,24 @@ export function layoutAccessMap(
 
   // 只保留两端都落在图上的边；使用流带仅 accessPaths>0（且 accessOk）。
   const placedIds = new Set(flowNodes.map((node) => node.id));
-  const activeEdges = edges.filter(
+  const activeEdges = allEdges.filter(
     (edge) => placedIds.has(edge.source) && placedIds.has(edge.target)
   );
   const usageEdges = accessOk ? activeEdges.filter(isUsageEdge) : [];
+  // 幽灵层：授权余量（示意厚度），每条边一条带；不进 unitPx。
+  const ghostEdges = activeEdges.filter((edge) => ghostPathsOf(edge, accessOk) > 0);
+  const ghostPx = new Map(
+    ghostEdges.map((edge) => [edge.id, ghostThickness(ghostPathsOf(edge, accessOk))])
+  );
+  const ghostOut = new Map<string, number>();
+  const ghostIn = new Map<string, number>();
+  for (const edge of ghostEdges) {
+    const t = ghostPx.get(edge.id) as number;
+    ghostOut.set(edge.source, (ghostOut.get(edge.source) ?? 0) + t);
+    ghostIn.set(edge.target, (ghostIn.get(edge.target) ?? 0) + t);
+  }
+  const ghostHeightOf = (node: AccessMapNode): number =>
+    Math.max(ghostOut.get(node.id) ?? 0, ghostIn.get(node.id) ?? 0);
 
   // 柱高 = max(入槽, 出槽) 使用厚度；闲置 stub 不进。
   const outSum = new Map<string, number>();
@@ -565,7 +696,7 @@ export function layoutAccessMap(
   });
   const finiteUnits = rawUnits.filter((value) => Number.isFinite(value));
   const rawUnit = finiteUnits.length > 0 ? Math.min(...finiteUnits) : maxPxPerPath;
-  let unitPx = Math.min(rawUnit, maxPxPerPath);
+  let unitPx = Math.max(UNIT_MIN, Math.min(rawUnit, maxPxPerPath));
 
   /**
    * 按给定刻度做一次完整布局（含标签避碰迭代）。
@@ -576,6 +707,7 @@ export function layoutAccessMap(
     columnHeights: number[];
     labelTops: Map<string, number>;
     maxColumnHeight: number;
+    usageMaxColumnHeight: number;
   } {
     // extra[列][节点]：为了给标签块腾出避让空间而在该节点**之前**插入的额外高度。
     const extra: number[][] = columns.map((column) => column.map(() => 0));
@@ -583,6 +715,7 @@ export function layoutAccessMap(
     let links: AccessMapLayoutLink[] = [];
     let labelTops = new Map<string, number>();
     let columnHeights: number[] = [];
+    let usageColumnHeights: number[] = [];
 
     // 标签避碰是迭代求解：把标签块往上挪需要空间，空间不够就把该节点的
     // 整块内容往下挪（`extra`），再重算流带。收敛是几何级数的（每轮缺口
@@ -592,26 +725,25 @@ export function layoutAccessMap(
       // ① 步进与柱位置。
       boxes = new Map<string, NodeBox>();
       const heights: number[] = [];
+      const usageHeights: number[] = [];
       columns.forEach((column, columnIndex) => {
         const isMiddle = columnIndex > 0 && columnIndex < columns.length - 1;
         let cursor = contentTop;
+        let usageCursor = contentTop;
         column.forEach((node, nodeIndex) => {
           const measure = measures.get(node.id) as LabelMeasure;
-          let pillarHeight = flowOfNode(node) * currentUnit;
-          if (!accessOk) {
-            pillarHeight = Math.min(IDLE_GRANT_PX, Math.max(pillarHeight, IDLE_GRANT_PX));
-          } else if (pillarHeight <= 0 && !usageNodeIds.has(node.id)) {
-            // 空桑基修复：闲置端点给骨干附着地板，不进 usage 刻度分母。
-            pillarHeight = BACKBONE_PX;
-          }
+          const pillarHeight = flowOfNode(node) * currentUnit;
+          const ghostHeight = ghostHeightOf(node);
+          const bodyHeight = pillarHeight + ghostHeight;
           cursor += extra[columnIndex][nodeIndex] ?? 0;
+          usageCursor += extra[columnIndex][nodeIndex] ?? 0;
           let y: number;
           if (isMiddle) {
             // 中间列：标签块在柱**上方**。
             y = cursor + measure.height + LABEL_PILLAR_GAP;
           } else {
             // 首 / 末列：标签块在柱侧面，柱体在步进单元里居中。
-            y = cursor + (Math.max(pillarHeight, measure.height) - pillarHeight) / 2;
+            y = cursor + (Math.max(bodyHeight, measure.height) - bodyHeight) / 2;
           }
           boxes.set(node.id, {
             node,
@@ -620,24 +752,24 @@ export function layoutAccessMap(
             x: columnX[columnIndex] as number,
             y,
             pillarHeight,
+            ghostHeight,
             measure
           });
           cursor = isMiddle
-            ? cursor + measure.height + LABEL_PILLAR_GAP + pillarHeight + NODE_GAP
-            : cursor + Math.max(pillarHeight, measure.height) + NODE_GAP;
+            ? cursor + measure.height + LABEL_PILLAR_GAP + bodyHeight + NODE_GAP
+            : cursor + Math.max(bodyHeight, measure.height) + NODE_GAP;
+          // 刻度回缩只看使用几何：幽灵区不得改变使用刻度（SC-B3）。
+          usageCursor = isMiddle
+            ? usageCursor + measure.height + LABEL_PILLAR_GAP + pillarHeight + NODE_GAP
+            : usageCursor + Math.max(pillarHeight, measure.height) + NODE_GAP;
         });
         heights.push(cursor - contentTop - NODE_GAP);
+        usageHeights.push(usageCursor - contentTop - NODE_GAP);
       });
 
-      // ② 槽位与面积流带（使用边）＋空访问闲置骨干（两端均在画布的 idle 边）。
+      // ② 槽位与面积流带（使用边）＋幽灵带（授权余量；画在使用带下层）。
       const built = buildBands(boxes, currentUnit, usageEdges);
-      const backboneEdges = accessOk
-        ? activeEdges.filter(
-            (edge) =>
-              isIdleGrantEdge(edge) && boxes.has(edge.source) && boxes.has(edge.target)
-          )
-        : [];
-      links = [...built.links, ...buildBackboneBands(boxes, backboneEdges)];
+      links = [...built.links, ...buildGhostBands(boxes, ghostEdges)];
 
       // ③ 标签避碰：中间列的标签块必须整块落在流带上下缘之上。
       let changed = false;
@@ -668,10 +800,12 @@ export function layoutAccessMap(
       if (!changed) {
         labelTops = nextLabelTops;
         columnHeights = heights;
+        usageColumnHeights = usageHeights;
         break;
       }
       labelTops = nextLabelTops;
       columnHeights = heights;
+      usageColumnHeights = usageHeights;
     }
 
     return {
@@ -679,15 +813,17 @@ export function layoutAccessMap(
       links,
       columnHeights,
       labelTops,
-      maxColumnHeight: columnHeights.length > 0 ? Math.max(...columnHeights) : 0
+      maxColumnHeight: columnHeights.length > 0 ? Math.max(...columnHeights) : 0,
+      usageMaxColumnHeight:
+        usageColumnHeights.length > 0 ? Math.max(...usageColumnHeights) : 0
     };
   }
 
   let built = build(unitPx);
-  // 密度预算：实测列高超预算就按比例回缩刻度（**不放宽** MAX_PX_PER_PATH）。
+  // 密度预算：使用几何超预算就按比例回缩刻度，但不低于 UNIT_MIN（超出则画布增高滚动）。
   for (let i = 0; i < 8; i += 1) {
-    if (built.maxColumnHeight <= usableForUnit + 0.5) break;
-    unitPx = unitPx * (usableForUnit / built.maxColumnHeight);
+    if (built.usageMaxColumnHeight <= usableForUnit + 0.5 || unitPx <= UNIT_MIN) break;
+    unitPx = Math.max(UNIT_MIN, unitPx * (usableForUnit / built.usageMaxColumnHeight));
     built = build(unitPx);
   }
 
@@ -705,14 +841,14 @@ export function layoutAccessMap(
     } else if (box.columnIndex === 0) {
       labelBox = {
         x: box.x - LABEL_GAP - measure.width,
-        y: box.y + (box.pillarHeight - measure.height) / 2,
+        y: box.y + (box.pillarHeight + box.ghostHeight - measure.height) / 2,
         width: measure.width,
         height: measure.height
       };
     } else {
       labelBox = {
         x: box.x + PILLAR_WIDTH + LABEL_GAP,
-        y: box.y + (box.pillarHeight - measure.height) / 2,
+        y: box.y + (box.pillarHeight + box.ghostHeight - measure.height) / 2,
         width: measure.width,
         height: measure.height
       };
@@ -723,6 +859,7 @@ export function layoutAccessMap(
       y: box.y,
       width: PILLAR_WIDTH,
       height: box.pillarHeight,
+      ghostHeight: box.ghostHeight,
       label: measure.name,
       labelBox,
       labelBlock: {
@@ -744,37 +881,10 @@ export function layoutAccessMap(
     contentTop + PADDING
   );
 
-  // §5.4：闲置出边的目标表可能不进列；stub 只要求源端点在画布上。
-  const idleBySource = new Map<string, AccessMapEdge[]>();
-  for (const edge of edges) {
-    if (!placedIds.has(edge.source)) continue;
-    if (accessOk) {
-      if (!isIdleGrantEdge(edge)) continue;
-    } else if (edge.grantPaths <= 0) {
-      continue;
-    }
-    const list = idleBySource.get(edge.source) ?? [];
-    list.push(edge);
-    idleBySource.set(edge.source, list);
-  }
-  const idleStubs: AccessMapIdleStub[] = [];
-  for (const [nodeId, idleEdges] of idleBySource) {
-    const box = boxes.get(nodeId);
-    if (!box) continue;
-    idleStubs.push({
-      nodeId,
-      x: box.x + PILLAR_WIDTH,
-      y: box.y + Math.max(0, box.pillarHeight - IDLE_GRANT_PX),
-      width: Math.max(12, ACCESS_MAP_COLUMN_GAP * 0.08),
-      height: IDLE_GRANT_PX,
-      idleEdges
-    });
-  }
-
   return {
     nodes: placed,
     links,
-    idleStubs,
+    idleAggregates: aggregates.map((item) => item.aggregate),
     columns: columns.map((column, index) => ({
       depth: depths[index] as number,
       kind: column[0]?.kind ?? "table",
@@ -934,24 +1044,60 @@ export function layoutAccessMap(
     return { links };
   }
 
-  /** 空访问闲置骨干：固定 BACKBONE_PX，不进 unitPx／usage 槽位。 */
-  function buildBackboneBands(
+  /**
+   * 幽灵带：每条授权余量一条，贴在柱体下方的幽灵区里。
+   * 厚度是示意值（封顶、独立于 unitPx）；出入槽位各自从幽灵区顶端累加。
+   */
+  function buildGhostBands(
     nodeBoxes: Map<string, NodeBox>,
     scopedEdges: AccessMapEdge[]
   ): AccessMapLayoutLink[] {
+    const orderOf = (edge: AccessMapEdge, mode: "out" | "in") => {
+      const counterpartId = mode === "out" ? edge.target : edge.source;
+      return { y: nodeBoxes.get(counterpartId)?.y ?? 0, id: counterpartId };
+    };
+    const outgoing = new Map<string, AccessMapEdge[]>();
+    const incoming = new Map<string, AccessMapEdge[]>();
+    for (const edge of scopedEdges) {
+      outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge]);
+      incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge]);
+    }
+    const slotOf = (
+      groups: Map<string, AccessMapEdge[]>,
+      mode: "out" | "in"
+    ): Map<string, AccessMapBandSlot> => {
+      const slots = new Map<string, AccessMapBandSlot>();
+      for (const list of groups.values()) {
+        list.sort((a, b) => {
+          const oa = orderOf(a, mode);
+          const ob = orderOf(b, mode);
+          return oa.y - ob.y || oa.id.localeCompare(ob.id);
+        });
+        let cursor = 0;
+        list.forEach((edge, index) => {
+          const height = ghostPx.get(edge.id) as number;
+          slots.set(edge.id, { top: cursor, height, index });
+          cursor += height;
+        });
+      }
+      return slots;
+    };
+    const sourceSlot = slotOf(outgoing, "out");
+    const targetSlot = slotOf(incoming, "in");
+
     const links: AccessMapLayoutLink[] = [];
     for (const edge of scopedEdges) {
       const source = nodeBoxes.get(edge.source);
       const target = nodeBoxes.get(edge.target);
-      if (!source || !target) continue;
-      const thickness = BACKBONE_PX;
-      const srcSlot: AccessMapBandSlot = { top: 0, height: thickness, index: 0 };
-      const tgtSlot: AccessMapBandSlot = { top: 0, height: thickness, index: 0 };
+      const srcSlot = sourceSlot.get(edge.id);
+      const tgtSlot = targetSlot.get(edge.id);
+      if (!source || !target || !srcSlot || !tgtSlot) continue;
+      const thickness = ghostPx.get(edge.id) as number;
       const x0 = source.x + PILLAR_WIDTH;
       const x1 = target.x;
       const gap = x1 - x0;
-      const y0 = source.y + source.pillarHeight / 2;
-      const y1 = target.y + target.pillarHeight / 2;
+      const y0 = source.y + source.pillarHeight + srcSlot.top + thickness / 2;
+      const y1 = target.y + target.pillarHeight + tgtSlot.top + thickness / 2;
       const curve: [Point, Point, Point, Point] = [
         { x: x0, y: y0 },
         { x: x0 + gap / 3, y: y0 },
@@ -973,8 +1119,7 @@ export function layoutAccessMap(
         topAligned: true,
         curve
       };
-      const hitThickness = Math.max(thickness, MIN_HIT_PX);
-      const hitHalf = hitThickness / 2;
+      const hitHalf = Math.max(thickness, MIN_HIT_PX) / 2;
       links.push({
         edge,
         path: band.path,
@@ -992,7 +1137,7 @@ export function layoutAccessMap(
         sourceSlot: srcSlot,
         targetSlot: tgtSlot,
         hitPaths: [areaPath(offsetCurve(curve, -hitHalf), offsetCurve(curve, hitHalf))],
-        layer: "backbone"
+        layer: "ghost"
       });
     }
     return links;
@@ -1005,7 +1150,7 @@ export function layoutAccessMap(
     if (!previousNode) return contentTop - LABEL_MARGIN;
     const previousBox = allBoxes.get(previousNode.id);
     if (!previousBox) return contentTop - LABEL_MARGIN;
-    return previousBox.y + previousBox.pillarHeight;
+    return previousBox.y + previousBox.pillarHeight + previousBox.ghostHeight;
   }
 
   /**
@@ -1341,17 +1486,17 @@ export type AccessMapCanvasProps = {
  * 里以极慢的原生 tooltip 出现、不能换行、样式不受控，读者读不到「这条边是
  * 什么状态」。所以这里另起一个 HTML 浮层，`<title>` 保留作为无障碍补充。
  */
+type AccessMapIdleTip = {
+  kind: "idle-stub";
+  nodeLabel: string;
+  idleCount: number;
+  grantPaths: number;
+};
+
 type AccessMapHoverTip =
   | { kind: "node"; node: AccessMapNode; x: number; y: number }
   | { kind: "edge"; edge: AccessMapEdge; x: number; y: number }
-  | {
-      kind: "idle-stub";
-      nodeLabel: string;
-      idleCount: number;
-      grantPaths: number;
-      x: number;
-      y: number;
-    };
+  | (AccessMapIdleTip & { x: number; y: number });
 
 export function AccessMapCanvas({
   nodes,
@@ -1364,12 +1509,28 @@ export function AccessMapCanvas({
   summary,
   accessOk = true
 }: AccessMapCanvasProps) {
-  const layout = useMemo(
-    () => layoutAccessMap(nodes, edges, { accessOk }),
-    [nodes, edges, accessOk]
-  );
   const populationNodes = censusNodes ?? nodes;
   const populationEdges = censusEdges ?? edges;
+  const layout = useMemo(
+    () =>
+      layoutAccessMap(nodes, edges, {
+        accessOk,
+        census: { nodes: populationNodes, edges: populationEdges }
+      }),
+    [nodes, edges, accessOk, populationNodes, populationEdges]
+  );
+  /** 绘制顺序：幽灵带在下，使用带在上（layout.links 里使用带在前，便于按 id 先命中使用带）。 */
+  const paintOrderedLinks = useMemo(
+    () => [
+      ...layout.links.filter((link) => link.layer === "ghost"),
+      ...layout.links.filter((link) => link.layer !== "ghost")
+    ],
+    [layout.links]
+  );
+  const aggregateByNodeId = useMemo(
+    () => new Map(layout.idleAggregates.map((item) => [item.nodeId, item])),
+    [layout.idleAggregates]
+  );
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [pinnedNodeId, setPinnedNodeId] = useState<string | null>(null);
   /** Esc 之后，指针还停在节点上时不再用悬停把高亮补回来，直到离开再进入。 */
@@ -1383,9 +1544,28 @@ export function AccessMapCanvas({
 
   /** 边的两端用**节点名**呈现；找不到就退回原始 id，不出现空白。 */
   const labelOfNode = useMemo(() => {
-    const byId = new Map(nodes.map((node) => [node.id, node.label]));
+    const byId = new Map<string, string>();
+    for (const node of populationNodes) byId.set(node.id, node.label);
+    for (const node of nodes) byId.set(node.id, node.label);
+    for (const item of layout.nodes) byId.set(item.node.id, item.node.label);
     return (nodeId: string): string => byId.get(nodeId) ?? nodeId;
-  }, [nodes]);
+  }, [nodes, populationNodes, layout.nodes]);
+  /** 打开某个闲置授权聚合节点的表清单。 */
+  const openIdleList = (nodeId: string): void => {
+    const aggregate = aggregateByNodeId.get(nodeId);
+    if (!aggregate) return;
+    setIdleList({ nodeLabel: labelOfNode(aggregate.parentId), edges: aggregate.tableEdges });
+  };
+  /** 幽灵带悬停：「N 条」＝余量路径数；聚合边则是闲置表数。 */
+  const ghostTipOf = (edge: AccessMapEdge): AccessMapIdleTip => {
+    const aggregate = aggregateByNodeId.get(edge.target);
+    return {
+      kind: "idle-stub",
+      nodeLabel: labelOfNode(edge.source),
+      idleCount: aggregate ? aggregate.tableIds.length : ghostPathsOf(edge, accessOk),
+      grantPaths: edge.grantPaths
+    };
+  };
 
   const pinnedNode = useMemo(
     () => nodes.find((node) => node.id === pinnedNodeId) ?? null,
@@ -1569,7 +1749,11 @@ export function AccessMapCanvas({
       </div>
 
       {/* 图区横向滚动：不缩小 SVG，也不做窄屏重排。 */}
-      <div className="overflow-x-auto" data-testid="access-map-plot-scroll">
+      <div
+        className="overflow-auto"
+        data-testid="access-map-plot-scroll"
+        style={{ maxHeight: ACCESS_MAP_PLOT_MAX_HEIGHT }}
+      >
         <svg
           role="img"
           aria-label={summary}
@@ -1580,49 +1764,71 @@ export function AccessMapCanvas({
           className="block"
           onClick={() => setPinnedNodeId(null)}
         >
-          {layout.links.map((link) => {
+          {paintOrderedLinks.map((link) => {
             const onChain = chain ? chain.edges.has(link.edge.id) : false;
             const faded = Boolean(chain) && !onChain;
+            const isGhost = link.layer === "ghost";
+            const isAggregateEdge = isIdleAggregateId(link.edge.target);
             return (
               <g
-                key={link.edge.id}
-                data-testid={`access-map-link-${link.edge.id}`}
+                key={`${link.layer ?? "usage"}|${link.edge.id}`}
+                data-testid={
+                  isGhost
+                    ? `access-map-ghost-link-${link.edge.id}`
+                    : `access-map-link-${link.edge.id}`
+                }
+                data-layer={link.layer ?? "usage"}
                 data-chain={chain ? (onChain ? "on" : "off") : undefined}
                 onClick={(event) => {
                   event.stopPropagation();
-                  setSelectedEdgeId(link.edge.id);
+                  if (isAggregateEdge) openIdleList(link.edge.target);
+                  else setSelectedEdgeId(link.edge.id);
                 }}
                 onMouseEnter={(event) =>
-                  setHoverTip({
-                    kind: "edge",
-                    edge: link.edge,
-                    ...tipPosition(event.clientX, event.clientY)
-                  })
+                  setHoverTip(
+                    isGhost
+                      ? { ...ghostTipOf(link.edge), ...tipPosition(event.clientX, event.clientY) }
+                      : {
+                          kind: "edge",
+                          edge: link.edge,
+                          ...tipPosition(event.clientX, event.clientY)
+                        }
+                  )
                 }
                 onMouseLeave={() => setHoverTip(null)}
               >
                 {/*
                   主视觉：**填充面积**（授权面积，或需复核的独立警示面积）。
-                  不是「一条超粗描边」——描边无法表达厚度，也没法做虚线中线。
+                  幽灵带（授权余量）：虚线轮廓＋极淡填充，示意厚度，不与实心带同尺度。
                 */}
                 {link.band ? (
                   <path
                     d={link.band.path}
                     className={
-                      link.layer === "backbone"
-                        ? `fill-none stroke-fg-muted ${faded ? "opacity-10" : onChain ? "opacity-50" : "opacity-35"}`
+                      isGhost
+                        ? `fill-fg-muted stroke-fg-muted ${faded ? "opacity-30" : ""}`
                         : `${bandFillClass(link.edge)} ${faded ? "opacity-10" : onChain ? "opacity-60" : "opacity-30"}`
                     }
-                    strokeWidth={link.layer === "backbone" ? 1.25 : undefined}
+                    fillOpacity={isGhost ? 0.1 : undefined}
+                    strokeOpacity={isGhost ? 0.55 : undefined}
+                    strokeWidth={isGhost ? 1 : undefined}
+                    strokeDasharray={isGhost ? "4 3" : undefined}
                     data-testid={
-                      link.layer === "backbone"
-                        ? `access-map-backbone-${link.edge.id}`
+                      isGhost
+                        ? `access-map-ghost-${link.edge.id}`
                         : `access-map-ribbon-${link.edge.id}`
                     }
-                    onClick={() => setSelectedEdgeId(link.edge.id)}
+                    onClick={() => {
+                      if (isAggregateEdge) openIdleList(link.edge.target);
+                      else setSelectedEdgeId(link.edge.id);
+                    }}
                     style={{ cursor: "pointer" }}
                   >
-                    <title>{accessMapEdgeTitleText(link.edge, accessOk, labelOfNode)}</title>
+                    <title>
+                      {isGhost
+                        ? `${labelOfNode(link.edge.source)} → ${accessOk ? "闲置授权" : "授权"}（示意宽度）`
+                        : accessMapEdgeTitleText(link.edge, accessOk, labelOfNode)}
+                    </title>
                   </path>
                 ) : null}
                 {/* 需复核：虚线中线（状态不只靠颜色区分）。 */}
@@ -1658,54 +1864,14 @@ export function AccessMapCanvas({
                     stroke="transparent"
                     strokeWidth={0}
                     pointerEvents="all"
-                    data-testid={`access-map-hit-${link.edge.id}-${index}`}
-                    onClick={() => setSelectedEdgeId(link.edge.id)}
+                    data-testid={`access-map-${isGhost ? "ghost-" : ""}hit-${link.edge.id}-${index}`}
+                    onClick={() => {
+                      if (isAggregateEdge) openIdleList(link.edge.target);
+                      else setSelectedEdgeId(link.edge.id);
+                    }}
                     style={{ cursor: "pointer" }}
                   />
                 ))}
-              </g>
-            );
-          })}
-          {layout.idleStubs.map((stub) => {
-            const sourceNode = nodes.find((node) => node.id === stub.nodeId);
-            const grantSum = stub.idleEdges.reduce((sum, edge) => sum + edge.grantPaths, 0);
-            return (
-              <g
-                key={`idle-stub-${stub.nodeId}`}
-                data-testid={`access-map-idle-stub-${stub.nodeId}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIdleList({
-                    nodeLabel: sourceNode?.label ?? stub.nodeId,
-                    edges: stub.idleEdges
-                  });
-                }}
-                onMouseEnter={(event) =>
-                  setHoverTip({
-                    kind: "idle-stub",
-                    nodeLabel: sourceNode?.label ?? stub.nodeId,
-                    idleCount: stub.idleEdges.length,
-                    grantPaths: grantSum,
-                    ...tipPosition(event.clientX, event.clientY)
-                  })
-                }
-                onMouseLeave={() => setHoverTip(null)}
-                style={{ cursor: "pointer" }}
-              >
-                <title>
-                  {`${sourceNode?.label ?? stub.nodeId} → 闲置授权 ${stub.idleEdges.length} 条`}
-                </title>
-                <rect
-                  x={stub.x}
-                  y={stub.y}
-                  width={stub.width}
-                  height={stub.height}
-                  fill="none"
-                  className="stroke-fg-muted"
-                  strokeWidth={1}
-                  data-testid={`access-map-idle-stub-shape-${stub.nodeId}`}
-                  data-grant-sum={grantSum}
-                />
               </g>
             );
           })}
@@ -1718,7 +1884,9 @@ export function AccessMapCanvas({
             const dimmed = Boolean(chain) && !onChain;
             const block = item.labelBlock;
             const hitWidth = Math.max(PILLAR_WIDTH, MIN_HIT_PX);
-            const hitHeight = Math.max(item.height, MIN_HIT_PX);
+            const bodyHeight = item.height + item.ghostHeight;
+            const hitHeight = Math.max(bodyHeight, MIN_HIT_PX);
+            const aggregate = aggregateByNodeId.get(node.id);
             return (
               <g
                 key={node.id}
@@ -1731,9 +1899,20 @@ export function AccessMapCanvas({
                 onClick={(event) => {
                   event.stopPropagation();
                   if (!clickable) return;
-                  pinNode(node.id);
+                  if (aggregate) openIdleList(node.id);
+                  else pinNode(node.id);
                 }}
                 onMouseEnter={(event) => {
+                  if (aggregate) {
+                    setHoverTip({
+                      kind: "idle-stub",
+                      nodeLabel: labelOfNode(aggregate.parentId),
+                      idleCount: aggregate.tableIds.length,
+                      grantPaths: node.meta.grantPaths ?? 0,
+                      ...tipPosition(event.clientX, event.clientY)
+                    });
+                    return;
+                  }
                   if (clickable) previewNode(node.id);
                   setHoverTip({ kind: "node", node, ...tipPosition(event.clientX, event.clientY) });
                 }}
@@ -1742,19 +1921,39 @@ export function AccessMapCanvas({
               >
                 {/* 全名留在 `<title>`：外标里的名称过长时会省略。 */}
                 <title>
-                  {`${node.label} · ${accessMapNodeSubtitle(node)}`}
+                  {aggregate
+                    ? `${node.label} · 授权路径 ${node.meta.grantPaths ?? 0} 条（示意，点击查看清单）`
+                    : `${node.label} · ${accessMapNodeSubtitle(node)}`}
                 </title>
-                <rect
-                  x={item.x}
-                  y={item.y}
-                  width={item.width}
-                  height={item.height}
-                  rx={3}
-                  className={`${nodeFillClass(node)} ${isPinned || isFocus ? "opacity-100" : "opacity-80"} ${
-                    isPinned || isFocus ? "stroke-brand" : ""
-                  }`}
-                  strokeWidth={isPinned || isFocus ? 2 : 0}
-                />
+                {item.height > 0 ? (
+                  <rect
+                    x={item.x}
+                    y={item.y}
+                    width={item.width}
+                    height={item.height}
+                    rx={3}
+                    className={`${nodeFillClass(node)} ${isPinned || isFocus ? "opacity-100" : "opacity-80"} ${
+                      isPinned || isFocus ? "stroke-brand" : ""
+                    }`}
+                    strokeWidth={isPinned || isFocus ? 2 : 0}
+                  />
+                ) : null}
+                {/* 幽灵区：柱体下方的虚线轮廓，容纳授权余量带（示意，不计量）。 */}
+                {item.ghostHeight > 0 ? (
+                  <rect
+                    x={item.x}
+                    y={item.y + item.height}
+                    width={item.width}
+                    height={item.ghostHeight}
+                    rx={3}
+                    className="fill-fg-muted stroke-fg-muted"
+                    fillOpacity={0.08}
+                    strokeOpacity={0.55}
+                    strokeWidth={1}
+                    strokeDasharray="3 2"
+                    data-testid={`access-map-ghost-zone-${node.id}`}
+                  />
+                ) : null}
                 {/* 透明命中扩展：细柱也要好点。名字在柱外，点击落在整组上。 */}
                 <rect
                   x={item.x - (hitWidth - item.width) / 2}
@@ -1804,7 +2003,7 @@ export function AccessMapCanvas({
           ) : hoverTip.kind === "idle-stub" ? (
             <>
               <div className="font-medium notranslate" translate="no">
-                {hoverTip.nodeLabel} → 闲置授权 {hoverTip.idleCount} 条
+                {hoverTip.nodeLabel} → {accessOk ? "闲置授权" : "授权"} {hoverTip.idleCount} 条
               </div>
               <div className="text-fg-muted">
                 {accessOk ? "有授权，窗口内未调用" : ACCESS_MAP_HOVER_ACCESS_UNAVAILABLE_CONCLUSION}
@@ -1886,14 +2085,21 @@ export function AccessMapCanvas({
               disabled={Boolean(item.node.meta.unresolved)}
               onClick={() => {
                 if (item.node.meta.unresolved) return;
-                pinNode(item.node.id);
+                if (aggregateByNodeId.has(item.node.id)) openIdleList(item.node.id);
+                else pinNode(item.node.id);
               }}
-              onMouseEnter={() => previewNode(item.node.id)}
+              onMouseEnter={() => {
+                if (!aggregateByNodeId.has(item.node.id)) previewNode(item.node.id);
+              }}
               onMouseLeave={leaveNode}
               data-testid={`access-map-node-button-${item.node.id}`}
             >
               {item.node.label}
-              <span className="ml-1 text-fg-muted">{accessMapNodeSubtitle(item.node)}</span>
+              <span className="ml-1 text-fg-muted">
+                {aggregateByNodeId.has(item.node.id)
+                  ? `授权路径 ${item.node.meta.grantPaths ?? 0} 条`
+                  : accessMapNodeSubtitle(item.node)}
+              </span>
             </button>
           </li>
         ))}
@@ -1907,8 +2113,10 @@ export function AccessMapCanvas({
       */}
       {(() => {
         const badgeEdges = [
-          ...layout.links.filter((link) => link.edge.state !== "normal").map((link) => link.edge),
-          ...layout.idleStubs.flatMap((stub) => stub.idleEdges)
+          ...layout.links
+            .filter((link) => link.edge.state !== "normal" && !isIdleAggregateId(link.edge.target))
+            .map((link) => link.edge),
+          ...layout.idleAggregates.flatMap((item) => item.tableEdges)
         ];
         const seen = new Set<string>();
         const unique = badgeEdges.filter((edge) => {

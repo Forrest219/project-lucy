@@ -17,6 +17,7 @@
 | `UAT-CONN-RELOAD-*` | 连接热重载用例 |
 | `UAT-SCAN-*` | 库内扫表用例 |
 | `UAT-ACCESS-MAP-*` | 访问关系图／空桑基用例 |
+| `UAT-SANKEY-*` | 访问关系图桑基还原（P1-41；零访问／宽授权／未确认关联／多 Agent 的可控种子数据；含 `UAT-SANKEY-R0`） |
 | `UAT-PERF-*` | Roles／Agent 页性能体感用例 |
 | `UAT-LOOP-*` | 重读路径与存活探针（P1-21 事故看守） |
 | `UAT-COPY-*` | 复制按钮假成功看守（P1-40 错题看守：明文 HTTP 下「已复制」但剪贴板未写入） |

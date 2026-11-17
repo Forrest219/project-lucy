@@ -72,6 +72,7 @@ import {
   ACCESS_MAP_DEFAULT_ACCESS_GRADE,
   ACCESS_MAP_DEFAULT_INQUIRY_KIND,
   buildBandED,
+  countUnconfirmedCalls,
   defaultEnsureInquiryRebuild,
   isAccessGradeFilterParam,
   isInquiryKindFilterParam,
@@ -521,6 +522,8 @@ export type AccessMapAccessSide =
       loadSnapshot: (hash: string) => AccessMapPermissionSnapshot | null;
       /** 结构筛选前 \|D\|；缺省时由 buildAccessLayer 从 rows 推导。 */
       deniedCalls?: number;
+      /** 关联未确认的去重调用数（A3 只读披露）；缺省视为 0。 */
+      unconfirmedCalls?: number;
       echo?: AccessMapEchoMeta;
     }
   | { state: "unavailable"; reason: string };
@@ -1231,6 +1234,11 @@ function attachCredentialList(input: {
 
 export const NODE_BUDGET = 150;
 export const EDGE_BUDGET = 400;
+/**
+ * 每列可见节点上限（Spec lucy-20261117-access-map-sankey-restoration D3）。
+ * 超出的节点并入同层「其他（n）」，受害序与预算折叠一致：使用最少者先折。
+ */
+export const COLUMN_NODE_CAP = 24;
 
 export type AccessMapGraph = {
   nodes: InternalNode[];
@@ -1261,7 +1269,7 @@ function foldVictimWeight(node: InternalNode): number {
  */
 export function foldAccessMapGraph(
   graph: AccessMapGraph,
-  budgets: { nodeBudget: number; edgeBudget: number } = {
+  budgets: { nodeBudget: number; edgeBudget: number; columnNodeCap?: number } = {
     nodeBudget: NODE_BUDGET,
     edgeBudget: EDGE_BUDGET
   }
@@ -1298,6 +1306,31 @@ export function foldAccessMapGraph(
       if (edge.source === victim.id || edge.target === victim.id) {
         keptEdges.delete(id);
         foldedEdges += 1;
+      }
+    }
+  }
+
+  // D3：每列可见节点上限。受害序＝最少 accessPaths → grantPaths 升序 → id（同列同深度）。
+  const columnCap = budgets.columnNodeCap ?? COLUMN_NODE_CAP;
+  const depths = new Set([...kept.values()].map((node) => node.depth));
+  for (const depth of depths) {
+    const column = [...kept.values()]
+      .filter((node) => node.depth === depth && node.kind !== "token")
+      .sort(
+        (a, b) =>
+          foldVictimWeight(a) - foldVictimWeight(b) ||
+          a.grantPaths - b.grantPaths ||
+          a.id.localeCompare(b.id)
+      );
+    for (let index = 0; index < column.length - columnCap; index += 1) {
+      const victim = column[index] as InternalNode;
+      kept.delete(victim.id);
+      foldedNodes += 1;
+      for (const [id, edge] of [...keptEdges]) {
+        if (edge.source === victim.id || edge.target === victim.id) {
+          keptEdges.delete(id);
+          foldedEdges += 1;
+        }
       }
     }
   }
@@ -1624,6 +1657,8 @@ export type AccessMapMeta = {
     trust: AccessMapTrust;
     deniedCalls: number;
     rawCalls: number;
+    /** 窗口内关联未确认、因此未计入本图的去重调用数（只读披露）。 */
+    unconfirmedCalls: number;
     reason?: string;
   };
   /** Spec 20261102：投影集合 E 的结构筛选前计数。 */
@@ -1784,6 +1819,7 @@ export async function buildAccessMap(
   let accessReason = "授权面不可用，未评估访问层";
   let deniedCalls = 0;
   let rawCalls = 0;
+  let unconfirmedCalls = 0;
   let echoMeta: AccessMapEchoMeta | undefined;
   let keptGrantRefs: GrantPathRef[] = [];
   let keptAccessRefs: AccessPathRef[] = [];
@@ -1830,6 +1866,7 @@ export async function buildAccessMap(
       // SC-14：不得因「只返回 E」把拒绝计数归零——优先用 access.deniedCalls（\|D\|）。
       deniedCalls = access.deniedCalls ?? layer.deniedCalls;
       rawCalls = layer.rawCalls;
+      unconfirmedCalls = access.unconfirmedCalls ?? 0;
       echoMeta = access.echo ?? {
         enteringAllowCallCount: rawCalls,
         enteringAllowCallCountBasis: "pre_structure"
@@ -1989,6 +2026,7 @@ export async function buildAccessMap(
         trust: query.trust,
         deniedCalls,
         rawCalls,
+        unconfirmedCalls,
         ...(accessReason ? { reason: accessReason } : {})
       },
       ...(echoMeta ? { echo: echoMeta } : {}),
@@ -2304,6 +2342,16 @@ export function createAdminAccessMapProvider(
           return { state: "unavailable", reason: banded.reason };
         }
         const { B, E, D } = banded.band;
+        const unconfirmedCalls = countUnconfirmedCalls(
+          {
+            window: { startIso: input.window.startIso, endIso: input.window.endIso },
+            trust: input.trust,
+            inquiryKind: input.inquiryKind,
+            accessGrade: input.accessGrade,
+            tokenLabel: input.tokenLabel
+          },
+          db
+        );
 
         // 时间条件必须用 metric-window 的半开区间，禁止内联 datetime('now','-7 days')
         // （Spec 128 HR-5）。路径只吃 E；deny 行保留以便 deniedCalls=\|D\| 可复核。
@@ -2396,6 +2444,7 @@ export function createAdminAccessMapProvider(
           tokenLastUsed,
           loadSnapshot,
           deniedCalls: D.size,
+          unconfirmedCalls,
           echo: {
             enteringAllowCallCount: E.size,
             enteringAllowCallCountBasis: "pre_structure"

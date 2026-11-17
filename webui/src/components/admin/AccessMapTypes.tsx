@@ -56,6 +56,8 @@ export type AccessMapNodeMeta = {
   accessAgentIds?: string[];
   /** 折叠进「其他」的真实节点 id。只出现在渲染节点上。 */
   foldedMemberIds?: string[];
+  /** 闲置授权聚合节点收纳的闲置表 id（只出现在画布合成节点上）。 */
+  idleTableIds?: string[];
   sourceScope?: string;
   toolCount?: number;
   tableCount?: number;
@@ -138,6 +140,8 @@ export type AccessMapMeta = {
     trust: "confirmed";
     deniedCalls: number;
     rawCalls: number;
+    /** 窗口内关联未确认、因此未计入本图的去重调用数（只读披露）。 */
+    unconfirmedCalls?: number;
     reason?: string;
   };
   /** 结构筛选前投影集合 E 披露；缺省参数构图时服务端总会带回。 */

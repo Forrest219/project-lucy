@@ -45,6 +45,7 @@
 
 | 日期 | 一句话错题 | 标签 | 文件 |
 |---|---|---|---|
+| 2026-11-17 | 访问关系图修复后仍不是桑基：线上镜像缺修复，HEAD 在零访问、多 Agent、全未确认下仍退化成文字和发丝 | `viz-geometry` `empty-default` `data-trust` `gate-gap` `sev-med` | [2026-11-17-access-map-sankey-regression.md](2026-11-17-access-map-sankey-regression.md) |
 | 2026-11-17 | intranet-HTTP 复制 Toast「已复制」但剪贴板未写入（假成功） | `ux-regression` `gate-gap` `sev-low` | [2026-11-17-clipboard-http-fake-success.md](2026-11-17-clipboard-http-fake-success.md) |
 | 2026-11-17 | 下载／导出／保存按钮的成功反馈不以真实结果为前提（静默失败与误报成功） | `ux-regression` `gate-gap` `sev-low` | [2026-11-17-button-feedback-silent-failure.md](2026-11-17-button-feedback-silent-failure.md) |
 | 2026-11-17 | 客户 K8s 平滑升级后 event loop 卡顿，readyz 超时摘端点，入口 502／503 | `ops-delivery` `gate-gap` `ux-regression` `sev-high` | [2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md](2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md) |

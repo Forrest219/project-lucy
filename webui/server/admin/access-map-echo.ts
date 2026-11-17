@@ -190,14 +190,23 @@ function collectWindowUserIds(db: EchoDb, startIso: string): string[] {
  * Load candidate access_log rows that already have ≥1 access_log_sources row,
  * half-open window, trust, and optional token — before inquiryKind / accessGrade.
  */
-export function loadCandidateRowsWithSources(f: EchoFilter, db: EchoDb): EchoCandidateRow[] {
+export function loadCandidateRowsWithSources(
+  f: EchoFilter,
+  db: EchoDb,
+  association: "confirmed" | "unconfirmed" = "confirmed"
+): EchoCandidateRow[] {
+  // 两个片段都是常量，不拼接外部输入。
+  const associationClause =
+    association === "confirmed"
+      ? "al.association_status = 'confirmed'"
+      : "(al.association_status IS NULL OR al.association_status <> 'confirmed')";
   const rows = db
     .prepare(
       `SELECT DISTINCT al.id AS call_id, al.user_id, al.tool, al.outcome, al.lucy_turn_id
        FROM access_log al
        JOIN access_log_sources als ON als.access_log_id = al.id
        WHERE al.ts >= ? AND al.ts < ?
-         AND al.association_status = 'confirmed'
+         AND ${associationClause}
          AND (? IS NULL OR al.token_label = ?)`
     )
     .all(f.window.startIso, f.window.endIso, f.tokenLabel, f.tokenLabel) as Array<
@@ -255,4 +264,24 @@ export async function buildBandED(
   }
 
   return { ok: true, band: { B, E, D } };
+}
+
+/**
+ * Spec lucy-20261117-access-map-sankey-restoration A3：
+ * 窗口内带表来源、但关联未确认的去重调用数（同窗、同问询种类、同访问等级；不分允许／拒绝）。
+ * 只读披露：这些调用**不**进入 B／E／D，也不改访问路径。
+ */
+export function countUnconfirmedCalls(f: EchoFilter, db: EchoDb): number {
+  const ids = new Set<string>();
+  for (const row of loadCandidateRowsWithSources(f, db, "unconfirmed")) {
+    if (!row.id) continue;
+    if (!passesAccessGrade(row.tool, f.accessGrade)) continue;
+    if (f.inquiryKind !== "all") {
+      const turn = resolveTurn({ id: row.id, lucyTurnId: row.lucyTurnId }, db);
+      if (turn == null) continue;
+      if (!inquiryKindMatches(inquiryKindOfTurn(turn), f.inquiryKind)) continue;
+    }
+    ids.add(row.id);
+  }
+  return ids.size;
 }
