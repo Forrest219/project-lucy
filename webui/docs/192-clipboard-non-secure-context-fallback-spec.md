@@ -349,3 +349,20 @@ New terms:
 本轮验证覆盖的是**代码与自动化契约**：helper 的三级降级、失败不谎报成功、
 真实浏览器中 `navigator.clipboard` 缺失时的回退路径。
 它**不等价于**客户内网 HTTP 实例上的现场复核，后者留给 S5。
+
+### 13.5 2026-11-17 事故修复记录（假成功）
+
+§5 伪代码要求降级路径对 textarea 做 `select()`＋`setSelectionRange(0, text.length)`，
+首版实现却改成「只给 `document` 选区加一个包住 textarea 内容的 Range、不聚焦」。
+Chromium 对表单控件给出**空选区**，而 `execCommand("copy")` 在空选区下仍返回 `true`，
+于是 helper 报 `{ ok: true }`、界面提示「已复制」、剪贴板未变（AC-04／AC-05 失守）。
+§13.1 的单测与 e2e 都把 `execCommand` 打桩，且 e2e 跑在回环（安全上下文），因此一直是绿的。
+
+委托人 2026-11-17 授权修复（清单 P1-40／REQ-030-061；错题 [clipboard-http-fake-success](../../docs/lessons/2026-11-17-clipboard-http-fake-success.md)）。修复内容：
+
+- `execCommandFallback`：聚焦 textarea 并全选，确认「焦点在 textarea 且选区＝全文」后才调用 `execCommand`；确认不了则返回 `exec-command-rejected`，不谎报成功。
+- 打开的 Radix 对话框／抽屉内触发时，textarea 挂在该对话框内，避免焦点陷阱把焦点抢走。
+- 调用结束后移除 textarea、把焦点还给原元素、还原原选区（用 `cloneRange()` 保存）。
+- 单测改为在 `execCommand` 被调用的瞬间读取「焦点与选区文本」，不再只看 textarea 的 value；新增多行长文本、聚焦失败不报成功、焦点还原、对话框内挂载 4 条。
+
+验证：`clipboard.test.tsx`＋`new-token.test.tsx` 31 passed；先红后绿（改前 4 条失败）。真实浏览器验证见测试台 `UAT-SUITE-COPY-FAKE-SUCCESS` 修复后跑次（局域网明文 HTTP＋真实粘贴读回）。

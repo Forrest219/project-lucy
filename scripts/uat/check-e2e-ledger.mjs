@@ -85,6 +85,12 @@ const REQUIRED = [
     latestRun: "docs/qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md"
   },
   {
+    poolId: "P1-40",
+    suiteId: "UAT-SUITE-COPY-FAKE-SUCCESS",
+    suiteDir: "docs/qa/uat/suites/copy-fake-success",
+    latestRun: "docs/qa/uat/suites/copy-fake-success/runs/2026-11-17-cursor-copy-probe-after-fix.md"
+  },
+  {
     poolId: "P1-31",
     suiteId: "UAT-SUITE-PAGE-SWEEP",
     suiteDir: "docs/qa/uat/suites/page-event-loop-sweep",
