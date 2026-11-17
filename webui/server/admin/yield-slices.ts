@@ -7,9 +7,17 @@
  */
 export const EXPORT_SLICE_ROWS = 250;
 
+/** Vitest fake timers wrap `setTimeout` with a `clock`. Those timers never fire `setImmediate`. */
+function timersAreFake(): boolean {
+  return (setTimeout as { clock?: unknown }).clock != null;
+}
+
 /**
- * A real macrotask yield. `MessageChannel` is used instead of `setImmediate`/`setTimeout` because
- * Vitest fake timers replace those two and a fake would leave this promise pending forever.
+ * A macrotask yield. Resolving inside the `MessageChannel` callback continues the caller as a
+ * microtask, so a `setImmediate` queued earlier still waits until the next synchronous stretch
+ * finishes. Production schedules one more `setImmediate` and lets those queued macrotasks run
+ * first. Vitest fake timers swallow `setImmediate`, so the fake-timer path resolves in the
+ * callback and the promise cannot stay pending.
  */
 export function yieldToEventLoop(): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -17,7 +25,11 @@ export function yieldToEventLoop(): Promise<void> {
     port1.onmessage = () => {
       port1.close();
       port2.close();
-      resolve();
+      if (timersAreFake()) {
+        resolve();
+        return;
+      }
+      setImmediate(resolve);
     };
     port2.postMessage(0);
   });

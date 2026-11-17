@@ -109,6 +109,32 @@ describe("SC-03 inferred turn maintainer", () => {
     expect(maintainer.status().pendingUsers).toBe(1);
     db.close();
   });
+
+  it("keeps a user dirty when a newer call is polled during that user's rebuild", async () => {
+    const { createInferredTurnMaintainer } = await import("../admin/inferred-turn-maintainer.js");
+    const db = new Database(":memory:");
+    db.exec(`CREATE TABLE access_log (id INTEGER PRIMARY KEY, ts TEXT NOT NULL, user_id TEXT NOT NULL)`);
+    const insert = db.prepare(`INSERT INTO access_log (ts, user_id) VALUES (?, ?)`);
+    insert.run(new Date().toISOString(), "busy");
+    const rebuilt: string[] = [];
+    const maintainer = createInferredTurnMaintainer({
+      getDb: async () => db,
+      rebuild: async (userId) => {
+        rebuilt.push(userId);
+        if (rebuilt.length === 1) {
+          insert.run(new Date(Date.now() + 5000).toISOString(), "busy");
+          await maintainer.pollOnce();
+        }
+      }
+    });
+    await maintainer.catchUp();
+    expect(rebuilt).toEqual(["busy"]);
+    expect(maintainer.status().pendingUsers).toBe(1);
+    await maintainer.runPass();
+    expect(rebuilt).toEqual(["busy", "busy"]);
+    expect(maintainer.status().pendingUsers).toBe(0);
+    db.close();
+  });
 });
 
 describe("SC-08 rollback switch", () => {

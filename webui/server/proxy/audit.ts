@@ -40,6 +40,7 @@ import {
   lookupInquiryNo,
   withAllocatedInquiryNo
 } from "../admin/audit-inquiry-serial.js";
+import { yieldToEventLoop } from "../admin/yield-slices.js";
 import {
   CALL_MONITOR_P95_MIN_SAMPLES,
   callMonitorBucketIndex,
@@ -2441,6 +2442,16 @@ export const UNREPORTED_QUESTION_SUMMARY = "未上报问询原文";
 /** Spec 172: page windows filter display only. Rebuild always covers the longest audit preset. */
 export const INFERRED_TURN_REBUILD_LOOKBACK_HOURS = 24 * 30;
 /**
+ * Count bounds for one synchronous stretch of an inferred-turn rebuild.
+ * They are not a time budget: one page, one cluster, or the in-memory grouping
+ * can still run longer than a 3s probe. Yields only let already queued macrotasks
+ * run before the next stretch.
+ */
+export const INFERRED_REBUILD_LOG_PAGE = 400;
+export const INFERRED_REBUILD_CLUSTER_SLICE = 25;
+/** Stay under SQLite's variable limit when one cluster references many access_log rows. */
+export const INFERRED_REBUILD_SOURCE_CHUNK = 500;
+/**
  * Spec 173 v0.3 / 2026-10-19 audit-trust: 120 秒近邻回绑已作废。
  * 此常量保留仅为兼容历史 import；`bindPriorSessionCalls` 不再按此窗口回填 `lucy_turn_id`。
  * 新代码不得读取本常量；新建会话归因见 `TurnCorrelationRegistry` 与 admission-time freeze。
@@ -2560,7 +2571,23 @@ function clientFromRows(rows: ClusterLogRow[]): string | null {
   return null;
 }
 
-export async function rebuildInferredTurns(
+const inferredRebuildInflight = new Map<string, Promise<{ turns: number }>>();
+
+/** Same-user rebuilds run one after another. A read-path retry waits instead of deleting under the background pass. */
+export function rebuildInferredTurns(
+  userId: string,
+  options: { lookbackHours?: number; gapMs?: number; includeCatalogOnly?: boolean } = {}
+): Promise<{ turns: number }> {
+  const previous = inferredRebuildInflight.get(userId) ?? Promise.resolve({ turns: 0 });
+  const run = previous.catch(() => ({ turns: 0 })).then(() => rebuildInferredTurnsUnlocked(userId, options));
+  const tracked = run.finally(() => {
+    if (inferredRebuildInflight.get(userId) === tracked) inferredRebuildInflight.delete(userId);
+  });
+  inferredRebuildInflight.set(userId, tracked);
+  return tracked;
+}
+
+async function rebuildInferredTurnsUnlocked(
   userId: string,
   options: { lookbackHours?: number; gapMs?: number; includeCatalogOnly?: boolean } = {}
 ): Promise<{ turns: number }> {
@@ -2569,13 +2596,32 @@ export async function rebuildInferredTurns(
   const includeCatalogOnly = options.includeCatalogOnly ?? (process.env.LUCY_TURN_INFER_INCLUDE_CATALOG_ONLY === "true");
   const database = await getDb();
   const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+  const ceiling = database.prepare(
+    `SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ? AND ts >= ?`
+  ).get(userId, cutoff) as { id: number };
+  const ceilingId = ceiling.id;
 
-  const loaded = database.prepare(`
+  const loadPage = database.prepare(`
     SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash, lucy_session_id, lucy_turn_id, client, client_version, user_agent
     FROM access_log
-    WHERE user_id = ? AND ts >= ?
+    WHERE user_id = ? AND ts >= ? AND id <= ? AND (ts > ? OR (ts = ? AND id > ?))
     ORDER BY ts ASC, id ASC
-  `).all(userId, cutoff) as ClusterLogRow[];
+    LIMIT ?
+  `);
+  const loaded: ClusterLogRow[] = [];
+  let cursorTs = "";
+  let cursorId = 0;
+  for (let pageIndex = 0; ; pageIndex += 1) {
+    if (pageIndex > 0) await yieldToEventLoop();
+    const page = loadPage.all(userId, cutoff, ceilingId, cursorTs, cursorTs, cursorId, INFERRED_REBUILD_LOG_PAGE) as ClusterLogRow[];
+    if (page.length === 0) break;
+    loaded.push(...page);
+    const tail = page[page.length - 1]!;
+    cursorTs = tail.ts;
+    cursorId = tail.id;
+    if (page.length < INFERRED_REBUILD_LOG_PAGE) break;
+  }
+  await yieldToEventLoop();
 
   const business = loaded.filter((row) =>
     !isMcpProtocolMethod(row.tool)
@@ -2628,6 +2674,7 @@ export async function rebuildInferredTurns(
       summaryOverride: sessionVisitSummary(clientFromRows(rows))
     });
   }
+  await yieldToEventLoop();
 
   const deleteAccessLogsStmt = database.prepare(`
     DELETE FROM inferred_turn_access_logs
@@ -2642,85 +2689,124 @@ export async function rebuildInferredTurns(
   `);
   const insertLinkStmt = database.prepare(`INSERT INTO inferred_turn_access_logs (inferred_turn_id, access_log_id) VALUES (?, ?)`);
   const sourceQueryCache = new Map<string, Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>>();
+  const assignedInquiry = new Map<string, number>();
 
   function sourcesFor(accessLogIds: number[]): Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }> {
     if (accessLogIds.length === 0) return [];
     const key = accessLogIds.join(",");
     const cached = sourceQueryCache.get(key);
     if (cached) return cached;
-    const result = database.prepare(`
-      SELECT DISTINCT connection_id, schema_name, source_name, physical_table
-      FROM access_log_sources
-      WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})
-    `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>;
-    sourceQueryCache.set(key, result);
-    return result;
+    const merged = new Map<string, { connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>();
+    for (let offset = 0; offset < accessLogIds.length; offset += INFERRED_REBUILD_SOURCE_CHUNK) {
+      const chunk = accessLogIds.slice(offset, offset + INFERRED_REBUILD_SOURCE_CHUNK);
+      const result = database.prepare(`
+        SELECT DISTINCT connection_id, schema_name, source_name, physical_table
+        FROM access_log_sources
+        WHERE access_log_id IN (${chunk.map(() => "?").join(",")})
+      `).all(...chunk) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>;
+      for (const row of result) {
+        const dedupe = `${row.connection_id ?? ""}\0${row.schema_name ?? ""}\0${row.source_name ?? ""}\0${row.physical_table}`;
+        if (!merged.has(dedupe)) merged.set(dedupe, row);
+      }
+    }
+    const rows = [...merged.values()];
+    sourceQueryCache.set(key, rows);
+    return rows;
   }
 
-  const rebuild = database.transaction((): number => {
+  const writeCluster = (cluster: BuiltCluster): boolean => {
+    const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
+    if (members.length === 0) return false;
+    const anchor = cluster.business[0] ?? members[0];
+    const accessLogIds = members.map((row) => row.id);
+    const businessRows = cluster.business.filter((row) => row.tables !== null);
+    const dataBearing = businessRows.length > 0;
+    const toolSummary = [...new Set(members.map((row) => row.tool))];
+    const sourceRows = sourcesFor(cluster.business.map((row) => row.id));
+    const sourceSummary: SourceSummaryEntry[] = sourceRows.map((row) => ({
+      connectionId: row.connection_id ?? undefined,
+      schema: row.schema_name ?? undefined,
+      sourceName: row.source_name ?? undefined,
+      physicalTable: row.physical_table
+    }));
+    const confidence: "medium" | "low" = dataBearing ? "medium" : "low";
+    const questionSummary = cluster.summaryOverride ?? UNREPORTED_QUESTION_SUMMARY;
+    const now = new Date().toISOString();
+    const startedAt = members[0].ts;
+    const endedAt = members[members.length - 1].ts;
+    const inferredId = inferredTurnId(userId, anchor.id);
+    const client = clientFromRows(members);
+    const inquiryNo = assignedInquiry.get(inferredId);
+    if (inquiryNo == null) throw new Error(`missing inquiry number for ${inferredId}`);
+
+    insertTurnStmt.run({
+      id: inferredId,
+      inquiryNo,
+      userId,
+      startedAt,
+      endedAt,
+      callCount: members.length,
+      businessCallCount: businessRows.length,
+      toolSummary: JSON.stringify(toolSummary),
+      sourceSummary: JSON.stringify(sourceSummary),
+      questionSummary,
+      confidence,
+      evidenceJson: JSON.stringify({
+        accessLogIds,
+        toolSummary,
+        sourceSummary,
+        callCount: members.length,
+        businessCallCount: businessRows.length,
+        sessionId: cluster.sessionId
+      }),
+      client,
+      sessionId: cluster.sessionId,
+      createdAt: now,
+      updatedAt: now
+    });
+    for (const accessLogId of accessLogIds) {
+      insertLinkStmt.run(inferredId, accessLogId);
+    }
+    return true;
+  };
+
+  const deleteLinksByTurn = database.prepare(`DELETE FROM inferred_turn_access_logs WHERE inferred_turn_id = ?`);
+  const deleteTurnById = database.prepare(`DELETE FROM inferred_turns WHERE inferred_turn_id = ?`);
+  const plans: Array<{ cluster: BuiltCluster; id: string }> = [];
+  for (const cluster of built) {
+    const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
+    if (members.length === 0) continue;
+    const anchor = cluster.business[0] ?? members[0];
+    plans.push({ cluster, id: inferredTurnId(userId, anchor.id) });
+  }
+
+  // One write transaction assigns every new inquiry number before any yield, so a
+  // concurrent allocator cannot take a number between slices. Ids about to be
+  // written are deleted even when started_at has fallen outside the lookback.
+  database.transaction(() => {
     ensureBackfillBeforeAllocate(database);
     deleteAccessLogsStmt.run(userId, cutoff);
     deleteTurnsStmt.run(userId, cutoff);
-
-    let written = 0;
-    for (const cluster of built) {
-      const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
-      if (members.length === 0) continue;
-      const anchor = cluster.business[0] ?? members[0];
-      const accessLogIds = members.map((row) => row.id);
-      const businessRows = cluster.business.filter((row) => row.tables !== null);
-      const dataBearing = businessRows.length > 0;
-      const toolSummary = [...new Set(members.map((row) => row.tool))];
-      const sourceRows = sourcesFor(cluster.business.map((row) => row.id));
-      const sourceSummary: SourceSummaryEntry[] = sourceRows.map((row) => ({
-        connectionId: row.connection_id ?? undefined,
-        schema: row.schema_name ?? undefined,
-        sourceName: row.source_name ?? undefined,
-        physicalTable: row.physical_table
-      }));
-      const confidence: "medium" | "low" = dataBearing ? "medium" : "low";
-      const questionSummary = cluster.summaryOverride ?? UNREPORTED_QUESTION_SUMMARY;
-      const now = new Date().toISOString();
-      const startedAt = members[0].ts;
-      const endedAt = members[members.length - 1].ts;
-      const inferredId = inferredTurnId(userId, anchor.id);
-      const client = clientFromRows(members);
-      const inquiryNo = lookupInquiryNo(database, inferredId) ?? allocateInquiryNo(database, inferredId);
-
-      insertTurnStmt.run({
-        id: inferredId,
-        inquiryNo,
-        userId,
-        startedAt,
-        endedAt,
-        callCount: members.length,
-        businessCallCount: businessRows.length,
-        toolSummary: JSON.stringify(toolSummary),
-        sourceSummary: JSON.stringify(sourceSummary),
-        questionSummary,
-        confidence,
-        evidenceJson: JSON.stringify({
-          accessLogIds,
-          toolSummary,
-          sourceSummary,
-          callCount: members.length,
-          businessCallCount: businessRows.length,
-          sessionId: cluster.sessionId
-        }),
-        client,
-        sessionId: cluster.sessionId,
-        createdAt: now,
-        updatedAt: now
-      });
-      for (const accessLogId of accessLogIds) {
-        insertLinkStmt.run(inferredId, accessLogId);
-      }
-      written += 1;
+    for (const plan of plans) {
+      deleteLinksByTurn.run(plan.id);
+      deleteTurnById.run(plan.id);
+      assignedInquiry.set(plan.id, lookupInquiryNo(database, plan.id) ?? allocateInquiryNo(database, plan.id));
     }
-    return written;
-  });
+  })();
+  await yieldToEventLoop();
 
-  const turns = rebuild();
+  let turns = 0;
+  for (let start = 0; start < plans.length; start += INFERRED_REBUILD_CLUSTER_SLICE) {
+    if (start > 0) await yieldToEventLoop();
+    const slice = plans.slice(start, start + INFERRED_REBUILD_CLUSTER_SLICE);
+    turns += database.transaction(() => {
+      let written = 0;
+      for (const plan of slice) {
+        if (writeCluster(plan.cluster)) written += 1;
+      }
+      return written;
+    })();
+  }
   return { turns };
 }
 

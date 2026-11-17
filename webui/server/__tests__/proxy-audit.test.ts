@@ -469,6 +469,197 @@ describe("proxy audit log", () => {
     }
   });
 
+  it("rebuildInferredTurns yields between pages so a queued macrotask runs before the rebuild finishes", async () => {
+    const { writeLog, rebuildInferredTurns, INFERRED_REBUILD_LOG_PAGE } = await import("../proxy/audit");
+    const count = INFERRED_REBUILD_LOG_PAGE + 1;
+    const base = Date.now() - 60 * 60 * 1000;
+    await writeLog({
+      ts: new Date(base).toISOString(),
+      userId: "yield-user",
+      lucySessionId: "yield-session",
+      tool: "sl_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "yield-0"
+    });
+    const seed = new Database(auditDbPath);
+    try {
+      const insert = seed.prepare(
+        `INSERT INTO access_log (ts, user_id, lucy_session_id, tool, tables, outcome, duration_ms, request_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      seed.transaction(() => {
+        for (let i = 1; i < count; i += 1) {
+          insert.run(
+            new Date(base + i).toISOString(),
+            "yield-user",
+            "yield-session",
+            "sl_query",
+            JSON.stringify(["dataforai.superstore_orders"]),
+            "ok",
+            1,
+            `yield-${i}`
+          );
+        }
+      })();
+    } finally {
+      seed.close();
+    }
+
+    let finished = false;
+    let ranBeforeFinish = false;
+    setImmediate(() => {
+      ranBeforeFinish = !finished;
+    });
+    const result = await rebuildInferredTurns("yield-user", { lookbackHours: 24, gapMs: 120_000 });
+    finished = true;
+    expect(ranBeforeFinish).toBe(true);
+    expect(result.turns).toBe(1);
+
+    const readIds = () => {
+      const check = new Database(auditDbPath, { readonly: true });
+      try {
+        const links = check.prepare("SELECT COUNT(*) AS cnt FROM inferred_turn_access_logs").get() as { cnt: number };
+        const ids = (check.prepare(
+          "SELECT inferred_turn_id FROM inferred_turns WHERE user_id = ? ORDER BY inferred_turn_id"
+        ).all("yield-user") as Array<{ inferred_turn_id: string }>).map((row) => row.inferred_turn_id);
+        return { links: links.cnt, ids };
+      } finally {
+        check.close();
+      }
+    };
+    const first = readIds();
+    expect(first.links).toBe(count);
+    const again = await rebuildInferredTurns("yield-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(again.turns).toBe(1);
+    expect(readIds().ids).toEqual(first.ids);
+  });
+
+  it("rebuildInferredTurns ignores rows inserted after the id ceiling and keeps inquiry numbers across a slice yield", async () => {
+    const { writeLog, rebuildInferredTurns, INFERRED_REBUILD_CLUSTER_SLICE } = await import("../proxy/audit");
+    const { allocateInquiryNo } = await import("../admin/audit-inquiry-serial");
+    const base = Date.now() - 60 * 60 * 1000;
+    const clusters = INFERRED_REBUILD_CLUSTER_SLICE + 1;
+    for (let i = 0; i < clusters; i += 1) {
+      await writeLog({
+        ts: new Date(base + i * 1000).toISOString(),
+        userId: "ceiling-user",
+        lucySessionId: `ceiling-session-${i}`,
+        tool: "sl_query",
+        tables: ["dataforai.superstore_orders"],
+        outcome: "ok",
+        durationMs: 1,
+        requestId: `ceiling-${i}`
+      });
+    }
+
+    let lateId = 0;
+    let intruded = false;
+    const watch = () => {
+      const db = new Database(auditDbPath);
+      try {
+        const table = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'inquiry_correlation_serial'`).get();
+        if (table) {
+          const assigned = db.prepare(`SELECT COUNT(*) AS cnt FROM inquiry_correlation_serial`).get() as { cnt: number };
+          if (assigned.cnt >= clusters) {
+            if (!intruded) {
+              allocateInquiryNo(db, "reported-between-slices");
+              intruded = true;
+            }
+            return;
+          }
+        }
+        if (lateId === 0) {
+          const inserted = db.prepare(
+            `INSERT INTO access_log (ts, user_id, lucy_session_id, tool, tables, outcome, duration_ms, request_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(
+            new Date(base + 500).toISOString(),
+            "ceiling-user",
+            "ceiling-session-0",
+            "sl_query",
+            JSON.stringify(["dataforai.superstore_orders"]),
+            "ok",
+            1,
+            "ceiling-late"
+          );
+          lateId = Number(inserted.lastInsertRowid);
+        }
+      } finally {
+        db.close();
+      }
+      setImmediate(watch);
+    };
+    setImmediate(watch);
+
+    const result = await rebuildInferredTurns("ceiling-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(result.turns).toBe(clusters);
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const links = db.prepare(`SELECT COUNT(*) AS cnt FROM inferred_turn_access_logs`).get() as { cnt: number };
+      expect(links.cnt).toBe(clusters);
+      const late = db.prepare(`SELECT COUNT(*) AS cnt FROM inferred_turn_access_logs WHERE access_log_id = ?`).get(lateId) as { cnt: number };
+      expect(late.cnt).toBe(0);
+      const numbers = (db.prepare(
+        `SELECT inquiry_no FROM inquiry_correlation_serial WHERE correlation_key LIKE 'inf_ceiling-user_%' ORDER BY inquiry_no`
+      ).all() as Array<{ inquiry_no: number }>).map((row) => row.inquiry_no);
+      expect(numbers).toEqual(Array.from({ length: clusters }, (_, index) => index + 1));
+      const intruder = db.prepare(`SELECT inquiry_no FROM inquiry_correlation_serial WHERE correlation_key = ?`).get("reported-between-slices") as { inquiry_no: number };
+      expect(intruder.inquiry_no).toBe(clusters + 1);
+    } finally {
+      db.close();
+    }
+
+    const second = await rebuildInferredTurns("ceiling-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(second.turns).toBe(clusters);
+    const after = new Database(auditDbPath, { readonly: true });
+    try {
+      const links = after.prepare(`SELECT COUNT(*) AS cnt FROM inferred_turn_access_logs`).get() as { cnt: number };
+      const late = after.prepare(`SELECT COUNT(*) AS cnt FROM inferred_turn_access_logs WHERE access_log_id = ?`).get(lateId) as { cnt: number };
+      expect(links.cnt).toBe(clusters + 1);
+      expect(late.cnt).toBe(1);
+    } finally {
+      after.close();
+    }
+  });
+
+  it("rebuildInferredTurns replaces a turn whose started_at has left the lookback but whose id is still in it", async () => {
+    const { writeLog, rebuildInferredTurns } = await import("../proxy/audit");
+    const handshakeAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    const businessAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    await writeLog({
+      ts: handshakeAt,
+      userId: "window-user",
+      lucySessionId: "window-session",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "window-handshake"
+    });
+    await writeLog({
+      ts: businessAt,
+      userId: "window-user",
+      lucySessionId: "window-session",
+      tool: "sl_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "window-business"
+    });
+    const wide = await rebuildInferredTurns("window-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(wide.turns).toBe(1);
+    const narrow = await rebuildInferredTurns("window-user", { lookbackHours: 1, gapMs: 120_000 });
+    expect(narrow.turns).toBe(1);
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const count = db.prepare(`SELECT COUNT(*) AS cnt FROM inferred_turns WHERE user_id = ?`).get("window-user") as { cnt: number };
+      expect(count.cnt).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
   it("rebuildInferredTurns keeps touched sources and uses a fixed summary when no question was reported", async () => {
     const { writeLog, writeAccessLogSources, rebuildInferredTurns } = await import("../proxy/audit");
     const base = Date.now() - 30 * 60 * 1000;

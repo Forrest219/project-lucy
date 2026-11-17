@@ -39,9 +39,10 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
   const lookbackHours = deps.lookbackHours ?? INFERRED_TURN_REBUILD_LOOKBACK_HOURS;
   const now = deps.now ?? Date.now;
   const dirty = new Set<string>();
+  const epoch = new Map<string, number>();
   const retryAt = new Map<string, number>();
   const failures = new Map<string, number>();
-  let watermarkTs: string | null = null;
+  let scanned = false;
   let watermarkId = 0;
   let lastCompletedAt: string | null = null;
   let running: Promise<void> | null = null;
@@ -54,12 +55,13 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     lastCompletedAt
   });
 
-  const rememberWatermark = (ts: string | null, id: number) => {
-    if (!ts) return;
-    if (watermarkTs === null || ts > watermarkTs || (ts === watermarkTs && id > watermarkId)) {
-      watermarkTs = ts;
-      watermarkId = id;
-    }
+  const touch = (userId: string) => {
+    dirty.add(userId);
+    epoch.set(userId, (epoch.get(userId) ?? 0) + 1);
+  };
+
+  const noteMaxId = (id: number) => {
+    if (id > watermarkId) watermarkId = id;
   };
 
   const scanFull = async (): Promise<void> => {
@@ -68,11 +70,10 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     const users = database
       .prepare(`SELECT DISTINCT user_id FROM access_log WHERE ts >= ?`)
       .all(cutoff) as Array<{ user_id: string }>;
-    for (const row of users) dirty.add(row.user_id);
-    const mark = database.prepare(`SELECT ts, id FROM access_log ORDER BY ts DESC, id DESC LIMIT 1`).get() as
-      | { ts: string; id: number }
-      | undefined;
-    rememberWatermark(mark?.ts ?? null, mark?.id ?? 0);
+    for (const row of users) touch(row.user_id);
+    const mark = database.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log`).get() as { id: number };
+    noteMaxId(mark.id);
+    scanned = true;
   };
 
   const passOnce = async (): Promise<void> => {
@@ -80,12 +81,16 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     for (const userId of userIds) {
       const due = retryAt.get(userId) ?? 0;
       if (due > now()) continue;
+      const token = epoch.get(userId) ?? 0;
       try {
         await deps.rebuild(userId);
-        dirty.delete(userId);
-        retryAt.delete(userId);
-        failures.delete(userId);
-        lastCompletedAt = new Date(now()).toISOString();
+        if ((epoch.get(userId) ?? 0) === token) {
+          dirty.delete(userId);
+          epoch.delete(userId);
+          retryAt.delete(userId);
+          failures.delete(userId);
+          lastCompletedAt = new Date(now()).toISOString();
+        }
       } catch {
         const attempt = (failures.get(userId) ?? 0) + 1;
         failures.set(userId, attempt);
@@ -116,21 +121,17 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
   };
 
   const pollOnce = async (): Promise<void> => {
-    if (watermarkTs === null) {
+    if (!scanned) {
       await scanFull();
       return;
     }
     const database = await deps.getDb();
     const users = database
-      .prepare(
-        `SELECT DISTINCT user_id FROM access_log WHERE ts > ? OR (ts = ? AND id > ?)`
-      )
-      .all(watermarkTs, watermarkTs, watermarkId) as Array<{ user_id: string }>;
-    for (const row of users) dirty.add(row.user_id);
-    const mark = database.prepare(`SELECT ts, id FROM access_log ORDER BY ts DESC, id DESC LIMIT 1`).get() as
-      | { ts: string; id: number }
-      | undefined;
-    rememberWatermark(mark?.ts ?? null, mark?.id ?? 0);
+      .prepare(`SELECT DISTINCT user_id FROM access_log WHERE id > ?`)
+      .all(watermarkId) as Array<{ user_id: string }>;
+    for (const row of users) touch(row.user_id);
+    const mark = database.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log`).get() as { id: number };
+    noteMaxId(mark.id);
   };
 
   return {
@@ -150,7 +151,7 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     },
     markDirty(userId: string) {
       if (!userId) return;
-      dirty.add(userId);
+      touch(userId);
       void runPass();
     },
     status,
