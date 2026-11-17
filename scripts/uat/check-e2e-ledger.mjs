@@ -124,26 +124,37 @@ const REQUIRED = [
     poolId: "P1-11",
     suiteId: "UAT-SUITE-OPS-CONCEPTS",
     suiteDir: "docs/qa/uat/suites/ops-concepts",
-    latestRun: "docs/qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md"
+    latestRun: "docs/qa/uat/suites/ops-concepts/runs/2026-11-15-cursor-p1-27-ops-retest.md"
   },
   {
     poolId: "P1-27",
     suiteId: "UAT-SUITE-OPS-CONCEPTS",
     suiteDir: "docs/qa/uat/suites/ops-concepts",
-    // Fix retest not run yet; keep FAIL baseline run for link existence.
-    latestRun: "docs/qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md"
+    latestRun: "docs/qa/uat/suites/ops-concepts/runs/2026-11-15-cursor-p1-27-ops-retest.md"
   },
   {
     poolId: "P1-28",
     suiteId: "UAT-SUITE-ROW-POLICY",
     suiteDir: "docs/qa/uat/suites/row-policy-finance-scenario",
-    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md"
+    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-retest.md"
   },
   {
     poolId: "P1-29",
     suiteId: "UAT-SUITE-ROW-POLICY",
     suiteDir: "docs/qa/uat/suites/row-policy-finance-scenario",
-    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-first.md"
+    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-retest.md"
+  },
+  {
+    poolId: "P1-12",
+    suiteId: "UAT-SUITE-QUESTION-BUDGET",
+    suiteDir: "docs/qa/uat/suites/question-budget",
+    latestRun: "docs/qa/uat/suites/question-budget/runs/2026-11-16-cursor-p1-12-budget-uat-rerun.md"
+  },
+  {
+    poolId: "P1-14",
+    suiteId: "UAT-SUITE-BUDGET-AUDIT",
+    suiteDir: "docs/qa/uat/suites/budget-audit",
+    latestRun: "docs/qa/uat/suites/budget-audit/runs/2026-11-15-cursor-p1-14-audit-retest.md"
   }
 ];
 

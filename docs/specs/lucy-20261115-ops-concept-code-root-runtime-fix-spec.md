@@ -5,11 +5,11 @@
 | 文档类型 / 版本 | 事故修复合同／**v0.7** |
 | 日期 / 目标版本 | 2026-11-15／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-27**／REQ-030-048／**P1**（P1-11 伴生事故修复；**不入核心分母**） |
-| 状态 | **v0.7；R2-F＋R4 已闭合（2026-11-15）；实现中；关 GAP-UAT-P1-11-RUNTIME；不入核心分母；≠ 可上线** |
+| 状态 | **v0.7；R2-F＋R4 已闭合（2026-11-15）；实现已落地；测试台复测 PASS（[cursor-p1-27-ops-retest](../qa/uat/suites/ops-concepts/runs/2026-11-15-cursor-p1-27-ops-retest.md)）；GAP-UAT-P1-11-RUNTIME 已关闭；不入核心分母；≠ 可上线** |
 | 决策来源 | 差集 UAT [`2026-11-15-claude-macmini-p1-11-ops`](../qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md)：`allow.ops` 可见工具，但 `list`／`summary` 502、`scan` `ERR_MODULE_NOT_FOUND`（从 `KTX_PROJECT_ROOT=/data/lucy` 加载 `scripts/concepts/*.mjs`） |
 | 父合同 | [P1-11 概念注册表 Ops Spec](lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md)（D11／D12／D15／D19／D21／D22；实施主体复用 `scripts/concepts/**`） |
-| 授权 | **R2-F＋R4 已闭合（2026-11-15）**。实现按 Plan 进行中 |
-| 测试台 | [`UAT-SUITE-OPS-CONCEPTS`](../qa/uat/suites/ops-concepts/suite.md)（INDEX 已挂首跑 **FAIL**；复测 **NOT RUN**）。复测必做：`UAT-R0-FIX`、`UAT-OPS-CONCEPT-02`；回归 `01`／`03`；cases 已落盘可复跑 |
+| 授权 | **R2-F＋R4 已闭合（2026-11-15）**。实现已落地 |
+| 测试台 | [`UAT-SUITE-OPS-CONCEPTS`](../qa/uat/suites/ops-concepts/suite.md)（INDEX＝**PASS**；复测 [cursor-p1-27-ops-retest](../qa/uat/suites/ops-concepts/runs/2026-11-15-cursor-p1-27-ops-retest.md)；首跑 FAIL 对照仍保留） |
 | 配套 Plan | [lucy-20261115-ops-concept-code-root-runtime-fix-plan.md](../plans/lucy-20261115-ops-concept-code-root-runtime-fix-plan.md) |
 | 过程对抗 | [Kimi 三轮](../reviews/2026-11-15-kimicode-review-ops-concept-code-root-runtime-fix.md)（≠ R2-F） |
 | Codex 终审 | [Codex R2-F](../reviews/2026-11-15-codex-review-ops-concept-code-root-runtime-fix.md)（#3＝PASS → R2-F 闭合；仍≠ R4） |
