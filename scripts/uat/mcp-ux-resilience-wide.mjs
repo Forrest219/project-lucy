@@ -47,6 +47,7 @@ async function deny() {
     gate_unresolved_ref: { agent: fullAgent, name: "lucy_query", args: (i) => ({ connectionId: state.connection, measures: ["t_0001.row_count"], filters: [`ghost_source_${i}.x = 1`] }) }
   };
   const out = {};
+  let notRejected = 0;
   for (const [label, shape] of Object.entries(shapes)) {
     const token = tokens[shape.agent];
     const { session } = await client.open(token);
@@ -54,13 +55,16 @@ async function deny() {
     const reasons = new Map();
     for (let i = 0; i < n; i += 1) {
       const r = await client.callTool(token, session, `${label}-${i}`, shape.name, shape.args(i));
+      if (r.status !== 200 || !(r.isError || r.json?.error)) notRejected += 1;
       samples.push(r.ms);
       const key = r.text.slice(0, 60);
       reasons.set(key, (reasons.get(key) ?? 0) + 1);
     }
     out[label] = { ...summarize(samples), sampleResponses: [...reasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2) };
   }
-  console.log(JSON.stringify({ probe: "wide-deny", sources: state.sources, ...out }));
+  // 不是「被拒」的响应会让延迟样本失真：不得当作拒绝延迟，退出非 0。
+  if (notRejected > 0) process.exitCode = 1;
+  console.log(JSON.stringify({ probe: "wide-deny", sources: state.sources, notRejected, ...out }));
 }
 
 function stages() {

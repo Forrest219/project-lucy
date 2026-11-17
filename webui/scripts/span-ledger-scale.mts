@@ -2,7 +2,10 @@
  * P1-36 UAT-TRC-11 — span 账本规模与事件循环占用。
  *
  *   cd webui
- *   npx tsx scripts/span-ledger-scale.mts [--traces 100000] [--out ../inbox/span-ledger-scale.json]
+ *   npx tsx scripts/span-ledger-scale.mts [--traces 20000] [--out ../inbox/span-ledger-scale.json]
+ *
+ * 默认 2 万条 trace（冒烟规模）。TRC-11 的 10 万条门槛须显式 `--traces 100000`：
+ * 单进程 RSS 峰值约 1.2 GB、spans.csv 约 97 MB。结果里的 `fullScale` 标明本次是否达到 10 万条。
  *
  * 在**临时沙箱审计库**里（不碰 demo 库）：先用真实写入路径 `writeLog` 写入三种形状的 trace
  * （ping、tools/list 形态、tools/call 形态），再把它们按时间平移克隆到 N 条（含 span 与 ledger_seq），
@@ -26,7 +29,8 @@ const flag = (name: string, fallback: string): string => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? (args[i + 1] ?? fallback) : fallback;
 };
-const TRACES = Number(flag("traces", "100000"));
+const FULL_SCALE_TRACES = 100_000;
+const TRACES = Number(flag("traces", "20000"));
 const OUT = path.resolve(process.cwd(), flag("out", path.join(here, "../../inbox/span-ledger-scale.json")));
 const BAR = { eventLoopP99Ms: 400, eventLoopMaxMs: 1000, bytesPerTrace: 8 * 1024 } as const;
 
@@ -75,18 +79,25 @@ function buildEntry(shape: "ping" | "tools/list" | "tools/call", traceId: string
 }
 
 type Row = Record<string, unknown>;
+const SAMPLE_TICK_MS = 25;
 const lagHistogram = monitorEventLoopDelay({ resolution: 10 });
 
 /** 度量一个（可能让出事件循环的）阶段：墙钟、事件循环延迟 P99／max、RSS。 */
-async function measure<T>(label: string, run: () => Promise<T>): Promise<{ label: string; wallMs: number; eventLoopP99Ms: number; eventLoopMaxMs: number; rssPeakMb: number; value: T }> {
+async function measure<T>(label: string, run: () => Promise<T>): Promise<{ label: string; wallMs: number; sampleCount: number; eventLoopP99Ms: number; eventLoopMaxMs: number; rssPeakMb: number; value: T }> {
   lagHistogram.reset();
   lagHistogram.enable();
+  // Node 的直方图只记录「相邻两次定时器回调的间隔」，第一次回调仅作锚点。先等一个回调落地，
+  // 之后 run() 里的冻结才会表现为下一次回调的逾期；结束后再等一个回调，补记 run() 末尾的同步尾段
+  // （拼接、digest、打包），否则 max 会系统性偏小。setImmediate 不行：它排在定时器阶段之前。
+  await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_TICK_MS));
   const started = performance.now();
   const value = await run();
   const wallMs = performance.now() - started;
+  await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_TICK_MS));
   lagHistogram.disable();
   return {
     label, wallMs: Math.round(wallMs),
+    sampleCount: lagHistogram.count,
     eventLoopP99Ms: Math.round(lagHistogram.percentile(99) / 1e6),
     eventLoopMaxMs: Math.round(lagHistogram.max / 1e6),
     rssPeakMb: Math.round(process.memoryUsage().rss / 1048576), value
@@ -164,7 +175,7 @@ async function main(): Promise<number> {
   const brief = (m: { wallMs: number; eventLoopP99Ms: number; eventLoopMaxMs: number; rssPeakMb: number }) =>
     ({ wallMs: m.wallMs, eventLoopP99Ms: m.eventLoopP99Ms, eventLoopMaxMs: m.eventLoopMaxMs, rssPeakMb: m.rssPeakMb });
   const result = {
-    probe: "span-ledger-scale", traces: TRACES, spanRows, seedMs, upperSeq,
+    probe: "span-ledger-scale", traces: TRACES, fullScale: TRACES >= FULL_SCALE_TRACES, spanRows, seedMs, upperSeq,
     capacity: { spanTableAndIndexBytes: spanBytes, bytesPerTrace, barBytesPerTrace: BAR.bytesPerTrace },
     computeSpanCoverage: { ...brief(coverage), traceLinked: coverage.value.traceLinked.status, spanIntegrity: coverage.value.spanIntegrity.status, spanTiming: coverage.value.spanTiming.status },
     renderSpansCsv: { ...brief(csv), rowCount: csv.value.rowCount, csvMb: Math.round(csv.value.csv.length / 1048576) },
@@ -174,6 +185,8 @@ async function main(): Promise<number> {
   const overs: string[] = [];
   if (bytesPerTrace !== null && bytesPerTrace > BAR.bytesPerTrace) overs.push(`bytesPerTrace=${bytesPerTrace}`);
   for (const phase of [coverage, csv, fullExport]) {
+    // 事件循环直方图没有任何样本＝没测到，不能当作「无超标」。
+    if (phase.sampleCount === 0) overs.push(`${phase.label} event loop not sampled`);
     if (phase.eventLoopMaxMs > BAR.eventLoopMaxMs) overs.push(`${phase.label} event loop max ${phase.eventLoopMaxMs}ms`);
     if (phase.eventLoopP99Ms > BAR.eventLoopP99Ms) overs.push(`${phase.label} event loop p99 ${phase.eventLoopP99Ms}ms`);
   }

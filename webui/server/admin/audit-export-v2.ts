@@ -33,9 +33,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDIT_WINDOWS } from "../proxy/ingress-registry.js";
-import { DERIVATION_VERSION } from "../proxy/audit-derivation.js";
+import { SPAN_DERIVATION_VERSION } from "../proxy/audit-trace-span.js";
 import { projectAttributionAsOfS, proveExactAsOfS, type AsOfSProof } from "../proxy/audit-as-of-proof.js";
-import { computeSpanCoverage, renderSpansCsv, type SpanCoverage } from "./audit-trace-export.js";
+import { computeSpanCoverage, countUnsequencedSpans, renderSpansCsv, type SpanCoverage } from "./audit-trace-export.js";
 
 export type ExportMode = "complete" | "diagnostic";
 
@@ -137,7 +137,10 @@ export type ExportV2Manifest = {
   catchUpDeadlineSeconds: number;
   /** P1-36 C7–C9：trace 关联、span 结构、时间一致性（不并入冻结的 combinedComplete）。 */
   spanCoverage: SpanCoverage;
-  /** P1-36 D12：`spans.csv` 的截止序号（与 `ledgerUpperSeq` 同一值）。 */
+  /**
+   * P1-36 D12：`spans.csv` 的截止序号（与 `ledgerUpperSeq` 同一值）。
+   * `unsequenced` 是被排除出文件的 **span 数**；`spanCoverage.unsequenced` 是无序号的 **行数**，量纲不同。
+   */
   spans: { ledgerUpperSeq: number; unsequenced: number };
 };
 
@@ -701,7 +704,8 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     provenance,
     crossFileRelations,
     exclusions,
-    derivationVersion: DERIVATION_VERSION,
+    // Spec P1-36 D7：现行派生版本（v2p5-2）；旧行保持 v2p5-1，由行内 derivation_version 与 spanCoverage.legacyUnlinked 如实区分。
+    derivationVersion: SPAN_DERIVATION_VERSION,
     prevExportId: options.prevExportId ?? null,
     exportId: options.exportId ?? randomUUID(),
     sortKey: "access_log.id ASC",
@@ -721,7 +725,7 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     files: [{ name: "calls-v2.csv", sha256: csvHash, rowCount: rows.length }],
     catchUpDeadlineSeconds: AUDIT_WINDOWS.t3ExportCatchupSeconds,
     spanCoverage: await computeSpanCoverage(db, upperSeq),
-    spans: { ledgerUpperSeq: upperSeq, unsequenced: 0 }
+    spans: { ledgerUpperSeq: upperSeq, unsequenced: countUnsequencedSpans(db, selectedAccessLogIds) }
   };
 
   if (mode === "complete" && !combinedComplete) {

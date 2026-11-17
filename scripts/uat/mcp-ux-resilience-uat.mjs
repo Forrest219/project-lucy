@@ -313,7 +313,7 @@ async function mcpx06() {
   });
   r.check("7b 审计列哈希段不等于任何无密钥 SHA-256 前缀（3 种常见序列化）", fpRows.length > 0 && noLeak, { sampled: fpRows.length });
   const keyLeak = scanKeyMaterial();
-  r.check("7b 审计库文件中找不到 HMAC 密钥材料", keyLeak.keyPresent && !keyLeak.foundInAudit, keyLeak);
+  r.check("7b 审计库文件中找不到 HMAC 密钥材料", keyLeak.keyPresent && keyLeak.scanOk && !keyLeak.foundInAudit, keyLeak);
   r.gap("7b 导出包中找不到密钥材料：导出包扫描在 UAT-MCPX-12／TRC 导出用例里与导出同批执行；此处仅查审计库");
 
   // 8 M3
@@ -326,10 +326,11 @@ function scanKeyMaterial() {
   const keyFile = "/data/lucy/.ktx-ui/rejection-fingerprint.key";
   const sh = (script) => spawnSync("docker", ["exec", state.container, "sh", "-c", script], { encoding: "utf8" });
   const present = sh(`test -s ${keyFile}`).status === 0;
-  if (!present) return { keyPresent: false, foundInAudit: false };
+  if (!present) return { keyPresent: false, scanOk: false, foundInAudit: false };
   // grep -f 读取密钥文件作为模式，密钥不进命令行也不打印；-a 按文本扫描二进制库文件。
-  const found = sh(`grep -a -q -F -f ${keyFile} /data/lucy/.ktx-ui/audit.sqlite*`).status === 0;
-  return { keyPresent: true, foundInAudit: found };
+  // 退出码：0＝发现、1＝干净、≥2（路径不存在／权限错等）＝扫描没有跑成，不得当作「干净」。
+  const status = sh(`grep -a -q -F -f ${keyFile} /data/lucy/.ktx-ui/audit.sqlite*`).status;
+  return { keyPresent: true, scanOk: status === 0 || status === 1, foundInAudit: status === 0 };
 }
 
 // ───────────────────────── MCPX-07 ─────────────────────────

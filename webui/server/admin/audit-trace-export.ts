@@ -42,6 +42,21 @@ const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmedi
 
 type ChunkOptions = { chunkSize?: number };
 
+/** 所选调用行里「所属行 `ledger_seq` 为 NULL」的 span 数；与 `renderSpansCsv().unsequenced` 同一口径。 */
+export function countUnsequencedSpans(db: Database.Database, selectedIds: readonly number[]): number {
+  if (selectedIds.length === 0 || !hasSpanTable(db)) return 0;
+  const stmt = db.prepare(
+    `SELECT COUNT(*) AS n FROM access_trace_span s JOIN access_log a ON a.id = s.access_log_id
+      WHERE s.access_log_id IN (SELECT value FROM json_each(?)) AND a.ledger_seq IS NULL`
+  );
+  const chunkSize = SPAN_EXPORT_CHUNK_ROWS;
+  let total = 0;
+  for (let offset = 0; offset < selectedIds.length; offset += chunkSize) {
+    total += (stmt.get(JSON.stringify(selectedIds.slice(offset, offset + chunkSize))) as { n: number }).n;
+  }
+  return total;
+}
+
 /**
  * 导出所选调用行的全部 span。`ledger_seq` 经 JOIN 所属行取得；所属行 `ledger_seq` 为 NULL 的 span
  * 不进文件、单列计数 `unsequenced`（不静默忽略）。排序固定：`access_log_id, seq`。

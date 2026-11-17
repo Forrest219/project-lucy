@@ -58,10 +58,10 @@ export function decideSourceSelection(input: {
   return inHits ? { kind: "allow" } : { kind: "tolerate", reason: "multi_hit_unconfirmed" };
 }
 
-type SourceBrief = { connectionId: string; sourceName: string; table: string };
+type SourceBrief = { connectionId: string; schema: string; sourceName: string; table: string };
 
 function brief(key: SourceIdentity): SourceBrief {
-  return { connectionId: key.connectionId, sourceName: key.sourceName, table: key.physicalTable };
+  return { connectionId: key.connectionId, schema: key.schema, sourceName: key.sourceName, table: key.physicalTable };
 }
 
 /** answer_verifiability.sourceSelection 的披露形态（不含取值、凭据）。 */

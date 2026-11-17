@@ -193,7 +193,7 @@ import {
   type SourceAmbiguityDenial,
   type SourceIdentity,
 } from "./source-ambiguity-gate.js";
-import { toSelectionDisclosure, type SourceSelectionDisclosure } from "./source-selection-tolerance.js";
+import { SOURCE_COUNT_CAP, toSelectionDisclosure, type SourceSelectionDisclosure } from "./source-selection-tolerance.js";
 
 export { registerPublishedVersion };
 export {
@@ -1268,7 +1268,7 @@ function lucyBeginQuestionTool() {
   return {
     name: "lucy_begin_question",
     description:
-      "Recommended at the start of each new user business question. Prefer the user's original wording in `question`; always provide `intentSummary`. When multiple visible sources may match the same business term, Lucy allows the query but discloses the selection in answer_verifiability.sourceSelection (tell the user which source you used and that it was unconfirmed). source_ambiguity_gate is returned only for hard failures (unresolved refs, catalog health, cross-connection, more than 4 sources); then retry as a single-source query. Skipping begin does not bypass these hard checks. Do not call for protocol checks or tool discovery only.",
+      `Recommended at the start of each new user business question. Prefer the user's original wording in \`question\`; always provide \`intentSummary\`. When multiple visible sources may match the same business term, Lucy allows the query but discloses the selection in answer_verifiability.sourceSelection (tell the user which source you used and that it was unconfirmed). source_ambiguity_gate is returned only for hard failures (unresolved refs, catalog health, cross-connection, more than ${SOURCE_COUNT_CAP} sources, or no source-qualified reference at all while the business term matches several sources); then retry as a single-source query using \`source.measure\` keys. Skipping begin does not bypass these hard checks. Do not call for protocol checks or tool discovery only.`,
     inputSchema: {
       type: "object",
       properties: {
@@ -4269,7 +4269,6 @@ async function handlePostTraced(
     parsedRpc = parsed;
     rpcMethod = parsed.method as string | undefined;
     traceContext.rpcMethod = rpcMethod;
-    trace.upstreamStage = rpcMethod === "initialize" ? "upstream_handshake" : "upstream_call";
     requestId = (parsed.id as string | number | undefined) ?? "";
 
     if (rpcMethod === "initialize") {
@@ -5261,6 +5260,10 @@ async function buildDenialRepairPayload(
         try {
           const projectRoot = await resolveProjectRoot();
           const listed = await listSources(projectRoot, { skipAuthorizedCounts: true });
+          // 度量名取自上面已装配的 overlay（与 measureCount 同源）；读不到名字＝空＝不合法（fail-closed）。
+          const measureNamesByKey = new Map(
+            enriched.matchableSources.map((m) => [repairEvidenceIdentityKey(m.identity), m.measureNames ?? []])
+          );
           for (const src of listed) {
             const key = repairEvidenceIdentityKey({
               connectionId: src.conn,
@@ -5271,7 +5274,7 @@ async function buildDenialRepairPayload(
             schemaProbeByIdentity.set(key, {
               schemaExists: true,
               completion: src.completion,
-              measureNames: src.measureCount > 0 ? ["*"] : []
+              measureNames: measureNamesByKey.get(key) ?? []
             });
           }
           // 权限可见但 listSources 未收录 → schemaExists=false（已知不存在于语义清单）

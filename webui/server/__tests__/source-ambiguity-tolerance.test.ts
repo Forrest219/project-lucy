@@ -329,7 +329,7 @@ describe("P1-35 v0.4 source selection tolerance", () => {
     const probe = new Map(
       ["a", "b", "c", "d", "e"].map((n) => [
         repairEvidenceIdentityKey(idOf(n)),
-        { schemaExists: true as boolean | null, completion: "done", measureNames: ["*"] }
+        { schemaExists: true as boolean | null, completion: "done", measureNames: ["m"] }
       ])
     );
     const out = await checkSourceAmbiguityGate({
@@ -392,8 +392,8 @@ describe("P1-35 v0.4 source selection tolerance", () => {
       descriptionState: "present" as const
     }));
     const probe = new Map([
-      [repairEvidenceIdentityKey(a), { schemaExists: true as boolean | null, completion: "done", measureNames: ["*"] }],
-      [repairEvidenceIdentityKey(b), { schemaExists: true as boolean | null, completion: "done", measureNames: ["*"] }]
+      [repairEvidenceIdentityKey(a), { schemaExists: true as boolean | null, completion: "done", measureNames: ["m"] }],
+      [repairEvidenceIdentityKey(b), { schemaExists: true as boolean | null, completion: "done", measureNames: ["m"] }]
     ]);
     const map = buildRepairEvidenceForGate({
       candidates: rows,
@@ -412,5 +412,48 @@ describe("P1-35 v0.4 source selection tolerance", () => {
     const closure = buildAmbiguityRepairClosure(toRepairTargetEvidence(rows, map));
     expect(closure.usableTargets.sort()).toEqual(["a", "b"]);
     expect(closure.rejected.some((r) => r.reason === "invalid_parameter_shape")).toBe(false);
+  });
+
+  it("CR-05: a candidate without the requested measure is not a usable retry target", () => {
+    const a = idOf("a");
+    const b = idOf("b");
+    const rows = [a, b].map((key) => ({
+      sourceKey: key,
+      displayName: key.sourceName,
+      allowListName: key.sourceName,
+      measures: [],
+      description: "x",
+      descriptionState: "present" as const
+    }));
+    const probe = new Map([
+      [repairEvidenceIdentityKey(a), { schemaExists: true as boolean | null, completion: "done", measureNames: ["order_count"] }],
+      [repairEvidenceIdentityKey(b), { schemaExists: true as boolean | null, completion: "done", measureNames: ["return_count"] }]
+    ]);
+    const evidenceFor = (measures: unknown[]) =>
+      buildAmbiguityRepairClosure(
+        toRepairTargetEvidence(
+          rows,
+          buildRepairEvidenceForGate({
+            candidates: rows,
+            permissions: {
+              sources: [
+                { connectionId: CONN, schema: SCHEMA, sourceName: "a", table: `${SCHEMA}.a` },
+                { connectionId: CONN, schema: SCHEMA, sourceName: "b", table: `${SCHEMA}.b` }
+              ],
+              tools: ["lucy_query"]
+            } as never,
+            toolName: "lucy_query",
+            sourceMapReliable: true,
+            schemaProbeByIdentity: probe,
+            args: { connectionId: CONN, measures }
+          })
+        )
+      );
+    // 度量只在 a 存在：b 不能进 usableTargets（重试到 b 上游必然报错）。
+    expect(evidenceFor(["a.order_count"]).usableTargets).toEqual(["a"]);
+    // 两个度量各归各表：各自限定的度量都存在，两者都可单来源重试。
+    expect(evidenceFor(["a.order_count", "b.return_count"]).usableTargets.sort()).toEqual(["a", "b"]);
+    // 限定到本候选但本候选没有该度量 → 不合法。
+    expect(evidenceFor(["a.return_count"]).usableTargets).toEqual(["b"]);
   });
 });

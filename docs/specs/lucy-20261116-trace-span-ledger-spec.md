@@ -23,6 +23,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v1.0 复核修订 | 2026-11-17 代码审查后的实现对齐，不改合同：manifest `derivationVersion` 取现行派生版本 `v2p5-2`（D7，与 `spanCoverage.version` 一致）；基础导出路径的 `spans.unsequenced` 与 pack 路径同口径计数（不再硬编码 0；仍为被排除 span 数，与 `spanCoverage.unsequenced` 的行数量纲不同）；Trace ID／Trace Span 并入术语标准 §4.7；`redactStorageDetail` 补 `scheme://user:password@host` 口令段；TRC-11 事件环度量改为先锚点再补尾（Node 直方图首个回调只作锚点），脚本默认规模降为 2 万条、10 万条须显式 `--traces 100000` |
 | v1.0 | 2026-11-17 **终稿确权（委托人授权代理修正后定稿，免 Codex 终审；≠ 开发授权）**：O1–O8 全部闭合（O6 冻结为每 trace span 表＋索引平均 ≤ 8 KB、平均 span 数协议 ≤ 6／业务 ≤ 14，span 与父行同寿命、不新增清理；O2／O7／O8 取建议值）；`session_shortcircuit` 注明为 P1-37 U3b 预留。R3 修订**未经第 4 轮复审**，为已知缺口。|
 | v0.4-draft | 2026-11-17 对抗性审阅 R3（终轮；GPT 5.6 子代理，**非 Codex CLI**；8 条，逐项状态见评审记录）修订：§5.4 理由码注册表 v1 冻结为 17 项粗粒度码＋全函数映射（原始 `decision_reason` 留旧列与 `reason_param`，DB `CHECK`）；`sl_query` 脱敏 UAT 改为「基线能用合法入参真实触发才入 UAT，否则 vitest」；D8 补 `X-Real-IP` 分类修正；C9c 墙钟锚定（`v2p5-2` 行 `ts` 与根终点同读数）；`attrs_json` 按 UTF-8 字节＋`json_valid`；`foreign_keys` 由 admin 状态接口读服务连接值；O1 去掉已冻结的 20 ms。总账出口同步改为「已落库行」。|
 | v0.3-draft | 2026-11-17 对抗性审阅 R2（GPT 5.6 子代理，**非 Codex CLI**；15 条，逐项状态见评审记录）修订：承诺收窄为「已落库行的 span 扩展与原子性」，入口完整性不由本条承担（漏记由 UAT 检出、故障下丢行归 S02）；发送清单关联键改用 UA＋唯一 JSON-RPC id；`spans.csv` 的 `ledger_seq` 经 JOIN 所属行；`ip_source`／`trusted_source` 改为**新增两列**（`trusted_source` 现状未落账）；C8 增加连通／无环／序号连续／列约束并落 DB CHECK；`tools/call` 最小阶段集合；理由码改为有限版本化注册表（`reason_code`＋`reason_param`）；`foreign_keys` 开启的子表盘点与删除顺序；根 span 关闭边界冻结、C9 容差由 20 ms 改为 1 ms 取整；同 S 重导须 pending=0，因果序号问题登记 O7；hdfs 脱敏子项移出必做 UAT（O8）；§3 改按分支矩阵；脱敏预期表补公网／IPv6 等反例 |
@@ -41,7 +42,7 @@
 
 This feature follows `webui/docs/00-product-terminology-standard.md`.
 
-New terms: **调用链路 ID**（Trace ID；调用流水列 `trace_id` 的展示名，禁用「追踪号」「链路号」混称）；**阶段记录**（Span；一次请求内某一阶段的耗时与结果，禁用「子调用」「节点」）。两词在获授权进入实现前并入术语标准；调用流水 CSV 与封存包的列头沿用既有「调用流水」「事件 ID」口径，不新增面向用户的 WebUI 文案。
+New terms: **调用链路 ID**（Trace ID；调用流水列 `trace_id` 的展示名，禁用「追踪号」「链路号」混称）；**阶段记录**（Span；一次请求内某一阶段的耗时与结果，禁用「子调用」「节点」）。两词已并入术语标准 §4.7（Trace ID／Trace Span）；调用流水 CSV 与封存包的列头沿用既有「调用流水」「事件 ID」口径，不新增面向用户的 WebUI 文案。
 
 ## 交互合同豁免
 

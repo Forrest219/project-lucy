@@ -305,8 +305,6 @@ export type TraceRecorderOptions = {
 
 export class TraceRecorder {
   readonly traceId: string;
-  /** 当前请求的上游调用应使用的阶段（initialize 用 `upstream_handshake`）。 */
-  upstreamStage: "upstream_call" | "upstream_handshake" = "upstream_call";
   private readonly monoNow: () => number;
   private readonly mono0: number;
   private readonly wall0: number;

@@ -34,7 +34,10 @@ describe("scope restatement instructions (SC-25)", () => {
     const text = await instructions();
     expect(text).toContain("source_ambiguity_gate");
     expect(text).toContain("放行并披露");
-    expect(text).toContain("不得自行挑选最高分表");
+    // v0.4：选表歧义放行但必须如实披露所用来源（取代 v0.3 的「不得自行挑选最高分表」）。
+    expect(text).toContain("未经用户确认");
+    // keys=0（无来源限定引用）仍会拦截，须在拦截清单里（CR-02）。
+    expect(text).toContain("没有任何带来源限定的引用");
     expect(text).not.toContain("代理不实现确认门闩");
   });
 

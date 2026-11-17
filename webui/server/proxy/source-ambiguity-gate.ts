@@ -52,6 +52,7 @@ import { joinConnected, loadDeclaredJoinEdges } from "./source-join-graph.js";
 import {
   appendToleratedEvent,
   decideSourceSelection,
+  SOURCE_COUNT_CAP,
   type SourceSelection
 } from "./source-selection-tolerance.js";
 
@@ -85,8 +86,8 @@ export const ASK_FIRST_SECTION = `## 问询范围确认／多表命中先问
 - 问询**原文**里出现指代（"这个""上次那个""它"）或一句包含两个意图时，先复述账户、月份和产品线，等用户确认后再发 \`lucy_query\`。
 - 没有用户原文的推断问询（例如从历史日志或工具报错反推出来的需求）跳过复述，直接按已确认范围查数。
 - 当多个可见来源表都可能回答同一业务词时，优先向用户澄清选哪张表，再发 \`lucy_query\`／\`lucy_explain_query\`；用户无法即时确认时，按最贴近问题的来源直接查，并在答复里说明所用来源。
-- Proxy 对选表歧义采用「放行并披露」：单来源、或经语义层已声明 join 连通的同连接多来源（至多 4 个）直接放行；集外钉选或未连通的多来源同样放行，但 \`answer_verifiability.sourceSelection\` 会标注 \`tolerated\`——此时你**必须**在答复里如实告知所用来源，并说明该选表未经用户确认。
-- 仍会拦截（\`source_ambiguity_gate\`）：无法解析的引用、目录健康失败、跨连接多来源、来源数超过 4、ACL／行权限限制。被拦后按返回的 \`usableTargets\` 改写为**单来源查询**重试；跨连接则按连接分别查。
+- Proxy 对选表歧义采用「放行并披露」：单来源、或经语义层已声明 join 连通的同连接多来源（至多 ${SOURCE_COUNT_CAP} 个）直接放行；集外钉选或未连通的多来源同样放行，但 \`answer_verifiability.sourceSelection\` 会标注 \`tolerated\`——此时你**必须**在答复里如实告知所用来源，并说明该选表未经用户确认。
+- 仍会拦截（\`source_ambiguity_gate\`）：无法解析的引用、目录健康失败、跨连接多来源、来源数超过 ${SOURCE_COUNT_CAP}、ACL／行权限限制；以及请求里**没有任何带来源限定的引用**（如度量只写 \`order_count\`、没有 \`source.\` 前缀）而业务词命中多个来源时——此时改用 \`source.measure\` 形式钉选单一来源再重试。被拦后按返回的 \`usableTargets\` 改写为**单来源查询**重试；跨连接则按连接分别查。
 - 宿主 person＋attestation 确认仍可用于 WebUI；Agent 不得伪造宿主 confirm HTTP。
 - 支持／暂不支持的组合场景见 \`docs/specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md\` §4.5。
 - 指代／双意图的复述仍约束模型行为。
@@ -419,6 +420,36 @@ export type GateSchemaProbe = {
   dimensionNames?: readonly string[];
 };
 
+/**
+ * 单身份重试形态的度量核验（Spec §4.4 argsShape）：本候选限定的度量与无限定度量须真实存在；
+ * 指向其他候选的度量在改写时被丢弃，但请求里至少有一个度量名在本候选存在，否则重试无度量可用。
+ * 仅字符串度量参与核验（`{expr,name}` 即席表达式不带来源限定）；无字符串度量则恒合法。
+ */
+function retryMeasureShapeValid(
+  rawMeasures: unknown,
+  candidateSourceName: string,
+  measureNames: readonly string[] | undefined
+): boolean {
+  const requested = Array.isArray(rawMeasures)
+    ? rawMeasures.filter((m): m is string => typeof m === "string" && m.trim().length > 0)
+    : [];
+  if (requested.length === 0) return true;
+  const known = new Set((measureNames ?? []).map((n) => n.trim().toLowerCase()));
+  const self = candidateSourceName.trim().toLowerCase();
+  let anyPresent = false;
+  for (const raw of requested) {
+    const text = raw.trim().toLowerCase();
+    const dot = text.lastIndexOf(".");
+    const leaf = dot >= 0 ? text.slice(dot + 1) : text;
+    const qualifier = dot >= 0 ? text.slice(0, dot).split(".").pop() : null;
+    const present = known.has(leaf);
+    if (present) anyPresent = true;
+    const addressesSelf = qualifier === null || qualifier === self;
+    if (addressesSelf && !present) return false;
+  }
+  return anyPresent;
+}
+
 export function buildRepairEvidenceForGate(input: {
   candidates: readonly AmbiguityCandidateRow[];
   permissions: Pick<EffectivePermissions, "sources" | "tools">;
@@ -452,14 +483,9 @@ export function buildRepairEvidenceForGate(input: {
     const compiled = probe?.completion === "done";
     // 无探测入口时 argsShape 一律 false（fail-closed）。
     // 校验对象是「单身份重试形态」（Spec §4.4），不是原请求：原请求含他表引用不使候选失效。
-    let parameterShapeValid = false;
-    if (probe) {
-      parameterShapeValid = true;
-      if (Array.isArray(input.args?.measures) && input.args.measures.length > 0) {
-        const names = probe.measureNames;
-        if (names && names.length === 0) parameterShapeValid = false;
-      }
-    }
+    const parameterShapeValid = probe
+      ? retryMeasureShapeValid(input.args?.measures, c.sourceKey.sourceName, probe.measureNames)
+      : false;
     out.set(key, {
       schemaExists,
       visibleToPrincipal: isVisible,
@@ -693,7 +719,7 @@ export function denialMessageFor(detail: string | undefined): string {
     return "跨连接多来源不能在一次查询中合并：请按连接拆分为单连接查询";
   }
   if (detail === "source_count_over_cap") {
-    return "单次查询引用的来源过多：请拆成单来源（或不超过 4 个已声明 join 的来源）查询";
+    return "单次查询引用的来源过多：请拆成单来源（或不超过 ${SOURCE_COUNT_CAP} 个已声明 join 的来源）查询";
   }
   return SOURCE_AMBIGUITY_MESSAGE;
 }

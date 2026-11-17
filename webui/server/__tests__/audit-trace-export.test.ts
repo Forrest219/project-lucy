@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AccessLogEntry } from "../proxy/audit.js";
 import { TraceRecorder, completeTrace } from "../proxy/audit-trace-span.js";
 import { buildExportPackV2, EXPORT_V2_HEADERS } from "../admin/audit-export-v2.js";
-import { SPANS_CSV_HEADERS, computeSpanCoverage, renderSpansCsv } from "../admin/audit-trace-export.js";
+import { SPANS_CSV_HEADERS, computeSpanCoverage, countUnsequencedSpans, renderSpansCsv } from "../admin/audit-trace-export.js";
 
 let dir: string;
 let dbPath: string;
@@ -141,6 +141,8 @@ describe("spans.csv 渲染", () => {
     const present = new Set(out.csv.trimEnd().split("\n").slice(1).map((l) => l.split(",")[idCol]));
     expect([...present]).toEqual([String(ids[0])]);
     expect(out.unsequenced).toBeGreaterThan(0);
+    // 基础导出路径（不渲染 spans.csv）用同一口径计数，不再硬编码 0。
+    expect(countUnsequencedSpans(db, ids)).toBe(out.unsequenced);
     db.close();
   });
 
@@ -242,6 +244,9 @@ describe("导出包接线", () => {
     expect(spans?.rowCount).toBeGreaterThanOrEqual(6);
     expect(spans?.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(result.manifest.spans).toEqual({ ledgerUpperSeq: 100, unsequenced: 0 });
+    // P1-36 D7：manifest 声明现行派生版本，与 spanCoverage.version 一致。
+    expect(result.manifest.derivationVersion).toBe("v2p5-2");
+    expect(result.manifest.derivationVersion).toBe(result.manifest.spanCoverage.version);
     expect(result.manifest.spanCoverage.traceLinked).toMatchObject({ status: "pass", denominator: 3 });
     expect(result.manifest.spanCoverage.spanIntegrity.status).toBe("pass");
     expect(result.manifest.spanCoverage.spanTiming.status).toBe("pass");

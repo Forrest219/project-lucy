@@ -31,6 +31,9 @@ This feature follows `webui/docs/00-product-terminology-standard.md`.
 New terms:
 
 - **Source Pin Allow（来源钉选放行）**：请求经 `collectCanonicalSourceKeys` 得到**恰好一个** ACL 可见 Source Identity，且满足 §4.2 D1 条件时，表级歧义门闩**放行**该次 `lucy_query`／`lucy_explain_query`，**不**要求 person 宿主 attested。中文主称「来源钉选放行」。钉选放行**不是**「MCP 可达确认」的同义词。
+- **放行并披露**（v0.4 D10／D13）：选表歧义不再强拦，放行该次查询并在 `answer_verifiability.sourceSelection` 披露所用来源；对应运行时指导里的用户可见主称。`status=tolerated` 与 `reason` 取值（`multi_hit_unconfirmed`／`pin_outside_hits`／`unjoined_multi_source`）是机器字段值，不是面向用户的中文主称。
+- **集外钉选**：请求钉选的来源不在业务词命中集内（`pin_outside_hits`）。
+- **未连通的多来源**：同连接多个来源之间没有被语义层已声明的 join 连成一个整体（`unjoined_multi_source`）。
 - **MCP-reachable confirmation（MCP 可达确认）**：与候选快照同代、且不依赖 `actorKind=person`＋WebUI-only 宿主头的**显式确认**路径。本波 **O1＝不做**；正式主路径是钉选放行，不是参数确认。
 
 Forbidden:
@@ -97,7 +100,7 @@ Forbidden:
 | **D9** | **安全边界收窄（显式）**：承认 D1 允许 Agent 在 `termHits` **集内**自选唯一钉选成交，**无**用户参与证据。父 D5／D7／D11「仅 attested 确认可放行查数」及父 SC-17 中「拒绝后无用户参与不得成交」条款，对 **D1 钉选放行路径**让位。父 SC-17 **保留范围**＝非 person／缺 attestation 调用宿主 confirm **HTTP** → **403**。集内错表误报＝**已接受残余风险**；缓解＝`S∈termHits`、instructions、Eval／P0-6 另线——**不得**再写「SC-17 完整语义不变」 | **冻结（回应 Codex F-01）** |
 | **D10** | **容错定位（v0.4）**：选表歧义（词命中≥2、钉选集外、多来源）**不再作为强拦理由**；改为「放行＋披露＋审计」。门闩只在**硬线**（D11）上 deny。本条**修订父 P0-3 的「强门禁」定位**（P0-3 状态不变，修订指针见父 Spec 头部）。D9 的残余风险范围随之扩大，缓解＝披露＋审计（D13／D14），**不得**写成「已消灭」 | **冻结（委托人 2026-11-16 夜）** |
 | **D11** | **三档裁决**：①**放行**（无披露）；②**放行并披露**；③**拦截**（硬线，必须给 MCP 可达下一步）。归档见 §4.5。**硬线**＝未知／无法解析引用、目录／描述健康失败、跨连接多来源、来源数超上限、既有 ACL／行权限／字段暴露／口径绑定／宿主 confirm 403 | **冻结（委托人 2026-11-16 夜）** |
-| **D12** | **join 连通放行（方向 B）**：同连接、全部可见、（`hits<2` 或全部 ∈ `termHits`）、且被语义层**已声明**的 `joins`（读 overlay `semantic-layer/<conn>/<table>.yaml` 与 `_schema/<schema>.yaml` 两处；`source=candidate` 的候选 join **不算**；**任一端声明即可**——对端无 yaml 也算；可经中间表**传递连通**）连成**一个连通整体** → 档①放行。两端均未声明（如 demo 的 returns＋people，不含 orders）→ 落档② | **冻结（委托人 2026-11-16 夜）** |
+| **D12** | **join 连通放行（方向 B）**：同连接、全部可见、（`hits<2` 或全部 ∈ `termHits`）、且被语义层**已声明**的 `joins`（读 overlay `semantic-layer/<conn>/<table>.yaml` 与 `_schema/<schema>.yaml` 两处；`source=candidate` 的候选 join **不算**；**任一端声明即可**——对端无 yaml 也算；可经中间表**传递连通**）连成**一个连通整体** → 档①放行。**节点＝完整 Source Identity（`connectionId`＋`schema`＋`sourceName`）**：同名不同 schema 的表是两个节点；无 schema 限定的 `to` 视作与声明方同 schema，跨 schema 须显式写 `schema.table`。两端均未声明（如 demo 的 returns＋people，不含 orders）→ 落档② | **冻结（委托人 2026-11-16 夜）** |
 | **D13** | **披露载体＝响应结构化字段**：在既有 `answer_verifiability` 内**加性**新增 `sourceSelection`（不发明第二套错误 JSON；不依赖 Agent 文本自觉）。字段至少：`status`（固定 `tolerated`）、`reason`（`multi_hit_unconfirmed`／`pin_outside_hits`／`unjoined_multi_source`）、`usedSources[]`（完整身份）、`termHits[]`（完整身份，若有）。档①**不带该字段**。**仅 `lucy_query` 成功响应携带**（`lucy_explain_query` 不产 `answer_verifiability`，档②只写审计）。`schema_version` 保持 `"1"`（加性字段） | **冻结（委托人 2026-11-16 夜）** |
 | **D14** | **审计只记录不定阈值**：档②每次放行写审计事件（`reason`、`usedSources`、`termHits`、工具、会话、时间；**不含**取值与凭据）。存储＝状态目录 `.ktx-ui/source-ambiguity/tolerated-events.jsonl`（append-only，一行一事件；与 journey 同目录，免 sqlite 迁移）。**本波不设收紧阈值**；观察期满（建议 1 周）后由委托人另定，回写 Spec。无审计则容错不可度量，**不得**上线声称「已接受容错」 | **冻结（委托人 2026-11-16 夜）** |
 | **D15** | **跨连接与来源数上限**：多来源跨连接 → 拦截；来源数 `>4`（草案值，**O3**）→ 拦截。拦截载荷须按 §4.4 给 usable 单来源改写（H1）或诚实说明 | **冻结（委托人 2026-11-16 夜）** |
@@ -267,7 +270,7 @@ D1 allow **只**解除本门闩。随后仍须：
 | SC-E03 | 窄意图单命中对照：首次 query **成交或合法空结果**（ESC-02；**禁止**「业务拒绝但非 ambiguity」凑绿） | 必做 |
 | SC-E04 | 非 person `POST .../source-ambiguity/confirm` 仍 403（ESC-03；SC-17 HTTP 部分） | 必做 |
 | SC-E05 | 钉选身份 ∉ termHits 且 termHits≥2 → 仍 deny | **〔v0.4 取代：E24〕** 必做 |
-| SC-E06 | never_begun＋单钉选可见 → allow；never_begun＋双钉选／未钉选 → `context_missing`（非 ambiguity 旁路） | 必做 |
+| SC-E06 | never_begun＋单钉选可见 → allow；never_begun＋**未钉选**（`keys=0`）→ `context_missing`（非 ambiguity 旁路）。**〔v0.4 修订：never_begun＋双／多钉选不再 `context_missing`；词源命中集为空（视作无歧义），按 §4.5 三档裁决——已声明 join 连通→档①放行，未连通→档②放行＋披露＋审计 `unjoined_multi_source`；健康失败、未知引用、跨连接、超上限仍为硬线，先于本条裁决。见 §4.1 v0.4 修订句、M2／M12、SC-E21／E23〕** | 必做 |
 | SC-E07 | **H1／H2**：多表 deny 且探测通路可用时，对已收录可见候选，`rejected` **不得**全员仅 `schema_evidence_unavailable`；禁止假 Schema 刷屏 | 必做 |
 | SC-E08 | **H1 专用**：前置「≥1 候选五项全真」→ `usableTargets` **非空**且可按 §4.4 重试规则改写为单身份请求；五项失败对象不得进 usable。**H2**（全员合法失败）允许空 usable，但须逐项失败原因 | 必做 |
 | SC-E09 | **F1**：探测整体失败 → 允许 null／空 usable；诚实探测失败文案；下一步不得写成「仅钉选即可越过目录健康门」 | 必做 |
@@ -337,3 +340,4 @@ D1 allow **只**解除本门闩。随后仍须：
 | v0.4-draft | 2026-11-16 夜｜全真复核 ce8610f7（ESC-07／08 FAIL）；委托人以「分析师群体通用性」升 v2 必做，并批准方向 B＋容错披露三档（选表歧义降为披露＋审计；披露载体＝响应字段；审计只记录）；新增 D10–D15、§4.5 支持矩阵、SC-E20–E30、O3；SC-E02／E05／E10／E14 修订；**待 Codex 终审与开发授权** |
 | v0.4 | 2026-11-16 夜｜委托人明示免 Codex 终审、授权定稿与开发；O3 闭合（上限 4／传递连通／`sourceSelection`／`schema_version` 不升）；D12 补读 overlay＋manifest 两处 join 且排除 candidate、对端无 yaml 亦连通；D13 仅 `lucy_query` 带披露；D14 存储＝JSONL；SC-E23／E30 夹具按 demo 实测修正 |
 | v0.4 实现 | 2026-11-16 夜｜按授权实现：`source-join-graph.ts`／`source-selection-tolerance.ts` 新增；门闩 keys≥1 走三档；`argsReferencesIdentity` 删除；`sourceSelection` 披露＋`tolerated-events.jsonl` 审计；跨连接／超上限拒绝 message 直写下一步；ASK_FIRST／data-qa-instructions 改「放行并披露」；UAT 夹具 `uat_sag_*`／`demo-mysql-b` 用后已还原；ESCAPE v0.4 跑次 PASS（观察：KTX 对未连通多来源必拒，M6 披露不可达，取证靠审计）；D13 `status` 固定 `tolerated` |
+| v0.4 复核修订 | 2026-11-17｜代码审查（[P1-35／36／37 审查记录](../reviews/2026-11-17-p1-35-p1-36-p1-37-code-review.md)）后的文字与实现对齐，不改 D10–D15 决策：SC-E06 标注 v0.4 修订（never_begun＋多钉选按三档，与 §4.1 修订句／M2／M12 一致）；D12 补节点身份＝完整 Source Identity；§4.4 argsShape 的度量存在性按候选真实度量名核验（生产探针不再用通配）；Terminology Compliance 补登「放行并披露」「集外钉选」「未连通的多来源」；运行时指导与 `lucy_begin_question` 描述补列「无来源限定引用」拦截面，上限引用 `SOURCE_COUNT_CAP` |

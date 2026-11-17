@@ -15,14 +15,22 @@ export type DeclaredJoinEdge = {
   connectionId: string;
   /** 声明方 sourceName（末段）。 */
   from: string;
-  /** 对端 sourceName（末段；可来自 `schema.table` 写法）。 */
+  /** 对端 sourceName（可带 `schema.` 限定；无限定时视作与声明方同 schema）。 */
   to: string;
+  /** 声明方所在 schema；缺省＝不按 schema 区分（仅纯函数夹具使用，磁盘读取一律带上）。 */
+  fromSchema?: string;
 };
 
 function lastSegment(name: string): string {
   const trimmed = name.trim();
   const dot = trimmed.lastIndexOf(".");
   return dot >= 0 ? trimmed.slice(dot + 1) : trimmed;
+}
+
+/** `schema.table` → schema；无限定或空 → null。 */
+function qualifierOf(name: string): string | null {
+  const parts = name.trim().split(".");
+  return parts.length >= 2 ? parts[parts.length - 2]! || null : null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -38,7 +46,7 @@ function formalJoinTargets(joins: unknown): string[] {
     const rec = asRecord(raw);
     if (typeof rec.to !== "string" || !rec.to.trim()) continue;
     if (rec.source === "candidate") continue;
-    out.push(lastSegment(rec.to));
+    out.push(rec.to.trim());
   }
   return out;
 }
@@ -65,23 +73,23 @@ export async function loadDeclaredJoinEdges(
     return edges;
   }
   const seen = new Set<string>();
-  const push = (connectionId: string, from: string, to: string) => {
-    const id = `${connectionId}\0${from}\0${to}`;
+  const push = (connectionId: string, fromSchema: string, from: string, to: string) => {
+    const id = `${connectionId}\0${fromSchema}\0${from}\0${to}`;
     if (seen.has(id)) return;
     seen.add(id);
-    edges.push({ connectionId, from, to });
+    edges.push({ connectionId, from, to, fromSchema });
   };
   for (const key of keys) {
     const from = lastSegment(key.sourceName);
     const connDir = path.join(base, key.connectionId);
     const overlay = await readYamlRecord(path.join(connDir, `${from}.yaml`));
     if (overlay) {
-      for (const to of formalJoinTargets(overlay.joins)) push(key.connectionId, from, to);
+      for (const to of formalJoinTargets(overlay.joins)) push(key.connectionId, key.schema, from, to);
     }
     const manifest = await readYamlRecord(path.join(connDir, "_schema", `${key.schema}.yaml`));
     if (manifest) {
       const table = asRecord(asRecord(manifest.tables)[from]);
-      for (const to of formalJoinTargets(table.joins)) push(key.connectionId, from, to);
+      for (const to of formalJoinTargets(table.joins)) push(key.connectionId, key.schema, from, to);
     }
   }
   return edges;
@@ -93,18 +101,32 @@ export function joinConnected(
   edges: readonly DeclaredJoinEdge[]
 ): boolean {
   if (keys.length <= 1) return true;
-  const node = (k: SourceIdentity) => `${k.connectionId}\0${lastSegment(k.sourceName)}`;
-  const nodes = new Set(keys.map(node));
+  // 节点＝完整身份（连接＋schema＋sourceName）：同名不同 schema 的表是两个节点，不得塌缩成一个。
+  const nodeId = (k: SourceIdentity) => `${k.connectionId}\0${k.schema}\0${lastSegment(k.sourceName)}`;
+  const nodes = new Map(keys.map((k) => [nodeId(k), k]));
   const adjacency = new Map<string, Set<string>>();
-  for (const n of nodes) adjacency.set(n, new Set());
+  for (const id of nodes.keys()) adjacency.set(id, new Set());
+  const matching = (connectionId: string, name: string, schema: string | null) =>
+    [...nodes.entries()]
+      .filter(
+        ([, k]) =>
+          k.connectionId === connectionId
+          && lastSegment(k.sourceName) === lastSegment(name)
+          && (schema === null || k.schema === schema)
+      )
+      .map(([id]) => id);
   for (const e of edges) {
-    const a = `${e.connectionId}\0${lastSegment(e.from)}`;
-    const b = `${e.connectionId}\0${lastSegment(e.to)}`;
-    if (!nodes.has(a) || !nodes.has(b) || a === b) continue;
-    adjacency.get(a)!.add(b);
-    adjacency.get(b)!.add(a);
+    const fromSchema = e.fromSchema ?? null;
+    const toSchema = qualifierOf(e.to) ?? fromSchema;
+    for (const a of matching(e.connectionId, e.from, fromSchema)) {
+      for (const b of matching(e.connectionId, e.to, toSchema)) {
+        if (a === b) continue;
+        adjacency.get(a)!.add(b);
+        adjacency.get(b)!.add(a);
+      }
+    }
   }
-  const start = node(keys[0]!);
+  const start = nodeId(keys[0]!);
   const visited = new Set<string>([start]);
   const queue = [start];
   while (queue.length > 0) {

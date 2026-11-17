@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const NAME = process.env.UAT_WIDE_CONTAINER ?? "lucy-uat-wide";
+const SANDBOX_PREFIX = "lucy-uat";
 const VOLUME = `${NAME}-data`;
 const NETWORK = process.env.UAT_WIDE_NETWORK ?? "compose_default";
 const IMAGE = process.env.UAT_WIDE_IMAGE ?? "project-lucy:demo";
@@ -35,8 +36,18 @@ const AGENTS = Number(process.env.UAT_WIDE_AGENTS ?? 20);
 const DB = "uat_wide_mcp";
 const CONNECTION = "uat-wide-catalog";
 const DB_ROOT_PASSWORD = "lucy_demo_root";
-const SECRETS = path.join(os.tmpdir(), "lucy-uat-wide");
+// 与 lib/mcp-uat-lib.mjs 的读侧同一个 env，读写删落在同一目录。
+const SECRETS = process.env.UAT_WIDE_STATE_DIR ?? path.join(os.tmpdir(), "lucy-uat-wide");
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
+
+// 删除护栏：`down`／`restart` 会 `docker rm -f`、`docker volume rm -f` 并递归删除状态目录；
+// 目标名／目录名不以 lucy-uat 开头一律拒绝，避免 env 误指到 demo 栈（如 compose-lucy-1）或用户目录。
+if (!NAME.startsWith(SANDBOX_PREFIX) || !path.basename(SECRETS).startsWith(SANDBOX_PREFIX)) {
+  console.error(
+    `refused: UAT_WIDE_CONTAINER ("${NAME}") and the basename of UAT_WIDE_STATE_DIR ("${path.basename(SECRETS)}") must both start with "${SANDBOX_PREFIX}"`
+  );
+  process.exit(2);
+}
 
 const docker = (args, options = {}) => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -195,6 +206,7 @@ async function up() {
 }
 
 function down() {
+  console.log(`==> removing container ${NAME}, volume ${VOLUME}, database ${DB}, state dir ${SECRETS}`);
   try { docker(["rm", "-f", NAME]); } catch { /* 不存在 */ }
   try { docker(["volume", "rm", "-f", VOLUME]); } catch { /* 不存在 */ }
   try { mysql(`DROP DATABASE IF EXISTS \`${DB}\`;`); } catch { /* demo-db 不在 */ }
@@ -216,6 +228,7 @@ function seedRows() {
 /** 换新镜像但保留卷（账号、令牌、目录、审计库都在卷里）。 */
 async function restart() {
   if (!existsSync(secretPath("state.json"))) throw new Error("no sandbox state; run `up` first");
+  console.log(`==> replacing container ${NAME} (volume ${VOLUME} kept)`);
   try { docker(["rm", "-f", NAME]); } catch { /* 已不存在 */ }
   startContainer();
   await waitHealthy();

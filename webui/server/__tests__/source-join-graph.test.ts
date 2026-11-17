@@ -43,6 +43,17 @@ describe("joinConnected (pure)", () => {
     expect(joinConnected([key("a"), key("b")], edges)).toBe(false);
   });
 
+  it("CR-03: same sourceName in two schemas are distinct nodes; no edge means not connected", () => {
+    expect(joinConnected([key("orders", "sales"), key("orders", "archive")], [])).toBe(false);
+    // 无限定的 `to` 视作与声明方同 schema，不得跨 schema 搭桥。
+    const edges: DeclaredJoinEdge[] = [{ connectionId: CONN, from: "orders", to: "customers", fromSchema: "sales" }];
+    expect(joinConnected([key("orders", "sales"), key("customers", "sales")], edges)).toBe(true);
+    expect(joinConnected([key("orders", "sales"), key("customers", "archive")], edges)).toBe(false);
+    // 显式 schema 限定可以指向另一个 schema。
+    const cross: DeclaredJoinEdge[] = [{ connectionId: CONN, from: "orders", to: "archive.orders", fromSchema: "sales" }];
+    expect(joinConnected([key("orders", "sales"), key("orders", "archive")], cross)).toBe(true);
+  });
+
   it("schema-qualified `to` matches by last segment on the same connection only", () => {
     expect(
       joinConnected([key("a"), key("b")], [{ connectionId: CONN, from: "a", to: "dataforai.b" }])
@@ -96,7 +107,7 @@ describe("loadDeclaredJoinEdges (semantic layer on disk)", () => {
       "utf8"
     );
     const edges = await loadDeclaredJoinEdges([key("orders"), key("returns"), key("people")]);
-    expect(edges).toEqual([{ connectionId: CONN, from: "orders", to: "returns" }]);
+    expect(edges).toEqual([{ connectionId: CONN, from: "orders", to: "returns", fromSchema: "dataforai" }]);
     expect(joinConnected([key("orders"), key("returns")], edges)).toBe(true);
     expect(joinConnected([key("orders"), key("people")], edges)).toBe(false);
   });

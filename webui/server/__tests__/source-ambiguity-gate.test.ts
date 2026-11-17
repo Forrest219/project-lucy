@@ -44,6 +44,7 @@ import {
   type MatchableSource
 } from "../proxy/source-ambiguity-gate";
 import { LUCY_HOST_ATTESTATION_HEADER } from "../proxy/source-ambiguity-journey";
+import { SOURCE_COUNT_CAP } from "../proxy/source-selection-tolerance";
 
 const CONNECTION = "demo-mysql";
 const OTHER_CONNECTION = "mysql-other";
@@ -145,7 +146,10 @@ describe("P0-3 source ambiguity gate", () => {
     for (const needle of [
       "多个可见来源表都可能回答同一业务词",
       "放行并披露",
-      "单来源查询"
+      "单来源查询",
+      // 上限写在 md 里是静态文案，由本断言钉住常量（CR-12）。
+      `来源数超过 ${SOURCE_COUNT_CAP}`,
+      "没有任何带来源限定的引用"
     ]) {
       expect(md).toContain(needle);
       expect(ASK_FIRST_SECTION).toContain(needle);

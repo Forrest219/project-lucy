@@ -35,6 +35,12 @@ const CASES: Array<[string, string, string]> = [
   ["hdfs path trailing period kept", "bad hdfs://ns/a/b.", `bad ${P}.`],
   ["s3 path", "no key s3://bucket/dir/file.parquet found", `no key ${P} found`],
   ["file path", "open file:///var/lib/data.csv failed", `open ${P} failed`],
+  // --- connection-string passwords -----------------------------------------
+  ["jdbc password masked, host redacted", "jdbc:mysql://root:secretpw@10.0.0.1:3306/db", `jdbc:mysql://root:[REDACTED]@${A}/db`],
+  ["postgresql password masked", "postgresql://app_user:s3cr3t@db.example.com:5432/w", "postgresql://app_user:[REDACTED]@db.example.com:5432/w"],
+  ["mongodb password masked", "mongodb://admin:letmein@mongo.svc:27017/l", "mongodb://admin:[REDACTED]@mongo.svc:27017/l"],
+  ["url without userinfo untouched", "https://example.com:8443/a", "https://example.com:8443/a"],
+  ["url user without password untouched", "ssh://git@example.com/repo", "ssh://git@example.com/repo"],
   // --- internal tool name --------------------------------------------------
   ["tool name exact", "Invalid arguments for tool sl_query", `Invalid arguments for tool ${T}`],
   ["tool name quoted", `tool "sl_query" rejected`, `tool "${T}" rejected`],

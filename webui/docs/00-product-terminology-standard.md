@@ -669,6 +669,8 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Correlation Key | 关联键 | — | 把关联键当列表问询 ID、第三种来源 badge | 库存主键：`lucy_<uuid>` 或 `inf_<userId>_<accessLogId>`。抽屉与问询 CSV 保留；列表主列不展示 |
 | Inferred Turn ID | 推断问询 ID | — | inferred turn id（裸露作主标签） | 调用流水列 / CSV 关联键回填；仅当问询 ID 为空时由关联表回填 |
 | Audit Event ID | 事件 ID | — | access_log id（裸露作主标签） | 调用流水 L1 身份列；`access_log.id` |
+| Trace ID | 调用链路 ID | — | 追踪号、链路号、trace id（裸露作主标签） | P1-36：调用流水列 `trace_id` 的展示名；同一请求从准入到响应共用一个。见 `docs/specs/lucy-20261116-trace-span-ledger-spec.md` |
+| Trace Span | 阶段记录 | — | 子调用、节点、span（裸露作主标签） | P1-36：一次请求内某一阶段的耗时与结果；导出文件 `spans.csv` 的行对象 |
 | Range preset | 近 24 小时 / 近 7 天 | — | 地址栏 `hours=168`（新写入） | URL `range=24h\|7d`；兼容读 `hours=24\|168` |
 | Reported turn | 已上报问询 | — | reported turn | 来源 badge |
 | Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |

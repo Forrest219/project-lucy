@@ -50,6 +50,9 @@ export const REDACTED_TOOL = "[REDACTED_TOOL]";
 // Storage URLs run to whitespace / quote / angle bracket; trailing sentence
 // punctuation is left outside the match.
 const STORAGE_PATH_RE = /\b(?:hdfs|s3a?|file):\/\/[^\s"'`<>]*[^\s"'`<>.,;:)\]]/gi;
+// `scheme://user:password@host` — only the password segment is masked; scheme, user and
+// host stay reviewable. Covers jdbc:/postgresql:/mongodb:/redis: style connection strings.
+const URL_USERINFO_RE = /\b([a-z][a-z0-9+.-]*:\/\/[^\s:@/"'`<>]*):([^\s/"'`<>]+)@/gi;
 const BRACKETED_IPV6_RE = /\[([0-9a-fA-F:.]+)\](?::\d{1,5})?/g;
 const BARE_IPV6_RE = /(?<![\w:.])(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}(?![\w:])/g;
 const IPV4_RE = /(?<![\w.])(\d{1,3}(?:\.\d{1,3}){3})(?::\d{1,5})?(?!\d|\.\d)/g;
@@ -84,6 +87,8 @@ const isInternalIPv6 = (value: string) => isIPv6(value) && INTERNAL_ADDRESSES.ch
  * - internal addresses (RFC1918, loopback, link-local, ULA; IPv4 and IPv6, a
  *   trailing `:port` is absorbed) -> `[REDACTED_ADDR]`;
  * - `hdfs://`, `s3://`, `s3a://`, `file://` locations -> `[REDACTED_PATH]`;
+ * - the password segment of `scheme://user:password@host` connection strings
+ *   -> `[REDACTED]` (scheme, user and host are kept);
  * - the internal tool name `sl_query` (whole identifier only) -> `[REDACTED_TOOL]`.
  * Public IPs, version strings, timestamps, `:port` fragments and reason codes
  * pass through untouched.
@@ -91,6 +96,7 @@ const isInternalIPv6 = (value: string) => isIPv6(value) && INTERNAL_ADDRESSES.ch
 export function redactStorageDetail(text: string): string {
   return redactAuditText(text)
     .replace(STORAGE_PATH_RE, REDACTED_PATH)
+    .replace(URL_USERINFO_RE, (_m, head: string) => `${head}:${REDACTED}@`)
     .replace(BRACKETED_IPV6_RE, (m, addr: string) => (isInternalIPv6(addr) ? REDACTED_ADDR : m))
     .replace(BARE_IPV6_RE, (m) => (isInternalIPv6(m) ? REDACTED_ADDR : m))
     .replace(IPV4_RE, (m, addr: string) => (isInternalIPv4(addr) ? REDACTED_ADDR : m))

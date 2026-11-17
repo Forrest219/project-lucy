@@ -39,6 +39,15 @@ async function rpc(body, session) {
   return { status: res.status, ms: performance.now() - started, text, session: res.headers.get("mcp-session-id") };
 }
 
+/** 响应确是「被拒」：JSON-RPC error，或 tool result 带 isError。401/过期令牌等错误页不算。 */
+function isRejection(r) {
+  if (r.status !== 200) return false;
+  try {
+    const json = JSON.parse(r.text.replace(/^event: message\ndata: /, "").trim());
+    return Boolean(json.error) || json.result?.isError === true;
+  } catch { return false; }
+}
+
 const initBody = (id) => ({
   jsonrpc: "2.0", id, method: "initialize",
   params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "uat-probe", version: "0" } }
@@ -84,18 +93,27 @@ async function deny() {
     missingMeasures: (i) => ({ jsonrpc: "2.0", id: `m-${i}`, method: "tools/call", params: { name: "lucy_query", arguments: { connectionId: "demo-mysql", dimensions: [{ field: "superstore_orders.region" }] } } })
   };
   const out = {};
+  let notRejected = 0;
   for (const [name, build] of Object.entries(shapes)) {
     const samples = [];
-    for (let i = 0; i < n; i += 1) samples.push((await rpc(build(i), session)).ms);
+    for (let i = 0; i < n; i += 1) {
+      const r = await rpc(build(i), session);
+      if (!isRejection(r)) notRejected += 1;
+      samples.push(r.ms);
+    }
     out[name] = summarize(samples);
   }
-  console.log(JSON.stringify({ probe: "deny", ...out }));
+  // 不是「被拒」的响应（令牌失效、代理 401 等）会让延迟样本失真：不得当作拒绝延迟，退出非 0。
+  if (notRejected > 0) process.exitCode = 1;
+  console.log(JSON.stringify({ probe: "deny", notRejected, ...out }));
 }
 
 async function staleSession() {
   const fake = "00000000-0000-4000-8000-000000000000";
   const ping = await rpc({ jsonrpc: "2.0", id: "stale-ping", method: "ping" }, fake);
   const list = await rpc({ jsonrpc: "2.0", id: "stale-list", method: "tools/list" }, fake);
+  const leaked = /unknown mcp session/i.test(ping.text) || /unknown mcp session/i.test(list.text);
+  if (leaked) process.exitCode = 1; // 上游 404 `Unknown MCP session` 透给了客户端＝恢复失败
   console.log(JSON.stringify({
     probe: "stale-session",
     ping: { status: ping.status, ms: Math.round(ping.ms), unknownSessionLeaked: /unknown mcp session/i.test(ping.text) },
