@@ -45,6 +45,7 @@
 
 | 日期 | 一句话错题 | 标签 | 文件 |
 |---|---|---|---|
+| 2026-11-18 | 数据库原始错误不透出：外部目录读字段失败时，Kerberos 握手失败、元数据服务太慢、元数据服务起不来在页面上是同一句「没有读到字段」，原文只在容器日志；单表 8 秒预算与超时文案对不上 | `ux-regression` `gate-gap` `contract-stack` `sev-med` | [2026-11-18-db-original-error-not-surfaced.md](2026-11-18-db-original-error-not-surfaced.md) |
 | 2026-11-17 | 访问关系图修复后仍不是桑基：线上镜像缺修复，HEAD 在零访问、多 Agent、全未确认下仍退化成文字和发丝 | `viz-geometry` `empty-default` `data-trust` `gate-gap` `sev-med` | [2026-11-17-access-map-sankey-regression.md](2026-11-17-access-map-sankey-regression.md) |
 | 2026-11-17 | intranet-HTTP 复制 Toast「已复制」但剪贴板未写入（假成功） | `ux-regression` `gate-gap` `sev-low` | [2026-11-17-clipboard-http-fake-success.md](2026-11-17-clipboard-http-fake-success.md) |
 | 2026-11-17 | 下载／导出／保存按钮的成功反馈不以真实结果为前提（静默失败与误报成功） | `ux-regression` `gate-gap` `sev-low` | [2026-11-17-button-feedback-silent-failure.md](2026-11-17-button-feedback-silent-failure.md) |
