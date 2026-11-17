@@ -366,3 +366,5 @@ Chromium 对表单控件给出**空选区**，而 `execCommand("copy")` 在空�
 - 单测改为在 `execCommand` 被调用的瞬间读取「焦点与选区文本」，不再只看 textarea 的 value；新增多行长文本、聚焦失败不报成功、焦点还原、对话框内挂载 4 条。
 
 验证：`clipboard.test.tsx`＋`new-token.test.tsx` 31 passed；先红后绿（改前 4 条失败）。真实浏览器验证见测试台 `UAT-SUITE-COPY-FAKE-SUCCESS` 修复后跑次（局域网明文 HTTP＋真实粘贴读回）。
+
+补记（同日同类排查）：§13.2 记录过的「把 `{ ok, reason }` 真值对象当布尔用」在 `Onboarding.tsx` 的 `writeMcpConfigToClipboard` 里仍然存在（`if (!copiedOk)` 恒为假，复制失败仍提示「MCP 配置已复制」），§13.1 的回归未覆盖。已改为判 `copied.ok`；`onboarding.test.tsx` 新增「剪贴板失败不得提示已复制／成功才提示已复制」两条（先红后绿）；`lint:copy-surfaces` 新增 R5，要求每个 `copyTextToClipboard` 调用点读取返回值 `.ok`。

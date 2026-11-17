@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { exportSemanticAssetPackage } from "../../lib/semantic-assets";
 import { ApiError } from "../../lib/apiClient";
 import type { SemanticAssetExportResponse } from "../../lib/types";
+import { ApiDownloadLink } from "../ApiDownloadLink";
 
 export type SemanticAssetExportButtonProps = {
   label?: string;
@@ -88,13 +89,14 @@ export function SemanticAssetExportButton(props: SemanticAssetExportButtonProps)
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <strong>{result.filename}</strong>
-            <a
+            <ApiDownloadLink
               className="pl-btn pl-btn--primary pl-btn--sm"
               href={result.downloadUrl}
+              fallbackFilename={result.filename}
               data-testid="semantic-asset-export-download"
             >
               下载 ({result.sizeBytes} 字节)
-            </a>
+            </ApiDownloadLink>
           </div>
           <p className="text-fg-muted">
             包含 {includedCount} 个文件，排除 {excludedCount} 个。{" "}

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { apiGet } from "../../lib/apiClient";
 import type { EvalRun, EvalRunCompare, EvalRunWithResults } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { ApiDownloadLink } from "../../components/ApiDownloadLink";
 
 const STATUS_CLASS: Record<string, string> = {
   queued: "pl-status-partial",
@@ -156,12 +157,12 @@ export function RunDetail() {
         badges={<span className={`pl-status-badge ${STATUS_CLASS[run.status] ?? "pl-status-partial"}`}>{run.status}</span>}
         actions={
           <>
-            <a className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=json`} download>
+            <ApiDownloadLink className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=json`} fallbackFilename={`eval-run-${run.id}.json`}>
               下载 JSON
-            </a>
-            <a className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=md`} download>
+            </ApiDownloadLink>
+            <ApiDownloadLink className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=md`} fallbackFilename={`eval-run-${run.id}.md`}>
               下载 MD
-            </a>
+            </ApiDownloadLink>
           </>
         }
       />

@@ -1,0 +1,122 @@
+{
+  "_comment": "P1-42 / REQ-030-063 下载入口清单。triggers 必须与源码里的触发点数量一致；click 入口由 UAT-SUITE-BUTTON-FEEDBACK 用真实浏览器点击，not-run 必须写原因。",
+  "files": {
+    "src/pages/WikiEditor.tsx": {
+      "triggers": 1,
+      "surfaces": [
+        { "id": "wiki-download", "label": "Wiki：下载已保存版本", "route": "/wiki?key=…", "coverage": "click", "case": "UAT-BTN-01" }
+      ]
+    },
+    "src/pages/TableEditor.tsx": {
+      "triggers": 1,
+      "surfaces": [
+        { "id": "table-export-yaml", "label": "表编辑器：导出 YAML", "route": "/catalog/:conn/:schema/:table", "coverage": "click", "case": "UAT-BTN-02" }
+      ]
+    },
+    "src/pages/eval/CaseList.tsx": {
+      "triggers": 1,
+      "surfaces": [
+        { "id": "eval-suite-download", "label": "评测用例：下载 Eval YAML", "route": "/eval/cases", "coverage": "click", "case": "UAT-BTN-03" }
+      ]
+    },
+    "src/components/catalog/CatalogAssetManifestDrawer.tsx": {
+      "triggers": 1,
+      "surfaces": [
+        { "id": "catalog-manifest-download", "label": "连接：下载 Manifest", "route": "/connections", "coverage": "click", "case": "UAT-BTN-04" }
+      ]
+    },
+    "src/pages/admin/Audit.tsx": {
+      "triggers": 2,
+      "surfaces": [
+        { "id": "audit-export-current", "label": "审计：导出", "route": "/admin/audit", "coverage": "click", "case": "UAT-BTN-05" },
+        { "id": "audit-export-pack", "label": "审计：导出审计证据包", "route": "/admin/audit", "coverage": "click", "case": "UAT-BTN-06" }
+      ]
+    },
+    "src/pages/admin/AuditReconciliation.tsx": {
+      "triggers": 1,
+      "surfaces": [
+        { "id": "reconciliation-export", "label": "审计对账：导出对账证据包", "route": "/admin/audit-reconciliation", "coverage": "click", "case": "UAT-BTN-07" }
+      ]
+    },
+    "src/pages/admin/ConfigAudit.tsx": {
+      "triggers": 1,
+      "surfaces": [
+        { "id": "config-audit-export", "label": "配置审计：导出 CSV", "route": "/admin/config-audit", "coverage": "click", "case": "UAT-BTN-08" }
+      ]
+    },
+    "src/pages/publish/PublishHistory.tsx": {
+      "triggers": 1,
+      "surfaces": [
+        { "id": "publish-history-export", "label": "发布记录：导出 CSV", "route": "/publish/history", "coverage": "click", "case": "UAT-BTN-09" }
+      ]
+    },
+    "src/components/semantic-assets/CatalogBatchPanel.tsx": {
+      "triggers": 2,
+      "surfaces": [
+        { "id": "catalog-batch-package", "label": "目录：批量下载语义维护包", "route": "/catalog", "coverage": "click", "case": "UAT-BTN-10" },
+        {
+          "id": "catalog-batch-report-csv",
+          "label": "目录：批量校验后下载 CSV 报告",
+          "route": "/catalog",
+          "coverage": "not-run",
+          "reason": "需要先运行批量校验任务得到报告链接；该任务会占用校验队列，本轮不执行"
+        }
+      ]
+    },
+    "src/lib/authoringHowTo.ts": {
+      "triggers": 1,
+      "surfaces": [
+        {
+          "id": "authoring-howto-download",
+          "label": "引导：下载编写说明",
+          "route": "/overview（引导第 2／5 步）",
+          "coverage": "not-run",
+          "reason": "引导流程已完成的实例不再渲染该入口；需要全新实例才能点到"
+        }
+      ]
+    },
+    "src/pages/eval/RunDetail.tsx": {
+      "triggers": 2,
+      "surfaces": [
+        {
+          "id": "eval-run-artifact-json",
+          "label": "评测运行详情：下载 JSON",
+          "route": "/eval/runs/:runId",
+          "coverage": "not-run",
+          "reason": "Demo 实例没有评测运行记录，页面不可达"
+        },
+        {
+          "id": "eval-run-artifact-md",
+          "label": "评测运行详情：下载 MD",
+          "route": "/eval/runs/:runId",
+          "coverage": "not-run",
+          "reason": "Demo 实例没有评测运行记录，页面不可达"
+        }
+      ]
+    },
+    "src/components/semantic-assets/RestoreReleaseDrawer.tsx": {
+      "triggers": 1,
+      "surfaces": [
+        {
+          "id": "restore-package-export",
+          "label": "发布记录：导出恢复包",
+          "route": "/publish/history（恢复抽屉）",
+          "coverage": "not-run",
+          "reason": "Demo 实例没有已发布版本，恢复抽屉不可达"
+        }
+      ]
+    },
+    "src/components/semantic-assets/SemanticAssetExportButton.tsx": {
+      "triggers": 1,
+      "surfaces": [
+        {
+          "id": "semantic-asset-export",
+          "label": "语义资产导出按钮（组件）",
+          "route": "—",
+          "coverage": "not-run",
+          "reason": "组件已导出但没有任何页面挂载，用户没有入口"
+        }
+      ]
+    }
+  }
+}

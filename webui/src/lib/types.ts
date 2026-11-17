@@ -1556,6 +1556,8 @@ export type CreateTokenResponse = {
   device_name?: string | null;
   created: string;
   expires_at: string;
+  /** Spec 14 §0.3 — the token is ready to use only when this is exactly `true`. */
+  runtimeAck?: boolean;
 };
 
 export type TokenInventoryItem = {

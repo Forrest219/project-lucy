@@ -44,6 +44,7 @@ docs/qa/uat/
 | `UAT-SUITE-ROLES-AGENT-PERF` | P1-13 | Roles／Agent 页性能体感 |
 | `UAT-SUITE-EVENT-LOOP-RELIEF` | P1-21 | 重读路径与存活探针 |
 | `UAT-SUITE-COPY-FAKE-SUCCESS` | P1-40 | 复制按钮假成功看守（明文 HTTP 下剪贴板读回） |
+| `UAT-SUITE-BUTTON-FEEDBACK` | P1-42 | 下载／保存／导出按钮成功反馈真实性看守（真实浏览器收文件＋真实 4xx） |
 | `UAT-SUITE-OPS-CONCEPTS` | P1-11 | 概念运维工具（Ops MCP） |
 | `UAT-SUITE-QUESTION-BUDGET` | P1-12 | 问询预算默认阈值 60／300 |
 | `UAT-SUITE-BUDGET-AUDIT` | P1-14 | 问询预算复盘审计字段 |

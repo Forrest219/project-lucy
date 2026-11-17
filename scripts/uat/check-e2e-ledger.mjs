@@ -88,7 +88,13 @@ const REQUIRED = [
     poolId: "P1-40",
     suiteId: "UAT-SUITE-COPY-FAKE-SUCCESS",
     suiteDir: "docs/qa/uat/suites/copy-fake-success",
-    latestRun: "docs/qa/uat/suites/copy-fake-success/runs/2026-11-17-cursor-copy-probe-after-fix.md"
+    latestRun: "docs/qa/uat/suites/copy-fake-success/runs/2026-11-17-cursor-copy-probe-hardened.md"
+  },
+  {
+    poolId: "P1-42",
+    suiteId: "UAT-SUITE-BUTTON-FEEDBACK",
+    suiteDir: "docs/qa/uat/suites/button-feedback",
+    latestRun: "docs/qa/uat/suites/button-feedback/runs/2026-11-17-cursor-button-feedback-after-fix.md"
   },
   {
     poolId: "P1-31",

@@ -43,6 +43,7 @@ import {
   isConnectGradeTool,
   type CallStoryInput
 } from "../../lib/audit-call-storyline";
+import { ApiDownloadLink } from "../../components/ApiDownloadLink";
 
 // 202608-01 — Trace / Evidence Kernel read model
 type LucySpanTypeView =
@@ -2199,24 +2200,26 @@ export function Audit() {
             >
               {refreshPaused ? "恢复刷新" : "暂停刷新"}
             </button>
-            <a
+            <ApiDownloadLink
               href={currentExport.href}
-              download
+              fallbackFilename="audit-export.csv"
+              failurePrefix="导出失败"
               className="pl-btn pl-btn--secondary text-sm"
               data-testid="audit-export-current"
               title={currentExport.title}
             >
               导出
-            </a>
-            <a
+            </ApiDownloadLink>
+            <ApiDownloadLink
               href={exportPackUrl}
-              download
+              fallbackFilename="audit-pack.zip"
+              failurePrefix="导出失败"
               className="pl-inline-link"
               data-testid="audit-export-pack"
               title="下载审计证据包"
             >
               导出审计证据包
-            </a>
+            </ApiDownloadLink>
           </div>
         }
       />

@@ -2026,6 +2026,12 @@ export function registerAgentRoutes(app: FastifyInstance) {
       ...auditActorFields(trustedActorFromRequest(request))
     });
     invalidateAccessConfigCache();
+    // Spec §14.3.2 — only `committed` is a success. A rolled-back or
+    // recovery-required delete must never be reported as `written: true`.
+    if (writeResult.status !== "committed") {
+      const failure = accessWriteResponseBody(writeResult, { gate });
+      return reply.status(failure.statusCode).send(failure.body);
+    }
     return {
       ok: true,
       data: {

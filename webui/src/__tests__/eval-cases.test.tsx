@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { CaseList } from "../pages/eval/CaseList";
 import { RunList } from "../pages/eval/RunList";
 
@@ -223,6 +224,69 @@ describe("CaseList M43 Eval YAML exchange", () => {
     });
     expect(screen.getByText(/lucy-eval-runner\.mjs/)).toBeInTheDocument();
     expect(downloads).toContain("kx_financial-eval-suite.yaml");
+  });
+
+  // P1-42 — a download button must say so when the file could not be fetched,
+  // and must not claim the suite is ready.
+  function stubSuiteDownload(download: () => Promise<Response>) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval/domains") {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: { domains: [{ domain: "kx_financial", filePath: "evals/kx_financial/eval/kx_financial-eval-cases.yaml", caseCount: 1 }] }
+          }));
+        }
+        if (url === "/api/eval/cases/kx_financial") {
+          return new Response(JSON.stringify({ ok: true, data: { cases: [] } }));
+        }
+        if (url === "/api/eval/runs?domain=kx_financial&limit=1&status=succeeded") {
+          return new Response(JSON.stringify({ ok: true, data: { total: 0, runs: [] } }));
+        }
+        if (url === "/api/eval/suites/kx_financial/download") return download();
+        return new Response(JSON.stringify({ ok: true, data: {} }));
+      })
+    );
+  }
+
+  it("reports a network failure instead of staying silent when the suite cannot be fetched", async () => {
+    stubSuiteDownload(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const clicks: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      clicks.push(this.download);
+    });
+    const errorSpy = vi.spyOn(toast, "error").mockImplementation(() => "");
+    const successSpy = vi.spyOn(toast, "success").mockImplementation(() => "");
+
+    renderCaseList();
+    fireEvent.click((await screen.findAllByRole("button", { name: /下载\s*Eval YAML/ }))[0]);
+
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledTimes(1));
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain("下载 Eval YAML 失败");
+    expect(successSpy).not.toHaveBeenCalled();
+    expect(clicks).toEqual([]);
+    expect(screen.queryByText(/本地运行命令/)).not.toBeInTheDocument();
+  });
+
+  it("reports an HTTP failure and does not trigger a file download", async () => {
+    stubSuiteDownload(async () => new Response("boom", { status: 500 }));
+    const clicks: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      clicks.push(this.download);
+    });
+    const errorSpy = vi.spyOn(toast, "error").mockImplementation(() => "");
+    const successSpy = vi.spyOn(toast, "success").mockImplementation(() => "");
+
+    renderCaseList();
+    fireEvent.click((await screen.findAllByRole("button", { name: /下载\s*Eval YAML/ }))[0]);
+
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledTimes(1));
+    expect(successSpy).not.toHaveBeenCalled();
+    expect(clicks).toEqual([]);
   });
 
   it("offers explicit actions when imported result hash does not match", async () => {

@@ -49,6 +49,16 @@ function EndpointFallbackNotice({ endpointInfo }: { endpointInfo?: McpEndpointIn
   );
 }
 
+/** Spec 14 §0.3 — the token is ready to use only when the runtime acknowledged the write. */
+function TokenRuntimeNotice({ runtimeAck }: { runtimeAck: boolean | undefined }) {
+  if (runtimeAck === true) return null;
+  return (
+    <div className="pl-error" role="alert" data-testid="token-runtime-unconfirmed">
+      Token 已写入，但运行态策略未确认生效，此 Token 暂时可能无法使用。请先查看策略降级提示或稍后重新核验，再交给使用者。
+    </div>
+  );
+}
+
 function TokenPlaintext({
   token,
   copied,
@@ -226,6 +236,7 @@ export function NewToken() {
           }
         />
 
+        <TokenRuntimeNotice runtimeAck={generatedToken.runtimeAck} />
         <div className="pl-card grid gap-3">
           <TokenPlaintext token={generatedToken.token} copied={copied} onCopy={handleCopyToken} />
           <div className="text-xs text-fg-muted">
@@ -337,6 +348,7 @@ export function NewToken() {
             </>
           }
         />
+        <TokenRuntimeNotice runtimeAck={generatedToken.runtimeAck} />
         <div className="pl-card grid gap-3">
           <TokenPlaintext token={generatedToken.token} copied={copied} onCopy={handleCopyToken} />
           <div className="pl-error" data-testid="mcp-endpoint-diagnostic">

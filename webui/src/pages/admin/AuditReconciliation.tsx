@@ -14,6 +14,7 @@ import {
   type ReconciliationExportResponse,
   type ReconciliationUsageResponse
 } from "../../lib/auditReconciliation";
+import { ApiDownloadLink } from "../../components/ApiDownloadLink";
 
 /**
  * P0-4（L25-02 / L25-03）只读对账 —— 使用概况。
@@ -145,15 +146,16 @@ export function AuditReconciliation() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-3">
-            <a
+            <ApiDownloadLink
               href={exportHref}
-              download
+              fallbackFilename="reconciliation-export.zip"
+              failurePrefix="导出失败"
               className="pl-btn pl-btn--secondary text-sm"
               data-testid="reconciliation-export"
               title="导出对账证据包（CSV + 对账清单）"
             >
               导出对账证据包
-            </a>
+            </ApiDownloadLink>
             <Link
               to="/admin/audit"
               className="pl-inline-link"

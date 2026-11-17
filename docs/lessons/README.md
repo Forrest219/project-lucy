@@ -46,6 +46,7 @@
 | 日期 | 一句话错题 | 标签 | 文件 |
 |---|---|---|---|
 | 2026-11-17 | intranet-HTTP 复制 Toast「已复制」但剪贴板未写入（假成功） | `ux-regression` `gate-gap` `sev-low` | [2026-11-17-clipboard-http-fake-success.md](2026-11-17-clipboard-http-fake-success.md) |
+| 2026-11-17 | 下载／导出／保存按钮的成功反馈不以真实结果为前提（静默失败与误报成功） | `ux-regression` `gate-gap` `sev-low` | [2026-11-17-button-feedback-silent-failure.md](2026-11-17-button-feedback-silent-failure.md) |
 | 2026-11-17 | 客户 K8s 平滑升级后 event loop 卡顿，readyz 超时摘端点，入口 502／503 | `ops-delivery` `gate-gap` `ux-regression` `sev-high` | [2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md](2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md) |
 | 2026-11-16 | 表级歧义门闩把「已限定表名的查数」变成单向死路，且无逃生通道 | `contract-stack` `gate-gap` `ux-regression` `sev-high` | [2026-11-16-source-ambiguity-gate-deadlock.md](2026-11-16-source-ambiguity-gate-deadlock.md) |
 | 2026-11-13 | 7 天访问日志同步重算占住事件循环，存活探针把 Pod 杀掉，概览报无法刷新 | `gate-gap` `ops-delivery` `ux-regression` `sev-high` | [2026-11-13-audit-read-blocks-event-loop.md](2026-11-13-audit-read-blocks-event-loop.md) |

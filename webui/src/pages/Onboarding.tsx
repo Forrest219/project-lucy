@@ -471,8 +471,8 @@ export function Onboarding() {
       );
       return false;
     }
-    const copiedOk = await copyTextToClipboard(mcpConfig);
-    if (!copiedOk) {
+    const copied = await copyTextToClipboard(mcpConfig);
+    if (!copied.ok) {
       toast.error("复制失败");
       return false;
     }

@@ -53,7 +53,8 @@
 3. **Stub 了浏览器剪贴板／`execCommand` 的测试，不得单独充当 intranet-HTTP 验收。** 至少补一条：真实 Chromium + 非安全上下文（或删 Clipboard API 后**不** stub `execCommand`）断言选区非空，或在可写环境下读回剪贴板。
 4. **凡注释写了「Never report success unless…」的共享 helper，门禁必须覆盖该句的反例。** 本例规则写在文件头，测试却允许假 `true`。
 5. **公网 HTTP／`security.access=http` 是受支持形态，复制类改动的冒烟不得只在 localhost 做。** Version／Token／Audit 等任一入口即可作探针。
-6. **登记本错题 ≠ 授权改 `clipboard.ts`。** 修复须另开授权；改 helper 会影响全部复制入口，需连带收紧测试合同。
+6. **同类要查到调用方，而不只是共用函数。** 修好 helper 之后，调用方仍可能把 `{ ok, reason }` 当布尔用或忽略返回值，导致失败分支是死代码、成功提示无条件显示。2026-11-17 复盘时在 `Onboarding.tsx`（概览页复制 MCP 配置）查到此问题，点击探针看不到（helper 成功时表现正常），只有静态读调用点或在失败路径上点才暴露；已修并加门禁 R5。
+7. **登记本错题 ≠ 授权改 `clipboard.ts`。** 修复须另开授权；改 helper 会影响全部复制入口，需连带收紧测试合同。
 
 ## 6. 后续动作
 
@@ -62,10 +63,11 @@
 | 动作 | 状态 | 说明 |
 |---|---|---|
 | 错题本登记（本文件）＋索引 | 完成 | 委托人 2026-11-17 要求复盘入错题本 |
-| 修复 `execCommandFallback`（focus + select／setSelectionRange；避免空选区仍报成功） | **完成（工作树，2026-11-17）** | 委托人「授权修复」；改共享 helper；对话框内挂载、焦点与选区还原；确认选区＝全文才调用 `execCommand`。未提交 |
+| 修复 `execCommandFallback`（focus + select／setSelectionRange；避免空选区仍报成功） | **完成（已提交 `65f40847`，2026-11-17）** | 委托人「授权修复」；改共享 helper；对话框内挂载、焦点与选区还原；确认选区＝全文才调用 `execCommand`。尚未随发布构建出包 |
 | 单测／e2e：去掉「假 `execCommand` 当真写入」的验收空洞 | **单测完成；e2e 待办** | `clipboard.test.tsx` 改为在 `execCommand` 调用瞬间读取焦点与选区（先红后绿）。`clipboard-fallback.spec.ts` 仍打桩且跑回环，**判定力由测试台探针承担**，不再依赖它 |
-| 非安全上下文冒烟 | **完成（2026-11-17）** | 测试台 [`UAT-SUITE-COPY-FAKE-SUCCESS`](../qa/uat/suites/copy-fake-success/suite.md)：真实 Chromium＋局域网明文 HTTP＋真实粘贴读回；首跑 FAIL |
-| 机制：新增复制入口必须登记并被点击探针覆盖 | **完成（2026-11-17）** | `npm --prefix webui run lint:copy-surfaces`（接入 `pretest`）＋登记表 `webui/scripts/copy-surfaces.manifest.json`；清单 P1-40／REQ-030-061 |
+| 非安全上下文冒烟 | **完成（2026-11-17）** | 测试台 [`UAT-SUITE-COPY-FAKE-SUCCESS`](../qa/uat/suites/copy-fake-success/suite.md)：真实 Chromium＋局域网明文 HTTP＋真实粘贴读回；首跑 FAIL；加固后 [PASS WITH GAP](../qa/uat/suites/copy-fake-success/runs/2026-11-17-cursor-copy-probe-hardened.md)（十个入口全 REAL，真实签发＋吊销 Token，`npm run uat:copy-probe`） |
+| 机制：新增复制入口必须登记并被点击探针覆盖 | **完成（2026-11-17）** | `npm --prefix webui run lint:copy-surfaces`（接入 `pretest`；R4 要求每个 click 入口有唯一子用例编号并写入 `cases.md`）＋登记表 `webui/scripts/copy-surfaces.manifest.json`；清单 P1-40／REQ-030-061 |
+| 同类排查：调用方是否把 `{ ok }` 当布尔／忽略返回值 | **完成（2026-11-17）** | 全部 15 个调用点逐个读过：14 个正确；`Onboarding.tsx` 的 `writeMcpConfigToClipboard` 有同类缺陷（`!copiedOk` 恒为假，复制失败仍提示「MCP 配置已复制」），已修（先红后绿）；`lint:copy-surfaces` 新增 R5 防回流。全仓库没有第二套复制实现（`navigator.clipboard`／`execCommand`／`ClipboardItem` 只在 `clipboard.ts`） |
 | 关闭本错题（`closed`） | 未开 | 套件 01／02 已在非安全上下文全 `REAL`（[修复后跑次](../qa/uat/suites/copy-fake-success/runs/2026-11-17-cursor-copy-probe-after-fix.md)，PASS WITH GAP）；**待修复提交合入主线**，且公网演示实例升级后复核（可选 UAT-COPY-04）|
 
 ## 7. 证据指针

@@ -16,6 +16,7 @@ import {
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import type { ConfigAuditEntry, ConfigAuditResponse } from "../../lib/types";
+import { ApiDownloadLink } from "../../components/ApiDownloadLink";
 
 const PAGE_SIZE = 20;
 const DEFAULT_TIME_WINDOW = "24h";
@@ -298,7 +299,7 @@ export function ConfigAudit() {
       <PageHeader
         title="配置审计"
         description="查看各类配置与内容资产的写入记录、变更内容和操作者。"
-        actions={<a href={exportUrl} className="pl-btn pl-btn--secondary text-sm">导出 CSV</a>}
+        actions={<ApiDownloadLink href={exportUrl} fallbackFilename="config-audit.csv" failurePrefix="导出失败" className="pl-btn pl-btn--secondary text-sm">导出 CSV</ApiDownloadLink>}
       />
 
       <div className="pl-admin-filterbar" data-testid="config-audit-filterbar">

@@ -9,13 +9,13 @@
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md) |
 | runs | [runs/](runs/) |
-| 自动化 | 探针 `scripts/uat/copy-button-fake-success-probe.mjs`；登记门禁 `npm --prefix webui run lint:copy-surfaces`（接入 `pretest`）；登记表 `webui/scripts/copy-surfaces.manifest.json` |
+| 自动化 | 探针 `npm run uat:copy-probe`（= `scripts/uat/copy-button-fake-success-probe.mjs`）；登记门禁 `npm --prefix webui run lint:copy-surfaces`（接入 `pretest`）；登记表 `webui/scripts/copy-surfaces.manifest.json` |
 
 ## 必做／可选
 
 | 必做 | 可选 |
 |---|---|
-| UAT-COPY-R0、UAT-COPY-01、UAT-COPY-02、UAT-COPY-03 | UAT-COPY-04（公网演示实例只读复核；需公网凭据） |
+| UAT-COPY-R0、UAT-COPY-01、UAT-COPY-02（子用例 02a–02j）、UAT-COPY-03 | UAT-COPY-04（公网演示实例只读复核；需公网凭据） |
 
 ## 判定口径（只认剪贴板读回）
 
@@ -45,7 +45,7 @@
 | 改动 `webui/src/lib/clipboard.ts`、任何复制入口、或升级 Chromium／Playwright 之后 | R0／01／02 |
 | 每次 `pretest`（自动） | 03（登记门禁） |
 | 新增／搬动复制入口 | 03 先红灯 → 补登记表与 02 的探针步骤 → 重跑 02 |
-| 客户 amd64 出包前（软证据） | R0／01／02 任选一个非回环 HTTP 实例 |
+| 客户 amd64 出包前（软证据，人工执行；需 demo Docker＋Playwright，不进 PR CI） | `npm run uat:copy-probe`：R0／01／02 在一个非回环 HTTP 实例上全 REAL |
 | 公网演示实例升级后 | 可选 04 |
 
 ## 出口（翻绿判据）
@@ -56,6 +56,6 @@
 
 - 本套件是**看守**：登记＋发现问题；**≠ 修复授权**，**≠ 功能合同收口**，**≠ 可上线**。
 - **回环地址（`127.0.0.1`／`localhost`）是安全上下文，Clipboard API 恒可用，没有判定力**；探针发现 `isSecureContext=true` 一律 BLOCKED。
-- 探针不写真实凭据：新建 Token 的签发请求在浏览器里打桩；连接测试是 `ktx connection test` 的只读真跑。
+- **全真，无替身**：新建 Token 真实签发 `uat-copy-probe-*`、用它走真实 MCP 查询产生审计行、结束前一定吊销（吊销失败＝整轮 FAIL）；连接测试是 `ktx connection test` 的只读真跑。Token 明文只在内存里使用，证据里脱敏。
 - 密码只从凭据文件读入进程，不打印、不落盘、不入证据。
 - 静态门禁只证明「入口都登记了」，**不证明复制可用**；可用性只认 02。

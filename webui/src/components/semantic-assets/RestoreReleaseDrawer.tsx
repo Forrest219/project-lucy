@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiPost } from "../../lib/apiClient";
+import { ApiDownloadLink } from "../ApiDownloadLink";
 
 export type RestoreTargetPlan = {
   targetPath: string;
@@ -149,13 +150,15 @@ export function RestoreReleaseDrawer({ releaseId, createdAt, actor, onClose }: P
         </span>
       </p>
       <p>
-        <a
+        <ApiDownloadLink
           className="pl-row-action-link"
           href={`/api/semantic-assets/releases/${encodeURIComponent(releaseId)}/restore-package`}
+          fallbackFilename={`restore-package-${releaseId}.zip`}
+          failurePrefix="导出失败"
           data-testid="restore-package-export"
         >
           导出恢复包
-        </a>
+        </ApiDownloadLink>
       </p>
       <button type="button" className="pl-btn pl-btn--ghost" onClick={() => void runPreview()} disabled={busy}>
         恢复预检

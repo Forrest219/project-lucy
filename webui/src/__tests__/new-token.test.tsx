@@ -35,7 +35,7 @@ type McpEndpointStub = {
 
 type FetchOptions = {
   mcpEndpoint?: McpEndpointStub;
-  tokenResponse?: { token: string; label: string; expires_at?: string };
+  tokenResponse?: { token: string; label: string; expires_at?: string; runtimeAck?: boolean };
   projectError?: boolean;
 };
 
@@ -52,7 +52,8 @@ const DEFAULT_TOKEN_RESPONSE = {
   hash: "sha256:hash",
   label: "hermes-laptop",
   created: "2026-06-20T00:00:00.000Z",
-  expires_at: "2026-09-18T23:59:59.999Z"
+  expires_at: "2026-09-18T23:59:59.999Z",
+  runtimeAck: true
 };
 
 function stubNewTokenFetch(opts: FetchOptions = {}) {
@@ -119,6 +120,33 @@ describe("NewToken", () => {
 
     expect(await screen.findByTestId("agent-detail")).toBeInTheDocument();
     expect(screen.queryByText("lucy_oneshot_token")).not.toBeInTheDocument();
+  });
+
+  // P1-42 — Spec 14 §0.3: the screen must not present the token as ready to use
+  // unless the runtime acknowledged the write (`runtimeAck === true`).
+  it("warns that the token is not confirmed yet when the runtime did not acknowledge the write", async () => {
+    stubNewTokenFetch({ tokenResponse: { token: "lucy_oneshot_token", label: "hermes-laptop", runtimeAck: false } });
+
+    renderNewToken();
+    fireEvent.change(screen.getByLabelText(/Token 标签/), { target: { value: "hermes-laptop" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
+
+    const warning = await screen.findByTestId("token-runtime-unconfirmed");
+    expect(warning).toHaveTextContent("运行态");
+    expect(warning).toHaveTextContent("未确认");
+    // The one-time plaintext must stay reachable: withholding it would strand the token.
+    expect(screen.getByTestId("plaintext-token")).toHaveTextContent("lucy_oneshot_token");
+  });
+
+  it("shows no unconfirmed warning when the runtime acknowledged the write", async () => {
+    stubNewTokenFetch();
+
+    renderNewToken();
+    fireEvent.change(screen.getByLabelText(/Token 标签/), { target: { value: "hermes-laptop" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
+
+    expect(await screen.findByTestId("plaintext-token")).toBeInTheDocument();
+    expect(screen.queryByTestId("token-runtime-unconfirmed")).not.toBeInTheDocument();
   });
 
   it("renders delivery tabs for Hermes, Claude Code, Codex, and 通用客户端", async () => {

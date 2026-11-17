@@ -106,6 +106,11 @@ vi.mock("../admin/audit.js", () => ({
           })
         };
       }
+      // inferred-turn-maintainer.scanFull() reads the access_log high-water mark
+      // on server start; an undefined row makes every buildServer() call throw.
+      if (sql.includes("MAX(id)")) {
+        return { get: vi.fn(() => ({ id: 0 })), all: vi.fn(() => []), run: vi.fn(() => ({ lastInsertRowid: 1 })) };
+      }
       return { get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn(() => ({ lastInsertRowid: 1 })) };
     }),
     exec: vi.fn(),
@@ -569,6 +574,45 @@ describe("DELETE /api/admin/agents/:userId", () => {
     const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     expect(yaml).not.toContain("zhangsan");
     await app.close();
+  });
+
+  // P1-42 — a rolled-back delete must never be reported as deleted. The
+  // ROLLED BACK outcome is unreachable without a runtime that refuses to
+  // acknowledge the write, so it is injected for this test only (module mock,
+  // reset afterwards — see p1-row-policy-templates W8 for the same reasoning).
+  it("reports the rollback instead of `written: true` when the delete did not take effect", async () => {
+    vi.resetModules();
+    vi.doMock("../admin/access-config.js", async () => {
+      const actual = await vi.importActual<typeof import("../admin/access-config.js")>(
+        "../admin/access-config.js"
+      );
+      return {
+        ...actual,
+        writeAccessConfigFileWithAuditClosure: vi.fn(async () => ({
+          status: "rolled_back",
+          written: false,
+          runtimeAck: false,
+          recoveryRequired: false,
+          policyVersion: "policy-version-rolled-back",
+          policyRuntimeAck: false
+        }))
+      };
+    });
+    try {
+      const { buildServer: buildFreshServer } = await import("../index");
+      const app = buildFreshServer();
+      await app.ready();
+      const res = await request(app.server).delete("/api/admin/agents/zhangsan");
+      expect(res.status).toBe(500);
+      expect(res.body.ok).toBe(false);
+      expect(res.body.written).toBe(false);
+      expect(res.body.data?.written).not.toBe(true);
+      expect(res.body.error.code).toBe("ROW_POLICY_SAVE_ROLLED_BACK");
+      await app.close();
+    } finally {
+      vi.doUnmock("../admin/access-config.js");
+      vi.resetModules();
+    }
   });
 });
 

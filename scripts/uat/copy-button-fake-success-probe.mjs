@@ -9,7 +9,13 @@
  *
  * 用法（仓库根）：
  *   node scripts/uat/copy-button-fake-success-probe.mjs \
- *     [--base http://<局域网IP>:55176] [--creds <凭据文件路径>] [--out inbox/uat-copy-fake-success-YYYY-MM-DD]
+ *     [--base http://<局域网IP>:55176] [--mcp http://<局域网IP>:57881/mcp] [--agent <agentId>]
+ *     [--creds <凭据文件路径>] [--out inbox/uat-copy-fake-success-YYYY-MM-DD]
+ *   或 npm run uat:copy-probe -- <同上参数>
+ *
+ * 全真：新建 Token 入口真实签发一个 `uat-copy-probe-<时间戳>` Token（30d），并用它走真实 MCP 查询产生审计行，
+ * 让审计页的复制入口有数据可点；探针结束前**一定**吊销该 Token（吊销失败则整轮判 FAIL 并打印标签，请人工吊销）。
+ * Token 明文只在内存里使用，证据文件里一律脱敏。
  *
  * 凭据文件：第 1 行 WebUI URL，第 2 行管理员 id，第 3 行密码（只读入进程，不打印、不落盘）。
  * 回环地址（127.0.0.1／localhost）是安全上下文，Clipboard API 恒可用，**没有判定力**——探针会拒绝并报 BLOCKED。
@@ -21,6 +27,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { makeClient } from "./lib/mcp-uat-lib.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { chromium } = createRequire(path.join(repoRoot, "webui", "package.json"))("playwright");
@@ -41,6 +48,16 @@ function lanIp() {
   return null;
 }
 const BASE = (args.base ?? `${credUrl.protocol}//${lanIp()}:${credUrl.port}`).replace(/\/$/, "");
+
+const MCP_URL = args.mcp ?? `${new URL(BASE).protocol}//${new URL(BASE).hostname}:57881/mcp`;
+const manifest = JSON.parse(readFileSync(path.join(repoRoot, "webui/scripts/copy-surfaces.manifest.json"), "utf8"));
+const CASE_OF = Object.fromEntries(
+  Object.values(manifest.files).flatMap((f) => f.surfaces.filter((x) => x.case).map((x) => [x.id, x.case]))
+);
+/** 真实签发的探针 Token 明文（只在内存；证据落盘前脱敏）。 */
+let realToken = null;
+/** 已创建、必须吊销的探针 Token。 */
+let createdToken = null;
 
 const SENTINEL = "__lucy_copy_probe_sentinel__";
 const SUCCESS_RE = /已复制|复制成功/;
@@ -71,18 +88,20 @@ async function writeControl(page, text) {
     b.id = "__probe_seed";
     b.textContent = "seed";
     b.style.cssText = "position:fixed;bottom:0;right:0;z-index:99999";
+    // 模态框（抽屉／对话框）打开时 body 其余部分不可点击、焦点被陷阱锁住：辅助元素必须挂进对话框内。
+    const host = document.querySelector('[role="dialog"]') ?? document.body;
     b.addEventListener("click", () => {
       const t = document.createElement("textarea");
       t.value = payload;
       t.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
-      document.body.appendChild(t);
+      host.appendChild(t);
       t.focus();
       t.select();
       t.setSelectionRange(0, t.value.length);
       document.execCommand("copy");
       t.remove();
     });
-    document.body.appendChild(b);
+    host.appendChild(b);
   }, text);
   await page.locator("#__probe_seed").click();
   await page.evaluate(() => document.getElementById("__probe_seed")?.remove());
@@ -94,7 +113,7 @@ async function pasteBack(page) {
     const t = document.createElement("textarea");
     t.id = "__probe_paste";
     t.style.cssText = "position:fixed;top:0;left:0;width:300px;height:40px;z-index:99999";
-    document.body.appendChild(t);
+    (document.querySelector('[role="dialog"]') ?? document.body).appendChild(t);
     t.focus();
   });
   await page.keyboard.press("ControlOrMeta+V");
@@ -138,21 +157,33 @@ async function clickAndJudge(page, id, label, locator, expected) {
   else if (failureShown) verdict = "HONEST-FAILURE";
   else verdict = "SILENT";
 
-  return { id, label, verdict, successShown, failureShown, clipboardOk, toasts, execCommandCalls: calls,
+  return { id, case: CASE_OF[id], label, verdict, successShown, failureShown, clipboardOk, toasts, execCommandCalls: calls,
     pasted: pasted === null ? null : pasted.length > 80 ? `${pasted.slice(0, 80)}…(${pasted.length} chars)` : pasted,
     expected: typeof expected === "string" ? expected : expected ? "(custom)" : "(non-empty)" };
 }
 
-const notRun = (id, label, reason) => ({ id, label, verdict: "NOT-RUN", reason });
+const notRun = (id, label, reason) => ({ id, case: CASE_OF[id], label, verdict: "NOT-RUN", reason });
 
 /** 单个入口组失败只记 NOT-RUN，不拖垮整轮；ids 是该组负责的入口。 */
 async function group(ids, fn) {
   try {
     await fn();
   } catch (error) {
-    const reason = `探针步骤失败：${String(error?.message ?? error).split("\n")[0]}`;
+    const reason = `探针步骤失败：${String(error?.message ?? error).split("\n").slice(0, 4).join(" ").slice(0, 400)}`;
     for (const [id, label] of ids) if (!results.surfaces.some((s) => s.id === id)) results.surfaces.push(notRun(id, label, reason));
   }
+}
+
+/** 真实 MCP 查询：第一个可见连接＋其第一个来源的第一个度量（Demo 为 demo-mysql／superstore_orders.order_count）。 */
+async function seedAuditViaMcp(token) {
+  const mcp = makeClient(MCP_URL);
+  const { session } = await mcp.open(token);
+  if (!session) throw new Error(`MCP 握手失败（${MCP_URL}）`);
+  const q = await mcp.callTool(token, session, "probe-q1", "lucy_query", {
+    connectionId: args.connection ?? "demo-mysql",
+    measures: [args.measure ?? "superstore_orders.order_count"]
+  });
+  return { mcp: MCP_URL, status: q.status, isError: q.isError, preview: String(q.text).slice(0, 80) };
 }
 
 // ── 主流程 ────────────────────────────────────────────────────────────────
@@ -235,31 +266,29 @@ try {
       : notRun(V[0][0], V[0][1], "构建提交不是 40 位 hex，页面不提供复制按钮"));
   });
 
-  // 新建 Token（POST 打桩，不写真实凭据）与 Agent hash
+  // 新建 Token（真实签发，结束前吊销）与 Agent hash
   const agentsResp = await context.request.get(`${BASE}/api/admin/agents`);
   const agents = (await agentsResp.json()).data?.agents ?? [];
-  const agent = agents.find((a) => (a.tokens ?? []).length > 0) ?? agents[0];
+  const agent = (args.agent && agents.find((a) => a.id === args.agent)) ?? agents.find((a) => (a.tokens ?? []).length > 0) ?? agents[0];
   const NT = [["new-token-plaintext", "新建 Token：复制 Token 明文"], ["new-token-snippet", "新建 Token：复制当前配置"]];
   const AH = [["agent-token-hash", "Agent 详情：复制 Token hash"]];
   if (!agent) {
     for (const [id, label] of [...NT, ...AH]) results.surfaces.push(notRun(id, label, "实例里没有 Agent"));
   } else {
     await group(NT, async () => {
-      const STUB_TOKEN = "lucy_copy_probe_stub_token";
-      await page.route("**/api/admin/agents/*/tokens", async (route) => {
-        if (route.request().method() !== "POST") return route.continue();
-        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, data: { token: STUB_TOKEN, hash: "sha256:probe", label: "copy-probe", created: "2026-01-01T00:00:00.000Z", expires_at: "2027-01-01T23:59:59.999Z" } }) });
-      });
-      try {
-        await goto(`/admin/agents/${encodeURIComponent(agent.id)}/tokens/new`);
-        await page.getByLabel("Token 标签").fill("copy-probe");
-        await page.getByRole("button", { name: "生成 Token" }).click();
-        await page.getByTestId("snippet-active").waitFor({ timeout: 15000 });
-        results.surfaces.push(await clickAndJudge(page, NT[0][0], NT[0][1], page.getByRole("button", { name: "复制 token 明文" }), STUB_TOKEN));
-        results.surfaces.push(await clickAndJudge(page, NT[1][0], NT[1][1], page.getByRole("button", { name: /复制当前配置/ }), (v) => v.includes(`Bearer ${STUB_TOKEN}`)));
-      } finally {
-        await page.unroute("**/api/admin/agents/*/tokens");
-      }
+      const label = `uat-copy-probe-${Date.now()}`;
+      await goto(`/admin/agents/${encodeURIComponent(agent.id)}/tokens/new`);
+      await page.getByLabel("Token 标签").fill(label);
+      const issued = page.waitForResponse((r) => r.request().method() === "POST" && /\/api\/admin\/agents\/[^/]+\/tokens$/.test(new URL(r.url()).pathname));
+      await page.getByRole("button", { name: "生成 Token" }).click();
+      const resp = await issued;
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok() || !body.data?.token) throw new Error(`真实签发 Token 失败：HTTP ${resp.status()} ${body.error?.code ?? ""}`);
+      realToken = body.data.token;
+      createdToken = { agentId: agent.id, label };
+      await page.getByTestId("snippet-active").waitFor({ timeout: 15000 });
+      results.surfaces.push(await clickAndJudge(page, NT[0][0], NT[0][1], page.getByRole("button", { name: "复制 token 明文" }), realToken));
+      results.surfaces.push(await clickAndJudge(page, NT[1][0], NT[1][1], page.getByRole("button", { name: /复制当前配置/ }), (v) => v.includes(`Bearer ${realToken}`)));
     });
 
     const token = (agent.tokens ?? [])[0];
@@ -272,15 +301,39 @@ try {
     });
   }
 
-  // 审计对账
+  // 用真实 Token 走真实 MCP 查询，产生审计行（审计页与对账页的复制入口才有数据可点）
+  const AU = [["audit-copyable-id", "审计：复制问询 ID（CopyableId）"], ["audit-table-list", "审计：复制触达表清单"]];
   const RC = [["reconciliation-ranking", "审计对账：复制表排行全文"]];
-  await group(RC, async () => {
-    await goto("/admin/audit-reconciliation");
-    const recon = page.getByTestId("reconciliation-table-copy");
-    results.surfaces.push(await recon.waitFor({ timeout: 10000 }).then(() => true).catch(() => false)
-      ? await clickAndJudge(page, RC[0][0], RC[0][1], recon)
-      : notRun(RC[0][0], RC[0][1], "复制按钮未出现"));
-  });
+  if (!realToken) {
+    for (const [id, label] of [...AU, ...RC]) results.surfaces.push(notRun(id, label, "没有真实签发的探针 Token，无法产生审计数据"));
+  } else {
+    results.seed = await seedAuditViaMcp(realToken).catch((e) => ({ error: String(e?.message ?? e).split("\n")[0] }));
+    await group(AU, async () => {
+      let idBtn = page.locator('[data-testid^="audit-turn-id-"]').first();
+      for (let i = 0; i < 8; i += 1) {
+        await goto("/admin/audit?range=7d");
+        if (await idBtn.waitFor({ timeout: 6000 }).then(() => true).catch(() => false)) break;
+        await page.waitForTimeout(4000);
+      }
+      if (!(await idBtn.isVisible().catch(() => false))) {
+        for (const [id, label] of AU) results.surfaces.push(notRun(id, label, `查询后约 60 秒内审计页仍没有问询行（seed=${JSON.stringify(results.seed)}）`));
+        return;
+      }
+      results.surfaces.push(await clickAndJudge(page, AU[0][0], AU[0][1], idBtn, (v) => /^\d+$/.test(v)));
+      await page.locator('[data-testid^="audit-turn-row-"]').first().click({ timeout: 10000 });
+      const tablesBtn = page.getByTestId("audit-turn-tables-copy");
+      results.surfaces.push(await tablesBtn.waitFor({ timeout: 8000 }).then(() => true).catch(() => false)
+        ? await clickAndJudge(page, AU[1][0], AU[1][1], tablesBtn, (v) => v.length > 0 && v !== SENTINEL)
+        : notRun(AU[1][0], AU[1][1], "最新问询没有触达表（查询被拒绝或未取到来源），抽屉不显示复制清单"));
+    });
+    await group(RC, async () => {
+      await goto("/admin/audit-reconciliation");
+      const recon = page.getByTestId("reconciliation-table-copy");
+      results.surfaces.push(await recon.waitFor({ timeout: 10000 }).then(() => true).catch(() => false)
+        ? await clickAndJudge(page, RC[0][0], RC[0][1], recon)
+        : notRun(RC[0][0], RC[0][1], "复制按钮未出现"));
+    });
+  }
 
   // 概览 MCP 配置
   const MC = [["onboarding-mcp-config", "接入向导／概览：复制 MCP 配置"]];
@@ -314,11 +367,16 @@ try {
 } catch (error) {
   results.error = String(error?.message ?? error);
 } finally {
+  if (createdToken) {
+    // 不带 content-type：带 JSON 头而无 body 会被 Fastify 400。
+    const del = await context.request.delete(`${BASE}/api/admin/agents/${encodeURIComponent(createdToken.agentId)}/tokens/${createdToken.label}`).catch((e) => ({ status: () => 0, error: e }));
+    results.cleanup = { agentId: createdToken.agentId, label: createdToken.label, revokeStatus: del.status(), revoked: del.status() === 200 };
+    if (!results.cleanup.revoked) console.error(`!! 探针 Token 未吊销，请人工吊销：Agent ${createdToken.agentId} 标签 ${createdToken.label}`);
+  }
   await browser.close();
 }
 
 // ── 登记表对照：未点击的入口列出原因 ─────────────────────────────────────
-const manifest = JSON.parse(readFileSync(path.join(repoRoot, "webui/scripts/copy-surfaces.manifest.json"), "utf8"));
 const clicked = new Set(results.surfaces.map((s) => s.id));
 results.manifestCoverage = Object.entries(manifest.files).flatMap(([file, entry]) =>
   entry.surfaces.map((s) => ({ file, id: s.id, label: s.label, declared: s.coverage, probed: clicked.has(s.id), reason: s.reason ?? null }))
@@ -331,21 +389,25 @@ const bad = (v) => ["FAKE-SUCCESS", "SILENT", "HONEST-FAILURE", "REAL-BUT-SHOWED
 const helperBad = results.helper.some((h) => h.verdict !== "REAL");
 const surfaceBad = results.surfaces.some((s) => bad(s.verdict));
 const notRunClick = results.manifestCoverage.some((r) => r.problem);
-results.verdict = results.error ? "BLOCKED" : helperBad || surfaceBad ? "FAIL" : notRunClick || results.surfaces.some((s) => s.verdict === "NOT-RUN") ? "PASS WITH GAP" : "PASS";
+const cleanupBad = results.cleanup && !results.cleanup.revoked;
+results.verdict = results.error ? "BLOCKED" : cleanupBad ? "FAIL" : helperBad || surfaceBad ? "FAIL" : notRunClick || results.surfaces.some((s) => s.verdict === "NOT-RUN") ? "PASS WITH GAP" : "PASS";
 results.finishedAt = new Date().toISOString();
 
 mkdirSync(OUT, { recursive: true });
-writeFileSync(path.join(OUT, "probe-result.json"), JSON.stringify(results, null, 2));
+const redact = (text) => (realToken ? text.split(realToken).join("<REAL_TOKEN_REDACTED>") : text);
+const cut = (v) => { const t = JSON.stringify(v); return t.length > 120 ? `${t.slice(0, 100)}…(${t.length} chars)` : t; };
+writeFileSync(path.join(OUT, "probe-result.json"), redact(JSON.stringify(results, null, 2)));
 
 const lines = [];
 lines.push(`# 复制按钮假成功探针结果（${results.finishedAt}）`, "", `- 被测实例：\`${BASE}\`（构建 \`${results.r0.build ?? "?"}\`）`, `- R0：${results.r0.verdict ?? "未执行"}（isSecureContext=${results.r0.isSecureContext}，Clipboard API=${results.r0.hasClipboardApi}，阳性对照往返=${results.r0.controlSentinelRoundTrip}）`, `- 总判定：**${results.verdict}**${results.error ? `（${results.error}）` : ""}`, "", "## UAT-COPY-01 共享 helper", "", "| 载荷 | helper 自报 | execCommand 调用 | 粘贴读回 | 判定 |", "|---|---|---|---|---|");
-for (const h of results.helper) lines.push(`| ${h.id} | ${JSON.stringify(h.helperResult)} | ${JSON.stringify(h.execCommandCalls)} | ${JSON.stringify(h.pasted)} | **${h.verdict}** |`);
-lines.push("", "## UAT-COPY-02 入口点击", "", "| 入口 | 界面说已复制 | 界面说失败 | 剪贴板确有内容 | 判定 |", "|---|---|---|---|---|");
-for (const s of results.surfaces) lines.push(s.verdict === "NOT-RUN" ? `| ${s.label} | — | — | — | NOT-RUN（${s.reason}） |` : `| ${s.label} | ${s.successShown} | ${s.failureShown} | ${s.clipboardOk} | **${s.verdict}** |`);
+for (const h of results.helper) lines.push(`| ${h.id} | ${JSON.stringify(h.helperResult)} | ${cut(h.execCommandCalls)} | ${JSON.stringify(h.pasted)} | **${h.verdict}** |`);
+lines.push("", "## UAT-COPY-02 入口点击", "", "| 子用例 | 入口 | 界面说已复制 | 界面说失败 | 剪贴板确有内容 | 判定 |", "|---|---|---|---|---|---|");
+for (const s of results.surfaces) lines.push(s.verdict === "NOT-RUN" ? `| ${s.case ?? ""} | ${s.label} | — | — | — | NOT-RUN（${s.reason}） |` : `| ${s.case ?? ""} | ${s.label} | ${s.successShown} | ${s.failureShown} | ${s.clipboardOk} | **${s.verdict}** |`);
 lines.push("", "## 登记表对照（全部复制入口）", "", "| 文件 | 入口 | 登记覆盖 | 本次点击 | 未点击原因 |", "|---|---|---|---|---|");
 for (const r of results.manifestCoverage) lines.push(`| ${r.file} | ${r.label} | ${r.declared} | ${r.probed ? "是" : "否"} | ${r.problem ?? r.reason ?? ""} |`);
-writeFileSync(path.join(OUT, "probe-result.md"), lines.join("\n") + "\n");
+lines.push("", "## 真实数据与清理", "", `- 种子查询：${JSON.stringify(results.seed ?? null)}`, `- 探针 Token：${results.cleanup ? `Agent \`${results.cleanup.agentId}\` 标签 \`${results.cleanup.label}\` 已${results.cleanup.revoked ? "吊销" : "**未吊销（请人工吊销）**"}（HTTP ${results.cleanup.revokeStatus}）` : "未创建"}`);
+writeFileSync(path.join(OUT, "probe-result.md"), redact(lines.join("\n") + "\n"));
 
-console.log(lines.join("\n"));
+console.log(redact(lines.join("\n")));
 console.log(`\n证据：${path.relative(repoRoot, OUT)}/probe-result.{json,md}`);
 process.exit(results.verdict === "BLOCKED" ? 2 : results.verdict === "FAIL" ? 1 : 0);
