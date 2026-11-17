@@ -40,7 +40,8 @@ import {
   lookupInquiryNo,
   withAllocatedInquiryNo
 } from "../admin/audit-inquiry-serial.js";
-import { yieldToEventLoop } from "../admin/yield-slices.js";
+import { pauseAfterStretch } from "../admin/yield-slices.js";
+import { nextRebuildPageSize, nextSliceSize, REBUILD_PAGE_INITIAL, REBUILD_WRITE_SLICE_INITIAL, REBUILD_WRITE_SLICE_MAX, REBUILD_WRITE_SLICE_MIN } from "../admin/page-budget.js";
 import {
   CALL_MONITOR_P95_MIN_SAMPLES,
   callMonitorBucketIndex,
@@ -470,6 +471,13 @@ export async function getAuditSqliteStatus(): Promise<AuditSqliteStatus> {
  * P1-36 §5.1：开启外键前先盘点指向 `access_log` 的子表并做存量孤儿扫描。
  * 存量违规不阻断启动（外键只约束新写入与父行删除），但数量如实上报。
  */
+let foreignKeyCheckMs = 0;
+
+/** P1-39: 启动预热日志用；最近一次打开审计库时 `PRAGMA foreign_key_check` 的耗时。 */
+export function lastForeignKeyCheckMs(): number {
+  return foreignKeyCheckMs;
+}
+
 function enableForeignKeysWithInventory(database: Database.Database): void {
   const tables = database
     .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
@@ -485,11 +493,13 @@ function enableForeignKeysWithInventory(database: Database.Database): void {
     }
   }
   let violations: number | null = null;
+  const checkStartedAt = performance.now();
   try {
     violations = (database.prepare(`PRAGMA foreign_key_check`).all() as unknown[]).length;
   } catch {
     violations = null;
   }
+  foreignKeyCheckMs = performance.now() - checkStartedAt;
   database.pragma("foreign_keys = ON");
   auditSqliteStatus = {
     foreignKeys: Number(database.pragma("foreign_keys", { simple: true })) === 1,
@@ -628,6 +638,14 @@ function hasAttributionMutationTable(database: Database.Database): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * P1-39: 监听前预热。打开连接、建表迁移和外键盘点在 app.listen 之前做完，
+ * 不再落在首个请求或 onReady 钩子里（冷盘上整段同步执行会卡死 livez / 触发钩子超时）。
+ */
+export async function openProxyAuditDb(): Promise<void> {
+  await getDb();
 }
 
 async function getDb(): Promise<Database.Database> {
@@ -2443,9 +2461,10 @@ export const UNREPORTED_QUESTION_SUMMARY = "未上报问询原文";
 export const INFERRED_TURN_REBUILD_LOOKBACK_HOURS = 24 * 30;
 /**
  * Count bounds for one synchronous stretch of an inferred-turn rebuild.
- * They are not a time budget: one page, one cluster, or the in-memory grouping
- * can still run longer than a 3s probe. Yields only let already queued macrotasks
- * run before the next stretch.
+ * The log page size is also a time budget (P1-39, `admin/page-budget.ts`): it starts small and
+ * adapts to the measured page time, with this constant as the upper bound. One cluster or the
+ * in-memory grouping can still run longer than a 3s probe. Yields only let already queued
+ * macrotasks run before the next stretch.
  */
 export const INFERRED_REBUILD_LOG_PAGE = 400;
 export const INFERRED_REBUILD_CLUSTER_SLICE = 25;
@@ -2595,6 +2614,12 @@ async function rebuildInferredTurnsUnlocked(
   const gapMs = options.gapMs ?? Number(process.env.LUCY_TURN_INFER_GAP_MS ?? 120_000);
   const includeCatalogOnly = options.includeCatalogOnly ?? (process.env.LUCY_TURN_INFER_INCLUDE_CATALOG_ONLY === "true");
   const database = await getDb();
+  // P1-39: 每个较长的同步段之后空出相当的时间（上限 250 毫秒），让多跳请求（readyz）在空窗里答完。
+  let stretchStartedAt = performance.now();
+  const rest = async (): Promise<void> => {
+    await pauseAfterStretch(performance.now() - stretchStartedAt);
+    stretchStartedAt = performance.now();
+  };
   const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
   const ceiling = database.prepare(
     `SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ? AND ts >= ?`
@@ -2611,17 +2636,22 @@ async function rebuildInferredTurnsUnlocked(
   const loaded: ClusterLogRow[] = [];
   let cursorTs = "";
   let cursorId = 0;
+  // P1-39: 页大小按上一页实测耗时收敛，慢盘冷缓存下单页同步读取不再随固定 400 行失控。
+  let pageSize = REBUILD_PAGE_INITIAL;
   for (let pageIndex = 0; ; pageIndex += 1) {
-    if (pageIndex > 0) await yieldToEventLoop();
-    const page = loadPage.all(userId, cutoff, ceilingId, cursorTs, cursorTs, cursorId, INFERRED_REBUILD_LOG_PAGE) as ClusterLogRow[];
+    if (pageIndex > 0) await rest();
+    const startedAt = performance.now();
+    const page = loadPage.all(userId, cutoff, ceilingId, cursorTs, cursorTs, cursorId, pageSize) as ClusterLogRow[];
+    const elapsedMs = performance.now() - startedAt;
     if (page.length === 0) break;
     loaded.push(...page);
     const tail = page[page.length - 1]!;
     cursorTs = tail.ts;
     cursorId = tail.id;
-    if (page.length < INFERRED_REBUILD_LOG_PAGE) break;
+    if (page.length < pageSize) break;
+    pageSize = nextRebuildPageSize(pageSize, elapsedMs);
   }
-  await yieldToEventLoop();
+  await rest();
 
   const business = loaded.filter((row) =>
     !isMcpProtocolMethod(row.tool)
@@ -2674,7 +2704,7 @@ async function rebuildInferredTurnsUnlocked(
       summaryOverride: sessionVisitSummary(clientFromRows(rows))
     });
   }
-  await yieldToEventLoop();
+  await rest();
 
   const deleteAccessLogsStmt = database.prepare(`
     DELETE FROM inferred_turn_access_logs
@@ -2793,12 +2823,14 @@ async function rebuildInferredTurnsUnlocked(
       assignedInquiry.set(plan.id, lookupInquiryNo(database, plan.id) ?? allocateInquiryNo(database, plan.id));
     }
   })();
-  await yieldToEventLoop();
+  await rest();
 
   let turns = 0;
-  for (let start = 0; start < plans.length; start += INFERRED_REBUILD_CLUSTER_SLICE) {
-    if (start > 0) await yieldToEventLoop();
-    const slice = plans.slice(start, start + INFERRED_REBUILD_CLUSTER_SLICE);
+  let sliceSize = REBUILD_WRITE_SLICE_INITIAL;
+  for (let start = 0; start < plans.length;) {
+    if (start > 0) await rest();
+    const slice = plans.slice(start, start + sliceSize);
+    const sliceStartedAt = performance.now();
     turns += database.transaction(() => {
       let written = 0;
       for (const plan of slice) {
@@ -2806,6 +2838,9 @@ async function rebuildInferredTurnsUnlocked(
       }
       return written;
     })();
+    start += slice.length;
+    // P1-39: 一片 = 一次事务（含 fsync 与可能的检查点），按实测耗时收敛片大小。
+    sliceSize = nextSliceSize(sliceSize, performance.now() - sliceStartedAt, REBUILD_WRITE_SLICE_MIN, REBUILD_WRITE_SLICE_MAX);
   }
   return { turns };
 }

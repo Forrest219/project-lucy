@@ -1,5 +1,16 @@
 import type Database from "better-sqlite3";
 import { INFERRED_TURN_REBUILD_LOOKBACK_HOURS } from "../proxy/audit.js";
+import { yieldToEventLoop } from "./yield-slices.js";
+
+/** P1-39: 轮询每页读取的新行数；每页之间让出事件循环。 */
+export const INFERRED_POLL_PAGE = 2000;
+/** P1-39: 启动补算每探测这么多用户让出一次事件循环。 */
+export const INFERRED_SCAN_YIELD_USERS = 64;
+/**
+ * P1-39: 最近一次重建的 updated_at 减去该余量后，仍不早于窗口内最新一行 ts，才算「已覆盖」。
+ * 余量吸收 ts 取自写入前、updated_at 取自重建时的时钟差与进程内水位尚未补算的小窗。
+ */
+export const INFERRED_COVERAGE_MARGIN_MS = 15 * 60_000;
 
 export type InferredRebuildStatus = {
   complete: boolean;
@@ -16,7 +27,11 @@ type MaintainerDeps = {
 };
 
 export type InferredTurnMaintainer = {
-  start(options?: { awaitInitial?: boolean }): Promise<void>;
+  /**
+   * `after`：首轮扫描与轮询等它完成才开始（生产里是「服务已开始监听」）。
+   * 启动补算与 onReady 里其余钩子争同一块盘，冷盘上会把钩子拖过 10 秒超时。
+   */
+  start(options?: { awaitInitial?: boolean; after?: Promise<unknown> }): Promise<void>;
   stop(): void;
   markDirty(userId: string): void;
   status(): InferredRebuildStatus;
@@ -64,16 +79,54 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     if (id > watermarkId) watermarkId = id;
   };
 
-  const scanFull = async (): Promise<void> => {
+  /**
+   * P1-39: 不再整条扫描 access_log。按用户逐个做 idx_al_user_ts 的 SEARCH 探测，
+   * 只把「窗口内有比上次重建更新的行」的用户标脏；覆盖判定见 INFERRED_COVERAGE_MARGIN_MS。
+   * 水位在探测开始前读取：探测期间新写入的行 id 更大，由首次轮询补上。
+   */
+  const scanFullOnce = async (): Promise<void> => {
+    await yieldToEventLoop();
     const database = await deps.getDb();
     const cutoff = new Date(now() - lookbackHours * 60 * 60 * 1000).toISOString();
-    const users = database
-      .prepare(`SELECT DISTINCT user_id FROM access_log WHERE ts >= ?`)
-      .all(cutoff) as Array<{ user_id: string }>;
-    for (const row of users) touch(row.user_id);
     const mark = database.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log`).get() as { id: number };
+    const nextUser = database.prepare(`SELECT user_id FROM access_log WHERE user_id > ? ORDER BY user_id LIMIT 1`);
+    const newestRow = database.prepare(`SELECT ts FROM access_log WHERE user_id = ? AND ts >= ? ORDER BY ts DESC LIMIT 1`);
+    let latestTurn: Database.Statement | null = null;
+    try {
+      latestTurn = database.prepare(`SELECT updated_at FROM inferred_turns WHERE user_id = ? ORDER BY started_at DESC LIMIT 1`);
+    } catch {
+      latestTurn = null;
+    }
+    const covered = (userId: string, newestTs: string): boolean => {
+      if (!latestTurn) return false;
+      const turn = latestTurn.get(userId) as { updated_at: string } | undefined;
+      if (!turn) return false;
+      const builtAt = Date.parse(turn.updated_at);
+      const newestAt = Date.parse(newestTs);
+      return Number.isFinite(builtAt) && Number.isFinite(newestAt) && builtAt - INFERRED_COVERAGE_MARGIN_MS >= newestAt;
+    };
+    let cursor = "";
+    let probed = 0;
+    for (;;) {
+      const next = nextUser.get(cursor) as { user_id: string } | undefined;
+      if (!next) break;
+      cursor = next.user_id;
+      const newest = newestRow.get(cursor, cutoff) as { ts: string } | undefined;
+      if (newest && !covered(cursor, newest.ts)) touch(cursor);
+      probed += 1;
+      if (probed % INFERRED_SCAN_YIELD_USERS === 0) await yieldToEventLoop();
+    }
     noteMaxId(mark.id);
     scanned = true;
+  };
+
+  /** 轮询与首轮扫描可能重叠（扫描现在会让出）；共用同一次进行中的扫描。 */
+  let scanning: Promise<void> | null = null;
+  const scanFull = (): Promise<void> => {
+    scanning ??= scanFullOnce().finally(() => {
+      scanning = null;
+    });
+    return scanning;
   };
 
   const passOnce = async (): Promise<void> => {
@@ -120,27 +173,49 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     return running;
   };
 
+  /**
+   * P1-39: 按 id 水位分页读取新行（无 DISTINCT，按 id 顺序读 rowid 范围），在代码里去重。
+   * 每页之后推进水位并让出事件循环；同一次轮询里每个用户只 touch 一次。
+   */
   const pollOnce = async (): Promise<void> => {
     if (!scanned) {
       await scanFull();
       return;
     }
     const database = await deps.getDb();
-    const users = database
-      .prepare(`SELECT DISTINCT user_id FROM access_log WHERE id > ?`)
-      .all(watermarkId) as Array<{ user_id: string }>;
-    for (const row of users) touch(row.user_id);
-    const mark = database.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log`).get() as { id: number };
-    noteMaxId(mark.id);
+    const page = database.prepare(`SELECT id, user_id FROM access_log WHERE id > ? ORDER BY id LIMIT ?`);
+    const seen = new Set<string>();
+    for (;;) {
+      const rows = page.all(watermarkId, INFERRED_POLL_PAGE) as Array<{ id: number; user_id: string }>;
+      for (const row of rows) {
+        if (seen.has(row.user_id)) continue;
+        seen.add(row.user_id);
+        touch(row.user_id);
+      }
+      if (rows.length > 0) noteMaxId(rows[rows.length - 1].id);
+      if (rows.length < INFERRED_POLL_PAGE) break;
+      await yieldToEventLoop();
+    }
   };
 
   return {
-    async start(options?: { awaitInitial?: boolean }) {
+    async start(options?: { awaitInitial?: boolean; after?: Promise<unknown> }) {
       if (timer) return;
-      const initial = scanFull().then(() => runPass());
+      let gateOpen = options?.after === undefined;
+      const initial = (options?.after ?? Promise.resolve())
+        .then(() => {
+          gateOpen = true;
+          return scanFull();
+        })
+        .then(() => runPass());
       if (options?.awaitInitial) await initial;
-      else void initial;
+      else {
+        initial.catch((error) => {
+          console.error("[inferred-turns] initial catch-up failed; the poll retries the scan:", error);
+        });
+      }
       timer = setInterval(() => {
+        if (!gateOpen) return;
         void pollOnce().then(() => runPass());
       }, pollMs);
       timer.unref();

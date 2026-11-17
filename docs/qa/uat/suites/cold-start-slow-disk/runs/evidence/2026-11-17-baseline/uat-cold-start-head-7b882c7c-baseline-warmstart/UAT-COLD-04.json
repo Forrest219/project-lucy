@@ -1,0 +1,104 @@
+{
+  "id": "UAT-COLD-04",
+  "title": "稳态下页缓存被冲掉（后台轮询冷读）",
+  "pass": false,
+  "checks": [
+    {
+      "name": "process stayed up (no exit)",
+      "pass": true,
+      "actual": {
+        "running": true,
+        "exitCode": 0,
+        "restarts": 0,
+        "oomKilled": false
+      },
+      "limit": "running"
+    },
+    {
+      "name": "no FST_ERR_HOOK_TIMEOUT / AVV_ERR_READY_TIMEOUT",
+      "pass": true,
+      "actual": false,
+      "limit": false
+    },
+    {
+      "name": "restart count == 0",
+      "pass": true,
+      "actual": 0,
+      "limit": 0
+    },
+    {
+      "name": "ready within 60s",
+      "pass": true,
+      "actual": 13,
+      "limit": "≤ 60s"
+    },
+    {
+      "name": "livez max",
+      "pass": false,
+      "actual": 8002,
+      "limit": "≤ 1000ms"
+    },
+    {
+      "name": "livez p99",
+      "pass": false,
+      "actual": 8002,
+      "limit": "≤ 400ms"
+    },
+    {
+      "name": "readyz p99",
+      "pass": false,
+      "actual": 8001,
+      "limit": "≤ 1500ms"
+    },
+    {
+      "name": "livez/readyz all 200 after ready",
+      "pass": false,
+      "actual": {
+        "livez": 1,
+        "readyz": 2
+      },
+      "limit": 0
+    }
+  ],
+  "image": "project-lucy:cold-head-7b882c7c",
+  "readyT": 13,
+  "exited": null,
+  "finalState": {
+    "running": true,
+    "exitCode": 0,
+    "restarts": 0,
+    "oomKilled": false
+  },
+  "windowStart": 13,
+  "windowEnd": 93,
+  "stats": {
+    "samples": 6,
+    "livezMaxMs": 8002,
+    "livezP99Ms": 8002,
+    "livezNon200": 1,
+    "readyzMaxMs": 8001,
+    "readyzP99Ms": 8001,
+    "readyzNon200": 2,
+    "healthMaxMs": 25,
+    "healthNon200": 0
+  },
+  "droppedAtT": 36.1,
+  "logFindings": {
+    "hookTimeout": false,
+    "auditSchemaReady": null,
+    "tail": [
+      "{\"level\":30,\"time\":1794930522586,\"pid\":266,\"hostname\":\"3929550983f6\",\"reqId\":\"req-s\",\"res\":{\"statusCode\":200},\"responseTime\":0.3790840000001481,\"msg\":\"request completed\"}",
+      "{\"level\":30,\"time\":1794930525285,\"pid\":266,\"hostname\":\"3929550983f6\",\"reqId\":\"req-t\",\"req\":{\"method\":\"GET\",\"url\":\"/api/readyz\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":51737},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794930538597,\"pid\":266,\"hostname\":\"3929550983f6\",\"reqId\":\"req-u\",\"req\":{\"method\":\"GET\",\"url\":\"/api/livez\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":63960},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794930538598,\"pid\":266,\"hostname\":\"3929550983f6\",\"reqId\":\"req-u\",\"res\":{\"statusCode\":200},\"responseTime\":0.3000000000029104,\"msg\":\"request completed\"}",
+      "{\"level\":30,\"time\":1794930538606,\"pid\":266,\"hostname\":\"3929550983f6\",\"reqId\":\"req-v\",\"req\":{\"method\":\"GET\",\"url\":\"/api/readyz\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":44129},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794930538622,\"pid\":266,\"hostname\":\"3929550983f6\",\"reqId\":\"req-v\",\"res\":{\"statusCode\":200},\"responseTime\":15.324166000005789,\"msg\":\"request completed\"}",
+      "Project: /data/lucy",
+      "{\"level\":30,\"time\":1794930496163,\"pid\":200,\"hostname\":\"3929550983f6\",\"sessionId\":\"ccd2a4ab-a63e-4685-a3d9-fd50d14ba98c\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794930508398,\"pid\":200,\"hostname\":\"3929550983f6\",\"sessionId\":\"4125d46d-7ece-44fb-912b-a7f4f1a7371b\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794930514494,\"pid\":200,\"hostname\":\"3929550983f6\",\"sessionId\":\"e9fc922a-caad-4c8a-85e1-9f94f12393d8\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794930538600,\"pid\":200,\"hostname\":\"3929550983f6\",\"sessionId\":\"1fcc308a-1352-4e97-ae13-372c5831e51a\",\"msg\":\"session.open\"}",
+      ""
+    ]
+  }
+}

@@ -166,6 +166,7 @@ import { registerAuthorizationSummaryRoutes } from "./admin/routes/authorization
 import { registerAccessMapRoutes } from "./admin/routes/access-map.js";
 // Lucy v0.25 / L25-10 — Hive 直连的配置面（P1-4，仅编译侧）。
 import { registerHiveConnectionRoutes } from "./admin/routes/hive.js";
+import { warmAuditDatabases } from "./admin/audit-warmup.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
@@ -792,7 +793,11 @@ export function buildServer() {
     bindInferredTurnMaintainer(inferredMaintainer);
     // Tests read the audit page as soon as the app is ready, so the first pass
     // finishes first. Production listen does not wait; users are rebuilt one by one.
-    await inferredMaintainer.start({ awaitInitial: process.env.VITEST === "true" });
+    // P1-39: outside tests the first scan waits for the listener. It shares the disk with the
+    // remaining onReady hooks; on a cold throttled disk that pushed a hook past its 10 s timeout.
+    const underTest = process.env.VITEST === "true";
+    const listening = new Promise<void>((resolve) => { app.server.once("listening", () => resolve()); });
+    await inferredMaintainer.start({ awaitInitial: underTest, after: underTest ? undefined : listening });
   });
   app.addHook("onClose", async () => {
     inferredMaintainer?.stop();
@@ -3309,6 +3314,7 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   // writes, the publish and the manual reindex all have to be gated by the
   // recovery admission. Running this after `app.listen()` would leave a
   // window in which the API accepted writes on an unverified target.
+  const auditStartupSince = performance.now();
   await recoverSemanticJournals();
 
   // ★ Lucy v0.25 / L25-16 §6.2 (F6-01 / G33): the control plane's non-terminal
@@ -3318,6 +3324,10 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   // the two non-terminal states would only ever refuse a new attempt and never
   // converge (Spec §6.2 / G33).
   await recoverOpsControlPlane();
+
+  // P1-39: 审计库两个连接的打开、建表迁移与外键盘点在监听之前完成，
+  // 冷盘上不再落进 onReady 钩子（10 秒超时即进程退出）或首个请求。
+  await warmAuditDatabases({ since: auditStartupSince });
 
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";

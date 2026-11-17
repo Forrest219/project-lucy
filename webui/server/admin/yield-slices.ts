@@ -35,6 +35,24 @@ export function yieldToEventLoop(): Promise<void> {
   });
 }
 
+/** 占空比让出的上限。再长的同步段也只让出这么久，补算整体不会被拖到无法收敛。 */
+export const PAUSE_CAP_MS = 250;
+/** 短于该值的同步段不值得起定时器，只做一次宏任务让出。 */
+const PAUSE_MIN_STRETCH_MS = 20;
+
+/**
+ * P1-39: 占空比让出。一次宏任务让出只给排队的回调一个回合，需要好几跳才能答完的请求
+ * （readyz 要读文件、问依赖）会被后台补算的每个同步段各拖一次。较长的同步段之后
+ * 空出与之相当的时间（上限 PAUSE_CAP_MS），多跳请求就能在这段空窗里答完。
+ * Vitest 假定时器下退化为一次宏任务让出，不会挂起。
+ */
+export function pauseAfterStretch(stretchMs: number): Promise<void> {
+  if (stretchMs < PAUSE_MIN_STRETCH_MS || timersAreFake()) return yieldToEventLoop();
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, Math.min(stretchMs, PAUSE_CAP_MS));
+  });
+}
+
 /** `fn` is applied per slice (it must be row-independent); outputs are concatenated in order. */
 export async function mapSlicesYielding<T, R>(
   items: readonly T[],
