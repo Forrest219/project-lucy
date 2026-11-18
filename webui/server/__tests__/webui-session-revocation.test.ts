@@ -1,5 +1,5 @@
-import {
-import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js"; createHmac } from "node:crypto";
+import { createHmac } from "node:crypto";
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFileSync } from "node:fs";
 import net from "node:net";

@@ -274,7 +274,7 @@ defaults:
       expect(res.status).toBe(200);
       const body = await res.json() as { result: { instructions: string } };
       expect(body.result.instructions).toContain("lucy_begin_question");
-      expect(body.result.instructions).toContain("Skipping this call never blocks catalog or query tools");
+      expect(body.result.instructions).toContain("Skipping begin does not bypass");
       expect(body.result.instructions).toContain("Prefer the user's original wording in `question`");
     } finally {
       await closeAll(upstream, server);

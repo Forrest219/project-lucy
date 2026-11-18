@@ -895,8 +895,23 @@ describe("MCP proxy smoke", () => {
       // AC-W3-02: export the evidence pack from the same DB populated by the
       // real Proxy call; do not seed a second synthetic access_log row.
       const { buildServer } = await import("../index");
+      const { runProjection } = await import("../security/projector");
+      const { getSecurityStore } = await import("../security/instance");
+      const { getAuditDb } = await import("../admin/audit");
       const app = buildServer();
       await app.ready();
+      // Drive the security projection to completion before exporting so that
+      // manifest.completeness.complete is true (buildServer does not start the
+      // scheduler; we run the projection synchronously here instead).
+      const storeResult = await getSecurityStore();
+      if (storeResult.ok) {
+        const target = await getAuditDb();
+        for (let i = 0; i < 20; i++) {
+          const run = runProjection(storeResult.value, target);
+          if (run.status.complete) break;
+          await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        }
+      }
       try {
         const pack = await app.inject({
           method: "GET",
@@ -1757,8 +1772,8 @@ describe("MCP proxy smoke", () => {
       const listBody = await listRes.json() as { result: { tools: Array<{ name: string; description?: string; inputSchema?: { required?: string[] } }> } };
       const beginTool = listBody.result.tools.find((tool) => tool.name === "lucy_begin_question");
       expect(beginTool).toBeDefined();
-      expect(beginTool?.description).toContain("Optional but recommended");
-      expect(beginTool?.description).toContain("never blocks");
+      expect(beginTool?.description).toContain("Recommended at the start of each new user business question");
+      expect(beginTool?.description).toContain("Skipping begin does not bypass");
       expect(beginTool?.inputSchema?.required).toEqual(["intentSummary"]);
 
       const beginRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
@@ -1882,10 +1897,11 @@ describe("MCP proxy smoke", () => {
       const auditB = await waitForAuditRow("follow-session-b");
       expect(auditA.lucy_turn_id).toBe(turnA);
       expect(auditB.lucy_turn_id).toBe(turnB);
-      expect(auditA.turn_attribution_mode).toBe("session_bound");
-      expect(auditB.turn_attribution_mode).toBe("session_bound");
-      expect(auditA.turn_attribution_confidence).toBe("low");
-      expect(auditB.turn_attribution_confidence).toBe("low");
+      // 空桑基修复 Spec §2 D3：同会话 begin 后无 header 的 tools/call → 显式延续（explicit + confirmed）。
+      expect(auditA.turn_attribution_mode).toBe("explicit");
+      expect(auditB.turn_attribution_mode).toBe("explicit");
+      expect(auditA.turn_attribution_confidence).toBe("high");
+      expect(auditB.turn_attribution_confidence).toBe("high");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -2584,21 +2600,26 @@ describe("MCP proxy smoke", () => {
       upstreamIds.push(id);
       res.writeHead(200, { "content-type": "application/json" });
       if (id === "pushdown-query" || id === "pushdown-off") {
+        // content[0].text must be a valid JSON object so AV assembly can inject
+        // answer_verifiability; the STRUCT/AS-field patterns must survive to the
+        // outer body string so that isFilterPushdownText fires for pushdown-query
+        // while pushdown-off (guard off) forwards the STRUCT-containing response.
         res.end(JSON.stringify({
           jsonrpc: "2.0",
           id,
           result: {
             structuredContent: { sql: pushdownSql },
-            content: [{ type: "text", text: pushdownSql }]
+            content: [{ type: "text", text: JSON.stringify({ sql: pushdownSql, rows: [], totalRows: 0 }) }]
           }
         }));
         return;
       }
       if (id === "truncated-query") {
+        // Same: valid JSON object so AV assembly succeeds; ...RUCT( pattern survives.
         res.end(JSON.stringify({
           jsonrpc: "2.0",
           id,
-          result: { content: [{ type: "text", text: "detailMessage = ...RUCT(" }] }
+          result: { content: [{ type: "text", text: JSON.stringify({ detail: "detailMessage = ...RUCT(" }) }] }
         }));
         return;
       }
@@ -2657,8 +2678,9 @@ describe("MCP proxy smoke", () => {
       const bound = await post("bind-query", "lucy_query", queryArgs, { "mcp-session-id": "session-bind" });
       expect(bound.result?.isError).not.toBe(true);
       const bindAudit = await waitForAuditRow("bind-query");
-      expect(bindAudit.turn_attribution_mode).toBe("session_bound");
-      expect(bindAudit.turn_attribution_confidence).toBe("low");
+      // 空桑基修复 Spec §2 D3：same-session begin 后无 header 的 tools/call → explicit + high。
+      expect(bindAudit.turn_attribution_mode).toBe("explicit");
+      expect(bindAudit.turn_attribution_confidence).toBe("high");
       const beginText = begun.result?.content?.[0]?.text ?? "";
       const { turnId } = JSON.parse(beginText) as { turnId: string };
       const turnDb = new Database(auditDbPath, { readonly: true });

@@ -1,5 +1,5 @@
-import {
-import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js"; copyFile, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, readFile, rm, writeFile } from "node:fs/promises";
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSessionSecretCache } from "../auth/session.js";
 import { closeSecurityStore } from "../security/instance.js";

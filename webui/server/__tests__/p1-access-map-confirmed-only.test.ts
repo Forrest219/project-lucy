@@ -206,7 +206,7 @@ describe("confirmed-only · B／E／D／detail（SC-11／SC-12）", () => {
         PRIMARY KEY(inferred_turn_id, access_log_id)
       );
     `);
-    const ts = "2026-10-19T00:15:00.000Z";
+    const ts = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const insertLog = db.prepare(
       `INSERT INTO access_log (ts, user_id, matched_role_id, role_ids, token_label, tool, outcome,
         permission_snapshot_hash, capability_digest, association_status, lucy_turn_id)
