@@ -472,6 +472,24 @@ WebUI 的 UI/UX 约束分散在下表几处；**各自只有一份正文**，本
 - 客户 amd64 离线包 / K8s integration 大包：推荐 `bash scripts/release/build-customer-amd64-image.sh`（含 G1–G4 + G4b + **G8** 门禁）；或 `docker buildx build --builder lucy-amd64 ...` 并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建 builder 时**不要** `--use`，结束后 `docker buildx use default`）。交付前**必须**完整走一遍 [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md)（含 `assert-image-elf-arch.sh` 对 **node+tini** 架构、Python runtime 离线预装 G4b、镜像 UID 10001 + git init **G8**、Helm MCP URL 守卫、**H3 N-1 旧 PVC 升级**及现场验收命令）。交付事故经验见 [`docs/lessons/`](../lessons/README.md)（原 preflight 大清单已作废）。K8s 升级方案见 [`deploy/k8s/helm/lucy/UPGRADE.md`](../../deploy/k8s/helm/lucy/UPGRADE.md)。详见 `docs/specs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
 - Demo 使用 `LUCY_TEMPLATE_ROOT=examples/docker-demo/project-template`（本地 `demo-mysql`），**不会**把内网测试库打进客户默认 seed。
 
+#### 镜像依赖层缓存原则（默认）
+
+日常「让最新代码生效」应**优先复用已装依赖**，不要因为改了一句 Dockerfile `RUN` 就整层重拉 npm / apt。
+
+| 变更类型 | 期望行为 |
+|---|---|
+| 只改业务源码（`COPY . .` 之后） | 依赖层 `CACHED`；只重建源码拷贝 + `vite build` |
+| `package.json` / `package-lock.json`（或 KTX / 系统包版本）变更 | 才重跑对应 `npm ci` / install 层 |
+| 集团或现场强制镜像源 | 用构建参数 `NPM_REGISTRY` / `UV_INDEX_URL` / `APT_MIRROR`，**不要**为换源去改 `RUN` 安装命令文案 |
+| 明确要求无缓存 | 才用 `--no-cache` |
+
+落地约束（`Dockerfile`）：
+
+1. **依赖层 lockfile 驱动**：`COPY package*.json` → `npm ci`；安装命令与 flags **冻结**，不因临时排障随意改 `RUN`（改一行即作废该层及之后所有层）。
+2. **下载缓存可复用**：npm 安装步骤使用 BuildKit `--mount=type=cache,id=lucy-npm,target=/root/.npm`。即使 lockfile 变更必须重跑 `npm ci`，也应尽量吃本地包缓存，而不是每次从镜像站完整重下。
+3. **WebUI 安装策略冻结为** `npm ci --include=dev --include=optional`（`NODE_ENV=production` 否则会丢掉 `@tailwindcss/oxide-*` 等 optional 原生包）。需要调整时单独评审，并接受一次依赖层失效。
+4. Agent / 文档操作默认走 `npm run demo:upgrade`（有缓存），禁止把「改 Dockerfile 安装参数」当成同步代码的常规手段。
+
 ## 语义层（semantic-layer）分层
 
 `semantic-layer/<connection>/` 下的 yaml 看似两份重名文件，实际是 ktx 的

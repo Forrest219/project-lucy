@@ -62,7 +62,10 @@ WORKDIR /app
 COPY scripts/runtime/docker-build-mirrors.sh /tmp/docker-build-mirrors.sh
 RUN sh /tmp/docker-build-mirrors.sh apt-install bash ca-certificates curl git tini python3 make g++
 
-RUN sh /tmp/docker-build-mirrors.sh npm install -g "@kaelio/ktx@${KTX_VERSION}"
+# npm download cache is shared across rebuilds. Layer invalidation still follows
+# Docker rules (KTX_VERSION / this RUN text); the mount avoids re-fetching tarballs.
+RUN --mount=type=cache,id=lucy-npm,target=/root/.npm \
+    sh /tmp/docker-build-mirrors.sh npm install -g "@kaelio/ktx@${KTX_VERSION}"
 
 # StarRocks / MySQL-protocol engines may reject SET SESSION max_execution_time (P0-1/P0-2).
 COPY scripts/runtime/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-mysql-starrocks-compat.js
@@ -106,11 +109,19 @@ RUN set -eux; \
 
 RUN sh /tmp/docker-build-mirrors.sh ktx-runtime
 
+# Dependency layers are lockfile-keyed. Prefer reuse: only package*.json / lockfile
+# changes should invalidate npm ci. Do not casually edit these RUN lines (flags /
+# comments that change the instruction bust the layer). See DEVELOPMENT.md
+# 「镜像依赖层缓存原则」.
 COPY package.json package-lock.json ./
-RUN sh /tmp/docker-build-mirrors.sh npm ci --include=dev
+RUN --mount=type=cache,id=lucy-npm,target=/root/.npm \
+    sh /tmp/docker-build-mirrors.sh npm ci --include=dev
 
 COPY webui/package.json webui/package-lock.json ./webui/
-RUN sh /tmp/docker-build-mirrors.sh npm --prefix /app/webui ci --include=dev
+# Install policy is frozen: --include=dev --include=optional.
+# NODE_ENV=production otherwise omits optional native bindings (@tailwindcss/oxide-*).
+RUN --mount=type=cache,id=lucy-npm,target=/root/.npm \
+    sh /tmp/docker-build-mirrors.sh npm --prefix /app/webui ci --include=dev --include=optional
 
 COPY . .
 

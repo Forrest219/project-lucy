@@ -24,6 +24,12 @@ npm run demo:upgrade
 - 关闭默认镜像：`LUCY_DEMO_BUILD_MIRRORS=0`，或显式导出空的 `NPM_REGISTRY=` / `UV_INDEX_URL=`（走 Dockerfile 官方优先阶梯）。
 - compose `cache_from: project-lucy:demo`；构建结束打印 `ktx install layer: CACHED|MISS|UNKNOWN`。
 
+**依赖层默认复用**（正文见 `docs/governance/DEVELOPMENT.md`「镜像依赖层缓存原则」）：
+
+- 同步最新代码时优先有缓存重建；**不要**为排障随意改 Dockerfile 里的 `npm ci` / install `RUN`（会整层重拉依赖）。
+- 依赖重装只应来自 lockfile / 版本变更，或集团镜像源参数（`NPM_REGISTRY` 等），或用户明确 `--no-cache`。
+- Dockerfile npm 步骤使用 BuildKit `lucy-npm` cache mount；WebUI 安装 flags 冻结为 `--include=dev --include=optional`。
+
 可选升级前备份：`npm run demo:upgrade -- --backup-dir inbox/backups`
 
 ## 从零 reseed（仅当用户明确要求清空运行时配置）
