@@ -26,6 +26,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261118-version-axis-naming-spec.md](specs/lucy-20261118-version-axis-naming-spec.md) | **v0.1-draft。仅方案落盘：不含运行代码、镜像与 CI 改动；未获开发授权；待 Codex 交叉审阅与委托人批准。≠ 可上线**：版本四轴分工——产品线号（分支号 `0.30`）／候选版本（合并前镜像 `0.30.0-rc.N`）／定稿产品版本（`0.30.0`）／构建修订（40-hex）；候选镜像一律 `candidate-` 前缀且不得被当作发布。现状证据：分支上 `VERSION` 自开线未再变动，合并前镜像与定稿镜像版本段撞车（`customer-amd64-0.30.0-20261117-abb38913`）；本地 `main` 落后 `origin/main` 324 提交 |
 | `governance/DEVELOPMENT.md` | 开发治理总纲：Plan Mode 强制场景、红线、Spec 落位与内容规格（重要功能伪代码）、术语合规 |
 | `governance/project-overview.md` | 项目总览：onboarding、模块索引、当前能力边界（v1.4，持续更新） |
 | `governance/vision.md` | Lucy 产品愿景 |
