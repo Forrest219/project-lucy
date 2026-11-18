@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v1.46 / 2026-11-18 |
+| 版本 / 日期 | v1.47 / 2026-11-18 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,7 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v1.47 | 2026-11-18 | **入池 P1-52／REQ-030-073（客户镜像升级可靠性分层门禁；仅发布取证文档）**：委托人认可 digest／Chart／values／N-1 数据基线绑定、客户数据量级覆盖与「环境等价而非复制客户集群」折中，授权只生成 Spec／Plan，评审前不开发、不执行 UAT。方案为镜像前预检＋镜像后 A 层原生 amd64 容器压力＋B 层标准 K8s 持续升级＋按验证边界触发的 C 层客户隔离预演；同一 digest 通过后才晋级。[Spec](../specs/lucy-20261118-customer-upgrade-reliability-gate-spec.md)／[Plan](lucy-20261118-customer-upgrade-reliability-gate-plan.md) v0.1-draft；测试台 not_registered。**入池＋起草 ≠ 终稿确权 ≠ 开发授权；未授权不改运行代码、CI、门禁脚本与测试台；不入核心分母；≠ 可上线** |
 | v1.46 | 2026-11-18 | **入池 P1-51／REQ-030-072（版本轴分工与命名规约；仅文档）**：委托人确认采纳 `rc.N`＋交付主键、候选号出包自动分配、私有化分叉可定位；Spec／Plan 升 **v0.3-draft**（交付仓追溯合同、SC-09–SC-13）。补登：此前 Spec／Plan 已落盘但未入总账。测试台 not_registered。**入池＋起草 ≠ 终稿确权 ≠ 开发授权；未授权不改运行代码；不入核心分母；≠ 可上线** |
 | v1.45 | 2026-11-18 | **P1-47 F2++（R07 第三轮）**：`wal_autocheckpoint` 50→**25**；写片 INITIAL 3／MAX 12；tiny residual 可跳过 PASSIVE（每 3 片强制一次）。[Spec](../specs/lucy-20261118-rebuild-probe-budget-spec.md) → v0.6；证据 [inbox/fde-r07-trace.md](../../inbox/fde-r07-trace.md)。`r07-p99-2` livez max 620✓／p99 441✗；**待** `r07-p99-3` 复跑。≠ 可上线 |
 | v1.44 | 2026-11-18 | **P1-47 F2+（R07 第二轮）**：`wal_autocheckpoint` 100→**50**；写片后必让出；PASSIVE busy 延后重试；写片 INITIAL 4／MAX 16。[Spec](../specs/lucy-20261118-rebuild-probe-budget-spec.md) → v0.5；证据 [inbox/fde-r07-trace.md](../../inbox/fde-r07-trace.md)。F3 `r07-default-on` livez max 650✓／p99 500✗；**待** `r07-p99-2` 复跑。≠ 可上线 |
@@ -302,6 +303,7 @@
 | P1-49 | P1 | `lucy_ops_reader` 无头可问治理面 ACL（规范 W0 指纹 heal；demo 种子升全集） | REQ-030-070 | 运维问数／ACL／无头 MCP | 否 | **v0.1-draft。仅登记与起草，不开发。** 连接 `lucy-ops` 已启用 W0∪W1∪W2 时，对匹配「规范 W0 指纹」的正式 `lucy_ops_reader` 在 ensure 成功路径幂等扩 `names` 至冻结 sourceName 全集，使无头 MCP 可问治理面 SOP 可达；定制 Role 不覆盖；W0 主路径仍可用。推荐 D0＝方案 B。终稿未确权；未获开发授权；未授权不改运行代码；测试台 not_registered；不入核心分母；≠ 可上线 | [Spec](../specs/lucy-20261118-lucy-ops-reader-headless-governance-acl-spec.md) · [Plan](lucy-20261118-lucy-ops-reader-headless-governance-acl-plan.md) · 前序 [可问治理面](../specs/lucy-20261101-ops-evidence-askable-governance-spec.md)／[客户默认系统 Role](../specs/lucy-20261105-customer-default-system-roles-spec.md) |
 | P1-50 | P1 | 重建快照上界与完成水位不一致：并发新增调用未入推断却被标已覆盖（FDE R01／P0） | REQ-030-071 | WebUI 审计正确性／事故修复／打包门禁 | 否 | **代码已实现（2026-11-18 Track-A）**：水位改为读快照 `ceilingId`；`covered()` 按 id；vitest 相关绿（见 `inbox/fde-r01-fix-summary.md`）。扩注 [P1-45 Spec](../specs/lucy-20261118-inferred-turn-rebuild-recovery-spec.md) §3.1。测试台未另跑 UAT；不入核心分母；≠ 可上线 | 前序 [P1-45](../specs/lucy-20261118-inferred-turn-rebuild-recovery-spec.md) · [fde-pack-gate-parallel-plan](lucy-20261118-fde-pack-gate-parallel-plan.md) · FDE R01 |
 | P1-51 | P1 | 版本轴分工与命名规约（候选 `rc.N` 自动分配＋交付主键＋私有化分叉追溯） | REQ-030-072 | 发版治理／交付追溯 | 否 | **v0.3-draft。仅方案落盘：不含运行代码、镜像与 CI 改动；未获开发授权；待 Codex 交叉审阅与委托人终稿确权。测试台 not_registered；不入核心分母；≠ 可上线**。合并 main＝产品线大版本；合并前＝自动 `X.Y.Z-rc.N`＋`lucy-k8s-integration-YYYYMMDD-rN`；交付仓 index／manifest／`deployPin`；运行时身份支撑私有化分叉定位。OQ-1／OQ-7 已决 | [Spec](../specs/lucy-20261118-version-axis-naming-spec.md) · [Plan](lucy-20261118-version-axis-naming-plan.md) · 交付仓 [lucy-customer-delivery](https://github.com/Forrest219/lucy-customer-delivery) |
+| P1-52 | P1 | 客户镜像升级可靠性分层门禁（同一 digest＋客户数据量级＋A/B 必跑＋C 按边界触发） | REQ-030-073 | 发布取证／升级可靠性／客户交付 | 否 | **v0.1-draft。仅登记与起草发布取证方案，评审前不开发、不执行 UAT。正式升级可靠性门禁在候选镜像生成后绑定同一 digest、Chart/values、N-1 数据与运行配置；A 层原生 amd64 容器数据与资源压力、B 层标准 K8s 持续升级为每个候选必跑，C 层客户隔离预演按验证边界触发；镜像前预检不替代镜像后验收。终稿未确权；未获开发授权；未授权不改运行代码、CI、门禁脚本与测试台；测试台 not_registered；不入核心分母；≠ 可上线** | [Spec](../specs/lucy-20261118-customer-upgrade-reliability-gate-spec.md) · [Plan](lucy-20261118-customer-upgrade-reliability-gate-plan.md) · 错题 [2026-11-17](../lessons/2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md) |
 | P1-30 | P1 | Wiki／Skill 真读真用＋ACL UAT（测试台合同；防假通） | REQ-030-051 | 测试台／正确性辅线 | 否 | **PASS WITH GAP（2026-11-15 首跑）**。必做 R0／R0-SEED／WIKI-01…04／SKILL-01…04 PASS；WIKI-01S **BLOCKED**（GAP-2）。双宿主 Claude Code CLI＋Cursor Agent CLI。**不入核心分母**；≠ 可上线 | [设计](../design/design-2026-11-15-uat-context-content-wiki-skill.md) · [落地 Plan](lucy-20261115-uat-context-content-landing-plan.md) · **测试台** [`UAT-SUITE-CONTEXT-CONTENT`](../qa/uat/suites/context-content/suite.md)（INDEX：[PASS WITH GAP](../qa/uat/INDEX.md)） |
 | P1-22 | P1 | Doris／SelectDB 多版本对比环境（2.0.14 基线 vs 4.0.8；高频分析路径回归＋版本探测） | REQ-030-043 | 连接／发布取证 | 否 | **入池（2026-11-14）**。委托人同句「我决定以你为准，构建长期测试对比环境」＝立项＋测试环境搭建授权；范围**仅**对比环境、版本探测与证据，**不含**适配代码改动（改代码须另行终稿确权＋开发授权）。行权限在 Doris 上的专项验证暂缓（客户未启用）；客户 SelectDB 版本串暂缺。Spec／Plan 待补；UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | 待补（与 P2-5 `升级候选验证环境` 相邻但对象不同：本条是数据库引擎版本，P2-5 是 Lucy 升级候选） |
 | P1-23 | P1 | UI/UX 标准收敛并与 DEVELOPMENT 绑定（设计系统 `webui/docs/design-system/` 清账、补缺章、DEVELOPMENT 总入口表） | REQ-030-044 | 文档治理 | 否 | **入池（2026-11-14）**。委托人批准：只读核对（已出报告）＋登记＋清理 `99-governance.md` 临时决策。**范围仅文档**；补缺章、改 DEVELOPMENT 总入口、新增 lint 门禁须各自另获委托人确认；不含运行代码。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [核对报告](../../inbox/20261114-0130-uiux-standard-audit.md)（临时文件，定稿后迁入 `docs/reviews/`） |
@@ -552,6 +554,13 @@
 - **事实**：未显式状态机时出现布尔冒充终态、非终态不落库、两套规则并行、无逃生死路、组级「一败一成」等模式（证据见 Spec §1 指针）。
 - **关系**：治理门禁，形态对齐交互合同门禁；业务路径整改须另立行。**不入核心分母**。
 - **跟进**：Spec／Plan v0.1-draft；测试台 not_registered；**终稿未确权；未授权开发（含未授权改 lint）**。
+
+### P1-52｜客户镜像升级可靠性分层门禁（REQ-030-073）
+
+- **出口**：候选镜像生成后，A 层原生 amd64 容器数据／资源压力与 B 层标准 K8s 持续升级均绑定同一 digest、Chart/values、N-1 数据与运行配置并失败关闭；客户参数超出验证边界时追加 C 层隔离预演；镜像前预检、单次健康 200、小样本热缓存与暂停配置结果均不得替代正式验收。
+- **事实**：客户升级事故中 livez 2.17 秒、readyz 7.55 秒并反复摘端点；现有 H3/H4 只看最终 Ready／一次 health，发布 real-e2e 是新装，慢盘套件尚未成为发布聚合必需证据。
+- **关系**：发布取证层；复用 P1-39／P1-47 场景与现有 H3/H4，不改这些功能合同，不在本条修业务运行时或放宽探针。**不入核心分母**。
+- **跟进**：Spec／Plan v0.1-draft；测试台 not_registered；**终稿未确权；评审前不开发、不执行 UAT；未授权不改运行代码、CI、门禁脚本与测试台**。
 
 ### P1-34｜大 Schema 接入（REQ-030-055）
 
