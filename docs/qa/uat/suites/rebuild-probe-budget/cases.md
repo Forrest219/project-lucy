@@ -10,6 +10,8 @@
 | UAT-RPB-05 | 暂停配置满量重建台 | `--env LUCY_INFERRED_MAINTAINER=off`；门槛同 01；**暂停≠默认配置 PASS** |
 | UAT-RPB-06 | 暂停下 MCP 回复 | 同窗每 10s：`initialize`→`tools/list`→轻量工具；单次 p99 ≤3s |
 | UAT-RPB-07 | 暂停状态披露 | `inferredRebuild.paused=true` 且 `complete=false`；启动日志有暂停警告 |
+| UAT-RPB-08 | 客户 11-17 指纹判别（必做诊断） | 同窗抄录：livez≥1.5s 占比、是否「约每 3s 一贯」持续停顿、health `degraded`／`KTX MCP probe timed out after 1500ms` 抖动；**不得**把「单尖峰」写成「客户同形未解」 |
+| UAT-RPB-09 | 默认配置多跑稳定性（出包前必做） | 同镜像默认配置连续 ≥3 次独立冷启动；关单须 3／3 的 RPB-01–03 PASS；1 PASS＋2 FAIL（偶发 max 尖峰）记 **FAIL／不稳定**，不得宣称可出镜像 |
 
 ---
 
@@ -94,3 +96,48 @@
 
 - `paused: true` 且 `complete: false`。
 - 日志含 `LUCY_INFERRED_MAINTAINER=off` 暂停警告。
+
+---
+
+## UAT-RPB-08 — 客户 11-17 指纹判别
+
+对齐错题 [`2026-11-17-k8s-upgrade-event-loop-readiness-timeout`](../../../../lessons/2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md) 与客户截图（Pod Ready=False、livez≈2.17s、readyz≈7.55s/`degraded`、health 因 KTX MCP 1500ms 抖动）。
+
+### 步骤
+
+1. 在 UAT-RPB-01 同一 120s 采样窗，对 `samples.json` 统计：`livezMs ≥1500` 样本数／占比、是否贯穿窗口反复出现、最大尖峰时刻 `t`。
+2. 同窗或紧接 90s：每约 5s 打 `/api/health`，抄录 `status`（ok／degraded）、`eventLoop.p99Ms`／`maxMs`、以及是否出现 `KTX MCP probe timed out after 1500ms`（或等价 detail）。
+3. 对照客户指纹表（跑次必须填）：
+
+| 指纹项 | 客户现场（11-17） | 本跑次 |
+|---|---|---|
+| livez 1.5–2.2s **持续** | 是（p99≈2.2s） | 是／否；≥1.5s 占比＝ |
+| readyz 常 &gt;3s | 是（2.4–7.5s） | 是／否；readyz max／p99＝ |
+| health ok↔degraded 抖动（KTX MCP 1500ms） | 是 | 是／否；degraded 次数＝ |
+| 客户 3s 观察器连续失败 ≥6 | 现场 Ready=False | 本跑 maxStreak＝ |
+
+### 期望
+
+- **客户同形未解**：≥1.5s 占比高（旧改前对照约 38／42）或 health 因循环停顿反复 degraded → 与 RPB-01 FAIL 一并记「同形未解」。
+- **残余单尖峰**：仅 1–2 个样本 ≥1.5s、p99 仍 ≤400ms、maxStreak＝0、health 无持续 degraded → 记「非客户同形；残余尖峰」，**仍不得**单靠本条把套件写成默认配置 PASS（关单看 RPB-01／09）。
+- **已解**：≥1.5s＝0、无 degraded 抖动、RPB-01–03 与 RPB-09 全绿。
+
+### 改前对照
+
+客户：livez≈2.17s；readyz≈7.55s degraded；health 90s 内 503／502／ok／degraded 交替。本机改前满量窗：livez 中位≈1967ms、38／42 ≥1.5s。
+
+---
+
+## UAT-RPB-09 — 默认配置多跑稳定性（出包前）
+
+### 步骤
+
+1. 固定候选镜像 digest／`BUILD_REVISION`，默认配置（不设 `LUCY_INFERRED_MAINTAINER=off`）。
+2. 连续 ≥3 次独立执行（每次独立冷启动＋注入近期调用＋120s 窗）；允许复用已 premigrate 卷，禁止改夹具规模。
+3. 汇总三跑：RPB-01／02／03 是否全 PASS；抄录各跑 livez max／p99 与 ≥1.5s 次数。
+
+### 期望
+
+- **出镜像放行（本套件默认配置）**：3／3 全 PASS。
+- **不稳定**：任一次 RPB-01 FAIL（含偶发 max 尖峰）→ 套件不得写默认配置 PASS；跑次写明「1 PASS＋N FAIL」形态。
+- 暂停配置跑次不计入本条分子。

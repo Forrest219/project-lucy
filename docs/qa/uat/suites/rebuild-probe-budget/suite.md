@@ -18,7 +18,7 @@
 
 | 必做 | 可选 |
 |---|---|
-| UAT-RPB-R0、UAT-RPB-01、UAT-RPB-02、UAT-RPB-03（**默认配置**关单） | UAT-RPB-04（真实 K8s 摘端点；默认 BLOCKED）；UAT-RPB-05／06／07（**暂停配置**交付缓解；PASS 不关默认 FAIL） |
+| UAT-RPB-R0、UAT-RPB-01、UAT-RPB-02、UAT-RPB-03（**默认配置**关单）；**出包评估另加** UAT-RPB-08（客户指纹判别）、UAT-RPB-09（同镜像 ≥3 次独立冷启动全绿） | UAT-RPB-04（真实 K8s 摘端点；默认 BLOCKED）；UAT-RPB-05／06／07（**暂停配置**交付缓解；PASS 不关默认 FAIL） |
 
 ## 门槛
 
@@ -27,6 +27,8 @@
 | 客户观察器 | timeout 3s；连续失败 &lt; 6 |
 | 重启稳态 120s | livez max ≤ 1000ms、p99 ≤ 400ms；readyz p99 ≤ 1500ms；全 200 |
 | 首次升级窗口 | 可沿用 P1-39 放宽（max ≤ 2000／p99 ≤ 1000），须在跑次注明 |
+| 出包多跑 | 同镜像默认配置 **3／3** RPB-01–03 PASS；单次 PASS 不算可出镜像 |
+| 指纹分型 | 「客户同形未解」＝持续 ≥1.5s 停顿／health 抖动；「残余单尖峰」＝偶发 max 越线但 p99 达标且 maxStreak＝0 — 后者仍记 RPB-01 FAIL，但不得写成 11-17 同形未修 |
 
 ## 边界
 
