@@ -16,7 +16,17 @@ export type InferredRebuildStatus = {
   complete: boolean;
   pendingUsers: number;
   lastCompletedAt: string | null;
+  /** P1-47 暂停开关：后台补算已被运维关闭，问询分组不再随新调用更新（此时 complete 恒为 false）。 */
+  paused?: boolean;
 };
+
+/**
+ * P1-47 暂停开关：`LUCY_INFERRED_MAINTAINER=off` 时不创建后台补算维护器。
+ * 默认开启，行为不变。关闭只影响审计页问询分组／编号对新调用的更新，不影响问数主路径。
+ */
+export function isInferredMaintainerPaused(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.LUCY_INFERRED_MAINTAINER ?? "").trim().toLowerCase() === "off";
+}
 
 type MaintainerDeps = {
   getDb: () => Promise<Database.Database>;
@@ -91,19 +101,25 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     const mark = database.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log`).get() as { id: number };
     const nextUser = database.prepare(`SELECT user_id FROM access_log WHERE user_id > ? ORDER BY user_id LIMIT 1`);
     const newestRow = database.prepare(`SELECT ts FROM access_log WHERE user_id = ? AND ts >= ? ORDER BY ts DESC LIMIT 1`);
-    let latestTurn: Database.Statement | null = null;
+    // P1-45: covered() 使用 inferred_rebuild_state 而非 inferred_turns.updated_at，
+    // 避免中断后残缺写入被判为已覆盖，同时收口 SC-04（15 分钟余量空转全量重建）。
+    let rebuildState: Database.Statement | null = null;
     try {
-      latestTurn = database.prepare(`SELECT updated_at FROM inferred_turns WHERE user_id = ? ORDER BY started_at DESC LIMIT 1`);
+      rebuildState = database.prepare(
+        `SELECT status, watermark FROM inferred_rebuild_state WHERE user_id = ?`
+      );
     } catch {
-      latestTurn = null;
+      rebuildState = null;
     }
     const covered = (userId: string, newestTs: string): boolean => {
-      if (!latestTurn) return false;
-      const turn = latestTurn.get(userId) as { updated_at: string } | undefined;
-      if (!turn) return false;
-      const builtAt = Date.parse(turn.updated_at);
-      const newestAt = Date.parse(newestTs);
-      return Number.isFinite(builtAt) && Number.isFinite(newestAt) && builtAt - INFERRED_COVERAGE_MARGIN_MS >= newestAt;
+      // 若表不存在（旧库尚未迁移），保守地视为未覆盖，触发重建。
+      if (!rebuildState) return false;
+      const state = rebuildState.get(userId) as { status: string; watermark: string | null } | undefined;
+      // 缺行或 in_progress（包含中断场景）均视为未覆盖。
+      if (!state || state.status !== "complete") return false;
+      // SC-04: 以水位（重建开始时的最新日志 ts）为准；watermark >= newestTs 时已覆盖。
+      // ISO 字符串可直接按字典序比较；watermark 为 '' 时对任意非空 newestTs 均返回 false。
+      return (state.watermark ?? "") >= newestTs;
     };
     let cursor = "";
     let probed = 0;
@@ -250,7 +266,10 @@ export function bindInferredTurnMaintainer(maintainer: InferredTurnMaintainer | 
 }
 
 export function inferredRebuildStatus(): InferredRebuildStatus {
-  return active?.status() ?? { complete: true, pendingUsers: 0, lastCompletedAt: null };
+  if (active) return active.status();
+  // 暂停时没有维护器：不能报「补算完成」，如实标记 paused。
+  if (isInferredMaintainerPaused()) return { complete: false, pendingUsers: 0, lastCompletedAt: null, paused: true };
+  return { complete: true, pendingUsers: 0, lastCompletedAt: null };
 }
 
 /**

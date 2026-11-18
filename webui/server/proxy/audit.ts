@@ -41,7 +41,7 @@ import {
   withAllocatedInquiryNo
 } from "../admin/audit-inquiry-serial.js";
 import { pauseAfterStretch } from "../admin/yield-slices.js";
-import { nextRebuildPageSize, nextSliceSize, REBUILD_PAGE_INITIAL, REBUILD_WRITE_SLICE_INITIAL, REBUILD_WRITE_SLICE_MAX, REBUILD_WRITE_SLICE_MIN } from "../admin/page-budget.js";
+import { nextRebuildPageSize, nextSliceSize, REBUILD_ALLOCATE_CHUNK, REBUILD_PAGE_INITIAL, REBUILD_WRITE_SLICE_INITIAL, REBUILD_WRITE_SLICE_MAX, REBUILD_WRITE_SLICE_MIN } from "../admin/page-budget.js";
 import {
   CALL_MONITOR_P95_MIN_SAMPLES,
   callMonitorBucketIndex,
@@ -795,6 +795,13 @@ async function getDb(): Promise<Database.Database> {
       PRIMARY KEY(inferred_turn_id, access_log_id)
     );
     CREATE INDEX IF NOT EXISTS idx_it_user_time ON inferred_turns(user_id, started_at, ended_at);
+    -- P1-45: 重建中断后恢复 — 持久化重建进行中／完整完成标记与访问上界水位。
+    CREATE TABLE IF NOT EXISTS inferred_rebuild_state (
+      user_id    TEXT PRIMARY KEY,
+      status     TEXT NOT NULL,
+      watermark  TEXT,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS auth_failure_log (
       id                 INTEGER PRIMARY KEY AUTOINCREMENT,
       ts                 TEXT    NOT NULL,
@@ -2706,11 +2713,6 @@ async function rebuildInferredTurnsUnlocked(
   }
   await rest();
 
-  const deleteAccessLogsStmt = database.prepare(`
-    DELETE FROM inferred_turn_access_logs
-    WHERE inferred_turn_id IN (SELECT inferred_turn_id FROM inferred_turns WHERE user_id = ? AND started_at >= ?)
-  `);
-  const deleteTurnsStmt = database.prepare(`DELETE FROM inferred_turns WHERE user_id = ? AND started_at >= ?`);
   const insertTurnStmt = database.prepare(`
     INSERT INTO inferred_turns
       (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, client, session_id, created_at, updated_at, inquiry_no)
@@ -2810,19 +2812,62 @@ async function rebuildInferredTurnsUnlocked(
     plans.push({ cluster, id: inferredTurnId(userId, anchor.id) });
   }
 
-  // One write transaction assigns every new inquiry number before any yield, so a
-  // concurrent allocator cannot take a number between slices. Ids about to be
-  // written are deleted even when started_at has fallen outside the lookback.
+  // P1-45: 记录本次重建覆盖的 access_log 上界水位（ISO 字符串，重建开始前的最新 ts）。
+  // 若用户在窗口内无日志则为 ''；该值在 in_progress 与 complete 两个阶段复用，
+  // 保证 covered() 只认重建开始时已存在的调用。
+  const watermarkRow = database.prepare(
+    `SELECT COALESCE(MAX(ts), '') AS ts FROM access_log WHERE user_id = ? AND ts >= ?`
+  ).get(userId, cutoff) as { ts: string };
+  const watermarkTs = watermarkRow.ts;
+
+  // P1-45 SC-01: 在 DELETE 之前持久化 in_progress，使任意中断后 covered() 返回 false。
+  database.prepare(`
+    INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
+    VALUES (?, 'in_progress', ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      status = 'in_progress', watermark = excluded.watermark, updated_at = excluded.updated_at
+  `).run(userId, watermarkTs, new Date().toISOString());
+
+  // P1-47 SC-01: Split the previously unbounded delete+allocate block so the event loop
+  // can yield between chunks. Window-scoped deletes are also chunked by turn id (UAT-RPB
+  // showed a single DELETE of thousands of turns still blocked livez for ~8s on throttled
+  // disk). The per-plan delete+allocate loop stays REBUILD_ALLOCATE_CHUNK-sized.
+  // OQ-1: within each short txn plans are processed in cluster order; between chunks we
+  // yield; existing correlation_key numbers are reused via lookupInquiryNo.
   database.transaction(() => {
     ensureBackfillBeforeAllocate(database);
-    deleteAccessLogsStmt.run(userId, cutoff);
-    deleteTurnsStmt.run(userId, cutoff);
-    for (const plan of plans) {
-      deleteLinksByTurn.run(plan.id);
-      deleteTurnById.run(plan.id);
-      assignedInquiry.set(plan.id, lookupInquiryNo(database, plan.id) ?? allocateInquiryNo(database, plan.id));
-    }
   })();
+  await rest();
+
+  const windowTurnIds = (
+    database.prepare(
+      `SELECT inferred_turn_id AS id FROM inferred_turns WHERE user_id = ? AND started_at >= ?`
+    ).all(userId, cutoff) as Array<{ id: string }>
+  ).map((row) => row.id);
+  for (let chunkStart = 0; chunkStart < windowTurnIds.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
+    if (chunkStart > 0) await rest();
+    const chunk = windowTurnIds.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
+    database.transaction(() => {
+      for (const id of chunk) {
+        deleteLinksByTurn.run(id);
+        deleteTurnById.run(id);
+      }
+    })();
+  }
+  await rest();
+
+  for (let chunkStart = 0; chunkStart < plans.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
+    if (chunkStart > 0) await rest();
+    const chunk = plans.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
+    database.transaction(() => {
+      for (const plan of chunk) {
+        // Plans may reference ids that fell outside the lookback window; delete those too.
+        deleteLinksByTurn.run(plan.id);
+        deleteTurnById.run(plan.id);
+        assignedInquiry.set(plan.id, lookupInquiryNo(database, plan.id) ?? allocateInquiryNo(database, plan.id));
+      }
+    })();
+  }
   await rest();
 
   let turns = 0;
@@ -2842,6 +2887,15 @@ async function rebuildInferredTurnsUnlocked(
     // P1-39: 一片 = 一次事务（含 fsync 与可能的检查点），按实测耗时收敛片大小。
     sliceSize = nextSliceSize(sliceSize, performance.now() - sliceStartedAt, REBUILD_WRITE_SLICE_MIN, REBUILD_WRITE_SLICE_MAX);
   }
+
+  // P1-45 SC-01: 全部写片成功后标记 complete，covered() 随即可返回 true（若无新日志）。
+  database.prepare(`
+    INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
+    VALUES (?, 'complete', ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      status = 'complete', watermark = excluded.watermark, updated_at = excluded.updated_at
+  `).run(userId, watermarkTs, new Date().toISOString());
+
   return { turns };
 }
 

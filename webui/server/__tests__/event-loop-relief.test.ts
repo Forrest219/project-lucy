@@ -264,6 +264,43 @@ describe("SC-10 livez", () => {
   });
 });
 
+describe("SC-01/SC-02 P1-46: readyz must stay 503 until MCP port is listening", () => {
+  // P1-46 (REQ-030-067): The first /api/readyz 200 must only appear AFTER the
+  // MCP proxy port is bound.  markWebuiWarmupComplete() must not be called in
+  // startServer() until proxy.listen() resolves.
+  //
+  // This test verifies the runtime/readiness.ts invariant: isWebuiReady()
+  // returns false (503) until markWebuiWarmupComplete() is called, which in
+  // production is now deferred to after proxy.listen() resolves (index.ts).
+  it("isWebuiReady is false before markWebuiWarmupComplete (simulates pre-MCP-listen window)", async () => {
+    const { isWebuiReady, resetWebuiWarmupForTests } = await import("../runtime/readiness.js");
+    resetWebuiWarmupForTests();
+    // Before MCP listen (markWebuiWarmupComplete not yet called): must be false
+    expect(isWebuiReady()).toBe(false);
+  });
+
+  it("readyz returns 503 before MCP listen, 200 after (via markWebuiWarmupComplete ordering)", async () => {
+    const { buildServer } = await import("../index.js");
+    const { markWebuiWarmupComplete, resetWebuiWarmupForTests } = await import("../runtime/readiness.js");
+    resetWebuiWarmupForTests();
+    const app = buildServer();
+    await app.ready();
+
+    // SC-01: before markWebuiWarmupComplete (= before MCP listen in production)
+    const cold = await app.inject({ method: "GET", url: "/api/readyz" });
+    expect(cold.statusCode).toBe(503);
+    expect(cold.json().reason).toBe("warming_up");
+
+    // SC-02: after markWebuiWarmupComplete (= after MCP listen in production)
+    markWebuiWarmupComplete();
+    const warm = await app.inject({ method: "GET", url: "/api/readyz" });
+    expect(warm.statusCode).toBe(200);
+    expect(warm.json().ok).toBe(true);
+
+    await app.close();
+  });
+});
+
 describe("SC-11 readyz and SC-12 health cache", () => {
   it("is 503 until warmup, then 200 even when ktx is degraded, and does not spawn ktx", async () => {
     const { buildServer } = await import("../index.js");

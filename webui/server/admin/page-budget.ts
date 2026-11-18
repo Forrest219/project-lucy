@@ -23,3 +23,10 @@ export function nextRebuildPageSize(size: number, lastMs: number): number {
 export const REBUILD_WRITE_SLICE_MIN = 2;
 export const REBUILD_WRITE_SLICE_MAX = 25;
 export const REBUILD_WRITE_SLICE_INITIAL = 8;
+
+/**
+ * P1-47 SC-01: 前置删除＋编号分配循环每次事务最多处理的 plan 数。
+ * 超过该值时分成多个短事务并在事务间让出事件循环，使同步段不随 plan 数无界增长。
+ * OQ-1: 每个短事务内仍按簇顺序分配；已有 correlation_key 编号通过 lookupInquiryNo 复用。
+ */
+export const REBUILD_ALLOCATE_CHUNK = 25;

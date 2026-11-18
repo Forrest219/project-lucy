@@ -25,8 +25,17 @@ function makeDb(): Database.Database {
     CREATE INDEX idx_al_ts ON access_log(ts);
     CREATE TABLE inferred_turns (inferred_turn_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE INDEX idx_it_user_time ON inferred_turns(user_id, started_at, ended_at);
+    CREATE TABLE inferred_rebuild_state (user_id TEXT PRIMARY KEY, status TEXT NOT NULL, watermark TEXT, updated_at TEXT NOT NULL);
   `);
   return db;
+}
+
+function setRebuildComplete(db: Database.Database, userId: string, watermark: string): void {
+  db.prepare(`
+    INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
+    VALUES (?, 'complete', ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET status = excluded.status, watermark = excluded.watermark, updated_at = excluded.updated_at
+  `).run(userId, watermark, new Date(NOW).toISOString());
 }
 
 function insertLogs(db: Database.Database, rows: Array<[string, string]>): void {
@@ -96,7 +105,8 @@ describe("SC-02 startup scan equals the old DISTINCT set when nothing is covered
 });
 
 describe("SC-14 users already covered by a recent rebuild are not rebuilt on restart", () => {
-  it("rebuilds only users with rows newer than their last rebuild (minus the safety margin)", async () => {
+  // P1-45: covered() now uses inferred_rebuild_state watermark instead of inferred_turns.updated_at margin.
+  it("rebuilds only users with rows newer than their last rebuild watermark", async () => {
     const { createInferredTurnMaintainer } = await loadMaintainer();
     const db = makeDb();
     insertLogs(db, [
@@ -111,6 +121,8 @@ describe("SC-14 users already covered by a recent rebuild are not rebuilt on res
     insertTurn(db, "b", "B-new-row", iso(-4 * 60 * MIN), iso(-30 * MIN));
     insertTurn(db, "c", "C-after-rebuild", iso(-4 * 60 * MIN), iso(-36 * MIN));
     insertTurn(db, "d", "D-inside-margin", iso(-4 * 60 * MIN), iso(-30 * MIN));
+    // P1-45: A-covered has a complete rebuild with watermark == its newest log ts → covered.
+    setRebuildComplete(db, "A-covered", iso(-2 * 60 * MIN));
     const rebuilt: string[] = [];
     const maintainer = createInferredTurnMaintainer({ getDb: async () => db, rebuild: async (u) => { rebuilt.push(u); }, now: () => NOW });
     await maintainer.catchUp();

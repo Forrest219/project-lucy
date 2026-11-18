@@ -226,7 +226,7 @@ import { loadWikiAccessConfigSnapshot } from "./wiki-access-effects.js";
 import { recoverWikiAccessOperations } from "./wiki-access-recovery.js";
 import { recoverInterruptedOperations } from "./security/ledger.js";
 import { AUDIT_PROJECTOR_NAME, createProjectionScheduler, readTargetCursor, registerProjectionTrigger } from "./security/projector.js";
-import { bindInferredTurnMaintainer, createInferredTurnMaintainer, stopInferredTurnMaintainer } from "./admin/inferred-turn-maintainer.js";
+import { bindInferredTurnMaintainer, createInferredTurnMaintainer, isInferredMaintainerPaused, stopInferredTurnMaintainer } from "./admin/inferred-turn-maintainer.js";
 import { INFERRED_TURN_REBUILD_LOOKBACK_HOURS, rebuildInferredTurns } from "./proxy/audit.js";
 import { eventLoopDelaySnapshot } from "./runtime/event-loop-delay.js";
 import { isWebuiReady, markWebuiWarmupComplete } from "./runtime/readiness.js";
@@ -786,6 +786,10 @@ export function buildServer() {
   let inferredMaintainer: ReturnType<typeof createInferredTurnMaintainer> | null = null;
   app.addHook("onReady", async () => {
     if (inferredMaintainer) return;
+    if (isInferredMaintainerPaused()) {
+      app.log.warn("[inferred-turns] LUCY_INFERRED_MAINTAINER=off: background inferred-turn rebuild is paused");
+      return;
+    }
     inferredMaintainer = createInferredTurnMaintainer({
       getDb: getAuditDb,
       rebuild: (userId) => rebuildInferredTurns(userId, { lookbackHours: INFERRED_TURN_REBUILD_LOOKBACK_HOURS })
@@ -3333,7 +3337,8 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);
   await app.listen({ host, port });
-  markWebuiWarmupComplete();
+  // P1-46 (REQ-030-067): do NOT markWebuiWarmupComplete here.
+  // /api/readyz must stay 503 until the MCP proxy port is also listening.
   const t3 = performance.now();
   let displayReadyMs: number | null = null;
   if (options.displayPrewarm !== false) {
@@ -3369,6 +3374,11 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
     proxy.listen(proxyPort, proxyHost, resolve);
     proxy.on("error", reject);
   });
+  // P1-46 (REQ-030-067): MCP proxy is now listening; mark WebUI ready so that
+  // /api/readyz returns 200 only after both the web port AND the MCP port are
+  // bound.  Moving this call here closes the startup window where readyz could
+  // return 200 while the MCP port was still not yet listening.
+  markWebuiWarmupComplete();
   console.log(`Lucy WebUI listening on http://${host}:${port}`);
   console.log(`MCP proxy listening on http://${proxyHost}:${proxyPort}/mcp`);
   return {
