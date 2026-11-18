@@ -40,6 +40,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261118-mcp-upgrade-compatibility-spec.md](specs/lucy-20261118-mcp-upgrade-compatibility-spec.md) | **v0.1-draft。委托人已批准双层门禁、全真用户旅程题库与绝对＋相对耗时双门禁；终稿未确权、开发未授权。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。本任务不重建 Docker；未授权不改运行代码、测试执行器与发布门禁。≠ 可上线**（P1-53／REQ-030-074）。配对 [Plan](plans/lucy-20261118-mcp-upgrade-compatibility-plan.md) |
 | [specs/lucy-20261118-customer-upgrade-reliability-gate-spec.md](specs/lucy-20261118-customer-upgrade-reliability-gate-spec.md) | **v0.1-draft。仅登记与起草发布取证方案，评审前不开发、不执行 UAT。正式升级可靠性门禁在候选镜像生成后绑定同一 digest、Chart/values、N-1 数据与运行配置；A 层原生 amd64 容器数据与资源压力、B 层标准 K8s 持续升级为每个候选必跑，C 层客户隔离预演按验证边界触发；镜像前预检不替代镜像后验收。终稿未确权；未获开发授权；未授权不改运行代码、CI、门禁脚本与测试台；测试台 not_registered；不入核心分母；≠ 可上线**（P1-52／REQ-030-073）。配对 [Plan](plans/lucy-20261118-customer-upgrade-reliability-gate-plan.md) |
 | [specs/lucy-20261118-version-axis-naming-spec.md](specs/lucy-20261118-version-axis-naming-spec.md) | **v0.3-draft。仅方案落盘：未获开发授权；≠ 可上线**（**P1-51／REQ-030-072**）：四轴＋交付主键；候选 `rc.N`／`deliveryId` **出包自动分配（禁人工起号）**；交付仓追溯＋私有化分叉定位（SC-09–SC-13）；OQ-1／OQ-7 已决；测试台 not_registered；不入核心分母。**仍不进入开发**。配对 [Plan](plans/lucy-20261118-version-axis-naming-plan.md) |
 | [specs/lucy-20261104-audit-call-storyline-spec.md](specs/lucy-20261104-audit-call-storyline-spec.md) | **v0.1 功能合同已收口（2026-11-04）**。SC-01–SC-16 关闭。本条收口不表示可上线。功能编号无。Plan 见 [lucy-20261104-audit-call-storyline-plan.md](plans/lucy-20261104-audit-call-storyline-plan.md) |
