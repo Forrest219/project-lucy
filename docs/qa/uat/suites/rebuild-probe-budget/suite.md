@@ -5,7 +5,7 @@
 | Suite ID | `UAT-SUITE-REBUILD-PROBE-BUDGET` |
 | 总账 ID | **P1-47**／REQ-030-068（前方报告 **P0-01**） |
 | 目标 | 看守满量推断重建负载下 livez／readyz 超客户 3s 预算与尾延迟；不得靠放宽超时或缩小数据关单 |
-| 合同回链 | [Spec](../../../../specs/lucy-20261118-rebuild-probe-budget-spec.md) SC-01–SC-07；前方报告 §3.1 F／§4.1 P0-01；可与 [`UAT-SUITE-COLD-START-SLOW-DISK`](../cold-start-slow-disk/suite.md) 共用限速台但**本套件聚焦满量重建稳态** |
+| 合同回链 | [Spec](../../../../specs/lucy-20261118-rebuild-probe-budget-spec.md) SC-01–SC-10；前方报告 §3.1 F／§4.1 P0-01；可与 [`UAT-SUITE-COLD-START-SLOW-DISK`](../cold-start-slow-disk/suite.md) 共用限速台但**本套件聚焦满量重建稳态**；暂停交付见 [接力 Plan](../../../../plans/lucy-20261118-p147-pause-uat-relay-plan.md) |
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md) |
 | runs | [runs/](runs/) |
@@ -18,7 +18,7 @@
 
 | 必做 | 可选 |
 |---|---|
-| UAT-RPB-R0、UAT-RPB-01、UAT-RPB-02、UAT-RPB-03 | UAT-RPB-04（真实 K8s 摘端点；默认 BLOCKED，归发布取证） |
+| UAT-RPB-R0、UAT-RPB-01、UAT-RPB-02、UAT-RPB-03（**默认配置**关单） | UAT-RPB-04（真实 K8s 摘端点；默认 BLOCKED）；UAT-RPB-05／06／07（**暂停配置**交付缓解；PASS 不关默认 FAIL） |
 
 ## 门槛
 

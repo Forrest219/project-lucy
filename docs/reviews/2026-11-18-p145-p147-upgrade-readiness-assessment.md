@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | P1-39／45／46／47 客户平滑升级放行评估 |
 | 文档类型 | Review |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-11-18 |
 | 撰写人 | Cursor（Claude） |
 | 委托人 | xingchen |
@@ -14,12 +14,14 @@
 
 ## 结论
 
-**不放行直接交付客户生产升级。可以放行进入「客户前置验证」（amd64 待测包 + 原生 amd64 环境验平滑升级）。**
+**不放行直接交付客户生产升级（默认配置下 P1-47 仍 FAIL）。**  
+**模拟台已证明：带 `LUCY_INFERRED_MAINTAINER=off` 的暂停交付可解 11-17 回滚同形根因** → 可进入「客户前置验证」（amd64 待测包 + values 置 off + 原生升级演练）。
 
-- 11-17 回滚的**主因（启动崩溃／稳态整表扫描）已在 Docker 限速台上证实修复**：冷启动全套 6/6 PASS，包含上次 FAIL 的 03／04。
-- 但**满量重建下 livez 仍有 2968ms 的单次停顿**（Spec 门槛 ≤1000ms），P1-47 测试台仍是 FAIL；这个停顿量级与客户 3 秒探针预算只差 32ms，不能当作「已解决」交付。
-- 候选是**工作树未提交、dirty、arm64 的本机构建**，不满足出包硬门禁（C07 要求已提交且 dirty=false；客户镜像为 amd64，须过 G1–G4）。
-- 没有任何 K8s／Helm 或 0.25→0.30 真实升级路径的取证（C12／C15／C16）。
+- 11-17 回滚的启动崩溃／整表扫描路径：P1-39／45／46 在限速台已 PASS。
+- **满量重建持续停顿**（默认开）：双跑对照 livez max **2693ms**，与客户 p99≈2.2s 同形 → 默认配置**仍不可当作已解决**。
+- **暂停配置（`off`）**：同镜像同夹具 livez max **13ms**；RPB-05／06／07 PASS；冷启动暂停配置 R0／01–05 PASS（见 [rpb-pause-uat](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-pause-uat.md)、[cold-pause-off](../qa/uat/suites/cold-start-slow-disk/runs/2026-11-18-cursor-cold-pause-off.md)）。Helm Chart **0.2.10** 已能下发该 env。
+- 候选仍为 **dirty／arm64**；须提交后出 amd64 `*-test`，实例 values 置 `env.LUCY_INFERRED_MAINTAINER: off`。
+- **暂停≠P1-47 修复**；正式包发出与客户现网仍走 C01–C20／A4／A5。
 
 ## 1. 证据总表（Spec／UAT 检查结果）
 

@@ -2,11 +2,11 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | Spec / **v0.2** |
+| 文档类型 / 版本 | Spec / **v0.3** |
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0` |
 | 功能编号 / 优先级 | **P1-47**／REQ-030-068／**P1**（事故修复；前方报告分级为 **P0-01**）。**不入 0.30 核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账，不占用 v0.25 登记册 |
-| 状态 | **v0.2。终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」；含前置删除／编号分配分块让出）。代码已实现（allocate＋整窗 DELETE 分块）。测试台 UAT-SUITE-REBUILD-PROBE-BUDGET＝**FAIL**：RPB-02／03 PASS（客户 3s streak=0）；RPB-01 livez max／p99 2968ms 未达 ≤1000／≤400（[r2](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-p145-p147-r2.md)；相对仅 allocate 分块的 8003ms 已改善）。2026-11-18 追加：运维暂停开关 `LUCY_INFERRED_MAINTAINER=off`（默认开，行为不变）已实现；对照实验（镜像 `p147-pause`，同夹具）暂停时 RPB-01／02／03 全 PASS（livez max 11ms，119 个样本 0 个 ≥1.5 秒），不暂停时仍 FAIL（max 2662ms，42 个样本 37 个 ≥1.5 秒），证实持续停顿来自后台补算维护器。默认配置（开）下 P1-47 仍 FAIL，根治待 OQ-2（`wal_autocheckpoint`／worker）。[对照跑次](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-p147-pause-control.md)。不入核心分母。≠ 可上线** |
+| 状态 | **v0.3。终稿已确权、开发已授权（含暂停开关入合同 SC-08–10）。代码已实现（allocate＋DELETE 分块＋`LUCY_INFERRED_MAINTAINER=off`）。测试台＝**FAIL（默认配置）**：RPB-01 livez 未达门槛；暂停配置用例 UAT-RPB-05／06／07 与 UAT-COLD-07／08 已登记，跑次见接力 Plan。**暂停≠修复**，不得把暂停 PASS 写成 P1-47 PASS。根治待 OQ-2。不入核心分母。≠ 可上线** |
 | 决策来源 | 委托人 2026-11-18 要求按仓库规范为前方升级测试报告三则 P0 分别制定 Spec 与 UAT |
 | 需求来源 | 前方报告 LUCY-TR-20261118-01 v1.2 §4.1 P0-01；证据 E07／E15–E18；客户事故错题 [`2026-11-17-k8s-upgrade-event-loop-readiness-timeout`](../lessons/2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md) |
 | 实施主体 | WebUI 服务端：`webui/server/proxy/audit.ts`（重建前置事务）、`page-budget`／`yield-slices`、必要时 `inferred-turn-maintainer`。不改 Helm timeout 关单 |
@@ -19,6 +19,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v0.3 | 2026-11-18 委托人批准暂停交付接力：SC-08–10 把运维暂停开关写入合同；出口扩至 SC-01–SC-10。暂停配置 UAT（RPB-05／06／07）单列；**暂停≠修复**；默认配置下 P1-47 仍 FAIL |
 | v0.2 | 2026-11-18 委托人「授权定稿」：终稿确权＋开发授权；OQ-1＝分块事务内按簇顺序分配且不与并发 allocator 抢号；进入多 agent 并行实现。同日 Wave2 Agent-47 落地：allocate 分块＋yield；vitest 5＋回归 20；UAT 未跑 |
 | v0.1-draft | 初稿。依据前方报告 P0-01 部分复现与源码同步段定位起草。终稿未确权；开发未授权 |
 
@@ -26,8 +27,8 @@
 
 - 层级：功能合同
 - 本条承诺：在约定满量／慢盘工况下，就绪后采样窗口内 `livez`／`readyz` 满足门槛，且按客户 `timeoutSeconds=3`、`failureThreshold=6` 观察模型时，连续失败次数不超过可摘端点阈值；合法用户已鉴权管理 API 在同窗口可用。
-- 本条出口：SC-01–SC-07。
-- 不在本条出口：真实 K8s EndpointSlice／OpenResty（发布取证另做）、中断自动恢复正确性（P1-45）、MCP 启动空窗（P1-46）。
+- 本条出口：SC-01–SC-10（其中 SC-08–10 为暂停交付合同；**SC-08–10 PASS 不构成 SC-01–SC-07／默认配置关单**）。
+- 不在本条出口：真实 K8s EndpointSlice／OpenResty（发布取证另做）、中断自动恢复正确性（P1-45）、MCP 启动空窗（P1-46）、客户现网升级放行。
 - 上线关系：本条收口不表示可上线
 
 ## Terminology Compliance
@@ -96,7 +97,10 @@ probe_window_after_ready(120s):
 | SC-04 | 已鉴权项目／管理 API 同窗口可用，不以「只验单次 200」代替 |
 | SC-05 | 不得靠预热全局缓存、缩小数据、放宽 timeout 关单 |
 | SC-06 | 与 P1-45 水位方案不冲突：完整覆盖用户不无故全量重建 |
-| SC-07 | 对应 UAT 必做项全真 PASS |
+| SC-07 | 对应 UAT 必做项全真 PASS（**默认配置**下的 RPB-01／02／03；不含仅暂停配置的 05–07） |
+| SC-08 | 默认未设 `LUCY_INFERRED_MAINTAINER`（或非 `off`）时行为与 v0.2 一致；设为 `off`（大小写不敏感、可 trim）时不创建后台补算维护器；`inferredRebuild` 状态如实返回 `paused: true` 且不得报 `complete: true` |
+| SC-09 | 暂停配置下，满量推断夹具＋慢盘冷启动后达到上表「重启稳态」门槛（UAT-RPB-05）；**不得**据此将默认配置判定为 PASS |
+| SC-10 | 暂停配置下 MCP 主路径可用：同窗循环 `initialize`→`tools/list`→一次目录／Wiki 类调用成功（UAT-RPB-06）；可行时加 `lucy_query`，接不上数据源须在跑次注明降级 |
 
 ## 5. 开放项
 

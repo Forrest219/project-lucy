@@ -146,6 +146,11 @@ env:
   # Demo / template-only switches. Production must keep these empty / 0.
   LUCY_ALLOW_PLACEHOLDER_KTX: ""
 
+  # P1-47 delivery mitigation: set to "off" to pause background inferred-turn
+  # rebuild (audit inquiry numbering freshness yields). Empty = maintainer on
+  # (default product behaviour). Not a fix for rebuild probe budget.
+  LUCY_INFERRED_MAINTAINER: ""
+
   # Compose contract — pinned by Dockerfile. Kept here for documentation;
   # the template also pins them as hardcoded env entries.
   KTX_PROJECT_ROOT: /data/lucy

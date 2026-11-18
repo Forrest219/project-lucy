@@ -10,6 +10,8 @@
 | UAT-COLD-05 | 冷启动后合法用户主路径可用 | 运行时＋API | `cold05 --new-image IMG` | 首次升级路径就绪后：管理员认领、`GET /api/project`、建角色／Agent／token、MCP `initialize`、`tools/list`，每步成功且 ≤ 5 秒 |
 | UAT-COLD-D1 | 诊断：重建单页冷读耗时 | 脚本（诊断，**不判 PASS/FAIL**） | `pagecost --new-image IMG` | 同一条重建 SQL（LIMIT 400）在限速冷盘／限速热缓存／不限速冷盘下 4 页各自毫秒。改前基线 2695–5902／1–2／21–29。用于解释 02／04 的结果，不是门禁 |
 | UAT-COLD-06 | 客户侧只读证据 | 可选，客户配合 | 客户执行并回传 | fsync 延迟、`audit.sqlite*` 三文件大小、故障启动日志。不回传则 BLOCKED。不得由我方对客户实例执行写操作 |
+| UAT-COLD-07 | 暂停版首次升级 | 运行时 | `cold02 --new-image IMG --env LUCY_INFERRED_MAINTAINER=off` | 同 02 门槛（放宽首次升级）；MCP 回复通过；**暂停缓解，≠ P1-47 默认 PASS** |
+| UAT-COLD-08 | 暂停版重启 | 运行时 | `cold03 --new-image IMG --env LUCY_INFERRED_MAINTAINER=off` | livez max ≤1000ms、p99 ≤400ms；readyz p99 ≤1500ms |
 
 事故对照：2026-11-17 客户升级后，`/api/livez` 1.5–2.2 秒、`/api/readyz` 常 > 3 秒、事件循环 p99 ≈ 2.2 秒、网关 502／503、回滚。本机受控复现：同一库、慢盘冷缓存，0.25.0 33 秒健康，0.30.0 `FST_ERR_HOOK_TIMEOUT` 退出码 1。
 
@@ -197,3 +199,29 @@ UAT-COLD-02 的启动路径（旧库、限速、冷缓存）。
 ### 清理
 
 客户删除 `.fsync-probe`。
+
+---
+
+## UAT-COLD-07 — 暂停版首次升级
+
+### 步骤
+
+与 UAT-COLD-02 相同，被测容器加 `--env LUCY_INFERRED_MAINTAINER=off`。
+
+### 期望
+
+- 沿用 02 放宽门槛（livez max ≤2000ms、p99 ≤1000ms；readyz p99 ≤1500ms；就绪 ≤150s）。
+- MCP 握手／`tools/list` 成功（可复用 05 子集）。
+- **暂停缓解**；不得写成 P1-47 默认配置 PASS。
+
+---
+
+## UAT-COLD-08 — 暂停版重启
+
+### 步骤
+
+与 UAT-COLD-03 相同，被测容器加 `--env LUCY_INFERRED_MAINTAINER=off`。
+
+### 期望
+
+- livez max ≤1000ms、p99 ≤400ms；readyz p99 ≤1500ms。

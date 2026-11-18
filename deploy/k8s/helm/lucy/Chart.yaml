@@ -17,7 +17,7 @@ description: |
   Bundled runtime: `@kaelio/ktx@0.16.0` (pinned in Dockerfile / values).
   Product version (`appVersion`) is Lucy-facing and independent of KTX.
 type: application
-version: 0.2.9
+version: 0.2.10
 appVersion: "0.30.0"
 kubeVersion: ">=1.24.0-0"
 home: https://github.com/kaelio/lucy
@@ -38,6 +38,8 @@ annotations:
   category: DataAgent
   licenses: Apache-2.0
   artifacthub.io/changes: |
+    - kind: added
+      description: Chart 0.2.10 whitelists optional env.LUCY_INFERRED_MAINTAINER (empty = omit; set "off" to pause background inferred-turn rebuild for P1-47 delivery mitigation). appVersion stays 0.30.0. Bundled KTX stays 0.16.0.
     - kind: changed
       description: Chart 0.2.9 points startup and readiness probes at /api/readyz and the liveness probe at /api/livez (period 10s, timeout 3s, failureThreshold 6). appVersion stays 0.30.0. Bundled KTX stays 0.16.0. A release that overrides probe paths must retarget them. Do not point a 0.25 image at /api/livez.
     - kind: changed

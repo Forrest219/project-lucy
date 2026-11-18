@@ -7,6 +7,9 @@
 | UAT-RPB-02 | 客户 3s 观察器 | 同窗按周期 5s、timeout 3s 打 readyz；连续失败 &lt; 6 |
 | UAT-RPB-03 | 已鉴权业务请求 | 同窗连续已鉴权项目／管理 API 全 200；记录 max／p99 |
 | UAT-RPB-04 | K8s 摘端点（可选） | 真实集群观察 EndpointSlice；默认 BLOCKED |
+| UAT-RPB-05 | 暂停配置满量重建台 | `--env LUCY_INFERRED_MAINTAINER=off`；门槛同 01；**暂停≠默认配置 PASS** |
+| UAT-RPB-06 | 暂停下 MCP 回复 | 同窗每 10s：`initialize`→`tools/list`→轻量工具；单次 p99 ≤3s |
+| UAT-RPB-07 | 暂停状态披露 | `inferredRebuild.paused=true` 且 `complete=false`；启动日志有暂停警告 |
 
 ---
 
@@ -51,3 +54,43 @@
 ### 期望
 
 - 全 200；记录 max；不得用未鉴权 health 代替。
+
+---
+
+## UAT-RPB-05 — 暂停配置满量重建台
+
+### 步骤
+
+与 UAT-RPB-01 相同夹具与限速，唯一差别：被测容器带 `LUCY_INFERRED_MAINTAINER=off`（`--env`，不作用于 premigrate／注入阶段）。
+
+### 期望
+
+- livez max ≤1000ms、p99 ≤400ms；readyz p99 ≤1500ms；全 200；客户 3s 连续失败 &lt; 6。
+- **禁止**把本条 PASS 写成套件默认配置 PASS／关 `GAP-UAT-P1-47`。
+- 同镜像对照（不设 env）须仍能复现秒级 livez（见跑次对照表）。
+
+---
+
+## UAT-RPB-06 — 暂停下 MCP 回复
+
+### 步骤
+
+在 UAT-RPB-05 同窗内，每 10 秒循环：MCP `initialize` → `tools/list` → 一次 `wiki_search`／`lucy_catalog`（或等价轻量工具）；可行时加一次 `lucy_query`。
+
+### 期望
+
+- 全部成功；单次 p99 ≤3s。
+- `lucy_query` 若接不上数据源：降级并在跑次注明，不得省略不写。
+
+---
+
+## UAT-RPB-07 — 暂停状态披露
+
+### 步骤
+
+暂停配置就绪后：读管理审计问询接口的 `inferredRebuild`（或等价）；检索容器启动日志。
+
+### 期望
+
+- `paused: true` 且 `complete: false`。
+- 日志含 `LUCY_INFERRED_MAINTAINER=off` 暂停警告。

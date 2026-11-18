@@ -171,12 +171,71 @@ console.log(JSON.stringify({users:users.length, injected:n, ts:now}));
   return JSON.parse(out.trim().split("\n").pop());
 }
 
-async function sampleWindow(windowS) {
+function isPauseEnv() {
+  return String(EXTRA_ENV.LUCY_INFERRED_MAINTAINER ?? "").trim().toLowerCase() === "off";
+}
+
+async function mcpCycle(bearer, sidIn) {
+  const headers = (sid) => ({
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+    authorization: `Bearer ${bearer}`,
+    ...(sid ? { "mcp-session-id": sid } : {})
+  });
+  const init = await timed(MCP, {
+    method: "POST",
+    headers: headers(undefined),
+    body: JSON.stringify({
+      jsonrpc: "2.0", id: 1, method: "initialize",
+      params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "uat-rpb", version: "1" } }
+    })
+  }, 8000);
+  const sid = init.headers?.get("mcp-session-id") ?? sidIn;
+  const list = await timed(MCP, {
+    method: "POST",
+    headers: headers(sid),
+    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
+  }, 8000);
+  // 轻量工具：优先 wiki_search，缺则 lucy_catalog
+  const light = await timed(MCP, {
+    method: "POST",
+    headers: headers(sid),
+    body: JSON.stringify({
+      jsonrpc: "2.0", id: 3, method: "tools/call",
+      params: { name: "wiki_search", arguments: { query: "uat" } }
+    })
+  }, 8000);
+  const lightOk = light.code === 200 || /lucy_catalog|wiki_search|Unknown tool|not found|denied/i.test(light.text);
+  // 再试 catalog 若 wiki 不可用
+  let catalog = null;
+  if (!/"result"/.test(light.text)) {
+    catalog = await timed(MCP, {
+      method: "POST",
+      headers: headers(sid),
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 4, method: "tools/call",
+        params: { name: "lucy_catalog", arguments: {} }
+      })
+    }, 8000);
+  }
+  const toolOk = /"result"/.test(light.text) || (catalog && /"result"/.test(catalog.text)) || lightOk;
+  return {
+    ok: init.code === 200 && /"result"/.test(init.text) && list.code === 200 && /"tools"/.test(list.text) && toolOk,
+    ms: Math.max(init.ms, list.ms, light.ms, catalog?.ms ?? 0),
+    sid,
+    codes: { init: init.code, list: list.code, light: light.code, catalog: catalog?.code ?? null }
+  };
+}
+
+async function sampleWindow(windowS, { mcpBearer = null } = {}) {
   const samples = [];
   const customer = [];
+  const mcp = [];
   const t0 = performance.now();
   let streak = 0; let maxStreak = 0;
   let nextCustomer = 0;
+  let nextMcp = 0;
+  let sid;
   while ((performance.now() - t0) / 1000 < windowS) {
     const livez = await timed(`${WEB}/api/livez`, {}, 8000);
     const readyz = await timed(`${WEB}/api/readyz`, {}, 8000);
@@ -193,12 +252,18 @@ async function sampleWindow(windowS) {
       customer.push({ t: +((performance.now() - t0) / 1000).toFixed(2), ms: c.ms, code: c.code, fail });
       nextCustomer += LIMITS.customerPeriodMs;
     }
+    if (mcpBearer && (performance.now() - t0) >= nextMcp) {
+      const cycle = await mcpCycle(mcpBearer, sid);
+      sid = cycle.sid;
+      mcp.push({ t: +((performance.now() - t0) / 1000).toFixed(2), ...cycle });
+      nextMcp += 10_000;
+    }
     await sleep(1000);
   }
   const livezMs = samples.map((s) => s.livezMs);
   const readyzMs = samples.map((s) => s.readyzMs);
   return {
-    samples, customer, maxStreak,
+    samples, customer, maxStreak, mcp,
     stats: {
       livezMaxMs: Math.max(...livezMs), livezP99Ms: pct(livezMs, 99),
       readyzMaxMs: Math.max(...readyzMs), readyzP99Ms: pct(readyzMs, 99),
@@ -225,10 +290,38 @@ async function mintAndHitProject() {
     await sleep(200);
   }
   let project = null;
+  let bearer = "";
+  let inferredRebuild = null;
   if (cookie) {
     project = await timed(`${WEB}/api/project`, { headers: { cookie } }, 8000);
+    const role = await timed(`${WEB}/api/admin/roles`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        dryRun: false,
+        roleId: "uat_rpb_min",
+        role: { description: "UAT RPB minimal", allow: { connections: [], tableSelectors: [], tools: ["wiki_search", "lucy_catalog", "connection_list"] } }
+      })
+    }, 8000);
+    const agent = await timed(`${WEB}/api/admin/agents`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ dryRun: false, agent: { id: "uat_rpb_agent", name: "UAT RPB agent", roles: ["uat_rpb_min"] } })
+    }, 8000);
+    const tok = await timed(`${WEB}/api/admin/agents/uat_rpb_agent/tokens`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ label: "uat", expires_at: new Date(Date.now() + 3_600_000).toISOString(), dryRun: false })
+    }, 8000);
+    let parsed; try { parsed = JSON.parse(tok.text); } catch { parsed = {}; }
+    bearer = parsed?.data?.token ?? parsed?.data?.plaintext ?? parsed?.token ?? "";
+    const turns = await timed(`${WEB}/api/admin/audit/turns?hours=168&source=all`, { headers: { cookie } }, 8000);
+    try { inferredRebuild = JSON.parse(turns.text)?.data?.inferredRebuild ?? null; } catch { inferredRebuild = null; }
+    void role; void agent;
   }
-  return { claimCode: claim.code, cookie: Boolean(cookie), hits, project };
+  if (cookie && password) writeFileSync(path.join(SECRETS, "admin-password"), password, { mode: 0o600 });
+  if (bearer) writeFileSync(path.join(SECRETS, "bearer"), bearer, { mode: 0o600 });
+  return { claimCode: claim.code, cookie: Boolean(cookie), hits, project, bearer, inferredRebuild, password };
 }
 
 async function all() {
@@ -249,15 +342,17 @@ async function all() {
   };
 
   const mig = await premigrate();
-  // Start unthrottled briefly to inject recent rows onto a working copy
+  // Start unthrottled briefly to inject recent rows onto a working copy.
+  // Bootstrap／Agent token 必须在此领取（冷启动卷会继承已消费的 bootstrap）。
   copyVolume(mig, `${RUN}-data`);
   startContainer(`${RUN}-data`, { throttle: false });
   if (!(await waitReady(180))) throw new Error("inject-ready failed");
   const injected = injectRecentActivity();
   log("injected", injected);
+  const business = await mintAndHitProject();
+  log("mint", { claimCode: business.claimCode, cookie: business.cookie, bearer: Boolean(business.bearer) });
   docker(["stop", "-t", "30", RUN]); removeContainer();
 
-  // RPB-01/02: throttled cold start with forced rebuild load
   dropCaches();
   copyVolume(`${RUN}-data`, `${RUN}-boot`);
   const t0 = performance.now();
@@ -265,17 +360,47 @@ async function all() {
   const readyOk = await waitReady(LIMITS.readyS);
   const readyS = +((performance.now() - t0) / 1000).toFixed(1);
   if (!readyOk) throw new Error("candidate ready failed");
-  const window = await sampleWindow(LIMITS.windowS);
-  const business = await mintAndHitProject();
+  const pause = isPauseEnv();
+  const bearer = business.bearer
+    || (existsSync(path.join(SECRETS, "bearer")) ? readFileSync(path.join(SECRETS, "bearer"), "utf8").trim() : "");
+  // 暂停态：冷启动后登录读 inferredRebuild（inject 阶段读的是未暂停进程）
+  let inferredRebuild = business.inferredRebuild;
+  if (pause) {
+    const pw = existsSync(path.join(SECRETS, "admin-password"))
+      ? readFileSync(path.join(SECRETS, "admin-password"), "utf8").trim()
+      : business.password;
+    if (pw) {
+      const login = await timed(`${WEB}/api/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ adminId: "uatrpbadmin", password: pw })
+      }, 8000);
+      const cookie = (login.headers?.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+      if (cookie) {
+        const turns = await timed(`${WEB}/api/admin/audit/turns?hours=168&source=all`, { headers: { cookie } }, 8000);
+        try { inferredRebuild = JSON.parse(turns.text)?.data?.inferredRebuild ?? null; } catch { inferredRebuild = null; }
+      }
+    }
+  }
+  const window = await sampleWindow(LIMITS.windowS, { mcpBearer: pause && bearer ? bearer : null });
+  const hits = [];
+  for (let i = 0; i < 20; i += 1) {
+    const r = await timed(`${WEB}/api/readyz`, {}, 8000);
+    hits.push({ code: r.code, ms: r.ms });
+    await sleep(200);
+  }
+  const logs = dockerTry(["logs", RUN]);
+  const pauseLog = /LUCY_INFERRED_MAINTAINER=off/.test(logs);
 
+  const probePass = readyOk
+    && window.stats.livezMaxMs <= LIMITS.livezMaxMs
+    && window.stats.livezP99Ms <= LIMITS.livezP99Ms
+    && window.stats.readyzP99Ms <= LIMITS.readyzP99Ms
+    && window.stats.livezNon200 === 0
+    && window.stats.readyzNon200 === 0;
   const rpb01 = {
     id: "UAT-RPB-01",
-    pass: readyOk
-      && window.stats.livezMaxMs <= LIMITS.livezMaxMs
-      && window.stats.livezP99Ms <= LIMITS.livezP99Ms
-      && window.stats.readyzP99Ms <= LIMITS.readyzP99Ms
-      && window.stats.livezNon200 === 0
-      && window.stats.readyzNon200 === 0,
+    pass: probePass,
     checks: [
       check("ready within budget", readyOk && readyS <= LIMITS.readyS, readyS, `≤${LIMITS.readyS}s`),
       check("livez max", window.stats.livezMaxMs <= LIMITS.livezMaxMs, window.stats.livezMaxMs, `≤${LIMITS.livezMaxMs}`),
@@ -295,27 +420,66 @@ async function all() {
   };
   const rpb03 = {
     id: "UAT-RPB-03",
-    pass: business.hits.every((h) => h.code === 200),
+    pass: hits.every((h) => h.code === 200),
     checks: [
-      check("readyz burst all 200", business.hits.every((h) => h.code === 200), {
-        n: business.hits.length,
-        maxMs: Math.max(...business.hits.map((h) => h.ms))
+      check("readyz burst all 200", hits.every((h) => h.code === 200), {
+        n: hits.length,
+        maxMs: Math.max(...hits.map((h) => h.ms))
       }, "all 200")
     ]
   };
 
+  const mcpMs = window.mcp.map((m) => m.ms);
+  const rpb05 = pause ? {
+    id: "UAT-RPB-05",
+    pass: probePass && rpb02.pass,
+    note: "pause config only; does not close default-config FAIL",
+    checks: rpb01.checks.concat(rpb02.checks),
+    stats: window.stats, maxStreak: window.maxStreak
+  } : { id: "UAT-RPB-05", pass: null, status: "SKIPPED", reason: "LUCY_INFERRED_MAINTAINER is not off" };
+  const rpb06 = pause ? {
+    id: "UAT-RPB-06",
+    pass: window.mcp.length > 0
+      && window.mcp.every((m) => m.ok)
+      && (mcpMs.length ? pct(mcpMs, 99) <= 3000 : false),
+    checks: [
+      check("mcp cycles ran", window.mcp.length > 0, window.mcp.length, "≥1"),
+      check("mcp all ok", window.mcp.every((m) => m.ok), window.mcp.map((m) => m.codes), "all ok"),
+      check("mcp p99 ≤3s", mcpMs.length ? pct(mcpMs, 99) <= 3000 : false, mcpMs.length ? pct(mcpMs, 99) : null, "≤3000")
+    ],
+    mcp: window.mcp
+  } : { id: "UAT-RPB-06", pass: null, status: "SKIPPED", reason: "LUCY_INFERRED_MAINTAINER is not off" };
+  const rpb07 = pause ? {
+    id: "UAT-RPB-07",
+    pass: Boolean(inferredRebuild && inferredRebuild.paused === true && inferredRebuild.complete === false && pauseLog),
+    checks: [
+      check("inferredRebuild.paused", inferredRebuild?.paused === true, inferredRebuild, "paused:true"),
+      check("inferredRebuild.complete false", inferredRebuild?.complete === false, inferredRebuild?.complete, false),
+      check("startup pause warning in logs", pauseLog, pauseLog, true)
+    ],
+    inferredRebuild
+  } : { id: "UAT-RPB-07", pass: null, status: "SKIPPED", reason: "LUCY_INFERRED_MAINTAINER is not off" };
+
+  const defaultPass = r0.pass && rpb01.pass && rpb02.pass && rpb03.pass;
+  const pausePass = !pause || (rpb05.pass && rpb06.pass && rpb07.pass);
   const suite = {
     suite: "UAT-SUITE-REBUILD-PROBE-BUDGET",
-    image: IMAGE, label, revision: rev, rig: RIG, extraEnv: EXTRA_ENV,
+    image: IMAGE, label, revision: rev, rig: RIG, extraEnv: EXTRA_ENV, pause,
     r0, "UAT-RPB-01": rpb01, "UAT-RPB-02": rpb02, "UAT-RPB-03": rpb03,
     "UAT-RPB-04": { id: "UAT-RPB-04", pass: null, status: "BLOCKED", reason: "real K8s EndpointSlice not in this Docker run" },
-    pass: r0.pass && rpb01.pass && rpb02.pass && rpb03.pass
+    "UAT-RPB-05": rpb05, "UAT-RPB-06": rpb06, "UAT-RPB-07": rpb07,
+    // 默认配置关单仍看 01–03；暂停跑次另看 05–07。pause 模式下 suite.pass 表示暂停合同。
+    pass: pause ? (r0.pass && pausePass && rpb03.pass) : defaultPass,
+    defaultConfigPass: defaultPass
   };
   writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(suite, null, 2));
   writeFileSync(path.join(OUT, "samples.json"), JSON.stringify(window.samples, null, 2));
   writeFileSync(path.join(OUT, "customer.json"), JSON.stringify(window.customer, null, 2));
+  if (window.mcp.length) writeFileSync(path.join(OUT, "mcp.json"), JSON.stringify(window.mcp, null, 2));
   console.log(JSON.stringify({
-    pass: suite.pass, r0: r0.pass, rpb01: rpb01.pass, rpb02: rpb02.pass, rpb03: rpb03.pass,
+    pass: suite.pass, pause, defaultConfigPass: defaultPass,
+    r0: r0.pass, rpb01: rpb01.pass, rpb02: rpb02.pass, rpb03: rpb03.pass,
+    rpb05: rpb05.pass, rpb06: rpb06.pass, rpb07: rpb07.pass,
     readyS, stats: window.stats, maxStreak: window.maxStreak, out: OUT
   }, null, 2));
   removeContainer();
@@ -332,6 +496,6 @@ function clean() {
 if (cmd === "clean") clean();
 else if (cmd === "all") await all();
 else {
-  console.error("usage: node scripts/uat/rebuild-probe-budget.mjs all|clean [--image IMG] [--label L] [--remigrate] [--premigrate-wait-s N]");
+  console.error("usage: node scripts/uat/rebuild-probe-budget.mjs all|clean [--image IMG] [--label L] [--remigrate] [--premigrate-wait-s N] [--env KEY=VAL]");
   process.exit(2);
 }

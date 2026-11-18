@@ -71,6 +71,8 @@ const opt = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? arg
 const NEW_IMAGE = opt("new-image");
 const WINDOW_S = Number(opt("window-s") ?? LIMITS.windowS);
 const PREMIGRATE_WAIT_S = Number(opt("premigrate-wait-s") ?? 30);
+// 可重复：--env KEY=VAL，只作用于被测（限速）容器，不作用于 seed／对照镜像。
+const EXTRA_ENV = Object.fromEntries(args.flatMap((a, i) => (a === "--env" && args[i + 1]?.includes("=") ? [args[i + 1].split(/=(.*)/s).slice(0, 2)] : [])));
 const today = new Date().toISOString().slice(0, 10);
 const label = opt("label") ?? `${today}-${(NEW_IMAGE ?? "baseline").split(":").pop().replace(/[^\w.-]/g, "_")}`;
 const OUT = path.join(ROOT, "inbox", `uat-cold-start-${label}`);
@@ -117,7 +119,7 @@ function ensureBootstrapSecret() {
   if (!existsSync(file)) writeFileSync(file, randomBytes(24).toString("hex"), { mode: 0o600 });
   return file;
 }
-function startContainer(image, volume, { throttle }) {
+function startContainer(image, volume, { throttle, extraEnv = {} }) {
   removeContainer(RUN);
   const env = {
     KTX_PROJECT_ROOT: "/data/lucy", LUCY_TEMPLATE_ROOT: "/app/examples/docker-demo/project-template",
@@ -125,7 +127,8 @@ function startContainer(image, volume, { throttle }) {
     LUCY_PROXY_UPSTREAM_HOST: "127.0.0.1", LUCY_PROXY_UPSTREAM_PORT: "7878", LUCY_CONTENT_ROOT: "/data/lucy/config",
     LUCY_PUBLIC_MCP_URL: MCP, LUCY_DEPLOYMENT_MODE: "customer",
     LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE: "/run/secrets/webui_bootstrap_token", LUCY_WEBUI_COOKIE_SECURE: "0",
-    LUCY_WEBUI_TEST_PROFILE: "1", POSTHOG_DISABLED: "1"
+    LUCY_WEBUI_TEST_PROFILE: "1", POSTHOG_DISABLED: "1",
+    ...extraEnv
   };
   docker(["run", "-d", "--name", RUN, ...(throttle ? throttleFlags() : []),
     ...Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]),
@@ -192,12 +195,12 @@ const windowStats = (mode, samples, from, to) => {
 const check = (name, pass, actual, limit) => ({ name, pass: Boolean(pass), actual, limit });
 
 // ---------- 一次冷启动场景 ----------
-async function scenario({ id, image, mode, volume, throttle = true, cold = true, readyBudgetS, windowS, midAction, afterReady }) {
-  log(`${id}: restore ${volume} → run volume, image=${image}, throttle=${throttle}, coldCache=${cold}`);
+async function scenario({ id, image, mode, volume, throttle = true, cold = true, readyBudgetS, windowS, midAction, afterReady, extraEnv = EXTRA_ENV }) {
+  log(`${id}: restore ${volume} → run volume, image=${image}, throttle=${throttle}, coldCache=${cold}, extraEnv=${JSON.stringify(extraEnv)}`);
   removeContainer(RUN); copyVolume(volume, `${RUN}-data`);
   if (cold) dropCaches();
   const t0 = performance.now();
-  startContainer(image, `${RUN}-data`, { throttle: throttle && !flag("no-throttle") });
+  startContainer(image, `${RUN}-data`, { throttle: throttle && !flag("no-throttle"), extraEnv });
   const sampler = startSampler(mode, t0);
   let readyT = null; let exited = null;
   const deadline = t0 + 360_000;
@@ -305,7 +308,8 @@ function steadyChecks(stats, { livezMaxMs = LIMITS.livezMaxMs, livezP99Ms = LIMI
   ];
 }
 async function cold01() {
-  const res = await scenario({ id: "UAT-COLD-01", image: OLD_IMAGE, mode: "old", volume: SNAP_OLD, readyBudgetS: LIMITS.oldReadyS, windowS: 60 });
+  // 对照镜像不得带候选 EXTRA_ENV（例如暂停开关）。
+  const res = await scenario({ id: "UAT-COLD-01", image: OLD_IMAGE, mode: "old", volume: SNAP_OLD, readyBudgetS: LIMITS.oldReadyS, windowS: 60, extraEnv: {} });
   const stats = res.readyT === null ? null : windowStats("old", res.samples, res.windowStart, res.windowEnd);
   return report("UAT-COLD-01", "对照：0.25.0 在同一限速冷启动台上能起来", [...readyCheck(res, LIMITS.oldReadyS), check("health all 200 in 60s window", stats && stats.healthNon200 === 0, stats?.healthNon200, 0)], { ...res, stats });
 }
@@ -421,6 +425,6 @@ if (cmd === "all") {
   const r = await table[cmd]();
   process.exit(r === false ? 1 : 0);
 } else {
-  console.error("usage: cold-start-slow-disk.mjs <r0|seed|cold01|cold02|cold03|cold04|cold05|pagecost|all|clean> [--new-image IMG] [--label L] [--reseed] [--remigrate] [--no-throttle] [--warm-start] [--window-s N] [--premigrate-wait-s N]");
+  console.error("usage: cold-start-slow-disk.mjs <r0|seed|cold01|cold02|cold03|cold04|cold05|pagecost|all|clean> [--new-image IMG] [--label L] [--reseed] [--remigrate] [--no-throttle] [--warm-start] [--window-s N] [--premigrate-wait-s N] [--env KEY=VAL]");
   process.exit(2);
 }

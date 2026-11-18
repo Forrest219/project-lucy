@@ -41,6 +41,11 @@ env:
   # Empty = image default `config/`. Set "." ONLY when the existing PVC keeps
   # semantic-layer/, wiki/, evals/, skills/ next to ktx.yaml.
   LUCY_CONTENT_ROOT: ""
+  # Pause background inferred-turn rebuild during upgrade mitigation windows.
+  # Leave empty for default (maintainer on). Set "off" only when following the
+  # P1-47 pause-delivery runbook; clearing it later resumes rebuild without
+  # changing the image.
+  LUCY_INFERRED_MAINTAINER: ""
   KTX_PROJECT_ROOT: /data/lucy
   POSTHOG_DISABLED: "1"
 

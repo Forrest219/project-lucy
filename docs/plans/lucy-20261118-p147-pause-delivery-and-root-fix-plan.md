@@ -11,7 +11,7 @@
 | 基于材料 | [升级放行评估](../reviews/2026-11-18-p145-p147-upgrade-readiness-assessment.md)；[暂停开关对照跑次](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-p147-pause-control.md)；[P1-47 Spec](../specs/lucy-20261118-rebuild-probe-budget-spec.md)；[客户 amd64 出包清单](../runbooks/customer-amd64-image-build-checklist.md)；[客户升级交付清单](../runbooks/customer-v2-upgrade-release-checklist.md)；Helm Chart `deploy/k8s/helm/lucy/` |
 | 适用范围 | 编排「先带暂停开关交付，让用户的 MCP 先回复；同步根治后再解除暂停」两条线。**所有 UAT 为 Docker 限速台上的模拟 UAT，不等于客户现场 PASS** |
 | 输出位置 | `docs/plans/lucy-20261118-p147-pause-delivery-and-root-fix-plan.md` |
-| 状态 | **v0.1；待委托人确认 §6 的三个决策点后开工。** 委托人 2026-11-18 已批准方向：「先完全暂停，让用户的 MCP 回复，再同步修正」；优先级＝**升级与 MCP 回复第一，日志第二** |
+| 状态 | **v0.1；待委托人确认 §6 的三个决策点后开工。** 委托人 2026-11-18 已批准方向：「先完全暂停，让用户的 MCP 回复，再同步修正」；优先级＝**升级与 MCP 回复第一，日志第二**。**接力执行 Plan**（UAT 优先验证回滚根因）：[lucy-20261118-p147-pause-uat-relay-plan.md](lucy-20261118-p147-pause-uat-relay-plan.md) |
 | 授权边界 | 已授权：暂停开关（已实现）、A 线与 B1 分段计时。**未授权**：提交 git、B2 的具体手段（`wal_autocheckpoint`／worker）、线上升级。≠ 可上线 |
 | 验收 | 见 §8 |
 
