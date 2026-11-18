@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261118-lucy-ops-reader-headless-governance-acl-plan.md](lucy-20261118-lucy-ops-reader-headless-governance-acl-plan.md) | **v0.1-draft**（P1-49／REQ-030-070）：`lucy_ops_reader` 无头可问治理面 ACL（规范 W0 指纹 heal）。配对 [Spec](../specs/lucy-20261118-lucy-ops-reader-headless-governance-acl-spec.md)；测试台 not_registered。**终稿未确权；未获开发授权；≠ 可上线** |
 | [lucy-20261117-access-map-sankey-restoration-plan.md](lucy-20261117-access-map-sankey-restoration-plan.md) | **v0.2；开发授权已获得；功能已实现并提交（2026-11-17）**（P1-41／REQ-030-062）：访问关系图桑基还原 Plan，配对 [Spec](../specs/lucy-20261117-access-map-sankey-restoration-spec.md)。**≠ 可上线** |
 | [lucy-20261115-trust-evidence-capability-split.md](lucy-20261115-trust-evidence-capability-split.md) | **v0.1；委托人批准（2026-11-15）**：可信证据两类拆分——0.30 吸收 P0-4／B／5；未开工进 post-0.30 池。**≠ Spec；≠ 开发授权；≠ 可上线** |
 | [lucy-20261115-post-030-trust-evidence-requirement-pool.md](lucy-20261115-post-030-trust-evidence-requirement-pool.md) | **v0.1 未来需求池（未开线）**：REQ-TE-001–008（可核对覆盖／证据槽位／认证／质量预警等）。**入池 ≠ 立项；≠ 可上线**。拆分见上条 |
