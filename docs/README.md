@@ -29,6 +29,7 @@
 | `governance/DEVELOPMENT.md` | 开发治理总纲：Plan Mode 强制场景、红线、Spec 落位与内容规格（重要功能伪代码）、术语合规 |
 | `governance/project-overview.md` | 项目总览：onboarding、模块索引、当前能力边界（v1.4，持续更新） |
 | `governance/vision.md` | Lucy 产品愿景 |
+| `governance/user-personas.md` | 用户画像与体验判定模型：4 画像（问数方／治理方／运维方／管理层）＋ `↑／＝／↓` 判定口径 ＋ 负向补偿门槛 ＋ 新功能 Spec 必含的「受影响画像」小节模板与评审接入口径 |
 | `specs/lucy-platform-goal-checklist.md` | POC → 可部署 MCP 平台的产品化验收清单 |
 | `governance/product-docs-index.md` | 客户交付文档子索引（admin/user/agent 接入/安全/排障指南） |
 | `SYSTEM_HANDBOOK.md` | WebUI 内置系统手册 / Help Center 内容源（根目录保留，运行时被 `webui/server/help.ts` 按 `docs/SYSTEM_HANDBOOK.md` 读取） |
