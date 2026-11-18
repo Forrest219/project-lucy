@@ -67,11 +67,16 @@ describe("production catalog SHOW adapter", () => {
       port: 9030,
       user: "reader",
       password: "fixture-private-password",
-      connectTimeout: 120000,
       multipleStatements: false
     });
+    // Connect and query share one monotonic remaining budget (≤ catalog scan default).
+    expect(params.connectTimeout).toBeGreaterThan(0);
+    expect(params.connectTimeout).toBeLessThanOrEqual(120_000);
     expect(params).not.toHaveProperty("database");
-    expect(injected.conn.query.mock.calls[0][0]).toMatchObject({ timeout: 120000, rowsAsArray: true });
+    const queryOpts = injected.conn.query.mock.calls[0][0];
+    expect(queryOpts).toMatchObject({ rowsAsArray: true });
+    expect(queryOpts.timeout).toBeGreaterThan(0);
+    expect(queryOpts.timeout).toBeLessThanOrEqual(120_000);
     expect(injected.conn.destroy).toHaveBeenCalledOnce();
     expect(JSON.stringify(actual)).not.toContain("fixture-private-password");
   });

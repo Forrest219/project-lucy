@@ -47,6 +47,7 @@ import {
   peekLiveSchemasCache
 } from "./live-catalog";
 import { previewSchemaStructure, SchemaStructureError } from "./schema-structure";
+import { SCHEMA_REQUEST_TIMEOUT_MS } from "./schema-read-deadline.js";
 import { CALL_BUDGET_MS, parseRequestedTables } from "./schema-structure-batch";
 import {
   addSchema,
@@ -1879,6 +1880,7 @@ export function buildServer() {
     const { tables } = parsed;
     try {
       const data = await previewSchemaStructure(projectRoot, request.params.connId, schema, {
+        requestTimeoutMs: SCHEMA_REQUEST_TIMEOUT_MS,
         ...(tables ? { tables, callBudgetMs: CALL_BUDGET_MS } : {})
       });
       return { ok: true, data };
