@@ -2,12 +2,12 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | Plan / **v0.1-draft** |
+| 文档类型 / 版本 | Plan / **v0.3-draft** |
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0`（分支 `lucy-v0.30`） |
-| 状态 | **v0.1-draft。方案稿：Task 全部未开工；未获开发授权；未改运行代码、镜像与 CI。终稿未确权** |
-| 授权边界 | **本 Plan 只授权「读代码与只读核实」**；任何写运行代码、改镜像标签逻辑、改 CI 工作流、改 `VERSION` 投影的动作，须委托人先批准 Spec 终稿并单独授权。本轮交付物＝方案文档本身 |
-| 验收 | 见 §「验收」（SC-01–SC-08 与阶段 0 的三条现状对齐事实） |
-| 配对 Spec | [`docs/specs/lucy-20261118-version-axis-naming-spec.md`](../specs/lucy-20261118-version-axis-naming-spec.md) |
+| 状态 | **v0.3-draft。方案稿：Task 全部未开工；未获开发授权；未改运行代码、镜像与 CI。终稿未确权。总账 P1-51／REQ-030-072；测试台 not_registered；不入核心分母；≠ 可上线** |
+| 授权边界 | **本 Plan 当前只授权「读代码与只读核实」以及本轮对 Spec／Plan 文档本身的修订**。任何写运行代码、改镜像标签逻辑、改 CI、改 `VERSION` 投影、改交付仓自动化的动作，须委托人先终稿确权并**单独**开发授权 |
+| 验收 | 见 §「验收」（SC-01–SC-13 与阶段 0 对齐事实） |
+| 配对 Spec | [`docs/specs/lucy-20261118-version-axis-naming-spec.md`](../specs/lucy-20261118-version-axis-naming-spec.md) **v0.3-draft** |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」「功能闭口与发布取证」；[`AGENTS.md`](../../AGENTS.md)「部署方式与版本制品解耦（全局原则）」 |
 
 ### Changelog
@@ -15,105 +15,132 @@
 | 版本 | 变更 |
 |---|---|
 | v0.1-draft | 初稿。配合 Spec v0.1-draft 落盘 Task 分解、验收与回滚口径；全部 Task 未开工 |
+| v0.2-draft | 对齐 Spec v0.2-draft：新增 Task 0b／1b／2b（交付仓追溯与可选运行时字段）；收紧候选用途与定稿后 hotfix 过渡；验收扩至 SC-09–SC-11；裁决点增 D-4／D-5。**仍不进入开发** |
+| v0.3-draft | 对齐 Spec v0.3：OQ-1／OQ-7 已决；Task 1／1b 强制**自动分配器**（禁人工起号）；Task 2b 默认要做（私有化分叉）；验收 SC-12／SC-13。**仍不进入开发** |
 
 ## 1. 目标（Context for Developer）
 
-**问题**：0.30 产品线在开发期出过多次合并前镜像，但 `VERSION` 自开线起未变动，导致每个合并前镜像与将来的定稿镜像**版本段完全相同**（实证：`customer-amd64-0.30.0-20261117-abb38913`）。现场无法回答「客户在跑第几版」，台账也没有位置记录这些交付。
+**问题**：
 
-**目标**：在不改动 `0.30` 功能范围的前提下，建立四条互不代用的版本轴——产品线号（分支号）／候选版本（合并前镜像）／定稿产品版本／构建修订——并让「这是候选还是定稿」成为标签层面的可判定事实。
+1. 0.30 开发期多次出包共用 `VERSION=0.30.0` 与 `customer-` 前缀，与将来定稿撞版本段（实证 `customer-amd64-0.30.0-20261117-abb38913`／交付 `20261117-r1`）。
+2. 交付仓 [lucy-customer-delivery](https://github.com/Forrest219/lucy-customer-delivery) 缺机器可读索引；源码台账与交付仓脱节。
+3. 开发态号码若靠人定义，易漏记、撞号；私有化现场难精确定位分叉。
 
-**产出**：可执行、可回滚的编号机制 ＋ 与之对齐的文档口径 ＋ 一次按新口径走完的 0.30 定稿。
+**目标**：四轴＋交付主键别名；**出包自动分配** `rc.N`／`deliveryId`；标签可判定候选／定稿；交付索引＋运行时身份支撑追溯与私有化分叉定位。
 
-**不在本 Plan 范围**：0.30 功能本身；`1.0.0` 的产品含义；历史 `v0.2.0`／`v2.0.0`／`v0.20.0`／`v0.25.0` 事实的改写；补丁位 hotfix 规则的最终批准（Spec §11 OQ-4）。
+**产出**：自动分配器 ＋ 编号／门禁 ＋ 交付仓追溯 ＋ 运行时／镜像身份 ＋ 文档 ＋（另授权后）0.30 定稿。
+
+**不在本 Plan 范围**：0.30 功能代码；`1.0.0` 产品含义；改写历史 tag／digest；托管客户私有 fork 源码；本轮实现任何运行代码。
 
 ## 2. 开工前置（Non-negotiable boundaries）
 
-**以下边界不可协商，越界即停并回报委托人：**
+1. **不改 `VERSION` 语义**；候选永不写入 11 处投影。
+2. **不占用**顶层 `docs/releases/vX.Y.Z.json`；候选只进 `docs/releases/candidates/`。
+3. **不改历史事实**；只补追溯卡。
+4. **候选不得冒充发布**；无受控放行不得标客户生产。
+5. **`customer-` 只由定稿 tag 路径产出**。
+6. **不碰 0.30 功能代码**。
+7. **不单方面启用补丁位**；未批 OQ-4 前走 `post-ga-hotfix-candidate`，不挤占开线 rc。
+8. **未获开发授权不改运行代码／CI／交付仓自动化**。
+9. **对外主键**＝`deliveryId`（OQ-7 已决）；台账双写 `candidateVersion`↔`deliveryId`。
+10. **每个交付包只钉一种 `deployPin` digest**。
+11. **禁止人工定义／传入 `rc.N` 或当日 `rN`**；号码只给出包／发放分配器产生（Spec §4.2.1／R10）。
+12. **成功出包必须同 job 身份入库**（R11）；失败不得留下无台账的已推送候选号。
 
-1. **不改 `VERSION` 语义**。`VERSION` 仍是产品身份与定稿号；候选版本号**永远不**写进 `VERSION`、`package.json`、`Chart.appVersion`、`values.lucy.version`、`values.image.tag` 与三处 fallback。`npm run lint:version` 的 11 处投影必须逐字相等。
-2. **不占用发布台账命名空间**。候选台账只进 `docs/releases/candidates/`；`docs/releases/` 顶层仍只放 `vX.Y.Z.json`。不改既有台账文件格式。
-3. **不改历史事实**。已发出的 tag、GitHub Release、镜像 digest、已归档的 `v0.2.0`／`v2.0.0` 一律不动。合并前镜像的历史标签**不重打**，只补追溯说明。
-4. **候选不得冒充发布**。候选镜像不带 `customer-` 前缀、不打 `v*` tag、不声明 `productionReady`、不写进对外 release notes、不进 `docs/releases/ux/`。
-5. **`customer-` 前缀只由定稿 tag 路径产出**。日常／PR 构建只产出 `candidate-`。
-6. **不碰 0.30 功能代码与功能范围**。本 Plan 只动发版治理面（版本文件、发布脚本、CI 工作流、文档）。
-7. **不单方面启用补丁位**。`0.30.1` 在 OQ-4 获批前不启用。
-8. **未获开发授权不改运行代码**。本 Plan 当前状态为「方案稿」，所有 Task 的写操作须等委托人批准。
-
-**开工裁决点**（须委托人明示才可进入执行）：
+**开工裁决点**（须委托人明示才可进入对应 Task 的写操作）：
 
 | 裁决 | 内容 | 阻塞的 Task |
 |---|---|---|
-| D-1 | 采纳 Spec §2 的四轴分工与命名形态（尤其 `X.Y.Z-rc.N` 与 `candidate-` 前缀） | Task 1 全部 |
-| D-2 | OQ-4 补丁位 hotfix 规则（`0.30.1` 是否为真发布） | Task 2 的 §2.4 段落 |
+| D-1 | 采纳四轴＋`candidate-`＋自动 `X.Y.Z-rc.N`（OQ-1 已决） | Task 1 |
+| D-2 | OQ-4 补丁位规则 | Task 2 补丁段落；影响 Task 1b channel 枚举说明 |
 | D-3 | 0.30 定稿时点与合并窗口 | Task 3 |
+| D-4 | 采纳交付仓追溯合同（index／manifest／`deployPin`／双向指针） | Task 1b |
+| D-5 | OQ-8 运行时／镜像身份（**默认 (a)**，私有化分叉依赖） | Task 2b |
+| D-6 | OQ-9 自动分配时区／当日 rN 分桶 | Task 1／1b 分配器实现细节 |
 
 ## 3. Task 分解
 
-### Task 0｜现状对齐（先止损，不依赖 D-1）
+> **本轮（v0.3-draft 文档修订）不执行下列 Task 的写操作。** 下列分解供终稿确权与开发授权后使用。
 
-- **Files**：
-  - 只读核对（无改动）：`git branch -a`、`git show origin/main:VERSION`、`git log --follow -- VERSION`
-  - 文档改动：`docs/releases/README.md`（补 0.25 尾段归属说明）、`docs/governance/release-ci.md`（CI 触发面口径）
-- **Step 1**：确认本地 `main` 与 `origin/main` 的偏差，并把本地 `main` 快进到 `origin/main`（不改任何文件内容）。
-- **Step 2**：在 `docs/releases/README.md` 增补一段：`lucy-v0.25` 在 `v0.25.0` tag 之后的尾段（`9c78b0e3` 等，2026-11-10 之前）**不单独发布**，随 0.30 交付；并写明 `lucy-v0.25` 是 `lucy-v0.30` 的祖先。
-- **Step 3**：核对 `.github/workflows/lucy-ci.yml` 的 `on.push.branches` 是否覆盖当前产品线分支；把「删除已失效的 `lucy-v0.25` 临时触发」写进待批清单（该项属 CI 改动，须 D-1 后随 Task 1 一起执行）。
-- **Expected**：`origin/main` 的 `VERSION` 为 `0.25.0`；本地 `main` 与之同步；`docs/releases/README.md` 能一句话说清 0.25 尾段归属。
-- **Commit**：`docs(webui): record 0.25 tail ownership and main sync state`
+### Task 0｜现状对齐（文档／同步；不依赖 D-1）
 
-### Task 1｜候选版本机制落地（需 D-1）
+- **Files**：`docs/releases/README.md`、`docs/governance/release-ci.md`（文档）；git 快进本地 `main`（无文件内容改动）
+- **Step 1**：本地 `main` 快进到 `origin/main`。
+- **Step 2**：写明 0.25 尾段随 0.30 交付、祖先关系。
+- **Step 3**：CI 触发面缺口列入待批（改 workflow 须开发授权，归 Task 1）。
+- **Expected**：`origin/main` 的 `VERSION`＝`0.25.0`；README 能一句话说清归属。
+- **Commit**（授权后）：`docs(webui): record 0.25 tail ownership and main sync state`
 
-- **Files**：
-  - 新增：根 `CANDIDATE_VERSION`（内容 `0.30.0-rc.0`）
-  - 新增：`docs/releases/candidates/`（目录 ＋ `README.md` ＋ 首个候选台账 `0.30.0-rc.1.json`）
-  - 改：`scripts/release/lucy-version-governance.mjs`（镜像 tag 正则与新增候选门禁）
-  - 改：`scripts/release/release-ledger.mjs`（**只加断言，不改既有条目格式**：候选文件不得出现在 `docs/releases/` 顶层；候选不得含 `productionReady: true`）
-  - 改：`.github/workflows/lucy-release.yml`（`candidate-` 标签携带 `CANDIDATE_VERSION`；`customer-` 标签只在 `refs/tags/v*` 路径产出）
-  - 测试：`scripts/release/lucy-version-governance.test.mjs`、`scripts/release/release-ledger.test.mjs`
-- **Step 1**：新增 `CANDIDATE_VERSION` 与 `CANDIDATE_VERSION_RE`（`^X.Y.Z-rc\.\d+$`），并在 `lucy-version-governance.mjs` 中断言其主版本段与 `VERSION` 一致。
-- **Step 2**：扩展 `isCustomerImageRefForVersion` 的姊妹函数 `isCandidateImageRefForVersion`，匹配 `^candidate-amd64-<version>-rc\.\d+-\d{8}-[0-9a-f]{7,}$`；断言候选 tag **不被** `isReleaseTagForVersion` 接受。
-- **Step 3**：新增门禁：`docs/releases/` 顶层出现 `*-rc.*.json` 即失败；`docs/releases/candidates/*.json` 出现 `productionReady: true` 即失败；候选 tag 以 `customer-` 开头即失败。
-- **Step 4**：在 `lucy-release.yml` 的 `customer-amd64-native` job 中，把 `TAG="candidate-amd64-${LUCY_VERSION}-${date}-${sha7}"` 改为携带 `${CANDIDATE_VERSION}`（形如 `candidate-amd64-0.30.0-rc.1-20261118-abc1234`）；`release-package` 的 `customer-` 标签生成逻辑与 `refs/tags/v*` 触发条件保持不变，并加断言：非 tag 路径不得产出 `customer-` 标签。
-- **Step 5**：补测试：候选 tag 正例／反例、`customer-` 前缀拒绝、候选台账不被顶层台账门禁误扫、`CANDIDATE_VERSION` 与 `VERSION` 主版本段不一致时报错。
-- **Expected**：`npm run lint:version`、`npm run lint:release-ledger`、`npm run lint:version:test`、`npm run lint:release-ledger:test` 全绿；`git tag` 中不出现 `v*`；候选镜像 tag 一眼可判为候选。
-- **Commit**：`feat(webui): add candidate version axis and candidate image tag gate`
+### Task 0b｜历史交付追溯卡（文档；可先于 D-1，建议与 D-4 口径一致）
+
+- **Files（源码仓）**：`docs/releases/candidates/README.md`；为 `20261113-r1`／`20261117-r1` 等各补一份追溯 JSON／Markdown（字段对齐 Spec §4.6，允许 `imageBuildTag` 仍为历史 `customer-amd64-…`）
+- **Files（交付仓，授权后）**：`DELIVERY_INDEX.json` 初值（可先手工）；README 顶栏「当前推荐／上一回滚」
+- **Step 1**：从 GH Releases 摘录 deliveryId、40-hex、三类 digest（选定一种为 `deployPin` 并注明其余 `alsoKnown`）、包 SHA、Chart、`productionReady=false`、取代关系。
+- **Step 2**：源码卡与交付 index 互指 `sourceLedgerPath`／`customerDeliveryReleaseUrl`。
+- **Step 3**：注明 `docs/releases/v0.30.0.json` 占位≠覆盖这些包。
+- **Expected**：SC-09／SC-10 对历史包可用人工查表满足；不改任何历史 tag／digest。
+- **Commit**（授权后）：`docs(webui): backfill pre-ga delivery traceback cards for 0.30`
+
+### Task 1｜候选版本机制＋自动分配器（需 D-1、D-6＋开发授权）
+
+- **Files**：根 `CANDIDATE_VERSION`；`docs/releases/candidates/`；分配器模块（建议 `scripts/release/candidate-version-allocator.mjs`＋test）；`lucy-version-governance.mjs`（+test）；`release-ledger.mjs`（+test）；`.github/workflows/lucy-release.yml`（concurrency group）；必要时 `lucy-ci.yml` 触发面
+- **Step 1–5**：`CANDIDATE_VERSION`、候选正则、门禁、`candidate-` tag、测试（同前）。
+- **Step 6**：实现 Spec §4.2.1 分配器：`N=max+1`；出包参数**不得**接收 `rc`／`n`；手改 `CANDIDATE_VERSION` 与台账不一致则失败。
+- **Step 7**：同 job 写台账（含 `mergeBaseWithMain`、40-hex）并回写 `CANDIDATE_VERSION`；失败回滚／不推无号镜像（R11）。
+- **Step 8**：候选台账 schema：已发放则必填 `deliveryId`。
+- **Expected**：SC-01–SC-08、SC-12；lint／相关 test 全绿；非 tag 路径不产 `customer-`。
+- **Commit**：`feat(webui): auto-allocate candidate rc and gate image tags`
+
+### Task 1b｜交付仓追溯＋自动 deliveryId（需 D-4、D-6＋开发授权；可与 Task 1 并行）
+
+- **Files（交付仓）**：`DELIVERY_INDEX.json`、`README.md`、`delivery-manifest.json` 模板；发放分配器／校验
+- **Files（源码仓）**：台账字段说明；`docs/releases/README.md`；可选 schema 校验
+- **Step 1**：落地 Spec §4.6；README 顶栏两行。
+- **Step 2**：发放时**自动**分配 `YYYYMMDD-rN`（人不填号）；Release 必须附 manifest。
+- **Step 3**：钉死 `deployPin` 种类。
+- **Step 4**：私有仓短 tag ↔ `deliveryId` 机械推导。
+- **Expected**：SC-09／SC-10／SC-12（delivery 侧）。
+- **Commit**：分仓提交；源码侧例 `docs(webui): require deliveryId linkage in candidate ledgers`
 
 ### Task 2｜文档与手册口径对齐（需 D-1、D-2）
 
 - **Files**：`docs/governance/version-matrix.md`、`docs/SYSTEM_HANDBOOK.md`、`deploy/k8s/K8S_CONTRACT.md`、`docs/releases/README.md`、`docs/governance/release-ci.md`
-- **Step 1**：`version-matrix.md` §1.1 增补「候选版本」一轴与 §7 更新规则；§1.1.1 的序关系补 `X.Y.Z-rc.N < X.Y.Z`。
-- **Step 2**：`SYSTEM_HANDBOOK.md` §版本补候选版本行与新镜像 tag 形态；补丁位行按 D-2 结果改写（未获批则原样保留并注明依赖 OQ-4）。
-- **Step 3**：`K8S_CONTRACT.md` 的镜像 tag 形态行同步；**注意** `lint:version` 会检查该文件的「current baseline」与兼容矩阵的 `**Current**` 行，改动不得破坏这两处断言。
-- **Step 4**：`docs/releases/README.md` 增补候选台账目录说明，并显式声明 `lint:release-ledger` 不扫描子目录。
-- **Expected**：`npm run lint:version` 通过（`K8S_CONTRACT` 两处断言未被破坏）；四份文档对四种编号的表述一致。
-- **Commit**：`docs(webui): align version matrix, handbook and k8s contract with candidate axis`
+- **Step 1–4**：同 v0.1，并增补：交付修订号别名、`deployPin`、受控候选放行、§5.4 过渡口径。
+- **Expected**：`lint:version` 通过；四处文档与 Spec 一致。
+- **Commit**：`docs(webui): align version matrix and delivery traceback contract`
 
-### Task 3｜0.30 定稿（需 D-3）
+### Task 2b｜运行时／镜像内身份（私有化分叉；需 D-5 默认 (a)＋开发授权）
 
-- **Files**：`docs/releases/v0.30.0.json`（新增）、`docs/releases/ux/0.30.0.md`（新增）、`docs/releases/v0.30.0-release-notes.md`（新增）、`CHANGELOG.md`、`docs/releases/v0.30.0-user-facing.md`（转正指针）
-- **Step 1**：功能闭口通过后合并 `lucy-v0.30` → `main`，取 merge commit。
-- **Step 2**：在该 merge commit 上打 annotated tag `v0.30.0`；先写台账（`commit` 暂填 `PENDING`），tag 打好后回填真实 SHA（沿用 `docs/releases/README.md` 维护规则 1）。
-- **Step 3**：走 `docs/releases/ux/README.md` 的 UX 走查记录，结果块为 `passed` 组合。
-- **Step 4**：tag run 产出 `customer-amd64-0.30.0-<YYYYMMDD>-<sha7>`；`npm run lint:release-ledger` 通过。
-- **Step 5**：`CHANGELOG.md` 的 `Unreleased — 0.30.0` 段转正。
-- **Expected**：`git tag` 含 `v0.30.0`；`docs/releases/v0.30.0.json` 的 `commit` 已回填；release run 的 Required 名义检查结论按台账如实记录（红即记 `failed`／`notExecuted`，不得记 `passed`）。
+- **Files**：构建写入 label／`/app` 元数据；`/api/health` 与版本信息 server／client；组件测试；短 runbook（分叉定位命令）
+- **Step 1**：写入 Spec §4.7 字段（`BUILD_REVISION` 已有；补 `deliveryId`／`candidateVersion`／`imageBuildTag`／`productLineRef` 等）；未发放则 `deliveryId=unknown`，不得编造。
+- **Step 2**：health／版本信息**追加**只读字段；既有字段语义不变。
+- **Step 3**：文档化 `merge-base` 分叉定位步骤（供应方侧）；对象不可达时的降级文案。
+- **Step 4**：测试：旧字段锁定；SC-13 用夹具 revision 跑通「可达／不可达」两分支。
+- **Expected**：SC-07、SC-13；现场可读身份或镜像内兜底。
+- **Commit**：`feat(webui): expose delivery identity for private-deploy fork location`
+
+### Task 3｜0.30 定稿（需 D-3＋开发授权）
+
+- **Files**：`docs/releases/v0.30.0.json`（回填）、UX、release notes、`CHANGELOG.md`；交付仓 GA Release＋index
+- **Step 1–5**：同 v0.1 定稿链。
+- **Step 6**：同次回填 `deliveryPackage`（含 `deliveryId`、`deployPin`、包 SHA）并更新交付 index `channel=ga`。
+- **Expected**：tag、台账、UX、`customer-` 镜像、交付回填一致；不得再出现「现场已发、台账 null」。
 - **Commit**：`docs(spec): land v0.30.0 release ledger and tag`
 
 ## 4. 验收
 
 ### 4.1 Final Verification Checklist
 
-- [ ] SC-01 任一镜像仅凭 tag 可判定「候选／定稿」：`candidate-amd64-<product>-rc.N-<date>-<sha7>` vs `customer-amd64-<product>-<date>-<sha7>`
-- [ ] SC-02 同一产品线候选号单调递增、不复用（候选台账目录序号连续）
-- [ ] SC-03 `VERSION` 仍为 `0.30.0`；`npm run lint:version` 通过；11 处投影逐字相等
-- [ ] SC-04 `npm run lint:release-ledger` 通过；`docs/releases/` 顶层无 `*-rc.*.json`
-- [ ] SC-05 `isReleaseTagForVersion("candidate-amd64-0.30.0-rc.1-20261118-abc1234", "0.30.0")` ＝ false
-- [ ] SC-06 候选构建路径不产出 `customer-` 标签（门禁可拦）
-- [ ] SC-07 `/api/health.data.gitSha` 为 40-hex；镜像内 `/app/BUILD_REVISION` 一致
-- [ ] SC-08 `0.30.0-rc.1 < 0.30.0-rc.2 < 0.30.0`；同线无更低号出现在更晚版本之后
-- [ ] 阶段 0：`origin/main` 的 `VERSION` 为 `0.25.0`；本地 `main` 已同步；`docs/releases/README.md` 写明 0.25 尾段归属
-- [ ] 阶段 0：CI push 触发覆盖当前产品线分支；已失效的 `lucy-v0.25` 临时触发已按 `release-ci.md` 要求删除
+- [ ] SC-01 … SC-08（同 Spec §8）
+- [ ] SC-09 已发交付包 1 分钟定位（含历史补卡）
+- [ ] SC-10 双向指针
+- [ ] SC-11 候选进生产须有受控放行记录
+- [ ] SC-12 自动分配；出包不可传号；手改号门禁红
+- [ ] SC-13 私有化分叉定位（可达／不可达两分支）
+- [ ] 阶段 0：main 同步口径；0.25 归属；CI 待批清单已登记
+- [ ] OQ-1／OQ-7 已决；OQ-8／OQ-9 裁决已写入手册
 
-### 4.2 门禁命令
+### 4.2 门禁命令（开发授权后的实现阶段）
 
 ```bash
 npm run lint:version
@@ -125,35 +152,40 @@ npm run lint:spec-docs
 
 ## 浏览器验证
 
-不适用：本 Plan 不改任何页面、组件、交互或文案，只改发版治理面（版本文件、发布脚本、CI 工作流、文档）。
+默认不适用。仅当 Task 2b 开工时，按 DEVELOPMENT 浏览器约束对「版本信息」页做最小只读核对（非移动窄屏）。
 
 ## 6. 完成定义
 
-1. Spec 与本 Plan 经 Codex 交叉审阅并按反馈修订，升 `v0.2-cross-review`。
-2. 委托人批准 D-1／D-2／D-3，并明示开发授权。
-3. Task 0–3 全部完成，§4.1 清单逐项勾上，且五道门禁命令全绿。
-4. 0.30 定稿产物齐备：`v0.30.0` tag、`docs/releases/v0.30.0.json`、`docs/releases/ux/0.30.0.md`、`customer-amd64-0.30.0-...` 镜像。
-5. `docs/governance/version-matrix.md`、`docs/SYSTEM_HANDBOOK.md`、`deploy/k8s/K8S_CONTRACT.md` 与实现一致。
+1. Spec／Plan 经交叉审阅；本 v0.3-draft 已纳入自动分配与私有化分叉诉求。
+2. 委托人终稿确权，并明示开发授权（可分批：D-1／D-4／D-5／D-3）。
+3. 已授权 Task 完成且对应 SC 勾选；五道 lint 命令在实现阶段全绿。
+4. 0.30 定稿产物齐备且交付仓 GA 回填完成（若走到 Task 3）。
+5. `version-matrix`／handbook／K8S_CONTRACT／交付仓 README 与实现一致。
 
 ## 7. 风险
 
 | 风险 | 影响 | 回滚 / 缓解 |
 |---|---|---|
-| 候选号被误当发布号对外传播 | 客户按候选号提工单 | 候选三重禁止（不进 `VERSION`／不占台账／不打 tag）＋门禁；对外材料只引用定稿号 |
-| 已发出的 `customer-amd64-0.30.0-20261117-abb38913` 与定稿撞版本段 | 现场混淆 | Task 0 补候选台账追溯说明；历史标签不重打（tag／digest 是事实） |
-| `CANDIDATE_VERSION` 与 `VERSION` 双 SSOT 漂移 | 候选标签带错版本段 | 候选号主版本段由 `VERSION` 派生并断言一致，漂移即门禁红 |
-| 扩 `lucy-version-governance.mjs` 正则影响既有发布路径 | 定稿 tag 校验被放宽或误伤 | 新增函数与断言，不改 `isReleaseTagForVersion` 对 `vX.Y.Z` 与 `customer-...` 的既有接受集合；用既有测试回归 |
-| CI 触发面改动影响日常跑批 | 跑批堆积或并发组错配 | 只增删分支条目，不改 concurrency 组；改动后看一次 PR 与 push 两类跑批 |
-| 补丁位规则未决时 hotfix 无处安放 | 定稿后修复无处落号 | 未获批前 hotfix 走新 rc 序列并在台账写明偏离；偏离本身须可追溯 |
-| 本地 `main` 不同步复发 | 版本判断反复出错 | 版本判断一律以 `origin/main` 为准 |
+| rc 与 deliveryId 无别名 | 排障乱 | 强制双写；OQ-7 已决 |
+| 人工起号 | 序列漂移 | R10／SC-12；参数禁传号 |
+| 并发抢同一 N | 撞号 | concurrency／锁；分配器单测 |
+| 候选进现网无放行记录 | 重复 11-17 | Spec §4.2＋SC-11 |
+| 定稿后 hotfix 挤占 rc | 语义崩 | §5.4；禁开线 rc 承接 post-GA |
+| digest 多值 | 对拍失败 | `deployPin` |
+| 交付仓只有 Markdown | 难检索 | Task 1b |
+| 无运行时身份 | 私有化分叉难 | Task 2b 默认 |
+| 现场对象不在供应方 git | 无法 merge-base | §4.7 降级文案 |
+| 扩治理正则误伤定稿 | 门禁异常 | 新增函数＋回归 |
+| 本地 main 不同步 | 误判 | 以 `origin/main` 为准 |
 
 ## 8. Reviewer Checklist
 
-- [ ] Spec 与 Plan 的四轴定义、命名形态、序关系三处是否一致（跨文档用词漂移）
-- [ ] 候选版本是否确实**不**进入 `VERSION` 及其 11 处投影（读 `scripts/release/lucy-version-governance.mjs` 核对，不只看 Plan 描述）
-- [ ] 候选 tag 是否会被 `isReleaseTagForVersion` 误接受（读正则核对）
-- [ ] `docs/releases/candidates/` 是否会被 `lint:release-ledger` 扫到（读 `readdirSync` 是否递归核对）
-- [ ] `K8S_CONTRACT.md` 的两处 `lint:version` 断言在文档改动后是否仍成立
-- [ ] Commit message 是否符合仓库规范（`feat(webui):` / `docs(webui):` / `docs(spec):` / `test(webui):`）
-- [ ] 边界第 2／3／4／5 条是否在实现里被守住（候选不进顶层台账、不改历史、不冒充发布、不产 `customer-`）
-- [ ] 本轮是否真的只做方案：是否无运行代码、镜像、CI、`VERSION` 投影的改动
+- [ ] Spec／Plan 四轴、自动分配、deliveryId、分叉定位一致
+- [ ] 候选永不进 `VERSION` 11 处投影
+- [ ] 出包／发放 API **无**人工传号参数
+- [ ] 候选 tag 不被 `isReleaseTagForVersion` 接受
+- [ ] `docs/releases/candidates/` 不被顶层 ledger 误扫
+- [ ] SC-09–SC-13 有对应 Task
+- [ ] 历史包只补卡、不改 tag／digest
+- [ ] OQ-1／OQ-7 已决；OQ-4 过渡不挤占开线 rc
+- [ ] 本轮是否仍无运行代码／CI／镜像改动（v0.3-draft 文档轮次应为是）
