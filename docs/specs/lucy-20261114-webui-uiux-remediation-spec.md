@@ -11,7 +11,7 @@
 | 基于材料 | [`webui/docs/design-system/`](../../webui/docs/design-system/README.md) 全部章节（含 2026-11-14 新增 15、16）、`webui/src/` 静态盘点（`rg` 与 `lint:url-driven-input`／`lint:terminology`）、**2026-11-14 浏览器盘点**（Lucy demo 容器，1920×1080／1440×900／1280×800）、[核对报告](../../inbox/20261114-0130-uiux-standard-audit.md)、[盘点脚本](../../inbox/uiux-browser-audit/audit.js) |
 | 适用范围 | 逐页整改的问题清单、批次、验收口径；后期每页整改均引用本 Spec 的 UXR 编号 |
 | 输出位置 | `docs/specs/lucy-20261114-webui-uiux-remediation-spec.md` |
-| 总账 | [功能清单池](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) P1-24；[需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) REQ-030-045；**不入核心分母** |
+| 总账 | [功能清单池](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md) P1-24；[需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) REQ-030-045；**不入核心分母** |
 | 实施主体 | 本 Spec 本身仅文档。整改实施主体是 `webui/src/`，不改 KTX |
 
 ## 闭口层级

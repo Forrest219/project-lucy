@@ -8,8 +8,8 @@ alwaysApply: true
 在产品线 `0.30.0` / 分支 `lucy-v0.30` / 声称做「0.30」的任务上：
 
 0. **主路径可用性优先（仓库第一性原理）**：新功能／门禁不得把最终用户主路径变成无逃生不可用；验收须同时覆盖「约束生效」与「合法用户仍可用」。正文只在 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md)「第一性原理：主路径可用性优先」，本规则不另写第二套。
-1. **先读执行总账（需求台 SOT）** [`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)（含 §2.2 评审门禁与**终稿确权**口径），再动 Spec、Plan 或代码排期。仓库级规则见 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md)「产品线执行总账（SOT）」与「端到端三台账」。
-2. **方向**见 [`docs/plans/lucy-20261107-lucy-0-30-core-direction.md`](docs/plans/lucy-20261107-lucy-0-30-core-direction.md)；**REQ 正文**见 [`docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)。
+1. **先读执行总账（需求台 SOT）** [`docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)（含 §2.2 评审门禁与**终稿确权**口径），再动 Spec、Plan 或代码排期。仓库级规则见 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md)「产品线执行总账（SOT）」与「端到端三台账」。
+2. **方向**见 [`docs/governance/lucy-20261107-lucy-0-30-core-direction.md`](docs/governance/lucy-20261107-lucy-0-30-core-direction.md)；**REQ 正文**见 [`docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)。
 3. **三台不得混写**：**需求台**＝总账；**开发台**＝Spec 头部状态；**测试台**＝[`docs/qa/uat/INDEX.md`](docs/qa/uat/INDEX.md)。勾连／缺口见 [`docs/governance/e2e-ledger.md`](docs/governance/e2e-ledger.md)。**功能合同收口 ≠ UAT PASS ≠ 可上线**。
 4. **P0 立项已批准**＝可写 Spec／Plan；**≠ 开发授权**。
 5. **三层进度不得混写**：（a）过程评审只记过程；（b）**终稿确权**＝**Codex CLI 终审**，或无 Codex 时 **委托人明示确权**；（c）**开发授权**须委托人另发。

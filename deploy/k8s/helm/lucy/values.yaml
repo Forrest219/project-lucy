@@ -146,6 +146,10 @@ env:
   # Demo / template-only switches. Production must keep these empty / 0.
   LUCY_ALLOW_PLACEHOLDER_KTX: ""
 
+  # Background inferred-turn rebuild. Empty keeps the image default (on).
+  # Set "off" to pause it. Any other value leaves the maintainer running.
+  LUCY_INFERRED_MAINTAINER: ""
+
   # Compose contract — pinned by Dockerfile. Kept here for documentation;
   # the template also pins them as hardcoded env entries.
   KTX_PROJECT_ROOT: /data/lucy

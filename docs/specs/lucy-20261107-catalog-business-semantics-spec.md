@@ -9,7 +9,7 @@
 | 状态 | **v0.6；R2-F＋R3（O1–O3）＋R4 已闭合（2026-11-08）；功能合同已收口（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**（SC-01–SC-17 证据关闭；见 [证据审计](../reviews/2026-11-13-catalog-business-semantics-sc-evidence-audit.md)）。**本条收口不表示可上线** |
 | 授权边界 | R2-F＋R3＋R4 已闭合（R4：2026-11-08）。授权范围＝本 Spec／Plan 实现与测试；**不**表示可上线／发布取证。实现由 Cursor coder；Cursor reviewer 做 code review。 |
 | 决策来源 | 2026-11-06 CFO 误报事故 ＋ 2026-11-07 客户沟通实录（翊总／田总）：「AI 取数取错了表」；第二轮沟通自述「**表一多，AI 自己不知道该选哪张**」 |
-| 需求来源 | [需求池 REQ-030-023](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.1 G1](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-2](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向 §4.1 约束闸](../plans/lucy-20261107-lucy-0-30-core-direction.md) |
+| 需求来源 | [需求池 REQ-030-023](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.1 G1](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-2](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向 §4.1 约束闸](../governance/lucy-20261107-lucy-0-30-core-direction.md) |
 | 实施主体 | Lucy：MCP Proxy 目录装配层。**不改 KTX 源码**；不改 ACL 裁决口径；不把语义裁判塞进 ACL |
 | 配套 Plan | [lucy-20261107-catalog-business-semantics-plan.md](../plans/lucy-20261107-catalog-business-semantics-plan.md)（**v0.6-draft**） |
 | 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)（形式合规 ＋ 事实性）；[Codex 对抗评审记录](../reviews/2026-11-08-catalog-business-semantics-codex-review.md)（过程对抗；**不构成终稿确权**）；[实现 CR](../reviews/2026-11-13-p0-2-catalog-business-semantics-code-review.md)（Wave A；**不表示可上线**） |
@@ -491,7 +491,7 @@ on lucy_catalog(args, identity):
 - 清单：P0-2；上一批 P0-1（027，口径绑定）；下一批 P0-3（024，表级门闩）；串联 P0-1／P0-3
 - 需求池：[`lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) REQ-030-023
 - 误报防线：[`lucy-20261107-misreport-defense-and-stored-user-experience-plan.md`](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md) §4.1（G1）、§4.3（G3 互补）
-- 核心方向：[`lucy-20261107-lucy-0-30-core-direction.md`](../plans/lucy-20261107-lucy-0-30-core-direction.md) §4.1 约束闸
+- 核心方向：[`lucy-20261107-lucy-0-30-core-direction.md`](../governance/lucy-20261107-lucy-0-30-core-direction.md) §4.1 约束闸
 - 方向参考（未实现）：[`docs/specs/lucy-20261014-concept-dictionary-spec.md`](lucy-20261014-concept-dictionary-spec.md)；[`docs/plans/wo-20261014-concept-dictionary.md`](wo-20261014-concept-dictionary.md)
 - Plan：[`lucy-20261107-catalog-business-semantics-plan.md`](../plans/lucy-20261107-catalog-business-semantics-plan.md)
 - Codex 对抗评审（过程，含 R1／R2／R3；**非终稿确权**）：[`docs/reviews/2026-11-08-catalog-business-semantics-codex-review.md`](../reviews/2026-11-08-catalog-business-semantics-codex-review.md)

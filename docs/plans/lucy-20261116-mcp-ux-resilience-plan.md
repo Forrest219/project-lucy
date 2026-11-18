@@ -15,7 +15,7 @@
 | 验收 | 见 §3 |
 | 输出位置 | `docs/plans/lucy-20261116-mcp-ux-resilience-plan.md` |
 
-**清单**：P1-37（**不入核心分母**）｜**REQ**：REQ-030-058｜**总账**：[功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md)｜**Spec**：[mcp-ux-resilience-spec](../specs/lucy-20261116-mcp-ux-resilience-spec.md)
+**清单**：P1-37（**不入核心分母**）｜**REQ**：REQ-030-058｜**总账**：[功能清单池](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)｜**Spec**：[mcp-ux-resilience-spec](../specs/lucy-20261116-mcp-ux-resilience-spec.md)
 
 ## 1. 目标
 

@@ -7,7 +7,7 @@
 | 状态 | **方向已锁定；P0 立项已批准（2026-11-07）**。**2026-11-15：行级隔离场景升入主线**（十几人 × 一批表 × 不同行范围；财务／业务分析）。完整跟进以 [功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md) 为准。**现行阶段：严格评审 Spec／Plan；暂时都不开工落地**。过程对抗可记；**终稿确权**＝Codex CLI 终审或委托人明示确权（清单池 §2.2）；确权后仍须 **开发授权** 才改代码 |
 | 授权边界 | 只定方向与优先级原则；本文件不构成任何功能验收，也不表示可上线。**P0 立项 ≠ 开发授权**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**。v0.5 **不授权**改运行代码，**不改**既有行权限 Spec 状态 |
 | 目标产品线 | `lucy-v0.30` / `0.30.0` |
-| 关联 | [功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md)（跟进主表） · [0.30 需求池](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [误报防线分支计划](lucy-20261107-misreport-defense-and-stored-user-experience-plan.md) · [MCP next-step 分支计划](lucy-20261107-mcp-next-step-guidance-and-journey-eval-plan.md) · 行级场景测试台 [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md) |
+| 关联 | [功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md)（跟进主表） · [0.30 需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [误报防线分支计划](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md) · [MCP next-step 分支计划](../plans/lucy-20261107-mcp-next-step-guidance-and-journey-eval-plan.md) · 行级场景测试台 [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md) |
 | 变更 | v0.5（2026-11-15）：委托人裁定行级权限是 0.30 核心能力。场景＝十几个人对一批表按不同行范围控制，典型财务分析与业务分析。主线增加第 5 闸；编译门禁／拒绝码统一仍不单独定义该场景。**不授权实现**。v0.4（2026-11-07）：对齐清单池 v0.5 终稿确权口径。v0.3（2026-11-07）：对齐清单池——现行阶段冻结落地，只评审 Spec／Plan。v0.2（2026-11-07）：方向锁定确认；P0 立项批准；跟进指针改挂功能清单池 |
 
 ## 1. 一句话
@@ -170,7 +170,7 @@ Eval 是**检出器**，不是修复器：它证明缺陷存在并阻止静默�
 
 - 本文件是 `0.30` **投入标准与主线／辅线叙述**。
 - **跟进主表**以 [功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md) 为准（含 P0 立项、P0–P2 全表、agent 遵从规则）。
-- 缺口正文与来源以 [需求池](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) 为准。
-- 事故级因果与取证以 [误报防线分支计划](lucy-20261107-misreport-defense-and-stored-user-experience-plan.md) 为准。
+- 缺口正文与来源以 [需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) 为准。
+- 事故级因果与取证以 [误报防线分支计划](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md) 为准。
 - 变更本方向时：改本文件版本号与「变更」行；若翻转主线定义，须同步回写功能清单池与需求池头部。
 - **不授权实现**；P0 已立项条目可开 Spec／Plan，改代码仍须开发授权。

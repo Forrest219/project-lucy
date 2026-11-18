@@ -29,7 +29,7 @@
 
 2026-11-01 起产品版本曾对齐为 `0.25.0`（分支 `lucy-v0.25`）。annotated tag `v0.25.0` 已落地；证据与交付边界见 `docs/releases/v0.25.0.json`（该版无客户交付包／`productionReady`）。`lucy-v0.25` / `v0.25.0` 现在只接 hotfix。
 
-2026-11-07 起，本开发线产品版本为 **`0.30.0`**（分支 `lucy-v0.30`）。界面标签为 `0.30.0`（不带 `v` 前缀）。捆绑 KTX 仍为 `0.16.0`。Helm Chart 包版本为 `0.2.9`（`appVersion` 为 `0.30.0`；存活探针 `/api/livez`，启动与就绪探针 `/api/readyz`）。`v0.30.0` 尚未打 tag；上一已 tag 产品版本为 `v0.25.0`。
+2026-11-07 起，本开发线产品版本为 **`0.30.0`**（分支 `lucy-v0.30`）。界面标签为 `0.30.0`（不带 `v` 前缀）。捆绑 KTX 仍为 `0.16.0`。Helm Chart 包版本为 `0.2.10`（`appVersion` 为 `0.30.0`；存活探针 `/api/livez`，启动与就绪探针 `/api/readyz`；`env.LUCY_INFERRED_MAINTAINER=off` 可暂停后台推断重建）。`v0.30.0` 尚未打 tag；上一已 tag 产品版本为 `v0.25.0`。
 
 **更正原因**：`2.0.0` 是与 Helm Chart 版本线容易混淆的错误切线；`0.2.0` 又错误地低于历史 `0.17.0`。`0.20.0` 恢复当时 `0.x` 版本线的数值顺序：`0.20.0 > 0.17.0 > 0.2.0`。`v2.0.0` 是已废止的历史切线，不作为当前版本线的承接基准。现行顺序是 `0.30.0 > 0.25.0 > 0.20.0 > 0.17.0 > 0.2.0`。
 
@@ -38,7 +38,7 @@
 | 身份 | 何时改变 | 当前 |
 | --- | --- | --- |
 | 产品版本（`VERSION`） | 产品线换代 | `0.30.0`（分支 `lucy-v0.30`） |
-| Helm Chart 包版本 | 安装行为变化 | `0.2.9`。探针改挂 `/api/livez` 与 `/api/readyz`；产品版本仍是 `0.30.0` |
+| Helm Chart 包版本 | 安装行为变化 | `0.2.10`。透传 `env.LUCY_INFERRED_MAINTAINER`；探针仍是 0.2.9 的 `/api/livez` 与 `/api/readyz`；产品版本仍是 `0.30.0` |
 | 捆绑 KTX | 运行时升级 | `0.16.0` |
 | 客户镜像 tag / 交付包修订号 | 真正构建或交付时才有 | `0.30.0` 还没有。形式是 `customer-amd64-<产品版本>-<日期>-<提交>` |
 | 补丁段 | 矩阵另定 hotfix 规则之前保持 `0` | `0.30.1` 暂不启用 |
@@ -52,7 +52,7 @@
 本次版本更正**不**涉及的事项：
 
 - `webui/package.json` 的 `version`（npm 包版本）保持 `1.0.0`，与包无关。
-- Helm Chart `version` 在那次更正时是 `0.2.7`；图表包版本与 `appVersion` 分开。当前 Chart 包版本是 `0.2.9`。
+- Helm Chart `version` 在那次更正时是 `0.2.7`；图表包版本与 `appVersion` 分开。当前 Chart 包版本是 `0.2.10`。
 - `@kaelio/ktx` 仍为 `0.16.0`；本次未升级运行时。
 - 已发布的 `v2.0.0`、`v0.2.0` 标签与 GitHub Release 均作为历史事实保留，不删除、不移动。
 
@@ -1313,6 +1313,12 @@ PUT /api/wiki/:key
 | `sl_validate` | — | — | ● | — |
 | `lucy_ops_connection_tables` | — | — | — | ● |
 | `lucy_ops_source_import` | — | — | — | ● |
+| `lucy_ops_concept_list` | — | — | — | ● |
+| `lucy_ops_concept_show` | — | — | — | ● |
+| `lucy_ops_concept_summary` | — | — | — | ● |
+| `lucy_ops_concept_scan` | — | — | — | ● |
+| `lucy_ops_concept_set_canonical` | — | — | — | ● |
+| `lucy_ops_concept_reject` | — | — | — | ● |
 
 ¹ 环境里已有已发布业务 Skill 时再开；没有就保持 `—`。
 
@@ -3327,7 +3333,7 @@ export LUCY_AGENT_TOKEN="$(cat <PROJECT_ROOT>/.ktx/secrets/lucy-agent-token)"
 
 #### 工具全集
 
-下表是运行时**可授予**的全部工具（21 个），按类别分组。工具是否对某个 `Agent` 可见，取决于角色的 `allow.tools` 与全局 `defaults.deny_tools`；不在角色里显式列出的工具不会隐式授予。
+下表是运行时**可授予**的全部工具（27 个），按类别分组。工具是否对某个 `Agent` 可见，取决于角色的 `allow.tools` 与全局 `defaults.deny_tools`；不在角色里显式列出的工具不会隐式授予。
 
 | 工具 | 类别 | 用途 |
 | --- | --- | --- |
@@ -3352,12 +3358,18 @@ export LUCY_AGENT_TOKEN="$(cat <PROJECT_ROOT>/.ktx/secrets/lucy-agent-token)"
 | `lucy_report_template` | 认证路线 | 按已发布的报告模板产出报告；其取数仍走 `lucy_query` 的授权 |
 | `lucy_ops_connection_tables` | 控制面 | 批量维护连接的启用表范围 / 移除 Schema；整批全成或全拒 |
 | `lucy_ops_source_import` | 控制面 | 批量导入源表语义、校验与版本回滚 |
+| `lucy_ops_concept_list` | 控制面 | 只读列出概念摘要；不创建目录 |
+| `lucy_ops_concept_show` | 控制面 | 只读查看单个概念及冲突状态 |
+| `lucy_ops_concept_summary` | 控制面 | 只读汇总全部概念或单个概念的统计 |
+| `lucy_ops_concept_scan` | 控制面 | 预览后提交，扫描 semantic / wiki 并写入概念绑定 |
+| `lucy_ops_concept_set_canonical` | 控制面 | 预览后提交，把绑定升为权威绑定 |
+| `lucy_ops_concept_reject` | 控制面 | 预览后提交，把绑定标为拒绝 |
 
 > **这张表是机器校验的。** 运行时新增或下线工具而本表未同步，`npm run lint:handbook-tool-surface` 会失败。事实源是 `webui/server/proxy/acl.ts` 的 `DATA_PLANE_TOOLS` / `META_TOOLS` / `CONTEXT_TOOLS` 与 `webui/server/ops/control-plane.ts` 的 `CONTROL_PLANE_TOOLS`。
 
 #### 选工具时最容易踩的三条
 
-不要一上来就把 21 个全开。三个最容易踩的点：
+不要一上来就把 27 个全开。三个最容易踩的点：
 
 1. **上下文面必须显式授予。** `wiki_search` / `wiki_read` / `lucy_skill_search` / `lucy_skill_read` 不在角色里显式列出就没有——业务 `Skill` 明明已发布，`Agent` 却查不到。这是「配置了也不生效」的头号原因。
 2. **只读与业务问答的差别就在上下文面和问询协议。** 只回答「这张表怎么定义的」，最小只读集就够（`lucy_catalog`、`lucy_read_source`、`lucy_query`、`lucy_explain_query`、`lucy_freshness`）；一旦回答里要引用业务口径或 `Skill` 规程，就得把上下文面连同 `lucy_begin_question` / `lucy_continue_question` 一起勾上——否则审计里看不到这次问询，问询预算也接不上。

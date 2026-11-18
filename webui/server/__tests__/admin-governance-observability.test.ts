@@ -256,13 +256,14 @@ describe("admin governance observability", () => {
   });
 
   it("reports every window metric as null — never 0 — when the audit store is unavailable (SC-14)", async () => {
+    const app = buildServer();
+    await app.ready();
     const db = await getAuditDb();
+    // Inject the outage after startup: this case exercises the overview's
+    // degraded response, rather than the inferred-turn maintainer's startup.
     // access_log_sources has an FK to access_log — drop the child first.
     db.exec("DROP TABLE access_log_sources");
     db.exec("DROP TABLE access_log");
-
-    const app = buildServer();
-    await app.ready();
     const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
     expect(res.statusCode).toBe(200);
     const payload = JSON.parse(res.payload).data;

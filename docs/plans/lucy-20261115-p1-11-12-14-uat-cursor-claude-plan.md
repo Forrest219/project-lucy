@@ -1,5 +1,10 @@
 # P1-11／12／14 差集 UAT 收口（Cursor 用例＋验收／Claude 全真执行）Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 状态 | 执行进度以本文件原Task勾选和已有跑次为准；本次仅补齐文档形态，未复跑本计划业务验收，当前候选结果待验。 |
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+
 > **For agentic workers:** 委托人已选定范围 **A**＋协作 **预写齐 + 分条执行**。按 Task 勾选推进；全真优先；禁止 vitest／CR 冒充 INDEX PASS。
 
 **Goal:** 在本机 Mac mini demo 上，为已落地且测试台仍为 `not_registered` 的 **P1-11／P1-12／P1-14** 建立 UAT 套件、完成可复查跑次，并回链 INDEX／e2e-ledger／总账；关闭这三条的测试台差集。
@@ -171,7 +176,7 @@ T0 Plan（本文件）──► T1 Cursor 预写三套件＋三 brief
 **Files:**
 - Modify: `docs/qa/uat/INDEX.md`（增 `UAT-SUITE-OPS-CONCEPTS` 行）
 - Modify: `docs/governance/e2e-ledger.md`（P1-11：`not_registered` → Suite＋跑次）
-- Modify: `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`（P1-11 Spec 列回链测试台；变更行；**不**改合同收口为可上线）
+- Modify: `docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md`（P1-11 Spec 列回链测试台；变更行；**不**改合同收口为可上线）
 - Modify: `docs/specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md`（状态行可加 UAT 指针；不改收口语义）
 - Modify: `scripts/uat/check-e2e-ledger.mjs`（追加 P1-11 REQUIRED）
 
@@ -274,3 +279,19 @@ T0 Plan（本文件）──► T1 Cursor 预写三套件＋三 brief
 - Cursor＝用例编写与结果确认；Claude＝执行测试  
 
 （Task 0 其余勾选：耗尽允许真实 61 次、demo 是否 upgrade — 执行前再口头钉死即可。）
+
+## 目标（治理补齐）
+
+完成Ops概念、问询预算和预算审计三套差集UAT并分别登记。
+
+## 开工前置（治理补齐）
+
+先按本机可跑矩阵锁定容器、凭据和预算真实阈值60/300000；不为提速修改常量。
+
+## 完成定义（治理补齐）
+
+按§4成功标准核对三套runs及INDEX/e2e；耗尽类未跑到阈值须诚实BLOCKED，不能以单测替代。
+
+## 风险（治理补齐）
+
+预算耗尽成本高且复用有先后依赖；无budget_stop不得宣称审计出口已实测。

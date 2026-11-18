@@ -107,7 +107,7 @@
 - …
 ```
 
-主题名跟 [0.30 核心方向](lucy-20261107-lucy-0-30-core-direction.md)／P0 产品面走，不跟内部 WO 号走。首版骨架建立时可按当时 P0 面调整节名。
+主题名跟 [0.30 核心方向](../governance/lucy-20261107-lucy-0-30-core-direction.md)／P0 产品面走，不跟内部 WO 号走。首版骨架建立时可按当时 P0 面调整节名。
 
 ---
 
@@ -150,7 +150,7 @@
 | `docs/releases/v0.25.0-release-notes.md` | 对内台账模板；0.30 台账继续此结构，增益叙述改为链到 user-facing |
 | `docs/governance/release-ci.md` §4 `lucy-release-notes.md` | 语义上应改为打包 user-facing；**改脚本属落地工作，本设计不自动执行** |
 | `docs/runbooks/lucy-release-train-workflow.md` | 收口 checklist 可增加「三点同步／双出口交叉检查」项（落地时改） |
-| `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md` | 主张范围与暂缓的权威跟进源之一；RN 不另立优先级 |
+| `docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md` | 主张范围与暂缓的权威跟进源之一；RN 不另立优先级 |
 | `docs/user-guide/release-notes.html` | 若继续给用户看，应与 user-facing 同源或由其生成；避免第三套正文 |
 
 ---

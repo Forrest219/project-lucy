@@ -46,7 +46,7 @@ P0-6／7／B（待 R2-F）；冻结 P1／P2；治理 Wave B Task 9；已收口 n
 
 ## 4. 回链
 
-[执行 Plan](../plans/lucy-20261113-midstate-exit-closure-plan.md) · [执行总账 SOT／清单池](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [桑基 closure](2026-11-13-access-map-sankey-empty-fix-closure.md) · [Skill closure](2026-11-11-mcp-client-skill-endpoint-fix-closure.md)
+[执行 Plan](../plans/lucy-20261113-midstate-exit-closure-plan.md) · [执行总账 SOT／清单池](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [桑基 closure](2026-11-13-access-map-sankey-empty-fix-closure.md) · [Skill closure](2026-11-11-mcp-client-skill-endpoint-fix-closure.md)
 
 ## 5. SOT 差集补录（2026-11-13）
 

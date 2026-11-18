@@ -6,7 +6,7 @@
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0` |
 | 功能编号 / 优先级 | **P1-47**／REQ-030-068／**P1**（事故修复；前方报告分级为 **P0-01**）。**不入 0.30 核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账，不占用 v0.25 登记册 |
-| 状态 | **v0.2。终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」；含前置删除／编号分配分块让出）。代码已实现（allocate＋整窗 DELETE 分块）。测试台 UAT-SUITE-REBUILD-PROBE-BUDGET＝**FAIL**：RPB-02／03 PASS（客户 3s streak=0）；RPB-01 livez max／p99 2968ms 未达 ≤1000／≤400（[r2](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-p145-p147-r2.md)；相对仅 allocate 分块的 8003ms 已改善）。2026-11-18 追加：运维暂停开关 `LUCY_INFERRED_MAINTAINER=off`（默认开，行为不变）已实现；对照实验（镜像 `p147-pause`，同夹具）暂停时 RPB-01／02／03 全 PASS（livez max 11ms，119 个样本 0 个 ≥1.5 秒），不暂停时仍 FAIL（max 2662ms，42 个样本 37 个 ≥1.5 秒），证实持续停顿来自后台补算维护器。默认配置（开）下 P1-47 仍 FAIL，根治待 OQ-2（`wal_autocheckpoint`／worker）。[对照跑次](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-p147-pause-control.md)。不入核心分母。≠ 可上线** |
+| 状态 | **v0.2。终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」；含前置删除／编号分配分块让出）。代码已实现（allocate＋整窗 DELETE 分块）。测试台 UAT-SUITE-REBUILD-PROBE-BUDGET＝**FAIL**：RPB-02／03 PASS（客户 3s streak=0）；RPB-01 livez max／p99 2968ms 未达 ≤1000／≤400（[r2](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-p145-p147-r2.md)；相对仅 allocate 分块的 8003ms 已改善）。2026-11-18 追加：运维暂停开关 `LUCY_INFERRED_MAINTAINER=off`（默认开，行为不变）已实现；对照实验（镜像 `p147-pause`，同夹具）暂停时 RPB-01／02／03 全 PASS（livez max 11ms，119 个样本 0 个 ≥1.5 秒），不暂停时仍 FAIL（max 2662ms，42 个样本 37 个 ≥1.5 秒），证实持续停顿来自后台补算维护器。默认配置（开）下 P1-47 仍 FAIL，审计库 `wal_autocheckpoint` 已改为 32 页；限速盘 UAT 未复跑，不得写成 PASS。worker 仍未做。[对照跑次](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-p147-pause-control.md)。不入核心分母。≠ 可上线** |
 | 决策来源 | 委托人 2026-11-18 要求按仓库规范为前方升级测试报告三则 P0 分别制定 Spec 与 UAT |
 | 需求来源 | 前方报告 LUCY-TR-20261118-01 v1.2 §4.1 P0-01；证据 E07／E15–E18；客户事故错题 [`2026-11-17-k8s-upgrade-event-loop-readiness-timeout`](../lessons/2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md) |
 | 实施主体 | WebUI 服务端：`webui/server/proxy/audit.ts`（重建前置事务）、`page-budget`／`yield-slices`、必要时 `inferred-turn-maintainer`。不改 Helm timeout 关单 |
@@ -103,10 +103,14 @@ probe_window_after_ready(120s):
 | ID | 问题 | 裁定 |
 |---|---|---|
 | OQ-1 | 编号分配分块时如何保持与并发 allocator 不抢号 | **已决**：每块短事务内仍按簇顺序 allocate；块间让出；已有 correlation_key 沿用 |
-| OQ-2 | 是否引入只读 worker／`wal_autocheckpoint` | **本次不做**；若分块后仍不达标再另立授权 |
+| OQ-2 | 是否引入只读 worker／`wal_autocheckpoint` | 审计库 `wal_autocheckpoint` 已改为 32 页。只读 worker 仍未做。限速盘 UAT 尚未按同等夹具复跑，不得写成 PASS |
 | OQ-3 | 关单是否必须含真实 K8s 摘端点 | **否**；归发布取证（UAT-RPB-04） |
 
 ## 6. 授权边界
 
 - **终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」）。**
 - 实现范围见配对 Plan；不得靠放宽 Helm timeout 或缩小数据关单；不得并入「顺手扩 P1-39」叙事。
+
+## 2026-11-18 接管补充验证
+
+已补全 ID 水位旧状态恢复、窗口分页、大簇关联分片、61秒就绪旁路及字段续查边界。授权慢盘容器补充验证：首次补算 livez max/p99=304/298ms，重启前120秒=265/239ms、readyz p99=395ms；中断用户2988/2988；另6000调用SIGKILL由25恢复至6000。113定向、65根合同通过；全量仍50基线失败、类型33基线错误。仅补充跑次通过，不替代原正式套件全部逐例运行或客户生产放行；K8s与真实Hive/Agent未验。运行记录：[Codex 接管跑次](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-codex-takeover.md)。

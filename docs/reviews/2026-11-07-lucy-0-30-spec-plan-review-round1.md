@@ -8,7 +8,7 @@
 | 状态 | 第 1 轮（形式合规 ＋ 事实性）**已完成 12／13 块**，已完成的分块全部逐条 triage 并回写；**c13 因 MiniMax Token Plan 账号级上限（HTTP 429）未能完成**，待配额恢复后补跑。**代码改动未授权**；第 2 轮对抗式评审待做 |
 | 授权边界 | **只记录、不实现**。本文件不改动任何运行代码，不构成开工授权 |
 | 评审范围 | `docs/specs/lucy-20261107-*.md` ＋ `docs/plans/lucy-20261107-*.md` 的**动态枚举**全部文档（评审时点共 35 份，含其他会话并发落盘者） |
-| 评审门禁依据 | [`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) §2.2 的 R1–R4；本文件是 **R1（形态验收）** ＋ R2 第 1 段（事实性核验）的记录 |
+| 评审门禁依据 | [`docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md) §2.2 的 R1–R4；本文件是 **R1（形态验收）** ＋ R2 第 1 段（事实性核验）的记录 |
 | 评审规模 | 13 块；主块 9 ＋ 补块 4；**评审标的 35 份 `0.30` 文档**（评审时点动态枚举，含其他会话并发落盘者）。累计 findings **115 条**，其中 **已修 110 条**、**5 条归他人未跟踪文件不代改**、**c13 未完成**——该块首跑与两次重跑均撞 **MiniMax Token Plan 账号级用量上限（HTTP 429）**；直连端点复核确认 **MiniMax-M3 与 MiniMax-M3.1-Flash 同账号同限**（均在 0.3s 内直接 429），本机 `minimax-claude-gateway.cjs` 只是改名透传、无备用后端。R2 第 1 段（事实性核验）因此**未覆盖 c13 的 4 份文档** |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」 |
 
@@ -187,7 +187,7 @@
 
 | ID | 问题 | 处置 |
 |---|---|---|
-| F1 | **阻塞**：`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md` 文件名违反落盘清单第 1 条（Plan 必须 `lucy-YYYYMMDD-<slug>-plan.md`） | 未跟踪时仅 WARN，**`git add` 即转阻塞**。须该文件主人改名（`…-feature-inventory-pool-plan.md`）并同步 `docs/plans/README.md:7`、`project-overview.md:251`、pool 内部自引与需求池链接 |
+| F1 | **阻塞**：`docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md` 文件名违反落盘清单第 1 条（Plan 必须 `lucy-YYYYMMDD-<slug>-plan.md`） | 未跟踪时仅 WARN，**`git add` 即转阻塞**。须该文件主人改名（`…-feature-inventory-pool-plan.md`）并同步 `docs/plans/README.md:7`、`project-overview.md:251`、pool 内部自引与需求池链接 |
 | F2 | **阻塞**：缺 4 类 Plan 小节（目标／开工前置／完成定义／风险） | 补四节，或移出 `docs/plans/` 并改索引与互链 |
 | F11 | 头部缺「验收」元数据行（清单第 3 条） | 补行；`lint-spec-docs.mjs:318-321` 因正则误命中变更表第 18 行而假阴性 |
 | F9 | §2.2 仍标「现行裁定…对抗式评审」，已被同日 v0.4 §2.3「暂缓对抗式评审」取代，两处并存易被读成现行路径 | §2.2 加「（已由 §2.3 取代，v0.4）」标记 |
@@ -252,8 +252,8 @@
 | `npm run lint:terminology` | **exit 0**（passed，1122 files scanned） |
 | `npm run lint:ia-boundary` | **exit 0**（passed） |
 
-`lint:spec-docs` 剩余 **16 条 WARN 全部属他人未跟踪的 3 份文档**（`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md` 5 条、'
-'`docs/plans/lucy-20261107-lucy-0-30-core-direction.md` 4 条、`docs/plans/2026-11-06-lucy-v0.25.0-formal-release-plan.md` 7 条），'
+`lint:spec-docs` 剩余 **16 条 WARN 全部属他人未跟踪的 3 份文档**（`docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md` 5 条、'
+'`docs/governance/lucy-20261107-lucy-0-30-core-direction.md` 4 条、`docs/plans/lucy-20261106-formal-release-plan.md` 7 条），'
 '**本轮产出的 35 份文档零 WARN**。WARN 在文件未被 `git add` 时不阻塞；**一旦 `git add` 即转阻塞项**——按共享工作区纪律**不代改**，
 须由各自主人处理（见 §5 P5）。
 

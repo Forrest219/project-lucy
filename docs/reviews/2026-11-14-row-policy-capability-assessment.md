@@ -12,7 +12,7 @@
 | 适用范围 | 委托人决定「行权限是否作为下阶段核心能力立项、先补什么」的输入；**仅评审，不含开发授权，不改任何 Spec 状态** |
 | 输出位置 | `docs/reviews/2026-11-14-row-policy-capability-assessment.md` |
 
-台账：总账 [P1-25](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)／REQ-030-046。本文不是 UAT 跑次，测试台 `not_registered`。**评审结论 ≠ UAT PASS ≠ 可上线。**
+台账：总账 [P1-25](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)／REQ-030-046。本文不是 UAT 跑次，测试台 `not_registered`。**评审结论 ≠ UAT PASS ≠ 可上线。**
 
 ---
 

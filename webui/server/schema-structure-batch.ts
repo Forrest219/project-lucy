@@ -99,39 +99,46 @@ export async function readMysqlTablesBatch(
   }
 
   const resolved = await resolvePhysicalNames(run, schema, valid, options, outcomes);
-  let chunksFinished = 0;
+  // Name resolution is the first query of this call and shares the same budget.
+  let queriesStarted = valid.length > 0 ? 1 : 0;
   const overBudget = () => options.budgetMs !== undefined && options.now() - start >= options.budgetMs;
+  const deferChunk = (chunk: Resolved[]) => {
+    for (const item of chunk) outcomes.set(item.requested, "deferred");
+  };
 
   const readChunk = async (chunk: Resolved[]): Promise<void> => {
-    if (chunksFinished > 0 && overBudget()) {
-      for (const item of chunk) outcomes.set(item.requested, "deferred");
+    if (queriesStarted > 0 && overBudget()) {
+      deferChunk(chunk);
       return;
     }
     const split = async () => {
+      if (overBudget()) {
+        deferChunk(chunk);
+        return;
+      }
       const middle = Math.ceil(chunk.length / 2);
       await readChunk(chunk.slice(0, middle));
       await readChunk(chunk.slice(middle));
     };
     let answer;
     try {
+      queriesStarted += 1;
       answer = await run(columnsSql(schema, chunk.map((item) => item.physical)), {
         maxRows: options.rowLimit,
         timeoutMs: options.timeoutMs
       });
     } catch (error) {
-      if (chunk.length > 1 && !isBrokenChannelError(error)) return split();
-      chunksFinished += 1;
       const reason = failureReason(error instanceof Error ? error.message : String(error));
+      // A timeout has already spent the statement. Splitting it only repeats the wait.
+      if (chunk.length > 1 && reason !== "timeout" && !isBrokenChannelError(error)) return split();
       for (const item of chunk) outcomes.set(item.requested, { reason });
       return;
     }
     if (answer.truncated) {
       if (chunk.length > 1) return split();
-      chunksFinished += 1;
       outcomes.set(chunk[0].requested, { reason: "too_wide" });
       return;
     }
-    chunksFinished += 1;
     const byTable = new Map<string, SchemaColumnRow[]>();
     for (const row of answer.rows) {
       if (!Array.isArray(row) || row.length < 6) continue;

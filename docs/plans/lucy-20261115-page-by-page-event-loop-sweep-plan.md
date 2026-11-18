@@ -15,7 +15,7 @@
 | 验收 | §5 出口：全部页面与全部 GET 路由都有判定；报告与总账镜像已落盘 |
 | 输出位置 | `docs/plans/lucy-20261115-page-by-page-event-loop-sweep-plan.md` |
 
-**清单**：P1-31（**不入核心分母**）｜**REQ**：REQ-030-052｜**总账**：[功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md)
+**清单**：P1-31（**不入核心分母**）｜**REQ**：REQ-030-052｜**总账**：[功能清单池](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)
 
 ## 开工前置
 

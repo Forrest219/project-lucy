@@ -1,0 +1,77 @@
+{
+  "full": {
+    "numTotalTests": 6528,
+    "numPassedTests": 6478,
+    "numFailedTests": 50,
+    "numTotalTestSuites": 1823,
+    "numPassedTestSuites": 1795,
+    "numFailedTestSuites": 28
+  },
+  "focused": {
+    "files": 10,
+    "tests": 113,
+    "failed": 0
+  },
+  "rootContracts": {
+    "tests": 65,
+    "failed": 0
+  },
+  "failureFiles": [
+    {
+      "file": "server/__tests__/admin-governance-observability.test.ts",
+      "failed": 1
+    },
+    {
+      "file": "server/__tests__/api.add-schema.test.ts",
+      "failed": 3
+    },
+    {
+      "file": "server/__tests__/api.remove-connection.test.ts",
+      "failed": 3
+    },
+    {
+      "file": "server/__tests__/api.remove-schema.test.ts",
+      "failed": 4
+    },
+    {
+      "file": "server/__tests__/api.save.test.ts",
+      "failed": 4
+    },
+    {
+      "file": "server/__tests__/api.semantic-assets.reindex.test.ts",
+      "failed": 1
+    },
+    {
+      "file": "server/__tests__/caliber-binding-proxy.test.ts",
+      "failed": 2
+    },
+    {
+      "file": "server/__tests__/display-invalidation.test.ts",
+      "failed": 2
+    },
+    {
+      "file": "server/__tests__/display-rollback-races.test.ts",
+      "failed": 1
+    },
+    {
+      "file": "server/__tests__/mcp-proxy-instructions.test.ts",
+      "failed": 1
+    },
+    {
+      "file": "server/__tests__/mcp-proxy-smoke.test.ts",
+      "failed": 4
+    },
+    {
+      "file": "server/__tests__/p1-access-map-confirmed-only.test.ts",
+      "failed": 1
+    },
+    {
+      "file": "server/__tests__/p1-access-map-unconfirmed-calls.test.ts",
+      "failed": 3
+    },
+    {
+      "file": "server/__tests__/token-renewal-closure.test.ts",
+      "failed": 20
+    }
+  ]
+}

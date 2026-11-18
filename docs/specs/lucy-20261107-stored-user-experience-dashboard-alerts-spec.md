@@ -9,7 +9,7 @@
 | 状态 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O6 已闭合（2026-11-13）＝建议包 E；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口**。须 Codex CLI 终审或委托人明示确权（R2-F）→ 另授开发授权后才可改代码。本条不表示可上线 |
 | 授权边界 | 本文件**不授权改代码**。现行阶段只接受评审与修订。实施须：§评审门禁 R1–R4（见功能清单池 §2.2）全部通过 |
 | 决策来源 | 2026-11-07 产品对话（100 用户 / C-level 体感）；客户沟通实录两项持续承诺：「每天跑测评、每天迭代」「同步盯后台回复，发现问题当天修正」——目前靠人力；本条是把「发现问题当天修正」变成系统可观测＋可告警的载体 |
-| 需求来源 | [需求池 REQ-030-026](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.7 G7](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-7](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../plans/lucy-20261107-lucy-0-30-core-direction.md) |
+| 需求来源 | [需求池 REQ-030-026](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.7 G7](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-7](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../governance/lucy-20261107-lucy-0-30-core-direction.md) |
 | 实施主体 | Lucy：Admin 读取聚合（`daily-question-kpi` 范式）＋ SMTP outbox 事件类扩展。不改 KTX 源码；不新造体感统计表 |
 | 配套 Plan | [lucy-20261107-stored-user-experience-dashboard-alerts-plan.md](../plans/lucy-20261107-stored-user-experience-dashboard-alerts-plan.md) |
 | 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[2026-11-09 过程推进](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md)（过程修订，**不是** R2-F）；[2026-11-13 O1–O6 决策纸](../reviews/2026-11-13-p0-7-o1-o6-decision-package.md)（**R3：O1–O6 已闭合 2026-11-13＝建议包 E**；**不是** R2-F／R4） |

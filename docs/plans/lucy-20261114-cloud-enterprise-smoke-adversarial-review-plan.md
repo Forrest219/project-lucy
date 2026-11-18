@@ -1,8 +1,12 @@
 # 公网企业精简测试设计 — Claude Code 两轮对抗评审 Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+
 | 元数据 | 内容 |
 |---|---|
-| 关联设计 | [`lucy-20261114-cloud-enterprise-smoke-design.md`](lucy-20261114-cloud-enterprise-smoke-design.md) |
+| 关联设计 | [`lucy-20261114-cloud-enterprise-smoke-design.md`](../design/lucy-20261114-cloud-enterprise-smoke-design.md) |
 | 委托人审批 | 2026-11-14：**批准 Claude Code 做两轮对抗评审** |
 | 性质 | 过程对抗；**≠ 设计定稿 ≠ 落地授权 ≠ 终稿确权** |
 
@@ -37,5 +41,25 @@
 
 - [x] 批准 Claude Code 两轮对抗评审（2026-11-14）
 - [x] R1／R2 已产出（2026-11-14）：结论均为 **BLOCK**；见 `inbox/20261114-cloud-enterprise-smoke-adversarial-r{1,2}.md`
-- [x] 设计 **v0.2 定稿**（2026-11-14）：关闭 R1／R2「落地前必须关闭」16 条；见 [`lucy-20261114-cloud-enterprise-smoke-design.md`](lucy-20261114-cloud-enterprise-smoke-design.md)
+- [x] 设计 **v0.2 定稿**（2026-11-14）：关闭 R1／R2「落地前必须关闭」16 条；见 [`lucy-20261114-cloud-enterprise-smoke-design.md`](../design/lucy-20261114-cloud-enterprise-smoke-design.md)
 - [ ] 落地 Runbook／UAT／S-CLOUD-1（待另授权）
+
+## 目标（治理补齐）
+
+对公网企业精简测试设计做两轮只读对抗，产出可复查findings。
+
+## 开工前置（治理补齐）
+
+只读关联设计和UAT/客户包规则，按已批两轮评审范围执行；落地Runbook/UAT仍须另授权。
+
+## 验收（治理补齐）
+
+按成功标准核对R1/R2结论、findings和差异；历史BLOCK及设计修订分别保留。
+
+## 完成定义（治理补齐）
+
+两轮产物和修订去向可追；本计划完成不等于落地实现，未授权落地任务保持未执行。
+
+## 风险（治理补齐）
+
+过程对抗不能代替终稿确权；不把公网最小测试误写为本机UAT或客户包硬门禁PASS。

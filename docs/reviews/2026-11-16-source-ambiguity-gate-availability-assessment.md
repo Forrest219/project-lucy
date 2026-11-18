@@ -12,7 +12,7 @@
 | 适用范围 | 委托人决定「P0-3 表级歧义门闩怎么修、是否改合同、客户侧是否先解封」的输入；**仅评估与决策清单，不含开发授权，不改任何 Spec 状态，不动运行代码** |
 | 输出位置 | `docs/reviews/2026-11-16-source-ambiguity-gate-availability-assessment.md` |
 
-台账：总账 [P0-3](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)／REQ-030-024。本文不是 UAT 跑次，测试台 `not_registered`。**评审结论 ≠ UAT PASS ≠ 可上线。**
+台账：总账 [P0-3](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)／REQ-030-024。本文不是 UAT 跑次，测试台 `not_registered`。**评审结论 ≠ UAT PASS ≠ 可上线。**
 
 ---
 

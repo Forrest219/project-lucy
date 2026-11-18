@@ -1,0 +1,10 @@
+{
+  "productVersion": "0.30.0",
+  "releaseTag": "v0.30.0",
+  "commit": "PENDING",
+  "releasedAt": null,
+  "deliveryPackage": null,
+  "noDeliveryReason": "0.30.0 尚未打 tag，也还没有客户交付包。镜像 digest、包摘要和交付验收在制品生成后据实补记。本条目只说明版本号已经存在、发布尚未发生。",
+  "gates": [],
+  "notes": "候选检查对象曾是 ff4762c9。发布提交确定后再把 commit 从 PENDING 改成完整 SHA，并补上实际跑过的 CI run 与门禁结果。"
+}

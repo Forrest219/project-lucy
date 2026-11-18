@@ -22,7 +22,7 @@ const ALLOW_EXACT = new Set([
   "docs/reviews/2026-11-09-concept-registry-lucy-ops-control-plane-codex-review.md",
   "docs/README.md",
   "docs/plans/README.md",
-  "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
+  "docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
   "docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md",
   "webui/src/lib/rolePermissionDraft.ts",
   "webui/server/admin/mcp-tools.ts",

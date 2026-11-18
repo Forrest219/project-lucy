@@ -1091,7 +1091,7 @@ export function CreateConnectionDrawer({
                 {created.executionRuntimeAck === true ? (
                   <span className="text-success-strong">已加载新连接</span>
                 ) : created.executionRuntimeAck === false ? (
-                  <span className="text-danger">
+                  <span className="text-danger notranslate" translate="no">
                     尚未确认加载
                     {created.executionRuntimeError
                       ? `（${created.executionRuntimeError}）`

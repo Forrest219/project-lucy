@@ -1,3 +1,4 @@
+import { SchemaReadDeadline, SchemaReadTimeout, SCHEMA_REQUEST_TIMEOUT_MS } from "./schema-read-deadline.js";
 import { stringify } from "yaml";
 import {
   catalogTablesSql,
@@ -282,11 +283,13 @@ ORDER BY c.table_name, c.ordinal_position
  */
 export function columnScanTimedOut(result: SqlResult, timeoutMs = CATALOG_SCAN_TIMEOUT_MS): boolean {
   const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+  // "connection/query timed out" is a statement deadline. It must be classified
+  // before the connection-failure exclusion, which only matches "connection timed out".
+  if (/query timed out|max_execution_time|maximum statement execution time|query execution was interrupted/i.test(text)) {
+    return true;
+  }
   if (/can't connect|cannot connect|connection refused|connection timed out|connect timed out|unknown host|no such host/i.test(text)) {
     return false;
-  }
-  if (/max_execution_time|maximum statement execution time|query execution was interrupted/i.test(text)) {
-    return true;
   }
   return !result.ok && result.latencyMs >= Math.max(0, timeoutMs - 1_500);
 }
@@ -660,10 +663,14 @@ export type ReadSchemaColumnsDeps = {
   openChannelImpl?: typeof openMetadataChannel;
   /** Batch reads stop starting new tables after this; the rest returns as `deferred`. */
   callBudgetMs?: number;
+  /** Hard deadline shared by all stages; HTTP requests leave 1s response headroom. */
+  requestTimeoutMs?: number;
   now?: () => number;
   /** Column rows one statement may return (tests lower it). */
   columnRowLimit?: number;
   tables?: string[];
+  /** Preserve structured outcomes when a bulk preparation shrinks to one table. */
+  batchRead?: boolean;
   /**
    * When omitted: no `tables` → `list-names`; with `tables` → `per-table`.
    * Pass `schema-wide` explicitly for catalog-scan SC-06/07 full-schema reads.
@@ -704,12 +711,26 @@ async function openBatchChannel(
   projectRoot: string,
   connectionId: string,
   deps: ReadSchemaColumnsDeps,
-  injectedLegacyImpl: unknown
+  injectedLegacyImpl: unknown,
+  deadline?: SchemaReadDeadline
 ): Promise<BatchChannel | null> {
   if (process.env.LUCY_SCHEMA_READ_LEGACY === "1") return null;
   if (!deps.openChannelImpl && injectedLegacyImpl) return null;
   const open = deps.openChannelImpl ?? openMetadataChannel;
-  const holder = createChannelHolder(() => open(projectRoot, connectionId));
+  const holder = createChannelHolder(async () => {
+    const opening = () => open(projectRoot, connectionId).then((channel) => {
+      if (deadline && deadline.remaining() <= 0) { channel.close(); throw new SchemaReadTimeout(); }
+      if (!deadline) return channel;
+      return {
+        run: (sql: string, options: { maxRows: number; timeoutMs: number }) => deadline.run(
+          () => channel.run(sql, { ...options, timeoutMs: deadline.timeout(options.timeoutMs) }),
+          () => channel.close()
+        ),
+        close: () => channel.close()
+      };
+    });
+    return deadline ? deadline.run(opening) : opening();
+  });
   try {
     await holder.ensure();
   } catch (error) {
@@ -738,8 +759,17 @@ export async function readSchemaColumns(
   deps: ReadSchemaColumnsDeps = {}
 ): Promise<SchemaColumnsRead> {
   const safeSchema = assertSchemaIdent(schema);
+  const deadline = deps.requestTimeoutMs !== undefined || deps.callBudgetMs !== undefined
+    ? new SchemaReadDeadline(deps.requestTimeoutMs ?? Math.max(SCHEMA_REQUEST_TIMEOUT_MS, deps.callBudgetMs ?? 0), deps.now)
+    : undefined;
   const read = deps.readConnectionsImpl ?? readConnections;
-  const connections = await read(projectRoot);
+  let connections: Awaited<ReturnType<typeof readConnections>>;
+  try {
+    connections = deadline ? await deadline.run(() => read(projectRoot)) : await read(projectRoot);
+  } catch (error) {
+    if (error instanceof SchemaReadTimeout) throw new SchemaStructureError("READ_FAILED", "读取表结构超时，请稍后重试。");
+    throw error;
+  }
   const connection = connections.find((item) => item.id === connectionId);
   if (!connection) {
     throw new SchemaStructureError("CONNECTION_NOT_FOUND", `未找到连接 ${connectionId}`, 404);
@@ -747,7 +777,14 @@ export async function readSchemaColumns(
   if (!canRead(connection)) {
     throw new SchemaStructureError("SCHEMA_UNSUPPORTED", "当前数据库类型请上传 Schema Manifest");
   }
-  const execute = deps.runSqlImpl ?? runSql;
+  const sqlImpl = deps.runSqlImpl ?? runSql;
+  const execute: typeof runSql = (root, id, sql, options) => deadline
+    ? deadline.run(() => sqlImpl(root, id, sql, { ...options, timeoutMs: deadline.timeout(options?.timeoutMs ?? CATALOG_SCAN_TIMEOUT_MS) }))
+    : sqlImpl(root, id, sql, options);
+  const showImpl = deps.runCatalogShowImpl ?? runCatalogShow;
+  const legacyShow: typeof runCatalogShow = (root, id, sql, options) => deadline
+    ? deadline.run(() => showImpl(root, id, sql, { ...options, timeoutMs: deadline.timeout(options?.timeoutMs ?? CATALOG_SCAN_TIMEOUT_MS) }))
+    : showImpl(root, id, sql, options);
   const catalog = protocolOf(connection) === "mysql" ? splitCatalogDatabase(connection.database) : null;
   let resolved: ResolvedSchemaRead;
   try {
@@ -763,7 +800,7 @@ export async function readSchemaColumns(
     if (catalog) {
       if (resolved.mode === "list-names") {
         const tableSql = catalogTablesSql(catalog.catalog, safeSchema);
-        const tablesResult = await (deps.runCatalogShowImpl ?? runCatalogShow)(
+        const tablesResult = await legacyShow(
           projectRoot,
           connectionId,
           tableSql,
@@ -791,8 +828,8 @@ export async function readSchemaColumns(
       if (targetTables.length === 0) {
         return { status: "error", message: "外部目录读字段必须指定 tables。" };
       }
-      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runCatalogShowImpl);
-      const show = holder ? channelAsShow(holder.run) : (deps.runCatalogShowImpl ?? runCatalogShow);
+      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runCatalogShowImpl, deadline);
+      const show = holder ? channelAsShow(holder.run) : legacyShow;
       const limits = holder
         ? { rowLimit: deps.columnRowLimit ?? COLUMN_READ_ROW_LIMIT, timeoutMs: PER_TABLE_TIMEOUT_MS }
         : undefined;
@@ -838,7 +875,7 @@ export async function readSchemaColumns(
     const protocol = protocolOf(connection);
     if (resolved.mode === "list-names" && protocol === "mysql") {
       const listSql = mysqlTableNamesSql(safeSchema);
-      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runSqlImpl);
+      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runSqlImpl, deadline);
       if (holder) {
         const context = { connectionId, schema: safeSchema, phase: "catalog-list-tables", sql: listSql };
         try {
@@ -870,7 +907,7 @@ export async function readSchemaColumns(
     // Postgres has no separate name-list SQL; list-names falls through to schema-wide
     // columns (pre-dual-mode behavior). MySQL per-table is handled above.
     if (resolved.mode === "per-table" && protocol === "mysql") {
-      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runSqlImpl);
+      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runSqlImpl, deadline);
       if (holder) {
         try {
           const batch = await readMysqlTablesBatch(holder.run, safeSchema, resolved.tables, {
@@ -970,6 +1007,7 @@ export async function readSchemaColumns(
           : undefined;
       return { status: "error", message: error.message, ...(detail ? { detail } : {}) };
     }
+    if (error instanceof SchemaReadTimeout) return { status: "error", message: "读取表结构超时，请稍后重试。" };
     console.error("[schema-structure] unexpected read failure", {
       connectionId,
       schema: safeSchema,
@@ -994,7 +1032,7 @@ export async function previewSchemaStructure(
     throw new SchemaStructureError("READ_FAILED", read.message, 400, read.detail);
   }
   const requested = deps.tables?.map((table) => table.trim()).filter(Boolean) ?? [];
-  const batch = requested.length > 1;
+  const batch = requested.length > 1 || deps.batchRead === true;
   if (!batch && requested.length > 0 && (read.rejections?.length ?? 0) > 0) {
     const rejection = read.rejections?.[0];
     throw new SchemaStructureError(
@@ -1013,6 +1051,6 @@ export async function previewSchemaStructure(
     ...preview,
     namesOnly,
     ...(batch && rejections.length > 0 ? { rejections } : {}),
-    ...(batch && read.deferred && read.deferred.length > 0 ? { deferred: read.deferred } : {})
+    ...(read.deferred && read.deferred.length > 0 ? { deferred: read.deferred } : {})
   };
 }

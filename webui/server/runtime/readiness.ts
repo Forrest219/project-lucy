@@ -1,18 +1,15 @@
-const WARMUP_MS = 60_000;
-let bootAt = Date.now();
 let ready = false;
 
-/** Called once the HTTP listener is up. */
+/** Called only after both the HTTP listener and the MCP listener are bound. */
 export function markWebuiWarmupComplete(): void {
   ready = true;
 }
 
 export function resetWebuiWarmupForTests(): void {
   ready = false;
-  bootAt = Date.now();
 }
 
-/** Ready after startup marks it, or after the 60s warmup budget. */
-export function isWebuiReady(now = Date.now()): boolean {
-  return ready || now - bootAt >= WARMUP_MS;
+/** Elapsed startup time cannot establish that the MCP listener is available. */
+export function isWebuiReady(): boolean {
+  return ready;
 }

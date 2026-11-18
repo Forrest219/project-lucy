@@ -173,6 +173,10 @@ let warnedNonIncrementalVacuum = false;
 export function prepareTraceDatabase(database: Database.Database): void {
   database.pragma("journal_mode = WAL");
   database.pragma("busy_timeout = 5000");
+  // Default autocheckpoint is 1000 pages. On a throttled disk that checkpoint
+  // runs inside the commit that crosses it and holds the event loop for seconds.
+  // 32 pages keeps each checkpoint inside the livez budget. synchronous stays FULL.
+  database.pragma("wal_autocheckpoint = 32");
   configureIncrementalVacuum(database);
 }
 

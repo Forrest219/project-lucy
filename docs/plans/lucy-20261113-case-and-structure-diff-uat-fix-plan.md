@@ -1,5 +1,10 @@
 # 大小写歧义与结构差异缺表修复计划
 
+| 治理字段 | 内容 |
+|---|---|
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+| 验收 | 以本文件验收小节、Task通过标准及已链接证据为准；历史结果不代表当前候选已复测。 |
+
 | 元数据 | 内容 |
 |---|---|
 | 状态 | **Task 1–4 已执行（2026-11-13）**。歧义单测已加；demo 已升级；`UAT-SCAN-CASE-01`／`DIFF-01` 复跑 **PASS**。Task 5 未触发。EXT live 仍 BLOCKED。**≠ 可上线** |
@@ -186,3 +191,19 @@ node scripts/uat/run-zhaomin-local-gaps.mjs case
 3. `run-zhaomin-local-gaps.mjs case` 的 `caseVerdict` 与 `diffVerdict` 都是 `PASS`。
 4. 测后没有 `uat-case-` 连接残留，`uat_case_pair` 已删除。
 5. INDEX 与 `e2e-ledger.md` 的最近跑次指向新文件；EXT live 仍是 BLOCKED。
+
+## 目标（治理补齐）
+
+修复大小写歧义与结构差异缺表分类，并只复跑原失败用例。
+
+## 开工前置（治理补齐）
+
+先按§1–2核对既有修法与demo身份；Task 5仅在升级后仍失败时触发。
+
+## 完成定义（治理补齐）
+
+Task 1–4证据与头部跑次一致；Task 5是否触发、EXT live BLOCKED各自保留，不把局部PASS扩为整套PASS。
+
+## 风险（治理补齐）
+
+本机demo结果不能覆盖EXT live；再次发现失败按Task 5范围处理，不改无关链路。

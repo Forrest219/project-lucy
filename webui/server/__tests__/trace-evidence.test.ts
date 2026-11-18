@@ -45,6 +45,18 @@ describe("trace/evidence — retention constants", () => {
   });
 });
 
+describe("trace/evidence — checkpoint budget", () => {
+  it("caps WAL autocheckpoint at 32 pages so one commit cannot stall probes", () => {
+    const { db, cleanup } = createTempDb();
+    try {
+      expect(Number(db.pragma("wal_autocheckpoint", { simple: true }))).toBe(32);
+      expect(String(db.pragma("journal_mode", { simple: true })).toLowerCase()).toBe("wal");
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 describe("trace/evidence — schema setup", () => {
   let db: Database.Database;
   let cleanup: () => void;

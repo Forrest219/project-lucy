@@ -9,7 +9,7 @@
 | 状态 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O3 已闭合（2026-11-13）＝建议包 S；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口**。须 Codex CLI 终审或委托人明示确权（R2-F）→ 另授开发授权后才可改代码。本条不表示可上线 |
 | 授权边界 | 本文件**不授权改代码**。现行阶段只接受评审与修订。实施须：§评审门禁 R1–R4（见功能清单池 §2.2）全部通过 |
 | 决策来源 | 2026-11-06 CFO 选表误报（**检出缺口**）＋ 2026-11-07 沟通实录：五域（损益／资金／资产／Token／GPU）日跑测评承诺；误报防线 **G6＋G8** |
-| 需求来源 | [需求池 REQ-030-025](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.6 G6／§4.8 G8](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-6](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[019 Spec](lucy-20261107-eval-tool-assertion-authoring-spec.md)；[020 Spec](lucy-20261107-audit-journey-eval-case-draft-spec.md) |
+| 需求来源 | [需求池 REQ-030-025](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.6 G6／§4.8 G8](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-6](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[019 Spec](lucy-20261107-eval-tool-assertion-authoring-spec.md)；[020 Spec](lucy-20261107-audit-journey-eval-case-draft-spec.md) |
 | 实施主体 | Lucy：Eval runner prompt 合同、用例骨架、发布后 smoke 接线；WebUI 仅 **019／020 最小面**。不改 KTX；不把 Eval 当自动修复器 |
 | 配套 Plan | [lucy-20261107-eval-source-selection-correctness-plan.md](../plans/lucy-20261107-eval-source-selection-correctness-plan.md) |
 | 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[2026-11-09 过程推进](../reviews/2026-11-09-p0-6-p0-7-p0-b-spec-advance.md)（过程修订，**不是** R2-F）；[2026-11-13 O1–O3 决策纸](../reviews/2026-11-13-p0-6-o1-o3-decision-package.md)（**R3：O1–O3 已闭合 2026-11-13＝建议包 S**；**不是** R2-F／R4） |

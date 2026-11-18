@@ -309,3 +309,23 @@
 | [prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md](prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md) | Agent 管理台高权限呈现的审阅者交付提示词 |
 
 - [UAT：Wiki／Skill 真读真用＋ACL（P1-30）](design/design-2026-11-15-uat-context-content-wiki-skill.md)
+
+## 文档治理补登记（2026-11-18）
+
+仅补入口；状态与授权以各文档正文为准。
+
+- [访问日志调用链故事线 Spec](specs/lucy-20261104-audit-call-storyline-spec.md)
+- [访问关系图允许词表对齐 Spec](specs/lucy-20261113-access-map-outcome-vocabulary-spec.md)
+- [字段暴露台账落点与 KTX 装载隔离 Spec](specs/lucy-20261114-field-exposure-ledger-landing-fix-spec.md)
+
+## 方向、执行总账与设计（2026-11-18 归位）
+
+以下为原文档归位，不新增开发或交付授权；每份文档保持唯一事实源。
+
+- [Lucy 双层 Release Notes 设计（自 0.30 起）](design/lucy-20261107-dual-layer-release-notes-design.md)
+- [Lucy 0.30 升级核心方向](governance/lucy-20261107-lucy-0-30-core-direction.md)
+- [Lucy 0.30 功能清单池](governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)
+- [公网企业体验精简测试（Cloud Enterprise Smoke）设计](design/lucy-20261114-cloud-enterprise-smoke-design.md)
+- [可信证据与认证体系 — 未来版本需求池（post-0.30）](governance/lucy-20261115-post-030-trust-evidence-requirement-pool.md)
+- [可信证据与认证能力：0.30 吸收 × 未来池拆分](governance/lucy-20261115-trust-evidence-capability-split.md)
+- [财务与销售收入口径选择 — 未来版本概念池（post-0.30）](governance/lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)

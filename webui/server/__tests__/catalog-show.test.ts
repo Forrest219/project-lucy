@@ -55,6 +55,23 @@ function driver(mode = "ok") {
 }
 
 describe("production catalog SHOW adapter", () => {
+  it("charges handshake time to the query deadline and destroys the legacy connection", async () => {
+    const root = await fixture();
+    const injected = driver();
+    let finishConnect: ((error: Error | null) => void) | undefined;
+    injected.conn.connect.mockImplementation(callback => { finishConnect = callback; });
+    injected.conn.query.mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    const pending = runCatalogShow(root, "hive-1", "SHOW DATABASES FROM `hive`", {timeoutMs: 1000}, injected);
+    await vi.waitFor(() => expect(finishConnect).toBeDefined());
+    await vi.advanceTimersByTimeAsync(700);
+    finishConnect!(null);
+    await vi.advanceTimersByTimeAsync(350);
+    expect(injected.conn.destroy).toHaveBeenCalledOnce();
+    const actual = await pending;
+    expect(actual.ok).toBe(false);
+    expect(actual.stderr).toMatch(/timed out/i);
+  });
   it("reads the configured file and sends no default database during handshake", async () => {
     const root = await fixture();
     const injected = driver();
@@ -67,11 +84,15 @@ describe("production catalog SHOW adapter", () => {
       port: 9030,
       user: "reader",
       password: "fixture-private-password",
-      connectTimeout: 120000,
       multipleStatements: false
     });
     expect(params).not.toHaveProperty("database");
-    expect(injected.conn.query.mock.calls[0][0]).toMatchObject({ timeout: 120000, rowsAsArray: true });
+    expect(params.connectTimeout).toBeGreaterThan(0);
+    expect(params.connectTimeout).toBeLessThanOrEqual(120000);
+    expect(injected.conn.query.mock.calls[0][0]).toMatchObject({ rowsAsArray: true });
+    const queryTimeout = (injected.conn.query.mock.calls[0][0] as {timeout: number}).timeout;
+    expect(queryTimeout).toBeGreaterThan(0);
+    expect(queryTimeout).toBeLessThanOrEqual(params.connectTimeout!);
     expect(injected.conn.destroy).toHaveBeenCalledOnce();
     expect(JSON.stringify(actual)).not.toContain("fixture-private-password");
   });

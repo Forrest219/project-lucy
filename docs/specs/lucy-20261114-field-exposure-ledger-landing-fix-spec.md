@@ -13,12 +13,18 @@
 
 ## 闭口层级
 
-- 层级：功能合同（落点／发布路径／KTX 隔离）
+- 层级：功能合同
+- 本条出口：实现获授权后按§3 SC-01–SC-06证明独立落点、合法查数与恢复路径；当前草稿不宣称通过。
 - 本条承诺：SC-01–SC-06
 - 不在本条出口：改写 P0-A 已收口 SC-01–SC-30 语义；改 KTX 上游源码；列级 ACL／脱敏
-- 上线关系：本条收口＋复测 PASS **不**表示可上线
+- 上线关系：本条收口不表示可上线；复测 PASS 亦不构成上线授权
 
 ## Terminology Compliance
+
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms:
+- None；沿用父Spec的「字段暴露」「未暴露字段」和既有错误码。
 
 沿用父 Spec：**字段暴露**／**未暴露字段**／`field_not_exposed`／`field_exposure_unavailable`。本条不新增用户可见术语。
 
@@ -70,3 +76,15 @@
 - 不修改 `@kaelio/ktx` 源码（D16 父合同）
 - 不重新打开 P0-A 全部分母；本条只修落点／隔离
 - 本 Spec 单独不构成开发授权
+
+## 核心流程（伪代码）
+
+```text
+设计流程（尚未获开发授权）：
+  台账规范路径 = exposure/<conn>/<source>.yaml
+  发布扫描将fieldExposure独立分类，不加入KTX上传及changedSources
+  若发现旧semantic-layer/**/_exposure/**权威台账：迁移或删除后reindex
+  publish trimmed -> 激活serving ledger -> 合法查询成功 / 未暴露字段上游0
+  publish cleanup或显式恢复 -> reindex ok -> 数据面恢复
+禁止新旧双写权威，禁止重启冒充恢复
+```

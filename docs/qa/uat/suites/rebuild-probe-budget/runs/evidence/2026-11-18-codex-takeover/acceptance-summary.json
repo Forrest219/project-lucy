@@ -1,0 +1,148 @@
+{
+  "J": {
+    "readyMs": 33611,
+    "wholeSteady": {
+      "/api/project": {
+        "samples": 113,
+        "maxMs": 321,
+        "p99Ms": 259,
+        "non200": 0,
+        "over3000": 0
+      },
+      "/api/livez": {
+        "samples": 117,
+        "maxMs": 304,
+        "p99Ms": 298,
+        "non200": 0,
+        "over3000": 0
+      },
+      "/api/readyz": {
+        "samples": 112,
+        "maxMs": 377,
+        "p99Ms": 309,
+        "non200": 0,
+        "over3000": 0
+      },
+      "/api/health": {
+        "samples": 24,
+        "maxMs": 2708,
+        "p99Ms": 2708,
+        "non200": 0,
+        "over3000": 0
+      }
+    },
+    "first120": {
+      "/api/livez": {
+        "n": 116,
+        "maxMs": 304,
+        "p99Ms": 298,
+        "non200": 0
+      },
+      "/api/readyz": {
+        "n": 112,
+        "maxMs": 377,
+        "p99Ms": 309,
+        "non200": 0
+      },
+      "/api/health": {
+        "n": 23,
+        "maxMs": 2708,
+        "p99Ms": 2708,
+        "non200": 0
+      },
+      "/api/project": {
+        "n": 113,
+        "maxMs": 321,
+        "p99Ms": 259,
+        "non200": 0
+      }
+    },
+    "healthStatuses": {
+      "ok": 24
+    },
+    "gatePass": true
+  },
+  "K": {
+    "readyMs": 36502,
+    "wholeSteady": {
+      "/api/livez": {
+        "samples": 256,
+        "maxMs": 265,
+        "p99Ms": 227,
+        "non200": 0,
+        "over3000": 0
+      },
+      "/api/readyz": {
+        "samples": 248,
+        "maxMs": 945,
+        "p99Ms": 372,
+        "non200": 0,
+        "over3000": 0
+      },
+      "/api/project": {
+        "samples": 248,
+        "maxMs": 869,
+        "p99Ms": 254,
+        "non200": 0,
+        "over3000": 0
+      },
+      "/api/health": {
+        "samples": 49,
+        "maxMs": 4500,
+        "p99Ms": 4500,
+        "non200": 0,
+        "over3000": 1
+      }
+    },
+    "first120": {
+      "/api/livez": {
+        "n": 116,
+        "maxMs": 265,
+        "p99Ms": 239,
+        "non200": 0
+      },
+      "/api/readyz": {
+        "n": 112,
+        "maxMs": 945,
+        "p99Ms": 395,
+        "non200": 0
+      },
+      "/api/health": {
+        "n": 22,
+        "maxMs": 2288,
+        "p99Ms": 2288,
+        "non200": 0
+      },
+      "/api/project": {
+        "n": 112,
+        "maxMs": 869,
+        "p99Ms": 243,
+        "non200": 0
+      }
+    },
+    "healthStatuses": {
+      "ok": 49
+    },
+    "gatePass": true
+  },
+  "customerObserver": {
+    "startup": {
+      "samples": 1,
+      "maxMs": 18,
+      "maxConsecutiveFailure": 0,
+      "non200": 0
+    },
+    "readiness": {
+      "samples": 48,
+      "maxMs": 370,
+      "maxConsecutiveFailure": 0,
+      "non200": 0
+    },
+    "liveness": {
+      "samples": 24,
+      "maxMs": 175,
+      "maxConsecutiveFailure": 0,
+      "non200": 0
+    }
+  }
+}

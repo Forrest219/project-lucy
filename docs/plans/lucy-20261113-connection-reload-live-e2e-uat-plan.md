@@ -1,5 +1,10 @@
 # B 轨：连接热重载 Live E2E／UAT 收口 Implementation Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 状态 | 执行进度以本文件原Task勾选和已有跑次为准；本次仅补齐文档形态，未复跑本计划业务验收，当前候选结果待验。 |
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+
 > **For agentic workers:** Use superpowers:executing-plans or subagent-driven-development. Checkbox tasks track progress.
 
 **Goal:** 关闭连接创建→执行层重载缺陷的浏览器与 UAT 已知债：`E2E-CON-07`、`E2E-MCP-02`、`UAT-CONN-RELOAD-01`，使发布取证可勾选本缺陷关闭。
@@ -73,3 +78,11 @@
 | 端点闸挡住新建 | 断言并点击 `endpoint-gate-separate` |
 | 执行层已是 `current` 时 MCP-02 无 remediation | 先 bump `ktx.yaml` 注释行制造 `reload_required`（容器内，测后随 reload 消化） |
 | 系统代理挡 `demo:upgrade` | 本轨不强制 upgrade；镜像已含 fix |
+
+## 目标（治理补齐）
+
+关闭连接热重载Live E2E与UAT证据缺口，证明配置落盘后执行层真正生效。
+
+## 完成定义（治理补齐）
+
+按本计划Tasks和成功标准交齐真实跑次；E2E、UAT与开发层证据分别记录，失败或受阻不得合成PASS。

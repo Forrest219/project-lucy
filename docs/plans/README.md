@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261118-upgrade-fix-completion-plan.md](lucy-20261118-upgrade-fix-completion-plan.md) | 委托人授权接管；补全字段续查、旧水位迁移与性能自测；实施中 |
 | [lucy-20261118-version-axis-naming-plan.md](lucy-20261118-version-axis-naming-plan.md) | **v0.1-draft。仅方案稿：Task 全部未开工；未获开发授权；未改运行代码、镜像与 CI**。版本四轴分工落地计划（候选版本机制 → 文档口径对齐 → 0.30 定稿）。配对 [Spec](../specs/lucy-20261118-version-axis-naming-spec.md)。**≠ 可上线** |
 | [lucy-20261118-p147-pause-delivery-and-root-fix-plan.md](lucy-20261118-p147-pause-delivery-and-root-fix-plan.md) | **v0.1**：P1-47 暂停交付（A 线）与根治（B 线）并行；模拟 UAT；待委托人确认 D1–D3。**≠ 可上线** |
 | [lucy-20261118-p145-p147-multi-agent-parallel-plan.md](lucy-20261118-p145-p147-multi-agent-parallel-plan.md) | **v0.1 编排**：P1-45／46／47 多 agent 并行（Wave1＝46∥45；Wave2＝47）。委托人已「授权定稿」。**≠ 可上线** |
@@ -13,9 +14,9 @@ This directory stores repository-level implementation plans that are not scoped 
 | [lucy-20261118-lucy-ops-reader-headless-governance-acl-plan.md](lucy-20261118-lucy-ops-reader-headless-governance-acl-plan.md) | **v0.1-draft**（P1-49／REQ-030-070）：`lucy_ops_reader` 无头可问治理面 ACL（规范 W0 指纹 heal）。配对 [Spec](../specs/lucy-20261118-lucy-ops-reader-headless-governance-acl-spec.md)；测试台 not_registered。**终稿未确权；未获开发授权；≠ 可上线** |
 | [lucy-20261118-multi-step-state-machine-contract-gate-plan.md](lucy-20261118-multi-step-state-machine-contract-gate-plan.md) | **v0.1-draft**（P1-48／REQ-030-069）：多步流程状态机合同门禁（文档＋lint）。配对 [Spec](../specs/lucy-20261118-multi-step-state-machine-contract-gate-spec.md)；测试台 not_registered。**终稿未确权；未获开发授权；≠ 可上线** |
 | [lucy-20261117-access-map-sankey-restoration-plan.md](lucy-20261117-access-map-sankey-restoration-plan.md) | **v0.2；开发授权已获得；功能已实现并提交（2026-11-17）**（P1-41／REQ-030-062）：访问关系图桑基还原 Plan，配对 [Spec](../specs/lucy-20261117-access-map-sankey-restoration-spec.md)。**≠ 可上线** |
-| [lucy-20261115-trust-evidence-capability-split.md](lucy-20261115-trust-evidence-capability-split.md) | **v0.1；委托人批准（2026-11-15）**：可信证据两类拆分——0.30 吸收 P0-4／B／5；未开工进 post-0.30 池。**≠ Spec；≠ 开发授权；≠ 可上线** |
-| [lucy-20261115-post-030-trust-evidence-requirement-pool.md](lucy-20261115-post-030-trust-evidence-requirement-pool.md) | **v0.1 未来需求池（未开线）**：REQ-TE-001–008（可核对覆盖／证据槽位／认证／质量预警等）。**入池 ≠ 立项；≠ 可上线**。拆分见上条 |
-| [lucy-20261116-post-030-dual-caliber-selection-concept-pool.md](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md) | **v0.1 未来概念池（未开线）**：REQ-CAL-001 财务／销售收入同名异域双口径选择。**概念阶段；≠ Spec；不进 0.30；入池 ≠ 立项；≠ 可上线** |
+| [lucy-20261115-trust-evidence-capability-split.md](../governance/lucy-20261115-trust-evidence-capability-split.md) | **v0.1；委托人批准（2026-11-15）**：可信证据两类拆分——0.30 吸收 P0-4／B／5；未开工进 post-0.30 池。**≠ Spec；≠ 开发授权；≠ 可上线** |
+| [lucy-20261115-post-030-trust-evidence-requirement-pool.md](../governance/lucy-20261115-post-030-trust-evidence-requirement-pool.md) | **v0.1 未来需求池（未开线）**：REQ-TE-001–008（可核对覆盖／证据槽位／认证／质量预警等）。**入池 ≠ 立项；≠ 可上线**。拆分见上条 |
+| [lucy-20261116-post-030-dual-caliber-selection-concept-pool.md](../governance/lucy-20261116-post-030-dual-caliber-selection-concept-pool.md) | **v0.1 未来概念池（未开线）**：REQ-CAL-001 财务／销售收入同名异域双口径选择。**概念阶段；≠ Spec；不进 0.30；入池 ≠ 立项；≠ 可上线** |
 | [lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md](lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md) | **P1-19／ACCESS-MAP UAT 已执行 PASS（2026-11-14）**：多 Agent；F-1 关闭。**≠ 可上线**。测试台 [`UAT-SUITE-ACCESS-MAP`](../qa/uat/suites/access-map-sankey-empty/suite.md) |
 | [lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md](lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md) | **P0 问数六套件本机 Mac mini UAT Wave A 已执行（2026-11-14）**：Claude 全真＋Cursor 验收；INDEX 已更新。Wave B 推迟。**≠ 改 Spec 合同；≠ 可上线**。测试台见 [`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md) |
 | [lucy-20261113-access-map-sankey-empty-fix-plan.md](lucy-20261113-access-map-sankey-empty-fix-plan.md) | **功能合同已收口（2026-11-13）**；[closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md)。Spec 见 [lucy-20261113-access-map-sankey-empty-fix-spec.md](../specs/lucy-20261113-access-map-sankey-empty-fix-spec.md)。**≠ 可上线** |
@@ -41,8 +42,8 @@ This directory stores repository-level implementation plans that are not scoped 
 | [lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md](lucy-20261109-concept-registry-lucy-ops-control-plane-plan.md) | **v0.5；功能合同层已收口（SC-01–SC-22）；实现 CR 已落盘（PASS，2026-11-13）**；**本分支概念注册表唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 2026-11-13 结案不做）。本条不表示可上线（P1-11／REQ-030-032）。Spec 见 [lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md)；[实现 CR](../reviews/2026-11-13-p1-11-concept-registry-ops-code-review.md) |
 | [lucy-20261108-concept-registry-ontology-lite-plan.md](lucy-20261108-concept-registry-ontology-lite-plan.md) | **委托人结案（2026-11-13）**：本分支明确**不做** ontology-lite **CLI／WebUI** 交付与效果门跟进；产品交付只走 **P1-11／REQ-030-032 Ops MCP**。P1-10 保留上游数据／语义合同（纯计算核心可被 Ops 复用）；既有 `npm run concepts` **不作为本分支交付出口**。本条不表示可上线。Spec 见 [lucy-20261108-concept-registry-ontology-lite-spec.md](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md)。评审见 [codex-review](../reviews/2026-11-09-concept-registry-ontology-lite-codex-review.md) |
 | [lucy-20261107-ui-interaction-contract-gate-plan.md](lucy-20261107-ui-interaction-contract-gate-plan.md) | **v0.5，开发授权已获得；功能合同已收口（2026-11-07）**。本条收口不表示可上线。交互合同门禁的 lint 与治理正文已落地。不改页面。Spec 见 [lucy-20261107-ui-interaction-contract-gate-spec.md](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md)。评审见 [codex-review](../reviews/2026-11-07-codex-review-ui-interaction-contract-gate.md) |
-| [lucy-20261107-lucy-0-30-feature-inventory-pool.md](lucy-20261107-lucy-0-30-feature-inventory-pool.md) | **v0.89 生效跟进（不是 Spec；立项≠开发授权）**：`0.30` **完整功能清单池**。**P1-28／REQ-030-049 行级隔离入核心分母**；**P1-29／REQ-030-050** 为取值缺口。测试台判定见 INDEX。**P1-11 测试台 FAIL**＋**P1-27／REQ-030-048** 入池（GAP-UAT-P1-11-RUNTIME；复测 NOT RUN）。**P0-6／P0-7／P0-B：O 项已闭合（2026-11-13）；待 R2-F**；**≠ 可上线**（P0 块）。§2.2 三层进度——过程评审（可分叉）／**终稿确权＝Codex CLI 终审或委托人明示确权**／开发授权另发。本条不表示可上线 |
-| [lucy-20261107-lucy-0-30-core-direction.md](lucy-20261107-lucy-0-30-core-direction.md) | **v0.5 方向已锁定（不是 Spec，不授权实现）**：`0.30` **升级核心方向**。辅线＝现有功能 UX；**主线＝约 100 名存量用户每日稳定／准确／可靠交互，加上行级隔离**——五道机制闸（§4.5／§9 第 5 条，P1-28）。测试台判定见 INDEX。跟进主表见功能清单池。**终稿确权＝Codex 终审或委托人确权**；暂不开工落地。本条不表示可上线 |
+| [lucy-20261107-lucy-0-30-feature-inventory-pool.md](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md) | **v0.89 生效跟进（不是 Spec；立项≠开发授权）**：`0.30` **完整功能清单池**。**P1-28／REQ-030-049 行级隔离入核心分母**；**P1-29／REQ-030-050** 为取值缺口。测试台判定见 INDEX。**P1-11 测试台 FAIL**＋**P1-27／REQ-030-048** 入池（GAP-UAT-P1-11-RUNTIME；复测 NOT RUN）。**P0-6／P0-7／P0-B：O 项已闭合（2026-11-13）；待 R2-F**；**≠ 可上线**（P0 块）。§2.2 三层进度——过程评审（可分叉）／**终稿确权＝Codex CLI 终审或委托人明示确权**／开发授权另发。本条不表示可上线 |
+| [lucy-20261107-lucy-0-30-core-direction.md](../governance/lucy-20261107-lucy-0-30-core-direction.md) | **v0.5 方向已锁定（不是 Spec，不授权实现）**：`0.30` **升级核心方向**。辅线＝现有功能 UX；**主线＝约 100 名存量用户每日稳定／准确／可靠交互，加上行级隔离**——五道机制闸（§4.5／§9 第 5 条，P1-28）。测试台判定见 INDEX。跟进主表见功能清单池。**终稿确权＝Codex 终审或委托人确权**；暂不开工落地。本条不表示可上线 |
 | [lucy-20261107-misreport-defense-and-stored-user-experience-plan.md](lucy-20261107-misreport-defense-and-stored-user-experience-plan.md) | **v0.1 草案，待拍板（不是 Spec，不授权实现）**：`0.30` 分支计划。**按 2026-11-06 CFO 选表误报事故 + 2026-11-07 客户沟通实录（客户：翊总 / 田总）**做定性——错表为 GPU 计提成本表（客户有权访问）⇒ **语义误报，ACL 越权排除**；事故有**两条独立故障轴**（选错表 ＋ 口径被 AI 自行加工）；**止血已落地**（改语义文件、客户真实账号复测通过）。八个缺口登记为 REQ-030-022–027（答复可核对性／选表语义暴露／多表命中先问＋表级歧义门闩／Eval 选表正确性／体感仪表盘与主动告警／口径固化）。**0.30 投入标准由沟通实录重新定义**：把已对客户承诺的「每天跑测评、每天迭代」「发现问题当天修正」从人力盯后台变成系统保证。本条不表示可上线 |
 | [lucy-20261107-mcp-next-step-guidance-and-journey-eval-plan.md](lucy-20261107-mcp-next-step-guidance-and-journey-eval-plan.md) | **v0.4 决策点已全部裁定（不是 Spec，不授权实现）**：`0.30` 分支计划。把外部文章主张逐条对拍 Lucy 现行实现——原文 7 条主张里 4 条已落地，真缺口 4 处（空结果下一步指导 / 路径断言编排面 / 审计旅程→Eval 用例草稿 / 批量工具反哺通道），登记为 REQ-030-018–021。含实施顺序、决策点与刻意不做项。D1（结构化）／D2（提示不阻断）／D3（先补 4 个预算型断言）／D4（单向导出）／D5（开 Spec）已于 2026-11-07 全部裁定并回写；G1 的 Spec／Plan 已至 **v0.7-draft**（Codex R3 残留已修；**G1 D3＝A 已确认**）。本条不表示可上线 |
 | [lucy-20261107-lucy-0-30-deferred-acceptance-execution-plan.md](lucy-20261107-lucy-0-30-deferred-acceptance-execution-plan.md) | **v0.2-draft，待严格评审／验收；冻结落地；未授权实现**：`0.30` 遗留验收执行（池 REQ-030-008／009／010／011／014）。把五个既有 Spec 的验收矩阵排期进 `0.30`，不新立功能合同。缺陷出口＝回池登记新条目，另走 Spec→Plan→授权。**本 Plan 收口不表示任何功能已收口，更不表示可上线** |
@@ -154,3 +155,21 @@ This directory stores repository-level implementation plans that are not scoped 
 e Lucy 202608 Enterprise Governance & Observability iteration across Admin, Trace / Evidence, Access Governance Gate, Security Eval, risk review candidates, and release readiness evidence |
 | `wo-202608-00-spec-branch-isolation.md` | Create a clean isolated branch/worktree for the frozen Lucy 202608 spec / plan / task documents |
 | `wo-202608-06-governance-review-release-evidence.md` | 202608-GOV-06 MiniMax Code handoff for risk review candidates and release readiness evidence package |
+
+## 文档治理补登记（2026-11-18）
+
+仅补入口；状态与授权以各文档正文为准。
+
+- [Lucy v0.25.0 Formal Release Plan](lucy-20261106-formal-release-plan.md)
+- [Lucy 双层 Release Notes 设计（自 0.30 起）](../design/lucy-20261107-dual-layer-release-notes-design.md)
+- [Docker 复现验收：连接热重载 ＋ 库内扫表读法](lucy-20261113-connection-reload-and-catalog-scan-docker-uat-plan.md)
+- [UAT-SUITE-EVENT-LOOP-RELIEF 执行计划](lucy-20261113-event-loop-relief-uat-execution-plan.md)
+- [P0 问数六套件 UAT（方案 B）Implementation Plan](lucy-20261113-p0-qa-uat-six-suites-plan.md)
+- [Schema 读法双模式（恢复 EE54 结构 diff）Implementation Plan](lucy-20261113-schema-read-dual-mode-plan.md)
+- [公网企业精简测试设计 — Claude Code 两轮对抗评审 Plan](lucy-20261114-cloud-enterprise-smoke-adversarial-review-plan.md)
+- [公网企业体验精简测试（Cloud Enterprise Smoke）设计](../design/lucy-20261114-cloud-enterprise-smoke-design.md)
+- [P0 升级后复跑 UAT（Cursor 用例／Claude 执行／Cursor 验收）Plan](lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md)
+- [P0 Wave B UAT（CALIBER-02／EXPOSURE-02）— Cursor＋Claude](lucy-20261114-p0-wave-b-caliber-exposure-uat-plan.md)
+- [P1-11／12／14 差集 UAT 收口（Cursor 用例＋验收／Claude 全真执行）Plan](lucy-20261115-p1-11-12-14-uat-cursor-claude-plan.md)
+- [P1-27／28／12／14 UAT 本波（Cursor 用例／验收／台账 · Claude Code 全真执行）Plan](lucy-20261115-p1-27-28-12-14-uat-cursor-claude-plan.md)
+- [UAT-SUITE-CONTEXT-CONTENT 落地 Plan](lucy-20261115-uat-context-content-landing-plan.md)

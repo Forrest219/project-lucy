@@ -898,6 +898,26 @@ describe("MCP proxy smoke", () => {
       const app = buildServer();
       await app.ready();
       try {
+        const laggingPack = await app.inject({
+          method: "GET",
+          url: "/api/admin/audit/export-pack?user=smoke_agent"
+        });
+        expect(laggingPack.statusCode).toBe(200);
+        const laggingEntries = parseStoredZipEntries(laggingPack.rawPayload);
+        const laggingManifest = JSON.parse(laggingEntries.get("manifest.json")!.toString("utf8"));
+        expect(laggingManifest.completeness.complete).toBe(false);
+        expect(laggingManifest.completeness.projection.reason).toBe("projection_lag");
+        expect(laggingManifest.completeness.projection.lag).toBeGreaterThan(0);
+
+        // buildServer does not start the CLI's background projector. Run the
+        // real projector before asserting completeness; keep all audit rows real.
+        const { getSecurityStore } = await import("../security/instance");
+        const { getAuditDb } = await import("../admin/audit");
+        const { runProjection } = await import("../security/projector");
+        const security = await getSecurityStore();
+        expect(security.ok).toBe(true);
+        if (!security.ok) throw new Error("synthetic security store unavailable");
+        runProjection(security.value, await getAuditDb());
         const pack = await app.inject({
           method: "GET",
           url: "/api/admin/audit/export-pack?user=smoke_agent"
@@ -1757,8 +1777,8 @@ describe("MCP proxy smoke", () => {
       const listBody = await listRes.json() as { result: { tools: Array<{ name: string; description?: string; inputSchema?: { required?: string[] } }> } };
       const beginTool = listBody.result.tools.find((tool) => tool.name === "lucy_begin_question");
       expect(beginTool).toBeDefined();
-      expect(beginTool?.description).toContain("Optional but recommended");
-      expect(beginTool?.description).toContain("never blocks");
+      expect(beginTool?.description).toContain("Recommended at the start");
+      expect(beginTool?.description).toContain("Skipping begin does not bypass these hard checks");
       expect(beginTool?.inputSchema?.required).toEqual(["intentSummary"]);
 
       const beginRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
@@ -1882,10 +1902,14 @@ describe("MCP proxy smoke", () => {
       const auditB = await waitForAuditRow("follow-session-b");
       expect(auditA.lucy_turn_id).toBe(turnA);
       expect(auditB.lucy_turn_id).toBe(turnB);
-      expect(auditA.turn_attribution_mode).toBe("session_bound");
-      expect(auditB.turn_attribution_mode).toBe("session_bound");
-      expect(auditA.turn_attribution_confidence).toBe("low");
-      expect(auditB.turn_attribution_confidence).toBe("low");
+      // Empty-sankey Spec SC-01: active begin is explicit continuation.
+      expect(auditA.turn_attribution_mode).toBe("explicit");
+      // Empty-sankey Spec SC-01: active begin is explicit continuation.
+      expect(auditB.turn_attribution_mode).toBe("explicit");
+      expect(auditA.turn_attribution_confidence).toBe("high");
+      expect(auditA.association_status).toBe("confirmed");
+      expect(auditB.turn_attribution_confidence).toBe("high");
+      expect(auditB.association_status).toBe("confirmed");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -2589,7 +2613,7 @@ describe("MCP proxy smoke", () => {
           id,
           result: {
             structuredContent: { sql: pushdownSql },
-            content: [{ type: "text", text: pushdownSql }]
+            content: [{ type: "text", text: JSON.stringify({ sql: pushdownSql, rows: [{ ok: true }], truncated: false }) }]
           }
         }));
         return;
@@ -2598,7 +2622,7 @@ describe("MCP proxy smoke", () => {
         res.end(JSON.stringify({
           jsonrpc: "2.0",
           id,
-          result: { content: [{ type: "text", text: "detailMessage = ...RUCT(" }] }
+          result: { content: [{ type: "text", text: JSON.stringify({ detailMessage: "...RUCT(", rows: [{ ok: true }], truncated: false }) }] }
         }));
         return;
       }
@@ -2657,8 +2681,10 @@ describe("MCP proxy smoke", () => {
       const bound = await post("bind-query", "lucy_query", queryArgs, { "mcp-session-id": "session-bind" });
       expect(bound.result?.isError).not.toBe(true);
       const bindAudit = await waitForAuditRow("bind-query");
-      expect(bindAudit.turn_attribution_mode).toBe("session_bound");
-      expect(bindAudit.turn_attribution_confidence).toBe("low");
+      // Empty-sankey Spec SC-01: active begin is explicit continuation.
+      expect(bindAudit.turn_attribution_mode).toBe("explicit");
+      expect(bindAudit.turn_attribution_confidence).toBe("high");
+      expect(bindAudit.association_status).toBe("confirmed");
       const beginText = begun.result?.content?.[0]?.text ?? "";
       const { turnId } = JSON.parse(beginText) as { turnId: string };
       const turnDb = new Database(auditDbPath, { readonly: true });

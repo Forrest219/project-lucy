@@ -9,7 +9,7 @@
 | 状态 | **v0.5；R2-F＋R3（O1／O2／O4）＋R4 已闭合（2026-11-08）；实现已合入；复审 BLOCK／CHANGE 已修；独立复验 PASS（2026-11-13）；SC-01–SC-26 证据关闭（2026-11-13，见 [证据审计](../reviews/2026-11-13-source-ambiguity-gate-sc-evidence-audit.md)）。功能合同已收口（2026-11-13）。本条收口不表示可上线。可用性续作（纯 MCP 逃生）→ [P1-35 Spec](lucy-20261116-source-ambiguity-mcp-escape-spec.md)（修订指针；未授权前不改本文件正文）** |
 | 授权边界 | R2-F＋R3＋R4 已闭合（R4：2026-11-08）。授权范围＝本 Spec／Plan 实现、测试与复审 BLOCK／CHANGE 修复；**不**表示可上线。 |
 | 决策来源 | 2026-11-06 CFO 误报事故 ＋ 误报防线 G2／G3：instructions 丢弃「问询范围确认」；字段歧义护栏对限定名错表零触发 |
-| 需求来源 | [需求池 REQ-030-024](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.2–4.3](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-3](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../plans/lucy-20261107-lucy-0-30-core-direction.md) |
+| 需求来源 | [需求池 REQ-030-024](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.2–4.3](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-3](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../governance/lucy-20261107-lucy-0-30-core-direction.md) |
 | 实施主体 | Lucy：动态 role-aware instructions 合并多表先问条文 ＋ MCP Proxy 在 `lucy_query`（及约定的姊妹工具）前做表级歧义硬门禁。不改 KTX；不改 ACL 裁决口径 |
 | 配套 Plan | [lucy-20261107-source-ambiguity-gate-plan.md](../plans/lucy-20261107-source-ambiguity-gate-plan.md) |
 | 评审记录 | [第 1 轮评审记录](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 对抗评审](../reviews/2026-11-08-source-ambiguity-gate-codex-review.md)（R1／R2／R3 BLOCK → 本稿修订；**≠ 终稿确权／开发授权**）；[实现复审／独立复验](../reviews/2026-11-13-source-ambiguity-gate-implementation-review.md)（2026-11-13）；[SC 证据审计](../reviews/2026-11-13-source-ambiguity-gate-sc-evidence-audit.md)（功能合同收口） |

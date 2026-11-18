@@ -1,0 +1,91 @@
+{
+  "baseline": "ff4762c9c4935d14dfbbf9b00c7e2bba2e36bfde",
+  "dirty": true,
+  "checked": [
+    {
+      "path": "webui/package-lock.json",
+      "sha256": "f2df907f357e58ef4bb52d94b22610df2031e347d16795def075891dc5d773a3"
+    },
+    {
+      "path": "webui/package.json",
+      "sha256": "3dd5a728b17582ff05031effd14e20ef572a9b3dfed5c909ef2567e5a1828576"
+    },
+    {
+      "path": "webui/server/__tests__/inferred-turn-maintainer-cold-start.test.ts",
+      "sha256": "e33f0ea0bfa558a0e06f981d66e1cacc4a29a3b618ca113ef99379036f7333c5"
+    },
+    {
+      "path": "webui/server/__tests__/inferred-turn-rebuild-recovery.test.ts",
+      "sha256": "12d483275492448d193ab8c7a19778fd77f8e707420bbb86cf26277af88a9fb7"
+    },
+    {
+      "path": "webui/server/__tests__/inferred-turn-watermark-snapshot.test.ts",
+      "sha256": "68799341cd58bc68db2afc0153ce9737bb86d294c5959d19fc6d8e65d0bc1ee2"
+    },
+    {
+      "path": "webui/server/__tests__/schema-structure-batch.test.ts",
+      "sha256": "68160b9ee16c105784a14325028ed9cd8e6c12750d2a17b19155cca1799f7415"
+    },
+    {
+      "path": "webui/server/__tests__/trace-evidence.test.ts",
+      "sha256": "d09ce69b635394efe272222273466dc8ddaf26e4825c8b1a5f5781be5b476824"
+    },
+    {
+      "path": "webui/server/__tests__/upgrade-fix-regressions.test.ts",
+      "sha256": "c7d34cc9f92adb5515c13597a7881e79bfb4439f49769273a932b2a60d02f37f"
+    },
+    {
+      "path": "webui/server/admin/inferred-turn-maintainer.ts",
+      "sha256": "6a931c667b0adfceb56b74eb44e409238c1948730164a9b68ffc8093e3a074a7"
+    },
+    {
+      "path": "webui/server/admin/page-budget.ts",
+      "sha256": "30ad26c40017fbe60bb223e6c8a48bcd3530547d275df1370be41a72ed906f61"
+    },
+    {
+      "path": "webui/server/index.ts",
+      "sha256": "c19bcb1578622a8d462c94f63436908db393b62b1e87a06b116ede5cd0158f85"
+    },
+    {
+      "path": "webui/server/proxy/audit.ts",
+      "sha256": "cf86e307f6706c5cc317782962a614cda956b7ce58380f23af8b02a71a47195d"
+    },
+    {
+      "path": "webui/server/runtime/readiness.ts",
+      "sha256": "c799d94a60750b5fcf9472078a2a5165ebbc0b19ac241c27553e0d3a178bb059"
+    },
+    {
+      "path": "webui/server/schema-structure-batch.ts",
+      "sha256": "1eb98fa2d825f94559d70a47457ad17a4e7c7df2e0b39df66ebf03027c8a1023"
+    },
+    {
+      "path": "webui/server/schema-structure.ts",
+      "sha256": "8d676787f6e0ff0f282d9806bdb25e46d8ed466c228825b05c21d1d9cc2e96b5"
+    },
+    {
+      "path": "webui/server/trace/evidence.ts",
+      "sha256": "80b8dd927098577bf7506e048afc0bb7b331577755c95783fdc1c7d29ff02d50"
+    },
+    {
+      "path": "webui/src/components/CreateConnectionDrawer.tsx",
+      "sha256": "3c5173947ca128a779351e5f6e5096ee88516c98cffcc3d347a2914dd3675436"
+    },
+    {
+      "path": "webui/src/components/connections/EditConnectionDialog.tsx",
+      "sha256": "c1f40a2c11b6d52ae17d53fb0f217c306d47e7a8dad8ba3ab55e779761b955e5"
+    },
+    {
+      "path": "webui/src/lib/prepareSchemaStructure.ts",
+      "sha256": "eb15265422f9d73cccaec04f47a0c636261d29248b00a643aef44bec9358df33"
+    },
+    {
+      "path": "webui/src/pages/TableEditor.tsx",
+      "sha256": "1836b51625830666cebc526a6c48166fc80d0adccee5e648c177350caaa49a7a"
+    },
+    {
+      "path": "webui/src/pages/admin/NewToken.tsx",
+      "sha256": "70c9a3b67173601d61bb36b378d29996d9b9b62b91b3bb7643e729b0c630c196"
+    }
+  ],
+  "mismatches": []
+}

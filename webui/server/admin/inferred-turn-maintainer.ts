@@ -98,41 +98,42 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     await yieldToEventLoop();
     const database = await deps.getDb();
     const cutoff = new Date(now() - lookbackHours * 60 * 60 * 1000).toISOString();
-    const mark = database.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log`).get() as { id: number };
+    const mark = database.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log`).get() as { id: number } | undefined;
     const nextUser = database.prepare(`SELECT user_id FROM access_log WHERE user_id > ? ORDER BY user_id LIMIT 1`);
-    const newestRow = database.prepare(`SELECT ts FROM access_log WHERE user_id = ? AND ts >= ? ORDER BY ts DESC LIMIT 1`);
+    const uncoveredRow = database.prepare(`SELECT id FROM access_log WHERE user_id = ? AND ts >= ? AND id > ? LIMIT 1`);
     // P1-45: covered() 使用 inferred_rebuild_state 而非 inferred_turns.updated_at，
     // 避免中断后残缺写入被判为已覆盖，同时收口 SC-04（15 分钟余量空转全量重建）。
     let rebuildState: Database.Statement | null = null;
     try {
       rebuildState = database.prepare(
-        `SELECT status, watermark FROM inferred_rebuild_state WHERE user_id = ?`
+        `SELECT status, watermark_id FROM inferred_rebuild_state WHERE user_id = ?`
       );
     } catch {
-      rebuildState = null;
+      // Legacy schema has no trustworthy id boundary. Rebuild once after migration.
     }
-    const covered = (userId: string, newestTs: string): boolean => {
-      // 若表不存在（旧库尚未迁移），保守地视为未覆盖，触发重建。
-      if (!rebuildState) return false;
-      const state = rebuildState.get(userId) as { status: string; watermark: string | null } | undefined;
-      // 缺行或 in_progress（包含中断场景）均视为未覆盖。
-      if (!state || state.status !== "complete") return false;
-      // SC-04: 以水位（重建开始时的最新日志 ts）为准；watermark >= newestTs 时已覆盖。
-      // ISO 字符串可直接按字典序比较；watermark 为 '' 时对任意非空 newestTs 均返回 false。
-      return (state.watermark ?? "") >= newestTs;
+    const coveredId = (userId: string): number => {
+      if (!rebuildState) return 0;
+      const state = rebuildState.get(userId) as { status: string; watermark_id: number | null } | undefined;
+      // Old timestamp watermarks may already include a row the old rebuild missed.
+      const id = state?.watermark_id;
+      return state?.status === "complete" && typeof id === "number" && Number.isSafeInteger(id) && id >= 0 ? id : 0;
     };
     let cursor = "";
     let probed = 0;
+    let lastYield = performance.now();
     for (;;) {
       const next = nextUser.get(cursor) as { user_id: string } | undefined;
       if (!next) break;
       cursor = next.user_id;
-      const newest = newestRow.get(cursor, cutoff) as { ts: string } | undefined;
-      if (newest && !covered(cursor, newest.ts)) touch(cursor);
+      const uncovered = uncoveredRow.get(cursor, cutoff, coveredId(cursor));
+      if (uncovered) touch(cursor);
       probed += 1;
-      if (probed % INFERRED_SCAN_YIELD_USERS === 0) await yieldToEventLoop();
+      if (probed % INFERRED_SCAN_YIELD_USERS === 0 || performance.now() - lastYield >= 20) {
+        await yieldToEventLoop();
+        lastYield = performance.now();
+      }
     }
-    noteMaxId(mark.id);
+    noteMaxId(Number(mark?.id ?? 0));
     scanned = true;
   };
 

@@ -1036,14 +1036,14 @@
   4. `docs/plans/README.md` 本条索引
   5. `docs/governance/project-overview.md` §9 本条现行行（另加历史 `v1.x 更新` 留痕，不回改旧行）
   6. `docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md` REQ-030-018 条目状态
-  7. `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md` P0-5／S4 跟进状态
+  7. `docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md` P0-5／S4 跟进状态
 
   示例收口句（日期实填）：`**vX.Y 功能合同已收口（2026-11-XX）**。SC-01–SC-30 关闭。本条收口不表示可上线`——Spec／Plan／上述镜像**同句**。
 
 - [ ] **Step 5：提交**
 
   ```bash
-  git add docs/specs/lucy-20261107-empty-result-next-step-guidance-spec.md docs/plans/lucy-20261107-empty-result-next-step-guidance-plan.md docs/README.md docs/plans/README.md docs/governance/project-overview.md docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md
+  git add docs/specs/lucy-20261107-empty-result-next-step-guidance-spec.md docs/plans/lucy-20261107-empty-result-next-step-guidance-plan.md docs/README.md docs/plans/README.md docs/governance/project-overview.md docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md
   git commit -m "docs: close empty-result next-step guidance functional contract"
   ```
 

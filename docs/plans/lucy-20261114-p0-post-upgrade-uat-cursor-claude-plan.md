@@ -1,5 +1,10 @@
 # P0 升级后复跑 UAT（Cursor 用例／Claude 执行／Cursor 验收）Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 状态 | 执行进度以本文件原Task勾选和已有跑次为准；本次仅补齐文档形态，未复跑本计划业务验收，当前候选结果待验。 |
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+
 > **For agentic workers:** 委托人 2026-11-14 已批准执行。Cursor 写用例＋brief＋验收；Claude Code 全真跑六套；禁止 CR／vitest 冒充 PASS。
 
 **Goal:** 在 **已完成 `demo:upgrade`** 的本机 demo 上，对 P0 问数六套件复跑全真 UAT，确认绿灯挂在升级后 `gitSha`（≠ 前次 Wave A 的 `3aa402c9`）。
@@ -44,3 +49,23 @@
 - [x] T3 Cursor：验收 → INDEX／e2e／lint；向委托人交结论
 
 **≠ 可上线；≠ 核心升级完成；≠ 改 Spec 功能合同收口句。**
+
+## 目标（治理补齐）
+
+在升级后的demo上复跑P0六套，结果绑定升级后实际gitSha。
+
+## 开工前置（治理补齐）
+
+先验证R0-UPGRADE与新容器身份，不得沿用前次Wave A的3aa402c9证据。
+
+## 验收（治理补齐）
+
+按Wave范围执行R0/R0-UPGRADE和各必做项；Wave B继续推迟，SAG-02缺person/attestation按原范围记BLOCKED。
+
+## 完成定义（治理补齐）
+
+六套新runs经Cursor验收后更新INDEX/e2e/latestRun；结果只证明本次容器，不能宣称核心升级完成。
+
+## 风险（治理补齐）
+
+旧镜像结果可能被错挂到新候选；必须记录实际gitSha，失败不改cases期望。

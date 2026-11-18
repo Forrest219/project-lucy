@@ -41,6 +41,9 @@ vi.mock("../admin/audit.js", () => ({
             auditControl.revoked.some((row) => row.token_hash === hash) ? { hit: 1 } : undefined
         };
       }
+      // Startup maintainer probes are not the traffic COUNT used by renewal.
+      if (sql.includes("SELECT user_id FROM access_log WHERE user_id >")) return { get: () => undefined };
+      if (sql.includes("SELECT COALESCE(MAX(id), 0) AS id FROM access_log")) return { get: () => ({ id: 0 }) };
       if (sql.includes("FROM access_log")) {
         return { get: () => ({ cnt: auditControl.calls7d }) };
       }

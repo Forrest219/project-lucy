@@ -1,5 +1,10 @@
 # 新建连接后执行层未生效 — 修复与回归门禁 Implementation Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 状态 | 执行进度以本文件原Task勾选和已有跑次为准；本次仅补齐文档形态，未复跑本计划业务验收，当前候选结果待验。 |
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 修复「WebUI 新建／改写连接后执行层仍读旧 `ktx.yaml`、必须手动重启 KTX」的运维级缺陷，并把「创建成功 ⇒ 执行层已加载新连接」变成可自动拦截的回归门禁。
@@ -152,3 +157,15 @@
 | 旧 CLI 回退在无 supervisor 的开发机仍需要 | 保留 capability 检测分支；单测双路径 |
 
 回滚：恢复 `ktx-mcp-reload.ts` 旧行为仅作紧急措施；产品上仍应提示手动「重载执行层」，不得恢复「静默失败当成功」。
+
+## 开工前置（治理补齐）
+
+先核对Spec 191 supervisor协议及已有E2E缺口；运行代码须取得原计划要求的开发授权。
+
+## 验收（治理补齐）
+
+按§3登记的单测、E2E-CON-07、E2E-MCP-02及UAT-CONN-RELOAD-01逐项取证；不能以API写盘成功代替查询可用。
+
+## 完成定义（治理补齐）
+
+§4 Task 1–6有对应证据；未通过的Live/UAT独立记缺口，不用单测代替。

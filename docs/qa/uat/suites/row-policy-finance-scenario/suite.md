@@ -5,7 +5,7 @@
 | Suite ID | `UAT-SUITE-ROW-POLICY` |
 | 总账 ID | **P1-28**／REQ-030-049（**核心分母**） |
 | 目标 | 财务／业务分析场景：至少 12 个用户对至少 2 张表按不同行范围问数；每人只看到自己的行；关 proven 不能取到未过滤行 |
-| 合同回链 | 方向 [§4.5／§9 第 5 条](../../../../plans/lucy-20261107-lucy-0-30-core-direction.md)；需求池 REQ-030-049。既有行权限 Spec **状态不动**，本套件不改它们的验收编号 |
+| 合同回链 | 方向 [§4.5／§9 第 5 条](../../../../governance/lucy-20261107-lucy-0-30-core-direction.md)；需求池 REQ-030-049。既有行权限 Spec **状态不动**，本套件不改它们的验收编号 |
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md) |
 | runs | [runs/](runs/) |

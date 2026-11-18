@@ -13,11 +13,17 @@
 ## 闭口层级
 
 - 层级：功能合同
+- 本条出口：§4 SC-01–SC-12：显式延续关联、confirmed-only、空态骨干及已有收口记录可核对。
 - 本条承诺：SC-01–SC-12
 - 不在本条出口：客户环境发布取证、Docker 重建（除非另授）、改默认筛
 - 上线关系：本条收口不表示可上线
 
 ## Terminology Compliance
+
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms:
+- 沿用本小节已有「闲置骨干」图例定义；不新增其他产品概念。
 
 Follows `webui/docs/00-product-terminology-standard.md`. 产品名仍为「访问关系图」。
 
@@ -36,7 +42,7 @@ New UI copy（图例，可选）：
 | D3 | 同会话在 `lucy_begin_question`（或其它已 `record` 的显式 turn）之后、无冲突 `x-lucy-turn-id` 时，后续 `tools/call` **按显式延续**解析 → `association_status=confirmed` |
 | D4 | 本条不改默认问询种类／访问等级 |
 
-## 2. 关联写入（Normative）
+## 2. 核心流程（伪代码）：关联写入（Normative）
 
 ```text
 on tools/call (tool ≠ lucy_begin_question):

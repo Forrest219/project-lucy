@@ -135,7 +135,7 @@ SELECT DISTINCT user_id FROM access_log WHERE ts >= ?
 
 ## 3. Non-Goals
 
-- 不改 `synchronous`、`journal_mode`、`wal_autocheckpoint`。fsync 对客户盘的影响没有证据，待客户侧 `dd` 数据。
+- 不改 `synchronous`，也不改已经是 WAL 的 `journal_mode`。审计连接的 `wal_autocheckpoint` 改为 32 页，避免默认 1000 页的检查点在限速盘上一次占住事件循环数秒。客户盘的 `dd` 数据仍待补。
 - 不改 Helm 探针、不改 Fastify `pluginTimeout`。放宽超时只是把崩溃改成长时间卡顿。
 - 不引入 worker 线程。迁移与写入会争锁，worker 不能让主线程免于阻塞。**若 §4.4 的时间预算与「只补算未覆盖用户」落地后，UAT-COLD-02／04 仍过不了，再评估把补算的读取放到只读 worker，须另批。**
 - 不把迁移分块、不把索引改成可选或后台建。本条只把它挪到监听之前并量化。

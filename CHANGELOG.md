@@ -31,7 +31,7 @@ All notable user-visible changes to Lucy ship here. Versions follow `<major>.<mi
 - **访问关系图空桑基**：begin 后同会话触表写入 confirmed；无访问时画闲置骨干连通带（功能合同已收口）。
 
 ### Notes
-- 用户叙事定稿：`docs/releases/v0.30.0-user-facing.md`；草稿：`docs/releases/drafts/0.30.0-user.md`（双层 RN 设计见 `docs/plans/lucy-20261107-dual-layer-release-notes-design.md`）。Skill／扫表／harness 类 Fixed／Changed 中，仅用户可观察项进定稿／草稿；工程接入项可不进。
+- 用户叙事定稿：`docs/releases/v0.30.0-user-facing.md`；草稿：`docs/releases/drafts/0.30.0-user.md`（双层 RN 设计见 `docs/design/lucy-20261107-dual-layer-release-notes-design.md`）。Skill／扫表／harness 类 Fixed／Changed 中，仅用户可观察项进定稿／草稿；工程接入项可不进。
 - **P1-10／REQ-030-031**：委托人结案——本分支不做 CLI／WebUI／效果门；不得再写成「已交付 CLI」。
 - P0-6／P0-7／P0-B 及未授权 P1／P2 **不进**本节主张（O 已闭合者仍待 R2-F／未授权实现）。
 

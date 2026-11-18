@@ -53,11 +53,12 @@ export function manifestKnown(
 export async function fetchSchemaStructure(
   connectionId: string,
   schema: string,
-  tables?: string[]
+  tables?: string[],
+  options: { batchRead?: boolean } = {}
 ): Promise<SchemaStructurePreview> {
   return apiPost<SchemaStructurePreview>(
     `/api/connections/${encodeURIComponent(connectionId)}/schema-structure`,
-    tables?.length ? { schema, tables } : { schema }
+    tables?.length ? { schema, tables, ...(options.batchRead ? { batchRead: true } : {}) } : { schema }
   );
 }
 
@@ -106,10 +107,11 @@ export async function readCheckedTableColumns(
   let columnCount = 0;
   let done = 0;
   let pending = [...tables];
+  let batchSize = TABLES_PER_REQUEST;
   while (pending.length > 0) {
-    const batch = pending.slice(0, TABLES_PER_REQUEST);
+    const batch = pending.slice(0, batchSize);
     onProgress?.(done, tables.length, batch[0]);
-    const part = await fetchSchemaStructure(connectionId, schema, batch);
+    const part = await fetchSchemaStructure(connectionId, schema, batch, { batchRead: true });
     if (part.namesOnly) {
       throw new ApiError({ code: "READ_FAILED", message: `读取表「${batch[0]}」的字段失败。` });
     }
@@ -117,6 +119,12 @@ export async function readCheckedTableColumns(
     const rejections = part.rejections ?? [];
     const unread = new Set([...deferred, ...rejections.map((item) => item.table)]);
     if (unread.size >= batch.length && rejections.length === 0) {
+      // A broad metadata query can spend its budget before a truncated result can
+      // be split. Retry smaller batches, never the same no-progress request.
+      if (batch.length > 1) {
+        batchSize = Math.max(1, Math.floor(batch.length / 2));
+        continue;
+      }
       throw new ApiError({ code: "READ_FAILED", message: "读取表结构没有进展，请稍后重试。" });
     }
     const readTables = tablesMapping(part.yaml);

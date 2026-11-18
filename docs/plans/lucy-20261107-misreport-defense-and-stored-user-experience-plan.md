@@ -11,8 +11,8 @@
 | 需求来源 | 2026-11-07 产品对话：①「0.30 重点提升 Eval 与平台运维，已有 100 用户，C-level 体感最关键」；② **2026-11-06 事故：CFO 询问资产数量，其 Agent 选错表并作答，严重误报**；③ **2026-11-07 事故沟通实录（客户：翊总 / 田总），见 §1.4** |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」「新增 Spec / Plan 的落盘清单」 |
 | 关联需求池 | [`lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)（REQ-030-022…027） |
-| 核心方向 | [`lucy-20261107-lucy-0-30-core-direction.md`](lucy-20261107-lucy-0-30-core-direction.md)（0.30 投入标准与主线／辅线排序；本分支计划是主线的事故级展开） |
-| 功能清单池 | [`lucy-20261107-lucy-0-30-feature-inventory-pool.md`](lucy-20261107-lucy-0-30-feature-inventory-pool.md)（**跟进主表**；P0 立项已批准；REQ-030-022–027 映射 P0-1…P0-7） |
+| 核心方向 | [`lucy-20261107-lucy-0-30-core-direction.md`](../governance/lucy-20261107-lucy-0-30-core-direction.md)（0.30 投入标准与主线／辅线排序；本分支计划是主线的事故级展开） |
+| 功能清单池 | [`lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)（**跟进主表**；P0 立项已批准；REQ-030-022–027 映射 P0-1…P0-7） |
 
 ## 1. 目标
 
@@ -302,7 +302,7 @@ CFO：「资产的数量」
 > **排序依据已由沟通实录改写**（§1.4.3、§1.5）：事故**已止血**（F3+F4），剩余工作是**防复发**；且 0.30 的投入标准是**把「每天迭代、当天修正」的人工承诺变成系统保证**。
 
 > **两个顺序，别混用**（2026-11-07 对齐）：
-> - **Spec／Plan 撰写批次** → 以 [功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md) §2.1 的 **S1–S6** 为准（那是跟进主表，已批准分批）。
+> - **Spec／Plan 撰写批次** → 以 [功能清单池](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md) §2.1 的 **S1–S6** 为准（那是跟进主表，已批准分批）。
 > - **实现波次（本表 W1–W7）** → 以本表为准；两者**不冲突**，因为本波次落在「落地冻结」期之前尚不存在，撰写批次服务于评审、实现波次服务于将来授权后的施工顺序。
 > - 差异点只有一处：清单池把 **023（Catalog 语义暴露）** 排在 **022（答复可核对）** 之前，本表相反。**撰写阶段按清单池走（S2 已开 023）；实现阶段建议按本表走（022 先于 023）**——理由是 022 让误报当场可识破，是止损；023 是降发生率。若委托人另有裁定，以裁定为准并回写本表。
 

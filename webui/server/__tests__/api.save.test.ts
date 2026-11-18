@@ -4,6 +4,13 @@ import path from "node:path";
 import request from "supertest";
 import { parse } from "yaml";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// KTX is an external process. Keep the real save, audit and policy paths while
+// supplying the successful reload receipt required by the configuration API.
+vi.mock("../ktx-mcp-reload.js", () => ({
+  reloadKtxMcpAfterConfigWrite: vi.fn(async () => ({ status: "reloaded", detail: "KTX MCP restarted and ready" })),
+  reloadKtxMcpExecutionRuntime: vi.fn(async () => ({ status: "reloaded", detail: "KTX MCP restarted and ready" }))
+}));
 import { buildServer } from "../index";
 import { validateSource } from "../ktx";
 

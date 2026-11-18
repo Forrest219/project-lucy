@@ -1,5 +1,9 @@
 # Lucy 0.30 P0 治理优化 Implementation Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 验收 | 以本文件验收小节、Task通过标准及已链接证据为准；历史结果不代表当前候选已复测。 |
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 按方案 C 分两波把 0.30 P0 主线的**实现 CR 证据债**与**未齐条目确权路径**收干净，使清单／Spec／`docs/reviews/` 三处现值一致；**不**借本 Plan 宣称可上线。
@@ -14,7 +18,7 @@
 | 决策来源 | 2026-11-13 分支审计（相对 `lucy-v0.25`）；委托人选定方案 **C**（先治理债、再未齐主线） |
 | 状态 | **可执行（文档／评审）**。**Wave A 已完成（2026-11-13）**——P0-2／A／4／5 实现 CR 落盘＋镜像回链。**Wave B Task 6–8 O 裁定回写已完成（2026-11-13）**；**Task 9 R2-F 仍 OPEN**。**≠ 可上线**。Wave B **不授权改代码** |
 | 授权边界 | 本 Plan **≠** 上线／客户出包／把 P0-6／7／B 直接开工。发现 BLOCK 时：Wave A 可修已授权条的实现；Wave B 只改 Spec／Plan／评审 |
-| 对照事实源 | [功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md) §2.2／§3；[核心方向](lucy-20261107-lucy-0-30-core-direction.md) |
+| 对照事实源 | [功能清单池](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md) §2.2／§3；[核心方向](../governance/lucy-20261107-lucy-0-30-core-direction.md) |
 | 既有 CR 范本 | [P0-1 CR](../reviews/2026-11-08-p0-1-caliber-binding-code-review.md)；[P0-3 实现复审](../reviews/2026-11-13-source-ambiguity-gate-implementation-review.md) |
 
 ## Global Constraints
@@ -59,7 +63,7 @@
 | `docs/reviews/2026-11-13-p0-7-o1-o6-decision-package.md` | P0-7 建议包 E 决策纸（新建；从 Spec 抽出可勾选表） |
 | `docs/reviews/2026-11-13-p0-b-o1-o3-decision-package.md` | P0-B 建议包 F 决策纸（新建） |
 | 各条 Spec／Plan 头部「状态」「评审记录」 | 回链 CR；Wave B 回写 O 闭合／R2-F |
-| `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md` | §3 链接列补 CR；变更行登记本 Plan |
+| `docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md` | §3 链接列补 CR；变更行登记本 Plan |
 | `docs/README.md`／`docs/plans/README.md`／`docs/governance/project-overview.md` §9 | 镜像同句现值（仅在状态句变化时） |
 
 **已存在、Wave A 只引用不重写：**
@@ -96,7 +100,7 @@ cd webui && npx vitest run <test-globs> --reporter=dot
 - Create: `docs/reviews/2026-11-13-p0-2-catalog-business-semantics-code-review.md`
 - Modify: `docs/specs/lucy-20261107-catalog-business-semantics-spec.md`（评审记录／状态补 CR 链）
 - Modify: `docs/plans/lucy-20261107-catalog-business-semantics-plan.md`（同句）
-- Modify: `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`（§3 P0-2 链接列）
+- Modify: `docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md`（§3 P0-2 链接列）
 - Test: `webui` 内 `catalog-business-semantics` 相关 vitest（以 SC 审计所列文件为准）
 
 **Interfaces:**
@@ -139,7 +143,7 @@ Spec／Plan「评审记录」加 CR 链接；清单 §3 P0-2 列仿 P0-1 加 `[C
 - Create: `docs/reviews/2026-11-13-p0-a-semantic-source-field-exposure-code-review.md`
 - Modify: `docs/specs/lucy-20261107-semantic-source-field-exposure-spec.md`
 - Modify: `docs/plans/lucy-20261107-semantic-source-field-exposure-plan.md`
-- Modify: `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`
+- Modify: `docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md`
 - Test: SC 审计所列 5 files／75 passed 对应 vitest
 
 **Interfaces:**
@@ -169,7 +173,7 @@ Expected: 审计声称的 75 passed；失败则 BLOCK。
 - Create: `docs/reviews/2026-11-13-p0-4-answer-verifiability-code-review.md`
 - Modify: `docs/specs/lucy-20261107-answer-verifiability-spec.md`
 - Modify: `docs/plans/lucy-20261107-answer-verifiability-plan.md`
-- Modify: `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`
+- Modify: `docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md`
 - Test: answer_verifiability／相关 proxy 测（以 Spec SC 与 `bcdeb624` 为准）
 
 **Interfaces:**
@@ -199,7 +203,7 @@ git show --stat bcdeb624
 - Create: `docs/reviews/2026-11-13-p0-5-empty-result-next-step-code-review.md`
 - Modify: `docs/specs/lucy-20261107-empty-result-next-step-guidance-spec.md`
 - Modify: `docs/plans/lucy-20261107-empty-result-next-step-guidance-plan.md`
-- Modify: `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`
+- Modify: `docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md`
 - Test: [`2026-11-13-empty-result-next-step-sc-evidence-audit.md`](../reviews/2026-11-13-empty-result-next-step-sc-evidence-audit.md) 所列测
 
 **Interfaces:**
@@ -371,3 +375,11 @@ Wave B Done when：三条均有决策纸；每条要么 O＋R2-F 闭合，要么
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | v0.1 | 2026-11-13 | 初稿。委托人选 C；Wave A CR 债＋Wave B O／R2-F |
+
+## 开工前置（治理补齐）
+
+先核对各Task触及的治理文件与委托人批准范围；治理澄清不得扩成运行代码授权。
+
+## 验收（治理补齐）
+
+按各Task的验证命令、回链与状态镜像逐项核验；终稿确权与开发授权仍按原正文分开。

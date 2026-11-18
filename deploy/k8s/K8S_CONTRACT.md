@@ -27,7 +27,8 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.8` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Optional SMTP notification wiring, off by default. Product version was still `0.20.0` when this chart package was cut |
 | `0.2.8` | `0.25.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.25`. Chart package version was not bumped. Superseded as current product line by `0.30.0` |
 | `0.2.8` | `0.30.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.30`. Chart package version was not bumped. Superseded as the current chart by `0.2.9` |
-| `0.2.9` | `0.30.0` | `0.16.0` | startup and readiness use `/api/readyz`; liveness uses `/api/livez` | **Current**. Probe split only. Product version stays `0.30.0`. A 0.25 image does not serve `/api/livez`; keep the previous liveness values until that image includes the route |
+| `0.2.9` | `0.30.0` | `0.16.0` | startup and readiness use `/api/readyz`; liveness uses `/api/livez` | Probe split only. Product version stays `0.30.0`. A 0.25 image does not serve `/api/livez`; keep the previous liveness values until that image includes the route. Superseded as the current chart by `0.2.10` |
+| `0.2.10` | `0.30.0` | `0.16.0` | same probes as 0.2.9; `env.LUCY_INFERRED_MAINTAINER` is rendered when set | **Current**. Empty value does not set the variable. Product version stays `0.30.0` |
 
 Image tags must be **immutable**. Recommended form:
 

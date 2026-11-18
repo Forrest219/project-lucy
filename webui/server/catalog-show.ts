@@ -99,6 +99,13 @@ export async function runCatalogShow(
   deps: DriverDeps = {}
 ): Promise<SqlResult> {
   const started = Date.now();
+  const monotonicStart = performance.now();
+  const totalTimeout = options.timeoutMs ?? DEADLINE_MS;
+  const remaining = (): number => {
+    const left = Math.floor(totalTimeout - (performance.now() - monotonicStart));
+    if (left <= 0) throw new Error("Catalog connection/query timed out");
+    return left;
+  };
   let password = "";
   let connection: CatalogShowConnection | undefined;
   const base = { command: "mysql SHOW", args: [] as string[], stdout: "" };
@@ -114,14 +121,14 @@ export async function runCatalogShow(
       port,
       user: conn.username,
       password,
-      connectTimeout: options.timeoutMs ?? DEADLINE_MS,
+      connectTimeout: remaining(),
       multipleStatements: false,
       rowsAsArray: true
     });
 
     const deadline = <T>(start: (done: (error: Error | null, value?: T) => void) => void): Promise<T> => new Promise((resolve, reject) => {
       let settled = false;
-      const timer = setTimeout(() => finish(new Error("Catalog connection/query timed out")), options.timeoutMs ?? DEADLINE_MS);
+      const timer = setTimeout(() => finish(new Error("Catalog connection/query timed out")), remaining());
       const finish = (error: Error | null, value?: T) => {
         if (settled) return;
         settled = true;
@@ -139,7 +146,7 @@ export async function runCatalogShow(
 
     await deadline<void>((done) => connection!.connect((error) => done(error)));
     const answer = await deadline<{ rows: unknown[][]; headers: string[] }>((done) => {
-      connection!.query({ sql, timeout: options.timeoutMs ?? DEADLINE_MS, rowsAsArray: true }, (error, rows, fields) => {
+      connection!.query({ sql, timeout: remaining(), rowsAsArray: true }, (error, rows, fields) => {
         if (error) return done(error);
         if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row))) return done(new Error("Invalid catalog rows"));
         done(null, { rows: rows as unknown[][], headers: (fields ?? []).map((field) => field.name) });

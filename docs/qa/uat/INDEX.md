@@ -119,3 +119,5 @@ npm run lint:e2e-ledger
 兜底检查：`npm run lint:e2e-ledger`（或 `node scripts/uat/check-e2e-ledger.mjs`）。
 
 WebUI：`http://127.0.0.1:55176`
+
+2026-11-18 接管补充：[Codex 慢盘及恢复验证](suites/rebuild-probe-budget/runs/2026-11-18-codex-takeover.md)。仅补充容器验证通过；原正式套件状态与客户发布缺口保留，不据此覆盖原 FAIL/PASS。

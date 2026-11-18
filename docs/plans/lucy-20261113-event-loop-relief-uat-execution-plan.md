@@ -1,5 +1,11 @@
 # UAT-SUITE-EVENT-LOOP-RELIEF 执行计划
 
+| 治理字段 | 内容 |
+|---|---|
+| 状态 | 执行进度以本文件原Task勾选和已有跑次为准；本次仅补齐文档形态，未复跑本计划业务验收，当前候选结果待验。 |
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+| 验收 | 以本文件验收小节、Task通过标准及已链接证据为准；历史结果不代表当前候选已复测。 |
+
 > **For agentic workers:** 本文件是**验收执行计划**，不是新功能实现 Plan。执行时用 `executing-plans` 按 Task 勾选；不要改产品代码，除非验收失败后另开缺陷修复授权。REQUIRED SUB-SKILL：`superpowers:executing-plans`（或 subagent-driven-development）。
 
 | 元数据 | 内容 |
@@ -355,3 +361,19 @@ Expected: 退出 0；或按脚本规则修齐指针后再跑。
 2. **Inline Execution** — 本会话按 `executing-plans` 连续跑，关键检查点停顿  
 
 回复选定后从 **Task 0** 开始（先确认是否 `demo:upgrade`）。
+
+## 开工前置（治理补齐）
+
+先按Task 0绑定源码/容器身份并验证livez；Track B未具备探针时保持BLOCKED。
+
+## 验收（治理补齐）
+
+以§3判定矩阵核对R0、LOOP-01–04及可选05；115k合成规模证据与demo证据分开登记。
+
+## 完成定义（治理补齐）
+
+Task 6生成本套件runs，INDEX/e2e-ledger回链且与实测一致；客户LOOP-05默认不执行，保留原因。
+
+## 风险（治理补齐）
+
+demo小库不能代替规模门槛；禁止业务高峰客户168小时审计请求，无livez旧镜像不能套新探针。

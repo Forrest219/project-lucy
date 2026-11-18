@@ -41,7 +41,7 @@ import {
   withAllocatedInquiryNo
 } from "../admin/audit-inquiry-serial.js";
 import { pauseAfterStretch } from "../admin/yield-slices.js";
-import { nextRebuildPageSize, nextSliceSize, REBUILD_ALLOCATE_CHUNK, REBUILD_PAGE_INITIAL, REBUILD_WRITE_SLICE_INITIAL, REBUILD_WRITE_SLICE_MAX, REBUILD_WRITE_SLICE_MIN } from "../admin/page-budget.js";
+import { nextRebuildPageSize, nextSliceSize, REBUILD_ALLOCATE_CHUNK, REBUILD_MUTATION_CHUNK, REBUILD_PAGE_INITIAL, REBUILD_WRITE_SLICE_INITIAL, REBUILD_WRITE_SLICE_MAX, REBUILD_WRITE_SLICE_MIN } from "../admin/page-budget.js";
 import {
   CALL_MONITOR_P95_MIN_SAMPLES,
   callMonitorBucketIndex,
@@ -885,6 +885,7 @@ async function getDb(): Promise<Database.Database> {
   ensureColumn(db, "conversation_turns", "association_status", "TEXT");
   ensureColumn(db, "inferred_turns", "client", "TEXT");
   ensureColumn(db, "inferred_turns", "session_id", "TEXT");
+  ensureColumn(db, "inferred_rebuild_state", "watermark_id", "INTEGER");
   ensureInquirySerialSchema(db);
   conversationTurnInsertStmt = null;
   db.exec(`
@@ -2627,11 +2628,29 @@ async function rebuildInferredTurnsUnlocked(
     await pauseAfterStretch(performance.now() - stretchStartedAt);
     stretchStartedAt = performance.now();
   };
-  const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
-  const ceiling = database.prepare(
-    `SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ? AND ts >= ?`
-  ).get(userId, cutoff) as { id: number };
-  const ceilingId = ceiling.id;
+  let cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+  // Preserve complete historical clusters that cross the rolling window. Loading
+  // only their recent members would allocate a second inquiry for the same call.
+  // Expand to interval closure so interleaved sessions are never cut in half.
+  const crossingWindow = database.prepare(`
+    SELECT MIN(started_at) AS started_at FROM inferred_turns
+    WHERE user_id = ? AND started_at < ? AND ended_at >= ?
+  `);
+  for (;;) {
+    const crossing = crossingWindow.get(userId, cutoff, cutoff) as { started_at: string | null };
+    if (!crossing.started_at) break;
+    cutoff = crossing.started_at;
+    await rest();
+  }
+  // One statement, before any yield: id ceiling and max ts are the same snapshot.
+  // A later MAX(ts) would adopt calls inserted during the rebuild and mark them covered.
+  const snapshot = database.prepare(
+    `SELECT COALESCE(MAX(id), 0) AS id, COALESCE(MAX(ts), '') AS ts
+     FROM access_log WHERE user_id = ? AND ts >= ?`
+  ).get(userId, cutoff) as { id: number; ts: string };
+  const ceilingId = snapshot.id;
+  const watermarkTs = snapshot.ts;
+  const watermarkId = snapshot.id;
 
   const loadPage = database.prepare(`
     SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash, lucy_session_id, lucy_turn_id, client, client_version, user_agent
@@ -2746,7 +2765,23 @@ async function rebuildInferredTurnsUnlocked(
     return rows;
   }
 
-  const writeCluster = (cluster: BuiltCluster): boolean => {
+  const linkChunkSize = 32;
+  // Large clusters need the same yielding guarantees as many small clusters.
+  const preloadLargeClusterSources = async (cluster: BuiltCluster): Promise<void> => {
+    const ids = cluster.business.map((row) => row.id);
+    if (ids.length <= linkChunkSize) return;
+    const merged = new Map<string, { connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>();
+    for (let offset = 0; offset < ids.length; offset += linkChunkSize) {
+      for (const row of sourcesFor(ids.slice(offset, offset + linkChunkSize))) {
+        const key = JSON.stringify([row.connection_id, row.schema_name, row.source_name, row.physical_table]);
+        if (!merged.has(key)) merged.set(key, row);
+      }
+      await rest();
+    }
+    sourceQueryCache.set(ids.join(","), [...merged.values()]);
+  };
+
+  const writeCluster = (cluster: BuiltCluster, includeLinks = true): boolean => {
     const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
     if (members.length === 0) return false;
     const anchor = cluster.business[0] ?? members[0];
@@ -2796,13 +2831,17 @@ async function rebuildInferredTurnsUnlocked(
       createdAt: now,
       updatedAt: now
     });
-    for (const accessLogId of accessLogIds) {
-      insertLinkStmt.run(inferredId, accessLogId);
+    if (includeLinks) {
+      for (const accessLogId of accessLogIds) insertLinkStmt.run(inferredId, accessLogId);
     }
     return true;
   };
 
-  const deleteLinksByTurn = database.prepare(`DELETE FROM inferred_turn_access_logs WHERE inferred_turn_id = ?`);
+  const deleteLinksByTurn = database.prepare(`
+    DELETE FROM inferred_turn_access_logs WHERE inferred_turn_id = ? AND access_log_id IN (
+      SELECT access_log_id FROM inferred_turn_access_logs WHERE inferred_turn_id = ? LIMIT ?
+    )
+  `);
   const deleteTurnById = database.prepare(`DELETE FROM inferred_turns WHERE inferred_turn_id = ?`);
   const plans: Array<{ cluster: BuiltCluster; id: string }> = [];
   for (const cluster of built) {
@@ -2812,21 +2851,17 @@ async function rebuildInferredTurnsUnlocked(
     plans.push({ cluster, id: inferredTurnId(userId, anchor.id) });
   }
 
-  // P1-45: 记录本次重建覆盖的 access_log 上界水位（ISO 字符串，重建开始前的最新 ts）。
-  // 若用户在窗口内无日志则为 ''；该值在 in_progress 与 complete 两个阶段复用，
-  // 保证 covered() 只认重建开始时已存在的调用。
-  const watermarkRow = database.prepare(
-    `SELECT COALESCE(MAX(ts), '') AS ts FROM access_log WHERE user_id = ? AND ts >= ?`
-  ).get(userId, cutoff) as { ts: string };
-  const watermarkTs = watermarkRow.ts;
-
   // P1-45 SC-01: 在 DELETE 之前持久化 in_progress，使任意中断后 covered() 返回 false。
+  // watermark 仍是快照内最大 ts；watermark_id 是实际读入的 id 上界。同时间戳或更早时间戳的后写入靠 id 判断。
   database.prepare(`
-    INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
-    VALUES (?, 'in_progress', ?, ?)
+    INSERT INTO inferred_rebuild_state (user_id, status, watermark, watermark_id, updated_at)
+    VALUES (?, 'in_progress', ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
-      status = 'in_progress', watermark = excluded.watermark, updated_at = excluded.updated_at
-  `).run(userId, watermarkTs, new Date().toISOString());
+      status = 'in_progress',
+      watermark = excluded.watermark,
+      watermark_id = excluded.watermark_id,
+      updated_at = excluded.updated_at
+  `).run(userId, watermarkTs, watermarkId, new Date().toISOString());
 
   // P1-47 SC-01: Split the previously unbounded delete+allocate block so the event loop
   // can yield between chunks. Window-scoped deletes are also chunked by turn id (UAT-RPB
@@ -2839,31 +2874,35 @@ async function rebuildInferredTurnsUnlocked(
   })();
   await rest();
 
-  const windowTurnIds = (
-    database.prepare(
-      `SELECT inferred_turn_id AS id FROM inferred_turns WHERE user_id = ? AND started_at >= ?`
-    ).all(userId, cutoff) as Array<{ id: string }>
-  ).map((row) => row.id);
-  for (let chunkStart = 0; chunkStart < windowTurnIds.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
-    if (chunkStart > 0) await rest();
-    const chunk = windowTurnIds.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
+  // Read only the next deletion batch, rather than materializing the entire
+  // old window (which performs thousands of cold table lookups synchronously).
+  // Same-user rebuilds are serialized; deleting each selected batch advances
+  // the next indexed query without OFFSET or a full-window snapshot.
+  const mutationChunk = Math.min(REBUILD_ALLOCATE_CHUNK, REBUILD_MUTATION_CHUNK);
+  const oldWindowPage = database.prepare(
+    `SELECT inferred_turn_id AS id FROM inferred_turns
+     WHERE user_id = ? AND started_at >= ? ORDER BY started_at LIMIT ?`
+  );
+  for (;;) {
+    const chunk = oldWindowPage.all(userId, cutoff, mutationChunk) as Array<{ id: string }>;
+    if (chunk.length === 0) break;
     database.transaction(() => {
-      for (const id of chunk) {
-        deleteLinksByTurn.run(id);
-        deleteTurnById.run(id);
+      for (const { id } of chunk) {
+        const removed = deleteLinksByTurn.run(id, id, linkChunkSize);
+        // Keep the parent until all links are drained, including after a crash.
+        if (removed.changes < linkChunkSize) deleteTurnById.run(id);
       }
     })();
+    await rest();
   }
-  await rest();
 
-  for (let chunkStart = 0; chunkStart < plans.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
+  for (let chunkStart = 0; chunkStart < plans.length; chunkStart += mutationChunk) {
     if (chunkStart > 0) await rest();
-    const chunk = plans.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
+    const chunk = plans.slice(chunkStart, chunkStart + mutationChunk);
     database.transaction(() => {
       for (const plan of chunk) {
-        // Plans may reference ids that fell outside the lookback window; delete those too.
-        deleteLinksByTurn.run(plan.id);
-        deleteTurnById.run(plan.id);
+        // The paged window deletion above covers every loaded anchor. Its
+        // inquiry allocation survives deletion and is intentionally reused.
         assignedInquiry.set(plan.id, lookupInquiryNo(database, plan.id) ?? allocateInquiryNo(database, plan.id));
       }
     })();
@@ -2874,7 +2913,29 @@ async function rebuildInferredTurnsUnlocked(
   let sliceSize = REBUILD_WRITE_SLICE_INITIAL;
   for (let start = 0; start < plans.length;) {
     if (start > 0) await rest();
-    const slice = plans.slice(start, start + sliceSize);
+    const first = plans[start]!;
+    const memberCount = (plan: typeof first) => plan.cluster.handshake.length + plan.cluster.business.length;
+    if (memberCount(first) > linkChunkSize) {
+      await preloadLargeClusterSources(first.cluster);
+      turns += database.transaction(() => writeCluster(first.cluster, false) ? 1 : 0)();
+      const ids = [...first.cluster.handshake, ...first.cluster.business].map((row) => row.id);
+      for (let offset = 0; offset < ids.length; offset += linkChunkSize) {
+        await rest();
+        database.transaction(() => {
+          for (const id of ids.slice(offset, offset + linkChunkSize)) insertLinkStmt.run(first.id, id);
+        })();
+      }
+      start += 1;
+      continue;
+    }
+    const slice: typeof plans = [];
+    let links = 0;
+    for (const plan of plans.slice(start, start + sliceSize)) {
+      const count = memberCount(plan);
+      if (links + count > linkChunkSize) break;
+      slice.push(plan);
+      links += count;
+    }
     const sliceStartedAt = performance.now();
     turns += database.transaction(() => {
       let written = 0;
@@ -2890,11 +2951,14 @@ async function rebuildInferredTurnsUnlocked(
 
   // P1-45 SC-01: 全部写片成功后标记 complete，covered() 随即可返回 true（若无新日志）。
   database.prepare(`
-    INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
-    VALUES (?, 'complete', ?, ?)
+    INSERT INTO inferred_rebuild_state (user_id, status, watermark, watermark_id, updated_at)
+    VALUES (?, 'complete', ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
-      status = 'complete', watermark = excluded.watermark, updated_at = excluded.updated_at
-  `).run(userId, watermarkTs, new Date().toISOString());
+      status = 'complete',
+      watermark = excluded.watermark,
+      watermark_id = excluded.watermark_id,
+      updated_at = excluded.updated_at
+  `).run(userId, watermarkTs, watermarkId, new Date().toISOString());
 
   return { turns };
 }

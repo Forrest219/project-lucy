@@ -338,7 +338,7 @@ export function EditConnectionDialog({ open, connection, onClose }: EditConnecti
                 {result.executionRuntimeAck === true ? (
                   <span className="text-success-strong">已加载新连接</span>
                 ) : result.executionRuntimeAck === false ? (
-                  <span className="text-danger">
+                  <span className="text-danger notranslate" translate="no">
                     尚未确认加载
                     {result.executionRuntimeError
                       ? `（${result.executionRuntimeError}）`

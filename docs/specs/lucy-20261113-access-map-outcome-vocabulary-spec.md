@@ -12,11 +12,17 @@
 ## 闭口层级
 
 - 层级：功能合同
+- 本条出口：§2 SC-01–SC-03：访问路径允许ok/allow，其余仍进拒绝计数，兼容旧夹具。
 - 本条承诺：SC-01–SC-03
 - 不在本条出口：改写历史 audit 行、放开 `include_candidate`、重画空桑基几何
 - 上线关系：本条收口不表示可上线
 
 ## Terminology Compliance
+
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms:
+- None；沿用「访问关系图」及既有outcome词表。
 
 产品名仍为「访问关系图」。不新增用户可见术语。
 
@@ -35,3 +41,13 @@
 | SC-01 | `buildAccessLayer`：`ok` 与 `allow` 进入 `rawCalls`；`denied`／`error`／`budget_stop` 只进 `deniedCalls` |
 | SC-02 | `bandSetsFromAuditRows` 与 echo `buildBandED` 使用同一判定 |
 | SC-03 | 既有 `allow`／`deny` 夹具测试仍通过 |
+
+## 核心流程（伪代码）
+
+```text
+for each confirmed audit row:
+  if outcome in [ok, allow]: accumulate rawCalls / band E
+  else: accumulate deniedCalls / band D
+访问层、bandSetsFromAuditRows、echo buildBandED复用同一判定
+不改历史行及写入词表
+```

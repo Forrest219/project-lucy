@@ -25,6 +25,9 @@ REST over HTTP，仅 `127.0.0.1`。所有响应为 JSON，遵循统一 envelope�
 
 ```text
 GET  /api/health
+GET  /api/livez                                  # 进程存活；不读依赖，恒 { ok: true }
+GET  /api/readyz                                 # WebUI 与 MCP 代理都已监听后 200；预热中 503 { ok:false, reason:"warming_up" }
+GET  /api/admin/audit/status                     # 审计库外键开关、子表盘点、存量违规数，以及审计写入是否已排空
 GET  /api/openapi.json                            # 公开可读 Admin OpenAPI（无密钥；仅 GET）
 GET  /api/project
 GET  /api/sources
@@ -492,7 +495,7 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 
 `GET /api/connections/:connId/live-schemas`（Spec 107）经 `ktx sql --json` 只读聚合账号可见 Schema 及 BASE TABLE 数量。Query `refresh=1` 跳过进程内 TTL（默认 10 分钟）。成功 / 连通失败均返回 HTTP 200 + `data.status`（与 connection test 同构，便于分连接 UI）；连接不存在返回 404。字段见 Spec 107 §6。
 
-`POST /api/connections/:connId/schema-structure` 预览指定 schema 的物理表结构，请求体 `{ schema }`；缺 `schema` 返回 `BAD_REQUEST`。`GET /api/connections/:connectionId/import-scope`（Spec 183）只读返回已发现物理表的导入范围分布。Spec 190 起该端点新增 `discoverySource`（`manual` / `continuous` / `none`）：未传 `discovered` 时改读 `.ktx-ui/live-table-snapshots.json` 中当前代次的成功快照，**不**为填满 `discovered` 而连库。
+`POST /api/connections/:connId/schema-structure` 预览指定 schema 的物理表结构，请求体 `{ schema }`；缺 `schema` 返回 `BAD_REQUEST`。 指定 `tables` 时读取选中表字段；批量准备客户端发送 `batchRead:true`，即使缩至单表也返回结构化 `rejections`，便于读完其余合法表后汇总。未设置该标志的独立单表失败仍返回原 `READ_FAILED`。任何表数下，预算耗尽的未读表均返回 `deferred`，不得把它计为字段读取成功。`GET /api/connections/:connectionId/import-scope`（Spec 183）只读返回已发现物理表的导入范围分布。Spec 190 起该端点新增 `discoverySource`（`manual` / `continuous` / `none`）：未传 `discovered` 时改读 `.ktx-ui/live-table-snapshots.json` 中当前代次的成功快照，**不**为填满 `discovered` 而连库。
 
 `GET /api/connections/:connId/live-tables`（Spec 190）只读返回单个 Schema 的库内表清单（表名、表类型、列数、注释）。Query：`schema`（**必填**，标识符白名单）、`refresh=1`（绕过面向人工的 10 分钟 TTL）、`purpose`（`manual` / `automatic`，两套缓存互不命中）。成功与失败均返回 HTTP 200 + `data.status`；失败时 `data.reason` 取封闭词表（`PROTOCOL_UNSUPPORTED` / `TABLE_LIST_UNSUPPORTED` / `CONNECTION_FAILED` / `AUTH_FAILED` / `SCHEMA_NOT_FOUND` / `SCHEMA_NOT_VISIBLE` / `TABLE_LIST_TOO_LARGE` / `QUERY_FAILED` / `PROBE_QUEUE_FULL` / `PROBE_QUEUE_TIMEOUT` / `GENERATION_INVALIDATED` / `PROVIDER_UNAVAILABLE`）。缺 `schema` 或 schema 非法返回 400，连接不存在返回 404。
 
@@ -1327,3 +1330,10 @@ type WikiUploadAccessSelection =
 - 本端点不改变 `/api/health` 的主服务健康定义：`degraded` 只表示通知队列或发信异常。
 - S2 起具备发送能力：投递由 outbox worker 异步执行，**本轮请求不等待 SMTP**。SMTP 服务器接受信件**不等于**最终送达收件箱——Lucy 只记录 SMTP 提交结果，不追踪退信、阅读或外部投递回执。
 - 不提供重新发送同一行的写接口；owner 通过状态接口与单行查询观察 `queued`／`sending`／`sent`／`dead`。
+
+
+### 2026-11-18 共享截止时间与完整导出修复
+
+`POST /api/connections/:connId/schema-structure` 的单次 HTTP 读取共用 19 秒硬截止时间，为原有 20 秒响应目标留出序列化和传输余量。配置读取、连接、名称解析、各 SQL 及表内语法回退均消耗同一剩余预算；8 秒单语句上限不得重置总预算。原有 10 秒批次调度预算保持不变，未开始的表继续返回 `deferred`。硬截止时间耗尽时明确返回读取超时或表级 `timeout`，不得把晚到字段当作成功。合法语法回退仍按原顺序执行；传统连接的握手与查询共用截止时间，到期销毁连接。本约束不表示客户 Hive 的实际连通性已经验收。
+
+`GET /api/admin/audit/export-v2` 与 `GET /api/admin/audit/export-pack-v2` 在开始时捕获账本上界 S；等待投影后使用相对 S 的最新剩余 lag，而非等待前的旧 lag。已追平 S 的 `complete` 可以成功，S 之后的新事件不使本次固定快照永久等待。仍未追平、账本不可用或完整性校验不通过时，`complete` 继续失败关闭；`diagnostic` 可导出诊断材料，但其不完整标识必须保留，不能代表正式完整封存。生产追平等待上限仍为 60 秒。

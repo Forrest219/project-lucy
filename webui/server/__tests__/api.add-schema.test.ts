@@ -5,6 +5,13 @@ import request from "supertest";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// KTX is an external process. Keep the real save, audit and policy paths while
+// supplying the successful reload receipt required by the configuration API.
+vi.mock("../ktx-mcp-reload.js", () => ({
+  reloadKtxMcpAfterConfigWrite: vi.fn(async () => ({ status: "reloaded", detail: "KTX MCP restarted and ready" })),
+  reloadKtxMcpExecutionRuntime: vi.fn(async () => ({ status: "reloaded", detail: "KTX MCP restarted and ready" }))
+}));
+
 // Mock the ktx CLI wrapper so the test does not shell out.
 vi.mock("../ktx", async () => {
   const actual = await vi.importActual<typeof import("../ktx")>("../ktx");

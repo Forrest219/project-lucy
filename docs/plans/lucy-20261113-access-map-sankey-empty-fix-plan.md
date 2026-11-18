@@ -1,5 +1,9 @@
 # 访问关系图空桑基修复 Implementation Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking. **未获委托人「开发授权」前禁止改运行代码。**
 
 | 元数据 | 内容 |
@@ -200,3 +204,7 @@ D1–D4 拍板 → Spec → 开发授权
 > **D1–D4 按推荐；先写 Spec，确认后再给开发授权。**
 
 或逐条改 D2／D3。拍板后本 Plan 升版并开 Spec；**在此之前不改运行代码。**
+
+## 完成定义（治理补齐）
+
+按§2 SC和Task 1–5核对关联写入、空态骨干、confirmed-only及文档镜像；原收口记录见头部closure，不新增UAT结论。

@@ -1152,6 +1152,66 @@
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
+    },
+    {
+      "path": "scripts/concepts/__tests__/model.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/concepts/__tests__/model.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/concepts/__tests__/sc-gaps.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/concepts/__tests__/sc-gaps.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/concepts/__tests__/scan.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/concepts/__tests__/scan.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/concepts/__tests__/store.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/concepts/__tests__/store.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/mcp-client-config-guard.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the repository MCP client config",
+      "command": "node --test scripts/smoke/mcp-client-config-guard.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/lib/mcp-ux-metrics.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/uat/lib/mcp-ux-metrics.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
     }
   ]
 }

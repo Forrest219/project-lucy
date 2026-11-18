@@ -1,5 +1,11 @@
 # Lucy v0.25.0 Formal Release Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 状态 | 执行进度以本文件原Task勾选和已有跑次为准；本次仅补齐文档形态，未复跑本计划业务验收，当前候选结果待验。 |
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+| 验收 | 以本文件验收小节、Task通过标准及已链接证据为准；历史结果不代表当前候选已复测。 |
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 `lucy-v0.25` tip 经 CI 绿灯合入 `main`，打 annotated tag `v0.25.0`、创建 GitHub Release、回填发版台账，并在合流后从 `main` 开 `lucy-v0.30` 产品线。
@@ -382,3 +388,19 @@ git push origin lucy-v0.30
 1. **Spec coverage:** 发版列车 P0/P1/P4/P5、台账规则、UX 门、开线顺序均有对应 Task。
 2. **Placeholder scan:** 无 TBD；CI 失败点写明已知证据与修复方向。
 3. **Type consistency:** `MAIN_SHA` / `RUN_MAIN` / `RUN_TAG` 在 Task 4–6 贯通。
+
+## 目标（治理补齐）
+
+将0.25候选按CI、合流、标签、Release和台账顺序完成正式发版，再开0.30产品线。
+
+## 验收（治理补齐）
+
+核对Task 1–8的CI关联提交、main合流、标签、Release和台账证据；未做的可选客户门禁分别记录。
+
+## 完成定义（治理补齐）
+
+Task 1–8的适用任务均有证据，Stop conditions无未处置项；缺客户包证据不冒充客户可交付。
+
+## 风险（治理补齐）
+
+CI与候选提交漂移或合流失败时按Stop conditions停表；不得复用旧提交的绿灯。

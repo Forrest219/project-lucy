@@ -131,17 +131,24 @@ describe("batch column read, plain MySQL", () => {
     expect(read.tables).toEqual(["narrow"]);
   });
 
-  it("LS-07 defers the remaining chunks once the budget is spent, but only after one chunk has been read", async () => {
+  it("LS-07 shares one budget across name resolution, the first chunk and every split", async () => {
     const clock = { now: 0, costMs: 4_000 };
-    const { channel } = mysqlChannel(manyTables(8, 30), clock);
+    const { channel, statements } = mysqlChannel(manyTables(8, 30), clock);
     const names = Array.from({ length: 8 }, (_, index) => `t_${index}`);
     const { read } = await readBatch(names, channel, { columnRowLimit: 100, now: () => clock.now, callBudgetMs: 10_000 });
     expect(read.status).toBe("ok");
     if (read.status !== "ok") return;
-    expect(read.tables).toEqual(["t_0", "t_1"]);
-    expect(read.deferred).toEqual(["t_2", "t_3", "t_4", "t_5", "t_6", "t_7"]);
+    expect(read.tables ?? []).toEqual([]);
+    expect(read.deferred).toEqual(names);
+    expect(statements.filter((sql) => sql.includes("FROM information_schema.columns"))).toHaveLength(2);
+    expect(clock.now).toBe(12_000);
     const covered = [...(read.tables ?? []), ...(read.rejections ?? []).map((item) => item.table), ...(read.deferred ?? [])];
     expect([...covered].sort()).toEqual([...names].sort());
+
+    clock.now = 0;
+    const again = await readBatch(names, channel, { columnRowLimit: 100, now: () => clock.now, callBudgetMs: 100_000 });
+    expect(again.read.status === "ok" && again.read.tables).toEqual(names);
+    expect(again.read.status === "ok" && (again.read.deferred ?? [])).toEqual([]);
   });
 
   it("LS-06 reads 9999 columns and rejects 10000 with the table and the number", async () => {
@@ -189,8 +196,42 @@ describe("batch column read, external catalog", () => {
     expect(covered).toEqual(names);
   });
 
-  it("always reads the first table even when the budget is already spent", async () => {
-    const clock = { now: 0, costMs: 50_000 };
+  it("stops a timed-out catalog probe instead of trying the other syntax forms", async () => {
+    const statements: string[] = [];
+    const channel: MetadataChannel = {
+      async run(sql) {
+        statements.push(sql);
+        throw new Error("Catalog connection/query timed out");
+      },
+      close: vi.fn()
+    };
+    const { read } = await readBatch(["slow_table"], channel, {}, hiveConn);
+    expect(statements).toEqual(["DESC `hive`.`dw`.`slow_table`"]);
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(read.rejections).toEqual([{ table: "slow_table", reason: "timeout" }]);
+    expect(read.tables).toEqual([]);
+  });
+
+  it("keeps the syntax fallback when the first probe is refused", async () => {
+    const statements: string[] = [];
+    const channel: MetadataChannel = {
+      async run(sql) {
+        statements.push(sql);
+        if (statements.length === 1) throw new Error("You have an error in your SQL syntax");
+        return { rows: [["id", "bigint", "NO", "true", null, null]], truncated: false };
+      },
+      close: vi.fn()
+    };
+    const { read } = await readBatch(["kept"], channel, {}, hiveConn);
+    expect(statements).toHaveLength(2);
+    expect(statements[0]).toContain("DESC");
+    expect(read.status === "ok" && read.tables).toEqual(["kept"]);
+    expect(read.status === "ok" && (read.rejections ?? [])).toEqual([]);
+  });
+
+  it("keeps a completed first table past the scheduling budget but within the hard request deadline", async () => {
+    const clock = { now: 0, costMs: 12_000 };
     const { channel } = catalogChannel(clock);
     const { read } = await readBatch(["a", "b"], channel, { now: () => clock.now, callBudgetMs: 10_000 }, hiveConn);
     expect(read.status === "ok" && read.tables).toEqual(["a"]);

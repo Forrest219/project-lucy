@@ -5,6 +5,13 @@ import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// KTX is an external process. Keep the real save, audit and policy paths while
+// supplying the successful reload receipt required by the configuration API.
+vi.mock("../ktx-mcp-reload.js", () => ({
+  reloadKtxMcpAfterConfigWrite: vi.fn(async () => ({ status: "reloaded", detail: "KTX MCP restarted and ready" })),
+  reloadKtxMcpExecutionRuntime: vi.fn(async () => ({ status: "reloaded", detail: "KTX MCP restarted and ready" }))
+}));
+
 /**
  * Spec 174 R7 — fault injection on the real write paths (import confirm,
  * createConnection + rollbackWrittenConnection, Agent and access-config

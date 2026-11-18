@@ -9,7 +9,7 @@
 | 状态 | **委托人结案（2026-11-13）**：本分支明确**不做** ontology-lite **CLI／WebUI** 交付与效果门跟进；产品交付只走 **P1-11／REQ-030-032 Ops MCP**。P1-10 保留上游数据／语义合同（纯计算核心可被 Ops 复用）；既有 `npm run concepts` **不作为本分支交付出口**。本条不表示可上线 |
 | 授权边界 | 本分支**不再授权** P1-10 CLI／WebUI／效果门跟进。历史 R4（2026-11-09）仅覆盖当时一期 CLI 试验实现；交付与后续改动以 **P1-11 Ops MCP** 为准 |
 | 决策来源 | 2026-11-08 头脑风暴：指标权威解释面 × 知识图谱／本体论是否值得；结论＝不做形式化 KG／OWL，做轻量概念注册表；人审优先、MCP 更后。**交付序（同日确认）**：先 CLI 跑通并验证效果，效果可接受后再做 WebUI 人审页 |
-| 需求来源 | [需求池 REQ-030-031](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[功能清单池 P1-10](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；对话结论（选错表／口径加工为最贵失败；缺口＝人审权威面 + 自动冲突发现；CLI 先） |
+| 需求来源 | [需求池 REQ-030-031](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[功能清单池 P1-10](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；对话结论（选错表／口径加工为最贵失败；缺口＝人审权威面 + 自动冲突发现；CLI 先） |
 | 实施主体 | Lucy：内容根概念注册表 + **一期 CLI** 扫描／人审。**不改 KTX 源码**；不替代 semantic-layer 计算语义；**一期不改 WebUI** |
 | 配套 Plan | [lucy-20261108-concept-registry-ontology-lite-plan.md](../plans/lucy-20261108-concept-registry-ontology-lite-plan.md)（**v0.4-draft**） |
 | 评审记录 | [Codex 对抗评审](../reviews/2026-11-09-concept-registry-ontology-lite-codex-review.md)（过程对抗；**不构成终稿确权**） |

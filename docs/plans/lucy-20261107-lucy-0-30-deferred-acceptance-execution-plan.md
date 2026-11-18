@@ -9,7 +9,7 @@
 | 授权边界 | **不授权执行任何验收、不授权改代码**。本 Plan 只排期与定义取证口径；执行须先取得开工授权 |
 | 验收 | 本 Plan 自身的验收＝五条目的验收归属、编号段、证据等级与落点写清；**不构成任何功能验收结论**，也不作为任何版本的发布取证 |
 | 对应需求池 | [`lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)（REQ-030-008／009／010／011／014） |
-| 关联文档 | 需求池 [`lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)（REQ-030-008／009／010／011／014 五条来源）· 功能清单池 [`lucy-20261107-lucy-0-30-feature-inventory-pool.md`](lucy-20261107-lucy-0-30-feature-inventory-pool.md)（P2-7…P2-11 批次归属）。⚠️ MCP next-step 分支计划只覆盖 W1–W4（G1–G4 缺口），**不含遗留验收线** |
+| 关联文档 | 需求池 [`lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)（REQ-030-008／009／010／011／014 五条来源）· 功能清单池 [`lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)（P2-7…P2-11 批次归属）。⚠️ MCP next-step 分支计划只覆盖 W1–W4（G1–G4 缺口），**不含遗留验收线** |
 
 ---
 

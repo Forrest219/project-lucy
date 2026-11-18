@@ -1,5 +1,9 @@
 # P0 本机 Mac mini UAT（Cursor 制定／Claude Code 执行）Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+
 > **For agentic workers:** 委托人审批本 Plan 后，按 Task 勾选执行。Cursor 负责用例矩阵、驱动与验收；Claude Code 负责本机全真跑次。禁止用 vitest／CR 冒充 PASS。
 
 **Goal:** 在本机 Mac mini（demo Docker）上，对 **P0-1／P0-2／P0-3／P0-4／P0-5／P0-A** 完成可复查的客户场景 UAT；关闭或如实登记必做／可选缺口，更新测试台 INDEX 与 e2e-ledger 指针。
@@ -213,3 +217,15 @@
 - [x] **SAG-02**：**允许 BLOCKED**
 - [x] **容器版本**：**以当前 demo 原样跑**（不 upgrade）
 - [x] **执行启动**：Cursor 已写 brief `inbox/20261114-p0-macmini-uat-claude-brief.md` 并驱动 Claude Code
+
+## 目标（治理补齐）
+
+在Mac mini demo执行已批准的P0 Wave A六套UAT，Cursor验收并登记测试台。
+
+## 开工前置（治理补齐）
+
+先核对§1环境与Task 1审批：demo原样、Wave B推迟、SAG-02允许BLOCKED。
+
+## 完成定义（治理补齐）
+
+按§5成功标准交齐Wave A真实跑次与台账；Wave B推迟、SAG-02受阻必须保留，不改Spec合同句。

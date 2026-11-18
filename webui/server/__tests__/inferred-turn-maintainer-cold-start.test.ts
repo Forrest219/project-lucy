@@ -25,17 +25,17 @@ function makeDb(): Database.Database {
     CREATE INDEX idx_al_ts ON access_log(ts);
     CREATE TABLE inferred_turns (inferred_turn_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE INDEX idx_it_user_time ON inferred_turns(user_id, started_at, ended_at);
-    CREATE TABLE inferred_rebuild_state (user_id TEXT PRIMARY KEY, status TEXT NOT NULL, watermark TEXT, updated_at TEXT NOT NULL);
+    CREATE TABLE inferred_rebuild_state (user_id TEXT PRIMARY KEY, status TEXT NOT NULL, watermark TEXT, watermark_id INTEGER, updated_at TEXT NOT NULL);
   `);
   return db;
 }
 
 function setRebuildComplete(db: Database.Database, userId: string, watermark: string): void {
   db.prepare(`
-    INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
-    VALUES (?, 'complete', ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET status = excluded.status, watermark = excluded.watermark, updated_at = excluded.updated_at
-  `).run(userId, watermark, new Date(NOW).toISOString());
+    INSERT INTO inferred_rebuild_state (user_id, status, watermark, watermark_id, updated_at)
+    VALUES (?, 'complete', ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET status = excluded.status, watermark = excluded.watermark, watermark_id = excluded.watermark_id, updated_at = excluded.updated_at
+  `).run(userId, watermark, (db.prepare('SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ? AND ts <= ?').get(userId, watermark) as {id:number}).id, new Date(NOW).toISOString());
 }
 
 function insertLogs(db: Database.Database, rows: Array<[string, string]>): void {
@@ -217,14 +217,14 @@ describe("SC-16 the first scan waits until the server is listening", () => {
 });
 
 describe("SC-13 rebuild page size follows a time budget", () => {
-  it("shrinks after a slow page, grows at most 1.5x after a fast one, and stays within 25..400", async () => {
+  it("shrinks after a slow page, grows at most 1.5x after a fast one, and stays within 5..400", async () => {
     const { nextRebuildPageSize, REBUILD_PAGE_MIN, REBUILD_PAGE_MAX, REBUILD_PAGE_INITIAL } = await import("../admin/page-budget.js");
-    expect(REBUILD_PAGE_MIN).toBe(25);
+    expect(REBUILD_PAGE_MIN).toBe(5);
     expect(REBUILD_PAGE_MAX).toBe(400);
     expect(REBUILD_PAGE_INITIAL).toBeLessThanOrEqual(100);
-    expect(nextRebuildPageSize(400, 3000)).toBe(25);
-    expect(nextRebuildPageSize(400, 5900)).toBe(25);
-    expect(nextRebuildPageSize(60, 3000)).toBe(25);
+    expect(nextRebuildPageSize(400, 3000)).toBe(13);
+    expect(nextRebuildPageSize(400, 5900)).toBe(6);
+    expect(nextRebuildPageSize(60, 3000)).toBe(5);
     expect(nextRebuildPageSize(50, 2)).toBe(75);
     expect(nextRebuildPageSize(300, 2)).toBe(400);
     expect(nextRebuildPageSize(400, 100)).toBe(400);
@@ -253,12 +253,13 @@ describe("SC-17 duty cycle: a long stretch is followed by an idle window", () =>
     }
   });
 
-  it("write slices shrink after a slow slice and stay within 2..25", async () => {
-    const { nextSliceSize } = await import("../admin/page-budget.js");
-    expect(nextSliceSize(25, 800, 2, 25)).toBe(3);
-    expect(nextSliceSize(25, 5000, 2, 25)).toBe(2);
-    expect(nextSliceSize(6, 20, 2, 25)).toBe(9);
-    expect(nextSliceSize(20, 20, 2, 25)).toBe(25);
+  it("write slices shrink after a slow slice and stay within 1..4", async () => {
+    const { nextSliceSize, REBUILD_WRITE_SLICE_MIN: min, REBUILD_WRITE_SLICE_MAX: max } = await import("../admin/page-budget.js");
+    expect([min, max]).toEqual([1, 4]);
+    expect(nextSliceSize(4, 800, min, max)).toBe(1);
+    expect(nextSliceSize(4, 5000, min, max)).toBe(1);
+    expect(nextSliceSize(2, 20, min, max)).toBe(3);
+    expect(nextSliceSize(4, 20, min, max)).toBe(4);
   });
 });
 

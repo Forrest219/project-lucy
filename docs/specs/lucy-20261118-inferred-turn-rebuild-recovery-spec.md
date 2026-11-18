@@ -127,3 +127,7 @@ runPass: rebuild each dirty user
 
 - **终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」）。**
 - 实现范围见配对 Plan；含 `inferred_rebuild_state` schema；禁止未另授权的线上升级。
+
+## 2026-11-18 接管补充验证
+
+已补全 ID 水位旧状态恢复、窗口分页、大簇关联分片、61秒就绪旁路及字段续查边界。授权慢盘容器补充验证：首次补算 livez max/p99=304/298ms，重启前120秒=265/239ms、readyz p99=395ms；中断用户2988/2988；另6000调用SIGKILL由25恢复至6000。113定向、65根合同通过；全量仍50基线失败、类型33基线错误。仅补充跑次通过，不替代原正式套件全部逐例运行或客户生产放行；K8s与真实Hive/Agent未验。运行记录：[Codex 接管跑次](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-codex-takeover.md)。

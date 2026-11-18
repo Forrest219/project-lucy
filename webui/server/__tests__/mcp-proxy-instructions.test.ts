@@ -226,7 +226,7 @@ describe("MCP proxy initialize instructions injection", () => {
     }
   });
 
-  it("injects optional lucy_begin_question soft nudge only when the tool is visible", async () => {
+  it("injects lucy_begin_question guidance and hard-check boundaries only when the tool is visible", async () => {
     const withBeginYaml = `users:
   - id: instructions_agent
     name: Instructions Agent
@@ -274,7 +274,7 @@ defaults:
       expect(res.status).toBe(200);
       const body = await res.json() as { result: { instructions: string } };
       expect(body.result.instructions).toContain("lucy_begin_question");
-      expect(body.result.instructions).toContain("Skipping this call never blocks catalog or query tools");
+      expect(body.result.instructions).toContain("Skipping begin does not bypass the source ambiguity gate");
       expect(body.result.instructions).toContain("Prefer the user's original wording in `question`");
     } finally {
       await closeAll(upstream, server);

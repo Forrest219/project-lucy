@@ -1,5 +1,9 @@
 # Schema 读法双模式（恢复 EE54 结构 diff）Implementation Plan
 
+| 治理字段 | 内容 |
+|---|---|
+| 授权边界 | 仅本计划既有Task所列范围，原审批和禁止项见正文；本次文档治理修订不新增运行代码、提交、部署或发布授权。 |
+
 | 元数据 | 内容 |
 |---|---|
 | 状态 | **已实现（待提交）** |
@@ -42,3 +46,23 @@
 - `lucy-ci.yml` 加 `lucy-v0.30`（另开流程项）
 - 外部目录 DESC 网关超时
 - 执行层 settle/503（已绿，不碰）
+
+## 目标（治理补齐）
+
+恢复结构diff按表隔离读法，同时保留catalog-scan的Schema宽读法。
+
+## 开工前置（治理补齐）
+
+先核对Spec 190与catalog-scan SC-06/07调用边界，按Tasks先补表达双模式的失败测试。
+
+## 验收（治理补齐）
+
+相关table-diff/schema-structure测试须覆盖per-table缺表分类及schema-wide全量/10000上限；list-names行为不变。
+
+## 完成定义（治理补齐）
+
+Tasks 1–4完成且三个mode调用方明确，Spec边界和测试一致；不据此宣称外部目录或生产UAT完成。
+
+## 风险（治理补齐）
+
+将schema-wide误用于diff会吞掉缺表分类；将per-table误用于scan会破坏宽读合同，复核两个调用方后再收口。

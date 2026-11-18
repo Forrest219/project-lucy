@@ -15,7 +15,7 @@
 | 验收 | 见 §4 |
 | 输出位置 | `docs/plans/lucy-20261115-audit-export-scale-and-equivalence-guard-plan.md` |
 
-**清单**：P1-32、P1-33（**不入核心分母**）｜**REQ**：REQ-030-053、REQ-030-054｜**总账**：[功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md)
+**清单**：P1-32、P1-33（**不入核心分母**）｜**REQ**：REQ-030-053、REQ-030-054｜**总账**：[功能清单池](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)
 
 ## 1. 目标
 

@@ -40,6 +40,7 @@ function makeDb(): Database.Database {
       user_id    TEXT PRIMARY KEY,
       status     TEXT NOT NULL,
       watermark  TEXT,
+      watermark_id INTEGER,
       updated_at TEXT NOT NULL
     );
   `);
@@ -53,10 +54,10 @@ function insertLogs(db: Database.Database, rows: Array<[string, string]>): void 
 
 function setRebuildState(db: Database.Database, userId: string, status: "in_progress" | "complete", watermark: string): void {
   db.prepare(`
-    INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET status = excluded.status, watermark = excluded.watermark, updated_at = excluded.updated_at
-  `).run(userId, status, watermark, new Date(NOW).toISOString());
+    INSERT INTO inferred_rebuild_state (user_id, status, watermark, watermark_id, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET status = excluded.status, watermark = excluded.watermark, watermark_id = excluded.watermark_id, updated_at = excluded.updated_at
+  `).run(userId, status, watermark, (db.prepare('SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ? AND ts <= ?').get(userId, watermark) as {id:number}).id, new Date(NOW).toISOString());
 }
 
 async function loadMaintainer() {

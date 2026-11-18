@@ -1,0 +1,11 @@
+{
+  "quickCheck": [
+    {
+      "quick_check": "ok"
+    }
+  ],
+  "foreignKeys": 0,
+  "rawRows": 200167,
+  "seedRows": 200000,
+  "turnRows": 198309
+}

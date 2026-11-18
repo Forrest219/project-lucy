@@ -9,7 +9,7 @@
 | 验收 | Spec §7 SC-A2–A7、SC-B1–B6 逐条有证据；测试台 `UAT-SUITE-ACCESS-MAP-SANKEY` 必做用例沙箱全绿；`npx vitest run src/__tests__/access-map server/__tests__/p1-access-map` 只剩既有的术语 lint 失败。**不构成发布取证** |
 | 目标 | 让访问关系图在零访问、多 Agent、全未确认、宽授权四种数据下仍是四列带状流的桑基，并披露被排除的未确认调用 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「落盘清单」「强制流程：Plan Mode」 |
-| 总账 | P1-41／REQ-030-062（见 [功能清单池](lucy-20261107-lucy-0-30-feature-inventory-pool.md)） |
+| 总账 | P1-41／REQ-030-062（见 [功能清单池](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)） |
 
 ## 1. 目标
 

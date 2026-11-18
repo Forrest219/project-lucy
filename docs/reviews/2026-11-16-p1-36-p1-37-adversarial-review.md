@@ -120,7 +120,7 @@ R1／R2 逐条原文见上表原始文件，这里只按主题归并并写处置
 | 终稿确权 | **已获得**：委托人明示免 Codex 终审、授权代理修正后定稿（见 §8）；Spec 现为 v1.0 |
 | 开发授权 | **未获得**；未授权不改运行代码 |
 | 测试台 | 两个套件仍 `NOT RUN`；夹具就绪门禁未过（脚本为 Plan 步骤 0 交付物，未交付）；P1-37 MCPX-09／10 为 U3b 伴生，BLOCKED 但不阻塞本条收口 |
-| 总账 | `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md` v1.11 已记；状态句在 Spec、Plan、总账、需求池、e2e-ledger、两个 README 一致 |
+| 总账 | `docs/governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md` v1.11 已记；状态句在 Spec、Plan、总账、需求池、e2e-ledger、两个 README 一致 |
 
 ## 7. 下一步
 

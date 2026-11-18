@@ -9,7 +9,7 @@
 | 状态 | **v0.9；R2-F＋R3（O1／O2）＋R4 已闭合（2026-11-08）；实现已合入；CR PASS；SC-01–SC-30 证据关闭（2026-11-13，见 [证据审计](../reviews/2026-11-13-question-type-caliber-binding-sc-evidence-audit.md)）。功能合同已收口（2026-11-13）。本条收口不表示可上线** |
 | 授权边界 | R2-F＋R3＋R4 已闭合（R4：2026-11-08）。授权范围＝本 Spec／Plan 实现与测试；**不**表示可上线／发布取证。实现由 Claude Code；Cursor Agent 做 code review。 |
 | 决策来源 | 2026-11-06 CFO 误报事故 ＋ 2026-11-07 客户沟通实录（翊总／田总）：「固定口径，不再让 AI 自行加工」；手工改语义文件已复测通过 |
-| 需求来源 | [需求池 REQ-030-027](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.9 G9](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-1](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../plans/lucy-20261107-lucy-0-30-core-direction.md) |
+| 需求来源 | [需求池 REQ-030-027](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.9 G9](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-1](../governance/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向](../governance/lucy-20261107-lucy-0-30-core-direction.md) |
 | 实施主体 | Lucy：内容根发布资产 ＋ MCP Proxy 运行时门禁。不改 KTX 源码；不把语义裁判塞进 ACL |
 | 配套 Plan | [lucy-20261107-question-type-caliber-binding-plan.md](../plans/lucy-20261107-question-type-caliber-binding-plan.md) |
 | 评审记录 | [批次 R1](../reviews/2026-11-07-lucy-0-30-spec-plan-review-round1.md)；[Codex 对抗式评审](../reviews/2026-11-07-question-type-caliber-binding-codex-review.md) |

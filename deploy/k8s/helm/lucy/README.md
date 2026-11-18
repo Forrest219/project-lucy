@@ -13,7 +13,7 @@ This chart installs Lucy as a single-replica Kubernetes workload.
 
 Key constraints:
 
-- Lucy product version: `0.30.0` (`Chart.appVersion` / `lucy.version`; independent of KTX). Rendering fails if those two fields differ. Chart package version is `0.2.9`, independent of the product version. Startup and readiness probes use `/api/readyz`; liveness uses `/api/livez`.
+- Lucy product version: `0.30.0` (`Chart.appVersion` / `lucy.version`; independent of KTX). Rendering fails if those two fields differ. Chart package version is `0.2.10`, independent of the product version. Set `env.LUCY_INFERRED_MAINTAINER` to `off` to pause background inferred-turn rebuild; leave it empty to keep the image default. Startup and readiness probes use `/api/readyz`; liveness uses `/api/livez`.
 - Bundled KTX version: `@kaelio/ktx@0.16.0`.
 - `replicaCount` must be `1` (enforced by the chart template via `fail`).
 - `persistence.enabled` must be `true` (enforced by the chart template via `fail`).

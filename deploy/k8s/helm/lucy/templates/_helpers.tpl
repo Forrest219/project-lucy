@@ -164,6 +164,10 @@ entry lands on its own line at the correct indent.
 - name: LUCY_TRUSTED_PROXY_CIDRS
   value: {{ .Values.env.LUCY_TRUSTED_PROXY_CIDRS | quote }}
 {{ end -}}
+{{ if .Values.env.LUCY_INFERRED_MAINTAINER -}}
+- name: LUCY_INFERRED_MAINTAINER
+  value: {{ .Values.env.LUCY_INFERRED_MAINTAINER | quote }}
+{{ end -}}
 {{- end -}}
 
 {{/*

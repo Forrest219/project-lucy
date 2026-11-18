@@ -74,7 +74,7 @@ function openDb(): Database.Database {
 }
 
 function seed(db: Database.Database, rows: Array<[string, string, string]>): void {
-  const ts = "2026-10-19T00:15:00.000Z";
+  const ts = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const insertLog = db.prepare(
     `INSERT INTO access_log (ts, user_id, matched_role_id, tool, outcome, association_status, lucy_turn_id)
      VALUES (?, 'agent_a', 'role_reader', 'lucy_query', ?, ?, ?)`
