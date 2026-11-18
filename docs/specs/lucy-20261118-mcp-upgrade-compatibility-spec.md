@@ -2,25 +2,48 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 发布取证 Spec／**v0.2-draft** |
+| 文档类型 / 版本 | 发布取证 Spec／**v1.1** |
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-53**／REQ-030-074。编号在 P1 序列；**升级放行优先级＝P0 底线**（挡「可升级／可出包」宣称）。**不入** 0.30 核心分母，**不挡**「0.30 核心升级完成」宣称 |
 | 台账号 | 无。挂现行 `0.30` 执行总账；编号避让 P1-52／REQ-030-073 |
-| 状态 | **v0.2-draft。委托人 2026-11-18 批准审阅修订落入合同（D20 拆分、耗时分档、出包／升级双入口、通用合成夹具车道、D6 Demo／客户分层、SC-14 固定坏 digest 等）；终稿未确权、开发未授权。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。未授权不改运行代码、测试执行器与发布门禁。≠ 可上线** |
-| 决策来源 | 2026-11-16 客户 WorkBuddy「会员收入」被 `source_ambiguity_gate` 高频阻断；委托人要求每次升级不得破坏既有 MCP 问数能力，并批准：①通用事故回归＋客户真实基线，无基线不升级；②独立问题、连续追问、单表／多表、无权限／分权限、单库／多库全真 Agent 题库；③记录用户端到端耗时；④绝对上限＋相对退化双门禁及首版阈值 |
-| 错题与证据 | [表级歧义门闩死路](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md)；[主路径可用性优先](../governance/DEVELOPMENT.md)；客户截图仅作外部会话证据，不入库 |
+| 状态 | **v1.1。终稿补丁确权（委托人 2026-11-18 批准：收编 P1-54 题库正本／Ops 分母／Lucy 配置资产包前置；闭合评审 B1）。开发未授权（明示暂不开发）。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。未授权不改运行代码、测试执行器与发布门禁。≠ 可上线** |
+| 决策来源 | 2026-11-16 客户 WorkBuddy「会员收入」被 `source_ambiguity_gate` 高频阻断；委托人要求每次升级不得破坏既有 MCP 问数能力；2026-11-18 目标对齐与 T1–T10 定稿；同日批准收编独立题库 Spec（P1-54）并确认全真须配合 Lucy 配置资产包 |
+| 错题与证据 | [表级歧义门闩死路](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md)；[主路径可用性优先](../governance/DEVELOPMENT.md)；技术问题 brief `inbox/20261118-mcp-upgrade-compatibility-technical-questions-for-cursor.md`（可删） |
 | 实施主体 | `scripts/e2e/` 全真 Agent／MCP 执行器与版本化题库、`scripts/upgrade/` 与 `scripts/gates/` 升级接线、发布证据校验器、测试台。不得修改 KTX 源码 |
 | 配套 Plan | [lucy-20261118-mcp-upgrade-compatibility-plan.md](../plans/lucy-20261118-mcp-upgrade-compatibility-plan.md) |
+| 题库合同 | [P1-54 多场景题库 **v1.0**](lucy-20261118-mcp-upgrade-question-bank-spec.md)（语义正本；终稿确权、开发未授权）；可执行实例 `scripts/e2e/contracts/mcp-upgrade-journeys.yaml` |
 | 测试台 | [`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`](../qa/uat/suites/mcp-upgrade-compatibility/suite.md) |
-| 关联合同 | [P1-35 纯 MCP 逃生](lucy-20261116-source-ambiguity-mcp-escape-spec.md)、[P1-37 MCP 体验韧性](lucy-20261116-mcp-ux-resilience-spec.md)、[P1-13 发版性能基线](lucy-20261113-release-perf-baseline-gate-spec.md)、P1-52 升级可靠性（并行登记）、[真实用户 E2E](lucy-20261018-enterprise-security-and-real-e2e-spec.md) |
+| 关联合同 | [P1-35 纯 MCP 逃生](lucy-20261116-source-ambiguity-mcp-escape-spec.md)、[P1-37 MCP 体验韧性](lucy-20261116-mcp-ux-resilience-spec.md)、[P1-13 发版性能基线](lucy-20261113-release-perf-baseline-gate-spec.md)、P1-52 升级可靠性（并行登记）、[真实用户 E2E](lucy-20261018-enterprise-security-and-real-e2e-spec.md)、[可问治理面](lucy-20261101-ops-evidence-askable-governance-spec.md) |
+| 授权边界 | **终稿确权 ≠ 开发授权**。本版只定合同；实现须委托人另发「授权进入开发」 |
 
 ## 闭口层级
 
 - 层级：发布取证
-- 本条承诺：客户候选版本与客户实例升级必须证明「既有合法 MCP 问数仍能成交、安全拒绝未放宽、用户体感未越绝对预算且未发生不可接受的相对退化」。证明同时来自版本化全真用户旅程和该实例升级前真实成功基线；健康检查、Pod Ready、`tools/list`、单测或 Code Review 均不得替代。
-- 本条出口：SC-01–SC-20；客户发布聚合器只接受同一候选 digest、同一题库摘要、完整必做分母下的明确 PASS。任何必做项 FAIL／BLOCKED／NOT RUN、基线缺失或证据身份不匹配，均不得放行。
-- 不在本条出口：修改门闩、ACL、行权限或 KTX 行为；修复被本题库发现的任何产品缺陷；客户生产升级或自动回滚；新增 WebUI 页面；移动窄屏；为本任务重建本地 Docker；承诺所有客户未来所有可能问题均被题库覆盖。
-- 上线关系：本条通过不表示各模块无问题；本条未通过则不得把该候选描述为升级兼容。
+- 本条承诺：见 **「目标（Normative，防漂移）」**；健康检查、Pod Ready、`tools/list`、单测、Code Review 或「只直连 MCP 脚本冒充 Agent」均不得替代。
+- 本条出口：SC-01–SC-25；三维判定全部 PASS，且分母完整（含 P1-54 业务＋Ops）；客户发布聚合器只接受匹配 digest／`questionBankDigest`／配置指纹／证据 kind 的明确 PASS。
+- 不在本条出口：修改门闩、ACL、行权限或 KTX 行为；编写题库题目语义（归 P1-54）；修复被本题库发现的产品缺陷；客户生产升级或自动回滚；新增 WebUI；实现全部候选 Agent 适配器；承诺覆盖一切未来客户问题。
+- 上线关系：本条通过不表示各模块无问题；未通过则不得描述为「可部署／可升级兼容」。
+
+## 目标（Normative，防漂移）
+
+> **委托人对齐句（2026-11-18，冻结）**：用**至少一个真实 Agent 客户端**，**真实调用 Lucy Public MCP** 跑**一批问数问题**，与**基准线对照**，产出「**敢不敢给用户部署／升级**」的决策依据。
+
+### 不可收窄
+
+1. **真实 Agent 分母**：每个场景至少 **一个** 真实 Agent 完成全部必做题；直连 MCP 只作对照，不得计入 Agent 分母。更多客户端仅补充，**报告不得外推到未测宿主**。
+2. **真实 Lucy MCP**：Public MCP Proxy；禁止 `:7878`、mock 库、预置答案。
+3. **一批问题＝全题库硬约束**：不得因总时长或模型费用删题／缩题；连续追问轮次、既定采样、每轮 120s 与 MCP 硬门仍有效。
+4. **对照基准线**：通用对照 gold／上一候选；客户对照 PRE 私有基线（同 Token、快照 ID、参数、客户端／模型指纹）。无客户基线 → 升级入口 BLOCKED。
+5. **三维全过才敢部署／升级**：`functionalCompatibility`、`serviceLatency`、`agentLatency` 各自 PASS；任一 FAIL／BLOCKED → 整体非 PASS。供应商延迟只可归因，**不得**把整体改成 PASS。
+
+### 决策入口
+
+| 决策问题 | 入口 | 最低证据 |
+|---|---|---|
+| 敢不敢**出包／给用户部署该候选**？ | `certifyCandidate` | ≥1 真实 Agent＋全题库＋MCP 对照；三维 PASS |
+| 敢不敢**在该客户实例升级**？ | `certifyInstanceUpgrade` | 候选已 PASS **且** 既有私有基线＋POST 三维 PASS |
+| 首次如何得到客户基线？ | `captureInstanceBaseline` | 旧实例全真批题成功 → 仓外私有基线；**不**要求历史文件已存在 |
+| 回滚后业务是否恢复？ | `replayInstanceBaseline(ROLLBACK_VERIFY)` | **发生回滚时条件必做**；证明基线恢复 ≠ 该 digest 可出包 |
 
 ## Terminology Compliance
 
@@ -28,11 +51,11 @@ This feature follows `webui/docs/00-product-terminology-standard.md`.
 
 New terms:
 
-- **MCP 问数兼容基线**：升级前在指定实例上，使用既有身份经 Public MCP URL 成功完成的一组版本化查询及其可比较结果、环境与耗时事实。
-- **真实用户旅程**：真实 Agent 接收自然语言，经 Public MCP、Lucy、真实数据库形成最终答案的完整过程；直接 MCP 调用只是对照，不冒充真实用户旅程。
-- **功能零回归**：基线中合法成功的查询在候选上仍成功且保留约定结果；基线中应拒绝的查询仍拒绝且不泄露。
-- **用户端到端耗时**：从用户提交一轮自然语言问题到真实 Agent 输出该轮完整最终答案的墙钟。
-- **绝对预算／相对退化**：前者是不得超过的固定体验上限；后者是相对同实例升级前基线的可接受恶化范围。
+- **MCP 问数兼容基线**：升级前在指定实例上，既有身份经 Public MCP 成功完成的版本化查询及可比较结果、环境与耗时事实（含 snapshotId）。
+- **真实用户旅程**：真实 Agent 自然语言 → Public MCP → Lucy → 真实库 → 最终答案；直连 MCP 不冒充。
+- **三维判定**：`functionalCompatibility`／`serviceLatency`／`agentLatency`；整体 PASS 当且仅当三者皆 PASS。
+- **DEGRADED_PROVIDER_LATENCY**：Agent 墙钟越线时的归因标签；**不是**放行例外。
+- **Lucy 兼容配置资产包（CompatConfigProfile）**：与题库 digest 绑定的连接／语义／Role／权限／夹具配置集合及其指纹；缺匹配配置不得开跑全题库放行。
 
 ## Design System Compliance
 
@@ -53,184 +76,219 @@ New terms:
 
 ### Follow-up Needed
 
-- 若后续把结果做成 WebUI 看板，须另立功能 Spec 与交互合同，不在本条夹带。
+- 若后续把结果做成 WebUI 看板，须另立功能 Spec，不在本条夹带。
 
 ## 交互合同豁免
 
-- 原因：不改变用户可见 WebUI 表面，不新增页面或控件。
+- 原因：不改变用户可见 WebUI 表面。
 - 不改变：路由、页面、按钮、空态、错误态、确认面、浏览器交互。
 
 ## 1. 已核实现状与缺口
 
-1. `scripts/uat/mcp-session-regression.mjs` 已能经真实 MCP 调 `lucy_catalog`、`lucy_read_source`、`lucy_query` 并检查真实指标，但专注 Session，不是版本化用户旅程题库。
-2. `scripts/gates/k8s-acceptance.sh` 当前 MCP 终点为 `initialize`＋`tools/list`；`scripts/gates/k8s-upgrade-gate.sh` 验证镜像、PVC、`.git` 与 `/api/health`，均不证明问数成交。
-3. Compose `upgrade-lucy.sh` 默认只等待 `/api/health` 与保留标记。
-4. ESC-01～10 已有事故场景和一次全真 PASS，但执行证据引用临时 `inbox` 脚本，尚不是每次出包与升级强制执行的稳定门禁。
-5. P1-13 已定义 MCP 热路径绝对＋相对性能门禁，但明确不含真实 LLM 端到端耗时；本条补充而不改写 P1-13。
-6. P1-52 负责镜像、数据规模、资源和持续升级可靠性；本条负责真实用户问数功能、权限与体验兼容，两者都必需，互不替代。
+1. `scripts/uat/mcp-session-regression.mjs` 能真调 MCP，但不是版本化用户旅程门禁。
+2. K8s／Compose 升级门禁止于 health／`tools/list`，不证明问数成交。
+3. ESCAPE／ESC-11 有事故同形，尚非每次出包强制稳定门禁。
+4. P1-13 管热路径性能，不含真实 LLM 墙钟；本条补充不改写 P1-13。
+5. P1-52 管镜像／资源可靠性；本条管问数功能／权限／体验，互不替代。
+6. 执行器／题库 YAML／配置资产包／双文件证据／verifier **尚未实现**（定稿 ≠ 已落地）。
+7. 独立题库合同已开 [P1-54](lucy-20261118-mcp-upgrade-question-bank-spec.md)；本条 v1.1 收编其分母与配置前置。
 
 ## 2. 决策（Normative）
 
 | ID | 决策 | 裁定 |
 |---|---|---|
-| D1 | 双层门禁 | 通用版本化题库＋实例真实基线缺一不可；无基线、基线不可读、未执行或分母不足均 BLOCKED |
-| D2 | 双执行面 | 每个通用业务场景必须有真实 Agent 自然语言旅程；关键场景另有确定性 MCP 同参数对照。直连脚本不得计入真实 Agent 客户端分母 |
-| D3 | 全真 | 使用真实 Agent、Public MCP、Lucy、真实数据库与真实 Role／Token；禁止 mock 数据库、预置最终答案、绕过 ACL、直连 KTX `:7878` 或以 Code Review 代替 |
-| D4 | 客户身份 | 客户基线使用既有只读 Token；候选与升级后使用同一 Token。确因安全轮换而不能复用时为 BLOCKED，不临时换高权 Token 凑绿 |
-| D5 | 覆盖矩阵 | 独立简单问题、过滤／时间／合法空结果、同会话连续追问、单表、多表 join、单库、多库分别查询与对比、无权限、表／行／字段分权限及合法对照全部必做 |
-| D6 | 事故永久看守（两层） | **Demo／通用层**：永久保留同形题，映射 [`UAT-SAG-ESC-11`](../qa/uat/suites/source-ambiguity-mcp-escape/cases.md)（客户原文问句＋泛化多表命中＋唯一钉选＋未限定 filter）；demo 绿 **≠** 客户放行。**客户层**：重放该实例私有会员收入基线（COMPAT-09）；无基线 → BLOCKED，不得声称客户验收 PASS |
-| D7 | 结果判定 | 固定夹具用 typed gold；客户动态数据比较指标名、结果行列形状、基线非空性与明确容差。原非空候选为空、预期指标缺失、新增 deny／error／空信封均 FAIL；**PRE 必须绑定数据快照 ID**（见 D15）；快照未变而结果漂移按 FAIL；快照已变到不可比则 BLOCKED，不得改判 PASS |
-| D8 | 安全负例 | 无权限与受限权限场景必须仍拒绝、无可执行上游越权查询且无敏感泄露；从 deny 变 allow 是 FAIL。每个拒绝场景配同身份或对照身份的合法成交用例 |
-| D9 | 连续追问 | 在同一 Agent 会话与同一 Lucy 旅程中连续发问；另开会话、重复完整上下文或把每轮改写成独立问题不得作为该场景 PASS。通用 demo 无客户「会员收入」表时，连续追问题须用题库冻结的 demo 同形词／度量，或只在客户私有基线车道执行 |
-| D10 | 多库 | 合法主路径是分别经授权连接查询再比较；不得为了 PASS 发明跨连接 join。非法跨连接混查须明确拒绝并给出按连接拆分的下一步 |
-| D11 | 绝对耗时（分档） | **确定性 MCP（硬拦）**：权限／门闩拒绝 P95≤500ms、P99≤2s；简单单表 `lucy_query` P95≤5s；复杂多表／多库查询 P95≤30s。**真实 Agent 每轮墙钟**：目标 ≤120s；越线规则见 D16a（不得与功能／安全零豁免混绑） |
-| D12 | 相对耗时 | 确定性 MCP：P95 增幅>20% 且绝对恶化>50ms 为 FAIL；真实 Agent：至少 3 次，中位数增幅>20% 且绝对恶化>2s 为 FAIL。MCP 绝对预算越线均 FAIL；Agent 绝对越线按 D16a |
-| D13 | 样本 | 确定性 MCP 每场景每版本至少 20 个有效样本，nearest-rank P95；真实 Agent 每场景、每必需客户端、每版本至少 3 次，所有尝试保留，禁止只挑最快或成功跑次 |
-| D14 | 冷启动 | 在既有冷启动／readyz 套件之上记录 Ready 后首轮 MCP 与真实问答；MCP 首轮仍受 D11 MCP 绝对预算；Agent 首轮单列，不得以稳态样本替代；Agent 墙钟按 D16a |
-| D15 | 环境可比 | 相对对照必须同实例、**同数据快照 ID**、同 Token／Role／策略、同连接、同 Agent／模型／版本、同题库与同级运行环境；任一不可比为 BLOCKED |
-| D16 | 功能／权限无豁免 | 功能零回归与安全拒绝：**不接受** `PASS WITH GAP`、`--allow-blocked`、跳过必做客户端、调低功能／权限阈值或删题凑绿。阈值或题库变更须修订 Spec、重审题库摘要并作废旧证据 |
-| D16a | Agent 墙钟有限例外 | Agent 端到端墙钟允许**唯一**一类可审计例外：同 Agent／模型指纹、同题、服务端 MCP 对照（D11 MCP 预算）仍 PASS，且公开证据写明 `agentWallClockException=true`＋原因码（如 `llm_provider_latency`）。**禁止**用该例外掩盖功能 FAIL、权限放宽或 MCP 绝对／相对 FAIL。无例外记录而墙钟越线＝FAIL |
-| D17 | 私有基线 | 含原始工具参数与过滤值的基线存于 Git、inbox、公共交付包之外的实例私有附件，目录 0700、文件 0600；不含 Token、Session ID、数据库密码与原始业务行。公开证据只含 case ID、版本、摘要、指标名、计数、耗时与判定 |
-| D18 | 候选绑定 | 通用、实例演练与升级后证据均绑定 runId、实例、完整 gitSha、镜像 digest、题库 SHA256、客户端／模型版本与 Token 指纹；发布只晋级被测 digest |
-| D19 | 接线（双入口） | **`certifyCandidate`**：通用全真包 PASS 是客户出包前置。**`certifyInstanceUpgrade`**：实例 PRE PASS 是升级前置；候选演练与升级后 POST PASS 是验收前置；回滚后再验（`ROLLBACK_VERIFY`）证明恢复基线。两入口独立终态；失败不自动改生产，由既定回滚 Runbook 处置 |
-| D20 | 环境生命周期（拆分） | **（a）文档起草任务**：可不重建 Docker，缺匹配环境记 BLOCKED，不得假绿。**（b）门禁生命周期**：允许按 Runbook 构建／部署**被测候选**与受控合成夹具（见 D21）；禁止为凑绿使用 mock 库、预置答案、绕过 ACL、或与被测 digest 不符的临时镜像冒充候选 |
-| D21 | 双车道夹具 | **通用车道**：允许脚本化合成夹具（多连接、差分 Role／行权限／字段暴露、事故同形表），用后必须还原；合成≠ mock 最终答案。**客户车道**：只使用该实例既有 Token／数据／私有基线；禁止伪造客户 PRE 或把合成结果写成客户 PASS |
-| D22 | 与 P1-13 | MCP `initialize`／`tools/list`／热路径性能仍归 [P1-13](lucy-20261113-release-perf-baseline-gate-spec.md)；本条只叠加**业务 `lucy_query`／`lucy_explain_query` 成交**与**真实 Agent 墙钟**，不重复判同一 `tools/list` 相对闸 |
-| D23 | 跑次成本与 CI | Spec／Plan 须公布「全量一次」墙钟／费用上限估计；CI＝变更触发**子集**（至少含 COMPAT-09／11 判定器负例＋事故同形），**客户出包／升级**跑全量必做分母。子集 PASS **不得**单独放行出包 |
+| D1 | 双层门禁 | 通用题库＋实例真实基线缺一不可；无基线／不可读／分母不足＝BLOCKED |
+| D2 | 双执行面 | 每场景须真实 Agent 旅程；关键场景另有确定性 MCP 对照；直连脚本∉ Agent 分母 |
+| D3 | 全真 | 真实 Agent、Public MCP、Lucy、真库、真 Role／Token；禁 mock／预置答案／绕过 ACL／`:7878`／CR 代替 |
+| D4 | 客户身份 | 基线与 POST 同一既有只读 Token；不能复用＝BLOCKED，禁换高权凑绿 |
+| D5 | 覆盖矩阵 | 独立问、过滤／时间／空结果、追问、单表、多表 join、单／多库、无权限与分权限＋合法对照，以及 **Lucy Ops W0／受控 W1／W2**（COMPAT-OPS-01–11）全部必做；题目语义以 P1-54 为准 |
+| D6 | 事故看守两层 | Demo／通用＝ESC-11 同形；客户＝私有会员收入基线。证据包负控≠旧版 UAT PASS；当前候选须真实 Agent 全链路 |
+| D7 | 结果判定 | 固定夹具 typed gold；客户比形状／非空／容差；快照未变却非空变空等＝FAIL；不可比＝BLOCKED |
+| D8 | 安全负例 | 拒绝须成立且无越权／泄露；deny→allow＝FAIL；每项配合法对照 |
+| D9 | 连续追问 | 同 Agent 会话＋同 Lucy 旅程；另开／改写成独立题不得 PASS |
+| D10 | 多库 | 分连接查询再比；禁发明跨连接 join；非法混查须拒绝＋按连接拆分下一步 |
+| D11 | MCP 绝对耗时 | 拒绝 P95≤500ms、P99≤2s；简单单表 P95≤5s；复杂多表／多库 P95≤30s。越线＝`serviceLatency` FAIL |
+| D12 | 相对耗时 | MCP：P95 增幅>20% 且>50ms＝FAIL。Agent：≥3 次中位数增幅>20% 且>2s＝FAIL。均不得豁免 |
+| D13 | 样本 | MCP／场景／版本 ≥20；Agent／场景／所选客户端／版本 ≥3；保留全部尝试 |
+| D14 | 冷启动 | Ready 后首轮单列；MCP 受 D11；Agent 受 D16a；禁稳态顶替首轮 |
+| D15 | 环境可比 | 同实例、快照 ID、Token／Role、连接、**同客户端与模型指纹**、题库、同级环境；否则 BLOCKED |
+| D16 | 功能／权限无豁免 | 不接受 PASS WITH GAP、删题、跳过必做、调低功能／权限阈值放行 |
+| D16a | Agent 墙钟严格底线 | **每轮** `turnWallClockMs`＞120s → `agentLatency=FAIL`。可写归因 `DEGRADED_PROVIDER_LATENCY`，**禁止**据此整体 PASS。MCP 对照绿不能挽救 Agent 墙钟 FAIL |
+| D17 | 私有基线 | 仓外 0700／0600；不含 Token／Session／密码／业务行；公开只摘要 |
+| D18 | 候选绑定 | runId、实例、gitSha、digest、`questionBankId`／version／digest、**configProfileFingerprint**、客户端／模型指纹、Token 指纹；只晋级被测 digest |
+| D19 | 四函数接线 | `captureInstanceBaseline`／`certifyCandidate`／`certifyInstanceUpgrade`／`replayInstanceBaseline`；见 §4。失败不自动改生产 |
+| D20 | 环境生命周期 | 门禁生命周期可按 Runbook 部署被测候选与 D21 夹具（digest 一致、用后还原）。每次实际构建／部署／生产升级仍须**独立授权**。禁 mock／错 digest 凑绿 |
+| D21 | 双车道夹具 | 通用可合成夹具用后还原；客户禁伪造 PRE |
+| D27 | Lucy 配置前置 | **全真开跑前**须应用与题库 digest 绑定的 CompatConfigProfile（连接、语义层、Role／表选择器／工具、行／字段权限、Ops 投影就绪声明）。指纹不匹配或缺包 → **BLOCKED**，不得删题凑绿。配置资产包合同正本在 P1-54；本条只强制消费 |
+| D22 | 与 P1-13 | 不重复 `tools/list` 相对闸；本条管业务 query＋Agent 墙钟 |
+| D23 | 全题库与 CI | **不设**总成本／总墙钟上限。必须记录实际总墙钟、分题耗时、模型调用／Token（能取则取）。**全题库完成且三维 PASS** 才可出包／升级放行。CI 子集仅反馈，**不得**单独 `releaseReady` |
+| D24 | 三维判定 | 整体 PASS ⇔ `functionalCompatibility=PASS` ∧ `serviceLatency=PASS` ∧ `agentLatency=PASS` |
+| D25 | Agent 选择 | 候选池见 Plan／`mcp-compat-clients.yaml`。每次运行检测环境后由用户单选（CI 预选）。PRE／POST 禁止换客户端／模型。无适配器／未装／未认证／无多轮＝改选或 BLOCKED；禁脚本冒充。新适配器另任务另授权 |
+| D26 | 双证据文件 | 公开：`results/mcp-compatibility-candidate.json` 与 `results/mcp-compatibility-instance.json`。assembler 只登记路径＋字节 SHA256；verifier **重读重算**分母与摘要，不信 runner 顶层 `status`／`summary` |
 
-## 3. 版本化题库
+## 3. 版本化题库与配置
 
-题库正本计划落在 `scripts/e2e/contracts/mcp-upgrade-journeys.yaml`，UAT 剧本落测试台。每题冻结：自然语言轮次、预期来源与 typed gold／拒绝类别、身份标签、连接与数据快照、MCP 对照参数、样本数、绝对预算、相对比较键和证据槽。
+| 层 | 正本 | 说明 |
+|---|---|---|
+| 题目语义 | [P1-54 Spec](lucy-20261118-mcp-upgrade-question-bank-spec.md) | 自然语言、oracle、身份、映射 COMPAT／COMPAT-OPS |
+| 可执行实例 | `scripts/e2e/contracts/mcp-upgrade-journeys.yaml`（实现阶段） | 与 P1-54 一一映射；本条只认声明的 `questionBankId`＋version＋digest |
+| Lucy 配置 | P1-54 CompatConfigProfile | 连接／语义／Role／权限／夹具；`configProfileFingerprint` 进证据 |
+| UAT 剧本 | 测试台 suite／cases | 不另造第二套题 |
 
 | 场景族 | 必做内容 |
 |---|---|
-| 独立单表 | 简单指标；时间／过滤／分组；合法空结果；客户会员收入同形 |
-| 连续追问 | 「那 12 月呢？」→「再按区域拆分」→「和上月相比呢？」；检查月份、分组与比较上下文未丢 |
-| 单表到多表 | 同会话从订单扩展到已声明 join 的退货／人员；首轮与追问均须成交 |
-| 多库 | 对连接 A／B 分别查询并比较；未授权连接与非法跨连接混查有明确拒绝和下一步 |
-| 权限 | 无 `lucy_query`、无 Source、表 A 可见表 B 不可见、华东／西南行权限、字段暴露；每项含合法对照与泄露检查 |
-| 生命周期 | 旧版 PRE、候选冷启动、稳态、升级后 POST、回滚后；每阶段保留独立证据 |
+| 独立单表 | 简单指标；时间／过滤／分组；合法空；客户会员收入同形 |
+| 连续追问 | 时间窗→分组→比较；上下文不得丢 |
+| 单表到多表 | 已声明 join 扩展成交 |
+| 多库 | 分连接查询与对比；非法跨连接拒绝（须配置层提供合法双连接编排，禁 `lucy_admin` 凑绿） |
+| 权限 | 无工具／Source／表／行／字段＋合法对照 |
+| Lucy Ops | W0 当前车道＋受控 W1／W2（COMPAT-OPS-01–11） |
+| 生命周期 | capture／候选／POST／ROLLBACK_VERIFY 分列证据 |
 
 ## 4. 核心流程（伪代码）
 
 ```text
-function certifyCandidate(newCandidate, suite):
-  require suite.schemaValid && suite.digest == approvedDigest
-  generic = executeGenericFullRealPack(newCandidate, suite)  // D21 通用车道；可含合成夹具
-  if generic.status != PASS: return FAIL_OR_BLOCKED(generic)
-  evidence = redactAndBind(generic, suite.digest, newCandidate.digest)
-  return PASS only if every required generic case/client/attempt passed
+function captureInstanceBaseline(instance, suite, agentClient, tokenFile, privateBaselinePath):
+  // 首次：不要求历史基线文件
+  require agentClient.selected && agentClient.fingerprint
+  run = executeFullSuite(instance, suite, agentClient, phase="CAPTURE")
+  if run.threeAxis != all PASS: return FAIL_OR_BLOCKED(run)
+  writePrivateBaseline(privateBaselinePath, redactSecrets(run), mode=0600, parent=0700)
+  return CAPTURE_PASS
 
-function certifyInstanceUpgrade(instance, oldCandidate, newCandidate, suite, privateBaseline):
-  require suite.schemaValid && suite.digest == approvedDigest
-  require oldCandidate.identity != newCandidate.identity
-  require privateBaseline.snapshotId && privateBaseline.tokenFingerprint
+function certifyCandidate(newCandidate, suite, agentClient, configProfile):
+  require suite.questionBankDigest == approvedQuestionBankDigest
+  require configProfile.fingerprint == suite.requiredConfigFingerprint
+  require applyCompatConfigProfile(configProfile).status == READY  // D27；否则 BLOCKED
+  require agentClient.selected  // ≥1；报告不得外推未测宿主
+  generic = executeGenericFullRealPack(newCandidate, suite, agentClient)
+  verdicts = threeAxis(generic)  // functional, serviceLatency, agentLatency
+  write results/mcp-compatibility-candidate.json  // kind=candidate
+  return PASS iff verdicts all PASS && denominatorComplete(generic)
 
-  if missing(privateBaseline): return BLOCKED(BASELINE_MISSING)
-
-  pre = executeAllRequired(instance, oldCandidate, suite, phase="PRE", snapshotId=privateBaseline.snapshotId)
-  if pre.status != PASS: return BLOCKED_OR_FAIL(pre)
-
-  // 出包侧 certifyCandidate(newCandidate) 须已 PASS；本函数不替代它
+function certifyInstanceUpgrade(instance, newCandidate, suite, agentClient, privateBaselinePath):
+  require fileExists(privateBaselinePath) else return BLOCKED(BASELINE_MISSING)
+  baseline = readPrivateBaseline(privateBaselinePath)
+  require baseline.snapshotId && sameFingerprint(agentClient, baseline)
   require certifyCandidateEvidence(newCandidate).status == PASS
+  post = replaySameIdentityAndArgs(instance, newCandidate, baseline, agentClient, phase="POST")
+  verdicts = threeAxisCompare(baseline, post)  // 含功能零回归 + D11/D12 + D16a
+  write results/mcp-compatibility-instance.json  // kind=instance; phases.POST
+  return PASS iff verdicts all PASS && denominatorComplete(post)
 
-  post = replaySameIdentityAndArgs(instance, newCandidate, privateBaseline, phase="POST")
-  if post.status != PASS: return FAIL_OR_BLOCKED(post)
-
-  for case in suite.requiredInstanceCases:
-    assertFunctionalZeroRegression(pre[case], post[case], case.expectation)  // D16
-    assertMcpAbsoluteBudgets(post[case], case.budgets)                       // D11 MCP
-    assertAgentWallClock(post[case], case.budgets, allowD16a=true)           // D16a
-    assertComparable(pre[case], post[case], snapshotId=privateBaseline.snapshotId)
-    assertRelativeBudget(pre[case], post[case], case.metricClass)
-
-  evidence = redactAndBind(pre, post, suite.digest, newCandidate.digest)
-  return PASS only if every required case and client passed every required attempt
-
-function certifyRollback(instance, restoredCandidate, privateBaseline, suite):
-  // ROLLBACK_VERIFY：证明业务基线恢复，而非只恢复 imageID
-  return certifyInstanceUpgrade.postReplayOnly(instance, restoredCandidate, privateBaseline, suite)
+function replayInstanceBaseline(instance, restoredCandidate, suite, agentClient, privateBaselinePath, phase):
+  // phase = ROLLBACK_VERIFY（发生回滚时条件必做）
+  require phase == "ROLLBACK_VERIFY"
+  require fileExists(privateBaselinePath)
+  baseline = readPrivateBaseline(privateBaselinePath)
+  require sameFingerprint(agentClient, baseline)
+  // 业务恢复 ≠ 可出包：若需声称 restored 可发布，另需该 digest 的 certifyCandidate PASS
+  result = replaySameIdentityAndArgs(instance, restoredCandidate, baseline, agentClient, phase)
+  appendPhase(results/mcp-compatibility-instance.json, ROLLBACK_VERIFY, result)
+  return threeAxisCompare(baseline, result)
 ```
 
 ### 多步状态机合同
 
-- **出包入口状态集**：`CANDIDATE_RUNNING` → `CANDIDATE_PASS`｜`FAIL`｜`BLOCKED`。
-- **升级入口状态集**：`BASELINE_MISSING` → `PRE_RUNNING` → `PRE_PASS` → `POST_RUNNING` → `POST_PASS` →（可选）`ROLLBACK_VERIFY` → `PASS`；任一执行可进 `FAIL` 或 `BLOCKED`。
-- 合法转移：出包与升级**分入口**；`PRE` 未 PASS 不得进入客户实例 POST；`certifyCandidate` 未 PASS 不得客户出包；`POST` 未 PASS 不得升级验收 PASS；回滚后须经 `ROLLBACK_VERIFY`。
-- 终态：`PASS`／`FAIL`／`BLOCKED`（各入口各自终态）。`PASS` 不是 Pod Ready 的同义词。
-- 非终态持久化：每次尝试即时写脱敏证据；私有基线写入私有附件，进程中断后按 runId 续读，不把半次运行写成完成。
-- 逃生边：产品合法查询必须成交；测试流程失败只停止放行并进入既有回滚 Runbook，不自动修改生产。
-- 禁止用单一布尔／`ok` 冒充终态；发布判定必须同时满足功能、权限、MCP 绝对／相对耗时、Agent 墙钟（含 D16a 审计）、身份与完整分母。
+- **捕获**：`CAPTURE_RUNNING` → `CAPTURE_PASS`｜`FAIL`｜`BLOCKED`。
+- **出包**：`CANDIDATE_RUNNING` → `CANDIDATE_PASS`｜`FAIL`｜`BLOCKED`。
+- **升级**：`BASELINE_MISSING`｜`POST_RUNNING` → `POST_PASS`｜`FAIL`｜`BLOCKED`（读取既有基线；不再于本函数内「边 capture 边 upgrade」）。
+- **回滚**：若操作者执行回滚 → **条件必做** `ROLLBACK_VERIFY`；未跑不得宣称业务已恢复。
+- 合法转移：无基线不得 upgrade；candidate 未 PASS 不得客户出包／不得把 upgrade PASS 当出包；rollback 恢复 ≠ restored digest 自动可发布。
+- 终态：`PASS`／`FAIL`／`BLOCKED`（各入口独立）。
+- 禁止单一布尔冒充终态；须三维＋分母＋身份。
 
-## 5. 计时与证据
+## 5. 计时、成本记录与证据
 
 | 字段 | 含义 |
 |---|---|
-| `turnWallClockMs` | 用户发问到 Agent 完整答案的端到端墙钟 |
-| `mcpClientRttMs[]` | 客户端观察到的每次 MCP 请求往返，含重试并标明 attempt |
-| `serverDurationMs[]` | `access_log.duration_ms` 的服务端事实，与请求 ID 对账 |
-| `stageDurations[]` | trace span 存在时记录真实阶段；缺 span 不得编造精确归因 |
-| `unattributedMs` | 端到端墙钟减去已观测区间后的余量，只称未归因，不武断全算数据库或模型 |
-| `samples` | P50／P95／P99／max／中位数、样本数、超时数、所有尝试指针 |
+| `turnWallClockMs` | Agent 端到端墙钟；＞120000 → agentLatency FAIL |
+| `mcpClientRttMs[]` | 客户端 MCP RTT（含 attempt） |
+| `serverDurationMs[]` | 服务端 `duration_ms` |
+| `unattributedMs` | 墙钟减已观测；只称未归因 |
+| `batchWallClockMs` | 本入口全题库实际总墙钟（记录，不作上限） |
+| `modelCallCount`／`tokenUsage` | 客户端能提供时必记；不能提供则 `not_available` |
+| `verdicts.functionalCompatibility` | PASS／FAIL／BLOCKED |
+| `verdicts.serviceLatency` | PASS／FAIL／BLOCKED |
+| `verdicts.agentLatency` | PASS／FAIL／BLOCKED；可附 `attribution=DEGRADED_PROVIDER_LATENCY` |
+| `entrypoint`／`kind` | `candidate`｜`instance` |
+| `clientFingerprint`／`modelFingerprint` | 所选 Agent／模型；禁止中途切换 |
+| `samples` | 分位数、样本数、全部尝试指针 |
 
-证据不得记录 Token、Session ID、连接秘密或原始客户业务行。公开报告中的时长、指标名、行列计数与判定不能反推私有过滤值。
+### 5.1 公开证据文件（D26）
+
+**`results/mcp-compatibility-candidate.json`**
+
+- `kind: "candidate"`
+- `suiteDigest`、`candidateDigest`、`clientFingerprint`、`modelFingerprint`
+- `denominator`、`verdicts`、`cases[]`、`batchWallClockMs`
+- 无私有过滤值／Token／Session／业务行
+
+**`results/mcp-compatibility-instance.json`**
+
+- `kind: "instance"`
+- `phases`: 可含 `POST`、`ROLLBACK_VERIFY`（有回滚时必有）
+- `snapshotId`（公开可持有 ID，不含行数据）、`suiteDigest`、`candidateDigest`、指纹
+- `verdicts`、`denominator`、与 baseline 对照摘要
+
+私有基线仍在仓外；公开 JSON 只脱敏结果。verifier 重读文件、重算分母与摘要。
 
 ## 6. 发布与升级接线
 
-1. **客户出包（`certifyCandidate`）**：`customer-release-readiness` 读取并独立重验通用包证据（如 `results/mcp-compatibility-candidate.json`）；缺失、摘要错误、候选 digest 不同或非 PASS 均 `releaseReady=false`。
-2. **K8s 候选升级（`certifyInstanceUpgrade`）**：H3 在健康检查后执行 PRE／POST 兼容回放（证据如 `results/mcp-compatibility-instance.json`）；H4 回滚后走 `ROLLBACK_VERIFY`，证明恢复基线而非只恢复 imageID。
-3. **现场验收**：`k8s-acceptance.sh` 在 `tools/list` 后执行实例基线回放；诊断用的 `--skip-mcp` 不产生可发布证据，聚合器仍失败关闭。
-4. **客户 Compose**：`upgrade-lucy.sh` 的客户配置路径要求私有基线与 Token 文件，健康检查后回放；开发 demo 只可跑通用车道／ESC-11，不伪称客户基线。
-5. **回滚**：门禁脚本不擅自执行生产回滚；失败后验收不通过，操作者按已备份 revision 与 Runbook 回滚并再验（`ROLLBACK_VERIFY`）。
-6. **与 P1-13**：不在本条重复 `tools/list` 相对闸；出包聚合器分别消费 P1-13 与本条证据。
+1. **出包**：聚合器重验 `mcp-compatibility-candidate.json`；非 PASS／缺文件／摘要错 → `releaseReady=false`。
+2. **升级**：重验 `mcp-compatibility-instance.json` 的 POST；且候选证据已 PASS。
+3. **回滚**：有回滚动作则必须有 `ROLLBACK_VERIFY` 相位；仍不得把未过 `certifyCandidate` 的 restored digest 标成可发布。
+4. **Compose／K8s**：接线消费上述文件；`--skip-mcp` 不产生可发布证据。
+5. **CI 子集**：可跑判定器负例＋事故同形；**禁止**子集单独放行。
 
 ## 7. 验收（SC）
 
 | ID | 标准 | 证据 |
 |---|---|---|
-| SC-01 | 题库 schema、稳定 ID、完整覆盖矩阵、版本与 SHA256 可机检；缺任一族失败 | 题库契约测试 |
-| SC-02 | 真实 Agent 链路含 release profile 要求的自动客户端与手工 WorkBuddy／Cursor；直连 MCP 不冒充 Agent | 全真 runs＋客户端证据 |
-| SC-03 | 独立单表、过滤／时间／分组与合法空结果 typed gold 正确 | COMPAT-01／02 |
-| SC-04 | 同会话连续追问保持时间、分组、比较上下文；禁止重开新会话凑绿 | COMPAT-03／04 |
-| SC-05 | 单表、多表 join、单表扩展多表均成交且结果正确 | COMPAT-05 |
-| SC-06 | 多库分别查询与对比成交；非法跨连接混查拒绝且可执行下一步，无越权 | COMPAT-06 |
-| SC-07 | 无工具／Source／表／行／字段权限均安全拒绝；合法对照成交；deny→allow 与泄露均 FAIL | COMPAT-07／08 |
-| SC-08 | Demo／通用：泛化业务词＋唯一钉表首次 `lucy_query` 不得 `source_ambiguity_gate`（挂 ESC-11／COMPAT-09 demo 层）；客户层：会员收入私有基线重放成交 | COMPAT-09 |
-| SC-09 | PRE／POST 同 Public URL、Token、参数、**数据快照 ID**、客户端与模型；缺基线或不可比为 BLOCKED | 基线绑定测试＋现场证据 |
-| SC-10 | 原成功请求新增 deny／error／空信封／快照未变却非空变空／预期指标缺失均 FAIL；原拒绝变允许均 FAIL | 判定器反向测试＋全真 |
-| SC-11 | 每轮端到端、MCP RTT、服务端耗时、重试、样本数与全旅程总时长完整；冷启动首轮单列 | COMPAT-10／11 |
-| SC-12 | D11 **MCP** 绝对预算自动判定；越线即使比旧版快也 FAIL。Agent 墙钟按 D16a | 判定器＋COMPAT-11 |
-| SC-13 | D12／D13 相对门禁与样本下限自动判定；缺基线不假绿 | 判定器＋COMPAT-12 |
-| SC-14 | COMPAT-09 负控：**优先**用固定坏 digest／冻结失败证据包回放判定器（证明能拦住事故）；若另有现存未修实例可全真复验，但**不依赖**长期保留未修环境。性能判定器延迟负控能拦 MCP 绝对与相对退化 | 证据包＋单元负控（±可选旧实例全真） |
-| SC-15 | 题库／客户端／模型／实例／候选 digest 或 Token 指纹不匹配即拒绝证据；所有必需尝试在分母中 | 发布校验反向测试 |
-| SC-16 | `customer-release-readiness` 对缺失、FAIL、BLOCKED、NOT RUN、篡改与旧摘要均 `releaseReady=false`；须分别消费 `certifyCandidate` 与 `certifyInstanceUpgrade` 证据 | 聚合器与 workflow 契约测试 |
-| SC-17 | K8s 升级、回滚（含 `ROLLBACK_VERIFY`）与客户 Compose 均接线；health／Ready／tools/list 单独通过不能放行 | 脚本契约＋现有环境全真 |
-| SC-18 | 私有基线权限与内容合规；公开证据无 Token、Session、连接秘密、过滤原值与业务行 | 泄露扫描 |
-| SC-19 | 门禁生命周期允许按 Runbook 部署被测候选与 D21 合成夹具；禁止 mock／错 digest 临时镜像凑绿；起草任务缺环境须 BLOCKED | 跑次与命令记录 |
-| SC-20 | Spec／Plan／总账／需求池／测试台勾连；文档 lint 与相关脚本测试通过 | 门禁输出 |
-| SC-21 | `certifyCandidate` 与 `certifyInstanceUpgrade` 为独立入口；仅通用 PASS 不得冒充实例升级 PASS；仅 PRE／POST 不得冒充出包 PASS | 聚合器反向测试 |
-| SC-22 | D16a 例外证据完整且不能掩盖功能／权限／MCP 门禁失败；无审计字段的墙钟越线＝FAIL | 判定器负控 |
+| SC-01 | 题库 schema／稳定 ID／完整矩阵／`questionBankDigest` 可机检；与 P1-54 一一映射 | 题库契约 |
+| SC-02 | ≥1 真实 Agent 完成必做分母；直连 MCP 不冒充；报告不外推未测宿主；客户端来自 `mcp-compat-clients.yaml` 检测／单选 | 全真 runs |
+| SC-03–SC-08 | 业务矩阵与事故看守（含 ESC-11／客户基线分层） | COMPAT-01–09 |
+| SC-03b | Lucy Ops W0／受控 W1／W2 分母完整（COMPAT-OPS-01–11）；扩展车道缺配置指纹不得删题 | P1-54＋OPS runs |
+| SC-09 | PRE／POST（或 capture／POST）同 URL、Token、快照、**客户端／模型指纹**；缺基线 BLOCKED | 绑定测试 |
+| SC-10 | 成功变 deny／空信封／非空变空等 FAIL；拒绝变 allow FAIL | 判定器＋全真 |
+| SC-11 | 计时与 `batchWallClockMs`／模型用量字段完整；冷启动首轮单列 | COMPAT-10／11 |
+| SC-12 | MCP 绝对预算硬拦；Agent 每轮＞120s → agentLatency FAIL；归因不得整体 PASS | 判定器 |
+| SC-13 | 相对门禁与样本下限；缺基线不假绿 | 判定器 |
+| SC-14 | 分层负控：证据包＝判定器；当前候选＝真实 Agent；旧实例可选；禁证据包冒充旧版 UAT PASS | 负控＋全真 |
+| SC-15 | 身份／digest／指纹不匹配拒证；尝试全进分母 | 发布校验 |
+| SC-16 | 聚合器分别消费 candidate／instance；缺／FAIL／BLOCKED／NOT RUN／篡改 → releaseReady=false | 契约测试 |
+| SC-17 | K8s／Compose 接线；health／tools/list 不能单独放行；有回滚必有 ROLLBACK_VERIFY | 脚本契约 |
+| SC-18 | 私有基线权限与泄露扫描 | 扫描 |
+| SC-19 | D20／D21 环境与夹具；错 digest／mock 不得 PASS | 跑次 |
+| SC-20 | 台账勾连与文档门禁 | lint |
+| SC-21 | 入口互不冒充；CI 子集不得 release PASS | 反向测试 |
+| SC-22 | 三维判定；`DEGRADED_PROVIDER_LATENCY` 不能变整体 PASS | 判定器负控 |
+| SC-23 | `captureInstanceBaseline` 与 `certifyInstanceUpgrade` 分离；无历史文件仍可首次捕获 | 契约＋全真 |
+| SC-24 | 双证据文件 schema；verifier 重读重算 | schema＋verifier 测试 |
+| SC-25 | 开跑前 CompatConfigProfile 已应用且指纹匹配；缺包／错指纹＝BLOCKED；用后受控夹具须还原 | 配置门禁＋清理记录 |
 
 ## 8. 主路径可用性自检
 
 | # | 问 | 答 |
 |---|---|---|
-| 1 | 合法用户原任务是否仍能完成？ | 本条唯一目的就是要求 PRE 成功的真实用户任务在 POST 仍成交；不是只验安全拒绝 |
-| 2 | 新增拒绝是否有同部署逃生？ | 本条不新增产品拒绝；测试 FAIL 只阻止候选放行。安全负例的既有拒绝必须有明确下一步，合法对照必做 |
-| 3 | 是否同时验约束与合法成交？ | 是。每个无权限／分权限场景都带合法对照；功能、权限与耗时共同构成分子 |
-| 4 | 是否用 BLOCKED 掩盖产品不可用？ | 否。客户升级的必做基线缺失或客户场景 BLOCKED 会阻止升级放行；不得标 PASS WITH GAP |
+| 1 | 合法用户原任务是否仍能完成？ | 要求基线成功任务在 POST 仍成交 |
+| 2 | 新增拒绝是否有逃生？ | 本条不新增产品拒绝；安全负例须有下一步＋合法对照 |
+| 3 | 是否同时验约束与成交？ | 是；三维共同构成分子 |
+| 4 | 是否用 BLOCKED 掩盖不可用？ | 否；客户无基线阻止升级放行 |
 
 ## 9. 开放项与边界
 
-- MCP 绝对阈值与相对双条件已由委托人批准；Agent 墙钟目标 120s／轮保留，越线走 D16a 有限例外（2026-11-18 审阅修订）。
-- 具体客户题目和参数从该实例私有基线读取，不写入仓库；公开仓库只保存可复现的通用合成题（D21）。
-- 本产品缺陷修复另开条目；发现 FAIL 不得在本条里顺手改门闩、ACL 或数据库行为。
-- 门禁生命周期允许部署被测候选与合成夹具（D20b／D21）；起草阶段缺环境须 BLOCKED，不得假绿（D20a）。
-- SC-14 以固定坏 digest／失败证据包为负控主路径；现存未修实例仅为可选加强，不得因无旧实例而宣称「负控不可做」。
+- **原则均已闭合**（严格墙钟、受控环境、≥1 Agent、分层负控、全题库无总成本上限、题库正本归 P1-54、配置资产包前置）。
+- 具体客户题目只在私有基线；仓库只存通用合成题与通用配置 profile 描述（无秘密）。
+- 产品缺陷修复另开条目。
+- 各 Agent 适配器 **不在本条出口默认已实现**；缺则改选或 BLOCKED。
+- **定稿 ≠ 开发授权 ≠ 可上线**；测试台仍 NOT RUN 直至另授权实现并全真跑通。
 
 ## 10. 变更记录
 
 | 版本 | 内容 |
 |---|---|
-| v0.1-draft | 2026-11-18｜入池：双层门禁、全真题库、耗时双门禁、UAT NOT RUN |
-| v0.2-draft | 2026-11-18｜委托人批准审阅修订：D20 拆分；D11／D16／D16a 耗时分档；D19／§4 出包／升级双入口＋`ROLLBACK_VERIFY`；D21 双车道夹具；D6 Demo／客户分层；D7／D15 快照 ID；D22／D23；SC-14／19／21／22 修订；编号口径澄清 |
+| v0.1-draft | 入池双层门禁与耗时门禁 |
+| v0.2-draft | 审阅修订＋目标对齐句 |
+| v1.0 | 终稿确权（暂不开发）：T1–T10 |
+| **v1.1** | **终稿补丁**：收编 P1-54 为题库语义正本；分母含 COMPAT-OPS；`questionBankDigest`；**D27／SC-25 Lucy 配置资产包前置**；禁无配置开跑 |

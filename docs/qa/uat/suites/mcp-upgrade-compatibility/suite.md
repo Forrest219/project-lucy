@@ -3,53 +3,56 @@
 | 元数据 | 内容 |
 |---|---|
 | Suite ID | `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY` |
-| 总账 ID | **P1-53**／REQ-030-074（升级放行＝P0 底线；不入核心分母） |
-| 目标 | 每次客户候选出包与升级都证明：真实 Agent 既有问数主路径功能零回归、权限不放宽，且 MCP 耗时满足绝对／相对硬门；Agent 墙钟达目标或具备 D16a 审计例外 |
-| 合同回链 | [Spec v0.2-draft](../../../../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)；[Plan](../../../../plans/lucy-20261118-mcp-upgrade-compatibility-plan.md)；[事故错题](../../../../lessons/2026-11-16-source-ambiguity-gate-deadlock.md) |
+| 总账 ID | **P1-53**／REQ-030-074（升级放行＝P0 底线；不入核心分母）；**P1-54**／REQ-030-075（独立多场景题库） |
+| 目标 | **与 Spec 目标同句**：≥1 真实 Agent 经 Lucy Public MCP 跑**全题库**、对照基线；三维（功能／MCP 服务耗时／Agent 墙钟）全过 → 敢不敢部署／升级 |
+| 合同回链 | [门禁 Spec **v1.1**](../../../../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)；[独立题库 Spec **v1.0**](../../../../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md)；[门禁 Plan](../../../../plans/lucy-20261118-mcp-upgrade-compatibility-plan.md)；[题库 Plan v1.0](../../../../plans/lucy-20261118-mcp-upgrade-question-bank-plan.md)；[事故错题](../../../../lessons/2026-11-16-source-ambiguity-gate-deadlock.md) |
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md) |
 | runs | [runs/](runs/) |
 
 ## 全真性
 
-真实 Agent 接收自然语言，经 Public MCP、Lucy、真实数据库形成最终答案；直连 MCP 仅作确定性对照。禁止 mock 数据库、预置答案、绕过 ACL、直连 KTX `:7878`、以健康检查或 Code Review 代替。
+真实 Agent 自然语言 → Public MCP → Lucy → 真库 → 最终答案；直连 MCP 仅对照。禁 mock／预置答案／绕过 ACL／`:7878`／健康检查或 CR 代替。
 
-**双入口**：出包＝`certifyCandidate`（通用包）；升级＝`certifyInstanceUpgrade`（实例 PRE／POST）。二者不得互相冒充 PASS。
+**入口**：`captureInstanceBaseline`（首次）／`certifyCandidate`（出包）／`certifyInstanceUpgrade`（升级）／`replayInstanceBaseline`（有回滚时条件必做 `ROLLBACK_VERIFY`）。互不冒充 PASS。回滚恢复 ≠ restored digest 可出包。
 
-**环境（Spec D20／D21）**：门禁生命周期允许按 Runbook 部署被测候选与通用车道合成夹具（用后还原）；禁止错 digest／mock 凑绿。起草或缺授权阶段缺匹配环境记 `BLOCKED`。
+**环境（D20／D21／D27）**：门禁生命周期可按 Runbook 部署被测候选与通用合成夹具（用后还原）；每次构建／部署／生产升级仍须独立授权。禁错 digest／mock 凑绿。缺匹配环境记 `BLOCKED`。
+
+**Lucy 配置前置（CompatConfigProfile）**：全真开跑前必须应用与题库 digest 绑定的连接／语义／Role／权限／Ops 投影配置并核对 fingerprint；**有题无配置＝不具备落地条件 → BLOCKED**，不得删题。配置合同在 P1-54 §0／§3；门禁强制在 P1-53 D27／SC-25。
+
+**Agent（D25）**：`mcp-compat-clients.yaml` 为候选池；每次检测后单选 ≥1；PRE／POST 同指纹；报告不外推未测宿主。
 
 ## 必做／可选
 
 | Lane | 必做 | 可选 |
 |---|---|---|
-| 通用候选（`certifyCandidate`） | UAT-COMPAT-R0、01–12；release profile／`mcp-compat-clients.yaml` 要求的自动真实 Agent；手工 WorkBuddy／Cursor 按发布合同；COMPAT-09 **Demo 层**（ESC-11） | 无 |
-| 客户实例（`certifyInstanceUpgrade`） | R0、实例适用 01–12＋09 **客户基线**；既有 Token、同一 Public MCP URL、快照 ID、PRE／POST／`ROLLBACK_VERIFY` | 无。实例声明不支持的既有能力须在 PRE 前以合同排除，不得看到 POST FAIL 后删题 |
+| 通用候选（`certifyCandidate`） | R0、01–12＋COMPAT-OPS-01–11；所选真实 Agent 全题库；COMPAT-09 Demo（ESC-11）；Ops 当前 W0＋受控 W1／W2 | 更多客户端仅补充 |
+| 客户捕获（`captureInstanceBaseline`） | 首次全真批题 → 仓外私有基线 | — |
+| 客户升级（`certifyInstanceUpgrade`） | 既有基线＋POST 全题库＋09 客户层；同 Token／快照／指纹 | — |
+| 回滚 | 发生回滚时 `ROLLBACK_VERIFY` 条件必做 | — |
 
-功能／权限必做项都必须 PASS，**不接受** `PASS WITH GAP`。缺基线、样本不足、环境不可比、必做客户端缺失、NOT RUN 或 BLOCKED 均阻止对应入口放行。Agent 墙钟仅允许 Spec D16a 有限例外。
+功能／权限／三维：**不接受** `PASS WITH GAP`。Agent 墙钟＞120s／轮 → `agentLatency` FAIL；`DEGRADED_PROVIDER_LATENCY` **不得**整体 PASS。无总成本上限；必须跑完全题库并记录实际总墙钟／模型用量。
 
 ## 样本与耗时
 
-- 确定性 MCP：每场景每版本至少 20 个有效样本，nearest-rank P95。
-- 真实 Agent：每场景、每必需客户端、每版本至少 3 次；所有尝试保留，以中位数做相对判定。
-- MCP 拒绝 P95≤500ms／P99≤2s；简单单表 P95≤5s；复杂多表／多库 P95≤30s（硬拦）。
-- Agent 每轮端到端目标 ≤120s；越线须 D16a 审计且 MCP 对照仍绿。
-- 相对 MCP：P95 增幅>20% 且>50ms 为 FAIL；Agent：中位数增幅>20% 且>2s 为 FAIL。
-- 缺 PRE 基线／快照 ID 不做 `baseline-seed` PASS。
+- MCP：≥20／场景／版本；P95 绝对预算硬拦；相对＞20% 且＞50ms＝FAIL。
+- Agent：所选客户端 ≥3／场景／版本；中位数相对＞20% 且＞2s＝FAIL；每轮＞120s＝FAIL。
+- 缺基线／快照／指纹不可比 → BLOCKED。
 
 ## 私有基线与公开证据
 
-私有基线含重放所需原始参数与**数据快照 ID**，存 Git、inbox、公共交付包之外，目录 0700、文件 0600；不含 Token、Session ID、数据库密码和原始业务行。公开 runs／evidence 只含 case ID、版本身份、摘要、指标名、行列计数、耗时、重试和判定，不含过滤原值。
+私有基线仓外 0700／0600。公开：`results/mcp-compatibility-candidate.json` 与 `results/mcp-compatibility-instance.json`（实现后）；runs 只摘要。verifier 重读重算。
 
 ## 持续节奏
 
 | 时机 | 跑哪些 |
 |---|---|
-| 改 MCP 门禁、权限、口径绑定、会话、查询编译、运行时、题库或 Agent 接入 | 判定器负例＋事故同形子集（D23）；合并前建议通用全集 |
-| 客户候选出包 | **`certifyCandidate` 全量**＋发布校验器反向测试 |
-| 客户升级前 | 实例 PRE 全集；未 PASS 不升级 |
-| 候选演练／升级后 | 同基线 POST 全集 |
-| 回滚后 | `ROLLBACK_VERIFY` 同一基线再验 |
+| 日常变更 | 判定器负例＋事故同形子集（**不得**单独 release） |
+| 出包 | `certifyCandidate` 全题库 |
+| 首次客户 | `captureInstanceBaseline` |
+| 升级 | `certifyInstanceUpgrade` POST 全题库 |
+| 回滚后 | `ROLLBACK_VERIFY` |
 
 ## 当前判定
 
-**NOT RUN**。Spec／Plan **v0.2-draft**（审阅修订已落入）；无执行器落地或全真跑次；终稿未确权、开发未授权。≠ 可上线。
+**NOT RUN**。门禁 Spec **v1.1**；题库 Spec／Plan **v1.0 终稿确权**；开发未授权（暂不开发）；无执行器／配置资产包实现／全真跑次。≠ 可上线。

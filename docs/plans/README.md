@@ -4,7 +4,8 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
-| [lucy-20261118-mcp-upgrade-compatibility-plan.md](lucy-20261118-mcp-upgrade-compatibility-plan.md) | **v0.2-draft**（P1-53／REQ-030-074）：MCP 升级兼容底线；审阅修订已落入（双入口、耗时分档、D21、D6 分层）；终稿未确权、开发未授权；测试台 NOT RUN。配对 [Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)。≠ 可上线 |
+| [lucy-20261118-mcp-upgrade-question-bank-plan.md](lucy-20261118-mcp-upgrade-question-bank-plan.md) | **v1.0 终稿确权**（P1-54／REQ-030-075）：题库＋CompatConfigProfile；开发未授权（明示暂不开发）；共享测试台 NOT RUN。配对 [Spec](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md)。≠ 可上线 |
+| [lucy-20261118-mcp-upgrade-compatibility-plan.md](lucy-20261118-mcp-upgrade-compatibility-plan.md) | **v1.1 终稿补丁**（P1-53／REQ-030-074）：收编 P1-54／D27 配置前置；开发未授权；测试台 NOT RUN。配对 [Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)。≠ 可上线 |
 | [lucy-20261118-customer-upgrade-reliability-gate-plan.md](lucy-20261118-customer-upgrade-reliability-gate-plan.md) | **v0.1-draft。仅登记与起草发布取证方案，评审前不开发、不执行 UAT。正式升级可靠性门禁在候选镜像生成后绑定同一 digest、Chart/values、N-1 数据与运行配置；A 层原生 amd64 容器数据与资源压力、B 层标准 K8s 持续升级为每个候选必跑，C 层客户隔离预演按验证边界触发；镜像前预检不替代镜像后验收。终稿未确权；未获开发授权；未授权不改运行代码、CI、门禁脚本与测试台；测试台 not_registered；不入核心分母；≠ 可上线**（P1-52／REQ-030-073）。配对 [Spec](../specs/lucy-20261118-customer-upgrade-reliability-gate-spec.md) |
 | [lucy-20261118-version-axis-naming-plan.md](lucy-20261118-version-axis-naming-plan.md) | **v0.3-draft。仅方案稿：Task 全部未开工；未获开发授权**（**P1-51／REQ-030-072**）。对齐 Spec v0.3：自动分配器、交付仓追溯、运行时／镜像身份；SC-01–SC-13；测试台 not_registered；不入核心分母。**仍不进入开发**。配对 [Spec](../specs/lucy-20261118-version-axis-naming-spec.md)。**≠ 可上线** |
 | [lucy-20261118-fde-pack-gate-parallel-plan.md](lucy-20261118-fde-pack-gate-parallel-plan.md) | **v0.1**：对齐 FDE 打包源码准入（R01／R02／R04–R07；R03 已关）。多 agent 并行；R01→R07 串行改 `audit.ts`。委托人已授权推进。**≠ 可上线** |

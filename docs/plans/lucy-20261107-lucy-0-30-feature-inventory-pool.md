@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v1.50 / 2026-11-18 |
+| 版本 / 日期 | v1.55 / 2026-11-19 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码 |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,10 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v1.55 | 2026-11-19 | **P1-54／REQ-030-075 Spec／Plan → v1.0 终稿确权**：委托人批准对抗复审修订并定稿（identities、D7a、frozen 02c、COMPAT-02 四题、行级③＋03b-gate、gov filters、OPS-05／05b、Plan 归属拆分）；开发未授权（明示暂不开发）；共享测试台 NOT RUN。**终稿确权 ≠ 开发授权；不入核心分母；≠ 可上线** |
+| v1.53 | 2026-11-18 | **P1-53 → v1.1 终稿补丁＋P1-54 → v0.2-draft**：委托人批准评审建议；收编题库正本／Ops 分母；明示 **CompatConfigProfile（连接／语义／Role／权限）为全真落地前置**（D27／SC-25；题库 Spec §0）；闭合多库禁 admin、行权限 East／Southwest、gov 分立。测试台仍 NOT RUN。**≠ 开发授权；不入核心分母；≠ 可上线** |
+| v1.52 | 2026-11-18 | **入池 P1-54／REQ-030-075（独立多场景题库）**：委托人授权访问真实系统并起草涵盖 Lucy Ops 的独立题库 Spec；已盘点 `demo-mysql`／`lucy-ops`、当前 Role 与 ACL。题库覆盖独立问、连续追问、单表／多表、权限、多库、Lucy Ops W0 当前车道及 W1／W2 受控扩展车道，含独立 oracle、时区与人口口径。[Spec](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md) v0.1-draft；测试台沿用 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。**入池＋起草 ≠ 终稿确权 ≠ 开发授权；不入核心分母；≠ 可上线** |
+| v1.51 | 2026-11-18 | **P1-53／REQ-030-074 Spec／Plan → v1.0 终稿确权**：委托人授权修订定稿（闭合 Kimi T1–T10：双证据文件、四函数拆分、严格 Agent 墙钟＋三维判定、客户端单选、回滚条件必做、无总成本上限、分层负控等）；测试台仍 NOT RUN。**终稿确权 ≠ 开发授权（明示暂不开发）；不入核心分母；≠ 可上线** |
 | v1.50 | 2026-11-18 | **登记事实（P1-20 UAT）**：本机 Doris 2.0.14 双目录 lab 复跑——SIM 76/76＋KTX-GUARD PASS；**EXT-03-DUAL PASS**（`hive.dw` 129 表／单表 60 列；Kerberos `hive_jd.app` 177 表／单表 120 列）。测试台 INDEX＝替身有效＋lab live PASS；**客户生产 SelectDB 仍 NOT VERIFIED**。用例补 `UAT-SCAN-EXT-03-DUAL`；跑次 [hive-jd-ext-dual](../qa/uat/suites/catalog-scan-read-path/runs/2026-11-18-cursor-hive-jd-ext-dual.md)；出镜像评估见 `inbox/20261118-2318-hive-jd-field-read-ship-assessment.md`。**不改运行代码；出包须另行授权；≠ 可上线** |
 | v1.49 | 2026-11-18 | **P1-53／REQ-030-074 Spec／Plan → v0.2-draft**：委托人批准审阅修订落入合同（D20 环境生命周期拆分、耗时分档＋D16a、出包／升级双入口、D21 通用合成夹具车道、D6 Demo＝ESC-11／客户基线分层、SC-14 固定坏 digest、SC-21／22 等）；测试台仍 NOT RUN。**≠ 终稿确权 ≠ 开发授权；不入核心分母；≠ 可上线** |
 | v1.48 | 2026-11-18 | **入池 P1-53／REQ-030-074（MCP 升级兼容底线与全真用户旅程门禁）**：委托人批准通用事故回归＋客户真实基线双层门禁、独立／连续追问／单表／多表／权限／多库全真 Agent 题库，以及绝对上限＋相对退化耗时双门禁；无基线、FAIL、BLOCKED、NOT RUN 均不得放行。[Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)／[Plan](lucy-20261118-mcp-upgrade-compatibility-plan.md) 初稿 v0.1-draft；测试台 NOT RUN。**入池＋起草 ≠ 终稿确权 ≠ 开发授权；不入核心分母；≠ 可上线** |
@@ -307,7 +311,8 @@
 | P1-50 | P1 | 重建快照上界与完成水位不一致：并发新增调用未入推断却被标已覆盖（FDE R01／P0） | REQ-030-071 | WebUI 审计正确性／事故修复／打包门禁 | 否 | **代码已实现（2026-11-18 Track-A）**：水位改为读快照 `ceilingId`；`covered()` 按 id；vitest 相关绿（见 `inbox/fde-r01-fix-summary.md`）。扩注 [P1-45 Spec](../specs/lucy-20261118-inferred-turn-rebuild-recovery-spec.md) §3.1。测试台未另跑 UAT；不入核心分母；≠ 可上线 | 前序 [P1-45](../specs/lucy-20261118-inferred-turn-rebuild-recovery-spec.md) · [fde-pack-gate-parallel-plan](lucy-20261118-fde-pack-gate-parallel-plan.md) · FDE R01 |
 | P1-51 | P1 | 版本轴分工与命名规约（候选 `rc.N` 自动分配＋交付主键＋私有化分叉追溯） | REQ-030-072 | 发版治理／交付追溯 | 否 | **v0.3-draft。仅方案落盘：不含运行代码、镜像与 CI 改动；未获开发授权；待 Codex 交叉审阅与委托人终稿确权。测试台 not_registered；不入核心分母；≠ 可上线**。合并 main＝产品线大版本；合并前＝自动 `X.Y.Z-rc.N`＋`lucy-k8s-integration-YYYYMMDD-rN`；交付仓 index／manifest／`deployPin`；运行时身份支撑私有化分叉定位。OQ-1／OQ-7 已决 | [Spec](../specs/lucy-20261118-version-axis-naming-spec.md) · [Plan](lucy-20261118-version-axis-naming-plan.md) · 交付仓 [lucy-customer-delivery](https://github.com/Forrest219/lucy-customer-delivery) |
 | P1-52 | P1 | 客户镜像升级可靠性分层门禁（同一 digest＋客户数据量级＋A/B 必跑＋C 按边界触发） | REQ-030-073 | 发布取证／升级可靠性／客户交付 | 否 | **v0.1-draft。仅登记与起草发布取证方案，评审前不开发、不执行 UAT。正式升级可靠性门禁在候选镜像生成后绑定同一 digest、Chart/values、N-1 数据与运行配置；A 层原生 amd64 容器数据与资源压力、B 层标准 K8s 持续升级为每个候选必跑，C 层客户隔离预演按验证边界触发；镜像前预检不替代镜像后验收。终稿未确权；未获开发授权；未授权不改运行代码、CI、门禁脚本与测试台；测试台 not_registered；不入核心分母；≠ 可上线** | [Spec](../specs/lucy-20261118-customer-upgrade-reliability-gate-spec.md) · [Plan](lucy-20261118-customer-upgrade-reliability-gate-plan.md) · 错题 [2026-11-17](../lessons/2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md) |
-| P1-53 | P0 底线（升级放行） | MCP 升级兼容底线与全真用户旅程门禁（通用题库＋实例真实基线＋功能／权限／耗时门禁） | REQ-030-074 | 发布取证／MCP 问数／真实 Agent／升级兼容 | 否 | **v0.2-draft。委托人 2026-11-18 批准审阅修订落入合同（D20 拆分、耗时分档、双入口、D21、D6 分层等）；终稿未确权、开发未授权。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。未授权不改运行代码、测试执行器与发布门禁。不入核心分母；≠ 可上线** | [Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md) · [Plan](lucy-20261118-mcp-upgrade-compatibility-plan.md) · **测试台** [`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`](../qa/uat/suites/mcp-upgrade-compatibility/suite.md) · 错题 [表级歧义死路](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md) |
+| P1-53 | P0 底线（升级放行） | MCP 升级兼容底线与全真用户旅程门禁（通用题库＋实例真实基线＋功能／权限／耗时门禁） | REQ-030-074 | 发布取证／MCP 问数／真实 Agent／升级兼容 | 否 | **v1.1。终稿补丁确权（收编 P1-54／Ops 分母／CompatConfigProfile 前置 D27）。开发未授权（明示暂不开发）。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。未授权不改运行代码、测试执行器与发布门禁。不入核心分母；≠ 可上线** | [Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md) · [Plan](lucy-20261118-mcp-upgrade-compatibility-plan.md) · **测试台** [`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`](../qa/uat/suites/mcp-upgrade-compatibility/suite.md) · 错题 [表级歧义死路](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md) |
+| P1-54 | P0 底线（题库＋配置合同） | MCP 升级兼容多场景题库＋CompatConfigProfile（业务／Ops／配置前置） | REQ-030-075 | 功能合同／题库／Lucy 配置／真实 Agent／Lucy Ops | 否 | **v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿）。开发未授权（明示暂不开发）。测试台沿用 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。未授权不改执行器、权限、数据与运行代码。≠ 可上线** | [Spec](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md) · [Plan](lucy-20261118-mcp-upgrade-question-bank-plan.md) · 共享 **测试台** [`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`](../qa/uat/suites/mcp-upgrade-compatibility/suite.md) · 父合同 [P1-53](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md) |
 | P1-30 | P1 | Wiki／Skill 真读真用＋ACL UAT（测试台合同；防假通） | REQ-030-051 | 测试台／正确性辅线 | 否 | **PASS WITH GAP（2026-11-15 首跑）**。必做 R0／R0-SEED／WIKI-01…04／SKILL-01…04 PASS；WIKI-01S **BLOCKED**（GAP-2）。双宿主 Claude Code CLI＋Cursor Agent CLI。**不入核心分母**；≠ 可上线 | [设计](../design/design-2026-11-15-uat-context-content-wiki-skill.md) · [落地 Plan](lucy-20261115-uat-context-content-landing-plan.md) · **测试台** [`UAT-SUITE-CONTEXT-CONTENT`](../qa/uat/suites/context-content/suite.md)（INDEX：[PASS WITH GAP](../qa/uat/INDEX.md)） |
 | P1-22 | P1 | Doris／SelectDB 多版本对比环境（2.0.14 基线 vs 4.0.8；高频分析路径回归＋版本探测） | REQ-030-043 | 连接／发布取证 | 否 | **入池（2026-11-14）**。委托人同句「我决定以你为准，构建长期测试对比环境」＝立项＋测试环境搭建授权；范围**仅**对比环境、版本探测与证据，**不含**适配代码改动（改代码须另行终稿确权＋开发授权）。行权限在 Doris 上的专项验证暂缓（客户未启用）；客户 SelectDB 版本串暂缺。Spec／Plan 待补；UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | 待补（与 P2-5 `升级候选验证环境` 相邻但对象不同：本条是数据库引擎版本，P2-5 是 Lucy 升级候选） |
 | P1-23 | P1 | UI/UX 标准收敛并与 DEVELOPMENT 绑定（设计系统 `webui/docs/design-system/` 清账、补缺章、DEVELOPMENT 总入口表） | REQ-030-044 | 文档治理 | 否 | **入池（2026-11-14）**。委托人批准：只读核对（已出报告）＋登记＋清理 `99-governance.md` 临时决策。**范围仅文档**；补缺章、改 DEVELOPMENT 总入口、新增 lint 门禁须各自另获委托人确认；不含运行代码。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [核对报告](../../inbox/20261114-0130-uiux-standard-audit.md)（临时文件，定稿后迁入 `docs/reviews/`） |
@@ -568,10 +573,17 @@
 
 ### P1-53｜MCP 升级兼容底线与全真用户旅程门禁（REQ-030-074）
 
-- **出口**：`certifyCandidate`（通用包）与 `certifyInstanceUpgrade`（实例 PRE／POST／`ROLLBACK_VERIFY`）分入口均通过；功能／权限零豁免；MCP 绝对／相对硬门；Agent 墙钟目标 120s／轮或 D16a 审计例外；COMPAT-09 Demo＝ESC-11、客户＝私有基线。
-- **事实**：现有升级与验收门禁止于 health／Ready／`tools/list`，没有强制真实 `lucy_query` 成交；表级歧义事故虽已有 ESCAPE 套件，但不是每次升级必过的版本化门禁。
-- **关系**：与 P1-52 镜像／资源／持续升级可靠性互补；复用 P1-13（热路径，不重复 `tools/list`）、P1-35、P1-37 和真实用户 E2E。**升级放行＝P0 底线；不入核心分母**。
-- **跟进**：Spec／Plan **v0.2-draft**（2026-11-18 审阅修订已落入）；测试台 NOT RUN；终稿未确权、开发未授权。缺环境 BLOCKED；禁止 mock／错 digest 凑绿。
+- **出口**：四函数＋三维 PASS；全题库（含 COMPAT-OPS）硬约束；消费 P1-54 `questionBankDigest`＋**CompatConfigProfile 指纹**（D27）；缺配置＝BLOCKED；双公开证据文件。
+- **事实**：升级门禁止于 health／`tools/list`；执行器／配置消费尚未实现。
+- **关系**：题库语义正本＝P1-54；与 P1-52／P1-13／P1-35／P1-37 互补。**升级放行＝P0 底线；不入核心分母**。
+- **跟进**：Spec／Plan **v1.1。终稿补丁确权（收编 P1-54／Ops／D27）。开发未授权（明示暂不开发）。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。未授权不改运行代码、测试执行器与发布门禁。不入核心分母；≠ 可上线**。
+
+### P1-54｜MCP 升级兼容多场景题库（REQ-030-075）
+
+- **出口**：版本化题库＋**CompatConfigProfile**（连接／语义／Role／权限／夹具）；§5 COMPAT↔QB 分母完整；有题无匹配配置＝不具备落地条件。
+- **事实**：demo 已盘点；W0 仅两表；多库禁 admin；通用车道不做行隔离成交（③＋03b-gate／proven）；frozen W0-only 负例；W1／W2 须夹具＋`gov.*`→`lucy_query.filters[]`。
+- **关系**：向 P1-53 提供 digest／fingerprint；YAML 内容／profile 脚本归本条 Create；父 Plan Consume；不依赖 P1-49 heal。**P0 底线题库＋配置合同；不入核心分母**。
+- **跟进**：Spec／Plan **v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿）。开发未授权（明示暂不开发）。测试台沿用 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。未授权不改执行器、权限、数据与运行代码。≠ 可上线**。
 
 ### P1-34｜大 Schema 接入（REQ-030-055）
 
