@@ -11,6 +11,7 @@
 | UAT-SCAN-EXT-01 | 外部目录列库 live | 可选／须授权 | live-schemas |
 | UAT-SCAN-EXT-02 | 外部目录列表 live | 可选／须授权 | live-tables |
 | UAT-SCAN-EXT-03 | 外部目录单表读字段 live（P1-20 事故复现） | **P1-20 现场必验**／须凭据 | schema-structure |
+| UAT-SCAN-EXT-03-DUAL | 双外部目录对照：无 Kerberos Hive ＋ Kerberos `hive_jd` 同构读字段 | **P1-20 客户症状对照**／本机 lab 或现场 | schema-structure |
 | UAT-SCAN-EXT-04 | 外部目录中文表名单表字段 live | P1-20 现场／须凭据与中文表 | schema-structure |
 | UAT-SCAN-EXT-05 | 外部目录结构 diff／per-table 同通道 live（含缺表报错取证） | P1-20 现场／须凭据 | table-structure-diff |
 | UAT-SCAN-CASE-01 | 大小写歧义字段拒绝 | 全真 API | `run-zhaomin-local-gaps.mjs case` |
@@ -21,6 +22,7 @@
 - SIM 可主张 EC 替身；**KTX-GUARD** 证明替身所模拟的 KTX 拒绝行为仍真实；二者都**不得**冒充 EXT live PASS。
 - 无点号 MySQL 单表字段不回归（EC-10 的 live 镜像）并入 `UAT-SCAN-MYSQL-02` 步骤 3，不另立编号，避免同一检查算两次 PASS。
 - EXT-03…05 是 P1-20 的现场必验项。「PASS WITH GAP」只适用于真正可选的 EXT-01／02；EXT-03…05 未跑时 P1-20 按 `suite.md`「主张规则」单独记 `NOT VERIFIED`／`BLOCKED`。
+- **EXT-03-DUAL** 针对客户截图症状（能列 `hive_jd`／`hive-1` 表，但「准备表结构」报「没有读到字段」）：同一 Lucy、同一 Doris／SelectDB，对**无 Kerberos** 与 **Kerberos `hive_jd`** 各读至少一张表字段；两路都通才可主张「本机构造的客户同形症状已修复」。只测一路 ≠ 关闭客户对照缺口。
 
 ### 跑前统一前置（所有 live 用例）
 
@@ -247,6 +249,44 @@ fixtures「可选外部目录 live」已填真实 `catalog.database` 连接；�
 ### 清理
 
 临时连接测后删除；不改生产 ACL／凭据文件内容。
+
+---
+
+## UAT-SCAN-EXT-03-DUAL — 双外部目录对照（hive ＋ hive_jd）
+
+对应客户反馈：连接 `hive-jd`（截图目录名常写作 `hive_jd`）后能列表，勾选表「读取字段」失败（文案「表「…」没有读到字段。」）；另一 Hive（如 `hive-1`／`hive`）历史上曾可对照。截图锚点：`hive_jd`／`app` 列表；「准备表结构」对 `dim_bidding_block_ad_id_2025` 类表失败。
+
+本条**不替代** EXT-03 的单连接合同；它补的是「两路同构」与 Kerberos／非 Kerberos 差集。本机 lab（Doris 2.0.14 ＋ 无 Kerberos `hive` ＋ Kerberos `hive_jd`）可主张 lab live；**客户生产 SelectDB 仍须另记**，不得把 lab PASS 写成客户 live PASS。
+
+### 前置
+
+- 跑前统一前置三步已完成  
+- fixtures「本机 Doris／Hive 双目录 lab」已填，且 Lucy 容器能 TCP 到 FE `:9030`（或 host 映射口）  
+- Doris 侧对两目录冷表 `DESC` 已成功（绕开 Lucy 的对照组）  
+- 自动化指针：`node scripts/uat/run-catalog-scan-ext-dual.mjs`  
+
+### 步骤
+
+1. 临时连接 A：`database=hive.dw`（或 fixtures `plainCatalogDb`），读表列表含 `T_plain`  
+2. `POST .../schema-structure`，`{ "schema": "<plainSchema>", "tables": ["<T_plain>"] }`  
+3. 临时连接 B：`database=hive_jd.app`（或 fixtures `krbCatalogDb`），读表列表含 `T_krb`  
+4. 同接口读 `T_krb` 字段  
+5. （可选对照）容器内 `ktx sql --connection <A|B> "DESC …"` 仍应被只读校验拒绝（证明字段成功路径不是 `ktx sql`）  
+6. 取日志：成功路径不应出现对应表的 `schema-structure] read failed`  
+
+### 期望／判定
+
+| 观察 | 判定 |
+|---|---|
+| A、B 两路均为 2xx，`namesOnly=false`，`columnCount>=1`；响应／日志无口令 | **PASS**（lab 或现场双目录同构） |
+| 仅 A 成功、B 失败（或相反） | **FAIL（差集）**：记录失败侧耗时、HTTP 码、脱敏探针日志；不得用「另一路通」主张本条 PASS |
+| 两路都失败，且约 ≤3s、日志无直连探针／或探针为 KTX `Describe` 拒绝 | **FAIL**：更像缺 P1-20 直连修复或容器仍是旧码；先回报跑前自检与 `BUILD_REVISION` |
+| 两路都失败，且日志有 SelectDB／Kerberos／超时原文 | **FAIL（下游）**：记原文类别；回流 P1-43／现场 Kerberos，不冒充「Lucy 直连未修」 |
+| lab 不可达／无凭据 | `BLOCKED`；客户现场无双目录时本条 `SKIPPED`（EXT-03 单路仍可独立判） |
+
+### 清理
+
+删除临时连接 A／B；不改 Doris catalog／keytab。
 
 ---
 

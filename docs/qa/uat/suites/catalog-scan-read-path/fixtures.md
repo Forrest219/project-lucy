@@ -52,3 +52,29 @@ cd webui && npx vitest run \
 | chineseTableForColumns | 例中文表名；无则 EXT-04 SKIPPED |
 | missingTableForDiff | 故意不存在的表名（EXT-05；同时用来取证 SelectDB 缺表报错原文） |
 | 凭据存放 | 路径 only（禁写口令内容） |
+
+## 本机 Doris／Hive 双目录 lab（EXT-03-DUAL）
+
+用于构造客户「`hive` 能对照、`hive_jd` 读字段失败」同形差集；**≠ 客户生产 SelectDB**。口令为空时勿在 fixtures 写死明文；脚本用环境变量或空串。
+
+| 键 | 值 |
+|---|---|
+| Doris FE 容器 | `doris-lab-2014-fe-1`（SelectDB／Doris **2.0.14**） |
+| FE MySQL（宿主机） | `127.0.0.1:19030` |
+| FE MySQL（Lucy 容器） | host=`doris-lab-2014-fe-1` port=`9030`（须 `docker network connect doris-lab-2014_doris_lab compose-lucy-1`） |
+| 无 Kerberos 目录 | catalog=`hive`；连接 `database=hive.dw`；表例 `dw_sim_001_i_h`（或 `hive.dim`／`dim_sim_001_stat_i_d`） |
+| Kerberos 目录 | catalog=`hive_jd`；连接 `database=hive_jd.app`；表例 `app_ad_sim_001_stat_i_d`（约 177 张模拟表） |
+| HMS／KDC | `lucy-krb-hms`、`kdc-lab`（与既有 inbox 交叉验证环境同栈） |
+| 对照旧镜像（可选） | 容器 `lucy-old3a9`＝客户回退基线 `3a9f0711`（只读对照，不改其配置） |
+| WebUI 登录文件 | 路径 only：`/Users/zhangxingchen/Projects/config_for_agents/lucy-docker-demo-webui.txt`（格式：第 2 行 adminId、第 3 行口令；禁写入口令） |
+| Doris 连接用户 | lab 临时用户 `uat_lucy`（口令仅经环境变量 `UAT_DORIS_PASSWORD` 注入脚本；**禁写入本 fixtures／跑次正文**）。Lucy API 要求非空 password，不可用空口令 root |
+| 自动化 | `UAT_DORIS_USER=uat_lucy UAT_DORIS_PASSWORD=… node scripts/uat/run-catalog-scan-ext-dual.mjs` |
+
+跑前自检（Doris 侧，绕开 Lucy）：
+
+```bash
+docker exec doris-lab-2014-fe-1 mysql -h127.0.0.1 -P9030 -uroot -e \
+  "DESC \`hive\`.\`dw\`.\`dw_sim_001_i_h\`; DESC \`hive_jd\`.\`app\`.\`app_ad_sim_001_stat_i_d\`;"
+```
+
+两路 `DESC` 成功后再跑 Lucy EXT；若 Doris 侧已失败，本条记 `BLOCKED`（下游），不要判 Lucy FAIL。

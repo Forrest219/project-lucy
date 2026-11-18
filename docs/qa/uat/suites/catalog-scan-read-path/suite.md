@@ -29,9 +29,11 @@ P1-20 **单独记状态**，不借 P1-16 的「PASS WITH GAP」。同一套件�
 | `UAT-SCAN-SIM` ＋ `UAT-SCAN-KTX-GUARD` 都 PASS | 替身与真实 KTX 拒绝行为一致；可主张「替身合同有效」；仍 ≠ live |
 | `KTX-GUARD` 退出码 1 | 替身前提失效：SIM 的 PASS 不再可信，P1-20 记 **FAIL** |
 | `KTX-GUARD` 退出码 2 | `BLOCKED`；SIM 的「替身有效」不可主张 |
-| EXT-03 live 真跑通（含跑前自检、跑次记录构建标识） | 「P1-20 现场单表字段 live PASS」；仍 ≠ 可上线 |
-| EXT-03／05 live 跑了但失败 | P1-20 **FAIL**；按判定表回流 |
+| EXT-03 live 真跑通（含跑前自检、跑次记录构建标识） | 「P1-20 现场／lab 单表字段 live PASS」；仍 ≠ 可上线 |
+| EXT-03-DUAL 两路（plain Hive ＋ `hive_jd`）都 PASS | 「客户同形双目录对照 lab／现场 PASS」；可关闭「只测了一路」缺口；仍 ≠ 客户生产 live（除非连接的就是客户 FE） |
+| EXT-03／05／03-DUAL live 跑了但失败 | P1-20 **FAIL**；按判定表回流 |
 | EXT-03…05 无凭据／不可达 | P1-20 记 `NOT VERIFIED`（跑次写 `BLOCKED`）。**降级主张**（例如「以替身收口」）需委托人**对 P1-20 单独书面授权**；P1-16 EXT 的既有「暂不补跑」授权**不覆盖**本条 |
-| EXT-04 无中文表 | `SKIPPED`，不影响 EXT-03 判定 |
+| 仅有 lab 双目录、无客户 FE | 可主张 **lab live PASS**；INDEX／跑次必须写「≠ 客户生产」；客户 live 仍 `NOT VERIFIED` 直至现场补跑或委托人另授权 |
+| EXT-04 无中文表 | `SKIPPED`，不影响 EXT-03／03-DUAL 判定 |
 
 跑次元数据：每个 live 跑次必须记 `git rev-parse HEAD`、工作区是否脏、容器构建标识、容器内源码自检结果（见 `cases.md`「跑前统一前置」）。
