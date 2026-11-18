@@ -180,7 +180,7 @@ readCatalogTableColumns(conn, catalog, schema, table):
 | EC-02 | 同上路径中 `runSqlImpl` **未被调用** | vitest |
 | EC-03 | `DESC` 被服务端拒绝、`SHOW COLUMNS` 成功 → 返回字段，尝试顺序为 `DESC`→`SHOW COLUMNS`；前两条 0 列、`DESCRIBE` 有列也能返回 | vitest |
 | EC-04 | 三探针皆失败 → `READ_FAILED` 且 message 为「表「…」没有读到字段。」，共 3 次尝试 | vitest |
-| EC-05 | 权限、表不存在、连接失败、超过读取上限、超时：只尝试 1 次，文案分别为 permission／默认／默认／too_large／timeout 句 | vitest |
+| EC-05 | 权限、表不存在、连接失败、超过读取上限、超时：只尝试 1 次，文案分别为 permission／默认／默认／too_large／timeout 句。超时分类须使用探针实际 `timeoutMs`（含 `Catalog connection/query timed out` 文本）；批量路径的共享 call 预算见 P1-34 LS-16／LS-18 | vitest |
 | EC-06 | 直连白名单放行三段名 `DESC`／`SHOW COLUMNS`／`DESCRIBE`（含中文名与反引号转义）；拒绝 `SELECT`、`information_schema`、两段名、`SHOW FULL COLUMNS`、分号、注释、`ALL` 后缀 | vitest |
 | EC-07 | 外部目录成功路径 SQL 不含 `information_schema` | vitest |
 | EC-08 | 密码不入字段探针的结果与错误；失败／超时都关连接 | vitest |

@@ -4,7 +4,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { resolveProjectRoot } from "../project.js";
 import { redactStorageDetail } from "../security/redaction.js";
-import { prepareTraceDatabase } from "../trace/evidence.js";
+import { AUDIT_WAL_AUTOCHECKPOINT_PAGES, prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
 import {
@@ -2477,6 +2477,20 @@ export const INFERRED_REBUILD_LOG_PAGE = 400;
 export const INFERRED_REBUILD_CLUSTER_SLICE = 25;
 /** Stay under SQLite's variable limit when one cluster references many access_log rows. */
 export const INFERRED_REBUILD_SOURCE_CHUNK = 500;
+
+/** Gate for rebuild phase timing (`LUCY_REBUILD_TRACE=1`). Used by FDE R07 / P1-47 B-line. */
+export function isRebuildTraceEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.LUCY_REBUILD_TRACE ?? "").trim() === "1";
+}
+
+function rebuildTrace(phase: string, detail: Record<string, number | string | boolean>): void {
+  if (!isRebuildTraceEnabled()) return;
+  const parts = Object.entries(detail)
+    .map(([key, value]) => `${key}=${typeof value === "number" ? (Number.isInteger(value) ? value : value.toFixed(1)) : value}`)
+    .join(" ");
+  console.info(`[lucy-rebuild-trace] ${phase} ${parts}`);
+}
+
 /**
  * Spec 173 v0.3 / 2026-10-19 audit-trust: 120 秒近邻回绑已作废。
  * 此常量保留仅为兼容历史 import；`bindPriorSessionCalls` 不再按此窗口回填 `lucy_turn_id`。
@@ -2627,6 +2641,16 @@ async function rebuildInferredTurnsUnlocked(
     await pauseAfterStretch(performance.now() - stretchStartedAt);
     stretchStartedAt = performance.now();
   };
+  const rebuildStartedAt = performance.now();
+  rebuildTrace("begin", {
+    userId,
+    wal_autocheckpoint: Number(database.pragma("wal_autocheckpoint", { simple: true })),
+    target_wal_autocheckpoint: AUDIT_WAL_AUTOCHECKPOINT_PAGES
+  });
+  // P1-47 B-line: enforce the tuned checkpoint even if an older connection skipped prepareTraceDatabase.
+  if (Number(database.pragma("wal_autocheckpoint", { simple: true })) !== AUDIT_WAL_AUTOCHECKPOINT_PAGES) {
+    database.pragma(`wal_autocheckpoint = ${AUDIT_WAL_AUTOCHECKPOINT_PAGES}`);
+  }
   const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
   const ceiling = database.prepare(
     `SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ? AND ts >= ?`
@@ -2645,11 +2669,16 @@ async function rebuildInferredTurnsUnlocked(
   let cursorId = 0;
   // P1-39: 页大小按上一页实测耗时收敛，慢盘冷缓存下单页同步读取不再随固定 400 行失控。
   let pageSize = REBUILD_PAGE_INITIAL;
+  let readPagesMs = 0;
+  let readPageCount = 0;
   for (let pageIndex = 0; ; pageIndex += 1) {
     if (pageIndex > 0) await rest();
     const startedAt = performance.now();
     const page = loadPage.all(userId, cutoff, ceilingId, cursorTs, cursorTs, cursorId, pageSize) as ClusterLogRow[];
     const elapsedMs = performance.now() - startedAt;
+    readPagesMs += elapsedMs;
+    readPageCount += 1;
+    rebuildTrace("read_pages", { page: pageIndex, rows: page.length, pageSize, ms: elapsedMs });
     if (page.length === 0) break;
     loaded.push(...page);
     const tail = page[page.length - 1]!;
@@ -2658,6 +2687,7 @@ async function rebuildInferredTurnsUnlocked(
     if (page.length < pageSize) break;
     pageSize = nextRebuildPageSize(pageSize, elapsedMs);
   }
+  rebuildTrace("read_pages_total", { pages: readPageCount, rows: loaded.length, ms: readPagesMs });
   await rest();
 
   const business = loaded.filter((row) =>
@@ -2812,13 +2842,10 @@ async function rebuildInferredTurnsUnlocked(
     plans.push({ cluster, id: inferredTurnId(userId, anchor.id) });
   }
 
-  // P1-45: 记录本次重建覆盖的 access_log 上界水位（ISO 字符串，重建开始前的最新 ts）。
-  // 若用户在窗口内无日志则为 ''；该值在 in_progress 与 complete 两个阶段复用，
-  // 保证 covered() 只认重建开始时已存在的调用。
-  const watermarkRow = database.prepare(
-    `SELECT COALESCE(MAX(ts), '') AS ts FROM access_log WHERE user_id = ? AND ts >= ?`
-  ).get(userId, cutoff) as { ts: string };
-  const watermarkTs = watermarkRow.ts;
+  // P1-45／P1-50: 水位必须与读页冻结的 ceilingId 同一上界（十进制 id 字符串）。
+  // 不得改用 MAX(ts)：重建期间插入且 id>ceiling 但 ts≤MAX(ts) 的行不会进快照，
+  // 却会被 ts 水位判为已覆盖（FDE R01）。空窗口时 ceilingId=0。
+  const watermark = String(ceilingId);
 
   // P1-45 SC-01: 在 DELETE 之前持久化 in_progress，使任意中断后 covered() 返回 false。
   database.prepare(`
@@ -2826,7 +2853,7 @@ async function rebuildInferredTurnsUnlocked(
     VALUES (?, 'in_progress', ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       status = 'in_progress', watermark = excluded.watermark, updated_at = excluded.updated_at
-  `).run(userId, watermarkTs, new Date().toISOString());
+  `).run(userId, watermark, new Date().toISOString());
 
   // P1-47 SC-01: Split the previously unbounded delete+allocate block so the event loop
   // can yield between chunks. Window-scoped deletes are also chunked by turn id (UAT-RPB
@@ -2834,9 +2861,11 @@ async function rebuildInferredTurnsUnlocked(
   // disk). The per-plan delete+allocate loop stays REBUILD_ALLOCATE_CHUNK-sized.
   // OQ-1: within each short txn plans are processed in cluster order; between chunks we
   // yield; existing correlation_key numbers are reused via lookupInquiryNo.
+  const backfillStartedAt = performance.now();
   database.transaction(() => {
     ensureBackfillBeforeAllocate(database);
   })();
+  rebuildTrace("backfill_serial", { ms: performance.now() - backfillStartedAt });
   await rest();
 
   const windowTurnIds = (
@@ -2844,21 +2873,29 @@ async function rebuildInferredTurnsUnlocked(
       `SELECT inferred_turn_id AS id FROM inferred_turns WHERE user_id = ? AND started_at >= ?`
     ).all(userId, cutoff) as Array<{ id: string }>
   ).map((row) => row.id);
+  let deleteWindowMs = 0;
   for (let chunkStart = 0; chunkStart < windowTurnIds.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
     if (chunkStart > 0) await rest();
     const chunk = windowTurnIds.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
+    const chunkStartedAt = performance.now();
     database.transaction(() => {
       for (const id of chunk) {
         deleteLinksByTurn.run(id);
         deleteTurnById.run(id);
       }
     })();
+    const chunkMs = performance.now() - chunkStartedAt;
+    deleteWindowMs += chunkMs;
+    rebuildTrace("delete_window", { offset: chunkStart, size: chunk.length, ms: chunkMs });
   }
+  rebuildTrace("delete_window_total", { turns: windowTurnIds.length, ms: deleteWindowMs });
   await rest();
 
+  let allocateMs = 0;
   for (let chunkStart = 0; chunkStart < plans.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
     if (chunkStart > 0) await rest();
     const chunk = plans.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
+    const chunkStartedAt = performance.now();
     database.transaction(() => {
       for (const plan of chunk) {
         // Plans may reference ids that fell outside the lookback window; delete those too.
@@ -2867,14 +2904,38 @@ async function rebuildInferredTurnsUnlocked(
         assignedInquiry.set(plan.id, lookupInquiryNo(database, plan.id) ?? allocateInquiryNo(database, plan.id));
       }
     })();
+    const chunkMs = performance.now() - chunkStartedAt;
+    allocateMs += chunkMs;
+    rebuildTrace("allocate", { offset: chunkStart, size: chunk.length, ms: chunkMs });
   }
+  rebuildTrace("allocate_total", { plans: plans.length, ms: allocateMs });
   await rest();
 
   let turns = 0;
   let sliceSize = REBUILD_WRITE_SLICE_INITIAL;
+  let writeSlicesMs = 0;
+  let prefetchMs = 0;
+  let walCheckpointMs = 0;
+  // F2++ / R07 p99-3: skip PASSIVE when the previous checkpoint already left a tiny
+  // residual (≤ autocheckpoint pages). Autocheckpoint keeps commit spikes bounded;
+  // still force PASSIVE every few slices so busy=1 residue cannot drift.
+  const TINY_WAL_LOG_PAGES = AUDIT_WAL_AUTOCHECKPOINT_PAGES;
+  const FORCE_PASSIVE_EVERY_SLICES = 3;
+  let lastWalLogPages = Number.POSITIVE_INFINITY;
+  let slicesSincePassive = 0;
   for (let start = 0; start < plans.length;) {
-    if (start > 0) await rest();
     const slice = plans.slice(start, start + sliceSize);
+    // P1-47 B-line: warm access_log_sources outside the write txn so cold reads
+    // are not held under the writer lock / commit+checkpoint stretch.
+    const prefetchStartedAt = performance.now();
+    for (const plan of slice) {
+      sourcesFor(plan.cluster.business.map((row) => row.id));
+    }
+    const prefetchElapsed = performance.now() - prefetchStartedAt;
+    prefetchMs += prefetchElapsed;
+    rebuildTrace("prefetch_sources", { offset: start, size: slice.length, ms: prefetchElapsed });
+    if (prefetchElapsed >= 20) await rest();
+
     const sliceStartedAt = performance.now();
     turns += database.transaction(() => {
       let written = 0;
@@ -2883,18 +2944,88 @@ async function rebuildInferredTurnsUnlocked(
       }
       return written;
     })();
+    const sliceMs = performance.now() - sliceStartedAt;
+    writeSlicesMs += sliceMs;
+    rebuildTrace("write_slice", { offset: start, size: slice.length, ms: sliceMs, sliceSize });
+
+    // Spread residual WAL into PASSIVE checkpoints between slices.
+    // F2+ / R07 p99: always yield after write (+ optional ckpt).
+    // If busy=1, do not retry on the write hot path — yield first, then one deferred PASSIVE.
+    slicesSincePassive += 1;
+    const skipPassive =
+      Number.isFinite(lastWalLogPages) &&
+      lastWalLogPages <= TINY_WAL_LOG_PAGES &&
+      sliceMs < 20 &&
+      slicesSincePassive < FORCE_PASSIVE_EVERY_SLICES;
+
+    if (skipPassive) {
+      rebuildTrace("wal_checkpoint_skip", {
+        offset: start,
+        prior_log: lastWalLogPages,
+        sliceMs,
+        slices_since_passive: slicesSincePassive
+      });
+      await rest();
+    } else {
+      const ckptStartedAt = performance.now();
+      let ckpt = database.pragma("wal_checkpoint(PASSIVE)") as Array<{ busy: number; log: number; checkpointed: number }>;
+      let ckptMs = performance.now() - ckptStartedAt;
+      walCheckpointMs += ckptMs;
+      let ckptRow = ckpt[0];
+      lastWalLogPages = ckptRow?.log ?? lastWalLogPages;
+      slicesSincePassive = 0;
+      rebuildTrace("wal_checkpoint", {
+        offset: start,
+        ms: ckptMs,
+        busy: ckptRow?.busy ?? -1,
+        log: ckptRow?.log ?? -1,
+        checkpointed: ckptRow?.checkpointed ?? -1
+      });
+      await rest();
+
+      if (ckptRow?.busy === 1) {
+        const retryStartedAt = performance.now();
+        ckpt = database.pragma("wal_checkpoint(PASSIVE)") as Array<{ busy: number; log: number; checkpointed: number }>;
+        ckptMs = performance.now() - retryStartedAt;
+        walCheckpointMs += ckptMs;
+        ckptRow = ckpt[0];
+        lastWalLogPages = ckptRow?.log ?? lastWalLogPages;
+        rebuildTrace("wal_checkpoint_retry", {
+          offset: start,
+          ms: ckptMs,
+          busy: ckptRow?.busy ?? -1,
+          log: ckptRow?.log ?? -1,
+          checkpointed: ckptRow?.checkpointed ?? -1
+        });
+        await rest();
+      }
+    }
+
     start += slice.length;
     // P1-39: 一片 = 一次事务（含 fsync 与可能的检查点），按实测耗时收敛片大小。
-    sliceSize = nextSliceSize(sliceSize, performance.now() - sliceStartedAt, REBUILD_WRITE_SLICE_MIN, REBUILD_WRITE_SLICE_MAX);
+    sliceSize = nextSliceSize(sliceSize, sliceMs, REBUILD_WRITE_SLICE_MIN, REBUILD_WRITE_SLICE_MAX);
   }
 
-  // P1-45 SC-01: 全部写片成功后标记 complete，covered() 随即可返回 true（若无新日志）。
+  // P1-45 SC-01: 全部写片成功后标记 complete；covered() 仅当 newest id ≤ ceilingId 时为 true。
   database.prepare(`
     INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
     VALUES (?, 'complete', ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       status = 'complete', watermark = excluded.watermark, updated_at = excluded.updated_at
-  `).run(userId, watermarkTs, new Date().toISOString());
+  `).run(userId, watermark, new Date().toISOString());
+
+  rebuildTrace("complete", {
+    turns,
+    plans: plans.length,
+    read_ms: readPagesMs,
+    delete_ms: deleteWindowMs,
+    allocate_ms: allocateMs,
+    prefetch_ms: prefetchMs,
+    write_ms: writeSlicesMs,
+    wal_checkpoint_ms: walCheckpointMs,
+    total_ms: performance.now() - rebuildStartedAt,
+    watermark
+  });
 
   return { turns };
 }

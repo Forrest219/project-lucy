@@ -20,12 +20,10 @@ import { buildForcedFiltersPayload, resetRowPolicyCatalogCacheForTests, type Row
  * V15 stays out of this file: the full fault-injection matrix is blocked here.
  */
 
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
+
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() })),
-    exec: vi.fn(),
-    pragma: vi.fn()
-  })),
+  getAuditDb: vi.fn(() => createEmptyAuditDbStub()),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => {}),
   registerAgentAuditRoutes: vi.fn(),

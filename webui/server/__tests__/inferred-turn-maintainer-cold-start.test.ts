@@ -121,8 +121,11 @@ describe("SC-14 users already covered by a recent rebuild are not rebuilt on res
     insertTurn(db, "b", "B-new-row", iso(-4 * 60 * MIN), iso(-30 * MIN));
     insertTurn(db, "c", "C-after-rebuild", iso(-4 * 60 * MIN), iso(-36 * MIN));
     insertTurn(db, "d", "D-inside-margin", iso(-4 * 60 * MIN), iso(-30 * MIN));
-    // P1-45: A-covered has a complete rebuild with watermark == its newest log ts → covered.
-    setRebuildComplete(db, "A-covered", iso(-2 * 60 * MIN));
+    // P1-50: A-covered has a complete rebuild with watermark == its newest log id → covered.
+    const aCoveredId = (
+      db.prepare(`SELECT MAX(id) AS id FROM access_log WHERE user_id = ?`).get("A-covered") as { id: number }
+    ).id;
+    setRebuildComplete(db, "A-covered", String(aCoveredId));
     const rebuilt: string[] = [];
     const maintainer = createInferredTurnMaintainer({ getDb: async () => db, rebuild: async (u) => { rebuilt.push(u); }, now: () => NOW });
     await maintainer.catchUp();

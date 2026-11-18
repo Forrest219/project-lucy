@@ -100,7 +100,10 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     const cutoff = new Date(now() - lookbackHours * 60 * 60 * 1000).toISOString();
     const mark = database.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log`).get() as { id: number };
     const nextUser = database.prepare(`SELECT user_id FROM access_log WHERE user_id > ? ORDER BY user_id LIMIT 1`);
-    const newestRow = database.prepare(`SELECT ts FROM access_log WHERE user_id = ? AND ts >= ? ORDER BY ts DESC LIMIT 1`);
+    // P1-50: 覆盖判定与重建读快照同一 id 上界；取窗口内 MAX(id)，不是 MAX(ts)。
+    const newestRow = database.prepare(
+      `SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ? AND ts >= ?`
+    );
     // P1-45: covered() 使用 inferred_rebuild_state 而非 inferred_turns.updated_at，
     // 避免中断后残缺写入被判为已覆盖，同时收口 SC-04（15 分钟余量空转全量重建）。
     let rebuildState: Database.Statement | null = null;
@@ -111,15 +114,17 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
     } catch {
       rebuildState = null;
     }
-    const covered = (userId: string, newestTs: string): boolean => {
+    const covered = (userId: string, newestId: number): boolean => {
       // 若表不存在（旧库尚未迁移），保守地视为未覆盖，触发重建。
       if (!rebuildState) return false;
       const state = rebuildState.get(userId) as { status: string; watermark: string | null } | undefined;
       // 缺行或 in_progress（包含中断场景）均视为未覆盖。
       if (!state || state.status !== "complete") return false;
-      // SC-04: 以水位（重建开始时的最新日志 ts）为准；watermark >= newestTs 时已覆盖。
-      // ISO 字符串可直接按字典序比较；watermark 为 '' 时对任意非空 newestTs 均返回 false。
-      return (state.watermark ?? "") >= newestTs;
+      // P1-50: watermark 为读快照 ceilingId 的十进制字符串；watermark >= newestId 时已覆盖。
+      // 历史 P1-45 写入的 ISO ts 水位不可与 id 比较 → 视为未覆盖（一次安全补算）。
+      const raw = (state.watermark ?? "").trim();
+      if (!/^\d+$/.test(raw)) return false;
+      return Number(raw) >= newestId;
     };
     let cursor = "";
     let probed = 0;
@@ -127,8 +132,8 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
       const next = nextUser.get(cursor) as { user_id: string } | undefined;
       if (!next) break;
       cursor = next.user_id;
-      const newest = newestRow.get(cursor, cutoff) as { ts: string } | undefined;
-      if (newest && !covered(cursor, newest.ts)) touch(cursor);
+      const newest = newestRow.get(cursor, cutoff) as { id: number } | undefined;
+      if (newest && newest.id > 0 && !covered(cursor, newest.id)) touch(cursor);
       probed += 1;
       if (probed % INFERRED_SCAN_YIELD_USERS === 0) await yieldToEventLoop();
     }

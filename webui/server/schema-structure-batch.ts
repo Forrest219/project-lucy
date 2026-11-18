@@ -98,12 +98,25 @@ export async function readMysqlTablesBatch(
     }
   }
 
-  const resolved = await resolvePhysicalNames(run, schema, valid, options, outcomes);
-  let chunksFinished = 0;
+  const statementTimeoutMs = (): number => {
+    if (options.budgetMs === undefined) return options.timeoutMs;
+    const remaining = options.budgetMs - (options.now() - start);
+    return Math.min(options.timeoutMs, Math.max(0, remaining));
+  };
+  const resolved = await resolvePhysicalNames(
+    run,
+    schema,
+    valid,
+    { ...options, timeoutMs: statementTimeoutMs() },
+    outcomes
+  );
+  let columnsAttempted = 0;
   const overBudget = () => options.budgetMs !== undefined && options.now() - start >= options.budgetMs;
 
   const readChunk = async (chunk: Resolved[]): Promise<void> => {
-    if (chunksFinished > 0 && overBudget()) {
+    // Always attempt the first columns statement; after that, stop starting more work past budget —
+    // including truncation splits — so a deep binary tree cannot burn several full timeouts.
+    if (columnsAttempted > 0 && overBudget()) {
       for (const item of chunk) outcomes.set(item.requested, "deferred");
       return;
     }
@@ -116,22 +129,21 @@ export async function readMysqlTablesBatch(
     try {
       answer = await run(columnsSql(schema, chunk.map((item) => item.physical)), {
         maxRows: options.rowLimit,
-        timeoutMs: options.timeoutMs
+        timeoutMs: statementTimeoutMs()
       });
     } catch (error) {
+      columnsAttempted += 1;
       if (chunk.length > 1 && !isBrokenChannelError(error)) return split();
-      chunksFinished += 1;
       const reason = failureReason(error instanceof Error ? error.message : String(error));
       for (const item of chunk) outcomes.set(item.requested, { reason });
       return;
     }
+    columnsAttempted += 1;
     if (answer.truncated) {
       if (chunk.length > 1) return split();
-      chunksFinished += 1;
       outcomes.set(chunk[0].requested, { reason: "too_wide" });
       return;
     }
-    chunksFinished += 1;
     const byTable = new Map<string, SchemaColumnRow[]>();
     for (const row of answer.rows) {
       if (!Array.isArray(row) || row.length < 6) continue;

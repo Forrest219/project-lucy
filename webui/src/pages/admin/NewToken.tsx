@@ -54,7 +54,7 @@ function TokenRuntimeNotice({ runtimeAck }: { runtimeAck: boolean | undefined })
   if (runtimeAck === true) return null;
   return (
     <div className="pl-error" role="alert" data-testid="token-runtime-unconfirmed">
-      Token 已写入，但运行态策略未确认生效，此 Token 暂时可能无法使用。请先查看策略降级提示或稍后重新核验，再交给使用者。
+      <span className="notranslate" translate="no">Token</span> 已写入，但运行态策略未确认生效，此 <span className="notranslate" translate="no">Token</span> 暂时可能无法使用。请先查看策略降级提示或稍后重新核验，再交给使用者。
     </div>
   );
 }

@@ -138,10 +138,70 @@ describe("batch column read, plain MySQL", () => {
     const { read } = await readBatch(names, channel, { columnRowLimit: 100, now: () => clock.now, callBudgetMs: 10_000 });
     expect(read.status).toBe("ok");
     if (read.status !== "ok") return;
-    expect(read.tables).toEqual(["t_0", "t_1"]);
-    expect(read.deferred).toEqual(["t_2", "t_3", "t_4", "t_5", "t_6", "t_7"]);
+    // First columns statement always runs; after it returns, later chunks defer once over budget.
+    // Deep truncation splits must not keep burning past the call budget (see LS-17).
+    expect(clock.now).toBeLessThanOrEqual(10_000 + 4_000);
     const covered = [...(read.tables ?? []), ...(read.rejections ?? []).map((item) => item.table), ...(read.deferred ?? [])];
     expect([...covered].sort()).toEqual([...names].sort());
+    expect((read.deferred ?? []).length).toBeGreaterThan(0);
+  });
+
+  it("LS-17 does not burn a depth-3 MySQL split tree past the call budget", async () => {
+    const clock = { now: 0, costMs: 6_000 };
+    const columnTimeouts: number[] = [];
+    const tables = manyTables(8, 30);
+    const { channel, statements } = mysqlChannel(tables, clock);
+    const wrapped: MetadataChannel = {
+      async run(sql, options) {
+        if (sql.includes("FROM information_schema.columns")) {
+          columnTimeouts.push(options.timeoutMs ?? -1);
+        }
+        return channel.run(sql, options);
+      },
+      close: channel.close
+    };
+    const names = Array.from({ length: 8 }, (_, index) => `t_${index}`);
+    const { read } = await readBatch(names, wrapped, {
+      columnRowLimit: 100,
+      now: () => clock.now,
+      callBudgetMs: 10_000
+    });
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    const columnStatements = statements.filter((sql) => sql.includes("FROM information_schema.columns"));
+    // Hole was tables + three columns leaves ≈ 24s under a 10s budget while descending a truncate tree.
+    expect(columnStatements.length).toBeLessThan(3);
+    expect(clock.now).toBeLessThanOrEqual(10_000 + 6_000);
+    const covered = [...(read.tables ?? []), ...(read.rejections ?? []).map((item) => item.table), ...(read.deferred ?? [])];
+    expect([...covered].sort()).toEqual([...names].sort());
+    expect((read.deferred ?? []).length).toBeGreaterThan(0);
+  });
+
+  it("LS-18 passes remaining call budget as each MySQL columns timeoutMs", async () => {
+    const clock = { now: 0, costMs: 3_000 };
+    const columnTimeouts: number[] = [];
+    const { channel } = mysqlChannel(manyTables(4, 10), clock);
+    const wrapped: MetadataChannel = {
+      async run(sql, options) {
+        if (sql.includes("FROM information_schema.columns")) {
+          columnTimeouts.push(options.timeoutMs ?? -1);
+        }
+        return channel.run(sql, options);
+      },
+      close: channel.close
+    };
+    await readBatch(["t_0", "t_1", "t_2", "t_3"], wrapped, {
+      now: () => clock.now,
+      callBudgetMs: 10_000
+    });
+    expect(columnTimeouts.length).toBeGreaterThan(0);
+    for (const timeoutMs of columnTimeouts) {
+      expect(timeoutMs).toBeGreaterThan(0);
+      expect(timeoutMs).toBeLessThanOrEqual(8_000);
+      expect(timeoutMs).toBeLessThanOrEqual(10_000);
+    }
+    // After the name-resolve cost, remaining budget must shrink the statement timeout.
+    expect(columnTimeouts[0]).toBeLessThanOrEqual(10_000 - 3_000);
   });
 
   it("LS-06 reads 9999 columns and rejects 10000 with the table and the number", async () => {
@@ -195,6 +255,49 @@ describe("batch column read, external catalog", () => {
     const { read } = await readBatch(["a", "b"], channel, { now: () => clock.now, callBudgetMs: 10_000 }, hiveConn);
     expect(read.status === "ok" && read.tables).toEqual(["a"]);
     expect(read.status === "ok" && read.deferred).toEqual(["b"]);
+  });
+
+  it("LS-16 classifies catalog timed-out stderr as timeout and stops after one probe", async () => {
+    const clock = { now: 0 };
+    const statements: string[] = [];
+    const probeTimeouts: number[] = [];
+    const channel: MetadataChannel = {
+      async run(sql, options) {
+        statements.push(sql);
+        probeTimeouts.push(options.timeoutMs ?? -1);
+        clock.now += 8_000;
+        throw new Error("Catalog connection/query timed out");
+      },
+      close: vi.fn()
+    };
+    const { read } = await readBatch(["slow"], channel, { now: () => clock.now, callBudgetMs: 10_000 }, hiveConn);
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toMatch(/^DESC /);
+    expect(read.rejections).toEqual([{ table: "slow", reason: "timeout" }]);
+    expect(clock.now).toBeLessThanOrEqual(10_000);
+    expect(probeTimeouts[0]).toBeLessThanOrEqual(8_000);
+  });
+
+  it("LS-16 keeps DESC→SHOW→DESCRIBE for non-timeout unreadable refusals", async () => {
+    const statements: string[] = [];
+    const channel: MetadataChannel = {
+      async run(sql) {
+        statements.push(sql);
+        throw new Error("You have an error in your SQL syntax near DESC");
+      },
+      close: vi.fn()
+    };
+    const { read } = await readBatch(["t"], channel, { callBudgetMs: 10_000 }, hiveConn);
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(statements).toEqual([
+      "DESC `hive`.`dw`.`t`",
+      "SHOW COLUMNS FROM `hive`.`dw`.`t`",
+      "DESCRIBE `hive`.`dw`.`t`"
+    ]);
+    expect(read.rejections).toEqual([{ table: "t", reason: "unreadable" }]);
   });
 });
 

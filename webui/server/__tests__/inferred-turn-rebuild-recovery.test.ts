@@ -59,6 +59,11 @@ function setRebuildState(db: Database.Database, userId: string, status: "in_prog
   `).run(userId, status, watermark, new Date(NOW).toISOString());
 }
 
+/** P1-50: watermark is the access_log id ceiling (decimal string), not MAX(ts). */
+function maxLogId(db: Database.Database, userId: string): number {
+  return (db.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ?`).get(userId) as { id: number }).id;
+}
+
 async function loadMaintainer() {
   return await import("../admin/inferred-turn-maintainer.js");
 }
@@ -70,8 +75,8 @@ describe("SC-01 covered() returns false while in_progress", () => {
     const newestTs = iso(-2 * MIN);
     insertLogs(db, [[newestTs, "alice"]]);
 
-    // Simulate a partial rebuild: in_progress with watermark matching the log
-    setRebuildState(db, "alice", "in_progress", newestTs);
+    // Simulate a partial rebuild: in_progress with id ceiling matching the log
+    setRebuildState(db, "alice", "in_progress", String(maxLogId(db, "alice")));
 
     const rebuilt: string[] = [];
     const maintainer = createInferredTurnMaintainer({
@@ -95,7 +100,7 @@ describe("SC-02 interruption (in_progress residual) → restart schedules rebuil
     insertLogs(db, [[logTs, "bob"]]);
 
     // Simulate a crash: in_progress was written, complete was never written
-    setRebuildState(db, "bob", "in_progress", logTs);
+    setRebuildState(db, "bob", "in_progress", String(maxLogId(db, "bob")));
 
     const rebuilt: string[] = [];
     const maintainer = createInferredTurnMaintainer({
@@ -120,7 +125,7 @@ describe("SC-02 interruption (in_progress residual) → restart schedules rebuil
       INSERT INTO inferred_turns (inferred_turn_id, user_id, started_at, ended_at, updated_at)
       VALUES ('t-charlie', 'charlie', ?, ?, ?)
     `).run(logTs, logTs, iso(-10 * MIN));
-    setRebuildState(db, "charlie", "in_progress", logTs);
+    setRebuildState(db, "charlie", "in_progress", String(maxLogId(db, "charlie")));
 
     const rebuilt: string[] = [];
     const maintainer = createInferredTurnMaintainer({
@@ -141,10 +146,10 @@ describe("SC-04 complete + no new access_log → not dirty from margin alone", (
     const { createInferredTurnMaintainer } = await loadMaintainer();
     const db = makeDb();
 
-    // The newest log is at logTs; rebuild completed with watermark = logTs
+    // The newest log id is the ceiling; rebuild completed with that id watermark
     const logTs = iso(-30 * MIN);
     insertLogs(db, [[logTs, "dave"]]);
-    setRebuildState(db, "dave", "complete", logTs);
+    setRebuildState(db, "dave", "complete", String(maxLogId(db, "dave")));
 
     const rebuilt: string[] = [];
     const maintainer = createInferredTurnMaintainer({
@@ -154,7 +159,7 @@ describe("SC-04 complete + no new access_log → not dirty from margin alone", (
     });
 
     await maintainer.catchUp();
-    // dave must NOT be rebuilt: watermark == newestTs → covered
+    // dave must NOT be rebuilt: watermark id == newest id → covered
     expect(rebuilt).not.toContain("dave");
     db.close();
   });
@@ -166,8 +171,8 @@ describe("SC-04 complete + no new access_log → not dirty from margin alone", (
     // Log is 1 minute old; under the old 15-min margin logic this would have been dirty
     const logTs = iso(-MIN);
     insertLogs(db, [[logTs, "eve"]]);
-    // complete with watermark == logTs (the most recent log at rebuild time)
-    setRebuildState(db, "eve", "complete", logTs);
+    // complete with id ceiling == newest log at rebuild time
+    setRebuildState(db, "eve", "complete", String(maxLogId(db, "eve")));
 
     const rebuilt: string[] = [];
     const maintainer = createInferredTurnMaintainer({
@@ -177,7 +182,7 @@ describe("SC-04 complete + no new access_log → not dirty from margin alone", (
     });
 
     await maintainer.catchUp();
-    // eve must NOT be rebuilt under new watermark logic
+    // eve must NOT be rebuilt under id-ceiling watermark logic
     expect(rebuilt).not.toContain("eve");
     db.close();
   });
@@ -186,11 +191,13 @@ describe("SC-04 complete + no new access_log → not dirty from margin alone", (
     const { createInferredTurnMaintainer } = await loadMaintainer();
     const db = makeDb();
 
-    // Rebuild happened 2 hours ago with watermark = -2h; new log arrived at -1h
+    // Rebuild covered id of first log only; second log arrived later with higher id
     const rebuildWatermark = iso(-2 * 60 * MIN);
     const newLogTs = iso(-60 * MIN);
-    insertLogs(db, [[rebuildWatermark, "frank"], [newLogTs, "frank"]]);
-    setRebuildState(db, "frank", "complete", rebuildWatermark);
+    insertLogs(db, [[rebuildWatermark, "frank"]]);
+    const ceilingAtRebuild = maxLogId(db, "frank");
+    insertLogs(db, [[newLogTs, "frank"]]);
+    setRebuildState(db, "frank", "complete", String(ceilingAtRebuild));
 
     const rebuilt: string[] = [];
     const maintainer = createInferredTurnMaintainer({
@@ -200,8 +207,60 @@ describe("SC-04 complete + no new access_log → not dirty from margin alone", (
     });
 
     await maintainer.catchUp();
-    // frank must be rebuilt because newLogTs > watermark
+    // frank must be rebuilt because newest id > watermark ceiling
     expect(rebuilt).toContain("frank");
+    db.close();
+  });
+});
+
+describe("P1-50 snapshot ceiling vs completion watermark (FDE R01)", () => {
+  it("higher-id row with same/earlier ts stays uncovered after complete without a link", async () => {
+    const { createInferredTurnMaintainer } = await loadMaintainer();
+    const db = makeDb();
+    const ts = iso(-30 * MIN);
+
+    // Row1 exists when rebuild freezes ceilingId
+    insertLogs(db, [[ts, "race-user"]]);
+    const ceilingId = maxLogId(db, "race-user");
+
+    // Row2 inserted during rebuild: same ts (or earlier-or-equal), higher id — not in snapshot
+    const earlierOrEqualTs = iso(-31 * MIN);
+    insertLogs(db, [[earlierOrEqualTs, "race-user"]]);
+    const lateId = maxLogId(db, "race-user");
+    expect(lateId).toBeGreaterThan(ceilingId);
+
+    // Complete with the frozen id ceiling (correct P1-50 watermark). No inferred link for lateId.
+    setRebuildState(db, "race-user", "complete", String(ceilingId));
+
+    const rebuilt: string[] = [];
+    const maintainer = createInferredTurnMaintainer({
+      getDb: async () => db,
+      rebuild: async (u) => { rebuilt.push(u); },
+      now: () => NOW
+    });
+    await maintainer.catchUp();
+
+    // Must NOT be marked covered without a link — race-user stays dirty / gets polled
+    expect(rebuilt).toContain("race-user");
+    db.close();
+  });
+
+  it("legacy ISO ts watermark is treated as uncovered (safe one-shot rebuild)", async () => {
+    const { createInferredTurnMaintainer } = await loadMaintainer();
+    const db = makeDb();
+    const logTs = iso(-30 * MIN);
+    insertLogs(db, [[logTs, "legacy-wm"]]);
+    // Historical P1-45 wrote MAX(ts) into watermark
+    setRebuildState(db, "legacy-wm", "complete", logTs);
+
+    const rebuilt: string[] = [];
+    const maintainer = createInferredTurnMaintainer({
+      getDb: async () => db,
+      rebuild: async (u) => { rebuilt.push(u); },
+      now: () => NOW
+    });
+    await maintainer.catchUp();
+    expect(rebuilt).toContain("legacy-wm");
     db.close();
   });
 });

@@ -13,13 +13,10 @@ import { hashPassword } from "../auth/password.js";
 import { parseOidcProfile } from "../auth/oidc-profile.js";
 import { SECURITY_SCHEMA_VERSION } from "../security/schema.js";
 import { createAuthFixture, login, startLucy, type AuthFixture, type RunningLucy } from "./webui-auth-fixture.js";
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
 
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(), all: vi.fn(() => []), run: vi.fn() })),
-    exec: vi.fn(),
-    pragma: vi.fn()
-  })),
+  getAuditDb: vi.fn(() => createEmptyAuditDbStub()),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAgentAuditRoutes: vi.fn(),

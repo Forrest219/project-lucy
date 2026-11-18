@@ -5,7 +5,8 @@ This directory stores repository-level implementation plans that are not scoped 
 | Plan | Purpose |
 |---|---|
 | [lucy-20261118-version-axis-naming-plan.md](lucy-20261118-version-axis-naming-plan.md) | **v0.1-draft。仅方案稿：Task 全部未开工；未获开发授权；未改运行代码、镜像与 CI**。版本四轴分工落地计划（候选版本机制 → 文档口径对齐 → 0.30 定稿）。配对 [Spec](../specs/lucy-20261118-version-axis-naming-spec.md)。**≠ 可上线** |
-| [lucy-20261118-p147-pause-uat-relay-plan.md](lucy-20261118-p147-pause-uat-relay-plan.md) | **v0.1**：P1-47 暂停交付**接力**——以 Docker 双跑 UAT（off vs on）验证能否解 11-17 客户回滚同形根因；Helm 白名单；待确认 D1／D2 后开工。父 Plan：[pause-delivery](lucy-20261118-p147-pause-delivery-and-root-fix-plan.md)。**≠ 可上线** |
+| [lucy-20261118-fde-pack-gate-parallel-plan.md](lucy-20261118-fde-pack-gate-parallel-plan.md) | **v0.1**：对齐 FDE 打包源码准入（R01／R02／R04–R07；R03 已关）。多 agent 并行；R01→R07 串行改 `audit.ts`。委托人已授权推进。**≠ 可上线** |
+| [lucy-20261118-p147-pause-uat-relay-plan.md](lucy-20261118-p147-pause-uat-relay-plan.md) | **v0.2**：P1-47 暂停交付接力；模拟双跑 PASS；提交 `dada75c2`。父 Plan：[pause-delivery](lucy-20261118-p147-pause-delivery-and-root-fix-plan.md)。**≠ 可上线** |
 | [lucy-20261118-p147-pause-delivery-and-root-fix-plan.md](lucy-20261118-p147-pause-delivery-and-root-fix-plan.md) | **v0.1**：P1-47 暂停交付（A 线）与根治（B 线）并行；模拟 UAT；待委托人确认 D1–D3。接力执行见 [pause-uat-relay](lucy-20261118-p147-pause-uat-relay-plan.md)。**≠ 可上线** |
 | [lucy-20261118-p145-p147-multi-agent-parallel-plan.md](lucy-20261118-p145-p147-multi-agent-parallel-plan.md) | **v0.1 编排**：P1-45／46／47 多 agent 并行（Wave1＝46∥45；Wave2＝47）。委托人已「授权定稿」。**≠ 可上线** |
 | [lucy-20261118-inferred-turn-rebuild-recovery-plan.md](lucy-20261118-inferred-turn-rebuild-recovery-plan.md) | **v0.2；终稿确权＋开发授权**（P1-45／REQ-030-066；前方 P0-02）。配对 [Spec](../specs/lucy-20261118-inferred-turn-rebuild-recovery-spec.md)。**≠ 可上线** |

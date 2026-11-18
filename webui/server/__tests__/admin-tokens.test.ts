@@ -5,6 +5,7 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { normalizeNewTokenExpiry, presetExpiryDateString } from "../admin/token-expiry-policy.js";
 import { buildServer } from "../index";
+import { stubAuditStatement } from "./helpers/audit-db-stub.js";
 
 const revokedRows: Array<{ token_hash: string; revoked_at: string; reason: string }> = [];
 const traceWriteFailure = vi.hoisted(() => ({ enabled: false }));
@@ -30,11 +31,7 @@ vi.mock("../admin/audit.js", () => ({
           )
         };
       }
-      return {
-        get: vi.fn(() => undefined),
-        all: vi.fn(() => []),
-        run: vi.fn(() => ({ lastInsertRowid: 1 }))
-      };
+      return stubAuditStatement(sql);
     }),
     exec: vi.fn(),
     pragma: vi.fn(),

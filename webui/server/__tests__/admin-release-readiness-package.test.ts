@@ -239,6 +239,10 @@ vi.mock("../admin/audit.js", () => ({
       if (sql.startsWith("INSERT INTO evidence_events")) {
         return { run: vi.fn(() => ({ lastInsertRowid: 1 })), all: vi.fn(() => []), get: vi.fn() };
       }
+      // inferred-turn-maintainer.scanFull() needs aggregate MAX(id) rows, not undefined.
+      if (sql.includes("MAX(id)")) {
+        return { get: vi.fn(() => ({ id: 0 })), all: vi.fn(() => []), run: vi.fn(() => ({ lastInsertRowid: 1 })) };
+      }
       return { get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() };
     }),
     exec: vi.fn(),

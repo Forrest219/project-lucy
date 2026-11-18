@@ -1098,7 +1098,7 @@ export function CreateConnectionDrawer({
                       : created.executionDecisionReason
                         ? `（${created.executionDecisionReason}）`
                         : ""}
-                    。请到 MCP 调试台点「重载执行层」重试。
+                    。请到 <span className="notranslate" translate="no">MCP</span> 调试台点「重载执行层」重试。
                   </span>
                 ) : (
                   <span className="text-fg-muted">状态未回报</span>

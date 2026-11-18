@@ -25,6 +25,8 @@ REST over HTTP，仅 `127.0.0.1`。所有响应为 JSON，遵循统一 envelope�
 
 ```text
 GET  /api/health
+GET  /api/livez                                   # K8s liveness：进程存活（恒 200；无鉴权）
+GET  /api/readyz                                  # K8s readiness：WebUI＋MCP 就绪（未就绪 503；无鉴权）
 GET  /api/openapi.json                            # 公开可读 Admin OpenAPI（无密钥；仅 GET）
 GET  /api/project
 GET  /api/sources
@@ -190,6 +192,7 @@ POST   /api/admin/roles/:roleId/copy
 GET    /api/admin/config-audit
 GET    /api/admin/config-audit/export.csv
 GET    /api/admin/audit
+GET    /api/admin/audit/status
 GET    /api/admin/audit/sources
 GET    /api/admin/audit/:id/sources
 GET    /api/admin/audit/export
@@ -248,6 +251,16 @@ POST /mcp                                      # MCP proxy, port 7879
 ```
 
 ## 3. 端点细节
+
+### 探针：`GET /api/livez` / `GET /api/readyz` / `GET /api/health`
+
+三者均无鉴权，供进程／编排探针与运维观测：
+
+| 路径 | 语义 | 成功 | 未就绪 |
+| --- | --- | --- | --- |
+| `GET /api/livez` | 进程存活（liveness） | 恒 `{ "ok": true }`／200 | 无（进程在即应答） |
+| `GET /api/readyz` | 服务可接流量（readiness；含 MCP listen 对齐，见 P1-46） | `{ "ok": true, "data": … }`／200 | `{ "ok": false, "reason": "warming_up", "data": … }`／503 |
+| `GET /api/health` | 诊断快照（依赖、event-loop 等；**不是** K8s readiness 合同） | `{ "ok": true, "data": … }`／200 | 见依赖降级字段；主路径仍可能 200 |
 
 ### `GET /api/openapi.json`
 公开可读的 Admin OpenAPI 文档（无登录、无密钥；**仅 GET**）。机器可读枚举登录、Agent／Role／Token 开通相关 operation（含 per-operation `dryRun` 语义）。响应为 OpenAPI JSON 文档本体，**不**包在统一 envelope 里。契约与验收见 [`docs/specs/lucy-20261103-admin-api-agent-discoverability-spec.md`](../../docs/specs/lucy-20261103-admin-api-agent-discoverability-spec.md)。
@@ -856,6 +869,7 @@ Audit：
 - `GET /api/admin/config-audit`
 - `GET /api/admin/config-audit/export.csv`
 - `GET /api/admin/audit`
+- `GET /api/admin/audit/status`：只读诊断。返回服务审计 SQLite 连接的 `foreign_keys`／`foreign_key_children`／`foreign_key_violations`，以及 `writeHealth`（含 `pendingWrites` 等），供 UAT／运维确认写入已排空与 FK 实际开启；不改库。
 - `GET /api/admin/audit/sources`
 - `GET /api/admin/audit/:id/sources`
 - `GET /api/admin/audit/export`

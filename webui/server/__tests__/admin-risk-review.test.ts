@@ -198,6 +198,10 @@ vi.mock("../admin/audit.js", () => ({
           get: vi.fn()
         };
       }
+      // inferred-turn-maintainer.scanFull() needs aggregate MAX(id) rows, not undefined.
+      if (sql.includes("MAX(id)")) {
+        return { get: vi.fn(() => ({ id: 0 })), all: vi.fn(() => []), run: vi.fn(() => ({ lastInsertRowid: 1 })) };
+      }
       return { get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() };
     }),
     exec: vi.fn(),

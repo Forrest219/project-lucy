@@ -162,17 +162,27 @@ const BLACKLIST_EVIDENCE_KINDS = new Set([
 let warnedNonIncrementalVacuum = false;
 
 /**
+ * P1-47 B-line (FDE R07 / F2++): keep automatic WAL checkpoints small so a rebuild
+ * write-slice commit cannot copy ~4 MiB (SQLite default 1000 pages) in one
+ * synchronous stretch on a throttled disk.
+ * 25 pages ≈ 100 KiB (was 50 after F2+; r07-p99-2 livez p99 441 still > 400).
+ */
+export const AUDIT_WAL_AUTOCHECKPOINT_PAGES = 25;
+
+/**
  * Prepare a database connection for use as the trace / evidence hot store.
  *
  * MUST be called immediately after opening a new `better-sqlite3` connection,
  * BEFORE the first `CREATE TABLE`. Sets `journal_mode = WAL`, `busy_timeout = 5000`,
- * and `auto_vacuum = INCREMENTAL` on fresh databases. For existing databases
- * where the auto_vacuum mode does not match, this emits a one-time warning
- * instead of triggering a long full VACUUM on a live production file.
+ * `wal_autocheckpoint = AUDIT_WAL_AUTOCHECKPOINT_PAGES`, and `auto_vacuum = INCREMENTAL`
+ * on fresh databases. For existing databases where the auto_vacuum mode does not match,
+ * this emits a one-time warning instead of triggering a long full VACUUM on a live
+ * production file.
  */
 export function prepareTraceDatabase(database: Database.Database): void {
   database.pragma("journal_mode = WAL");
   database.pragma("busy_timeout = 5000");
+  database.pragma(`wal_autocheckpoint = ${AUDIT_WAL_AUTOCHECKPOINT_PAGES}`);
   configureIncrementalVacuum(database);
 }
 

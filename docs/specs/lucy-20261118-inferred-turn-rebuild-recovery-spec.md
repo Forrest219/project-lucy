@@ -6,7 +6,7 @@
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0` |
 | 功能编号 / 优先级 | **P1-45**／REQ-030-066／**P1**（事故修复；前方报告分级为 **P0-02**）。**不入 0.30 核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账，不占用 v0.25 登记册 |
-| 状态 | **v0.2。终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」；OQ-1＝`inferred_rebuild_state`）。代码已实现；vitest 20/20；测试台 UAT-SUITE-INFERRED-REBUILD-RECOVERY＝**PASS**（[2026-11-18-cursor-irr](../qa/uat/suites/inferred-turn-rebuild-recovery/runs/2026-11-18-cursor-irr-p145-p147.md)）。不入核心分母。≠ 可上线** |
+| 状态 | **v0.2＋P1-50 水位注记。终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」；OQ-1＝`inferred_rebuild_state`）。代码已实现；测试台 UAT-SUITE-INFERRED-REBUILD-RECOVERY＝**PASS**（[2026-11-18-cursor-irr](../qa/uat/suites/inferred-turn-rebuild-recovery/runs/2026-11-18-cursor-irr-p145-p147.md)）。P1-50／FDE R01：完成水位改为与读快照同一 `ceilingId`（见 §3.1 注）。不入核心分母。≠ 可上线** |
 | 决策来源 | 委托人 2026-11-18 要求按仓库规范为前方升级测试报告三则 P0 分别制定 Spec 与 UAT |
 | 需求来源 | 前方报告《Lucy 升级与稳定性测试报告》LUCY-TR-20261118-01 v1.2（委托人 Obsidian Inbox）§4.1 P0-02；证据 E05／E06／E17 |
 | 实施主体 | WebUI 服务端：`webui/server/proxy/audit.ts`（`rebuildInferredTurnsUnlocked`）、`webui/server/admin/inferred-turn-maintainer.ts`（`covered`／`scanFull`）。不改 Helm、不改 KTX |
@@ -19,6 +19,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v0.2＋P1-50 注 | 2026-11-18 FDE R01／P1-50：完成水位改为读快照 `ceilingId`（十进制字符串），`covered()` 按 id 比较；重建中插入且 `id>ceiling` 的行不得被 ts 水位误判已覆盖。不另开 Spec 升版出口 |
 | v0.2 | 2026-11-18 委托人「授权定稿」：终稿确权＋开发授权；OQ-1＝允许 `inferred_rebuild_state`；进入多 agent 并行实现。同日 Wave1 Agent-45 落地：表＋in_progress/complete watermark＋`covered()`；vitest 20/20；UAT 未跑 |
 | v0.1-draft | 初稿。依据前方报告 P0-02 硬复现事实起草。终稿未确权；开发未授权 |
 
@@ -91,16 +92,18 @@ rebuild(user):
     if crash: exit with in_progress still set
   mark persistent state = complete(user, epoch)
 
-covered(user, newest_access_ts):
+covered(user, newest_access_id):
   if state is missing or in_progress: return false
-  if state.complete and watermark covers newest_access_ts: return true
-  return false   # 不得仅凭 inferred_turns.updated_at 判覆盖
+  if state.complete and watermark_id >= newest_access_id: return true
+  return false   # 不得仅凭 inferred_turns.updated_at 判覆盖；不得用 MAX(ts) 代替 id 上界
 
 scanFull / catchUp:
   for each user with access_log in window:
     if not covered(user): touch(user)
 runPass: rebuild each dirty user
 ```
+
+**P1-50／FDE R01 注（2026-11-18）：** 读页冻结 `ceilingId = MAX(id)`；`inferred_rebuild_state.watermark` 必须持久化**同一** `ceilingId`（十进制字符串），不得写 `MAX(ts)`。重建期间插入且 `id > ceilingId` 但 `ts ≤ 旧 ts 水位` 的行无推断关联时，`covered()` 必须为 false，由轮询／补算再处理。历史 ISO ts 水位视为不可比 → 未覆盖（一次安全补算）。本注不改 SC-01（`in_progress` 仍未覆盖）。
 
 ## 4. 验收（SC）
 

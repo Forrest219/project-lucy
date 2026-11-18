@@ -2,11 +2,11 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | Spec / **v0.3** |
+| 文档类型 / 版本 | Spec / **v0.6** |
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0` |
 | 功能编号 / 优先级 | **P1-47**／REQ-030-068／**P1**（事故修复；前方报告分级为 **P0-01**）。**不入 0.30 核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账，不占用 v0.25 登记册 |
-| 状态 | **v0.3。终稿已确权、开发已授权（含暂停开关入合同 SC-08–10）。代码已实现（allocate＋DELETE 分块＋`LUCY_INFERRED_MAINTAINER=off`）。测试台＝**FAIL（默认配置）**：RPB-01 livez 未达门槛；暂停配置用例 UAT-RPB-05／06／07 与 UAT-COLD-07／08 已登记，跑次见接力 Plan。**暂停≠修复**，不得把暂停 PASS 写成 P1-47 PASS。根治待 OQ-2。不入核心分母。≠ 可上线** |
+| 状态 | **v0.6。终稿已确权、开发已授权（含暂停开关 SC-08–10；B 线 OQ-2 `wal_autocheckpoint` 由 FDE Track-F／打包门槛 Plan 授权落地）。代码已实现（allocate＋DELETE 分块＋暂停开关＋`wal_autocheckpoint=25`＋写片前 sources 预取＋片间 PASSIVE／tiny-log 可跳过／busy 延后重试＋写片后必让出＋写片 INITIAL 3·MAX 12＋`LUCY_REBUILD_TRACE=1`）。测试台＝**待 `r07-p99-3` 复跑**（`r07-p99-2` livez max 620✓／p99 441✗；F3 p99 500；历史 ~2693ms）。暂停对照 PASS 不得关单。不入核心分母。≠ 可上线** |
 | 决策来源 | 委托人 2026-11-18 要求按仓库规范为前方升级测试报告三则 P0 分别制定 Spec 与 UAT |
 | 需求来源 | 前方报告 LUCY-TR-20261118-01 v1.2 §4.1 P0-01；证据 E07／E15–E18；客户事故错题 [`2026-11-17-k8s-upgrade-event-loop-readiness-timeout`](../lessons/2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md) |
 | 实施主体 | WebUI 服务端：`webui/server/proxy/audit.ts`（重建前置事务）、`page-budget`／`yield-slices`、必要时 `inferred-turn-maintainer`。不改 Helm timeout 关单 |
@@ -19,6 +19,9 @@
 
 | 版本 | 变更 |
 |---|---|
+| v0.6 | 2026-11-18 FDE Track-F F2++（R07 第三轮）：`wal_autocheckpoint` 50→**25**；写片 INITIAL 4→**3**／MAX 16→**12**；片间 PASSIVE 在 residual log 已 ≤ autocheckpoint 且写片快时跳过（每 3 片强制一次）。目标收 `r07-p99-2` p99 441→≤400（实践目标 ≤380）。SC 不变；仍不得用暂停 PASS 关单；写连接分离仍不做 |
+| v0.5 | 2026-11-18 FDE Track-F F2+（R07 第二轮）：`wal_autocheckpoint` 100→**50**；写片后**必** `pauseAfterStretch`；PASSIVE `busy=1` 不在写热路径重试、让出后再试一次；写片 INITIAL 8→4／MAX 25→16。目标收 F3 p99 500→≤400。SC 不变；仍不得用暂停 PASS 关单 |
+| v0.4 | 2026-11-18 FDE Track-F／P1-47 B 线：OQ-2 中 `wal_autocheckpoint` 落地（默认 100 页；写片前预取 `access_log_sources`；片间 `wal_checkpoint(PASSIVE)`；`LUCY_REBUILD_TRACE=1` 分段计时）。SC 集合不变（仍 SC-01–10）；暂停仍为逃生阀。默认配置 UAT 待协调者复跑；**不得**用暂停 PASS 关单 |
 | v0.3 | 2026-11-18 委托人批准暂停交付接力：SC-08–10 把运维暂停开关写入合同；出口扩至 SC-01–SC-10。暂停配置 UAT（RPB-05／06／07）单列；**暂停≠修复**；默认配置下 P1-47 仍 FAIL |
 | v0.2 | 2026-11-18 委托人「授权定稿」：终稿确权＋开发授权；OQ-1＝分块事务内按簇顺序分配且不与并发 allocator 抢号；进入多 agent 并行实现。同日 Wave2 Agent-47 落地：allocate 分块＋yield；vitest 5＋回归 20；UAT 未跑 |
 | v0.1-draft | 初稿。依据前方报告 P0-01 部分复现与源码同步段定位起草。终稿未确权；开发未授权 |
@@ -107,7 +110,7 @@ probe_window_after_ready(120s):
 | ID | 问题 | 裁定 |
 |---|---|---|
 | OQ-1 | 编号分配分块时如何保持与并发 allocator 不抢号 | **已决**：每块短事务内仍按簇顺序 allocate；块间让出；已有 correlation_key 沿用 |
-| OQ-2 | 是否引入只读 worker／`wal_autocheckpoint` | **本次不做**；若分块后仍不达标再另立授权 |
+| OQ-2 | 是否引入只读 worker／`wal_autocheckpoint` | **部分已决（FDE Track-F／P1-47 B＋F2＋F2++）**：审计库 `wal_autocheckpoint=25`（`prepareTraceDatabase`）＋重建写片前预取 sources＋片间 `PRAGMA wal_checkpoint(PASSIVE)`（tiny residual 可跳过；busy 则让出后再试一次）＋写片后必让出＋写片 INITIAL 3／MAX 12。只读 worker／独立写连接 **仍不做**；若 `r07-p99-3` 仍不达标再另立写连接授权 |
 | OQ-3 | 关单是否必须含真实 K8s 摘端点 | **否**；归发布取证（UAT-RPB-04） |
 
 ## 6. 授权边界

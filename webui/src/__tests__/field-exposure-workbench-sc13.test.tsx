@@ -227,7 +227,18 @@ describe("SC-13 workbench field exposure (component)", () => {
     expect(within(table).getByText("secret")).toBeInTheDocument();
     expect(within(table).getByText("order_date")).toBeInTheDocument();
     expect(screen.getByText(/字段列表保留全量库存/)).toBeInTheDocument();
-    expect(screen.getByText(/字段暴露开关随待发布进入发布激活后才对 Agent 数据面生效/)).toBeInTheDocument();
+    // Agent is wrapped in translate=no / notranslate (terminology gate); match via textContent.
+    expect(
+      screen.getByText((_, el) => {
+        const text = el?.textContent ?? "";
+        return (
+          el?.tagName === "P" &&
+          text.includes("字段暴露开关随待发布进入发布激活后才对") &&
+          text.includes("Agent") &&
+          text.includes("数据面生效")
+        );
+      })
+    ).toBeInTheDocument();
     expect(screen.getByText(/业务暴露裁剪 ≠ 列级安全/)).toBeInTheDocument();
   });
 

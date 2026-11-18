@@ -5,12 +5,10 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Identity } from "../proxy/identity";
 
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
+
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() })),
-    exec: vi.fn(),
-    pragma: vi.fn()
-  })),
+  getAuditDb: vi.fn(() => createEmptyAuditDbStub()),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => {}),
   registerAgentAuditRoutes: vi.fn(),

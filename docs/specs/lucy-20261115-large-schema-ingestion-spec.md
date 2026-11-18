@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | Spec / **v0.2** |
+| 文档类型 / 版本 | Spec / **v0.2.2** |
 | 日期 / 目标版本 | 2026-11-15／不绑定产品版本号 |
 | 功能编号 / 优先级 | **P1-34**／REQ-030-055／**P1**（事故续作，客户规模）。**不入 0.30 核心分母** |
-| 状态 | **v0.2；终稿确权＝委托人明示确权（2026-11-15，「授权 spec 定稿，进入落地开发」）；决策 O1–O6 已闭合（见 §9）；开发授权已获得（2026-11-15，同句）；实现已落地（代码、单测与 demo 容器已升级）；测试台 `UAT-SUITE-LARGE-SCHEMA` 于 2026-11-16 必做 11 条 PASS（共 5 次完整跑中 1 次 SCALE-09 异常 FAIL 未定位；INDEX 现值＝PASS WITH GAP）。** 跑次 2026-11-16-claude-large-schema-after-impl：必做 11 条 PASS，可选 11／12 未执行，SCALE-09 测量对象已更换（见跑次备注）。功能合同逐条收口（LS-01…15）另行判定；功能合同收口 ≠ UAT PASS；≠ 可上线 |
+| 状态 | **v0.2.2；终稿确权＝委托人明示确权（2026-11-15，「授权 spec 定稿，进入落地开发」）；决策 O1–O6 已闭合（见 §9）；开发授权已获得（2026-11-15，同句）；实现已落地（代码、单测与 demo 容器已升级）；测试台 `UAT-SUITE-LARGE-SCHEMA` 于 2026-11-16 必做 11 条 PASS（共 5 次完整跑中 1 次 SCALE-09 异常 FAIL 未定位；INDEX 现值＝PASS WITH GAP）。** 跑次 2026-11-16-claude-large-schema-after-impl：必做 11 条 PASS，可选 11／12 未执行，SCALE-09 测量对象已更换（见跑次备注）。**FDE R02（2026-11-18）：字段读共享超时预算补洞已落地（LS-16–18；vitest 虚拟时钟 PASS；真实 Hive UAT＝BLOCKED，不挡源码关单）。** 功能合同逐条收口（LS-01…18）另行判定；功能合同收口 ≠ UAT PASS；≠ 可上线 |
 | 决策来源 | 2026-11-15 委托人：客户存在列非常多的表、表数非常多的 Schema，普通 MySQL 上曾出现「小库很快、大库拉取失败」的先例。委托人要求把此规模写进 UAT 并制定优化 Spec／Plan，目标是**顺利接入，而不是超时报错** |
 | 需求来源 | [P1-16 库内扫表读法](lucy-20261111-catalog-scan-read-path-spec.md) 的 `tblu` 先例（789 张表，逐表查字段，20 秒内无响应体）；[P1-20 外部目录读字段](lucy-20261113-external-catalog-column-read-spec.md) 把「整库逐表批量准备耗时」明确划出本条并记 Follow-up；本次本机规模实测（[`inbox/hive-lab/REPORT.md`](../../inbox/hive-lab/REPORT.md)，诊断证据，非 UAT） |
 | 实施主体 | WebUI 服务端读字段通道（`schema-structure`、`catalog-show`、`live-discovery`）与前端 `prepareSchemaStructure` 库层。不改页面组件、不改 KTX、不改问数 |
@@ -19,6 +19,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v0.2.2 | 2026-11-18 FDE R02：关闭字段读超时预算洞。① 外部目录探针把实际 `timeoutMs` 与 `/timed out/` 文本纳入超时分类，超时后不再跑满 DESC→SHOW→DESCRIBE 各一整段；② 普通 MySQL 在**首条** columns 语句返回后、每一次后续 columns（含折半拆分）前检查 `CALL_BUDGET_MS`，避免深度拆分树烧穿预算；③ 有 `callBudgetMs` 时下一条语句 `timeoutMs = min(PER_TABLE_TIMEOUT_MS, remaining)`。新增验收 LS-16–18。对齐 P1-20 EC-05（超时＝单次尝试）。真实 Hive live UAT 记 BLOCKED。不新开 P1-51；不并入 P1-43。 |
 | v0.2.1 | 2026-11-16 提交前代码评审（Reviewer 子代理）后修订实现，合同不变。评审指出 LS-07 在普通 MySQL 路径无测试；补测时发现并修复一处违反 §5.2「每次调用至少读完一张表」的缺陷：首块被截断对半拆分后，子块的预算检查会让全部表落入 `deferred`、零进展。现改为「已有一块读到终态才按预算截断」。另改三处小项：SQL 字面量拼接遇非法表名显式抛错；批内去重改 `Set`；客户端累积表用无原型对象。 |
 | v0.2 | 委托人 2026-11-15 授权定稿并进入开发。O1–O6 闭合（§9）：O2 客户网关超时无法取得，委托人认定本机实测规模接近客户真实用量，沿用 20 秒假设；其余按建议值采纳。 |
 | v0.1-draft | 初稿。四层根因（§1）、容量与预算（§4）、批量读法（§5）、验收 LS-01–LS-15（§8）、决策点 O1–O6（§9）。基于 2026-11-15 本机规模实测 |
@@ -27,7 +28,7 @@
 
 - 层级：功能合同
 - 本条承诺：在 §4 规定的规模下限内，用户在「准备表结构」勾选至多 600 张表，系统在预算内读完全部字段并生成可校验的 Manifest。任一单次 HTTP 响应不超过 20 秒，页面主线程不被长任务卡住；不因规模返回「超时」或「超过一次可读取的上限」；个别表失败时仍读完其余表，并在一次错误里列出全部失败表与各自原因。
-- 本条出口：LS-01–LS-15（本机自动化：vitest 与真实进程内检查，含对真实 `mysql2` 驱动的语句计数）。规模下限由测试台 `UAT-SUITE-LARGE-SCHEMA` 复现，结果只记 [`INDEX.md`](../qa/uat/INDEX.md)，不是本条出口。
+- 本条出口：LS-01–LS-18（本机自动化：vitest 与真实进程内检查，含对真实 `mysql2` 驱动的语句计数）。规模下限由测试台 `UAT-SUITE-LARGE-SCHEMA` 复现，结果只记 [`INDEX.md`](../qa/uat/INDEX.md)，不是本条出口。
 - 不在本条出口：客户环境 live、Hive Metastore Kerberos／HDFS、Hive 字段注释、Postgres／SQL Server／Oracle 读字段路径、Manifest 写入与热重载链路（O3）、部分成功的页面呈现（O4）、浏览器测试、发布取证、证据等级。
 - 上线关系：本条收口不表示可上线。
 
@@ -121,12 +122,16 @@ readTablesBatch(conn, schema, tables, now):
     columns = [], rejections = [], deferred = []
     start = now()
 
+    deadline = start + CALL_BUDGET_MS
+    statementTimeout = () => min(PER_TABLE_TIMEOUT_MS, max(0, deadline - now()))
+
     if conn 是外部目录 (catalog.database):
       for t in tables:
         if now() - start >= CALL_BUDGET_MS: deferred = rest(tables, t); break
         result = probeColumns(channel, catalog, schema, t,
-                              order = [DESC, SHOW COLUMNS, DESCRIBE],  # P1-20 EC 规则不变
-                              timeout = PER_TABLE_TIMEOUT_MS)
+                              order = [DESC, SHOW COLUMNS, DESCRIBE],  # P1-20 EC 规则不变；非超时 unreadable 才回退
+                              timeout = statementTimeout(),           # 与 call 剩余预算共享（LS-18）
+                              classifyTimeoutWithProbeBudget = true)  # 超时文案／实际 timeoutMs → reason=timeout；停探针（LS-16／EC-05）
         if result.rows >= COLUMN_READ_ROW_LIMIT:
           rejections += {t, reason: too_wide, columns: COLUMN_READ_ROW_LIMIT}
         else if result.rejection: rejections += {t, reason}
@@ -136,9 +141,11 @@ readTablesBatch(conn, schema, tables, now):
       # 语句 1：information_schema.tables，LOWER(table_name) IN (…)，解析物理表名（大小写与歧义规则同改前）
       physical = resolve(tables)                     # 0 个 → missing；>1 个 → ambiguous
       # 语句 2：information_schema.columns，table_name IN (物理名…)，一次读一块
+      columnsAttempted = 0
       readChunk(physical):
-        if 已读过至少一块 and now() - start >= CALL_BUDGET_MS: deferred += chunk; return
-        rows = channel.run(ColumnsOfTables(schema, chunk), limit = COLUMN_READ_ROW_LIMIT, timeout = PER_TABLE_TIMEOUT_MS)
+        if columnsAttempted > 0 and now() - start >= CALL_BUDGET_MS: deferred += chunk; return  # 含折半拆分（LS-17）
+        rows = channel.run(ColumnsOfTables(schema, chunk), limit = COLUMN_READ_ROW_LIMIT, timeout = statementTimeout())
+        columnsAttempted += 1
         if rows 触顶: 块内多于 1 张则折半各自重试；单表仍触顶 → too_wide
         if 该语句失败: 非超时／非断连则折半归因；超时／断连则整块记原因
         每张表按物理名取行；无行 → unreadable
@@ -254,8 +261,11 @@ New terms:
 | LS-13 | 结构差异 20 张表只开 1 条连接，不再起 `ktx sql` 进程。结构差异与批量读共用同一读取器（`readSchemaColumns` 的 `per-table`），由 LS-01 覆盖，另由 UAT-SCALE-03 实测 | 本机 vitest（LS-01）＋测试台 |
 | LS-14 | 直连通道不可用（连接含不支持的选项）或 `LUCY_SCHEMA_READ_LEGACY=1` 时，走改前路径，行为与改前一致 | 本机 vitest |
 | LS-15 | 密码不出现在错误文本、日志、审计和测试快照 | 本机 vitest（既有脱敏断言扩展） |
+| LS-16 | 外部目录：探针在实际 `PER_TABLE_TIMEOUT_MS` 下返回 catalog timed-out stderr 时，单表只发 **1** 条探针、`reason === timeout`，虚拟时钟耗时 ≤ `callBudgetMs`；非超时的 `unreadable` 仍按 DESC→SHOW COLUMNS→DESCRIBE 回退（对齐 P1-20 EC-05） | 本机 vitest（虚拟时钟／stub） |
+| LS-17 | 普通 MySQL：`costMs` 使折半深度 ≥3、`callBudgetMs = 10_000` 时，不得在预算后仍跑满整棵拆分树（columns 语句数与虚拟耗时有上界）；`columns`／`rejections`／`deferred` 仍划分请求表集 | 本机 vitest（虚拟时钟） |
+| LS-18 | 设置 `callBudgetMs` 时，下一条语句的 `timeoutMs ≤ remaining` 且 ≤ `PER_TABLE_TIMEOUT_MS` | 本机 vitest（断言传给 `run`／`show` 的 options） |
 
-规模下限的真实复现不在本表，由测试台 `UAT-SCALE-01…10` 承担（见 §4 与 [`cases.md`](../qa/uat/suites/large-schema-ingestion/cases.md)）。**vitest 绿不得写成 UAT PASS。**
+规模下限的真实复现不在本表，由测试台 `UAT-SCALE-01…10` 承担（见 §4 与 [`cases.md`](../qa/uat/suites/large-schema-ingestion/cases.md)）。**vitest 绿不得写成 UAT PASS。** 真实 Hive live 对 LS-16 记 **BLOCKED**（不挡源码关单）。
 
 ## 9. 决策点（已闭合，2026-11-15）
 

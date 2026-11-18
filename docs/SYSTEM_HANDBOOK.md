@@ -1313,6 +1313,12 @@ PUT /api/wiki/:key
 | `sl_validate` | — | — | ● | — |
 | `lucy_ops_connection_tables` | — | — | — | ● |
 | `lucy_ops_source_import` | — | — | — | ● |
+| `lucy_ops_concept_list` | — | — | — | ● |
+| `lucy_ops_concept_show` | — | — | — | ● |
+| `lucy_ops_concept_summary` | — | — | — | ● |
+| `lucy_ops_concept_scan` | — | — | — | ● |
+| `lucy_ops_concept_set_canonical` | — | — | — | ● |
+| `lucy_ops_concept_reject` | — | — | — | ● |
 
 ¹ 环境里已有已发布业务 Skill 时再开；没有就保持 `—`。
 
@@ -3327,7 +3333,7 @@ export LUCY_AGENT_TOKEN="$(cat <PROJECT_ROOT>/.ktx/secrets/lucy-agent-token)"
 
 #### 工具全集
 
-下表是运行时**可授予**的全部工具（21 个），按类别分组。工具是否对某个 `Agent` 可见，取决于角色的 `allow.tools` 与全局 `defaults.deny_tools`；不在角色里显式列出的工具不会隐式授予。
+下表是运行时**可授予**的全部工具（27 个），按类别分组。工具是否对某个 `Agent` 可见，取决于角色的 `allow.tools` 与全局 `defaults.deny_tools`；不在角色里显式列出的工具不会隐式授予。
 
 | 工具 | 类别 | 用途 |
 | --- | --- | --- |
@@ -3352,12 +3358,18 @@ export LUCY_AGENT_TOKEN="$(cat <PROJECT_ROOT>/.ktx/secrets/lucy-agent-token)"
 | `lucy_report_template` | 认证路线 | 按已发布的报告模板产出报告；其取数仍走 `lucy_query` 的授权 |
 | `lucy_ops_connection_tables` | 控制面 | 批量维护连接的启用表范围 / 移除 Schema；整批全成或全拒 |
 | `lucy_ops_source_import` | 控制面 | 批量导入源表语义、校验与版本回滚 |
+| `lucy_ops_concept_list` | 控制面 | 只读列出 `concepts/` 概念摘要（无计划机、不创建目录） |
+| `lucy_ops_concept_show` | 控制面 | 只读查看单个概念及冲突状态 |
+| `lucy_ops_concept_summary` | 控制面 | 只读汇总全部概念或单概念统计 |
+| `lucy_ops_concept_scan` | 控制面 | 预览→提交扫描 semantic／wiki，写集仅 `concepts/*.yaml`；整批全成或全拒 |
+| `lucy_ops_concept_set_canonical` | 控制面 | 预览→提交将 binding 升为 canonical（需 summary） |
+| `lucy_ops_concept_reject` | 控制面 | 预览→提交将 binding 标为 rejected |
 
 > **这张表是机器校验的。** 运行时新增或下线工具而本表未同步，`npm run lint:handbook-tool-surface` 会失败。事实源是 `webui/server/proxy/acl.ts` 的 `DATA_PLANE_TOOLS` / `META_TOOLS` / `CONTEXT_TOOLS` 与 `webui/server/ops/control-plane.ts` 的 `CONTROL_PLANE_TOOLS`。
 
 #### 选工具时最容易踩的三条
 
-不要一上来就把 21 个全开。三个最容易踩的点：
+不要一上来就把 27 个全开。三个最容易踩的点：
 
 1. **上下文面必须显式授予。** `wiki_search` / `wiki_read` / `lucy_skill_search` / `lucy_skill_read` 不在角色里显式列出就没有——业务 `Skill` 明明已发布，`Agent` 却查不到。这是「配置了也不生效」的头号原因。
 2. **只读与业务问答的差别就在上下文面和问询协议。** 只回答「这张表怎么定义的」，最小只读集就够（`lucy_catalog`、`lucy_read_source`、`lucy_query`、`lucy_explain_query`、`lucy_freshness`）；一旦回答里要引用业务口径或 `Skill` 规程，就得把上下文面连同 `lucy_begin_question` / `lucy_continue_question` 一起勾上——否则审计里看不到这次问询，问询预算也接不上。

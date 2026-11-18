@@ -285,7 +285,9 @@ export function columnScanTimedOut(result: SqlResult, timeoutMs = CATALOG_SCAN_T
   if (/can't connect|cannot connect|connection refused|connection timed out|connect timed out|unknown host|no such host/i.test(text)) {
     return false;
   }
-  if (/max_execution_time|maximum statement execution time|query execution was interrupted/i.test(text)) {
+  // Match probe/driver timeouts (incl. "Catalog connection/query timed out") against the
+  // statement budget that was actually passed — not the 120s schema-wide default alone.
+  if (/timed out|max_execution_time|maximum statement execution time|query execution was interrupted/i.test(text)) {
     return true;
   }
   return !result.ok && result.latencyMs >= Math.max(0, timeoutMs - 1_500);
@@ -405,8 +407,8 @@ function structureRows(result: SqlResult, context: SchemaStructureLogContext = {
   return rows;
 }
 
-function sqlFailureReason(result: SqlResult): SchemaColumnRejection["reason"] {
-  if (columnScanTimedOut(result)) return "timeout";
+function sqlFailureReason(result: SqlResult, timeoutMs?: number): SchemaColumnRejection["reason"] {
+  if (columnScanTimedOut(result, timeoutMs)) return "timeout";
   const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
   if (/超过一次可读取的上限/.test(text)) return "too_large";
   if (/access denied|command denied|permission denied|\bprivilege\b/i.test(text)) return "permission";
@@ -416,10 +418,11 @@ function sqlFailureReason(result: SqlResult): SchemaColumnRejection["reason"] {
 
 function answeredRows(
   result: SqlResult,
-  limit: number
+  limit: number,
+  timeoutMs?: number
 ): { rows: unknown[] } | { reason: SchemaColumnRejection["reason"] } {
   const rows = resultRows(result);
-  if (!result.ok || rows === null) return { reason: sqlFailureReason(result) };
+  if (!result.ok || rows === null) return { reason: sqlFailureReason(result, timeoutMs) };
   if (rows.length >= limit) return { reason: "too_large" };
   return { rows };
 }
@@ -445,20 +448,36 @@ async function readCatalogTableColumns(
   schema: string,
   table: string,
   show: typeof runCatalogShow,
-  limits: { rowLimit: number; timeoutMs: number } = { rowLimit: COLUMN_READ_ROW_LIMIT, timeoutMs: CATALOG_SCAN_TIMEOUT_MS }
+  limits: {
+    rowLimit: number;
+    timeoutMs: number;
+    deadlineMs?: number;
+    now?: () => number;
+  } = { rowLimit: COLUMN_READ_ROW_LIMIT, timeoutMs: CATALOG_SCAN_TIMEOUT_MS }
 ): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection }> {
   const probes = [
     describeCatalogTableSql(catalog, schema, table),
     showColumnsSql(catalog, schema, table),
     describeTableSql(catalog, schema, table)
   ];
+  const now = limits.now ?? Date.now;
   let reason: SchemaColumnRejection["reason"] = "unreadable";
   for (const sql of probes) {
+    const remaining =
+      limits.deadlineMs !== undefined ? limits.deadlineMs - now() : limits.timeoutMs;
+    if (limits.deadlineMs !== undefined && remaining <= 50) {
+      reason = "timeout";
+      break;
+    }
+    const timeoutMs =
+      limits.deadlineMs !== undefined
+        ? Math.min(limits.timeoutMs, Math.max(0, remaining))
+        : limits.timeoutMs;
     const result = await show(projectRoot, connectionId, sql, {
       maxRows: limits.rowLimit,
-      timeoutMs: limits.timeoutMs
+      timeoutMs
     });
-    const answered = answeredRows(result, limits.rowLimit);
+    const answered = answeredRows(result, limits.rowLimit, timeoutMs);
     if ("reason" in answered) {
       reason = answered.reason;
       logSchemaStructureFailure({ connectionId, schema, table, phase: "table-columns", sql }, result);
@@ -793,11 +812,17 @@ export async function readSchemaColumns(
       }
       const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runCatalogShowImpl);
       const show = holder ? channelAsShow(holder.run) : (deps.runCatalogShowImpl ?? runCatalogShow);
-      const limits = holder
-        ? { rowLimit: deps.columnRowLimit ?? COLUMN_READ_ROW_LIMIT, timeoutMs: PER_TABLE_TIMEOUT_MS }
-        : undefined;
       const now = deps.now ?? Date.now;
       const started = now();
+      const deadlineMs =
+        deps.callBudgetMs !== undefined ? started + deps.callBudgetMs : undefined;
+      const limits = holder
+        ? {
+            rowLimit: deps.columnRowLimit ?? COLUMN_READ_ROW_LIMIT,
+            timeoutMs: PER_TABLE_TIMEOUT_MS,
+            ...(deadlineMs !== undefined ? { deadlineMs, now } : {})
+          }
+        : undefined;
       const wanted = holder ? uniqueInOrder(targetTables) : targetTables;
       const columns: ColumnInput[] = [];
       const rejections: SchemaColumnRejection[] = [];
