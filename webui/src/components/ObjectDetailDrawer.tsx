@@ -547,9 +547,9 @@ function AuditEventDetailBody({
   return (
     <div className="grid gap-3" data-testid="object-detail-audit-body">
       <DetailRow label="时间" value={new Date(entry.ts).toLocaleString("zh-CN")} />
-      <DetailRow label="用户" value={entry.userId} notranslate />
-      <DetailRow label="工具" value={entry.tool} notranslate />
-      <DetailRow label="状态" value={entry.outcome} />
+      <DetailRow label="用户" value={entry.userId ?? ""} notranslate />
+      <DetailRow label="工具" value={entry.tool ?? ""} notranslate />
+      <DetailRow label="状态" value={entry.outcome ?? ""} />
       <div className="grid grid-cols-[120px_minmax(0,1fr)] items-baseline gap-3">
         <span className="text-xs font-semibold tracking-wider text-fg-muted uppercase">裁决原因</span>
         <DecisionReasonCell code={entry.decisionReason} />

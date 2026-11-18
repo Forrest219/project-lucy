@@ -52,6 +52,14 @@ const narrowOkAd = {
 };
 
 describe("audit-call-storyline", () => {
+  it("tolerates auth_failure rows with missing tool (calls list merge)", () => {
+    const story = buildCallStoryLine({ tool: undefined, outcome: undefined });
+    expect(story.accessGrade).toBe("unclassified");
+    expect(story.action).toBe("未分级动作");
+    expect(story.intent).toBe("—");
+    expect(story.resultSummary).toBe("—");
+  });
+
   it("SC-02 — lucy_begin_question action is 问询登记", () => {
     expect(buildCallStoryLine(begin).action).toBe("问询登记");
   });

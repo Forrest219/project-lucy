@@ -300,7 +300,7 @@ type RouteBoundaryState = { error: unknown };
  * Spec 174 §6 — a failed route chunk keeps the shell; after the one automatic
  * reload has been used, show a local retry instead of reloading in a loop.
  */
-class RouteChunkBoundary extends Component<{ resetKey: string; children: ReactNode }, RouteBoundaryState> {
+export class RouteChunkBoundary extends Component<{ resetKey: string; children: ReactNode }, RouteBoundaryState> {
   state: RouteBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: unknown): RouteBoundaryState {
@@ -317,14 +317,32 @@ class RouteChunkBoundary extends Component<{ resetKey: string; children: ReactNo
 
   render() {
     if (!this.state.error) return this.props.children;
+    // 只有 chunk 加载失败才可能是版本更新；其余渲染异常不得包装成版本文案（错题 2026-11-18-audit-calls-render-crash-misreported）。
+    if (isChunkLoadError(this.state.error)) {
+      return (
+        <div className="pl-async-region pl-async-region--error" role="alert" data-testid="route-chunk-error">
+          <p className="pl-error">页面资源加载失败，可能是版本已更新。</p>
+          <button
+            type="button"
+            className="pl-btn pl-btn--secondary pl-btn--xs"
+            data-testid="route-chunk-retry"
+            onClick={() => window.location.reload()}
+          >
+            重试
+          </button>
+        </div>
+      );
+    }
+    const errorName = this.state.error instanceof Error ? this.state.error.name : "UnknownError";
     return (
-      <div className="pl-async-region pl-async-region--error" role="alert" data-testid="route-chunk-error">
-        <p className="pl-error">页面资源加载失败，可能是版本已更新。</p>
+      <div className="pl-async-region pl-async-region--error" role="alert" data-testid="route-render-error">
+        <p className="pl-error">本页出错，请重试；若持续出现，请联系管理员并提供错误类别。</p>
+        <p className="text-xs text-fg-muted">错误类别：<code data-testid="route-render-error-kind">{errorName}</code></p>
         <button
           type="button"
           className="pl-btn pl-btn--secondary pl-btn--xs"
-          data-testid="route-chunk-retry"
-          onClick={() => window.location.reload()}
+          data-testid="route-render-retry"
+          onClick={() => this.setState({ error: null })}
         >
           重试
         </button>

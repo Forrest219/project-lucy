@@ -531,8 +531,8 @@ const PAGE_SIZE = 50;
 
 function playgroundReplayHref(entry: Pick<AuditLogEntry, "userId" | "tool" | "argsSummary">): string {
   const params = new URLSearchParams({
-    agentId: entry.userId,
-    tool: entry.tool,
+    agentId: entry.userId ?? "",
+    tool: entry.tool ?? "",
     mode: "dry-run"
   });
   if (entry.argsSummary && typeof entry.argsSummary === "object") {
@@ -760,7 +760,7 @@ function TurnSourceBadge({ source }: { source: AuditTurnEntry["source"] }) {
 }
 
 function toCallStoryInput(log: {
-  tool: string;
+  tool?: string | null;
   accessGrade?: CallStoryInput["accessGrade"];
   tables?: string[];
   argsSummary?: Record<string, unknown>;
@@ -770,7 +770,7 @@ function toCallStoryInput(log: {
   responseRowCount?: number;
 }): CallStoryInput {
   return {
-    tool: log.tool,
+    tool: log.tool ?? "",
     accessGrade: log.accessGrade,
     tables: log.tables,
     argsSummary: log.argsSummary,
@@ -1268,9 +1268,11 @@ function EntryRow({
   const auditEventHref = {
     search: mergeObjectDetailSearch(searchParams, { kind: "auditEvent", eventId: entry.id }).toString()
   };
-  const agentHref = {
-    search: mergeObjectDetailSearch(searchParams, { kind: "agent", agentId: entry.userId }).toString()
-  };
+  const agentHref = entry.userId
+    ? {
+        search: mergeObjectDetailSearch(searchParams, { kind: "agent", agentId: entry.userId }).toString()
+      }
+    : null;
   const clientLabel =
     entry.client
       ? `${entry.client}${entry.clientVersion ? ` ${entry.clientVersion}` : ""}`
@@ -1280,7 +1282,56 @@ function EntryRow({
     entry.responseBytes !== undefined
     || entry.responseRowCount !== undefined
     || entry.responseColumnCount !== undefined;
-  const story = buildCallStoryLine(toCallStoryInput(entry));
+  const isAuthFailure = entry.eventType === "auth_failure";
+  const story = isAuthFailure
+    ? null
+    : buildCallStoryLine(toCallStoryInput(entry));
+
+  if (isAuthFailure) {
+    return (
+      <tr className="pl-audit-row" data-testid={`audit-auth-failure-row-${entry.id}`}>
+        <td className="pl-audit-table-num">{index}</td>
+        <td className="pl-audit-table-muted whitespace-nowrap">
+          <AuditDateTime value={entry.ts} />
+        </td>
+        <td className="pl-audit-table-mono">
+          <CopyableId value={String(entry.id)} testId={`audit-event-id-${entry.id}`} label="事件 ID" />
+        </td>
+        <td className="pl-audit-table-mono whitespace-nowrap">
+          <span className="text-fg-muted">—</span>
+        </td>
+        <td data-testid={`audit-call-grade-${entry.id}`}>
+          <span className="pl-status-badge pl-status-error">鉴权失败</span>
+        </td>
+        <td data-testid={`audit-call-action-${entry.id}`}>
+          <span className="font-mono text-xs notranslate" translate="no">
+            {entry.reason || "auth_failure"}
+          </span>
+        </td>
+        <td className="text-xs max-w-xs" data-testid={`audit-call-intent-${entry.id}`}>
+          <span className="text-fg-muted">
+            {[entry.clientIp, entry.tokenHashPrefix].filter(Boolean).join(" · ") || "—"}
+          </span>
+        </td>
+        <td>
+          <span
+            className="pl-status-badge pl-status-error"
+            data-testid={`audit-primary-status-${entry.id}`}
+          >
+            拒绝
+          </span>
+        </td>
+        <td className="pl-audit-table-muted">
+          <span className="text-fg-muted">—</span>
+        </td>
+        <td className="pl-audit-table-muted">
+          <span className="font-mono text-xs notranslate" translate="no">
+            {entry.reason || "—"}
+          </span>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <>
@@ -1353,14 +1404,14 @@ function EntryRow({
         <td data-testid={`audit-call-grade-${entry.id}`}>{accessGradeLabel(entry.accessGrade)}</td>
         <td data-testid={`audit-call-action-${entry.id}`}>
           <div className="flex flex-col items-start gap-0.5">
-            <span>{story.action}</span>
+            <span>{story!.action}</span>
             <span className="font-mono text-[11px] text-fg-muted notranslate" translate="no">
               {entry.tool}
             </span>
           </div>
         </td>
         <td className="text-xs max-w-xs" data-testid={`audit-call-intent-${entry.id}`}>
-          <span className="notranslate" translate="no">{story.intent}</span>
+          <span className="notranslate" translate="no">{story!.intent}</span>
         </td>
         <td>
           <div className="flex flex-col items-start gap-1" data-testid={`audit-status-cell-${entry.id}`}>
@@ -1372,7 +1423,7 @@ function EntryRow({
               {primaryStatusLabel(primaryStatus)}
             </span>
             <span className="text-[11px] text-fg-muted" data-testid={`audit-call-result-${entry.id}`}>
-              {story.resultSummary}
+              {story!.resultSummary}
             </span>
             <AuditStatusTriad
               execution={executionAxisFrom(entry)}
@@ -1383,7 +1434,7 @@ function EntryRow({
         </td>
         <td className="pl-audit-table-muted">
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <span className="tabular-nums">{entry.durationMs}ms</span>
+            <span className="tabular-nums">{entry.durationMs ?? 0}ms</span>
             {entry.usageSlowCall ? (
               <span
                 className="pl-status-badge pl-status-partial text-[11px] px-1.5 whitespace-nowrap"
@@ -1422,16 +1473,18 @@ function EntryRow({
                   }
                 >
                   <span className="inline-flex flex-wrap items-center gap-2" data-testid={`audit-call-agent-${entry.id}`}>
-                    <span className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</span>
-                    <Link
-                      to={agentHref}
-                      className="pl-inline-link notranslate"
-                      translate="no"
-                      aria-label={`查看 Agent ${entry.userId} 的对象详情`}
-                      data-testid={`audit-related-agent-${entry.id}`}
-                    >
-                      查看 Agent 详情
-                    </Link>
+                    <span className="notranslate" translate="no">{formatAgentLabel(entry.userId ?? "", agentNameById)}</span>
+                    {agentHref ? (
+                      <Link
+                        to={agentHref}
+                        className="pl-inline-link notranslate"
+                        translate="no"
+                        aria-label={`查看 Agent ${entry.userId} 的对象详情`}
+                        data-testid={`audit-related-agent-${entry.id}`}
+                      >
+                        查看 Agent 详情
+                      </Link>
+                    ) : null}
                     {entry.userId ? (
                       <span className="font-mono text-fg-muted notranslate" translate="no">
                         ({entry.userId})
@@ -1441,7 +1494,7 @@ function EntryRow({
                 </AuditDetailField>
                 <AuditDetailField label="凭证主体">
                   <CredentialPrincipalCell
-                    userId={entry.credentialPrincipalId ?? entry.userId}
+                    userId={entry.credentialPrincipalId ?? entry.userId ?? ""}
                     hint={
                       entry.credentialPrincipalId && entry.credentialPrincipalId !== entry.userId
                         ? "凭证主体"
@@ -2102,7 +2155,7 @@ export function Audit() {
 
   const callEntries = (callsQuery.data?.entries ?? []).filter((entry) => {
     if (!slowOnly || p95Ms <= 0) return true;
-    return entry.durationMs > p95Ms;
+    return (entry.durationMs ?? 0) > p95Ms;
   });
   const callTotal = callsQuery.data?.total ?? 0;
   const isCallsSlowFiltered = tab === "calls" && slowOnly;
@@ -2741,7 +2794,7 @@ export function Audit() {
                 ) : (
                   callEntries.map((entry, index) => (
                     <EntryRow
-                      key={entry.id}
+                      key={`${entry.eventType ?? "call"}-${entry.id}`}
                       entry={entry}
                       index={page * PAGE_SIZE + index + 1}
                       agentNameById={agentNameById}

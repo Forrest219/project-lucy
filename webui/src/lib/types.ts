@@ -1652,8 +1652,15 @@ export type AuditNullReason =
 
 export type AuditLogEntry = {
   id: number;
+  /**
+   * SC-21：调用流水与 auth_failure_log 合表时带事件类型。
+   * 缺省按 call 处理；auth_failure 行没有 tool / durationMs 等调用字段。
+   */
+  eventType?: "call" | "auth_failure";
+  /** auth_failure 行的拒绝原因（如 token_unrecognized）。 */
+  reason?: string;
   ts: string;
-  userId: string;
+  userId?: string;
   tokenLabel?: string;
   tokenHashPrefix?: string;
   lucySessionId?: string;
@@ -1673,7 +1680,8 @@ export type AuditLogEntry = {
   clientIp?: string;
   userAgent?: string;
   deviceName?: string;
-  tool: string;
+  /** 调用行必有；auth_failure 合表行可缺。 */
+  tool?: string;
   tables?: string[];
   argsSummary?: Record<string, unknown>;
   queryHash?: string;
@@ -1682,14 +1690,14 @@ export type AuditLogEntry = {
   queryPreview?: string;
   queryArtifactRef?: string;
   generatedSql?: string;
-  outcome: "ok" | "error" | "denied";
+  outcome?: "ok" | "error" | "denied";
   errorDetail?: string;
-  durationMs: number;
+  durationMs?: number;
   responseBytes?: number;
   responseRowCount?: number;
   responseColumnCount?: number;
   responseTruncated?: boolean;
-  requestId: string | number;
+  requestId?: string | number;
   traceId?: string;
   roleIds?: string[];
   permissionSnapshotHash?: string;
