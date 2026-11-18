@@ -29,6 +29,17 @@
 - 改运行代码须同步 Spec／总账同句；不入核心分母的事故项保持「≠ 可上线」。
 - 客户 hive 真连、原生 amd64 升级＝制品阶段，不在本 Plan 完成定义内冒充 PASS。
 
+## 开工前置
+
+| 前置 | 现状（以本文头部与 Global Constraints 为准） |
+|---|---|
+| 开工授权 | 本文头部「状态」：委托人 2026-11-18「对齐 FDE 打包门槛，制定可并行计划并推进执行」＝本 Plan 开工授权；范围以头部「授权边界」为准，客户生产升级与宣称正式客户包不在授权内 |
+| 输入证据 | FDE 检查报告（候选 `ff4762c9`，路径见头部「基于材料」）；接力头 `dada75c2`（Chart 0.2.10＋暂停模拟 PASS）。修复须落在其后的新提交 |
+| 已关项不占带宽 | R03 已在 `dada75c2` 关闭（Chart 0.2.10 下发 `LUCY_INFERRED_MAINTAINER`） |
+| 文件所有权 | 同一时间只允许一名 agent 改 `webui/server/proxy/audit.ts`：R01（Track-A）与 R07（Track-F）串行，Track-F 须在 Track-A 合入后开工（§2 Wave 2c） |
+| 总账先行 | 改运行代码须同步 Spec 与总账同句；R01／R02 的总账编号见 §4（P1-50、P1-51 或 P1-34 addendum）；不入核心分母的事故项保持「≠ 可上线」 |
+| 不在本 Plan 范围 | 客户 hive 真连、原生 amd64 升级属制品阶段，不得在本 Plan 完成定义内冒充 PASS |
+
 ---
 
 ## 1. 目标与 FDE 映射
@@ -109,7 +120,7 @@ flowchart TD
 - [x] **E1** 列出失败门禁命令与最小修补集（release-ledger、livez／readyz API 文档、spec-docs、Ops 手册 6 工具）。  
   → [`inbox/fde-r06-triage.md`](../../inbox/fde-r06-triage.md)。
 - [x] **E2** 只修源码／文档侧可关项；digest／包 SHA 留空位注明「制品后填」。  
-  → 已关：`lint:release-ledger`、`lint:spec` api-spec（livez／readyz／audit/status）、`lint:handbook-tool-surface`（27 工具）。**Deferred**：`lint:spec-docs` 167 条基线外违规（基线只减不增；非 Track-E 可关范围）。
+  → 已关：`lint:release-ledger`、`lint:spec` api-spec（livez／readyz／audit/status）、`lint:handbook-tool-surface`（27 工具）。**Deferred（已于 2026-11-18 处置）**：`lint:spec-docs` 曾有 167 条基线外违规。委托人批复「方案 B」：本 Plan 的「开工前置」小节已补齐；`docs/README.md` 补登 3 条 Spec 索引；其余 163 条属 0.30 批次（lucy-20261104–20261116）存量，已作为一次性批复写入 `docs/governance/spec-plan-doc-baseline.json`（原因见该文件 `ruleNotes.batch-0.30-2026-11-18`）；`lucy-20261118-version-axis-naming-spec.md` 另有 2 条（close-layer、interaction-contract）由该 Spec 的 owner 自行修正，不入基线。
 
 ### Track-F｜R07 默认重建性能（P0）
 
