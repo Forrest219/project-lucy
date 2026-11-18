@@ -14,7 +14,7 @@
 
 | 必做 | 可选 |
 |---|---|
-| UAT-R0、UAT-SAG-ESC-01～ESC-10（04～08 为 v2，2026-11-16 夜升必做；09～10 为 v0.4 新增；全部必做，v0.4 跑次 PASS） | 无 |
+| UAT-R0、UAT-SAG-ESC-01～ESC-11（04～08 为 v2；09～10 为 v0.4；**11＝出包看守** WorkBuddy 会员收入同形，2026-11-18 升必做） | 无 |
 
 ## v2 扩展（2026-11-16 夜；已升必做）
 
@@ -27,7 +27,8 @@ ESC-04～08 补客户形态、explain／never_begun／重试路径、合法多�
 ## 边界
 
 - **优化前基线**：[2026-11-16-claude-sag-escape-baseline](runs/2026-11-16-claude-sag-escape-baseline.md) ESC-01 FAIL。  
-- **现值**：[2026-11-16-cursor-sag-escape-v04](runs/2026-11-16-cursor-sag-escape-v04.md)（v0.4，ESC-01～10 全绿）＝INDEX **PASS**；历史 [retest](runs/2026-11-16-cursor-sag-escape-retest.md) 仅覆盖 v1 三条。  
+- **现值**：[2026-11-18-cursor-sag-escape-post-rebuild](runs/2026-11-18-cursor-sag-escape-post-rebuild.md)（重建后 ESC-01～11；`gitSha=7ebedd4e`）＝INDEX **PASS**；对照 [v0.4](runs/2026-11-16-cursor-sag-escape-v04.md)；历史 [retest](runs/2026-11-16-cursor-sag-escape-retest.md) 仅覆盖 v1 三条。  
+- **出包看守**：ESC-11＝WorkBuddy「会员收入」demo 同形；客户真表基线仍属 `UAT-COMPAT-09`，无基线不得宣称客户验收 PASS。  
 - **UAT-SAG-ESC-02** 是窄意图对照：证明门闩不是「一律拦所有 query」。  
 - **UAT-SAG-ESC-03** 断言：Agent／非 person 不得伪造宿主 confirm（403）——不得为逃生而拆掉 SC-17 HTTP 门。  
 - 与 [`UAT-SUITE-SOURCE-AMBIGUITY`](../source-ambiguity-gate/suite.md) 分工：彼套件必做 **SAG-01 v2**＝「未形成 D1 钉选的多表词要拦」；本套件 ESC-01＝「唯一钉选可成交」。历史 SAG-01 单度量步骤已迁义到 ESC-01，不得两边同时要求相反期望。SAG-02（person 确认放行）仍属彼套件可选。  

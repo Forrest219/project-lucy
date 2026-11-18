@@ -2,11 +2,11 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 发布取证 Spec／**v0.1-draft** |
+| 文档类型 / 版本 | 发布取证 Spec／**v0.2-draft** |
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0`（分支 `lucy-v0.30`） |
-| 功能编号 / 优先级 | **P1-53**／REQ-030-074／**P0 底线**。不入 0.30 核心分母 |
+| 功能编号 / 优先级 | **P1-53**／REQ-030-074。编号在 P1 序列；**升级放行优先级＝P0 底线**（挡「可升级／可出包」宣称）。**不入** 0.30 核心分母，**不挡**「0.30 核心升级完成」宣称 |
 | 台账号 | 无。挂现行 `0.30` 执行总账；编号避让 P1-52／REQ-030-073 |
-| 状态 | **v0.1-draft。委托人已批准双层门禁、全真用户旅程题库与绝对＋相对耗时双门禁；本文仅落盘合同与实施计划，终稿未确权、开发未授权。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。本任务不重建 Docker；未授权不改运行代码、测试执行器与发布门禁。≠ 可上线** |
+| 状态 | **v0.2-draft。委托人 2026-11-18 批准审阅修订落入合同（D20 拆分、耗时分档、出包／升级双入口、通用合成夹具车道、D6 Demo／客户分层、SC-14 固定坏 digest 等）；终稿未确权、开发未授权。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。未授权不改运行代码、测试执行器与发布门禁。≠ 可上线** |
 | 决策来源 | 2026-11-16 客户 WorkBuddy「会员收入」被 `source_ambiguity_gate` 高频阻断；委托人要求每次升级不得破坏既有 MCP 问数能力，并批准：①通用事故回归＋客户真实基线，无基线不升级；②独立问题、连续追问、单表／多表、无权限／分权限、单库／多库全真 Agent 题库；③记录用户端到端耗时；④绝对上限＋相对退化双门禁及首版阈值 |
 | 错题与证据 | [表级歧义门闩死路](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md)；[主路径可用性优先](../governance/DEVELOPMENT.md)；客户截图仅作外部会话证据，不入库 |
 | 实施主体 | `scripts/e2e/` 全真 Agent／MCP 执行器与版本化题库、`scripts/upgrade/` 与 `scripts/gates/` 升级接线、发布证据校验器、测试台。不得修改 KTX 源码 |
@@ -78,21 +78,25 @@ New terms:
 | D3 | 全真 | 使用真实 Agent、Public MCP、Lucy、真实数据库与真实 Role／Token；禁止 mock 数据库、预置最终答案、绕过 ACL、直连 KTX `:7878` 或以 Code Review 代替 |
 | D4 | 客户身份 | 客户基线使用既有只读 Token；候选与升级后使用同一 Token。确因安全轮换而不能复用时为 BLOCKED，不临时换高权 Token 凑绿 |
 | D5 | 覆盖矩阵 | 独立简单问题、过滤／时间／合法空结果、同会话连续追问、单表、多表 join、单库、多库分别查询与对比、无权限、表／行／字段分权限及合法对照全部必做 |
-| D6 | 事故永久看守 | WorkBuddy「会员收入」同形题永久保留；通用 demo 必须构造泛化业务词多表命中但请求已钉唯一来源的首次查询，客户层重放实际基线 |
-| D7 | 结果判定 | 固定夹具用 typed gold；客户动态数据比较指标名、结果行列形状、基线非空性与明确容差。原非空候选为空、预期指标缺失、新增 deny／error／空信封均 FAIL；数据已变化到不可比则 BLOCKED，不得改判 PASS |
+| D6 | 事故永久看守（两层） | **Demo／通用层**：永久保留同形题，映射 [`UAT-SAG-ESC-11`](../qa/uat/suites/source-ambiguity-mcp-escape/cases.md)（客户原文问句＋泛化多表命中＋唯一钉选＋未限定 filter）；demo 绿 **≠** 客户放行。**客户层**：重放该实例私有会员收入基线（COMPAT-09）；无基线 → BLOCKED，不得声称客户验收 PASS |
+| D7 | 结果判定 | 固定夹具用 typed gold；客户动态数据比较指标名、结果行列形状、基线非空性与明确容差。原非空候选为空、预期指标缺失、新增 deny／error／空信封均 FAIL；**PRE 必须绑定数据快照 ID**（见 D15）；快照未变而结果漂移按 FAIL；快照已变到不可比则 BLOCKED，不得改判 PASS |
 | D8 | 安全负例 | 无权限与受限权限场景必须仍拒绝、无可执行上游越权查询且无敏感泄露；从 deny 变 allow 是 FAIL。每个拒绝场景配同身份或对照身份的合法成交用例 |
-| D9 | 连续追问 | 在同一 Agent 会话与同一 Lucy 旅程中连续发问；另开会话、重复完整上下文或把每轮改写成独立问题不得作为该场景 PASS |
+| D9 | 连续追问 | 在同一 Agent 会话与同一 Lucy 旅程中连续发问；另开会话、重复完整上下文或把每轮改写成独立问题不得作为该场景 PASS。通用 demo 无客户「会员收入」表时，连续追问题须用题库冻结的 demo 同形词／度量，或只在客户私有基线车道执行 |
 | D10 | 多库 | 合法主路径是分别经授权连接查询再比较；不得为了 PASS 发明跨连接 join。非法跨连接混查须明确拒绝并给出按连接拆分的下一步 |
-| D11 | 绝对耗时 | 权限／门闩拒绝 P95≤500ms、P99≤2s；简单单表 `lucy_query` P95≤5s；复杂多表／多库查询 P95≤30s；真实 Agent 每轮端到端≤120s |
-| D12 | 相对耗时 | 确定性 MCP：P95 增幅>20% 且绝对恶化>50ms 为 FAIL；真实 Agent：至少 3 次，中位数增幅>20% 且绝对恶化>2s 为 FAIL。任一绝对预算越线均 FAIL |
+| D11 | 绝对耗时（分档） | **确定性 MCP（硬拦）**：权限／门闩拒绝 P95≤500ms、P99≤2s；简单单表 `lucy_query` P95≤5s；复杂多表／多库查询 P95≤30s。**真实 Agent 每轮墙钟**：目标 ≤120s；越线规则见 D16a（不得与功能／安全零豁免混绑） |
+| D12 | 相对耗时 | 确定性 MCP：P95 增幅>20% 且绝对恶化>50ms 为 FAIL；真实 Agent：至少 3 次，中位数增幅>20% 且绝对恶化>2s 为 FAIL。MCP 绝对预算越线均 FAIL；Agent 绝对越线按 D16a |
 | D13 | 样本 | 确定性 MCP 每场景每版本至少 20 个有效样本，nearest-rank P95；真实 Agent 每场景、每必需客户端、每版本至少 3 次，所有尝试保留，禁止只挑最快或成功跑次 |
-| D14 | 冷启动 | 在既有冷启动／readyz 套件之上记录 Ready 后首轮 MCP 与真实问答，首轮仍受相同绝对预算；不得以稳态样本替代冷启动首轮 |
-| D15 | 环境可比 | 相对对照必须同实例数据快照、同 Token／Role／策略、同连接、同 Agent／模型／版本、同题库与同级运行环境；任一不可比为 BLOCKED |
-| D16 | 无豁免 | 本条不接受 `PASS WITH GAP`、`acceptedRegressionNote`、`--allow-blocked`、跳过必做客户端或调低阈值放行。阈值或题库变更须修订 Spec、重审题库摘要并作废旧证据 |
+| D14 | 冷启动 | 在既有冷启动／readyz 套件之上记录 Ready 后首轮 MCP 与真实问答；MCP 首轮仍受 D11 MCP 绝对预算；Agent 首轮单列，不得以稳态样本替代；Agent 墙钟按 D16a |
+| D15 | 环境可比 | 相对对照必须同实例、**同数据快照 ID**、同 Token／Role／策略、同连接、同 Agent／模型／版本、同题库与同级运行环境；任一不可比为 BLOCKED |
+| D16 | 功能／权限无豁免 | 功能零回归与安全拒绝：**不接受** `PASS WITH GAP`、`--allow-blocked`、跳过必做客户端、调低功能／权限阈值或删题凑绿。阈值或题库变更须修订 Spec、重审题库摘要并作废旧证据 |
+| D16a | Agent 墙钟有限例外 | Agent 端到端墙钟允许**唯一**一类可审计例外：同 Agent／模型指纹、同题、服务端 MCP 对照（D11 MCP 预算）仍 PASS，且公开证据写明 `agentWallClockException=true`＋原因码（如 `llm_provider_latency`）。**禁止**用该例外掩盖功能 FAIL、权限放宽或 MCP 绝对／相对 FAIL。无例外记录而墙钟越线＝FAIL |
 | D17 | 私有基线 | 含原始工具参数与过滤值的基线存于 Git、inbox、公共交付包之外的实例私有附件，目录 0700、文件 0600；不含 Token、Session ID、数据库密码与原始业务行。公开证据只含 case ID、版本、摘要、指标名、计数、耗时与判定 |
 | D18 | 候选绑定 | 通用、实例演练与升级后证据均绑定 runId、实例、完整 gitSha、镜像 digest、题库 SHA256、客户端／模型版本与 Token 指纹；发布只晋级被测 digest |
-| D19 | 接线 | 通用 PASS 是客户出包前置；实例 PRE PASS 是升级前置；候选演练与升级后 POST PASS 是验收前置；回滚后亦须恢复基线。失败不自动改生产，由既定回滚 Runbook 处置 |
-| D20 | Docker 约束 | 本任务本机不执行 Docker 重建、镜像构建或容器重建；只复用现有实例。没有匹配现有候选时记 BLOCKED，不得以本地新造镜像代替 |
+| D19 | 接线（双入口） | **`certifyCandidate`**：通用全真包 PASS 是客户出包前置。**`certifyInstanceUpgrade`**：实例 PRE PASS 是升级前置；候选演练与升级后 POST PASS 是验收前置；回滚后再验（`ROLLBACK_VERIFY`）证明恢复基线。两入口独立终态；失败不自动改生产，由既定回滚 Runbook 处置 |
+| D20 | 环境生命周期（拆分） | **（a）文档起草任务**：可不重建 Docker，缺匹配环境记 BLOCKED，不得假绿。**（b）门禁生命周期**：允许按 Runbook 构建／部署**被测候选**与受控合成夹具（见 D21）；禁止为凑绿使用 mock 库、预置答案、绕过 ACL、或与被测 digest 不符的临时镜像冒充候选 |
+| D21 | 双车道夹具 | **通用车道**：允许脚本化合成夹具（多连接、差分 Role／行权限／字段暴露、事故同形表），用后必须还原；合成≠ mock 最终答案。**客户车道**：只使用该实例既有 Token／数据／私有基线；禁止伪造客户 PRE 或把合成结果写成客户 PASS |
+| D22 | 与 P1-13 | MCP `initialize`／`tools/list`／热路径性能仍归 [P1-13](lucy-20261113-release-perf-baseline-gate-spec.md)；本条只叠加**业务 `lucy_query`／`lucy_explain_query` 成交**与**真实 Agent 墙钟**，不重复判同一 `tools/list` 相对闸 |
+| D23 | 跑次成本与 CI | Spec／Plan 须公布「全量一次」墙钟／费用上限估计；CI＝变更触发**子集**（至少含 COMPAT-09／11 判定器负例＋事故同形），**客户出包／升级**跑全量必做分母。子集 PASS **不得**单独放行出包 |
 
 ## 3. 版本化题库
 
@@ -110,37 +114,53 @@ New terms:
 ## 4. 核心流程（伪代码）
 
 ```text
-function certifyUpgrade(instance, oldCandidate, newCandidate, suite):
+function certifyCandidate(newCandidate, suite):
+  require suite.schemaValid && suite.digest == approvedDigest
+  generic = executeGenericFullRealPack(newCandidate, suite)  // D21 通用车道；可含合成夹具
+  if generic.status != PASS: return FAIL_OR_BLOCKED(generic)
+  evidence = redactAndBind(generic, suite.digest, newCandidate.digest)
+  return PASS only if every required generic case/client/attempt passed
+
+function certifyInstanceUpgrade(instance, oldCandidate, newCandidate, suite, privateBaseline):
   require suite.schemaValid && suite.digest == approvedDigest
   require oldCandidate.identity != newCandidate.identity
+  require privateBaseline.snapshotId && privateBaseline.tokenFingerprint
 
-  pre = executeAllRequired(instance, oldCandidate, suite, phase="PRE")
+  if missing(privateBaseline): return BLOCKED(BASELINE_MISSING)
+
+  pre = executeAllRequired(instance, oldCandidate, suite, phase="PRE", snapshotId=privateBaseline.snapshotId)
   if pre.status != PASS: return BLOCKED_OR_FAIL(pre)
 
-  generic = executeGenericFullRealPack(newCandidate, suite)
-  if generic.status != PASS: return FAIL_OR_BLOCKED(generic)
+  // 出包侧 certifyCandidate(newCandidate) 须已 PASS；本函数不替代它
+  require certifyCandidateEvidence(newCandidate).status == PASS
 
-  post = replaySameIdentityAndArgs(instance, newCandidate, pre.privateBaseline)
+  post = replaySameIdentityAndArgs(instance, newCandidate, privateBaseline, phase="POST")
   if post.status != PASS: return FAIL_OR_BLOCKED(post)
 
-  for case in suite.requiredCases:
-    assertFunctionalZeroRegression(pre[case], post[case], case.expectation)
-    assertAbsoluteBudgets(post[case], case.budgets)
-    assertComparable(pre[case], post[case])
+  for case in suite.requiredInstanceCases:
+    assertFunctionalZeroRegression(pre[case], post[case], case.expectation)  // D16
+    assertMcpAbsoluteBudgets(post[case], case.budgets)                       // D11 MCP
+    assertAgentWallClock(post[case], case.budgets, allowD16a=true)           // D16a
+    assertComparable(pre[case], post[case], snapshotId=privateBaseline.snapshotId)
     assertRelativeBudget(pre[case], post[case], case.metricClass)
 
-  evidence = redactAndBind(pre, generic, post, suite.digest, newCandidate.digest)
+  evidence = redactAndBind(pre, post, suite.digest, newCandidate.digest)
   return PASS only if every required case and client passed every required attempt
+
+function certifyRollback(instance, restoredCandidate, privateBaseline, suite):
+  // ROLLBACK_VERIFY：证明业务基线恢复，而非只恢复 imageID
+  return certifyInstanceUpgrade.postReplayOnly(instance, restoredCandidate, privateBaseline, suite)
 ```
 
 ### 多步状态机合同
 
-- 状态集：`BASELINE_MISSING` → `PRE_RUNNING` → `PRE_PASS` → `CANDIDATE_RUNNING` → `POST_RUNNING` → `PASS`；任一执行可进 `FAIL` 或 `BLOCKED`。
-- 合法转移：只允许上述顺序；`PRE` 未 PASS 不得进入候选演练；`POST` 未 PASS 不得进入发布 PASS。
-- 终态：`PASS`／`FAIL`／`BLOCKED`。`PASS` 不是 Pod Ready 的同义词。
+- **出包入口状态集**：`CANDIDATE_RUNNING` → `CANDIDATE_PASS`｜`FAIL`｜`BLOCKED`。
+- **升级入口状态集**：`BASELINE_MISSING` → `PRE_RUNNING` → `PRE_PASS` → `POST_RUNNING` → `POST_PASS` →（可选）`ROLLBACK_VERIFY` → `PASS`；任一执行可进 `FAIL` 或 `BLOCKED`。
+- 合法转移：出包与升级**分入口**；`PRE` 未 PASS 不得进入客户实例 POST；`certifyCandidate` 未 PASS 不得客户出包；`POST` 未 PASS 不得升级验收 PASS；回滚后须经 `ROLLBACK_VERIFY`。
+- 终态：`PASS`／`FAIL`／`BLOCKED`（各入口各自终态）。`PASS` 不是 Pod Ready 的同义词。
 - 非终态持久化：每次尝试即时写脱敏证据；私有基线写入私有附件，进程中断后按 runId 续读，不把半次运行写成完成。
 - 逃生边：产品合法查询必须成交；测试流程失败只停止放行并进入既有回滚 Runbook，不自动修改生产。
-- 禁止用单一布尔／`ok` 冒充终态；发布判定必须同时满足功能、权限、绝对耗时、相对耗时、身份与完整分母。
+- 禁止用单一布尔／`ok` 冒充终态；发布判定必须同时满足功能、权限、MCP 绝对／相对耗时、Agent 墙钟（含 D16a 审计）、身份与完整分母。
 
 ## 5. 计时与证据
 
@@ -157,11 +177,12 @@ function certifyUpgrade(instance, oldCandidate, newCandidate, suite):
 
 ## 6. 发布与升级接线
 
-1. **客户出包**：`customer-release-readiness` 读取并独立重验 `results/mcp-compatibility.json`；缺失、摘要错误、候选 digest 不同或非 PASS 均 `releaseReady=false`。
-2. **K8s 候选升级**：H3 在健康检查后执行 PRE／POST 兼容回放；H4 回滚后再跑基线，证明恢复而非只恢复 imageID。
+1. **客户出包（`certifyCandidate`）**：`customer-release-readiness` 读取并独立重验通用包证据（如 `results/mcp-compatibility-candidate.json`）；缺失、摘要错误、候选 digest 不同或非 PASS 均 `releaseReady=false`。
+2. **K8s 候选升级（`certifyInstanceUpgrade`）**：H3 在健康检查后执行 PRE／POST 兼容回放（证据如 `results/mcp-compatibility-instance.json`）；H4 回滚后走 `ROLLBACK_VERIFY`，证明恢复基线而非只恢复 imageID。
 3. **现场验收**：`k8s-acceptance.sh` 在 `tools/list` 后执行实例基线回放；诊断用的 `--skip-mcp` 不产生可发布证据，聚合器仍失败关闭。
-4. **客户 Compose**：`upgrade-lucy.sh` 的客户配置路径要求私有基线与 Token 文件，健康检查后回放；开发 demo 不伪称客户基线。
-5. **回滚**：门禁脚本不擅自执行生产回滚；失败后验收不通过，操作者按已备份 revision 与 Runbook 回滚并再验。
+4. **客户 Compose**：`upgrade-lucy.sh` 的客户配置路径要求私有基线与 Token 文件，健康检查后回放；开发 demo 只可跑通用车道／ESC-11，不伪称客户基线。
+5. **回滚**：门禁脚本不擅自执行生产回滚；失败后验收不通过，操作者按已备份 revision 与 Runbook 回滚并再验（`ROLLBACK_VERIFY`）。
+6. **与 P1-13**：不在本条重复 `tools/list` 相对闸；出包聚合器分别消费 P1-13 与本条证据。
 
 ## 7. 验收（SC）
 
@@ -174,19 +195,21 @@ function certifyUpgrade(instance, oldCandidate, newCandidate, suite):
 | SC-05 | 单表、多表 join、单表扩展多表均成交且结果正确 | COMPAT-05 |
 | SC-06 | 多库分别查询与对比成交；非法跨连接混查拒绝且可执行下一步，无越权 | COMPAT-06 |
 | SC-07 | 无工具／Source／表／行／字段权限均安全拒绝；合法对照成交；deny→allow 与泄露均 FAIL | COMPAT-07／08 |
-| SC-08 | 泛化业务词＋唯一钉表首次 `lucy_query` 不得被 `source_ambiguity_gate`；客户会员收入基线重放成交 | COMPAT-09 |
-| SC-09 | PRE／POST 同 Public URL、Token、参数、数据快照、客户端与模型；缺基线或不可比为 BLOCKED | 基线绑定测试＋现场证据 |
-| SC-10 | 原成功请求新增 deny／error／空信封／非空变空／预期指标缺失均 FAIL；原拒绝变允许均 FAIL | 判定器反向测试＋全真 |
+| SC-08 | Demo／通用：泛化业务词＋唯一钉表首次 `lucy_query` 不得 `source_ambiguity_gate`（挂 ESC-11／COMPAT-09 demo 层）；客户层：会员收入私有基线重放成交 | COMPAT-09 |
+| SC-09 | PRE／POST 同 Public URL、Token、参数、**数据快照 ID**、客户端与模型；缺基线或不可比为 BLOCKED | 基线绑定测试＋现场证据 |
+| SC-10 | 原成功请求新增 deny／error／空信封／快照未变却非空变空／预期指标缺失均 FAIL；原拒绝变允许均 FAIL | 判定器反向测试＋全真 |
 | SC-11 | 每轮端到端、MCP RTT、服务端耗时、重试、样本数与全旅程总时长完整；冷启动首轮单列 | COMPAT-10／11 |
-| SC-12 | D11 全部绝对预算自动判定；越线即使比旧版快也 FAIL | 判定器＋COMPAT-11 |
+| SC-12 | D11 **MCP** 绝对预算自动判定；越线即使比旧版快也 FAIL。Agent 墙钟按 D16a | 判定器＋COMPAT-11 |
 | SC-13 | D12／D13 相对门禁与样本下限自动判定；缺基线不假绿 | 判定器＋COMPAT-12 |
-| SC-14 | 含事故门闩的旧版真实负控被 COMPAT-09 拦住；性能判定器延迟负控能拦绝对与相对退化 | 旧版全真＋单元负控 |
+| SC-14 | COMPAT-09 负控：**优先**用固定坏 digest／冻结失败证据包回放判定器（证明能拦住事故）；若另有现存未修实例可全真复验，但**不依赖**长期保留未修环境。性能判定器延迟负控能拦 MCP 绝对与相对退化 | 证据包＋单元负控（±可选旧实例全真） |
 | SC-15 | 题库／客户端／模型／实例／候选 digest 或 Token 指纹不匹配即拒绝证据；所有必需尝试在分母中 | 发布校验反向测试 |
-| SC-16 | `customer-release-readiness` 对缺失、FAIL、BLOCKED、NOT RUN、篡改与旧摘要均 `releaseReady=false` | 聚合器与 workflow 契约测试 |
-| SC-17 | K8s 升级、回滚与客户 Compose 均接线；health／Ready／tools/list 单独通过不能放行 | 脚本契约＋现有环境全真 |
+| SC-16 | `customer-release-readiness` 对缺失、FAIL、BLOCKED、NOT RUN、篡改与旧摘要均 `releaseReady=false`；须分别消费 `certifyCandidate` 与 `certifyInstanceUpgrade` 证据 | 聚合器与 workflow 契约测试 |
+| SC-17 | K8s 升级、回滚（含 `ROLLBACK_VERIFY`）与客户 Compose 均接线；health／Ready／tools/list 单独通过不能放行 | 脚本契约＋现有环境全真 |
 | SC-18 | 私有基线权限与内容合规；公开证据无 Token、Session、连接秘密、过滤原值与业务行 | 泄露扫描 |
-| SC-19 | 本任务本机未重建 Docker；缺匹配现有候选明确 BLOCKED，不以 mock 或临时镜像凑绿 | 跑次与命令记录 |
+| SC-19 | 门禁生命周期允许按 Runbook 部署被测候选与 D21 合成夹具；禁止 mock／错 digest 临时镜像凑绿；起草任务缺环境须 BLOCKED | 跑次与命令记录 |
 | SC-20 | Spec／Plan／总账／需求池／测试台勾连；文档 lint 与相关脚本测试通过 | 门禁输出 |
+| SC-21 | `certifyCandidate` 与 `certifyInstanceUpgrade` 为独立入口；仅通用 PASS 不得冒充实例升级 PASS；仅 PRE／POST 不得冒充出包 PASS | 聚合器反向测试 |
+| SC-22 | D16a 例外证据完整且不能掩盖功能／权限／MCP 门禁失败；无审计字段的墙钟越线＝FAIL | 判定器负控 |
 
 ## 8. 主路径可用性自检
 
@@ -199,7 +222,15 @@ function certifyUpgrade(instance, oldCandidate, newCandidate, suite):
 
 ## 9. 开放项与边界
 
-- 首版阈值已全部由委托人批准，无待裁定数值。
-- 具体客户题目和参数从该实例私有基线读取，不写入仓库；公开仓库只保存可复现的通用合成题。
+- MCP 绝对阈值与相对双条件已由委托人批准；Agent 墙钟目标 120s／轮保留，越线走 D16a 有限例外（2026-11-18 审阅修订）。
+- 具体客户题目和参数从该实例私有基线读取，不写入仓库；公开仓库只保存可复现的通用合成题（D21）。
 - 本产品缺陷修复另开条目；发现 FAIL 不得在本条里顺手改门闩、ACL 或数据库行为。
-- 本任务不重建 Docker。真实旧版负控与候选全真验证只能复用已经存在的匹配环境；若当前没有，保留 SC-14／全真项 BLOCKED，不得宣称本条已 PASS。
+- 门禁生命周期允许部署被测候选与合成夹具（D20b／D21）；起草阶段缺环境须 BLOCKED，不得假绿（D20a）。
+- SC-14 以固定坏 digest／失败证据包为负控主路径；现存未修实例仅为可选加强，不得因无旧实例而宣称「负控不可做」。
+
+## 10. 变更记录
+
+| 版本 | 内容 |
+|---|---|
+| v0.1-draft | 2026-11-18｜入池：双层门禁、全真题库、耗时双门禁、UAT NOT RUN |
+| v0.2-draft | 2026-11-18｜委托人批准审阅修订：D20 拆分；D11／D16／D16a 耗时分档；D19／§4 出包／升级双入口＋`ROLLBACK_VERIFY`；D21 双车道夹具；D6 Demo／客户分层；D7／D15 快照 ID；D22／D23；SC-14／19／21／22 修订；编号口径澄清 |

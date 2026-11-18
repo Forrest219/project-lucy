@@ -12,7 +12,10 @@
 | 连接 | `demo-mysql` |
 | 泛化歧义词 | `超市`（命中 orders／people／returns） |
 | 限定度量 | `superstore_orders.order_count` |
-| 窄意图摘要 | `仅查询 superstore_orders 订单明细金额`（不得含「超市」）
+| 窄意图摘要 | `仅查询 superstore_orders 订单明细金额`（不得含「超市」） |
+| ESC-11 客户同形问句 | `请使用lucy查询25年11月和12月会员收入`（原文；demo 用「超市」多表命中＋`superstore_orders` 钉选） |
+| ESC-11 同形 filter | `region='East'`、`discount > 0.2`（对应客户未限定 `company_code`／`stats_yyyymm`） |
+| ESC-08／10 夹具脚本（可删） | `inbox/uat-sag-fidelity-2026-11-16/{fixture,run4,esc03,mcp}.mjs`；测后必须 revert＋DROP `uat_sag_*` |
 
 ## 禁止
 

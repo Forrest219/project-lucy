@@ -11,12 +11,12 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 实施计划（Plan） |
-| 版本 / 日期 | v0.1-draft / 2026-11-18 |
-| 状态 | **v0.1-draft。与 Spec 同句：架构、题库与阈值已批准；终稿未确权、开发未授权。测试台 NOT RUN。本任务不重建 Docker；未授权不改执行器、发布门禁与运行代码。≠ 可上线** |
+| 版本 / 日期 | v0.2-draft / 2026-11-18 |
+| 状态 | **v0.2-draft。与 Spec 同句：委托人 2026-11-18 批准审阅修订落入合同（D20 拆分、耗时分档、双入口、D21 夹具车道、D6 分层等）；终稿未确权、开发未授权。测试台 NOT RUN。未授权不改执行器、发布门禁与运行代码。≠ 可上线** |
 | 主 Spec | [`docs/specs/lucy-20261118-mcp-upgrade-compatibility-spec.md`](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md) |
-| 总账 | **P1-53**／REQ-030-074；P0 底线；不入核心分母 |
-| 授权边界 | 当前只允许本批文档登记。实施须另获终稿确权＋开发授权；授权后仅可改本 Plan 白名单中的测试、脚本、CI、Runbook 与证据校验，不得修 `webui/server`／`webui/src` 产品行为或 KTX。git commit、生产升级、回滚与出包均须另行明确授权 |
-| 验收 | Spec SC-01–SC-20；UAT 必做分母完整且 INDEX=PASS；本机缺匹配现有候选时全真项 BLOCKED，不得假绿 |
+| 总账 | **P1-53**／REQ-030-074；升级放行＝P0 底线；**不入**核心分母 |
+| 授权边界 | 当前只允许本批文档登记／审阅修订。实施须另获终稿确权＋开发授权；授权后仅可改本 Plan 白名单中的测试、脚本、CI、Runbook 与证据校验，不得修 `webui/server`／`webui/src` 产品行为或 KTX。git commit、生产升级、回滚与出包均须另行明确授权 |
+| 验收 | Spec SC-01–SC-22；UAT 必做分母完整且 INDEX=PASS；缺匹配环境时全真项 BLOCKED，不得假绿 |
 
 ## 目标
 
@@ -29,9 +29,10 @@
 
 1. P1-53／REQ-030-074、Spec／Plan、UAT suite／cases／fixtures 已登记。
 2. 委托人另发终稿确权与开发授权；本 Plan 的 Task 1 起才可实现。
-3. 本任务**不重建 Docker**：禁止 `npm run demo:upgrade`、`docker build`、`docker compose up --build`、删除或重建现有容器／卷。只复用现有实例；需要候选而当前没有时记 BLOCKED。
+3. **环境（对齐 Spec D20／D21）**：起草／无授权阶段可不重建 Docker，缺环境记 BLOCKED。获开发授权后，门禁生命周期**允许**按 Runbook 部署被测候选与通用车道合成夹具（用后还原）；禁止 mock 库、预置答案、错 digest 临时镜像凑绿。
 4. 真实 Agent／模型／数据库／Token 仅从受保护环境和既有秘密文件路径读取；不得在命令行、报告或 Git 中写秘密。
 5. 开始每一 Task 前检查 `git status`，只暂存本任务明确文件；当前工作区已有他人改动，不得覆盖、回滚或格式化无关文件。
+6. CI 策略（D23）：变更触发跑判定器负例＋事故同形子集；客户出包／升级跑全量。子集不得单独放行。
 
 ## Task 0：合同与测试台登记（本轮仅文档）
 
@@ -46,6 +47,8 @@
 2. 将已批准架构、完整题库矩阵、绝对与相对阈值、私有基线和无豁免口径写入 Spec。
 3. 建 UAT suite，INDEX 只写 NOT RUN，不预写 PASS。
 4. 运行文档形态门禁并保留结果；未跟踪新文件 WARN 不得冒充全量零违规。
+
+**Task 0b（2026-11-18，委托人批准审阅）**：升 **v0.2-draft**——落入 D20 拆分、D11／D16／D16a、双入口、D21、D6 分层、SC-14／21／22、独立 `mcp-compat-clients.yaml` 等；仍 **≠ 终稿确权 ≠ 开发授权**。
 
 ## Task 1：版本化题库与纯判定器
 
@@ -66,9 +69,12 @@ test("expected denial becoming allow is FAIL");
 test("simple query p95 5001ms is FAIL even when faster than baseline");
 test("MCP relative regression requires both >20% and >50ms");
 test("agent relative regression uses median, requires both >20% and >2s");
+test("agent wall-clock over 120s without D16a audit fields is FAIL");
+test("D16a exception cannot mask functional or MCP budget FAIL");
 test("fewer than 20 MCP or 3 agent samples is BLOCKED");
-test("missing PRE baseline is BLOCKED, never baseline-seed PASS");
+test("missing PRE baseline or snapshotId is BLOCKED, never baseline-seed PASS");
 test("candidate, suite, token fingerprint or client/model mismatch is rejected");
+test("certifyCandidate PASS alone does not satisfy certifyInstanceUpgrade");
 ```
 
 Run: `node --test scripts/e2e/__tests__/mcp-compatibility.test.mjs`
@@ -158,12 +164,12 @@ Expected: PASS。此步不调用 Docker 重建。
 ## Task 3：真实 Agent 用户旅程执行器
 
 **Files:**
-- Modify: `scripts/e2e/run-agent-journey.mjs`
+- Modify: `scripts/e2e/run-agent-journey.mjs`（仅增加可选用入口，默认行为不变）
 - Modify: `scripts/e2e/adapters/claude-code.mjs`、`openclaw.mjs`（仅在 adapter 缺少同会话多轮接口时）
 - Create: `scripts/e2e/lib/mcp-agent-journeys.mjs`
+- Create: `docs/qa/mcp-compat-clients.yaml`（**独立** COMPAT client profile；不改全局 `real-e2e-clients.yaml` 必做分母）
 - Test: `scripts/e2e/__tests__/mcp-agent-journeys.test.mjs`
-- Modify: `docs/qa/real-e2e-clients.yaml`（只追加 COMPAT case ID，不移除既有必需客户端）
-- Modify: `docs/qa/manual-gui-e2e-checklist.md`（WorkBuddy／Cursor 人工全真步骤）
+- Modify: `docs/qa/manual-gui-e2e-checklist.md`（WorkBuddy／Cursor 人工全真步骤；COMPAT 专节）
 
 **Step 1：先写失败测试**
 
@@ -272,9 +278,9 @@ Expected: PASS；不运行真实升级、不重建 Docker。
 
 记录现有实例版本、镜像、Agent／模型、数据库快照、Role／Token 指纹与题库摘要。若不是目标 PRE／候选或缺真实客户端，立即把对应项记 BLOCKED；禁止为跑通而重建 Docker。
 
-**Step 2：先跑事故负控**
+**Step 2：先跑事故负控（SC-14）**
 
-只在已经存在的事故而未修复实例上执行 COMPAT-09；预期首次查询被 `source_ambiguity_gate`，套件 FAIL。若没有现存旧版环境，SC-14 全真部分 BLOCKED，不用 mock 代替。
+主路径：用固定坏 digest／冻结失败证据包回放判定器，证明 COMPAT-09 能拦住事故。可选加强：若存在未修旧实例且暴露 MCP，再全真复验。无旧实例不得宣称「负控不可做」；禁止用 mock 答案代替证据包。
 
 **Step 3：跑 PRE 与通用候选全真包**
 
@@ -309,10 +315,10 @@ Expected: 实现与文档门禁 PASS；全真 UAT 只有实际必做分母全绿
 
 ## 验收
 
-- Spec SC-01–SC-20 逐项有可重跑证据；不得以单测替代全真 UAT，也不得以全真一次运行替代判定器负例。
-- 客户出包聚合器能独立发现缺题、改摘要、改状态、错版本与耗时越线。
-- 通用包与实例基线都 PASS 才可声明该次升级兼容；健康检查不能替代。
-- 本任务没有 Docker 重建命令与副作用。
+- Spec SC-01–SC-22 逐项有可重跑证据；不得以单测替代全真 UAT，也不得以全真一次运行替代判定器负例。
+- 客户出包聚合器能独立发现缺题、改摘要、改状态、错版本与耗时越线；并分别校验 `certifyCandidate`／`certifyInstanceUpgrade`。
+- 通用包 PASS 才可出包；实例 PRE／POST PASS 才可升级验收；二者不得互相冒充；健康检查不能替代。
+- 门禁生命周期可按 Runbook 部署被测候选与 D21 夹具；禁止 mock／错 digest 凑绿。
 
 ## 完成定义
 
@@ -332,5 +338,8 @@ Expected: 实现与文档门禁 PASS；全真 UAT 只有实际必做分母全绿
 | Agent 为答对而绕过 MCP | 最终答案必须绑定本问真实 `lucy_query` 与服务端 trace；直连数据库无证据即 FAIL |
 | 权限测试被可用性修复冲垮 | deny→allow、泄露与越权上游执行均零容错，并配合法成交对照 |
 | 升级脚本失败后扩大生产影响 | 门禁不自动改生产；候选预演先拦截，现场失败走既有备份回滚 Runbook |
-| 本地缺候选却想凑绿 | 遵守不重建 Docker；明确 BLOCKED，不构建临时镜像、不用 mock |
+| 本地缺候选却想凑绿 | D20：授权后可部署被测候选；禁止错 digest／mock 凑绿；起草阶段缺环境 BLOCKED |
+| Agent 墙钟抖动误杀出包 | D16a 有限例外＋MCP 对照仍须绿；禁止例外掩盖功能／权限失败 |
+| 通用包无权限矩阵环境 | D21 合成夹具脚本化 seed／还原；与客户车道隔离 |
 | 共享脏工作区误带他人改动 | 每 Task 只暂存白名单文件；不格式化、不回滚无关文件；实际 commit 另需授权 |
+| 改全局 real-e2e 客户端分母 | Task 3 使用独立 `mcp-compat-clients.yaml` |

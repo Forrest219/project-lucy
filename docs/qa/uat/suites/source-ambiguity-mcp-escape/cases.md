@@ -13,8 +13,9 @@
 | UAT-SAG-ESC-08 | **v2** 硬线拦截（来源数超上限）的拒绝载荷须给可执行下一步 | MCP 全真 | Spec §4.4 H1／SC-E08／E29；错题 §5.2 | 见下 |
 | UAT-SAG-ESC-09 | **v0.4** 容错披露与审计：档②放行带 `sourceSelection`，档①不带；审计有记录 | MCP＋审计 | Spec D13／D14；SC-E25／E26 | 见下 |
 | UAT-SAG-ESC-10 | **v0.4** 跨连接多来源拦截并给「按连接拆分」下一步 | MCP 全真 | Spec D15；SC-E28 | 见下 |
+| UAT-SAG-ESC-11 | **出包看守** WorkBuddy「会员收入」同形（中文问句＋未限定 filter＋唯一钉选） | MCP 全真 | 错题本；COMPAT-09 demo 层；客户截图 | 首次成交；禁止 `schema_evidence_unavailable` 刷屏 |
 
-> **v2 扩展（2026-11-16 夜）**：ESC-04～08 由 [fidelity 跑次](runs/2026-11-16-cursor-sag-escape-fidelity.md) 新增，补 ESC-01～03 未覆盖的客户形态与拒绝载荷。已按分析师群体主路径通用性升为**必做**（见 suite.md）；ESC-07 当前 FAIL。**v0.4（2026-11-16 夜）按容错三档修订 ESC-06／07／08 期望并新增 ESC-09／10**；修订期望依据 Spec §4.5。v0.4 已授权并实现，复测见 [v0.4 跑次](runs/2026-11-16-cursor-sag-escape-v04.md)。
+> **v2 扩展（2026-11-16 夜）**：ESC-04～08 由 [fidelity 跑次](runs/2026-11-16-cursor-sag-escape-fidelity.md) 新增，补 ESC-01～03 未覆盖的客户形态与拒绝载荷。已按分析师群体主路径通用性升为**必做**（见 suite.md）。**v0.4（2026-11-16 夜）按容错三档修订 ESC-06／07／08 期望并新增 ESC-09／10**；修订期望依据 Spec §4.5。v0.4 已授权并实现，复测见 [v0.4 跑次](runs/2026-11-16-cursor-sag-escape-v04.md)。**ESC-11（2026-11-18）**：出包前永久看守——用客户原文问句形态在 demo 同形重放；**不**替代客户实例 `UAT-COMPAT-09` 私有基线。
 
 ---
 
@@ -258,3 +259,34 @@ UAT 自造 ≥5 个同词来源 `uat_sag_1`…`uat_sag_5`（带 yaml、completio
 ### 期望
 
 拒绝，零执行；`message` 与 `usableTargets` 给出可执行下一步（按连接拆分为单连接查询）。
+
+---
+
+## UAT-SAG-ESC-11 — WorkBuddy「会员收入」同形出包看守
+
+> 对应客户截图原文：「请使用lucy查询25年11月和12月会员收入」；故障点＝泛化业务词 begin 后首次 `lucy_query` 被 `source_ambiguity_gate` 拦，且候选全员 `schema_evidence_unavailable`（「缺少真实 Schema 证据，无法判定」）。demo 无客户 `finance`／`bidm.viz_dm_hs_pl_metric_sum`，故用「超市」多表命中＋`superstore_orders` 唯一钉选＋未限定字符串 filter 同形。**客户层**真实基线仍归 [`UAT-COMPAT-09`](../mcp-upgrade-compatibility/cases.md)。
+
+### 前置
+
+UAT-R0 PASS；新会话；**不**使用 person／宿主 confirm。
+
+### 步骤
+
+1. `lucy_begin_question`：  
+   - `question`＝「请使用lucy查询25年11月和12月会员收入」  
+   - `intentSummary`＝「未选表概况：查询超市业务会员与收入相关指标，未指定来源表」（须含能多表命中的泛化词，demo 用「超市」）  
+2. 同会话 **首次** `lucy_query`：  
+   - `connectionId=demo-mysql`  
+   - `measures=["superstore_orders.total_sales"]`  
+   - `filters=["region='East'","discount > 0.2"]`（同形客户 `company_code`／`stats_yyyymm` 未带表前缀的字符串 filter）  
+   - `dimensions=[{field:"superstore_orders.region"}]`（可选，模拟按月／维度展开）
+
+### 期望
+
+- 步骤 2 **首次**成交（有行或合法空结果）；原因码**不是** `source_ambiguity_gate`  
+- 响应文案与 JSON **不得**出现 `schema_evidence_unavailable`／「缺少真实 Schema 证据」刷屏  
+- **禁止**先 deny 再重试凑绿；**禁止**伪造宿主 confirm
+
+### 清理
+
+会话可丢弃。

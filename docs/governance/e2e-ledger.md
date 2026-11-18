@@ -29,7 +29,7 @@
 
 | 清单 ID | REQ | 开发台 Spec | 测试台 Suite | 最近 UAT | 备注 |
 |---|---|---|---|---|---|
-| P1-53 | REQ-030-074 | [MCP 升级兼容底线 Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md) | [`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`](../qa/uat/suites/mcp-upgrade-compatibility/suite.md) | **NOT RUN** | **v0.1-draft。双层门禁、全真用户旅程题库与绝对＋相对耗时双门禁已批准；终稿未确权、开发未授权；本任务不重建 Docker；≠ 可上线**。缺口 GAP-UAT-P1-53 |
+| P1-53 | REQ-030-074 | [MCP 升级兼容底线 Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md) | [`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`](../qa/uat/suites/mcp-upgrade-compatibility/suite.md) | **NOT RUN** | **v0.2-draft。委托人 2026-11-18 批准审阅修订落入合同（D20 拆分、耗时分档、双入口、D21、D6 分层等）；终稿未确权、开发未授权；≠ 可上线**。缺口 GAP-UAT-P1-53 |
 | P0-3 | REQ-030-024 | [歧义门闩 Spec](../specs/lucy-20261107-source-ambiguity-gate-spec.md) | [`UAT-SUITE-SOURCE-AMBIGUITY`](../qa/uat/suites/source-ambiguity-gate/suite.md)＋[`UAT-SUITE-SOURCE-AMBIGUITY-ESCAPE`](../qa/uat/suites/source-ambiguity-mcp-escape/suite.md) | 拦得住：[2026-11-14 升级后 PASS](../qa/uat/suites/source-ambiguity-gate/runs/2026-11-14-claude-macmini-p0-post-upgrade.md)；**逃生**：[2026-11-16 retest PASS](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-retest.md) | SAG-02 BLOCKED；逃生缺口已关（P1-35）。SAG-01 v2 伴生 deny PASS。≠ 可上线 |
 | P1-35 | REQ-030-056 | [纯 MCP 逃生 Spec](../specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md) | [`UAT-SUITE-SOURCE-AMBIGUITY-ESCAPE`](../qa/uat/suites/source-ambiguity-mcp-escape/suite.md) | [2026-11-16 v0.4 PASS](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-v04.md) | Spec **v0.4**（委托人明示确权＋授权开发，免 Codex；容错三档 D10–D15 已实现）；ESCAPE INDEX＝**PASS**（R0／ESC-01～10）；GAP-UAT-P0-3-ESCAPE **关闭**。**≠ D5／功能合同收口 ≠ 可上线** |
 | P1-36 | REQ-030-057 | [trace 级流水 Spec](../specs/lucy-20261116-trace-span-ledger-spec.md) | [`UAT-SUITE-TRACE-LEDGER`](../qa/uat/suites/trace-span-ledger/suite.md) | **PASS WITH GAP**（沙箱 Tier-A；TRC-07/08/09 NOT RUN；GAP-UAT-P1-36 保持开启） | **终稿确权（委托人 2026-11-17 授权代理修正后定稿，免 Codex 终审）；v1.0；已获开发授权（委托人 2026-11-17「授权开发落地」）；代码已落地（span 表、同事务写入、spans.csv 与 spanCoverage、`/api/admin/audit/status`），vitest 回归无新增失败，本机 demo 已平滑升级并取证；测试台 `UAT-SUITE-TRACE-LEDGER`＝**PASS WITH GAP**（2026-11-17 宽目录沙箱 Tier-A 跑次 `docs/qa/uat/suites/trace-span-ledger/runs/2026-11-17-claude-wide-sandbox-tierA.md`；TRC-01/02/03/04/05/06/10/11 有证据，TRC-07/08/09 NOT RUN，不是整套 PASS）；登记发现 F-1～F-5，其中 F-2（正式完整导出 `mode=complete` 因既有 F-02 失败关闭，`spans.csv` 只在诊断包验证）与 F-3（SC-06 与 §6.2 口径冲突）待委托人裁定。≠ UAT PASS；≠ 可上线** |
@@ -94,7 +94,7 @@
 | GAP-UAT-P1-45 | ~~P1-45 NOT RUN~~ → **已关闭**（2026-11-18 IRR PASS） | 关闭证据：[irr 跑次](../qa/uat/suites/inferred-turn-rebuild-recovery/runs/2026-11-18-cursor-irr-p145-p147.md)。≠ 可上线 | P1 |
 | GAP-UAT-P1-46 | ~~P1-46 NOT RUN~~ → **已关闭**（2026-11-18 RML PASS） | 关闭证据：[rml 跑次](../qa/uat/suites/readyz-mcp-listen/runs/2026-11-18-cursor-rml-p145-p147.md)。≠ 可上线 | P1 |
 | GAP-UAT-P1-47 | P1-47 满量重建探针 **FAIL**（RPB-01 livez） | 关闭条件：RPB-01 达 Spec 重启稳态 livez；RPB-02 已 PASS（3s streak=0）。[r2](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-p145-p147-r2.md)。持续停顿（38／42 个样本 ≥1.5 秒）已由 [对照跑次](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-18-cursor-rpb-p147-pause-control.md) 定位到后台补算维护器；暂停开关仅为逃生阀，不关缺口。≠ 可上线 | P1 |
-| GAP-UAT-P1-53 | MCP 升级兼容底线尚无执行器与全真跑次 | 测试台已挂，INDEX=NOT RUN。关闭条件：通用全真题库＋实例 PRE／POST 基线＋功能／权限／绝对与相对耗时全部门禁实际通过，发布校验负例证明不可绕过；缺现有匹配环境保持 BLOCKED，本任务不得重建 Docker 凑绿。≠ 可上线 | P0 |
+| GAP-UAT-P1-53 | MCP 升级兼容底线尚无执行器与全真跑次 | 测试台已挂，INDEX=NOT RUN。关闭条件：`certifyCandidate`＋`certifyInstanceUpgrade` 全真分母 PASS；功能／权限零豁免；MCP 绝对／相对硬门；Agent 墙钟按 D16a；发布校验负例不可绕过。缺环境 BLOCKED，禁止 mock／错 digest 凑绿。≠ 可上线 | P0 |
 | GAP-UAT-P1-48 | P1-48 状态机合同门禁无客户场景 UAT | 文档／lint 门禁；测试台 not_registered 为预期。关闭条件：委托人若要求客户场景复现则另立套件；否则可在门禁落地收口时将本缺口标为 `n/a`（工程向）。不得把 lint 绿写成 UAT PASS。≠ 可上线 | P1 |
 | GAP-UAT-P1-51 | P1-51 版本轴／交付追溯无客户场景 UAT | 发版治理；测试台 not_registered 为预期。关闭条件：开发授权落地后若需客户场景复现则另立套件；否则收口时标 `n/a`（工程向）。不得把文档齐写成 UAT PASS。≠ 可上线 | P1 |
 | GAP-UAT-P1-40 | P1-40 复制按钮假成功：加固后 **PASS WITH GAP** | 缺口：①6 个 helper-only 入口（行策略表身份、连接概览路径、启用表路径、接入向导第 6 步、撰写说明、信任列用户 ID）demo 下不可达，点到它们要改行策略／接入状态，需另行授权，由 01 承载；②公网演示实例未升级、UAT-COPY-04 未跑；③`clipboard-fallback.spec.ts` 仍打桩跑回环（不作 UAT 证据）。**已关闭**：Token 打桩（改真实签发＋吊销）、对账／审计入口未点、对话框内路径无实证、02 无子编号、原始证据不留档、修复未提交（`65f40847`）。关闭条件：公网实例升级后跑 04（或等价非回环 HTTP 实例）；另批准后补点 helper-only 入口。不得靠放宽探针翻绿。≠ 可上线 | P1 |
@@ -150,7 +150,8 @@ node scripts/uat/check-e2e-ledger.mjs
 | 日期 | 内容 |
 |---|---|
 | 2026-11-18 | **P1-47 暂停交付模拟双跑**：默认 FAIL（2693ms）／暂停 PASS（13ms＋MCP＋COLD 全绿）；Helm 0.2.10；Spec v0.3。GAP-UAT-P1-47 仍开（默认）。≠ 可上线 |
-| 2026-11-18 | **入池 P1-53／REQ-030-074**：MCP 升级兼容底线与全真用户旅程门禁 Spec／Plan v0.1-draft；测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN；开 GAP-UAT-P1-53。架构、题库和耗时阈值已批准；本任务不重建 Docker。≠ 终稿确权；≠ 开发授权；≠ 可上线 |
+| 2026-11-18 | **P1-53 Spec／Plan → v0.2-draft**：委托人批准审阅修订落入（D20 拆分、耗时分档、双入口、D21、D6 分层、SC-14／21／22）；测试台仍 NOT RUN。≠ 终稿确权；≠ 开发授权；≠ 可上线 |
+| 2026-11-18 | **入池 P1-53／REQ-030-074**：MCP 升级兼容底线与全真用户旅程门禁 Spec／Plan v0.1-draft；测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN；开 GAP-UAT-P1-53。架构、题库和耗时阈值已批准。≠ 终稿确权；≠ 开发授权；≠ 可上线 |
 | 2026-11-18 | **入池 P1-51／REQ-030-072**：版本轴分工与命名规约 Spec／Plan v0.3-draft；测试台 not_registered；开 GAP-UAT-P1-51。委托人确认方案、暂不开发；补登此前未入池。≠ 终稿确权；≠ 开发授权；≠ 可上线 |
 | 2026-11-18 | **入池 P1-48／REQ-030-069**：多步流程状态机合同门禁 Spec／Plan v0.1-draft；测试台 not_registered；开 GAP-UAT-P1-48。委托人授权起草、暂时不开发。≠ 终稿确权；≠ 开发授权；≠ 可上线 |
 | 2026-11-18 | **P1-45／46／47 Docker UAT**：RML／IRR PASS；RPB FAIL（01）；关 GAP-UAT-P1-45／46；GAP-UAT-P1-47 改为 RPB-01 门槛未达。≠ 可上线 |
