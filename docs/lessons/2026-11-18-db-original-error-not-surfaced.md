@@ -38,6 +38,9 @@
   - 单表读取只等 8 秒（`PER_TABLE_TIMEOUT_MS`），`DESC`、`SHOW COLUMNS`、`DESCRIBE` 三条探针各等一次，合计 24 秒后放弃。
   - 单表路径的超时文本（`Catalog connection/query timed out`）既不匹配 `CONNECTION_FAILURE`（需 `connection timed out`），`columnScanTimedOut` 又按 120 秒阈值判定，因此「读取表…的字段超时」文案在这条路径上走不到。
 
+- **更正（2026-11-18，晚）**：上面「单表只等 8 秒」只适用于 `71e5b941`（以及 `abb38913` 里打开批量通道时）；`abb38913` 未打开批量通道时每条探针是 120 秒。回退基线 `3a9f0711` 读字段只发一条 `DESC`、120 秒。因此第 2 节表中的 9 秒、24 秒耗时只适用于新代码，不能直接套到客户当前版本。
+- **新实例（同日）**：客户当前版本 `3a9f0711` 上，读字段被 KTX 在本地拒绝（请求没到 SelectDB），页面仍是同一句「没有读到字段」，导致排障先围绕 Kerberos 展开。详见 [2026-11-18-rollback-baseline-lacks-external-catalog-field-fix](2026-11-18-rollback-baseline-lacks-external-catalog-field-fix.md)。读**不存在的表**时提示也完全相同。
+
 ## 4. 为何漏检
 
 - 既有测试替身（如 `doris-external-catalog.simulation.test.ts`）模拟的是「超时」「权限」等**分类后的**失败，没有断言「用户能看到原因」。
