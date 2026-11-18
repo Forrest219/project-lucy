@@ -200,8 +200,9 @@ describe("batch column read, plain MySQL", () => {
       expect(timeoutMs).toBeLessThanOrEqual(8_000);
       expect(timeoutMs).toBeLessThanOrEqual(10_000);
     }
-    // After the name-resolve cost, remaining budget must shrink the statement timeout.
-    expect(columnTimeouts[0]).toBeLessThanOrEqual(10_000 - 3_000);
+    // First column statement (columnsAttempted=0) always gets the full per-table timeout to guarantee
+    // progress; subsequent statements are budget-capped. This scenario issues only one column query.
+    expect(columnTimeouts[0]).toBe(8_000);
   });
 
   it("LS-06 reads 9999 columns and rejects 10000 with the table and the number", async () => {
@@ -409,6 +410,241 @@ describe("previewSchemaStructure batch response", () => {
       now: () => clock.now
     });
     expect(read.status === "ok" && read.deferred).toEqual(["c"]);
+  });
+});
+
+describe("budget-boundary: F1/F2 deferred vs terminal timeout (catalog path)", () => {
+  it("F1-catalog: statement timed out due to budget cap defers the table, not a terminal rejection", async () => {
+    const clock = { now: 0 };
+    const statements: string[] = [];
+    const channel: MetadataChannel = {
+      async run(sql, options) {
+        statements.push(sql);
+        const queryMs = 6_000;
+        const advance = Math.min(queryMs, options.timeoutMs ?? 8_000);
+        clock.now += advance;
+        if (advance < queryMs) throw new Error("Catalog connection/query timed out");
+        return { rows: [["id", "bigint", "NO", "true", null, null]], truncated: false };
+      },
+      close: vi.fn()
+    };
+    // a: remaining=10000ms, timeoutMs=min(8000,10000)=8000, 6s<8s → succeeds
+    // b: remaining=4000ms, timeoutMs=min(8000,4000)=4000 < 8000 (budget-capped), 6s>4s → deferred
+    // c: deferred via slice (outer loop short-circuits)
+    const { read } = await readBatch(["a", "b", "c"], channel, { now: () => clock.now, callBudgetMs: 10_000 }, hiveConn);
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(read.tables).toEqual(["a"]);
+    expect(read.deferred).toEqual(["b", "c"]);
+    expect(read.rejections ?? []).toEqual([]);
+    // "a" gets 1 statement; "b" gets 1 budget-capped statement that times out; "c" deferred via slice
+    expect(statements).toHaveLength(2);
+    const all = [...(read.tables ?? []), ...(read.deferred ?? []), ...(read.rejections ?? []).map((r) => r.table)];
+    expect(all.sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("F1-catalog: table using the full per-table timeout is a terminal rejection, not deferred", async () => {
+    const clock = { now: 0 };
+    const channel: MetadataChannel = {
+      async run(_sql, options) {
+        clock.now += options.timeoutMs ?? 8_000;
+        throw new Error("Catalog connection/query timed out");
+      },
+      close: vi.fn()
+    };
+    // timeoutMs = min(8000, 10000) = 8000 = limits.timeoutMs → NOT budget-capped → terminal timeout
+    const { read } = await readBatch(["slow"], channel, { now: () => clock.now, callBudgetMs: 10_000 }, hiveConn);
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(read.rejections).toEqual([{ table: "slow", reason: "timeout" }]);
+    expect(read.deferred ?? []).toEqual([]);
+  });
+
+  it("F2-catalog: remaining ≤ 50ms defers tables without sending any statement", async () => {
+    const clock = { now: 0 };
+    const statements: string[] = [];
+    const channel: MetadataChannel = {
+      async run(sql) {
+        statements.push(sql);
+        clock.now += 9_950; // one successful read consumes 9950ms; remaining = 50ms ≤ 50ms threshold
+        return { rows: [["id", "bigint", "NO", "true", null, null]], truncated: false };
+      },
+      close: vi.fn()
+    };
+    // a: remaining=10000ms > 50ms → reads OK; b: remaining=50ms ≤ 50ms → deferred (no statement sent)
+    const { read } = await readBatch(["a", "b", "c"], channel, { now: () => clock.now, callBudgetMs: 10_000 }, hiveConn);
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(read.tables).toEqual(["a"]);
+    expect(read.deferred).toEqual(["b", "c"]);
+    expect(read.rejections ?? []).toEqual([]);
+    expect(statements).toHaveLength(1); // only "a" sent a statement; "b" and "c" deferred without statements
+    const all = [...(read.tables ?? []), ...(read.deferred ?? []), ...(read.rejections ?? []).map((r) => r.table)];
+    expect(all.sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("convergence: genuinely slow table gets terminal timeout when called with a fresh full budget", async () => {
+    const clock = { now: 0 };
+    const channel: MetadataChannel = {
+      async run(_sql, options) {
+        // Simulates HMS permanently paused: consumes entire allowed timeout then throws
+        clock.now += options.timeoutMs ?? 8_000;
+        throw new Error("Catalog connection/query timed out");
+      },
+      close: vi.fn()
+    };
+    // Fresh call: timeoutMs = min(8000, 10000) = 8000 = limits.timeoutMs → NOT budget-capped → terminal
+    const { read } = await readBatch(["genuinely-slow"], channel, { now: () => clock.now, callBudgetMs: 10_000 }, hiveConn);
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(read.rejections).toEqual([{ table: "genuinely-slow", reason: "timeout" }]);
+    expect(read.deferred ?? []).toEqual([]);
+  });
+
+  // Catalog-path livelock analysis: each call, the first table (or sole table) gets
+  // timeoutMs = min(limits.timeoutMs=8000, remaining). When called alone with callBudgetMs=10000,
+  // remaining=10000 → timeoutMs=8000=limits.timeoutMs → NOT budget-capped → terminal if fails.
+  // No livelock as long as callBudgetMs ≥ PER_TABLE_TIMEOUT_MS (production: 10000 ≥ 8000). ✓
+  it("catalog-no-livelock: deferred table sent alone with fresh budget receives full per-table timeout", async () => {
+    const clock = { now: 0 };
+    const probeTimeouts: number[] = [];
+    const channel: MetadataChannel = {
+      async run(_sql, options) {
+        probeTimeouts.push(options.timeoutMs ?? -1);
+        clock.now += options.timeoutMs ?? 8_000;
+        throw new Error("Catalog connection/query timed out");
+      },
+      close: vi.fn()
+    };
+    // Simulate: a previously deferred table is sent alone in a fresh call (callBudgetMs=10000).
+    // timeoutMs = min(8000, 10000) = 8000 = limits.timeoutMs → NOT budget-capped → terminal timeout.
+    const { read } = await readBatch(["prev-deferred"], channel, { now: () => clock.now, callBudgetMs: 10_000 }, hiveConn);
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(read.rejections).toEqual([{ table: "prev-deferred", reason: "timeout" }]);
+    expect(read.deferred ?? []).toEqual([]);
+    // The probe received the full per-table timeout, not a reduced budget
+    expect(probeTimeouts[0]).toBe(8_000);
+  });
+});
+
+describe("budget-boundary: livelock fix and F1 (MySQL batch path)", () => {
+  // Livelock scenario: name-resolve 6s + column query 6s, budget 10s.
+  // Before fix: first column query gets budget-capped to 4s → times out → all deferred every round → infinite.
+  // After fix: first column query (columnsAttempted=0) gets full per-table timeout (8s) → 6s < 8s → reads all.
+  it("livelock-mysql: tables read (not infinitely deferred) when name-resolve leaves < per-table budget", async () => {
+    const clock = { now: 0 };
+    const channel: MetadataChannel = {
+      async run(sql, options) {
+        if (sql.includes("FROM information_schema.tables")) {
+          clock.now += 6_000; // name-resolve 6s; remaining budget = 4s < per-table limit 8s
+          return { rows: [["t_0"], ["t_1"]], truncated: false };
+        }
+        // Column query: 6s. Old: budget-capped to 4s → times out → deferred (livelock).
+        // New: columnsAttempted=0 → full 8s → 6s < 8s → succeeds.
+        const advance = Math.min(6_000, options.timeoutMs ?? 8_000);
+        clock.now += advance;
+        if (advance < 6_000) throw new Error("Catalog connection/query timed out");
+        return { rows: [["t_0", "id", "int", "YES", "", ""], ["t_1", "id", "int", "YES", "", ""]], truncated: false };
+      },
+      close: vi.fn()
+    };
+    const { read } = await readBatch(["t_0", "t_1"], channel, { now: () => clock.now, callBudgetMs: 10_000 });
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(read.tables?.sort()).toEqual(["t_0", "t_1"]);
+    expect(read.deferred ?? []).toEqual([]);
+    expect(read.rejections ?? []).toEqual([]);
+  });
+
+  it("livelock-mysql (multi-round): tables converge in finite rounds when name-resolve consumes budget", async () => {
+    let tablesToRead = ["t_0", "t_1"];
+    const readTables: string[] = [];
+    const rejectedTables: string[] = [];
+
+    for (let round = 0; round < 5; round++) {
+      if (tablesToRead.length === 0) break;
+      const clock = { now: 0 };
+      const currentTables = tablesToRead;
+      const channel: MetadataChannel = {
+        async run(sql, options) {
+          if (sql.includes("FROM information_schema.tables")) {
+            clock.now += 6_000;
+            return { rows: currentTables.map((t) => [t]), truncated: false };
+          }
+          const advance = Math.min(6_000, options.timeoutMs ?? 8_000);
+          clock.now += advance;
+          if (advance < 6_000) throw new Error("Catalog connection/query timed out");
+          return { rows: currentTables.flatMap((t) => [[t, "id", "int", "YES", "", ""]]), truncated: false };
+        },
+        close: vi.fn()
+      };
+      const { read } = await readBatch(tablesToRead, channel, { now: () => clock.now, callBudgetMs: 10_000 });
+      if (read.status !== "ok") break;
+      readTables.push(...(read.tables ?? []));
+      rejectedTables.push(...(read.rejections ?? []).map((r) => r.table));
+      tablesToRead = read.deferred ?? [];
+    }
+
+    // All tables must converge (no infinite deferral)
+    expect(tablesToRead).toEqual([]);
+    expect([...readTables, ...rejectedTables].sort()).toEqual(["t_0", "t_1"]);
+  });
+
+  it("F1-mysql: subsequent column statement budget-capped after split defers those tables", async () => {
+    // First column query (columnsAttempted=0): instant + truncated → forces split.
+    // Second column query (columnsAttempted=1): budget-capped (remaining 3s < 8s) → timeout → deferred.
+    const clock = { now: 0 };
+    let colCount = 0;
+    const channel: MetadataChannel = {
+      async run(sql, options) {
+        if (sql.includes("FROM information_schema.tables")) {
+          clock.now += 7_000; // name-resolve 7s, leaving 3s budget
+          return { rows: [["t_0"], ["t_1"], ["t_2"], ["t_3"]], truncated: false };
+        }
+        colCount += 1;
+        if (colCount === 1) {
+          // First column query: instant, returns exactly maxRows → truncated (forces split)
+          const rows = Array.from({ length: options.maxRows ?? 1 }, (_, i) => [
+            `t_${i % 4}`, `c${i}`, "int", "YES", "", ""
+          ]);
+          return { rows, truncated: true };
+        }
+        // Subsequent: budget-capped (3s remaining < 8s limit) → times out → deferred
+        clock.now += options.timeoutMs ?? 8_000;
+        throw new Error("Catalog connection/query timed out");
+      },
+      close: vi.fn()
+    };
+    const { read } = await readBatch(["t_0", "t_1", "t_2", "t_3"], channel, {
+      columnRowLimit: 2,
+      now: () => clock.now,
+      callBudgetMs: 10_000
+    });
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect((read.deferred ?? []).sort()).toEqual(["t_0", "t_1", "t_2", "t_3"]);
+    expect(read.rejections ?? []).toEqual([]);
+  });
+
+  it("F1-mysql: column statement using full per-table timeout is a terminal rejection", async () => {
+    const clock = { now: 0 };
+    const channel: MetadataChannel = {
+      async run(sql, options) {
+        if (sql.includes("FROM information_schema.tables")) {
+          return { rows: [["t_0"]], truncated: false }; // instant name-resolve
+        }
+        clock.now += options.timeoutMs ?? 8_000; // uses full timeout
+        throw new Error("Catalog connection/query timed out");
+      },
+      close: vi.fn()
+    };
+    // timeoutMs = min(8000, 10000-0) = 8000 = options.timeoutMs → NOT budget-capped → terminal rejection
+    const { read } = await readBatch(["t_0"], channel, { now: () => clock.now, callBudgetMs: 10_000 });
+    expect(read.status).toBe("ok");
+    if (read.status !== "ok") return;
+    expect(read.rejections).toEqual([{ table: "t_0", reason: "timeout" }]);
+    expect(read.deferred ?? []).toEqual([]);
   });
 });
 

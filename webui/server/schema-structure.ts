@@ -454,7 +454,7 @@ async function readCatalogTableColumns(
     deadlineMs?: number;
     now?: () => number;
   } = { rowLimit: COLUMN_READ_ROW_LIMIT, timeoutMs: CATALOG_SCAN_TIMEOUT_MS }
-): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection }> {
+): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection; deferred?: true }> {
   const probes = [
     describeCatalogTableSql(catalog, schema, table),
     showColumnsSql(catalog, schema, table),
@@ -465,14 +465,18 @@ async function readCatalogTableColumns(
   for (const sql of probes) {
     const remaining =
       limits.deadlineMs !== undefined ? limits.deadlineMs - now() : limits.timeoutMs;
+    // F2: remaining budget too small to issue a statement — defer without sending anything.
     if (limits.deadlineMs !== undefined && remaining <= 50) {
-      reason = "timeout";
-      break;
+      return { columns: [], deferred: true };
     }
     const timeoutMs =
       limits.deadlineMs !== undefined
         ? Math.min(limits.timeoutMs, Math.max(0, remaining))
         : limits.timeoutMs;
+    // F1: detect when the statement timeout was capped by the remaining budget, not by the
+    // per-table limit. A timeout on such a capped statement means the budget ran out, not that
+    // the table is genuinely unreadable. Only a full per-table timeout is terminal.
+    const isBudgetCapped = limits.deadlineMs !== undefined && timeoutMs < limits.timeoutMs;
     const result = await show(projectRoot, connectionId, sql, {
       maxRows: limits.rowLimit,
       timeoutMs
@@ -480,6 +484,9 @@ async function readCatalogTableColumns(
     const answered = answeredRows(result, limits.rowLimit, timeoutMs);
     if ("reason" in answered) {
       reason = answered.reason;
+      if (reason === "timeout" && isBudgetCapped) {
+        return { columns: [], deferred: true };
+      }
       logSchemaStructureFailure({ connectionId, schema, table, phase: "table-columns", sql }, result);
       if (isTerminalProbeFailure(result, reason)) break;
       continue;
@@ -842,6 +849,11 @@ export async function readSchemaColumns(
             show,
             limits
           );
+          // F1/F2: budget-induced deferral — this table and all remaining ones go to deferred.
+          if (tableRead.deferred) {
+            deferred = wanted.slice(index);
+            break;
+          }
           if (tableRead.rejection) {
             const { reason } = tableRead.rejection;
             rejections.push(holder && reason === "too_large" ? { table, reason: "too_wide" } : tableRead.rejection);

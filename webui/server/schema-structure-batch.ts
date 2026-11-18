@@ -125,16 +125,27 @@ export async function readMysqlTablesBatch(
       await readChunk(chunk.slice(0, middle));
       await readChunk(chunk.slice(middle));
     };
+    // Progress guarantee (livelock fix): the first column statement always gets the full per-table
+    // timeout so a table that can be read within that limit is guaranteed to make progress on some
+    // call, even if a slow name-resolve already consumed most of the budget. Subsequent statements
+    // (columnsAttempted > 0) revert to the remaining-budget cap so total call time stays bounded.
+    const chunkTimeoutMs = columnsAttempted === 0 ? options.timeoutMs : statementTimeoutMs();
+    const budgetCapped = columnsAttempted > 0 && options.budgetMs !== undefined && chunkTimeoutMs < options.timeoutMs;
     let answer;
     try {
       answer = await run(columnsSql(schema, chunk.map((item) => item.physical)), {
         maxRows: options.rowLimit,
-        timeoutMs: statementTimeoutMs()
+        timeoutMs: chunkTimeoutMs
       });
     } catch (error) {
       columnsAttempted += 1;
-      if (chunk.length > 1 && !isBrokenChannelError(error)) return split();
       const reason = failureReason(error instanceof Error ? error.message : String(error));
+      // F1: statement was cut short by remaining budget, not by the per-table limit → defer.
+      if (reason === "timeout" && budgetCapped) {
+        for (const item of chunk) outcomes.set(item.requested, "deferred");
+        return;
+      }
+      if (chunk.length > 1 && !isBrokenChannelError(error)) return split();
       for (const item of chunk) outcomes.set(item.requested, { reason });
       return;
     }
