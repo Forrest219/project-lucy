@@ -1,0 +1,74 @@
+{
+  "id": "UAT-COLD-R0",
+  "title": "环境门禁",
+  "pass": true,
+  "checks": [
+    {
+      "name": "block device detected",
+      "pass": true,
+      "actual": "/dev/vda",
+      "limit": "/dev/*"
+    },
+    {
+      "name": "throttle effective: 60MB direct write",
+      "pass": true,
+      "actual": "31.2 MB/s",
+      "limit": "≤ 45 MB/s"
+    },
+    {
+      "name": "page cache can be dropped",
+      "pass": true,
+      "actual": true,
+      "limit": true
+    },
+    {
+      "name": "images resolvable",
+      "pass": true,
+      "actual": [
+        {
+          "image": "project-lucy:old-9c78b0e3",
+          "revision": "9c78b0e367c7466c697e3b1627ba800afa8956f1",
+          "version": "0.25.0"
+        },
+        {
+          "image": "project-lucy:p145-p147",
+          "revision": "e2118111ce864a8555bdc89142fcaa6064a07eb4-dirty",
+          "version": "0.30.0"
+        }
+      ],
+      "limit": "revision/version readable"
+    },
+    {
+      "name": "seed snapshot present",
+      "pass": true,
+      "actual": "-rw-r--r--    1 10001    10001    987844608 Nov 17 23:57 audit.sqlite\n943",
+      "limit": "run `seed`"
+    }
+  ],
+  "rig": {
+    "readMBps": 30,
+    "writeMBps": 30,
+    "readIops": 300,
+    "writeIops": 100,
+    "cpus": 2
+  },
+  "identities": [
+    {
+      "image": "project-lucy:old-9c78b0e3",
+      "revision": "9c78b0e367c7466c697e3b1627ba800afa8956f1",
+      "version": "0.25.0"
+    },
+    {
+      "image": "project-lucy:p145-p147",
+      "revision": "e2118111ce864a8555bdc89142fcaa6064a07eb4-dirty",
+      "version": "0.30.0"
+    }
+  ],
+  "logFindings": {
+    "hookTimeout": false,
+    "auditSchemaReady": null,
+    "tail": [
+      ""
+    ]
+  }
+}

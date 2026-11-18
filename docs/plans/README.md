@@ -5,6 +5,11 @@ This directory stores repository-level implementation plans that are not scoped 
 | Plan | Purpose |
 |---|---|
 | [lucy-20261118-version-axis-naming-plan.md](lucy-20261118-version-axis-naming-plan.md) | **v0.1-draft。仅方案稿：Task 全部未开工；未获开发授权；未改运行代码、镜像与 CI**。版本四轴分工落地计划（候选版本机制 → 文档口径对齐 → 0.30 定稿）。配对 [Spec](../specs/lucy-20261118-version-axis-naming-spec.md)。**≠ 可上线** |
+| [lucy-20261118-p147-pause-delivery-and-root-fix-plan.md](lucy-20261118-p147-pause-delivery-and-root-fix-plan.md) | **v0.1**：P1-47 暂停交付（A 线）与根治（B 线）并行；模拟 UAT；待委托人确认 D1–D3。**≠ 可上线** |
+| [lucy-20261118-p145-p147-multi-agent-parallel-plan.md](lucy-20261118-p145-p147-multi-agent-parallel-plan.md) | **v0.1 编排**：P1-45／46／47 多 agent 并行（Wave1＝46∥45；Wave2＝47）。委托人已「授权定稿」。**≠ 可上线** |
+| [lucy-20261118-inferred-turn-rebuild-recovery-plan.md](lucy-20261118-inferred-turn-rebuild-recovery-plan.md) | **v0.2；终稿确权＋开发授权**（P1-45／REQ-030-066；前方 P0-02）。配对 [Spec](../specs/lucy-20261118-inferred-turn-rebuild-recovery-spec.md)。**≠ 可上线** |
+| [lucy-20261118-readyz-mcp-listen-consistency-plan.md](lucy-20261118-readyz-mcp-listen-consistency-plan.md) | **v0.2；终稿确权＋开发授权**（P1-46／REQ-030-067；前方 P0-03）。配对 [Spec](../specs/lucy-20261118-readyz-mcp-listen-consistency-spec.md)。**≠ 可上线** |
+| [lucy-20261118-rebuild-probe-budget-plan.md](lucy-20261118-rebuild-probe-budget-plan.md) | **v0.2；终稿确权＋开发授权**（P1-47／REQ-030-068；前方 P0-01；Wave2）。配对 [Spec](../specs/lucy-20261118-rebuild-probe-budget-spec.md)。**≠ 可上线** |
 | [lucy-20261118-lucy-ops-reader-headless-governance-acl-plan.md](lucy-20261118-lucy-ops-reader-headless-governance-acl-plan.md) | **v0.1-draft**（P1-49／REQ-030-070）：`lucy_ops_reader` 无头可问治理面 ACL（规范 W0 指纹 heal）。配对 [Spec](../specs/lucy-20261118-lucy-ops-reader-headless-governance-acl-spec.md)；测试台 not_registered。**终稿未确权；未获开发授权；≠ 可上线** |
 | [lucy-20261117-access-map-sankey-restoration-plan.md](lucy-20261117-access-map-sankey-restoration-plan.md) | **v0.2；开发授权已获得；功能已实现并提交（2026-11-17）**（P1-41／REQ-030-062）：访问关系图桑基还原 Plan，配对 [Spec](../specs/lucy-20261117-access-map-sankey-restoration-spec.md)。**≠ 可上线** |
 | [lucy-20261115-trust-evidence-capability-split.md](lucy-20261115-trust-evidence-capability-split.md) | **v0.1；委托人批准（2026-11-15）**：可信证据两类拆分——0.30 吸收 P0-4／B／5；未开工进 post-0.30 池。**≠ Spec；≠ 开发授权；≠ 可上线** |
