@@ -49,6 +49,9 @@ const LIMITS = {
   windowS: 120, // 默认值；`--window-s` 可加长，用于首次升级后台补算较长的构建
   livezMaxMs: 1000,
   livezP99Ms: 400,
+  // 首次升级补算窗口（UAT-COLD-02）单独放宽：委托人 2026-11-18 批准，依据见 Spec OQ-2。
+  firstUpgradeLivezMaxMs: 2000,
+  firstUpgradeLivezP99Ms: 1000,
   readyzP99Ms: 1500,
   coldCacheWindowS: 60,
   mainPathStepMs: 5000,
@@ -293,10 +296,10 @@ function readyCheck(res, budgetS) {
     check(`ready within ${budgetS}s`, res.readyT !== null && res.readyT <= budgetS, res.readyT, `≤ ${budgetS}s`)
   ];
 }
-function steadyChecks(stats) {
+function steadyChecks(stats, { livezMaxMs = LIMITS.livezMaxMs, livezP99Ms = LIMITS.livezP99Ms } = {}) {
   return [
-    check("livez max", stats.livezMaxMs !== null && stats.livezMaxMs <= LIMITS.livezMaxMs, stats.livezMaxMs, `≤ ${LIMITS.livezMaxMs}ms`),
-    check("livez p99", stats.livezP99Ms !== null && stats.livezP99Ms <= LIMITS.livezP99Ms, stats.livezP99Ms, `≤ ${LIMITS.livezP99Ms}ms`),
+    check("livez max", stats.livezMaxMs !== null && stats.livezMaxMs <= livezMaxMs, stats.livezMaxMs, `≤ ${livezMaxMs}ms`),
+    check("livez p99", stats.livezP99Ms !== null && stats.livezP99Ms <= livezP99Ms, stats.livezP99Ms, `≤ ${livezP99Ms}ms`),
     check("readyz p99", stats.readyzP99Ms !== null && stats.readyzP99Ms <= LIMITS.readyzP99Ms, stats.readyzP99Ms, `≤ ${LIMITS.readyzP99Ms}ms`),
     check("livez/readyz all 200 after ready", stats.livezNon200 === 0 && stats.readyzNon200 === 0, { livez: stats.livezNon200, readyz: stats.readyzNon200 }, 0)
   ];
@@ -321,7 +324,7 @@ async function migratedVolume() {
 async function cold02() {
   const res = await scenario({ id: "UAT-COLD-02", image: NEW_IMAGE, mode: "new", volume: SNAP_OLD, readyBudgetS: LIMITS.firstUpgradeReadyS, windowS: WINDOW_S });
   const stats = res.readyT === null ? null : windowStats("new", res.samples, res.windowStart, res.windowEnd);
-  return report("UAT-COLD-02", "旧库首次升级：慢盘冷缓存冷启动", [...readyCheck(res, LIMITS.firstUpgradeReadyS), ...(stats ? steadyChecks(stats) : [check("steady-state window measured", false, null, "needs ready")])], { ...res, stats });
+  return report("UAT-COLD-02", "旧库首次升级：慢盘冷缓存冷启动", [...readyCheck(res, LIMITS.firstUpgradeReadyS), ...(stats ? steadyChecks(stats, { livezMaxMs: LIMITS.firstUpgradeLivezMaxMs, livezP99Ms: LIMITS.firstUpgradeLivezP99Ms }) : [check("steady-state window measured", false, null, "needs ready")])], { ...res, stats });
 }
 async function cold03() {
   const vol = await migratedVolume();

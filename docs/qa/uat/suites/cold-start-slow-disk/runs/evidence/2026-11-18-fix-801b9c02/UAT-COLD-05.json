@@ -1,0 +1,165 @@
+{
+  "id": "UAT-COLD-05",
+  "title": "冷启动后合法用户主路径可用（管理员认领＋MCP 握手）",
+  "pass": true,
+  "checks": [
+    {
+      "name": "process stayed up (no exit)",
+      "pass": true,
+      "actual": {
+        "running": true,
+        "exitCode": 0,
+        "restarts": 0,
+        "oomKilled": false
+      },
+      "limit": "running"
+    },
+    {
+      "name": "no FST_ERR_HOOK_TIMEOUT / AVV_ERR_READY_TIMEOUT",
+      "pass": true,
+      "actual": false,
+      "limit": false
+    },
+    {
+      "name": "restart count == 0",
+      "pass": true,
+      "actual": 0,
+      "limit": 0
+    },
+    {
+      "name": "ready within 150s",
+      "pass": true,
+      "actual": 123.4,
+      "limit": "≤ 150s"
+    },
+    {
+      "name": "admin bootstrap claim",
+      "pass": true,
+      "actual": {
+        "ms": 159,
+        "detail": 200
+      },
+      "limit": "ok & ≤ 5000ms"
+    },
+    {
+      "name": "admin session reads /api/project",
+      "pass": true,
+      "actual": {
+        "ms": 7,
+        "detail": 200
+      },
+      "limit": "ok & ≤ 5000ms"
+    },
+    {
+      "name": "create role, agent and token",
+      "pass": true,
+      "actual": {
+        "ms": 946,
+        "detail": {
+          "role": 200,
+          "agent": 200,
+          "token": 200
+        }
+      },
+      "limit": "ok & ≤ 5000ms"
+    },
+    {
+      "name": "MCP initialize with Bearer",
+      "pass": true,
+      "actual": {
+        "ms": 49,
+        "detail": 200
+      },
+      "limit": "ok & ≤ 5000ms"
+    },
+    {
+      "name": "MCP tools/list returns tools",
+      "pass": true,
+      "actual": {
+        "ms": 29,
+        "detail": 200
+      },
+      "limit": "ok & ≤ 5000ms"
+    }
+  ],
+  "image": "project-lucy:cold-fix-801b9c02",
+  "readyT": 123.4,
+  "exited": null,
+  "finalState": {
+    "running": true,
+    "exitCode": 0,
+    "restarts": 0,
+    "oomKilled": false
+  },
+  "afterReadyResult": [
+    {
+      "name": "admin bootstrap claim",
+      "pass": true,
+      "actual": {
+        "ms": 159,
+        "detail": 200
+      },
+      "limit": "ok & ≤ 5000ms"
+    },
+    {
+      "name": "admin session reads /api/project",
+      "pass": true,
+      "actual": {
+        "ms": 7,
+        "detail": 200
+      },
+      "limit": "ok & ≤ 5000ms"
+    },
+    {
+      "name": "create role, agent and token",
+      "pass": true,
+      "actual": {
+        "ms": 946,
+        "detail": {
+          "role": 200,
+          "agent": 200,
+          "token": 200
+        }
+      },
+      "limit": "ok & ≤ 5000ms"
+    },
+    {
+      "name": "MCP initialize with Bearer",
+      "pass": true,
+      "actual": {
+        "ms": 49,
+        "detail": 200
+      },
+      "limit": "ok & ≤ 5000ms"
+    },
+    {
+      "name": "MCP tools/list returns tools",
+      "pass": true,
+      "actual": {
+        "ms": 29,
+        "detail": 200
+      },
+      "limit": "ok & ≤ 5000ms"
+    }
+  ],
+  "windowStart": 123.4,
+  "windowEnd": 133.4,
+  "logFindings": {
+    "hookTimeout": false,
+    "auditSchemaReady": null,
+    "tail": [
+      "{\"level\":30,\"time\":1794962425822,\"pid\":451,\"hostname\":\"31b6b1b492de\",\"reqId\":\"req-o\",\"req\":{\"method\":\"GET\",\"url\":\"/api/livez\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":26845},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794962425823,\"pid\":451,\"hostname\":\"31b6b1b492de\",\"reqId\":\"req-o\",\"res\":{\"statusCode\":200},\"responseTime\":0.8569580000003043,\"msg\":\"request completed\"}",
+      "{\"level\":30,\"time\":1794962425828,\"pid\":451,\"hostname\":\"31b6b1b492de\",\"reqId\":\"req-p\",\"req\":{\"method\":\"GET\",\"url\":\"/api/readyz\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":46977},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794962425832,\"pid\":451,\"hostname\":\"31b6b1b492de\",\"reqId\":\"req-p\",\"res\":{\"statusCode\":200},\"responseTime\":4.5260420000013255,\"msg\":\"request completed\"}",
+      "{\"level\":30,\"time\":1794962425833,\"pid\":451,\"hostname\":\"31b6b1b492de\",\"reqId\":\"req-q\",\"req\":{\"method\":\"GET\",\"url\":\"/api/health\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":26845},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794962425838,\"pid\":451,\"hostname\":\"31b6b1b492de\",\"reqId\":\"req-q\",\"res\":{\"statusCode\":200},\"responseTime\":5.391124999998283,\"msg\":\"request completed\"}",
+      "Project: /data/lucy",
+      "{\"level\":30,\"time\":1794962416483,\"pid\":372,\"hostname\":\"31b6b1b492de\",\"sessionId\":\"430119ef-4796-4a45-bfa2-2b729ef8b6a1\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794962418225,\"pid\":372,\"hostname\":\"31b6b1b492de\",\"sessionId\":\"f756b862-8823-4299-89a2-911d9313835b\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794962421459,\"pid\":372,\"hostname\":\"31b6b1b492de\",\"sessionId\":\"85fd550f-5dfc-436d-9079-4c3a5814f9ef\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794962426641,\"pid\":372,\"hostname\":\"31b6b1b492de\",\"sessionId\":\"b138d6ce-aa0a-4ecd-8d5f-9419fbb6279d\",\"msg\":\"session.open\"}",
+      ""
+    ]
+  }
+}

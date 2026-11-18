@@ -4,7 +4,7 @@
 |---|---|---|---|---|
 | UAT-COLD-R0 | 环境门禁 | 脚本 | `npm run uat:cold-start -- r0 --new-image IMG` | 探到块设备；60MB 直写 ≤ 45MB/s（限速生效）；能清页缓存；镜像身份可读；种子快照在 |
 | UAT-COLD-01 | 对照：0.25.0 在同一台限速冷启动台上能起来 | 运行时 | `cold01` | 不退出、重启 0、`/api/health` ≤ 120 秒转 200，之后 60 秒全 200。**不过则 02–05 的结论作废** |
-| UAT-COLD-02 | 旧库首次升级：慢盘冷缓存冷启动 | 运行时 | `cold02 --new-image IMG` | 不退出、无 `FST_ERR_HOOK_TIMEOUT`、重启 0、`/api/readyz` ≤ 150 秒转 200；之后 120 秒 livez max ≤ 1000ms／p99 ≤ 400ms，readyz p99 ≤ 1500ms，全 200 |
+| UAT-COLD-02 | 旧库首次升级：慢盘冷缓存冷启动 | 运行时 | `cold02 --new-image IMG` | 不退出、无 `FST_ERR_HOOK_TIMEOUT`、重启 0、`/api/readyz` ≤ 150 秒转 200；之后 120 秒 livez max ≤ 2000ms／p99 ≤ 1000ms（首次升级补算窗口专用，2026-11-18 放宽），readyz p99 ≤ 1500ms，全 200 |
 | UAT-COLD-03 | 已迁移库再次冷启动（Pod 重启） | 运行时 | `cold03 --new-image IMG` | `/api/readyz` ≤ 60 秒转 200；稳态门槛同 02 |
 | UAT-COLD-04 | 稳态下页缓存被冲掉（后台轮询冷读） | 运行时 | `cold04 --new-image IMG` | 就绪 20 秒后清页缓存；之后 60 秒门槛同 02 |
 | UAT-COLD-05 | 冷启动后合法用户主路径可用 | 运行时＋API | `cold05 --new-image IMG` | 首次升级路径就绪后：管理员认领、`GET /api/project`、建角色／Agent／token、MCP `initialize`、`tools/list`，每步成功且 ≤ 5 秒 |
@@ -79,7 +79,7 @@ UAT-COLD-01 PASS。候选镜像已构建，`gitSha` 是被测提交。
 
 - 容器不退出、无 `FST_ERR_HOOK_TIMEOUT`／`AVV_ERR_READY_TIMEOUT`、重启 0。
 - `/api/readyz` ≤ 150 秒转 200。
-- 转 200 之后 120 秒：livez max ≤ 1000ms、p99 ≤ 400ms；readyz p99 ≤ 1500ms；livez／readyz 全 200。
+- 转 200 之后 120 秒：livez max ≤ 2000ms、p99 ≤ 1000ms（首次升级补算窗口专用，2026-11-18 委托人批准放宽；03／04 仍是 max ≤ 1000ms、p99 ≤ 400ms）；readyz p99 ≤ 1500ms；livez／readyz 全 200。
 - 修复后：`logFindings.auditSchemaReady` 非空，含总耗时与 `foreign_key_check` 耗时，且出现在监听日志之前（SC-06）。耗时抄进跑次。**注（2026-11-18 改后跑次实测）：旧库的打开与迁移常在 `recoverSemanticJournals` 之前就已发生，该行恒为个位数毫秒，不能用它读出迁移耗时；迁移量级只能用 02 与 03 的就绪时间差间接估算。**
 - 首次升级补算窗口（旧库没有推断问询，等于 67 个用户首次 30 天全量回填）是本条最容易越线的部分；跑次须记录 livez 超过 350ms 的样本时刻，以便对到后台同步段；并抄录 `stats.readyzP50Ms`／`readyzP95Ms`（不判分，用于看占空比让出 SC-17 是否仍在：退化时 readyz 会回到 1.2 秒以上）。
 - 监听日志之前不得出现维护器补算的活动（SC-16：首轮扫描等监听之后才启动）；若 02 在 `onReady` 阶段崩溃，先查这一条。

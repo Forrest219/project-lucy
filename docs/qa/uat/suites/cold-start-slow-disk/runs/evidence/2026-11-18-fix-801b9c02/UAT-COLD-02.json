@@ -1,0 +1,105 @@
+{
+  "id": "UAT-COLD-02",
+  "title": "旧库首次升级：慢盘冷缓存冷启动",
+  "pass": true,
+  "checks": [
+    {
+      "name": "process stayed up (no exit)",
+      "pass": true,
+      "actual": {
+        "running": true,
+        "exitCode": 0,
+        "restarts": 0,
+        "oomKilled": false
+      },
+      "limit": "running"
+    },
+    {
+      "name": "no FST_ERR_HOOK_TIMEOUT / AVV_ERR_READY_TIMEOUT",
+      "pass": true,
+      "actual": false,
+      "limit": false
+    },
+    {
+      "name": "restart count == 0",
+      "pass": true,
+      "actual": 0,
+      "limit": 0
+    },
+    {
+      "name": "ready within 150s",
+      "pass": true,
+      "actual": 122.8,
+      "limit": "≤ 150s"
+    },
+    {
+      "name": "livez max",
+      "pass": true,
+      "actual": 788,
+      "limit": "≤ 2000ms"
+    },
+    {
+      "name": "livez p99",
+      "pass": true,
+      "actual": 694,
+      "limit": "≤ 1000ms"
+    },
+    {
+      "name": "readyz p99",
+      "pass": true,
+      "actual": 315,
+      "limit": "≤ 1500ms"
+    },
+    {
+      "name": "livez/readyz all 200 after ready",
+      "pass": true,
+      "actual": {
+        "livez": 0,
+        "readyz": 0
+      },
+      "limit": 0
+    }
+  ],
+  "image": "project-lucy:cold-fix-801b9c02",
+  "readyT": 122.8,
+  "exited": null,
+  "finalState": {
+    "running": true,
+    "exitCode": 0,
+    "restarts": 0,
+    "oomKilled": false
+  },
+  "windowStart": 122.8,
+  "windowEnd": 242.8,
+  "stats": {
+    "samples": 108,
+    "livezMaxMs": 788,
+    "livezP99Ms": 694,
+    "livezNon200": 0,
+    "readyzMaxMs": 431,
+    "readyzP99Ms": 315,
+    "readyzP50Ms": 6,
+    "readyzP95Ms": 219,
+    "readyzNon200": 0,
+    "healthMaxMs": 1058,
+    "healthNon200": 0
+  },
+  "logFindings": {
+    "hookTimeout": false,
+    "auditSchemaReady": null,
+    "tail": [
+      "{\"level\":30,\"time\":1794960120003,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"01474007-facb-47d6-8fc4-9d48debf6cd2\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960125156,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"045dd592-8dd4-43eb-9c43-68b4dd96d515\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960130223,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"a6d86e25-e4c4-40ed-88f8-bec7ef157e96\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960135218,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"952bbd10-3bf5-4765-ae24-58afb0660820\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960140423,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"150571bc-e2a7-4114-ae31-3d840dc272c8\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960145422,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"99329b75-7795-4c0c-9ef9-7890df6c2ea0\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960150425,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"df8a0de9-9962-4abb-bb1e-c85187db7745\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960155692,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"00ca1ff4-4cbf-4e08-bb1d-a990950a5a0e\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960160685,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"b75848cc-fbb3-4b55-8915-953e557bd26c\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960166148,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"9389d92c-8c64-4aca-977a-a3f4892ca14d\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794960171235,\"pid\":370,\"hostname\":\"1342a8076568\",\"sessionId\":\"7a1cd7eb-2cbd-48e3-bb44-b295b64a8598\",\"msg\":\"session.open\"}",
+      ""
+    ]
+  }
+}
