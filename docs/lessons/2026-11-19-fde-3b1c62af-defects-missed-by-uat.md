@@ -6,7 +6,7 @@
 | 标签 | `gate-gap` `contract-stack` `ux-regression` `ops-delivery` `sev-high` |
 | 环境 | 本机 arm64 原生，Node `v22.23.5`；候选 `lucy-v0.30@3b1c62af32af7b6d045caef7fa10ccc92300ae97`（干净 worktree）；对照 ff `ff4762c9`、3a9 `3a9f0711`、84 `84becc34`。源码级复现（函数级、Fastify 内存路由、真实 SQLite），**未构建镜像，无容器 L2**；F01 投影进度、F02／F03 SQL 延迟、F04／AUDIT-01 时钟均为受控 |
 | 相关 | 总账 **P1-56**／REQ-030-077、**P1-55**／REQ-030-076；FDE 报告 `Lucy升级检查_3b1c62af_20261119`；本机复核回复 `inbox/uat-fde-3b1c62af-2026-11-19/reply-差异复核.md`；契约修订草案与整改 Plan 见 §6 |
-| 状态 | `open`（缺陷未修；契约修订草案与整改 Plan 已起草，**未终稿确权、未开发授权**；治理类后续动作均未开） |
+| 状态 | `open`（本条记录的是修复前的漏检。契约修订已确权并落地于 `d8c3f097`。复测仍有两处读表阻塞，见 [修复复测错题](2026-11-19-fde-fix-retest-batch-abort.md)。治理类后续动作仍未开） |
 
 ## 1. 症状与影响
 
@@ -81,6 +81,7 @@
 | 根测试登记补 6 个漏登记文件（`root-test-registry.json`） | **未开** | 属门禁配置，非本次文档授权范围 |
 | UAT 套件补「预算耗尽／慢拒绝／滚动窗口」用例；`run-large-schema-ingestion.mts` 判定修正 | **未开** | 由整改 Plan Task 6 承接，待授权 |
 | 更正 `UAT-TRC-05` 跑次 F-5 的归类 | 已写入 `e2e-ledger.md` 变更表（仅文档；F-5 与 F01 高度同型，根因未复核） | 历史跑次不改写 |
+| 修复落地后的复测 | 已记入后续错题，阻塞未修 | [2026-11-19-fde-fix-retest-batch-abort.md](2026-11-19-fde-fix-retest-batch-abort.md)。F01／F02 原用例翻绿；混合权限与 100 次上限仍失败 |
 
 登记 ≠ 授权开工。
 

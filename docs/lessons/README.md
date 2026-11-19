@@ -45,6 +45,7 @@
 
 | 日期 | 一句话错题 | 标签 | 文件 |
 |---|---|---|---|
+| 2026-11-19 | 宽表修复落地后，混合权限缩到单表仍中止其余 29 张合法表；600 张合法表在持续读完时被新增的 100 次请求上限打断，已读 95 张被丢成 0。新测试 mock 了服务端不会返回的成功体，并把 50 张夹具的次数上界写成了全局硬顶 | `gate-gap` `contract-stack` `ux-regression` `sev-high` | [2026-11-19-fde-fix-retest-batch-abort.md](2026-11-19-fde-fix-retest-batch-abort.md) |
 | 2026-11-19 | FDE 复核的 5 个缺陷（慢合法 Hive 语法误判超时、宽表整批 deferred 不收敛、单表 deferred 静默假成功、正式导出追平后仍 409、滚动窗口重复归属）本机可复现，旧 UAT 与默认套件都没拦住：用例只测快路径、缺陷代码晚于最后一次 UAT、F01 症状被记成「既有行为」、移植 84 分支测试时计划写「保留」实际全改 `it.skip` 且未入总账、UAT runner 不看 `deferred` | `gate-gap` `contract-stack` `ux-regression` `ops-delivery` `sev-high` | [2026-11-19-fde-3b1c62af-defects-missed-by-uat.md](2026-11-19-fde-3b1c62af-defects-missed-by-uat.md) |
 | 2026-11-18 | 回退基线 `3a9f0711` 缺 P1-20 修复：读外部目录字段全部失败（`ktx sql` 拒绝 `DESC`，请求没到 SelectDB），却被当成 hive-jd 的 Kerberos 问题排查；回退前症状仍未解释 | `ops-delivery` `gate-gap` `ux-regression` `sev-high` | [2026-11-18-rollback-baseline-lacks-external-catalog-field-fix.md](2026-11-18-rollback-baseline-lacks-external-catalog-field-fix.md) |
 | 2026-11-18 | 访问日志调用流水渲染崩溃（合并进来的 auth_failure 行无 `tool`），被路由兜底边界伪装成「页面资源加载失败，可能是版本已更新」，整页不可用；兜底边界捕获所有渲染错误，`release-ux` 错误判定又不含该文案 | `ux-regression` `gate-gap` `contract-stack` `sev-high` | [2026-11-18-audit-calls-render-crash-misreported.md](2026-11-18-audit-calls-render-crash-misreported.md) |
