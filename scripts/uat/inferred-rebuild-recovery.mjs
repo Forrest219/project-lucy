@@ -182,7 +182,9 @@ const db=new D("/data/lucy/.ktx-ui/audit.sqlite",{readonly:true});
 const st=db.prepare("SELECT status,watermark,updated_at FROM inferred_rebuild_state WHERE user_id=?").get(${JSON.stringify(userId)});
 const turns=db.prepare("SELECT COUNT(*) c FROM inferred_turns WHERE user_id=?").get(${JSON.stringify(userId)}).c;
 const newest=db.prepare("SELECT MAX(ts) ts FROM access_log WHERE user_id=?").get(${JSON.stringify(userId)}).ts;
-console.log(JSON.stringify({st, turns, newest}));
+const raw=db.prepare("SELECT COUNT(*) n FROM access_log WHERE user_id=?").get(${JSON.stringify(userId)}).n;
+const links=db.prepare("SELECT COUNT(*) n,COUNT(DISTINCT l.access_log_id) unique_n,SUM(CASE WHEN t.inferred_turn_id IS NULL THEN 1 ELSE 0 END) missing_turns FROM inferred_turn_access_logs l JOIN access_log a ON a.id=l.access_log_id LEFT JOIN inferred_turns t ON t.inferred_turn_id=l.inferred_turn_id WHERE a.user_id=?").get(${JSON.stringify(userId)});
+console.log(JSON.stringify({st, turns, newest,raw,links}));
 `);
   return JSON.parse(out.trim().split("\n").pop());
 }
@@ -245,14 +247,14 @@ async function all() {
   const final01 = after01.state;
   // Clustering may collapse many access_log rows into a single inferred turn; the
   // contract is recovery to complete (not a minimum turn count).
-  const recovered01 = final01.st?.status === "complete" && (final01.turns ?? 0) >= 1;
+  const recovered01 = final01.st?.status === "complete" && final01.turns === 1 && final01.raw === smallMeta.rows && final01.links?.n === smallMeta.rows && final01.links?.unique_n === smallMeta.rows && final01.links?.missing_turns === 0;
   results["UAT-IRR-01"] = {
     id: "UAT-IRR-01",
     pass: before.st?.status === "in_progress" && recovered01,
     checks: [
       check("before was in_progress", before.st?.status === "in_progress", before.st, "in_progress"),
       check("after complete", final01.st?.status === "complete", final01.st, "complete"),
-      check("rebuilt turns present", (final01.turns ?? 0) >= 1, final01.turns, "≥1")
+      check("one complete cluster with every call uniquely linked", recovered01, {turns:final01.turns,raw:final01.raw,links:final01.links}, "1 cluster, all 120 calls linked once")
     ],
     before, final01, after01
   };
@@ -265,20 +267,23 @@ async function all() {
   };
 
   // IRR-04: complete + no new logs → restart must stay complete without wiping
-  setComplete(smallMeta.user, smallMeta.newest);
-  const turnsBefore04 = queryState(smallMeta.user).turns;
+  // Keep the actual successful decimal watermark; do not seed an ISO timestamp.
+  const before04 = queryState(smallMeta.user);
+  const turnsBefore04 = before04.turns;
   stopContainer(); startContainer();
   await waitReady(180);
   await sleep(20_000);
   const after04 = queryState(smallMeta.user);
   results["UAT-IRR-04"] = {
     id: "UAT-IRR-04",
-    pass: after04.st?.status === "complete" && after04.turns === turnsBefore04,
+    pass: after04.st?.status === "complete" && after04.turns === turnsBefore04 && JSON.stringify(after04.st) === JSON.stringify(before04.st) && JSON.stringify(after04.links) === JSON.stringify(before04.links),
     checks: [
       check("still complete", after04.st?.status === "complete", after04.st, "complete"),
-      check("turn count unchanged", after04.turns === turnsBefore04, { before: turnsBefore04, after: after04.turns }, "equal")
+      check("turn count unchanged", after04.turns === turnsBefore04, { before: turnsBefore04, after: after04.turns }, "equal"),
+      check("completion timestamp/watermark unchanged (no rebuild)", JSON.stringify(after04.st) === JSON.stringify(before04.st), {before:before04.st,after:after04.st}, "unchanged"),
+      check("complete links unchanged", JSON.stringify(after04.links) === JSON.stringify(before04.links), {before:before04.links,after:after04.links}, "unchanged")
     ],
-    after04
+    before04,after04
   };
 
   // IRR-02 must observe actual partial links, SIGKILL the container, and
