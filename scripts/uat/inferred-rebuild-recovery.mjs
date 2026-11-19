@@ -111,7 +111,7 @@ for (let i=0;i<120;i++) {
   const ts=new Date(base+i*1000).toISOString();
   ins.run({
     ts, user_id:user, token_label:"uat", client:"uat-irr", tool:"lucy_query",
-    args_summary:"irr-small", query_preview:"select 1", outcome:"success", duration_ms:10,
+    args_summary:JSON.stringify({uat:"irr-small"}), query_preview:"select 1", outcome:"success", duration_ms:10,
     request_id:"irr-s-"+i, trace_id:"irr-s-t-"+i
   });
 }
