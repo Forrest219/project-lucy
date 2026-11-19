@@ -9,7 +9,9 @@ const command = process.argv[2] ?? "check";
 const db = new Database(FILE);
 const facts = () => db.prepare("SELECT COUNT(*) rows,COUNT(DISTINCT user_id) users FROM access_log").get();
 if (command === "seed") {
-  const user = (db.prepare("SELECT user_id FROM access_log ORDER BY user_id LIMIT 1").get() as { user_id: string }).user_id;
+  // Dedicated first-sorted user makes closure completion observable while all 67
+  // original padded users still rebuild under the unchanged full-size pressure.
+  const user = "000-uat-p157-crossing";
   const now = Date.now(), boundary = now - 30 * 86_400_000, depth = 50;
   const ins = db.prepare(`INSERT INTO access_log (ts,user_id,tool,tables,lucy_session_id,outcome,duration_ms,request_id)
     VALUES (?,?,'lucy_query','["t1"]',?,'success',1,?)`);

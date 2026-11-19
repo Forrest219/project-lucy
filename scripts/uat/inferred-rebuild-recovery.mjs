@@ -281,39 +281,26 @@ async function all() {
     after04
   };
 
-  // IRR-02: medium seed, start rebuild, SIGKILL after some turns, restart must recover
-  const medMeta = JSON.parse(auditEval(SEED_MEDIUM).trim().split("\n").pop());
-  // Clear state so rebuild starts
-  auditEval(`const D=require("/app/webui/node_modules/better-sqlite3");const db=new D("/data/lucy/.ktx-ui/audit.sqlite");db.prepare("DELETE FROM inferred_rebuild_state WHERE user_id=?").run(${JSON.stringify(medMeta.user)});db.prepare("DELETE FROM inferred_turns WHERE user_id=?").run(${JSON.stringify(medMeta.user)});console.log("ok");`);
-  // Ensure dirty: leave no complete row so restart must rebuild.
-  auditEval(`const D=require("/app/webui/node_modules/better-sqlite3");const db=new D("/data/lucy/.ktx-ui/audit.sqlite");
-db.prepare("DELETE FROM inferred_rebuild_state WHERE user_id=?").run(${JSON.stringify(medMeta.user)});
-db.prepare("DELETE FROM inferred_turns WHERE user_id=?").run(${JSON.stringify(medMeta.user)});
-console.log("ok");`);
-  // Pre-mark in_progress to guarantee kill window even if rebuild is very fast after ready.
-  injectInProgress(medMeta.user, medMeta.newest);
-  const killRun = await triggerRebuildAndWatch(medMeta.user, { killOnInProgress: true, waitCompleteMs: 60_000 });
-  let mid = killRun.state;
-  let forcedResidual = false;
-  // If kill missed because rebuild finished first, force residual in_progress (commit-boundary
-  // equivalent) so restart must reschedule — same recovery contract as SIGKILL mid-write.
-  if (!killRun.killed || mid.st?.status === "complete") {
-    injectInProgress(medMeta.user, medMeta.newest);
-    mid = queryState(medMeta.user);
-    forcedResidual = true;
-  }
-  const recover = await triggerRebuildAndWatch(medMeta.user, { waitCompleteMs: 300_000 });
-  const interrupted = Boolean(killRun.killed) || mid.st?.status === "in_progress" || forcedResidual;
+  // IRR-02 must observe actual partial links, SIGKILL the container, and
+  // recover on the same volume. A fabricated residual is not a SIGKILL PASS.
+  stopContainer();
+  const killed = spawnSync(process.execPath, [path.join(ROOT, "scripts/uat/inferred-rebuild-real-kill.mjs"),
+    "--image", IMAGE, "--out", path.join(OUT, "real-kill")], {
+    cwd: ROOT, env: process.env, encoding: "utf8", maxBuffer: 64 * 1024 * 1024
+  });
+  let actualKill;
+  try { actualKill = JSON.parse(killed.stdout.trim().split("\n").pop()); }
+  catch { actualKill = { pass: false, error: "real SIGKILL runner failed", exitCode: killed.status }; }
   results["UAT-IRR-02"] = {
-    id: "UAT-IRR-02",
-    pass: interrupted && mid.st?.status === "in_progress" && recover.state?.st?.status === "complete" && (recover.state?.turns ?? 0) >= 1,
+    id: "UAT-IRR-02", pass: killed.status === 0 && actualKill.pass === true,
     checks: [
-      check("in_progress residual before recover", mid.st?.status === "in_progress",
-        { killed: killRun.killed, forcedResidual, midStatus: mid.st?.status, sawInProgress: killRun.sawInProgress }, "in_progress"),
-      check("recover to complete", recover.state?.st?.status === "complete", recover.state?.st, "complete"),
-      check("turns after recover", (recover.state?.turns ?? 0) >= 1, recover.state?.turns, "≥1")
-    ],
-    killRun, recover, forcedResidual
+      check("real SIGKILL", actualKill.killed === true && actualKill.processExit?.exitCode === 137,
+        actualKill.processExit, "killed, exit 137"),
+      check("partial links before kill", actualKill.before?.links > 0 && actualKill.before?.links < actualKill.rows,
+        actualKill.before, "0 < links < raw rows"),
+      check("same-volume complete and unique links", actualKill.after?.state?.status === "complete" && actualKill.after?.links === actualKill.rows && actualKill.after?.duplicates === 0,
+        actualKill.after, "complete, all calls linked exactly once")
+    ], actualKill
   };
 
   const suite = {

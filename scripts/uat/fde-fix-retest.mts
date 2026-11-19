@@ -26,6 +26,8 @@ const results: any[] = [], wire: any[] = [], attempts: any[] = [];
 let cookie = "", mode = "off", session = "";
 let delay = 0, clientCalls = 0;
 const connections: string[] = [];
+let dorisAdmin: Awaited<ReturnType<typeof mysql.createConnection>> | undefined;
+let temporaryDorisUser = false;
 const record = (id: string, pass: boolean, detail: unknown, level = "real") => {
   const row = { id, verdict: pass ? "PASS" : "FAIL", level, detail };
   results.push(row); console.log(JSON.stringify(row)); flush();
@@ -153,6 +155,16 @@ try {
   record("UAT-FDE-FIX-06", progress.result?.tableCount === 600 && progress.result?.columnCount === 91500 && progress.calls.length > 100, { tables: progress.result?.tableCount, columns: progress.result?.columnCount, error: progress.error?.message, calls: progress.calls }, "real SQL + authorized latency");
 
   let hiveMode = "off";
+  // Preserve the API password requirement; use a temporary lab principal.
+  const hiveUser = process.env.UAT_DORIS_USER ?? "uat_fde_p157";
+  const hivePassword = process.env.UAT_DORIS_PASSWORD ?? randomBytes(24).toString("hex");
+  if (!process.env.UAT_DORIS_USER) {
+    dorisAdmin = await mysql.createConnection({ host: "127.0.0.1", port: 19030, user: "root" });
+    await dorisAdmin.query("CREATE USER IF NOT EXISTS 'uat_fde_p157'@'%' IDENTIFIED BY '" + hivePassword + "'");
+    await dorisAdmin.query("SET PASSWORD FOR 'uat_fde_p157'@'%' = PASSWORD('" + hivePassword + "')");
+    temporaryDorisUser = true;
+    await dorisAdmin.query("GRANT SELECT_PRIV ON hive.dw.* TO 'uat_fde_p157'@'%'");
+  }
   const hiveTable = "dw_sim_001_i_h";
   const hiveProxy = await startMysqlFaultProxy({ host: "127.0.0.1", port: 19030, record: (e) => wire.push(e), decide: (sql: string) => {
     const target = sql.match(/`([^`]+)`\s*$/)?.[1] ?? "";
@@ -162,7 +174,7 @@ try {
     const wait = !targeted ? 0 : hiveMode === "slow" ? (desc ? 7100 : 100) : hiveMode === "budget" ? 6000 : hiveMode === "timeout" ? 9000 : 0;
     return { delayMs: wait, ...(refused ? { errorCode: 1064, message: "You have an error in your SQL syntax (UAT controlled refusal)" } : {}), evidence: { mode: `hive-${hiveMode}`, table: target, fault: refused ? "D5-syntax" : null } };
   } }); proxies.push(hiveProxy);
-  await create("uat-fde-hive", "hive.dw", hiveProxy.port, "host.docker.internal", process.env.UAT_DORIS_USER ?? "root", process.env.UAT_DORIS_PASSWORD ?? "");
+  await create("uat-fde-hive", "hive.dw", hiveProxy.port, "host.docker.internal", hiveUser, hivePassword);
   const plain = await api("/api/connections/uat-fde-hive/schema-structure", { schema: "dw", tables: [hiveTable] });
   attempts.push({ step: "F02 real dialect attempt", status: plain.status, columnCount: plain.data?.columnCount, boundary: "lab DESC succeeds; the first-two-syntax refusal state cannot be naturally induced" });
   hiveMode = "slow";
@@ -185,6 +197,8 @@ try {
   mode = "off"; delay = 0;
   for (const id of connections.reverse()) { try { await api(`/api/connections/${id}/remove`, { dryRun: false }); } catch {} }
   for (const proxy of proxies) await proxy.close();
+  if (temporaryDorisUser) { try { await dorisAdmin?.query("DROP USER 'uat_fde_p157'@'%'"); } catch {} }
+  await dorisAdmin?.end();
   try { await db.query("DROP USER IF EXISTS 'uat_fde_natural'@'%'"); } catch {}
   await db.end(); flush();
   // Leave only the isolated instance and private login path for the remaining UAT steps.

@@ -109,6 +109,7 @@ function startContainer(volume, { throttle, extraEnv = {} }) {
     ...Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]),
     "-p", `${WEB_PORT}:5174`, "-p", `${PROXY_PORT}:7879`,
     "-v", `${volume}:/data/lucy`, "-v", `${ensureBootstrapSecret()}:/run/secrets/webui_bootstrap_token:ro`,
+    ...(flag("crossing-fixture") ? ["-v", `${path.join(ROOT, "scripts/uat/fde-crossing-fixture.mts")}:/app/scripts/uat/fde-crossing-fixture.mts:ro`] : []),
     IMAGE]);
 }
 async function timed(url, init = {}, timeoutMs = 8000) {
@@ -227,10 +228,11 @@ async function mcpCycle(bearer, sidIn) {
   };
 }
 
-async function sampleWindow(windowS, { mcpBearer = null } = {}) {
+async function sampleWindow(windowS, { mcpBearer = null, adminCookie = null } = {}) {
   const samples = [];
   const customer = [];
   const mcp = [];
+  const business = [];
   const t0 = performance.now();
   let streak = 0; let maxStreak = 0;
   let nextCustomer = 0;
@@ -239,10 +241,14 @@ async function sampleWindow(windowS, { mcpBearer = null } = {}) {
   while ((performance.now() - t0) / 1000 < windowS) {
     const livez = await timed(`${WEB}/api/livez`, {}, 8000);
     const readyz = await timed(`${WEB}/api/readyz`, {}, 8000);
+    const health = await timed(`${WEB}/api/health`, {}, 8000);
+    let healthStatus = null;
+    try { const h = JSON.parse(health.text); healthStatus = h?.data?.status ?? h?.status ?? null; } catch {}
     samples.push({
       t: +((performance.now() - t0) / 1000).toFixed(2),
       livezMs: livez.ms, livezCode: livez.code,
-      readyzMs: readyz.ms, readyzCode: readyz.code
+      readyzMs: readyz.ms, readyzCode: readyz.code,
+      healthMs: health.ms, healthCode: health.code, healthStatus
     });
     if ((performance.now() - t0) >= nextCustomer) {
       const c = await timed(`${WEB}/api/readyz`, {}, LIMITS.customerTimeoutMs);
@@ -258,17 +264,23 @@ async function sampleWindow(windowS, { mcpBearer = null } = {}) {
       mcp.push({ t: +((performance.now() - t0) / 1000).toFixed(2), ...cycle });
       nextMcp += 10_000;
     }
+    if (adminCookie) {
+      const r = await timed(`${WEB}/api/project`, { headers: { cookie: adminCookie } }, 8000);
+      business.push({ t: +((performance.now() - t0) / 1000).toFixed(2), code: r.code, ms: r.ms });
+    }
     await sleep(1000);
   }
   const livezMs = samples.map((s) => s.livezMs);
   const readyzMs = samples.map((s) => s.readyzMs);
   return {
-    samples, customer, maxStreak, mcp,
+    samples, customer, maxStreak, mcp, business,
     stats: {
       livezMaxMs: Math.max(...livezMs), livezP99Ms: pct(livezMs, 99),
       readyzMaxMs: Math.max(...readyzMs), readyzP99Ms: pct(readyzMs, 99),
       livezNon200: samples.filter((s) => s.livezCode !== 200).length,
-      readyzNon200: samples.filter((s) => s.readyzCode !== 200).length
+      readyzNon200: samples.filter((s) => s.readyzCode !== 200).length,
+      livezAtLeast1500Fraction: samples.filter((s) => s.livezMs >= 1500).length / samples.length,
+      healthDegradedCount: samples.filter((s) => s.healthStatus === "degraded").length
     }
   };
 }
@@ -359,7 +371,7 @@ async function all() {
   if (flag("crossing-fixture")) {
     const out = docker(["run", "--rm", "--network", "none", "--entrypoint", "/app/webui/node_modules/.bin/tsx",
       "-e", "KTX_PROJECT_ROOT=/data/lucy", "-e", "LUCY_CONTENT_ROOT=/data/lucy/config",
-      "-v", `${RUN}-data:/data/lucy`, IMAGE, "/app/scripts/uat/fde-crossing-fixture.mts", "seed"]);
+      "-v", `${RUN}-data:/data/lucy`, "-v", `${path.join(ROOT, "scripts/uat/fde-crossing-fixture.mts")}:/app/scripts/uat/fde-crossing-fixture.mts:ro`, IMAGE, "/app/scripts/uat/fde-crossing-fixture.mts", "seed"]);
     crossingFixture = JSON.parse(out.trim().split("\n").pop());
     writeFileSync(path.join(OUT, "crossing-seed.json"), JSON.stringify(crossingFixture, null, 2));
   }
@@ -393,7 +405,15 @@ async function all() {
       }
     }
   }
-  const window = await sampleWindow(LIMITS.windowS, { mcpBearer: pause && bearer ? bearer : null });
+  // RPB-03 requires authenticated business requests in this very cold window.
+  const adminPassword = business.password || (existsSync(path.join(SECRETS, "admin-password")) ? readFileSync(path.join(SECRETS, "admin-password"), "utf8").trim() : "");
+  const coldLogin = adminPassword ? await timed(`${WEB}/api/auth/login`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ adminId: "uatrpbadmin", password: adminPassword })
+  }, 8000) : null;
+  const adminCookie = (coldLogin?.headers?.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+  const window = await sampleWindow(LIMITS.windowS, { mcpBearer: pause && bearer ? bearer : null, adminCookie });
+  writeFileSync(path.join(OUT, "sample-window.json"), JSON.stringify(window, null, 2));
   if (crossingFixture) {
     let checked;
     // Preserve the actual 120s probe window; allow bounded background convergence afterwards.
@@ -446,8 +466,11 @@ async function all() {
   };
   const rpb03 = {
     id: "UAT-RPB-03",
-    pass: hits.every((h) => h.code === 200),
+    pass: window.business.length >= 50 && window.business.every((h) => h.code === 200) && hits.every((h) => h.code === 200),
+    business: window.business,
     checks: [
+      check("authenticated business count", window.business.length >= 50, window.business.length, "≥50"),
+      check("authenticated business all 200", window.business.length >= 50 && window.business.every((h) => h.code === 200), { n: window.business.length, maxMs: Math.max(0, ...window.business.map((h) => h.ms)), p99Ms: pct(window.business.map((h) => h.ms), 99) }, "all 200"),
       check("readyz burst all 200", hits.every((h) => h.code === 200), {
         n: hits.length,
         maxMs: Math.max(...hits.map((h) => h.ms))

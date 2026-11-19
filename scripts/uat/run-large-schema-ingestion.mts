@@ -29,6 +29,7 @@ const MYSQL = {
   user: process.env.UAT_DEMO_DB_USER ?? "root",
   password: process.env.UAT_DEMO_DB_PASSWORD ?? "lucy_demo_root",
   tables: Number(process.env.UAT_SCALE_MYSQL_TABLES ?? 1200),
+  cols: Number(process.env.UAT_SCALE_MYSQL_COLS ?? 10),
   wideCols: Number(process.env.UAT_SCALE_MYSQL_WIDE_COLS ?? 1000)
 };
 const HIVE = {
@@ -278,8 +279,8 @@ async function main() {
 
     // 04 / 06 ingest 600 tables
     const my600 = await readTables(myId, MYSQL.database, myTables.slice(0, 600), B.ingest600Ms);
-    const colsPerTable = 30;
-    const j04 = judgeReadTables(my600, 600, 600 * colsPerTable);
+    // MySQL's contracted fixture is 1200 x 10; Hive's is 600 x 30.
+    const j04 = judgeReadTables(my600, 600, 600 * MYSQL.cols);
     const ok04 = j04.pass && my600.ms <= B.ingest600Ms && my600.maxCallMs <= B.httpMaxMs;
     record("UAT-SCALE-04", ok04 ? "PASS" : "FAIL", `mysql ingest ${my600.done}/600 tables, ${my600.columns} cols (${j04.reason}) in ${my600.ms}ms via ${my600.calls} ${my600.mode} calls, slowest call ${my600.maxCallMs}ms (budget ${B.ingest600Ms}ms, call ${B.httpMaxMs}ms)${my600.failure ? `; ${my600.failure}` : ""}`, my600);
     const hv600 = await readTables(hvId, HIVE.schema, hvTables, B.ingest600Ms);
