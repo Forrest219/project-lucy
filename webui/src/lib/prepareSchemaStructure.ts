@@ -70,7 +70,9 @@ const REJECTION_REASON_TEXT: Record<string, string> = {
   permission: "没有读取权限",
   timeout: "读取超时",
   too_wide: "字段数超过一次可读取的上限",
-  too_large: "字段数超过一次可读取的上限"
+  too_large: "字段数超过一次可读取的上限",
+  // P1-34 §11 C6: single-table consecutive deferral
+  deferred: "这次没有读完，请稍后重试。"
 };
 
 type TableRejection = { table: string; reason: string; message?: string };
@@ -85,10 +87,10 @@ function readFailureMessage(failures: TableRejection[]): string {
 }
 
 /**
- * Read columns for the checked tables in batches of 50. Tables the server leaves unread
- * (`deferred`) are asked for again; failures are collected and reported together after
- * every other table has been read. Entries accumulate in one map, so the YAML is parsed
- * once per batch and written once.
+ * Read columns for the checked tables in batches of up to 50 (P1-34 §11 C2–C6).
+ * - C2: all-deferred with no rejections → halve batch size (min 1), not "no progress" error.
+ * - C5: each table in a batch must appear in yaml OR rejections OR deferred; missing → error naming it.
+ * - C6: single table deferred twice consecutively → record as failure "这次没有读完", continue rest.
  */
 export async function readCheckedTableColumns(
   connectionId: string,
@@ -106,22 +108,69 @@ export async function readCheckedTableColumns(
   let columnCount = 0;
   let done = 0;
   let pending = [...tables];
+  // C2: adaptive batch size (halved on all-deferred, min 1).
+  let batchSize = TABLES_PER_REQUEST;
+  // C6: strikes map for single-table consecutive deferred.
+  const strikes = new Map<string, number>();
+  let requestCount = 0;
   while (pending.length > 0) {
-    const batch = pending.slice(0, TABLES_PER_REQUEST);
-    onProgress?.(done, tables.length, batch[0]);
+    const batch = pending.slice(0, batchSize);
+    onProgress?.(done, tables.length, batch[0]!);
     const part = await fetchSchemaStructure(connectionId, schema, batch);
+    requestCount++;
     if (part.namesOnly) {
       throw new ApiError({ code: "READ_FAILED", message: `读取表「${batch[0]}」的字段失败。` });
     }
     const deferred = part.deferred ?? [];
     const rejections = part.rejections ?? [];
-    const unread = new Set([...deferred, ...rejections.map((item) => item.table)]);
-    if (unread.size >= batch.length && rejections.length === 0) {
-      throw new ApiError({ code: "READ_FAILED", message: "读取表结构没有进展，请稍后重试。" });
-    }
     const readTables = tablesMapping(part.yaml);
+    // C5: verify each batch table is accounted for.
     for (const name of batch) {
-      if (!unread.has(name) && Object.prototype.hasOwnProperty.call(readTables, name)) entries[name] = readTables[name];
+      const inYaml = Object.prototype.hasOwnProperty.call(readTables, name);
+      const inRejections = rejections.some((r) => r.table === name);
+      const inDeferred = deferred.includes(name);
+      if (!inYaml && !inRejections && !inDeferred) {
+        throw new ApiError({
+          code: "READ_FAILED",
+          message: `服务端没有返回表「${name}」的读取结果，读取终止。`
+        });
+      }
+    }
+    // C6: handle consecutive deferral for single-table batches.
+    const deferredSet = new Set(deferred);
+    const dropped: string[] = [];
+    for (const t of deferred) {
+      if (batch.length === 1) {
+        // Single-table: increment strike counter.
+        const count = (strikes.get(t) ?? 0) + 1;
+        strikes.set(t, count);
+        if (count >= 2) {
+          // C6: two consecutive deferred → record as failure, stop retrying this table.
+          failures.push({ table: t, reason: "deferred", message: `表「${t}」这次没有读完，请稍后重试。` });
+          dropped.push(t);
+          deferredSet.delete(t);
+        }
+      } else {
+        strikes.delete(t); // reset strike on non-singleton batch
+      }
+    }
+    // C2: if all-deferred with no rejections, halve batch size.
+    const allDeferred = deferredSet.size > 0 && rejections.length === 0 &&
+      batch.every((t) => deferredSet.has(t) || dropped.includes(t));
+    if (allDeferred && deferredSet.size > 0) {
+      batchSize = Math.max(1, Math.ceil(batchSize / 2));
+    } else if (rejections.length > 0 || deferredSet.size < batch.length) {
+      // Some progress made: allow batch size to stabilize (don't grow back automatically)
+    }
+    // Guard against infinite retry (LS-19 upper bound).
+    if (requestCount > 100) {
+      throw new ApiError({ code: "READ_FAILED", message: "读取表结构请求次数超过上限，请稍后重试。" });
+    }
+    // Accumulate results for tables that were actually read.
+    for (const name of batch) {
+      if (!deferredSet.has(name) && !rejections.some((r) => r.table === name) && !dropped.includes(name)) {
+        if (Object.prototype.hasOwnProperty.call(readTables, name)) entries[name] = readTables[name];
+      }
     }
     failures.push(...rejections);
     downgraded.push(...part.downgraded);
@@ -129,8 +178,9 @@ export async function readCheckedTableColumns(
     mapped.string += part.mapped.string;
     mapped.time += part.mapped.time;
     columnCount += part.columnCount;
-    done += batch.length - deferred.length;
-    pending = [...deferred, ...pending.slice(batch.length)];
+    done += batch.length - deferredSet.size - dropped.length;
+    // Next pending: deferred (minus dropped) first, then remaining unread tables.
+    pending = [...deferredSet, ...pending.slice(batch.length)];
   }
   if (failures.length > 0) {
     throw new ApiError({ code: "READ_FAILED", message: readFailureMessage(failures) });

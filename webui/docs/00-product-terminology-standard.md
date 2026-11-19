@@ -469,6 +469,7 @@ Connection (连接)
 | 我已有 Schema Manifest | 展开上传 | 裸「上传 YAML」 |
 | 替换已有 Schema Manifest | 主动覆盖入口，确认后再写入 | 自动覆盖 |
 | 结束并稍后继续 | 关闭并保留第 2 步断点 | 稍后上传 Schema Manifest |
+| 表「x」这次没有读完，请稍后重试。 | 客户端在单表连续两次收到 deferred 后的失败提示（P1-34 §11 C6；`prepareSchemaStructure.ts`）。用于错误汇总文案。x 为实际表名 | 读取超时、批量读取失败、服务器未响应（作 C6 文案）|
 | 如何生成 Schema Manifest | 第 2 步折叠提醒（Spec 167）。展开后只说明：要自己准备文件时，把编写说明交给 Agent。读库由主按钮「从数据库读取表结构」承担 | 下载 Skill、去某个客户端安装、先准备好 YAML 再启动向导 |
 | 如何写业务 Wiki | 第 5 步折叠提醒（Spec 167）。先说明可直接写、上传或跳过；不知道写什么时把编写说明交给 Agent | 维基模板、把业务 Wiki 写成必填 |
 | 编写说明 | 交给 Agent 的生成说明，可复制或下载（Spec 167）。不限定客户端 | Skill、配置作者、业务 Skill |

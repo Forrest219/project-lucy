@@ -7,7 +7,7 @@
 | 版本 / 日期 | **v1.0-frozen / 2026-10-20，Asia/Shanghai**（v0.1 Kimi 初稿；v0.2 Codex 修订；v0.3 Kimi 裁决；v1.0 Codex 经授权完成复核修正与设计冻结） |
 | target_release | **v0.25** |
 | 功能编号 / 优先级 | **L25-09 / P0（P0-1）** |
-| 状态 | **功能合同已收口。** 出口是 S01–S07，逐条落点见 §18.16，闭口层级见 §18.17，收口记录见 [2026-11-01-l25-09-functional-contract-closure.md](../reviews/2026-11-01-l25-09-functional-contract-closure.md)。本条收口不表示可上线 |
+| 状态 | **2026-11-19 N26（§18.19）：委托人明示终稿确权＋整批开发授权（2026-11-19 12:35，「整批授权」「无需复审，整批定稿」）；Codex 首轮终审（同日）意见已全部采纳修订，**未做复审**。**N26 修订实现已落地（2026-11-19）；N26-1–N26-6 vitest 6 条全绿（`webui/server/__tests__/audit-export-n26.test.ts`；N26-2 走真实 `performExportV2`）；demo 容器复核未做；不是 UAT PASS。**** 以下为 N26 之前的现值：**功能合同已收口。** 出口是 S01–S07，逐条落点见 §18.16，闭口层级见 §18.17，收口记录见 [2026-11-01-l25-09-functional-contract-closure.md](../reviews/2026-11-01-l25-09-functional-contract-closure.md)。本条收口不表示可上线 |
 | 交叉审阅 | **独立静态审阅结论为「退回，待修订后复审」**（`docs/reviews/2026-10-27-codex-review-audit-increment-p0.md`，阻塞 0／高 2／中 2，2026-10-27 19:29 落盘）。F-01～F-04 的文档修订记录见 §18.10；本 Spec 状态行的事实对齐与 Stage 1 取证记录见 §18.13 |
 | 撰写人 | **Kimi（起草）** |
 | 审阅者 / 冻结执行人 | **Codex（委托人明确授权“修改，完成冻结”）** |
@@ -17,6 +17,7 @@
 | 关联 Plan | [2026-10-18-lucy-2.5-upgrade-proposal.md](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md)（已同步登记本增量）；实施 Plan 依据本冻结版本另行批准 |
 | 审查入口 | [P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §2 L25-09；[首批 P0 需求审查清单](../plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md) |
 | Acceptance | 功能合同出口是 §18.16／§18.17 的 S01–S07 |
+| N26 修订（已确权） | **§18.19 N26（2026-11-19，v0.4）**：正式导出追平后仍用等待前的 lag、且把「追平」判成「全部事件已投影」（F01）。委托人明示终稿确权＋整批开发授权（2026-11-19 12:35，「整批授权」「无需复审，整批定稿」）；Codex 首轮终审（同日）意见已全部采纳修订，**未做复审**。开发授权已获得（整批）；**实现已落地（2026-11-19）；N26-1–N26-6 vitest 6 条全绿**；不重开 S01–S07，状态行已前缀登记 N26 保留；整改见 [整改 Plan](../plans/lucy-20261119-fde-3b1c62af-contract-remediation-plan.md)，总账 P1-56 |
 | 基线 | `lucy-v2.0`，HEAD `2abc472`；历史导出样本为 2026-10-20 只读证据，本 spec 不改写历史证据 |
 | 范围 | 审计事件状态与响应证据（S01）、入口持久化与恢复（S02）、跨端关联与重试标识（S03）、问询归属与来源可信度（S04）、对账指标与完整性（S05）、导出快照与证据封存（S06）、错误重试与预算（S07）、故障注入与历史回放（S08） |
 | 部署边界 | **单实例 / 单副本**；开发 Mac arm64，客户 linux/amd64 Kubernetes；**只改 Lucy，不改 KTX 源码**；不修改 2026-10-20 历史审计证据 |
@@ -1325,7 +1326,7 @@ D-28 仍开放。窗口里还有切分前无序号行时，正式读取继续 40
 
 - 层级：功能合同
 - 本条承诺：审计事件的主状态与三视图按冻结口径派生；入口先持久 `received` 再放行，审计存储不可用即阻断；标识与归属按证据顺序裁决，不按时间回绑；对账六项覆盖检查各自判定，缺独立证据即 `unknown` 且不合成 `pass`；导出按 as-of 快照封存，内容被改或缺文件时失败关闭；错误与预算按七分类与 162 四维映射落账。
-- 本条出口：S01–S07 的逐条落点（§18.16），含 `webui/server/__tests__/audit-v025-*.test.ts` 11 个文件 165 条用例，以及 §18.16 表内列出的共用夹具文件。本次收口新增 `audit-v025-contract-boundaries.test.ts`（38 条）与 `audit-v025-export-seal-contract.test.ts`（9 条），补的是收口前**没有行为断言**的六处冻结合同：U11 预览／摘要边界（§4.3(c)）、reported／observed／inferred 三族分离（§4.3(e)）、U1 `acknowledged` 写路径的三重比对（§4.3(b)）、统一错误七分类（§10.2）、清单校验重算文件内容（§9.3(b)，实现已在、缺的是测试）、跨出口版本一致性守卫（§4.3(a) 末段）。**运行代码零改动。**
+- 本条出口：S01–S07 的逐条落点（§18.16；**2026-11-19 追加：S06 的 HTTP 路由追平落点含 §18.19 N26-1–N26-6**），含 `webui/server/__tests__/audit-v025-*.test.ts` 11 个文件 165 条用例，以及 §18.16 表内列出的共用夹具文件。本次收口新增 `audit-v025-contract-boundaries.test.ts`（38 条）与 `audit-v025-export-seal-contract.test.ts`（9 条），补的是收口前**没有行为断言**的六处冻结合同：U11 预览／摘要边界（§4.3(c)）、reported／observed／inferred 三族分离（§4.3(e)）、U1 `acknowledged` 写路径的三重比对（§4.3(b)）、统一错误七分类（§10.2）、清单校验重算文件内容（§9.3(b)，实现已在、缺的是测试）、跨出口版本一致性守卫（§4.3(a) 末段）。**运行代码零改动。**
 - 不在本条出口：运行时取证层——S08、§13.2 的 A01–A12（含全部命名子例）、U9 的 Stage 1 与 Stage 2（已从功能合同删除，场景文本保留给发布目录，见 §18.18）；历史只读样本回放核对（§3 的 177／192／175、110/23/43/1、137/36/2、19 个仅握手分组、Session B 50 工具、Codex 31=23+3+4+1）；浏览器层与移动窄屏；整库旅程与 Agent 产品客户端；真实进程强杀与「上游已执行但回包丢失 → `indeterminate`」分支；`received` 单点提交失败注入；关联头在 HTTP 出站的实际带出；`prevExportId` 版本链与来源声明的行为；客户 linux/amd64 单副本 Kubernetes；镜像构建、部署与客户环境；客户交付与 Wave 0b。
 - 上线关系：本条收口不表示可上线
 
@@ -1338,6 +1339,72 @@ D-28 仍开放。窗口里还有切分前无序号行时，正式读取继续 40
 - 2026-10-29 把未排期的故障演练推成「本条不可交付 UAT」。这句已作废，不得当作现值。
 - Wave 0b 与客户交付已从本条删除。AUD25 留在发布目录。本条不记录它的执行状态。
 - 记录见 [2026-11-02-l25-09-s08-release-evidence.md](../reviews/2026-11-02-l25-09-s08-release-evidence.md)。通过记录见 [出口拆分记录](../reviews/2026-11-02-functional-contract-exit-split.md)。
+
+### 18.19 FDE 3b1c62af 复现补记（2026-11-19，N26；v0.4；已确权，开发授权已获得；实现未开始）
+
+> 本节是已确权的合同修订（委托人明示终稿确权，2026-11-19），**不改 §1–§17 的冻结文本；开发授权已获得，见头部「状态」行**，实现未开始。S06 的收口现值以头部「状态」行为准（已登记 N26 保留）；本条若成立，说明 §12.5 的 T3 追平在 HTTP 路由上有一处实现与冻结契约不一致，**不重开 S01–S07**。
+
+#### N26 — 追平后仍用等待前的 lag，且「追平」按「全部事件已投影」判定
+
+- **偏差事实**（本机 L1，Fastify 内存路由＋真实 SQLite＋受控投影进度；非真实投影）：两条正式导出路由 `GET /api/admin/audit/export-v2`／`export-pack-v2` 先取 `projection = auditProjectionStatus(database)`，再调 `waitForProjectionCatchUp(database, S, deadline)`；追平成功后仍把**等待之前**的 `projection.lag` 传给 `performExportV2`，而 `performExportV2` 在 `projectionLag > 0` 时失败关闭。此外 `waitForProjectionCatchUp` 以 `status.complete && status.latestSeq >= S` 判定追平，`complete` 表示「投影已追上账本最新」，而 §12.5 要求的是「投影覆盖 S」；S 之后新增的事件会让 `complete` 为 `false`。
+- **复现结果**（候选 `3b1c62af`；CSV 与 ZIP 完全一致，共 12 个 HTTP 场景）：
+
+  | 场景 | 候选 | ff `ff4762c9` | 84 `84becc34` |
+  |---|---|---|---|
+  | complete，零 lag | 200 | 200 | 通过 |
+  | complete，lag 1→0（等待期间追平） | **409 `projection_lag_exceeded`** | **409** | 通过 |
+  | diagnostic，追平 | 200 | 200 | 通过 |
+  | complete，捕获 S 之后账本又前进（夹具 `S=3`、`cursor=3`、`latestSeq=6`、`complete=false`） | **409** | **409** | 通过 |
+  | complete，持续 lag 直到截止 | 409（正确拒绝） | 409 | 通过 |
+  | diagnostic，持续 lag | 200（partial） | 200 | 通过 |
+
+  3a9 没有 `waitForProjectionCatchUp`（只读一次 lag），等待逻辑是 3a9 之后由 `211f2d64`（2026-11-14）引入，ff 带缺陷引入，84 改为 `catchUp.lag` 并按捕获的 S 计算，0.30 分支未合入。
+- **证据**：`webui/server/admin/audit.ts`：`waitForProjectionCatchUp`（3180 行起，3190 行判 `status.complete && status.latestSeq >= upperSeq`）、`export-v2` 路由 4792 行取 `projection`、4796 行等待、4808 行传 `projection.lag`；`export-pack-v2` 路由 4878／4881／4889 行同构（候选 `3b1c62af`）；`webui/server/admin/audit-export-v2.ts` 的 `projectionLag` 判定（474–475、590 行）；本机日志 `inbox/uat-fde-3b1c62af-2026-11-19/l1/f01-{cand,ff,84}.log`。
+- **为何旧验收没拦住**：S06 的功能合同落点（§18.16）用单元级 exporter 夹具，投影状态是函数入参，没有「路由内先取 lag、再等待」这一段时序；`UAT-TRC-05`（2026-11-17）跑次把「管理员登录后立即导出撞 `projection_lag_exceeded`」记为 F-5「既有行为」，处理是让脚本登录后等待投影追平再导出，**没有当作路由缺陷登记**。F-5 与本条同一错误码、同一触发场景，高度同型，但该跑次未记录请求时序，**是否同一根因未经复核**。同一跑次的 F-2（`integrity_or_relation_failed`，`access_log_asof_meta` 为空）是另一个缺陷，不并入 N26。历史跑次不改写；更正写在 `e2e-ledger.md` 变更表（见整改 Plan Task 0）。
+- **本次拟定裁决（草案）**：
+  1. **lag 口径**：正式导出传给 `performExportV2` 的 `projectionLag` 取**追平判定那一刻相对 S 的 lag**，即 `max(0, S − projection.cursor)`；追平成功即为 0。不得沿用等待前的值。
+  2. **追平口径**：`caughtUp ⇔ projection.cursor ≥ S`（投影覆盖 S）；S 之后新增的事件**不计入**本次导出，也不得导致误拒。
+  3. **保留约束**：持续 lag 到 T3 截止仍拒绝（409 `projection_lag_exceeded`）；diagnostic 导出保持 partial 语义且不得代替 complete；T3 自捕获 S 起算、重试不重置（B21、U6）。
+- **实现路径（委托人 2026-11-19 批准的方向）**：优先移植 84 的做法（`waitForProjectionCatchUp` 返回 `{ caughtUp, lag }`，按捕获的 S 计算 lag，路由用 `catchUp.lag`），不整枝合入 84；84 在 FDE 的 12 个场景下为绿，但移植到候选后仍须在候选上自证 N26-1–N26-6（候选的路由与导出器与 84 不同）。
+- **受影响条款**：§12.5（导出伪代码 `waitUntilProjectionCovers(S, …)`）、§8.2(b) 检查 3（投影追平）、§15-U6（T3）、A10。
+- **冻结契约**：**不改变**。本条恢复 §12.5 的原文要求（追平＝覆盖 S；>S 不混入），不放宽 as-of S，不增加 `combinedComplete` 的第四合取项，不触碰 N18 所述「精确 as-of S」的未完成边界。
+- **核心流程（伪代码，只写与 §12.5 的差异）**：
+
+  ```text
+  onFormalExport(filter):
+    startedAt = monotonicNow()                           # T3 在捕获 S 之前起算，重试不重置（候选现为先读投影后记起点，须改）
+    S = canonicalLedger.committedWatermark()
+    loop:
+      status = projectionStatus()
+      lagAtS = max(0, S - status.cursor)                 # 相对 S，不含 S 之后的事件
+      if lagAtS == 0: break                              # 追平 ⇔ 覆盖 S
+      if monotonicNow() - startedAt >= T3: return failFormalExport("projection_lag_exceeded")   # 409
+      runProjection(maxBatches = 1); yield
+    return performExportV2(projectionLag = lagAtS, ledgerUpperSeq = S, ...)   # 此处 lagAtS == 0
+  ```
+
+- **验收（N26，本机自动化；复用 FDE `functional-export-catchup.test.ts` 的业务断言，不降低场景数）**。候选基线：N26-2、N26-3 为缺陷检出用例，须先红；N26-1、N26-4、N26-6 为应绿的对照（防回退），记录候选基线并保持绿，不要求先红：
+
+  | 编号 | 通过标准 |
+  |---|---|
+  | N26-1 | complete，零 lag：CSV／ZIP 均 200；ZIP manifest 的 `ledgerUpperSeq = S`、`projectionComplete = true`、`combinedComplete = true` |
+  | N26-2 | complete，等待期间 lag 1→0：CSV／ZIP 均 200 并封存（同 N26-1 的 manifest 断言） |
+  | N26-3 | complete，捕获 S 之后账本又前进（`cursor ≥ S`，`latestSeq > S`）：200，导出内容不含 `ledger_seq > S` 的事件 |
+  | N26-4 | complete，持续 lag 到截止：409 `projection_lag_exceeded`；无半成品包 |
+  | N26-5 | diagnostic：追平与持续 lag 两种场景均 200。追平场景在其他证明成立时 manifest 可为 `projectionComplete = true`、`combinedComplete = true`（与 FDE 原断言一致）；持续 lag 场景必须 `projectionComplete = false`、`combinedComplete = false`。无论哪种，诊断导出的结果都不能当作正式 complete 导出交付 |
+  | N26-6 | T3 自捕获 S 之前起算且不因重试重置（回归 B21）：用受控时钟断言（a）初始投影读取与 S 捕获所耗时间计入 T3，（b）同一次请求内多次等待重试，截止时刻不后移。移植时保留 84 的起点顺序（先记起点，再取 S，再读投影），不只移植返回字段 |
+
+- **证据等级**：N26-1–N26-6 为本机 vitest（路由与 SQLite 为真实实现，**投影进度为受控**）。真实投影 lag 的构造由测试台承接（整改 Plan Task 6）：委托人 2026-11-19 已授权受控投影进度替身，条件是**先尝试真实构造，做不到再降级，INDEX 标「受控降级」，不与全真 PASS 混写**。**vitest 绿不得写成 UAT PASS。**
+- **受影响画像**（事实源 [`user-personas.md`](../governance/user-personas.md)）：
+
+  | 画像 | 变更前体验 | 变更后体验 | 判定 | 依据 | 负向时的补偿路径 |
+  |---|---|---|---|---|---|
+  | P1 问数方 | 无直接触点 | 不变 | ＝ | 本条只改正式导出路由，不触碰问数路径 | — |
+  | P2 治理方 | 投影有积压时请求正式导出，等待追平后仍可能返回 409，需重试或改诊断导出 | 追平后正式导出成功；真正未追平仍拒绝 | ↑ | N26-2／N26-4 | — |
+  | P3 运维方 | 在受控的「等待期间追平」场景下，正式导出仍返回 409 `projection_lag_exceeded`（`UAT-TRC-05` 的 F-5 与之同型，根因未复核） | 追平后成功；`projection_lag_exceeded` 只在投影确实未覆盖 S 时出现（其他 409 原因不在本条） | ↑ | N26-2／N26-4 | — |
+  | P4 管理层 | 取证导出偶发失败 | 取证导出在投影覆盖 S 后稳定成功，且不混入 S 之后事件 | ↑ | N26-3 | — |
+
+- **不在本条出口**：真实投影 lag 的 UAT 判定；诊断包的完整性语义；精确 as-of S 的账本历史能力（N18）；客户环境；证据等级。本条收口不表示可上线。
 
 ---
 

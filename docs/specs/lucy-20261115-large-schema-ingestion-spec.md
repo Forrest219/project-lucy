@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | Spec / **v0.2.2** |
 | 日期 / 目标版本 | 2026-11-15／不绑定产品版本号 |
 | 功能编号 / 优先级 | **P1-34**／REQ-030-055／**P1**（事故续作，客户规模）。**不入 0.30 核心分母** |
-| 状态 | **v0.2.2；终稿确权＝委托人明示确权（2026-11-15，「授权 spec 定稿，进入落地开发」）；决策 O1–O6 已闭合（见 §9）；开发授权已获得（2026-11-15，同句）；实现已落地（代码、单测与 demo 容器已升级）；测试台 `UAT-SUITE-LARGE-SCHEMA` 于 2026-11-16 必做 11 条 PASS（共 5 次完整跑中 1 次 SCALE-09 异常 FAIL 未定位；INDEX 现值＝PASS WITH GAP）。** 跑次 2026-11-16-claude-large-schema-after-impl：必做 11 条 PASS，可选 11／12 未执行，SCALE-09 测量对象已更换（见跑次备注）。**FDE R02（2026-11-18）：字段读共享超时预算补洞已落地（LS-16–18；vitest 虚拟时钟 PASS；真实 Hive UAT＝BLOCKED，不挡源码关单）。** 功能合同逐条收口（LS-01…18）另行判定；功能合同收口 ≠ UAT PASS；≠ 可上线 |
+| 状态 | **2026-11-19 §11 修订（LS-19–LS-24）：委托人明示终稿确权＋整批开发授权（2026-11-19 12:35，「整批授权」「无需复审，整批定稿」）；Codex 首轮终审（同日）意见已全部采纳修订，**未做复审**；决策点 O7–O10 已闭合（O7 的「服务端计终态」一半作废）。**§11 修订实现已落地（2026-11-19）；LS-19–LS-24 vitest 6 条全绿（`webui/server/__tests__/large-schema-ls19-24.test.ts`）；LS-24 `node --test` 5/5；demo 容器复核未做；不是 UAT PASS。**** 以下为 §11 之前的现值：**v0.2.2；终稿确权＝委托人明示确权（2026-11-15，「授权 spec 定稿，进入落地开发」）；决策 O1–O6 已闭合（见 §9）；开发授权已获得（2026-11-15，同句）；实现已落地（代码、单测与 demo 容器已升级）；测试台 `UAT-SUITE-LARGE-SCHEMA` 于 2026-11-16 必做 11 条 PASS（共 5 次完整跑中 1 次 SCALE-09 异常 FAIL 未定位；INDEX 现值＝PASS WITH GAP）。** 跑次 2026-11-16-claude-large-schema-after-impl：必做 11 条 PASS，可选 11／12 未执行，SCALE-09 测量对象已更换（见跑次备注）。**FDE R02（2026-11-18）：字段读共享超时预算补洞已落地（LS-16–18；vitest 虚拟时钟 PASS；真实 Hive UAT＝BLOCKED，不挡源码关单）。** 功能合同逐条收口（LS-01…18）另行判定；功能合同收口 ≠ UAT PASS；≠ 可上线 |
 | 决策来源 | 2026-11-15 委托人：客户存在列非常多的表、表数非常多的 Schema，普通 MySQL 上曾出现「小库很快、大库拉取失败」的先例。委托人要求把此规模写进 UAT 并制定优化 Spec／Plan，目标是**顺利接入，而不是超时报错** |
 | 需求来源 | [P1-16 库内扫表读法](lucy-20261111-catalog-scan-read-path-spec.md) 的 `tblu` 先例（789 张表，逐表查字段，20 秒内无响应体）；[P1-20 外部目录读字段](lucy-20261113-external-catalog-column-read-spec.md) 把「整库逐表批量准备耗时」明确划出本条并记 Follow-up；本次本机规模实测（[`inbox/hive-lab/REPORT.md`](../../inbox/hive-lab/REPORT.md)，诊断证据，非 UAT） |
 | 实施主体 | WebUI 服务端读字段通道（`schema-structure`、`catalog-show`、`live-discovery`）与前端 `prepareSchemaStructure` 库层。不改页面组件、不改 KTX、不改问数 |
@@ -14,11 +14,15 @@
 | 与既有 Spec 的关系 | **续作并收窄**：P1-16 的 SC-06／SC-07（`schema-wide` 一条 `information_schema.columns`、达 10000 行 fail-closed）**不改**；本条新增第三种读法 `batch`（有界表集、一次一条查询）。**修订** P1-20 的 `COLUMN_READ_ROW_LIMIT`（2000→10000）与「逐表新建连接」；EC-01–EC-13 的探针顺序与回退规则**保持有效**。**不改** Spec 190 的结构差异 20 张上限，只让它走同一批量读 |
 | 实施计划 | [`docs/plans/lucy-20261115-large-schema-ingestion-plan.md`](../plans/lucy-20261115-large-schema-ingestion-plan.md) |
 | 测试台 | [`UAT-SUITE-LARGE-SCHEMA`](../qa/uat/suites/large-schema-ingestion/suite.md)（INDEX 判定）。**规模下限不得降低**，见 §4 |
+| §11 修订（已确权） | **§11 FDE 3b1c62af 合同修订（v0.4，2026-11-19）**：整批 deferred 必收敛、单表 deferred 必披露、客户端不得静默漏表、UAT runner 判定以读到的字段为准（LS-19–LS-24）。委托人明示终稿确权＋整批开发授权（2026-11-19 12:35，「整批授权」「无需复审，整批定稿」）；Codex 首轮终审（同日）意见已全部采纳修订，**未做复审**。开发授权已获得（整批）；**实现已落地（2026-11-19）；LS-19–LS-24 vitest 6 条全绿**；O7–O10 已闭合（O7 的「服务端计终态」一半作废）；整改见 [整改 Plan](../plans/lucy-20261119-fde-3b1c62af-contract-remediation-plan.md)，总账 P1-56 |
 
 ### Changelog
 
 | 版本 | 变更 |
 |---|---|
+| v0.4 | 2026-11-19 12:35 §11 定稿：委托人明示终稿确权＋整批开发授权，未做 Codex 复审。本条出口扩为 LS-01–LS-24。实现未开始；不是 UAT PASS；≠ 可上线 |
+| v0.4-draft | 2026-11-19 按 Codex 终审修订 §11：①§11.3 服务端伪代码改回候选的硬上界，删除「无终态即放宽超时」（原写法在 50×400、6000ms 下首个终态约 30 秒，违反 B3）；②C1 写明上界、C3 改为只约束客户端进度；③LS-19 增逐响应 ≤20 秒与连续三次截断树形；④O9 在 §11.8 与 §11.6 统一为已批准。**仍为草案，终稿未确权** |
+| v0.3-draft | 2026-11-19 FDE 3b1c62af 本机复现（F03／F04）：①v0.2.1 修过的「首块截断后零进展」在 v0.2.2 预算改动后复现（`columnsAttempted` 把被截断的尝试当成进度）；②客户端整批 `deferred` 报「没有进展」且不缩批；③单表路径丢弃 `deferred`，客户端对缺失的表静默成功；④UAT runner 不看 `deferred`。新增 §11 与验收 LS-19–LS-25，新增决策点 O7–O10（待裁定）。**草案，待终稿确权，开发未授权** |
 | v0.2.2 | 2026-11-18 FDE R02：关闭字段读超时预算洞。① 外部目录探针把实际 `timeoutMs` 与 `/timed out/` 文本纳入超时分类，超时后不再跑满 DESC→SHOW→DESCRIBE 各一整段；② 普通 MySQL 在**首条** columns 语句返回后、每一次后续 columns（含折半拆分）前检查 `CALL_BUDGET_MS`，避免深度拆分树烧穿预算；③ 有 `callBudgetMs` 时下一条语句 `timeoutMs = min(PER_TABLE_TIMEOUT_MS, remaining)`。新增验收 LS-16–18。对齐 P1-20 EC-05（超时＝单次尝试）。真实 Hive live UAT 记 BLOCKED。不新开 P1-51；不并入 P1-43。 |
 | v0.2.1 | 2026-11-16 提交前代码评审（Reviewer 子代理）后修订实现，合同不变。评审指出 LS-07 在普通 MySQL 路径无测试；补测时发现并修复一处违反 §5.2「每次调用至少读完一张表」的缺陷：首块被截断对半拆分后，子块的预算检查会让全部表落入 `deferred`、零进展。现改为「已有一块读到终态才按预算截断」。另改三处小项：SQL 字面量拼接遇非法表名显式抛错；批内去重改 `Set`；客户端累积表用无原型对象。 |
 | v0.2 | 委托人 2026-11-15 授权定稿并进入开发。O1–O6 闭合（§9）：O2 客户网关超时无法取得，委托人认定本机实测规模接近客户真实用量，沿用 20 秒假设；其余按建议值采纳。 |
@@ -28,7 +32,7 @@
 
 - 层级：功能合同
 - 本条承诺：在 §4 规定的规模下限内，用户在「准备表结构」勾选至多 600 张表，系统在预算内读完全部字段并生成可校验的 Manifest。任一单次 HTTP 响应不超过 20 秒，页面主线程不被长任务卡住；不因规模返回「超时」或「超过一次可读取的上限」；个别表失败时仍读完其余表，并在一次错误里列出全部失败表与各自原因。
-- 本条出口：LS-01–LS-18（本机自动化：vitest 与真实进程内检查，含对真实 `mysql2` 驱动的语句计数）。规模下限由测试台 `UAT-SUITE-LARGE-SCHEMA` 复现，结果只记 [`INDEX.md`](../qa/uat/INDEX.md)，不是本条出口。
+- 本条出口：LS-01–LS-24（LS-19–LS-24 为 §11（2026-11-19）新增；LS-25 属测试台承接，不是出口）（本机自动化：vitest 与真实进程内检查，含对真实 `mysql2` 驱动的语句计数）。规模下限由测试台 `UAT-SUITE-LARGE-SCHEMA` 复现，结果只记 [`INDEX.md`](../qa/uat/INDEX.md)，不是本条出口。
 - 不在本条出口：客户环境 live、Hive Metastore Kerberos／HDFS、Hive 字段注释、Postgres／SQL Server／Oracle 读字段路径、Manifest 写入与热重载链路（O3）、部分成功的页面呈现（O4）、浏览器测试、发布取证、证据等级。
 - 上线关系：本条收口不表示可上线。
 
@@ -289,3 +293,126 @@ New terms:
 | 预算截断使 `deferred` 反复出现、客户端不收敛 | 每次调用至少读完一张表；5.2 不变量；LS-10 |
 | 单表 8 秒超时比原 120 秒更严 | 8 秒来自网关假设，O2 取证后调整；超时有专门的 `timeout` 原因，不混入「没有读到字段」 |
 | 客户端累积改动影响既有 Manifest 合并语义 | `mergeManifestTables` 仍用于「并入已有 Manifest」，不改；只改读取阶段累积 |
+
+## 11. FDE 3b1c62af 合同修订（v0.4，2026-11-19；已确权，开发授权已获得；实现未开始）
+
+> 本节是已确权的合同修订（委托人明示终稿确权，2026-11-19）；**开发授权已获得，见头部「状态」行**，实现未开始。现行状态以头部「状态」行为准。§10 第三条风险早已写明「预算截断使 `deferred` 反复出现、客户端不收敛」，缓解写的是「每次调用至少读完一张表；5.2 不变量；LS-10」。本节说明为什么这条缓解没有生效，并把它改写成**可被打假的验收**。
+
+### 11.1 事实（本机 L1 复现；受控 SQL 与模拟时钟，非客户现场）
+
+| 编号 | 输入 | 候选 `3b1c62af` | 对照 |
+|---|---|---|---|
+| F04a | 50 表×400 列，每次 SQL 模拟 6000ms，`callBudgetMs=10000`，真实 `readCheckedTableColumns`＋真实 `previewSchemaStructure` | `ApiError「读取表结构没有进展，请稍后重试。」`，0 张表读到 | 84 原始用例通过 |
+| F04b | 30 表，`t0` 权限拒绝，其余合法，同上时钟 | `seen=[]`，一张都没读；预期 29 张继续、汇总 1 张失败 | 84 原始用例通过 |
+| F03 | 外部目录单表，探针耗时 `[6000,6000,6000]`，`requestTimeoutMs=19000` | 约 12 秒，响应**无 `deferred`、无 `rejections`**；真实客户端返回成功：`tableCount=1`、`columnCount=0`、YAML 无该表 | — |
+
+机制（静态确认）：
+
+1. **服务端零进度**（对应 F04）：`schema-structure-batch.ts` 的 `readChunk` 在 `columnsAttempted > 0 && overBudget()` 时把整块置 `deferred`；而 `columnsAttempted` 在首块**被截断**时就已加一。50×400＝20000 行，超过 `COLUMN_READ_ROW_LIMIT = 10_000`，首条列语句必被截断，解析表名＋这一条语句一旦吃满 10 秒，后续拆分子块全部 `deferred`。「进度保证」注释只保证**第一条**列语句拿满超时，而这条恰好是被截断的整批。这与 v0.2.1 记录的缺陷同形（Changelog：「首块被截断对半拆分后，子块的预算检查会让全部表落入 `deferred`、零进展」）。
+2. **客户端不缩批**：`prepareSchemaStructure.ts` 固定 `TABLES_PER_REQUEST = 50`，`unread.size >= batch.length && rejections.length === 0` 即抛「没有进展」；下一次仍发同一批，永远不会读到。
+3. **单表丢披露**（对应 F03）：`previewSchemaStructure` 中 `batch = requested.length > 1`，只有批量才回传 `deferred`；单表失败只在 `rejections` 非空时抛错。预算耗尽的单表既不抛错也不披露。客户端对「请求了、响应里没有」的表不校验，直接 `done += 1`。单表并不只在用户只勾 1 张时出现：51 张表的第二批、续读队列最后剩 1 张，都走这条路。
+4. **runner 假通过**（UAT 判定）：`scripts/uat/run-large-schema-ingestion.mts` 的 `readTables` 对每个非 4xx 响应执行 `i += slice.length; done = i;`，不看 `deferred`／`rejections`；`ok04`／`ok06` 只校验 `done`、耗时与单次最慢，不校验字段数。全部延期、0 字段时仍判 600/600 PASS。历史真实跑次（600 张，172／487ms，12 次批量）不像发生过延期，但记录没有字段总数。
+
+**触发条件**（本机分析，非实测）：「解析表名＋首条被截断的列语句」合计吃满 10 秒。快速数据库不触发；慢元数据服务或高负载库可能触发。所以这是条件触发的收敛缺陷，不是任何宽表必现。
+
+为什么旧验收没拦住：LS-10 的 mock 服务只让「部分表」`deferred`；LS-07 断言划分（无遗漏无重复），不断言进度；规模下限里没有「一批同时触发行数截断与预算耗尽」的形态；`UAT-SCALE-04／06` 最后一次完整跑在 11-16，早于 `deferred` 逻辑（11-18 `784e7f7e`），之后未复跑。
+
+### 11.2 合同修订（normative）
+
+| 编号 | 条款 |
+|---|---|
+| C1 | **响应有界**：任一响应耗时不超过 B3。服务端不得为了保证进度而无界继续拆分（每个语句 ≤ `PER_TABLE_TIMEOUT_MS`；拆分深度×语句超时可能超过 B3，故进度由 C2 在调用之间保证，不靠单次调用无界重试）。**每次调用只有第一条 columns 语句可用满 `PER_TABLE_TIMEOUT_MS`，其后所有语句（含拆分子块）的超时不得超过剩余预算；不得以「尚无终态」为由重置或放宽该上界**（候选已有此上界，保持不变） |
+| C2 | **调用间进度**：对任意请求集，客户端在有限次请求内使每张表达到终态（读到字段，或带原因的失败）。整批 `deferred` 且无 `rejections` 时，客户端**缩批**（对半，最小 1 张）后重试；单表仍无进展才终止 |
+| C3 | **进度只数终态**：客户端的「进度」计数只数终态结果（读到字段、明确的 `rejection`）。被截断拆分、超时、预算截断的**尝试**不算进度。服务端**不**要求单次调用内必有终态，只要求有界（C1），并保证批次小到第一条 columns 语句能读完时必产出终态 |
+| C4 | **划分与披露不分批大小**：`columns`／`rejections`／`deferred` 对请求表集构成划分（LS-07 的断言扩到**请求 1 张表**）。预算耗尽的单表必须披露 `deferred`（HTTP 200），不得返回无披露的空结构。LS-08（单表失败 400＋原文案）只适用于**失败**，不适用于未读完 |
+| C5 | **客户端不静默漏表**：每个响应后，批内每张表必须是「在 YAML 中」「在 `rejections`」「在 `deferred`」三者之一；都不是则按错误处理并点名该表（不得计入 `done`、不得返回成功） |
+| C6 | **单表 `deferred` 的终止**：客户端对同一张单表连续两次收到 `deferred` 且无进展，记为该表失败（原因＝这次没有读完），其余表继续；最终与其他失败一起汇总一次报出（LS-12），已读结果不丢 |
+| C7 | **UAT 判定以产出物为准**：`UAT-SCALE-04／06` 的「完成」只数响应中**实际读到字段**的表；`deferred`／`rejections` 计未完成；校验字段总数不低于夹具期望；全部延期或 0 字段必须判 FAIL |
+| C8 | **规模下限追加（不得降低）**：一次 50 表×400 列（20000 行，超过 `COLUMN_READ_ROW_LIMIT`）的批次是必测形态，含一个「慢元数据」变体（测试台在延迟注入通道下执行，见整改 Plan Task 6） |
+
+### 11.3 核心流程（伪代码，只写与现行 §5 的差异）
+
+```text
+# 服务端 readChunk：保持候选的硬上界（C1）。不引入「无终态则放宽超时」
+firstColumnsUsed = false
+readChunk(chunk):
+  if firstColumnsUsed and overBudget(): defer(chunk); return    # 首条之后受剩余预算约束
+  timeout = firstColumnsUsed ? min(PER_TABLE_TIMEOUT_MS, remaining) : PER_TABLE_TIMEOUT_MS
+  firstColumnsUsed = true
+  answer = run(columnsSql(chunk), timeout)
+  if answer truncated:
+    if len(chunk) > 1: split()                                  # 子块仍受上面的预算约束
+    else: reject(chunk[0], too_wide)
+  else if answer failed:
+    if budget-capped timeout: defer(chunk)
+    else: rejections(chunk, reason)
+  else: record columns
+  # 进度由客户端缩批在调用之间保证（C2）；单次调用可以整批 deferred，但耗时有界
+
+# 服务端单表（C4）：与批量同一返回形态
+previewSchemaStructure(requested):
+  read = readSchemaColumns(...)
+  return { yaml, rejections?, deferred? }                       # requested.length == 1 也回传 deferred
+  # 仅当 read 失败（非未读完）时才按 LS-08 抛 400
+
+# 客户端 readCheckedTableColumns（C2 / C5 / C6）
+batchSize = 50; strikes = {}
+while pending non-empty:
+  batch = pending.take(batchSize)
+  r = POST schema-structure {tables: batch}
+  for t in batch:
+    require t in r.yaml.tables or r.rejections or r.deferred     # C5，否则点名报错
+  readNow = batch − r.deferred − r.rejections
+  accumulate(readNow, r.rejections)
+  if len(readNow) == 0 and len(r.rejections) == 0:               # 整批无进展
+    if len(batch) > 1: batchSize = max(1, ceil(len(batch)/2))    # C2 缩批
+    else:
+      strikes[batch[0]] += 1
+      if strikes[batch[0]] >= 2: failures += {batch[0], 未读完}; drop batch[0]   # C6
+  pending = r.deferred (minus dropped) + pending.drop(len(batch))
+if failures: throw summarize(failures)                           # LS-12
+```
+
+### 11.4 验收（LS，延续 LS-18）
+
+| 编号 | 断言 | 证据等级 |
+|---|---|---|
+| LS-19 | 50 表×400 列、每次 SQL 模拟 6000ms：真实客户端读完 **50 表／20000 列**，不抛「没有进展」；请求次数有上界（≤ 100，防无限重试）；**逐次记录 `previewSchemaStructure` 的虚拟耗时，每次响应 ≤ 20 秒**。另增树形夹具：连续三次语句触顶截断（50→25→13 张）之后才出现终态，每次响应仍 ≤ 20 秒（防止「无终态即放宽超时」的错误实现，该实现按 6000ms 推算首个终态约在 30 秒）。业务断言复用 FDE `functional-skipped-skipped-public-behavior.test.ts` 第一条，不降低规模与阈值 | 本机 vitest（模拟时钟）；不是客户现场 |
+| LS-20 | 30 表、`t0` 权限拒绝、其余合法、同一时钟：其余 **29 张全部读到**，最终抛一次错误，文案是「有 1 张表没有读到字段」并点名 `t0`；`seen` 覆盖全部表 | 本机 vitest；复用 FDE 同文件第二条 |
+| LS-21 | LS-07 的划分断言扩到请求 **1 张**表：`columns`／`rejections`／`deferred` 对请求集无遗漏无重复 | 本机 vitest（虚拟时钟） |
+| LS-22 | 单表预算耗尽（外部目录 `[6000,6000,6000]`）：响应含 `deferred:[该表]`（HTTP 200）；真实客户端**不得**返回「成功但 YAML 无该表」，须读到或在两次无进展后把该表记入失败汇总 | 本机 vitest；复用本机补充用例 `f03-client-impact.test.ts` 的业务断言 |
+| LS-23 | 服务端既不返回某张请求表的字段，也不把它放进 `rejections`／`deferred`（构造缺失响应）：客户端抛错并点名该表，`done` 不前进 | 本机 vitest |
+| LS-24 | UAT runner 判定：stub 服务对每批返回 `deferred` 全部表且 `columnCount=0`，`UAT-SCALE-04／06` 判 FAIL；完成数只数读到字段的表；字段总数低于期望判 FAIL。判定函数须抽出可测，并有红绿自检 | 本机 `node --test`（须登记进 `root-test-registry.json`）；属脚本改动，另行授权 |
+| LS-25 | 测试台承接（**不是本条出口**）：`seed-large-schema-fixtures.sh` 增 50×400 批次夹具；`UAT-SUITE-LARGE-SCHEMA` 增用例覆盖「正常速度读完」与「延迟注入下读完」两个变体，缺环境记 `BLOCKED` 并保留在套件里，不得删除 | 测试台 INDEX；整改 Plan Task 6 |
+
+证据等级：LS-19–LS-24 为本机自动化；**vitest 绿不得写成 UAT PASS**。真实 MySQL＋50×400 实表在自然耗时下是否触发，未实测。
+
+### 11.5 受影响画像
+
+> 事实源：[`docs/governance/user-personas.md`](../governance/user-personas.md)。
+
+| 画像 | 变更前体验 | 变更后体验 | 判定 | 依据 | 负向时的补偿路径 |
+|---|---|---|---|---|---|
+| P1 问数方 | 不直接使用「准备表结构」；若 Manifest 因静默漏表缺字段，问数口径不全 | 不会因静默漏表拿到缺字段的 Manifest | ↑ | LS-22／LS-23 | — |
+| P2 治理方 | 慢元数据下勾选宽表批次报「没有进展」且无法继续；单表预算耗尽时页面显示成功但表为空 | 批次自动缩批读完，或被明确告知哪张表没读完 | ↑ | LS-19／LS-20／LS-22 | — |
+| P3 运维方 | UAT 报 600/600 PASS，实际可能 0 字段 | UAT 判定以读到的字段为准 | ↑ | LS-24 | — |
+| P4 管理层 | 无直接触点 | 不变 | ＝ | 本条不触碰概览与审计摘要 | — |
+
+主路径可用性：缩批使请求数在最坏情形下增加（每次对半，最多 ⌈log₂50⌉ 轮），合法用户仍能读完；LS-19 同时断言「读得完」与「请求数有上界」，覆盖约束生效与合法用户仍可用。
+
+### 11.6 决策点（委托人 2026-11-19 批准建议：O7–O10 全部按「建议」闭合；O7 的「服务端计终态」一半经 Codex 终审作废；终稿已确权）
+
+| 编号 | 问题 | 建议（**已批准**） |
+|---|---|---|
+| O7 | 进度保证放在客户端缩批、服务端计终态，还是只改服务端（让首块读到终态才按预算截断） | **（v0.4 修订，须委托人知悉）已批准的「两者并用」中，「服务端计终态」一半经 Codex 终审（LS-B1）证明会让单次响应超过 B3，不再采用；现为：客户端缩批保证进度，服务端保持候选的硬上界（C1）。**原批准理由如下，其「服务端计终态」部分作废：**两者并用**。只改服务端会让最坏耗时＝拆分深度×单语句超时，可能超过 B3（C1）；缩批把进度放到调用之间，单次响应保持有界。84 的 `batchRead`＋客户端降到单表批的做法可作参照，但 84 不是 0.30 祖先，不整枝移植 |
+| O8 | 单表连续两次 `deferred` 后是否记失败（C6 的次数） | 两次。一次可能是瞬时慢，两次视为这张表在当前预算内读不完 |
+| O9 | 用户可见句：现行「读取表结构没有进展，请稍后重试。」是否改为点名句 | 改为「表「x」这次没有读完，请稍后重试。」，用既有词，不引入「预算」等新词；改动须在术语标准登记后再落 UI |
+| O10 | `deferred` 是否带机器可读原因（预算耗尽／截断拆分） | 不带；本条不扩响应形态。需要时另立条目 |
+
+### 11.7 不在本条出口
+
+客户环境 live；浏览器测试；Manifest 写入与热重载（O3）；部分成功页面（O4）；`schema-wide` 路径；发布取证与证据等级。本条收口不表示可上线。
+
+### 11.8 Terminology Compliance 增补
+
+新增或改变的用户可见句只有 O9 一句（委托人 2026-11-19 已批准），沿用「表」「读取」「没有读完」等既有词。New terms: None。落地前须先在 [`webui/docs/00-product-terminology-standard.md`](../../webui/docs/00-product-terminology-standard.md) 登记该句，再改 UI 与测试断言。

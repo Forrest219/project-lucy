@@ -2669,7 +2669,21 @@ async function rebuildInferredTurnsUnlocked(
   if (Number(database.pragma("wal_autocheckpoint", { simple: true })) !== AUDIT_WAL_AUTOCHECKPOINT_PAGES) {
     database.pragma(`wal_autocheckpoint = ${AUDIT_WAL_AUTOCHECKPOINT_PAGES}`);
   }
-  const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+  // AUDIT-01 (P1-38 §8): Expand cutoff via interval closure so clusters that straddle the
+  // rolling window boundary are not split into two inquiries. Each iteration checks whether
+  // any existing inferred_turn started before the current cutoff but ended inside the window;
+  // if so, extend cutoff to that turn's start. Repeat until no crossing turn remains.
+  let cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+  const crossingWindow = database.prepare(`
+    SELECT MIN(started_at) AS started_at FROM inferred_turns
+    WHERE user_id = ? AND started_at < ? AND ended_at >= ?
+  `);
+  for (;;) {
+    const crossing = crossingWindow.get(userId, cutoff, cutoff) as { started_at: string | null };
+    if (!crossing.started_at) break;
+    cutoff = crossing.started_at;
+    await rest();
+  }
   const ceiling = database.prepare(
     `SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ? AND ts >= ?`
   ).get(userId, cutoff) as { id: number };

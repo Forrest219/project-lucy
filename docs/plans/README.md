@@ -4,6 +4,10 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261119-fde-3b1c62af-contract-remediation-plan.md](lucy-20261119-fde-3b1c62af-contract-remediation-plan.md) | **v1.0**（P1-56／REQ-030-077）：已按 Codex 首轮终审修订并定稿；FDE 3b1c62af 本机已复现 5 个缺陷（F01／F02／F03／F04／AUDIT-01）的整改计划：先红→修复→复验；Task 0–7，分两批。契约修订草案见 P1-20 §8、P1-34 §11、v2p5 §18.19、P1-38 §8。**四份修订已由委托人明示确权，整批开发授权已获得（2026-11-19 12:35；未做 Codex 复审）；实现已落地（本批 vitest 绿；demo 未复核；根合同门禁未重跑）；O3 延后未授权；≠ UAT PASS；≠ 可上线** |
+| [lucy-20261119-p147-write-slice-spike-shave-plan.md](lucy-20261119-p147-write-slice-spike-shave-plan.md) | **v0.3**（P1-47）：写片尖峰削峰（保持 30 天回看）；W0＋W1 已落地，W2 默认多跑 UAT PASS，W3 未跑。**≠ 可上线** |
+| [lucy-20261118-ff4762c9-upgrade-blocker-integration-plan.md](lucy-20261118-ff4762c9-upgrade-blocker-integration-plan.md) | **v0.1.1**：同事 `84becc34` 升级 blocker 补丁→`lucy-v0.30` 外科手术式集成计划；2026-11-19 补形态并追加 Task 5／6 偏差更正记录。**≠ 可上线** |
+| [lucy-20261119-fde-3b1c62af-local-repro-uat-plan.md](lucy-20261119-fde-3b1c62af-local-repro-uat-plan.md) | **v0.3**：本机复现 FDE 3b1c62af 打包前检查（4 项 P0＋3 项 P1＋正向结论）；L1 原样复现＋L2 UAT 全真；D1–D4 已确认；Task 0–3 已执行（L1 全部重现），L2 未开始。仅测试台与证据，不改运行代码。**≠ 开发授权；≠ 可上线** |
 | [lucy-20261118-mcp-upgrade-question-bank-plan.md](lucy-20261118-mcp-upgrade-question-bank-plan.md) | **v1.0 终稿确权**（P1-54／REQ-030-075）：题库＋CompatConfigProfile；开发未授权（明示暂不开发）；共享测试台 NOT RUN。配对 [Spec](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md)。≠ 可上线 |
 | [lucy-20261118-mcp-upgrade-compatibility-plan.md](lucy-20261118-mcp-upgrade-compatibility-plan.md) | **v1.1 终稿补丁**（P1-53／REQ-030-074）：收编 P1-54／D27 配置前置；开发未授权；测试台 NOT RUN。配对 [Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)。≠ 可上线 |
 | [lucy-20261118-customer-upgrade-reliability-gate-plan.md](lucy-20261118-customer-upgrade-reliability-gate-plan.md) | **v0.1-draft。仅登记与起草发布取证方案，评审前不开发、不执行 UAT。正式升级可靠性门禁在候选镜像生成后绑定同一 digest、Chart/values、N-1 数据与运行配置；A 层原生 amd64 容器数据与资源压力、B 层标准 K8s 持续升级为每个候选必跑，C 层客户隔离预演按验证边界触发；镜像前预检不替代镜像后验收。终稿未确权；未获开发授权；未授权不改运行代码、CI、门禁脚本与测试台；测试台 not_registered；不入核心分母；≠ 可上线**（P1-52／REQ-030-073）。配对 [Spec](../specs/lucy-20261118-customer-upgrade-reliability-gate-spec.md) |

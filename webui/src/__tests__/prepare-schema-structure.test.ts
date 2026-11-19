@@ -182,11 +182,18 @@ describe("readCheckedTableColumns", () => {
     expect(requests).toHaveLength(12);
   });
 
-  it("stops instead of looping when the server makes no progress", async () => {
+  it("stops instead of looping when the server makes no progress (C6: single-table consecutive deferral terminates)", async () => {
+    // P1-34 §11 C2+C6: client halves batch size on all-deferred, then stops at single-table with 2 consecutive defers.
+    // With 5 tables: 50→25 (halved), 25→12, 12→6, 6→3, 3→1 (singleton), then 2x deferred per table → fail.
+    // Upper bound: batch halvings (⌈log₂5⌉=3) + 2 single-table retries × 5 tables = bounded.
     const names = tableNames(5);
     serverOf(names, 2, { deferAll: true });
-    await expect(readCheckedTableColumns("c1", "dw", names)).rejects.toBeInstanceOf(ApiError);
-    expect(apiPost.mock.calls.length).toBeLessThanOrEqual(3);
+    const error = await readCheckedTableColumns("c1", "dw", names).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    // All 5 tables should end up as failures (C6)
+    expect((error as ApiError).message).toContain("5 张表");
+    // Upper bound on calls: should not exceed 100 (the safety limit)
+    expect(apiPost.mock.calls.length).toBeLessThan(50);
   });
 
   it("keeps the request order of the tables in the manifest", async () => {

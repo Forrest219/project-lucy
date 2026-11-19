@@ -11,6 +11,9 @@
 | 基于材料 | `84becc34`（`origin/fix/v030-ff4762c9-upgrade-blockers`）；`lucy-v0.30@9be444ba`；与 `ff4762c9` 分叉后主线提交 `dada75c2`／`7ebedd4e`／`784e7f7e`／`c672b0f8`／`f6fec5d3` |
 | 适用范围 | 评估同事提交并**外科手术式**集成进 `lucy-v0.30`；本计划授权范围内可改运行代码与测试，但禁止整枝 merge、禁止用同事提交覆盖主线已收口行为 |
 | 输出位置 | `docs/plans/lucy-20261118-ff4762c9-upgrade-blocker-integration-plan.md` |
+| 状态 | **v0.1。集成评估与 Task 拆分已成文；执行结果以各 Task 的复选框与提交为准，本头部不重判完成度。2026-11-19 补形态并追加偏差更正记录（见 §5）。** ≠ 可上线 |
+| 授权边界 | 见「适用范围」：本计划授权范围内可改运行代码与测试；禁止整枝 merge，禁止用同事提交覆盖主线已收口行为。**不**授权出包、发布、升级 |
+| 验收 | 见 Task 8；偏差更正后的补充要求见 §5.3 |
 
 > **For agentic workers:** 按 Task 顺序执行；每 Task 结束后跑该 Task 的验证命令再进入下一 Task。步骤用 checkbox 跟踪。
 
@@ -406,8 +409,44 @@ Expected: 仍存在。
 
 ---
 
+## 5. 目标、开工前置、完成定义与风险（形态补记，2026-11-19）
+
+> 本节只补文档形态并追加偏差更正记录，**不改上文任何 Task 的内容与已记录的裁决，不重判执行完成度**。
+
+### 5.1 目标
+
+见文首 **Goal**：把同事 `84becc34` 中仍有增量价值的升级可靠性修复，在不回退 `784e7f7e`（预算延后）与 `dada75c2`（pause）的前提下，外科手术式集成进 `lucy-v0.30`。
+
+### 5.2 开工前置
+
+- 主干固定为 `lucy-v0.30`；对照提交固定为 `84becc34`，远程 tip 前移须先与委托人确认（见 Global Constraints 1）。
+- Task 0 工作区消毒与对照钉死先行。
+
+### 5.3 完成定义
+
+以 Task 8「集成验收」为准。偏差更正（§5.5）之后追加两条：被标「保留」的用例不得以 `it.skip` 代替；允许 skip 的用例必须各有总账行或子项，否则不计入「完成」。
+
+### 5.4 风险
+
+- 整枝 merge 预估 28 个内容冲突，已在 Global Constraints 2 禁止。
+- 竞争设计（`watermark` 语义）与主线 P1-50 冲突，无证明不整包替换（Global Constraints 3）。
+- 移植用例时以 `it.skip` 规避失败会让验收「看起来通过」；这一风险在本计划执行中已发生，见 §5.5。
+
+### 5.5 偏差更正记录（2026-11-19）
+
+| 项 | 计划原文 | 事后核对 |
+|---|---|---|
+| Task 5 对「table-preparation 在 defer 后收敛」「单表 defer 不得空成功」「singleton batch」 | 标「保留」／「保留／微调」 | 同日提交 `a9052b27` 把这 3 个用例连同其余 5 个共 8 个改成 `it.skip`（`webui/server/__tests__/upgrade-fix-regressions.test.ts`）。**这 3 个与计划相反** |
+| Task 5 对「inquiry／cluster／page-budget 生长」 | 冲突时可标 skip 并写原因、**开子项** | 其余 5 个（含跨回看边界的簇）属此类，skip 原因已写在测试名里，但**没有开子项**，总账当时没有对应行 |
+| Task 6 导出 lag | 「若无失败用例驱动，可标记 deferred」 | 被标 deferred；驱动它的用例（导出追平、跨回看边界）恰在被跳过之列。2026-11-19 FDE 复核在本机复现：导出追平后仍 409，簇跨边界后同一调用属于两个问询 |
+
+后续整改见 [FDE 3b1c62af 整改 Plan](lucy-20261119-fde-3b1c62af-contract-remediation-plan.md)；错题本见 [`2026-11-19-fde-3b1c62af-defects-missed-by-uat.md`](../lessons/2026-11-19-fde-3b1c62af-defects-missed-by-uat.md)。
+
+---
+
 ## Changelog
 
 | 版本 | 变更 |
 |---|---|
+| v0.1.1 | 2026-11-19 补头部「状态／授权边界／验收」与 §5（目标／开工前置／完成定义／风险）；追加 Task 5／Task 6 的偏差更正记录。不改 Task 内容 |
 | v0.1 | 初稿：完成对 `84becc34` vs `lucy-v0.30@9be444ba` 的评估矩阵与外科手术式集成任务拆分；明确拒绝整枝 merge 与覆盖 `784e7f7e` defer |

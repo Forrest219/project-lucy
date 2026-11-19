@@ -3176,24 +3176,29 @@ async function auditProjectionStatus(database: Database.Database): Promise<Proje
   return status;
 }
 
-/** Export catch-up: at most one projection batch per slice, then yield. */
+/**
+ * Export catch-up: wait until projection.cursor ≥ upperSeq (N26 追平口径).
+ * Returns { caughtUp, lag } where lag = max(0, upperSeq - cursor) relative to S.
+ * C4: relies on upperSeq (S) for lag calculation; events after S do not count.
+ */
 async function waitForProjectionCatchUp(
   database: Database.Database,
   upperSeq: number,
   deadlineMs: number,
   startedAt: number
-): Promise<boolean> {
+): Promise<{ caughtUp: boolean; lag: number }> {
   const store = await getSecurityStore();
-  if (!store.ok) return false;
+  if (!store.ok) return { caughtUp: false, lag: Math.max(1, upperSeq) };
   for (;;) {
     const status = projectionStatus(store.value, database);
-    if (status.complete && status.latestSeq >= upperSeq) {
-      recordProjectionStatus(status);
-      return true;
+    // N26: lag relative to S (not to latestSeq). cursor ≥ S means caught up.
+    const lag = Math.max(0, upperSeq - status.cursor);
+    recordProjectionStatus(status);
+    if (lag === 0 && status.reason !== "security_store_unavailable" && status.latestSeq >= upperSeq) {
+      return { caughtUp: true, lag: 0 };
     }
     if (Date.now() - startedAt >= deadlineMs) {
-      recordProjectionStatus(status);
-      return false;
+      return { caughtUp: false, lag: Math.max(1, lag) };
     }
     runProjection(store.value, database, { maxBatches: 1 });
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -4776,6 +4781,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       };
     }
 
+    // N26-6: T3 starts BEFORE capturing S and reading projection (B21 start order).
+    const catchUpStartedAt = Date.now();
     const store = await getSecurityStore();
     if (!store.ok) {
       reply.code(503);
@@ -4789,11 +4796,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }
 
     const database = await getAuditDb();
-    const projection = await auditProjectionStatus(database);
     // B21：自捕获 S 那一刻起算，等待重试不重置。
-    const catchUpStartedAt = Date.now();
     const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
-    const caughtUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
+    // N26: waitForProjectionCatchUp returns { caughtUp, lag } relative to S.
+    const catchUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
 
     try {
       const result = await performExportV2({
@@ -4805,7 +4811,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
           userId: query.userId
         },
         fixedZone: "UTC",
-        projectionLag: projection.lag,
+        projectionLag: catchUp.lag,
         auditStoreAvailable: true,
         securityStoreAvailable: true,
         backupOk: true,
@@ -4823,7 +4829,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
         },
         prevExportId: query.prevExportId ?? null
       });
-      if (mode === "complete" && !caughtUp) {
+      if (mode === "complete" && !catchUp.caughtUp) {
         reply.code(409);
         return {
           ok: false,
@@ -4863,6 +4869,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       };
     }
 
+    // N26-6: T3 starts BEFORE capturing S and reading projection (B21 start order).
+    const catchUpStartedAt = Date.now();
     const store = await getSecurityStore();
     if (!store.ok) {
       reply.code(503);
@@ -4875,10 +4883,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }
 
     const database = await getAuditDb();
-    const projection = await auditProjectionStatus(database);
-    const catchUpStartedAt = Date.now();
+    // N26: waitForProjectionCatchUp returns { caughtUp, lag } relative to S.
     const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
-    const caughtUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
+    const catchUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
 
     try {
       const pack = await buildExportPackV2({
@@ -4886,7 +4893,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
         confirmDiagnostic: query.confirmDiagnostic === "true",
         fixedFilter: { from: query.from, until: query.until, userId: query.userId },
         fixedZone: "UTC",
-        projectionLag: projection.lag,
+        projectionLag: catchUp.lag,
         auditStoreAvailable: true,
         securityStoreAvailable: true,
         backupOk: true,
@@ -4904,7 +4911,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
         },
         prevExportId: query.prevExportId ?? null
       });
-      if (mode === "complete" && !caughtUp) {
+      if (mode === "complete" && !catchUp.caughtUp) {
         reply.code(409);
         return {
           ok: false,

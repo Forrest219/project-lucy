@@ -438,6 +438,37 @@ function isTerminalProbeFailure(result: SqlResult, reason: SchemaColumnRejection
 }
 
 /**
+ * External-catalog probe classifier (P1-20 §8 C1–C5).
+ * Unlike the global `columnScanTimedOut`, this NEVER uses latency as a timeout signal:
+ * a slow server-side refusal (syntax error, auth denial) is "unreadable" (retriable), not "timeout".
+ * C1: only explicit driver/text timeout signal → "timeout"
+ * C5: budget-capped statement with explicit timeout → "deferred" (not terminal)
+ * C2: all other failures (including slow latency) → "unreadable" (continue probing)
+ */
+function classifyProbeFailure(
+  result: SqlResult,
+  isBudgetCapped: boolean
+): "deferred" | SchemaColumnRejection["reason"] {
+  const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+  // Connection failures are unreadable (terminal via isTerminalProbeFailure), not timeout.
+  if (CONNECTION_FAILURE.test(text)) return "unreadable";
+  // Explicit timeout signal in driver text (not latency-based inference).
+  const hasExplicitTimeout =
+    /timed out|max_execution_time|maximum statement execution time|query execution was interrupted/i.test(text);
+  if (hasExplicitTimeout) {
+    // C5: budget-capped statement timed out → deferred, not terminal.
+    if (isBudgetCapped) return "deferred";
+    // C4: full per-table timeout with explicit signal → terminal.
+    return "timeout";
+  }
+  // No explicit timeout → classify by error content (slow refusal is "unreadable", not "timeout").
+  if (/超过一次可读取的上限/.test(text)) return "too_large";
+  if (/access denied|command denied|permission denied|\bprivilege\b/i.test(text)) return "permission";
+  if (/unknown table|doesn't exist|does not exist|table not found/i.test(text)) return "missing";
+  return "unreadable";
+}
+
+/**
  * External catalogs read one table over the same direct MySQL channel as `SHOW TABLES`.
  * `ktx sql` rejects `DESC`/`DESCRIBE`/`SHOW` (read/write operation), so no probe goes there.
  * Probes run in order; the next one is tried only after a server-side refusal or a 0-column mapping.
@@ -484,10 +515,10 @@ async function readCatalogTableColumns(
     });
     const answered = answeredRows(result, limits.rowLimit, timeoutMs);
     if ("reason" in answered) {
-      reason = answered.reason;
-      if (reason === "timeout" && isBudgetCapped) {
-        return { columns: [], deferred: true };
-      }
+      // C1–C5: use dedicated probe classifier (P1-20 §8) that never uses latency as timeout signal.
+      const probeClass = classifyProbeFailure(result, isBudgetCapped);
+      if (probeClass === "deferred") return { columns: [], deferred: true };
+      reason = probeClass;
       logSchemaStructureFailure({ connectionId, schema, table, phase: "table-columns", sql }, result);
       if (isTerminalProbeFailure(result, reason)) break;
       continue;
@@ -1088,7 +1119,10 @@ export async function previewSchemaStructure(
   }
   const requested = deps.tables?.map((table) => table.trim()).filter(Boolean) ?? [];
   const batch = requested.length > 1;
-  if (!batch && requested.length > 0 && (read.rejections?.length ?? 0) > 0) {
+  // F03: single-table deferred must be distinguished from single-table failure.
+  // If the read returned deferred (budget exhausted), do NOT throw as rejection.
+  const hasDeferred = (read.deferred?.length ?? 0) > 0;
+  if (!batch && requested.length > 0 && (read.rejections?.length ?? 0) > 0 && !hasDeferred) {
     const rejection = read.rejections?.[0];
     throw new SchemaStructureError(
       "READ_FAILED",
@@ -1105,7 +1139,8 @@ export async function previewSchemaStructure(
   return {
     ...preview,
     namesOnly,
+    // F03: pass rejections for batch requests; deferred for any request size (C4 of P1-34 §11).
     ...(batch && rejections.length > 0 ? { rejections } : {}),
-    ...(batch && read.deferred && read.deferred.length > 0 ? { deferred: read.deferred } : {})
+    ...(read.deferred && read.deferred.length > 0 ? { deferred: read.deferred } : {})
   };
 }

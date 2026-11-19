@@ -129,10 +129,21 @@ async function removeConnection(id: string) {
   await api("POST", `/api/connections/${encodeURIComponent(id)}/remove`, { dryRun: false }).catch(() => undefined);
 }
 
+/** LS-24 / Task 6: same pass criteria as `large-schema-ingestion-ls24.test.mjs`. */
+export function judgeReadTables(
+  result: { done: number; columns: number; failure: string },
+  expectedTables: number,
+  expectedColumnsMin: number
+): { pass: boolean; reason: string } {
+  if (result.failure) return { pass: false, reason: `request failed: ${result.failure}` };
+  if (result.done !== expectedTables) return { pass: false, reason: `done=${result.done} < expected=${expectedTables}` };
+  if (result.columns < expectedColumnsMin) return { pass: false, reason: `columns=${result.columns} < min=${expectedColumnsMin}` };
+  return { pass: true, reason: "ok" };
+}
+
 /**
- * Read `tables` the way the client does. Uses batches when the server accepts them
- * (Spec D1), otherwise one table per call (the pre-optimization contract).
- * Stops as soon as `budgetMs` is exceeded and reports how far it got.
+ * Read `tables` like `readCheckedTableColumns`: batches, deferred retries, halve on all-deferred.
+ * `done` counts only tables that actually returned column data (not deferred-only advancement).
  */
 async function readTables(conn: string, schema: string, tables: string[], budgetMs: number) {
   const start = performance.now();
@@ -142,9 +153,15 @@ async function readTables(conn: string, schema: string, tables: string[], budget
   let calls = 0;
   let mode: "batch" | "single" = "batch";
   let failure = "";
-  for (let i = 0; i < tables.length; ) {
+  let batchSize = BATCH;
+  const strikes = new Map<string, number>();
+  let pending = [...tables];
+  while (pending.length > 0) {
     if (performance.now() - start > budgetMs) break;
-    const slice = mode === "batch" ? tables.slice(i, i + BATCH) : [tables[i]];
+    const slice =
+      mode === "batch"
+        ? pending.slice(0, Math.min(batchSize, BATCH))
+        : [pending[0]];
     const res = await api("POST", `/api/connections/${encodeURIComponent(conn)}/schema-structure`, { schema, tables: slice });
     calls += 1;
     maxCallMs = Math.max(maxCallMs, res.ms);
@@ -157,9 +174,51 @@ async function readTables(conn: string, schema: string, tables: string[], budget
       failure = `HTTP ${res.status} ${res.json?.error?.message ?? ""}`.trim();
       break;
     }
-    columns += Number(res.json?.data?.columnCount ?? 0);
-    i += slice.length;
-    done = i;
+    const data = res.json?.data ?? {};
+    const deferred: string[] = data.deferred ?? [];
+    const rejections: Array<{ table: string }> = data.rejections ?? [];
+    const deferredSet = new Set(deferred);
+    const dropped: string[] = [];
+    for (const t of deferred) {
+      if (slice.length === 1) {
+        const count = (strikes.get(t) ?? 0) + 1;
+        strikes.set(t, count);
+        if (count >= 2) {
+          failure = `表「${t}」这次没有读完，请稍后重试。`;
+          dropped.push(t);
+          deferredSet.delete(t);
+        }
+      } else {
+        strikes.delete(t);
+      }
+    }
+    const allDeferred =
+      deferredSet.size > 0 &&
+      rejections.length === 0 &&
+      slice.every((t) => deferredSet.has(t) || dropped.includes(t));
+    if (allDeferred && deferredSet.size > 0) {
+      batchSize = Math.max(1, Math.ceil(batchSize / 2));
+    }
+    let batchRead = 0;
+    for (const name of slice) {
+      if (deferredSet.has(name) || rejections.some((r) => r.table === name) || dropped.includes(name)) continue;
+      done += 1;
+      batchRead += 1;
+    }
+    if (batchRead > 0) columns += Number(data.columnCount ?? 0);
+    if (rejections.length > 0) {
+      failure = rejections.map((r) => `${r.table}:${(r as { message?: string }).message ?? "rejected"}`).join("; ");
+      break;
+    }
+    pending = [...deferredSet, ...pending.slice(slice.length)];
+    if (failure) break;
+    if (calls > 200) {
+      failure = "too many schema-structure calls";
+      break;
+    }
+  }
+  if (!failure && done < tables.length) {
+    failure = `stopped at ${done}/${tables.length} before budget or completion`;
   }
   return { done, columns, calls, mode, maxCallMs, ms: Math.round(performance.now() - start), failure };
 }
@@ -277,10 +336,13 @@ async function main() {
 
     // 04 / 06 ingest 600 tables
     const my600 = await readTables(myId, MYSQL.database, myTables.slice(0, 600), B.ingest600Ms);
-    const ok04 = my600.done === 600 && !my600.failure && my600.ms <= B.ingest600Ms && my600.maxCallMs <= B.httpMaxMs;
-    record("UAT-SCALE-04", ok04 ? "PASS" : "FAIL", `mysql ingest ${my600.done}/600 tables in ${my600.ms}ms via ${my600.calls} ${my600.mode} calls, slowest call ${my600.maxCallMs}ms (budget ${B.ingest600Ms}ms, call ${B.httpMaxMs}ms)${my600.failure ? `; ${my600.failure}` : ""}`, my600);
+    const colsPerTable = 30;
+    const j04 = judgeReadTables(my600, 600, 600 * colsPerTable);
+    const ok04 = j04.pass && my600.ms <= B.ingest600Ms && my600.maxCallMs <= B.httpMaxMs;
+    record("UAT-SCALE-04", ok04 ? "PASS" : "FAIL", `mysql ingest ${my600.done}/600 tables, ${my600.columns} cols (${j04.reason}) in ${my600.ms}ms via ${my600.calls} ${my600.mode} calls, slowest call ${my600.maxCallMs}ms (budget ${B.ingest600Ms}ms, call ${B.httpMaxMs}ms)${my600.failure ? `; ${my600.failure}` : ""}`, my600);
     const hv600 = await readTables(hvId, HIVE.schema, hvTables, B.ingest600Ms);
-    const ok06 = hv600.done === HIVE.tables && !hv600.failure && hv600.ms <= B.ingest600Ms && hv600.maxCallMs <= B.httpMaxMs;
+    const j06 = judgeReadTables(hv600, HIVE.tables, HIVE.tables * HIVE.cols);
+    const ok06 = j06.pass && hv600.ms <= B.ingest600Ms && hv600.maxCallMs <= B.httpMaxMs;
     record("UAT-SCALE-06", ok06 ? "PASS" : "FAIL", `hive ingest ${hv600.done}/${HIVE.tables} tables in ${hv600.ms}ms via ${hv600.calls} ${hv600.mode} calls, slowest call ${hv600.maxCallMs}ms${hv600.failure ? `; ${hv600.failure}` : ""}`, hv600);
 
     // 07 wide external tables
