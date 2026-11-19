@@ -271,13 +271,14 @@ async function all() {
   const before04 = queryState(smallMeta.user);
   const turnsBefore04 = before04.turns;
   stopContainer(); startContainer();
-  await waitReady(180);
+  const ready04 = await waitReady(180);
   await sleep(20_000);
   const after04 = queryState(smallMeta.user);
   results["UAT-IRR-04"] = {
     id: "UAT-IRR-04",
-    pass: after04.st?.status === "complete" && after04.turns === turnsBefore04 && JSON.stringify(after04.st) === JSON.stringify(before04.st) && JSON.stringify(after04.links) === JSON.stringify(before04.links),
+    pass: ready04 && after04.st?.status === "complete" && after04.turns === turnsBefore04 && JSON.stringify(after04.st) === JSON.stringify(before04.st) && JSON.stringify(after04.links) === JSON.stringify(before04.links),
     checks: [
+      check("restart ready", ready04, ready04, "HTTP readyz=200"),
       check("still complete", after04.st?.status === "complete", after04.st, "complete"),
       check("turn count unchanged", after04.turns === turnsBefore04, { before: turnsBefore04, after: after04.turns }, "equal"),
       check("completion timestamp/watermark unchanged (no rebuild)", JSON.stringify(after04.st) === JSON.stringify(before04.st), {before:before04.st,after:after04.st}, "unchanged"),
