@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.144 |
+| 版本 | v1.145 |
+| v1.145 更新 | 2026-11-19，委托人D7明确延期P1-57-G6正式完整导出基线缺口，待另行安排、不启动D6；原FIX-01／原完整范围UAT实测FAIL保持。本轮客户功能测试排除正式完整导出，可按其余已验证范围进行；不声称全缺陷清零／可上线。三台账同步，仅文档范围登记。 |
 | v1.144 更新 | 2026-11-19，P1-57授权修复复验：R1／R2修复、G7–G9验收差集纠正，完整夹具三轮／真实SIGKILL／完整HTTP滚动通过；正式新实例CSV／ZIP仍409，整体测试台FAIL，G6回D6设计裁决。Spec／Plan／总账／测试台同步；不能交客户测试；≠可上线。 |
 | v1.143 更新 | 2026-11-19，P1-57 FDE 修复复评整改仅文档：同步 P1-20／v2p5 现值镜像；P1-34 §11 与 P1-38 §8 验收缺口保留未收口，新增验收草案待委托人确认。运行代码、测试实现、Docker 与 UAT 本轮均未执行；测试台以 INDEX 为准；≠ 可上线。 |
 | v1.142 更新 | 2026-11-15，**行级隔离升入 0.30 核心分母**：方向 v0.5 §4.5／§9 第 5 条；清单池 v0.89 **P1-28／REQ-030-049**；需求池 v0.59。测试台 `UAT-SUITE-ROW-POLICY`＝**FAIL**。不新开实现 Spec，未改运行代码。**≠ 可上线；≠ 核心升级完成。** 台账号无。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
@@ -309,7 +310,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | **竞品分析与差异化立项（20261014）** | **`docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md`**（P0-1 反馈回流浪程）· **`docs/specs/lucy-20261014-release-bom-spec.md`**（P0-2 发布物料清单）· **`docs/specs/lucy-20261014-concept-dictionary-spec.md`**（P1 概念字典）；工单 `docs/plans/wo-20261014-*.md`；分析底稿与评审历史 `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` |
 | Cloudflare OS 对标差异（20261018） | `docs/specs/lucy-20261018-cloudflare-os-benchmark.md`。公开材料对照，不是功能 Spec；未纳入本地实机截图交叉审阅 |
 | Hive 直连／问数（v0.25 L25-10，P1-4；编译侧已收口；执行波 Wave A 已落地） | 编译侧：[Hive 直连 Spec](../specs/lucy-20261025-v0p25-hive-direct-connection-spec.md)（V01／V02／V06）。执行波：[Hive 问数 Spec](../specs/lucy-20261030-hive-query-execution-spec.md)、[Plan](../plans/lucy-20261030-hive-query-execution-plan.md)（HQ-01–HQ-18 合成维；分区门禁／MCP divert）。发布取证 `HIV25` 由 E2E Spec 持有；支持状态 `planned`；本模块收口 ≠ 客户交付／可上线 |
-| 审计事实、可靠性与证据闭环（L25-09） | S01–S07 先前功能收口结论保留；N26（§18.19）已确权并实现，N26-6 起点／截止补证与错误起点 mutation 检出完成，原12个 CSV／ZIP 变体在当前源码通过。新建正常初始化实例的正式导出因 as-of-S 基线缺失 FAIL，P1-57-G6 保持开放，按 D4 返回设计；不以 diagnostic 代通过，不扩修历史基线。测试台见 INDEX；≠ 可上线。 [Spec](../specs/lucy-20261020-v2p5-audit-increment-spec.md) |
+| 审计事实、可靠性与证据闭环（L25-09） | S01–S07 先前功能收口结论保留；N26（§18.19）已确权并实现，N26-6 起点／截止补证与错误起点 mutation 检出完成，原12个 CSV／ZIP 变体在当前源码通过。新实例正式完整导出因 as-of-S 基线缺失的 FAIL 证据保留；委托人2026-11-19明确延期 P1-57-G6 的该缺口，待另行安排，未修复且不作为本轮客户功能测试阻塞。完整导出保持失败关闭，本轮测试排除此项；未来恢复时沿用原验收标准。D6未授权实施；≠ 可上线。 [Spec](../specs/lucy-20261020-v2p5-audit-increment-spec.md) |
 | 审计只读对账展示（v0.25 L25-02／03，P0-4，读取合同与两句页面行为已收口） | [审计只读对账展示 Spec](../specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md)。已收口的是读模型、水位与窗口、五类 CSV、三个只读端点的失败关闭与六项 `unknown`、用量页的不可观测与诊断展示、精确 as-of 的正式导出失败关闭；对账问询详情页不把长表清单收成「等 N 个」，以及表排行逐条给出完整 `connectionId / schema / table` 并可复制全文。落点：`webui/src/__tests__/audit-reconciliation-page.test.tsx`。本条收口不表示可上线 |
 | 语义资产批量维护（v0.25 L25-11，P0-3，**已关闭**） | [语义资产批量维护 Spec](../specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md)。**已关闭。** 出口是 FC-01–FC-32。G30 已收口：校验只产报告，不产可发布计划。不打开 W-B。本条关闭不表示可上线 |
 | 语义发布历史版本与整批恢复（v0.25 L25-15，P0，**代码已落；SRR → REQ-030-010**） | [整批恢复 Spec](../specs/lucy-20261027-v0p25-semantic-release-restore-spec.md)。S1–S6 运行代码已落地；SRR 验收 Deferred 至 [`REQ-030-010`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)。SRR-22 已拆出。记录见 [D](../reviews/2026-11-03-product-close-peel-d.md) |
