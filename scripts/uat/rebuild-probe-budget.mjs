@@ -136,13 +136,30 @@ async function waitReady(budgetS) {
 function migratedFacts(volume) {
   const out = docker(["run", "--rm", "--entrypoint", "node", "-v", `${volume}:/data/lucy:ro`, IMAGE, "-e", `
 const D=require('/app/webui/node_modules/better-sqlite3');const d=new D('/data/lucy/.ktx-ui/audit.sqlite',{readonly:true});
+const cutoff=new Date(Date.now()-30*86400000).toISOString();
 const raw=d.prepare('SELECT COUNT(*) n,COUNT(DISTINCT user_id) users FROM access_log').get();
-const linked=d.prepare('SELECT COUNT(*) n,COUNT(DISTINCT l.access_log_id) unique_n,SUM(CASE WHEN t.inferred_turn_id IS NULL THEN 1 ELSE 0 END) missing_turns FROM inferred_turn_access_logs l JOIN access_log a ON a.id=l.access_log_id LEFT JOIN inferred_turns t ON t.inferred_turn_id=l.inferred_turn_id').get();
-const pending=d.prepare("SELECT COUNT(*) n FROM (SELECT user_id,MAX(id) newest FROM access_log GROUP BY user_id) a LEFT JOIN inferred_rebuild_state s ON s.user_id=a.user_id WHERE s.status IS NULL OR s.status<>'complete' OR s.watermark IS NULL OR s.watermark='' OR s.watermark GLOB '*[^0-9]*' OR CAST(s.watermark AS INTEGER)<a.newest").get().n;
+const eligible=d.prepare('SELECT COUNT(*) n,COUNT(DISTINCT user_id) users FROM access_log WHERE ts>=?').get(cutoff);
+const linked=d.prepare('SELECT COUNT(*) n,COUNT(DISTINCT l.access_log_id) unique_n,SUM(CASE WHEN t.inferred_turn_id IS NULL THEN 1 ELSE 0 END) missing_turns FROM inferred_turn_access_logs l JOIN access_log a ON a.id=l.access_log_id LEFT JOIN inferred_turns t ON t.inferred_turn_id=l.inferred_turn_id WHERE a.ts>=?').get(cutoff);
+const pending=d.prepare("SELECT COUNT(*) n FROM (SELECT user_id,MAX(id) newest FROM access_log WHERE ts>=? GROUP BY user_id) a LEFT JOIN inferred_rebuild_state s ON s.user_id=a.user_id WHERE s.status IS NULL OR s.status<>'complete' OR s.watermark IS NULL OR s.watermark='' OR s.watermark GLOB '*[^0-9]*' OR CAST(s.watermark AS INTEGER)<a.newest").get(cutoff).n;
 const turns=d.prepare('SELECT COUNT(*) n FROM inferred_turns').get().n;
-console.log(JSON.stringify({raw,linked,pending,turns,complete:raw.n>=200000&&raw.users>=67&&linked.n===raw.n&&linked.unique_n===raw.n&&linked.missing_turns===0&&pending===0}));d.close();`]);
+console.log(JSON.stringify({cutoff,raw,eligible,linked,pending,turns,complete:raw.n>=200000&&eligible.n>=200000&&eligible.users>=67&&linked.n===eligible.n&&linked.unique_n===eligible.n&&linked.missing_turns===0&&pending===0}));d.close();`]);
   return JSON.parse(out.trim().split("\n").pop());
 }
+function refreshSyntheticFixtureWindow(volume) {
+  // A fixed 30-day seed ages out. Raise the fixture with real padded synthetic
+  // calls; do not rewrite old timestamps, lengthen runtime lookback, or fake links.
+  const out = docker(["run", "--rm", "--entrypoint", "node", "-v", `${volume}:/data/lucy`, IMAGE, "-e", `
+const D=require('/app/webui/node_modules/better-sqlite3');const d=new D('/data/lucy/.ktx-ui/audit.sqlite');
+const now=Date.now(),cutoff=new Date(now-30*86400000).toISOString();
+const before=d.prepare('SELECT COUNT(*) n FROM access_log WHERE ts>=?').get(cutoff).n;
+const n=Math.max(0,201000-before),users=d.prepare('SELECT DISTINCT user_id FROM access_log ORDER BY user_id').all().map(r=>r.user_id);
+const pad=d.prepare('SELECT args_summary,generated_sql,query_preview FROM access_log ORDER BY id LIMIT 1').get();
+const ins=d.prepare("INSERT INTO access_log(ts,user_id,token_label,client,tool,tables,args_summary,generated_sql,query_preview,outcome,duration_ms,request_id,trace_id,lucy_session_id) VALUES (?,?, 'uat','uat-p157-fill','lucy_query',?,?,?,?,'success',10,?,?,?)");
+d.transaction(()=>{for(let i=0;i<n;i++)ins.run(new Date(now-3600000+i).toISOString(),users[i%users.length],JSON.stringify(['t1']),pad.args_summary,pad.generated_sql,pad.query_preview,'p157-fill-'+now+'-'+i,'p157-fill-trace-'+now+'-'+i,'p157-fill-session-'+now+'-'+i)})();
+console.log(JSON.stringify({beforeEligible:before,added:n,targetEligible:201000,originalTimestampsUnchanged:true,paddingCopied:true,users:users.length}));d.close();`]);
+  return JSON.parse(out.trim().split("\n").pop());
+}
+
 async function premigrate() {
   let source = SNAP_OLD;
   if (volumeExists(MIG) && !flag("remigrate")) {
@@ -158,6 +175,8 @@ async function premigrate() {
   if (!volumeExists(source)) throw new Error(`missing ${source}; run: npm run uat:cold-start -- seed`);
   log(`premigrating ${source} → ${MIG}`);
   copyVolume(source, `${RUN}-data`);
+  const refresh = refreshSyntheticFixtureWindow(`${RUN}-data`);
+  writeFileSync(path.join(OUT, "fixture-refresh.json"), JSON.stringify(refresh, null, 2));
   startContainer(`${RUN}-data`, { throttle: false });
   if (!(await waitReady(300))) throw new Error("premigrate ready failed");
   const waitS = Number(opt("premigrate-wait-s") ?? 300);

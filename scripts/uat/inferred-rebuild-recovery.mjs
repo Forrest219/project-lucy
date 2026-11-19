@@ -8,7 +8,7 @@
  * 全真容器 + 同卷持久 SQLite。必做：R0、注入中断状态后重启须重排（01／03）、
  * 完整 complete 水位后无新日志不重算（04）、中样本 SIGKILL 中断后恢复（02）。
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
