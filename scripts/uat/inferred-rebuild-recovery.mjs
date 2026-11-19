@@ -225,7 +225,7 @@ async function all() {
 
   // R0
   const rev = dockerTry(["run", "--rm", "--entrypoint", "cat", IMAGE, "/app/BUILD_REVISION"]).trim().split("\n")[0];
-  const canSql = (() => { try { queryState("none"); return true; } catch { return true; } })();
+  const canSql = (() => { try { queryState("none"); return true; } catch { return false; } })();
   results.r0 = {
     id: "UAT-IRR-R0",
     pass: Boolean(rev),
