@@ -7,7 +7,7 @@
 | 总账 / REQ | P1-58／REQ-030-079；P1-59／REQ-030-080 |
 | 目标 | 以基准、2×、5× 的数据／并发／到达速率，验证列表响应、统计正确、多会话编辑、冲突恢复及纯 MCP 共存 |
 | 环境 | 独立本机 Docker compose fixture，单 Lucy 进程／单副本；真实 WebUI、API、SQLite、MCP 与反向代理 |
-| 当前执行状态 | NOT RUN；本次仅设计，未创建 runner、未造数、未执行浏览器或压力测试 |
+| 当前执行状态 | **SMOKE_PASS WITH GAP**（2026-11-19 F58-smoke／F59-smoke）；完整 F58／F59／R／浏览器／2×／5× 造数仍 NOT RUN。最近跑次见 [runs/2026-11-19-cursor-f58-f59-smoke.md](runs/2026-11-19-cursor-f58-f59-smoke.md) |
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md)（倍率、资源、时序与阈值唯一真源） |
 | runs | [runs/](runs/)；当前无跑次 |

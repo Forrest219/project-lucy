@@ -29,8 +29,12 @@ docs/qa/uat/
 
 ## 当前套件（与 INDEX 对齐）
 
+- [Core Availability](suites/core-availability/suite.md)：P1-61／62／63；F61／F62／F63模块验收，R-CAV为既有P1-13组合补充；当前NOT RUN。
+
 | Suite ID | 总账 | 主题 |
 |---|---|---|
+| `UAT-SUITE-BEGIN-ZERO-BINDING` | P1-60 | 零绑定 N／B／D 单一矩阵，G1–G6／D6 轮次、正式发布控制、RC1 既有客户端及画像任务补偿（v0.2-draft，NOT RUN） |
+| `UAT-SUITE-ROLES-AGENT-CONCURRENCY-SCALE` | P1-58／P1-59 | 角色权限与 Agent 单维／组合 2×、5× 负载，冲突恢复与纯 MCP 共存 |
 | `UAT-SUITE-SOURCE-AMBIGUITY` | P0-3 | 表级歧义门闩（拦得住） |
 | `UAT-SUITE-SOURCE-AMBIGUITY-ESCAPE` | P0-3 | 表级歧义纯 MCP 逃生（死路基线／优化后翻绿） |
 | `UAT-SUITE-CALIBER-BINDING` | P0-1 | 问题类型口径绑定 |

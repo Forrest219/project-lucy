@@ -1,0 +1,116 @@
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint: 
+hint: 	git config --global init.defaultBranch <name>
+hint: 
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint: 
+hint: 	git branch -m <name>
+Initialized empty Git repository in /data/lucy/.git/
+[lucy] initialized git repository at /data/lucy
+[lucy] template sync disabled (LUCY_DISABLE_TEMPLATE_SYNC=1)
+[system_ensure_formal_roles] lucy_admin wrote=true branch=A
+[lucy] created persistent KTX internal token
+[system_ensure_formal_roles] lucy_ops_reader wrote=true branch=C
+[ops-evidence] connection=inserted readiness=reload_required assets=15 upgrades=0 conflicts=0 mirror(copied=16,skipped=0,failed=0)
+[lucy] synced 14 missing runtime mirror semantic-layer file(s) into /data/lucy/runtime/semantic-layer
+[lucy] synced 1 missing runtime mirror wiki file(s) into /data/lucy/runtime/wiki
+[lucy] synced 1 missing runtime mirror skills file(s) into /data/lucy/runtime/skills
+[ops-evidence] ktx.yaml digest stamped: 4a0550df101268ce38609e2444efdbb2dd303dbb0f394bafd071ffdaa8d860d8
+[lucy] refreshing KTX semantic index
+[lucy] bundled KTX: @kaelio/ktx 0.16.0
+[lucy] project root: /data/lucy
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+
+> webui@1.0.0 start
+> tsx server/index.ts
+
+[system_ensure_formal_roles] lucy_ops_reader wrote=false branch=D
+[lucy-audit] schema ready in 4ms (foreign_key_check 0ms)
+{"level":30,"time":1795101279853,"pid":311,"hostname":"e8ce2bc09168","msg":"Server listening at http://127.0.0.1:5174"}
+{"level":30,"time":1795101279853,"pid":311,"hostname":"e8ce2bc09168","msg":"Server listening at http://172.25.0.3:5174"}
+Lucy WebUI listening on http://0.0.0.0:5174
+MCP proxy listening on http://0.0.0.0:7879/mcp
+{"level":30,"time":1795101279920,"pid":246,"hostname":"e8ce2bc09168","sessionId":"e65ae482-9761-490c-aeed-10612f835310","msg":"session.open"}
+{"level":30,"time":1795101280465,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-1","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59852},"msg":"incoming request"}
+{"level":30,"time":1795101280475,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-1","res":{"statusCode":200},"responseTime":10.133125000000064,"msg":"request completed"}
+{"level":30,"time":1795101280476,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-2","req":{"method":"POST","url":"/api/auth/bootstrap","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59856},"msg":"incoming request"}
+{"level":30,"time":1795101280560,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-2","res":{"statusCode":200},"responseTime":83.51608299999998,"msg":"request completed"}
+{"level":30,"time":1795101280563,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-3","req":{"method":"POST","url":"/api/connections/hive-1/schema-structure","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59864},"msg":"incoming request"}
+{"level":30,"time":1795101280960,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-4","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":43862},"msg":"incoming request"}
+{"level":30,"time":1795101280962,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-4","res":{"statusCode":200},"responseTime":1.7923749999999927,"msg":"request completed"}
+{"level":30,"time":1795101283417,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-3","res":{"statusCode":200},"responseTime":2854.105334,"msg":"request completed"}
+{"level":30,"time":1795101283419,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-5","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59868},"msg":"incoming request"}
+{"level":30,"time":1795101283422,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-5","res":{"statusCode":200},"responseTime":3.0317910000003394,"msg":"request completed"}
+{"level":30,"time":1795101283424,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-6","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59882},"msg":"incoming request"}
+{"level":30,"time":1795101283488,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-6","res":{"statusCode":200},"responseTime":63.649083000000246,"msg":"request completed"}
+{"level":30,"time":1795101283490,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-7","req":{"method":"PUT","url":"/api/connections/hive-1/enabled-tables","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59886},"msg":"incoming request"}
+[lucy] reload requested (cb991617-75ce-49b7-b316-dd3712b8a3f4); restarting KTX MCP upstream
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+{"level":30,"time":1795101284744,"pid":495,"hostname":"e8ce2bc09168","sessionId":"2746fedb-e922-4339-8954-9efdd9073188","msg":"session.open"}
+{"level":30,"time":1795101284752,"pid":495,"hostname":"e8ce2bc09168","tool":"connection_list","callId":"158728a3-fbc2-460e-8ec5-359c22e2cfc6","sessionId":"2746fedb-e922-4339-8954-9efdd9073188","params":{},"msg":"tool.start"}
+{"level":30,"time":1795101284758,"pid":495,"hostname":"e8ce2bc09168","tool":"connection_list","callId":"158728a3-fbc2-460e-8ec5-359c22e2cfc6","sessionId":"2746fedb-e922-4339-8954-9efdd9073188","durationMs":5.027209000000084,"outcome":"ok","resultSize":445,"msg":"tool.end"}
+{"level":30,"time":1795101284765,"pid":495,"hostname":"e8ce2bc09168","sessionId":"707cb86d-0067-4756-be81-75e0a802c5e4","msg":"session.open"}
+{"level":30,"time":1795101284775,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-7","res":{"statusCode":200},"responseTime":1285.4484169999996,"msg":"request completed"}
+{"level":30,"time":1795101284791,"pid":495,"hostname":"e8ce2bc09168","sessionId":"cd8cd2f5-13bb-4d49-bee7-a35781fa26d0","msg":"session.open"}
+{"level":30,"time":1795101284808,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-8","req":{"method":"GET","url":"/api/admin/agents/repro_reader/effective-permissions","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59898},"msg":"incoming request"}
+{"level":30,"time":1795101284823,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-8","res":{"statusCode":200},"responseTime":14.00220900000022,"msg":"request completed"}
+{"level":30,"time":1795101284883,"pid":495,"hostname":"e8ce2bc09168","tool":"sl_read_source","callId":"9910cbb7-027a-4c5b-9ee7-104cd88ceeee","sessionId":"cd8cd2f5-13bb-4d49-bee7-a35781fa26d0","params":{"connectionId":"hive-1","sourceName":"city"},"msg":"tool.start"}
+{"level":30,"time":1795101284888,"pid":495,"hostname":"e8ce2bc09168","tool":"sl_read_source","callId":"9910cbb7-027a-4c5b-9ee7-104cd88ceeee","sessionId":"cd8cd2f5-13bb-4d49-bee7-a35781fa26d0","durationMs":5.153375000000096,"outcome":"ok","resultSize":181,"msg":"tool.end"}
+{"level":30,"time":1795101284912,"pid":495,"hostname":"e8ce2bc09168","sessionId":"1c0ff9f6-ea10-4f68-816d-5978cef40b39","msg":"session.open"}
+{"level":30,"time":1795101284929,"pid":495,"hostname":"e8ce2bc09168","tool":"sl_query","callId":"459cb4ce-739a-4575-ab79-4109a2740a8c","sessionId":"cd8cd2f5-13bb-4d49-bee7-a35781fa26d0","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795101285207,"pid":495,"hostname":"e8ce2bc09168","tool":"sl_query","callId":"459cb4ce-739a-4575-ab79-4109a2740a8c","sessionId":"cd8cd2f5-13bb-4d49-bee7-a35781fa26d0","durationMs":278.07566700000007,"outcome":"ok","resultSize":171,"msg":"tool.end"}
+{"level":30,"time":1795101285217,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-9","req":{"method":"POST","url":"/api/connections/hive-1/schema-structure","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59912},"msg":"incoming request"}
+{"level":30,"time":1795101286145,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-9","res":{"statusCode":200},"responseTime":927.6529169999994,"msg":"request completed"}
+{"level":30,"time":1795101286148,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-a","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59920},"msg":"incoming request"}
+{"level":30,"time":1795101286151,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-a","res":{"statusCode":200},"responseTime":3.016916000000492,"msg":"request completed"}
+{"level":30,"time":1795101286154,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-b","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59934},"msg":"incoming request"}
+{"level":30,"time":1795101286215,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-b","res":{"statusCode":200},"responseTime":60.74879099999998,"msg":"request completed"}
+{"level":30,"time":1795101286218,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-c","req":{"method":"PUT","url":"/api/connections/hive-1/enabled-tables","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":59950},"msg":"incoming request"}
+[acl] policy_degraded_deny agent=repro_reader cause=source_map_compile_failed:duplicate_source_name:hive-1:city
+[acl] policy_scope_expanded roleId=repro_reader sourcesBefore=1 sourcesAfter=1 added=1 sourceMapVersion=f7d0c2d723e50cd9
+[acl] policy_scope_expanded roleId=lucy_admin sourcesBefore=1 sourcesAfter=1 added=1 sourceMapVersion=f7d0c2d723e50cd9
+[lucy] reload requested (3ec0eb36-0221-48ed-ac4c-d74b0b7979a7); restarting KTX MCP upstream
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+{"level":30,"time":1795101287372,"pid":614,"hostname":"e8ce2bc09168","sessionId":"5c2b7b5a-c5d0-4fbe-baba-3f67a77f5cce","msg":"session.open"}
+{"level":30,"time":1795101287379,"pid":614,"hostname":"e8ce2bc09168","tool":"connection_list","callId":"13940878-ef00-49d5-a820-3c2a5a1616fc","sessionId":"5c2b7b5a-c5d0-4fbe-baba-3f67a77f5cce","params":{},"msg":"tool.start"}
+{"level":30,"time":1795101287384,"pid":614,"hostname":"e8ce2bc09168","tool":"connection_list","callId":"13940878-ef00-49d5-a820-3c2a5a1616fc","sessionId":"5c2b7b5a-c5d0-4fbe-baba-3f67a77f5cce","durationMs":4.531666000000087,"outcome":"ok","resultSize":445,"msg":"tool.end"}
+{"level":30,"time":1795101287390,"pid":614,"hostname":"e8ce2bc09168","sessionId":"b25af17e-1752-4e6d-aead-b4ce8cf88c0c","msg":"session.open"}
+{"level":30,"time":1795101287399,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-c","res":{"statusCode":200},"responseTime":1181.1382510000003,"msg":"request completed"}
+{"level":30,"time":1795101287410,"pid":614,"hostname":"e8ce2bc09168","sessionId":"3f512e9e-a65a-4e77-a5ed-f584b40e093a","msg":"session.open"}
+[lucy-proxy] re-established KTX upstream session user=repro_reader tool=tools/list
+{"level":30,"time":1795101287456,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-d","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":57756},"msg":"incoming request"}
+{"level":30,"time":1795101287458,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-d","res":{"statusCode":200},"responseTime":1.9423330000008718,"msg":"request completed"}
+{"level":30,"time":1795101287460,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-e","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":57764},"msg":"incoming request"}
+{"level":30,"time":1795101287519,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-e","res":{"statusCode":200},"responseTime":59.0096250000006,"msg":"request completed"}
+{"level":30,"time":1795101287525,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-f","req":{"method":"PUT","url":"/api/connections/hive-1/enabled-tables","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":57772},"msg":"incoming request"}
+[acl] policy_scope_expanded roleId=repro_reader sourcesBefore=1 sourcesAfter=2 added=2 sourceMapVersion=9f0bca6aa283d22d
+[acl] policy_scope_expanded roleId=lucy_admin sourcesBefore=1 sourcesAfter=2 added=2 sourceMapVersion=9f0bca6aa283d22d
+[lucy] reload requested (e648180c-a8cd-43a0-9954-8f05b62fa47e); restarting KTX MCP upstream
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+{"level":30,"time":1795101288774,"pid":684,"hostname":"e8ce2bc09168","sessionId":"0a20f0c9-971a-4aff-97b0-cba9f85f6acb","msg":"session.open"}
+{"level":30,"time":1795101288781,"pid":684,"hostname":"e8ce2bc09168","tool":"connection_list","callId":"7024b45a-9f6d-48cd-9278-88d509823511","sessionId":"0a20f0c9-971a-4aff-97b0-cba9f85f6acb","params":{},"msg":"tool.start"}
+{"level":30,"time":1795101288786,"pid":684,"hostname":"e8ce2bc09168","tool":"connection_list","callId":"7024b45a-9f6d-48cd-9278-88d509823511","sessionId":"0a20f0c9-971a-4aff-97b0-cba9f85f6acb","durationMs":4.972291999999925,"outcome":"ok","resultSize":445,"msg":"tool.end"}
+{"level":30,"time":1795101288792,"pid":684,"hostname":"e8ce2bc09168","sessionId":"c5b08880-ee79-41c6-91f5-04c453a7b3fc","msg":"session.open"}
+{"level":30,"time":1795101288802,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-f","res":{"statusCode":200},"responseTime":1277.405584,"msg":"request completed"}
+{"level":30,"time":1795101288807,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-g","req":{"method":"GET","url":"/api/admin/agents/repro_reader/effective-permissions","host":"127.0.0.1:52096","remoteAddress":"172.25.0.1","remotePort":57780},"msg":"incoming request"}
+{"level":30,"time":1795101288820,"pid":311,"hostname":"e8ce2bc09168","reqId":"req-g","res":{"statusCode":200},"responseTime":13.21624999999949,"msg":"request completed"}
+{"level":30,"time":1795101288828,"pid":684,"hostname":"e8ce2bc09168","sessionId":"ba45c3f0-2d11-4dd7-b796-18d5b3503814","msg":"session.open"}
+[lucy-proxy] re-established KTX upstream session user=repro_reader tool=tools/list
+{"level":30,"time":1795101288868,"pid":684,"hostname":"e8ce2bc09168","tool":"sl_read_source","callId":"6b3bcdce-944f-41ca-ac08-d34256d606c9","sessionId":"ba45c3f0-2d11-4dd7-b796-18d5b3503814","params":{"connectionId":"hive-1","sourceName":"city"},"msg":"tool.start"}
+{"level":30,"time":1795101288874,"pid":684,"hostname":"e8ce2bc09168","tool":"sl_read_source","callId":"6b3bcdce-944f-41ca-ac08-d34256d606c9","sessionId":"ba45c3f0-2d11-4dd7-b796-18d5b3503814","durationMs":6.054333000000042,"outcome":"ok","resultSize":181,"msg":"tool.end"}
+{"level":30,"time":1795101288907,"pid":684,"hostname":"e8ce2bc09168","tool":"sl_query","callId":"5ee75595-08dc-493a-a94e-885d8aa8b0c4","sessionId":"ba45c3f0-2d11-4dd7-b796-18d5b3503814","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795101289173,"pid":684,"hostname":"e8ce2bc09168","tool":"sl_query","callId":"5ee75595-08dc-493a-a94e-885d8aa8b0c4","sessionId":"ba45c3f0-2d11-4dd7-b796-18d5b3503814","durationMs":265.72845800000005,"outcome":"ok","resultSize":171,"msg":"tool.end"}
+{"level":30,"time":1795101289208,"pid":684,"hostname":"e8ce2bc09168","tool":"sl_query","callId":"d5e1617c-88a6-43af-ab25-42dedf476cbc","sessionId":"ba45c3f0-2d11-4dd7-b796-18d5b3503814","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(ods_city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795101289470,"pid":684,"hostname":"e8ce2bc09168","tool":"sl_query","callId":"d5e1617c-88a6-43af-ab25-42dedf476cbc","sessionId":"ba45c3f0-2d11-4dd7-b796-18d5b3503814","durationMs":261.93162500000017,"outcome":"ok","resultSize":175,"msg":"tool.end"}
+

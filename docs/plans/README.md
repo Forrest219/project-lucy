@@ -4,6 +4,13 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) | P1-64／REQ-030-085；v0.1-draft。仅修复方案与验收设计；终稿未确权；开发未授权；测试台最近跑次 FAIL（缺陷已复现），修复后复测 NOT RUN；不入核心分母；≠ 可上线。 |
+| [lucy-20261119-memory-probe-diagnostics-isolation-plan.md](lucy-20261119-memory-probe-diagnostics-isolation-plan.md) | P1-61／REQ-030-082；v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
+| [lucy-20261119-heavy-work-capacity-control-plan.md](lucy-20261119-heavy-work-capacity-control-plan.md) | P1-62／REQ-030-083；v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
+| [lucy-20261119-process-drain-lifecycle-plan.md](lucy-20261119-process-drain-lifecycle-plan.md) | P1-63／REQ-030-084；v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
+| [lucy-20261119-webui-publish-caliber-registry-repair-plan.md](lucy-20261119-webui-publish-caliber-registry-repair-plan.md) | P1-60／REQ-030-081；v0.5-draft。复审闭合 OQ-1／OQ-2 文档方案；OQ-3 数值容差待采样前冻结；终稿未确权；开发未授权；测试台 NOT RUN；不入新增核心分母；≠ 可上线。 |
+| [lucy-20261119-roles-agent-read-responsiveness-plan.md](lucy-20261119-roles-agent-read-responsiveness-plan.md) | P1-58／REQ-030-079；v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F58／浏览器）；本轮验证仅 vitest＋code review，未跑 docker／UAT；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
+| [lucy-20261119-roles-agent-concurrent-edit-plan.md](lucy-20261119-roles-agent-concurrent-edit-plan.md) | P1-59／REQ-030-080；v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F59／浏览器）；本轮验证仅 vitest＋code review，未跑 docker／UAT；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | [lucy-20261119-fde-acceptance-remediation-plan.md](lucy-20261119-fde-acceptance-remediation-plan.md) | v1.2。D1–D5／Task1–7修复复验已执行，R1／R2修复，G7–G9测程缺口已补齐。委托人2026-11-19明示正式完整导出“可以先不修，未来再修”；G6该子项延期、待另行安排。原完整范围UAT实测FAIL保留；本次客户功能测试排除正式CSV／ZIP导出，可按限定范围进行，D5边界保留。D6未授权实施，本次延期仅改登记；不入核心分母；≠ 可上线。 |
 | [lucy-20261119-fde-3b1c62af-contract-remediation-plan.md](lucy-20261119-fde-3b1c62af-contract-remediation-plan.md) | v1.0 上一批实现 d8c3f097 及复评记录保留；混合权限与全局请求上限已由获授权的 P1-57 修复并复验。原完整范围FDE实测FAIL保留；委托人2026-11-19已将G6正式完整导出基线缺口延期，本次客户功能测试排除此项，可按限定范围进行，不声称导出已修复。O3仍未授权，D6未实施；≠ 可上线。 |
 | [lucy-20261119-p147-write-slice-spike-shave-plan.md](lucy-20261119-p147-write-slice-spike-shave-plan.md) | **v0.3**（P1-47）：写片尖峰削峰（保持 30 天回看）；W0＋W1 已落地，W2 默认多跑 UAT PASS，W3 未跑。**≠ 可上线** |

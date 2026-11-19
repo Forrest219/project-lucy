@@ -4,7 +4,13 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.145 |
+| 版本 | v1.151 |
+| v1.150 更新 | 2026-11-19：核对核心可用性已有修复后，新增P1-61／62／63三份独立Spec／Plan及共享模块UAT设计；仅文档，未确权、开发未授权；现值见§9。 |
+| v1.151 更新 | 2026-11-20：P1-60／REQ-030-081 复审修订 Spec／Plan v0.5-draft、UAT v0.3-draft：OQ-1／OQ-2 文档方案闭合，参与代次复用 committed registry generation，预算＋有效归属同事务并补 C1／C2 恢复；OQ-3 数值待采样前冻结。终稿未确权、开发未授权；13 项全部 NOT RUN，≠ 可上线。 |
+| v1.149 更新 | 2026-11-19：P1-60／REQ-030-081 按评审决议修订 Spec／Plan v0.4-draft、UAT v0.2-draft：保留 D6 新问询轮次，补 G1–G6、N／B／D 单一矩阵、画像任务补偿、RC1 与正式控制入口。待复审、未确权、开发未授权；13 项全部 NOT RUN，≠ 可上线。 |
+| v1.148 更新 | 2026-11-19：P1-60 零绑定 begin Spec／Plan v0.3-draft 及独立 UAT 草案已落盘，测试台 NOT RUN；错题复盘已登记。仅文档，终稿未确权、开发未授权；现值见 §9。 |
+| v1.147 更新 | 2026-11-19：P1-58／59文档v1.0终稿确权，委托人明示本次修订即终稿、免Codex CLI终审；开发未授权、UAT未执行；现值见§9。 |
+| v1.146 更新 | 2026-11-19：登记 P1-58／59 两份功能 Spec／Plan 与共享 2×／5× 规模 UAT 设计；仅文档授权，未开发、未执行，状态现值见 §9。 |
 | v1.145 更新 | 2026-11-19，委托人D7明确延期P1-57-G6正式完整导出基线缺口，待另行安排、不启动D6；原FIX-01／原完整范围UAT实测FAIL保持。本轮客户功能测试排除正式完整导出，可按其余已验证范围进行；不声称全缺陷清零／可上线。三台账同步，仅文档范围登记。 |
 | v1.144 更新 | 2026-11-19，P1-57授权修复复验：R1／R2修复、G7–G9验收差集纠正，完整夹具三轮／真实SIGKILL／完整HTTP滚动通过；正式新实例CSV／ZIP仍409，整体测试台FAIL，G6回D6设计裁决。Spec／Plan／总账／测试台同步；不能交客户测试；≠可上线。 |
 | v1.143 更新 | 2026-11-19，P1-57 FDE 修复复评整改仅文档：同步 P1-20／v2p5 现值镜像；P1-34 §11 与 P1-38 §8 验收缺口保留未收口，新增验收草案待委托人确认。运行代码、测试实现、Docker 与 UAT 本轮均未执行；测试台以 INDEX 为准；≠ 可上线。 |
@@ -277,6 +283,15 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 2026-06-22 另验证了「VIEW-as-pseudo-table」变通方案（CIO demo）：role `superstore_region_huadong` 通过 VIEW `dataforai.superstore_orders_huadong` 把表级 ACL 锁定到单一区域，零代理层代码改动；细节见 `docs/access-control/design-governance-baseline.md` §3.2。
 
 ## 9. 关键文档索引
+
+| 新增条目 | 状态与指针 |
+|---|---|
+| P1-61／REQ-030-082：存活／就绪探针纯内存响应与诊断隔离 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 [Spec](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) · [Plan](../plans/lucy-20261119-memory-probe-diagnostics-isolation-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
+| P1-62／REQ-030-083：重任务跨模块容量控制与许可生命周期 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 [Spec](../specs/lucy-20261119-heavy-work-capacity-control-spec.md) · [Plan](../plans/lucy-20261119-heavy-work-capacity-control-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
+| P1-63／REQ-030-084：进程关停准入关闭与在途请求排空 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 [Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md) · [Plan](../plans/lucy-20261119-process-drain-lifecycle-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
+| P1-60／REQ-030-081：零绑定 begin 不影响 MCP 问数 | v0.5-draft。复审闭合 OQ-1／OQ-2 文档方案；OQ-3 数值容差待采样前冻结；终稿未确权；开发未授权；测试台 NOT RUN；不入新增核心分母；≠ 可上线。 [Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md) · [Plan](../plans/lucy-20261119-webui-publish-caliber-registry-repair-plan.md) · [UAT](../qa/uat/suites/begin-zero-binding/suite.md) |
+| P1-58／REQ-030-079：角色权限与 Agent 读取响应 | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F58／浏览器）；本轮验证仅 vitest＋code review，未跑 docker／UAT；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 [Spec](../specs/lucy-20261119-roles-agent-read-responsiveness-spec.md) · [Plan](../plans/lucy-20261119-roles-agent-read-responsiveness-plan.md) |
+| P1-59／REQ-030-080：角色权限与 Agent 多人编辑 | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F59／浏览器）；本轮验证仅 vitest＋code review，未跑 docker／UAT；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 [Spec](../specs/lucy-20261119-roles-agent-concurrent-edit-spec.md) · [Plan](../plans/lucy-20261119-roles-agent-concurrent-edit-plan.md) |
 
 展示快照变更去重与影响范围隔离：[Spec 195](../../docs/specs/lucy-20261030-display-snapshot-invalidation-isolation-spec.md) · [实施计划 WO-20261030](../../webui/docs/plans/wo-20261030-display-snapshot-invalidation-isolation.md)。重点为同版本去重和 overlay / Agent 影响隔离；**实现已完成（提交 `ced19d1a`，2026-10-31）**，SI-01–SI-13 已执行并通过，SI-14 为本地匿名夹具浏览器往返（31 样本全成功），现场实例复核未执行。
 
