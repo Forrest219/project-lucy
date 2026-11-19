@@ -20,11 +20,16 @@ export function nextRebuildPageSize(size: number, lastMs: number): number {
 }
 
 /** 补算写入分片（每片一个事务，含 fsync）同样按时间预算收敛。 */
-export const REBUILD_WRITE_SLICE_MIN = 2;
-/** F2++ / R07 p99-3: tighter cap so adaptive growth cannot reopen a long commit+ckpt stretch. */
-export const REBUILD_WRITE_SLICE_MAX = 12;
-/** F2++ / R07 p99-3: start smaller so the first adaptive slices stay under the livez budget. */
-export const REBUILD_WRITE_SLICE_INITIAL = 3;
+export const REBUILD_WRITE_SLICE_MIN = 1;
+/**
+ * P1-47 spike-shave W0b (2026-11-19): tighter than F2++ (12) so a single on-thread
+ * fallback cannot reopen a multi-second commit; off-thread write still uses this cap.
+ */
+export const REBUILD_WRITE_SLICE_MAX = 8;
+/** P1-47 spike-shave W0b: start smaller than F2++ (3). */
+export const REBUILD_WRITE_SLICE_INITIAL = 2;
+/** If a write slice took at least this long, force the next size down (W0b). */
+export const REBUILD_WRITE_SLICE_SLOW_MS = 50;
 
 /**
  * P1-47 SC-01: 前置删除＋编号分配循环每次事务最多处理的 plan 数。

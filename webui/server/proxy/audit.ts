@@ -41,7 +41,22 @@ import {
   withAllocatedInquiryNo
 } from "../admin/audit-inquiry-serial.js";
 import { pauseAfterStretch } from "../admin/yield-slices.js";
-import { nextRebuildPageSize, nextSliceSize, REBUILD_ALLOCATE_CHUNK, REBUILD_PAGE_INITIAL, REBUILD_WRITE_SLICE_INITIAL, REBUILD_WRITE_SLICE_MAX, REBUILD_WRITE_SLICE_MIN } from "../admin/page-budget.js";
+import {
+  nextRebuildPageSize,
+  nextSliceSize,
+  REBUILD_ALLOCATE_CHUNK,
+  REBUILD_PAGE_INITIAL,
+  REBUILD_WRITE_SLICE_INITIAL,
+  REBUILD_WRITE_SLICE_MAX,
+  REBUILD_WRITE_SLICE_MIN,
+  REBUILD_WRITE_SLICE_SLOW_MS
+} from "../admin/page-budget.js";
+import {
+  closeRebuildWriteWorker,
+  runDeleteWindowOffThread,
+  runWriteSliceOffThread,
+  type RebuildTurnWrite
+} from "./audit-rebuild-write.js";
 import {
   CALL_MONITOR_P95_MIN_SAMPLES,
   callMonitorBucketIndex,
@@ -524,6 +539,7 @@ export function closeAuditDb(): void {
     snapshotStmt = null;
     conversationTurnInsertStmt = null;
   }
+  void closeRebuildWriteWorker();
   // F-02：重开数据库后基线需重新核对（换一个库文件时基线不在旧库里）。
   asofBaselineResolved = false;
   budgetTableReady = false;
@@ -2642,8 +2658,10 @@ async function rebuildInferredTurnsUnlocked(
     stretchStartedAt = performance.now();
   };
   const rebuildStartedAt = performance.now();
+  const auditDbPath = database.name;
   rebuildTrace("begin", {
     userId,
+    write_connection: "rebuild_worker",
     wal_autocheckpoint: Number(database.pragma("wal_autocheckpoint", { simple: true })),
     target_wal_autocheckpoint: AUDIT_WAL_AUTOCHECKPOINT_PAGES
   });
@@ -2743,13 +2761,6 @@ async function rebuildInferredTurnsUnlocked(
   }
   await rest();
 
-  const insertTurnStmt = database.prepare(`
-    INSERT INTO inferred_turns
-      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, client, session_id, created_at, updated_at, inquiry_no)
-    VALUES
-      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @client, @sessionId, @createdAt, @updatedAt, @inquiryNo)
-  `);
-  const insertLinkStmt = database.prepare(`INSERT INTO inferred_turn_access_logs (inferred_turn_id, access_log_id) VALUES (?, ?)`);
   const sourceQueryCache = new Map<string, Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>>();
   const assignedInquiry = new Map<string, number>();
 
@@ -2776,9 +2787,10 @@ async function rebuildInferredTurnsUnlocked(
     return rows;
   }
 
-  const writeCluster = (cluster: BuiltCluster): boolean => {
+  /** Build a serializable turn write for the rebuild worker (prefetch sources on this thread). */
+  const buildTurnWrite = (cluster: BuiltCluster): RebuildTurnWrite | null => {
     const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
-    if (members.length === 0) return false;
+    if (members.length === 0) return null;
     const anchor = cluster.business[0] ?? members[0];
     const accessLogIds = members.map((row) => row.id);
     const businessRows = cluster.business.filter((row) => row.tables !== null);
@@ -2794,19 +2806,15 @@ async function rebuildInferredTurnsUnlocked(
     const confidence: "medium" | "low" = dataBearing ? "medium" : "low";
     const questionSummary = cluster.summaryOverride ?? UNREPORTED_QUESTION_SUMMARY;
     const now = new Date().toISOString();
-    const startedAt = members[0].ts;
-    const endedAt = members[members.length - 1].ts;
     const inferredId = inferredTurnId(userId, anchor.id);
-    const client = clientFromRows(members);
     const inquiryNo = assignedInquiry.get(inferredId);
     if (inquiryNo == null) throw new Error(`missing inquiry number for ${inferredId}`);
-
-    insertTurnStmt.run({
+    return {
       id: inferredId,
       inquiryNo,
       userId,
-      startedAt,
-      endedAt,
+      startedAt: members[0].ts,
+      endedAt: members[members.length - 1].ts,
       callCount: members.length,
       businessCallCount: businessRows.length,
       toolSummary: JSON.stringify(toolSummary),
@@ -2821,15 +2829,12 @@ async function rebuildInferredTurnsUnlocked(
         businessCallCount: businessRows.length,
         sessionId: cluster.sessionId
       }),
-      client,
+      client: clientFromRows(members),
       sessionId: cluster.sessionId,
       createdAt: now,
-      updatedAt: now
-    });
-    for (const accessLogId of accessLogIds) {
-      insertLinkStmt.run(inferredId, accessLogId);
-    }
-    return true;
+      updatedAt: now,
+      accessLogIds
+    };
   };
 
   const deleteLinksByTurn = database.prepare(`DELETE FROM inferred_turn_access_logs WHERE inferred_turn_id = ?`);
@@ -2861,6 +2866,7 @@ async function rebuildInferredTurnsUnlocked(
   // disk). The per-plan delete+allocate loop stays REBUILD_ALLOCATE_CHUNK-sized.
   // OQ-1: within each short txn plans are processed in cluster order; between chunks we
   // yield; existing correlation_key numbers are reused via lookupInquiryNo.
+  // Spike-shave: window DELETE chunks run off-thread (same worker as write_slice).
   const backfillStartedAt = performance.now();
   database.transaction(() => {
     ensureBackfillBeforeAllocate(database);
@@ -2877,16 +2883,14 @@ async function rebuildInferredTurnsUnlocked(
   for (let chunkStart = 0; chunkStart < windowTurnIds.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
     if (chunkStart > 0) await rest();
     const chunk = windowTurnIds.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
-    const chunkStartedAt = performance.now();
-    database.transaction(() => {
-      for (const id of chunk) {
-        deleteLinksByTurn.run(id);
-        deleteTurnById.run(id);
-      }
-    })();
-    const chunkMs = performance.now() - chunkStartedAt;
-    deleteWindowMs += chunkMs;
-    rebuildTrace("delete_window", { offset: chunkStart, size: chunk.length, ms: chunkMs });
+    const offDelete = await runDeleteWindowOffThread(auditDbPath, chunk);
+    deleteWindowMs += offDelete.writeMs;
+    rebuildTrace("delete_window", {
+      offset: chunkStart,
+      size: chunk.length,
+      ms: offDelete.writeMs,
+      off_thread: 1
+    });
   }
   rebuildTrace("delete_window_total", { turns: windowTurnIds.length, ms: deleteWindowMs });
   await rest();
@@ -2895,10 +2899,11 @@ async function rebuildInferredTurnsUnlocked(
   for (let chunkStart = 0; chunkStart < plans.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
     if (chunkStart > 0) await rest();
     const chunk = plans.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
+    // Per-plan deletes for ids outside the window list stay on this thread but are tiny;
+    // inquiry allocate must stay here for serial consistency with lookupInquiryNo.
     const chunkStartedAt = performance.now();
     database.transaction(() => {
       for (const plan of chunk) {
-        // Plans may reference ids that fell outside the lookback window; delete those too.
         deleteLinksByTurn.run(plan.id);
         deleteTurnById.run(plan.id);
         assignedInquiry.set(plan.id, lookupInquiryNo(database, plan.id) ?? allocateInquiryNo(database, plan.id));
@@ -2916,94 +2921,65 @@ async function rebuildInferredTurnsUnlocked(
   let writeSlicesMs = 0;
   let prefetchMs = 0;
   let walCheckpointMs = 0;
-  // F2++ / R07 p99-3: skip PASSIVE when the previous checkpoint already left a tiny
-  // residual (≤ autocheckpoint pages). Autocheckpoint keeps commit spikes bounded;
-  // still force PASSIVE every few slices so busy=1 residue cannot drift.
-  const TINY_WAL_LOG_PAGES = AUDIT_WAL_AUTOCHECKPOINT_PAGES;
-  const FORCE_PASSIVE_EVERY_SLICES = 3;
-  let lastWalLogPages = Number.POSITIVE_INFINITY;
-  let slicesSincePassive = 0;
+  // P1-47 spike-shave: always PASSIVE after each write_slice (no F2++ skip); write+ckpt off-thread.
   for (let start = 0; start < plans.length;) {
     const slice = plans.slice(start, start + sliceSize);
-    // P1-47 B-line: warm access_log_sources outside the write txn so cold reads
-    // are not held under the writer lock / commit+checkpoint stretch.
+    // Prefetch on the request thread (read-only); build serializable payloads before the worker txn.
     const prefetchStartedAt = performance.now();
+    const turnWrites: RebuildTurnWrite[] = [];
     for (const plan of slice) {
       sourcesFor(plan.cluster.business.map((row) => row.id));
+      const builtTurn = buildTurnWrite(plan.cluster);
+      if (builtTurn) turnWrites.push(builtTurn);
     }
     const prefetchElapsed = performance.now() - prefetchStartedAt;
     prefetchMs += prefetchElapsed;
     rebuildTrace("prefetch_sources", { offset: start, size: slice.length, ms: prefetchElapsed });
     if (prefetchElapsed >= 20) await rest();
 
-    const sliceStartedAt = performance.now();
-    turns += database.transaction(() => {
-      let written = 0;
-      for (const plan of slice) {
-        if (writeCluster(plan.cluster)) written += 1;
-      }
-      return written;
-    })();
-    const sliceMs = performance.now() - sliceStartedAt;
-    writeSlicesMs += sliceMs;
-    rebuildTrace("write_slice", { offset: start, size: slice.length, ms: sliceMs, sliceSize });
+    const off = await runWriteSliceOffThread(auditDbPath, turnWrites);
+    turns += off.written;
+    writeSlicesMs += off.writeMs;
+    walCheckpointMs += off.checkpointMs;
+    rebuildTrace("write_slice", {
+      offset: start,
+      size: turnWrites.length,
+      ms: off.writeMs,
+      sliceSize,
+      off_thread: 1
+    });
+    rebuildTrace("wal_checkpoint", {
+      offset: start,
+      ms: off.checkpointMs,
+      busy: off.busy,
+      log: off.log,
+      checkpointed: off.checkpointed,
+      off_thread: 1
+    });
+    await rest();
 
-    // Spread residual WAL into PASSIVE checkpoints between slices.
-    // F2+ / R07 p99: always yield after write (+ optional ckpt).
-    // If busy=1, do not retry on the write hot path — yield first, then one deferred PASSIVE.
-    slicesSincePassive += 1;
-    const skipPassive =
-      Number.isFinite(lastWalLogPages) &&
-      lastWalLogPages <= TINY_WAL_LOG_PAGES &&
-      sliceMs < 20 &&
-      slicesSincePassive < FORCE_PASSIVE_EVERY_SLICES;
-
-    if (skipPassive) {
-      rebuildTrace("wal_checkpoint_skip", {
+    if (off.busy === 1) {
+      const retry = await runWriteSliceOffThread(auditDbPath, []);
+      walCheckpointMs += retry.checkpointMs;
+      rebuildTrace("wal_checkpoint_retry", {
         offset: start,
-        prior_log: lastWalLogPages,
-        sliceMs,
-        slices_since_passive: slicesSincePassive
+        ms: retry.checkpointMs,
+        busy: retry.busy,
+        log: retry.log,
+        checkpointed: retry.checkpointed,
+        off_thread: 1
       });
       await rest();
-    } else {
-      const ckptStartedAt = performance.now();
-      let ckpt = database.pragma("wal_checkpoint(PASSIVE)") as Array<{ busy: number; log: number; checkpointed: number }>;
-      let ckptMs = performance.now() - ckptStartedAt;
-      walCheckpointMs += ckptMs;
-      let ckptRow = ckpt[0];
-      lastWalLogPages = ckptRow?.log ?? lastWalLogPages;
-      slicesSincePassive = 0;
-      rebuildTrace("wal_checkpoint", {
-        offset: start,
-        ms: ckptMs,
-        busy: ckptRow?.busy ?? -1,
-        log: ckptRow?.log ?? -1,
-        checkpointed: ckptRow?.checkpointed ?? -1
-      });
-      await rest();
-
-      if (ckptRow?.busy === 1) {
-        const retryStartedAt = performance.now();
-        ckpt = database.pragma("wal_checkpoint(PASSIVE)") as Array<{ busy: number; log: number; checkpointed: number }>;
-        ckptMs = performance.now() - retryStartedAt;
-        walCheckpointMs += ckptMs;
-        ckptRow = ckpt[0];
-        lastWalLogPages = ckptRow?.log ?? lastWalLogPages;
-        rebuildTrace("wal_checkpoint_retry", {
-          offset: start,
-          ms: ckptMs,
-          busy: ckptRow?.busy ?? -1,
-          log: ckptRow?.log ?? -1,
-          checkpointed: ckptRow?.checkpointed ?? -1
-        });
-        await rest();
-      }
     }
 
     start += slice.length;
-    // P1-39: 一片 = 一次事务（含 fsync 与可能的检查点），按实测耗时收敛片大小。
-    sliceSize = nextSliceSize(sliceSize, sliceMs, REBUILD_WRITE_SLICE_MIN, REBUILD_WRITE_SLICE_MAX);
+    const sliceMs = off.writeMs + off.checkpointMs;
+    // W0b: slow slices shrink immediately; otherwise adapt toward the time budget.
+    if (sliceMs >= REBUILD_WRITE_SLICE_SLOW_MS) {
+      sliceSize = Math.max(REBUILD_WRITE_SLICE_MIN, Math.min(sliceSize, Math.floor(sliceSize / 2) || REBUILD_WRITE_SLICE_MIN));
+    } else {
+      sliceSize = nextSliceSize(sliceSize, Math.max(off.writeMs, 1), REBUILD_WRITE_SLICE_MIN, REBUILD_WRITE_SLICE_MAX);
+    }
   }
 
   // P1-45 SC-01: 全部写片成功后标记 complete；covered() 仅当 newest id ≤ ceilingId 时为 true。

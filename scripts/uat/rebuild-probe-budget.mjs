@@ -390,6 +390,9 @@ async function all() {
     await sleep(200);
   }
   const logs = dockerTry(["logs", RUN]);
+  writeFileSync(path.join(OUT, "container.log"), logs);
+  const traceLines = logs.split("\n").filter((line) => line.includes("[lucy-rebuild-trace]"));
+  if (traceLines.length) writeFileSync(path.join(OUT, "rebuild-trace.log"), `${traceLines.join("\n")}\n`);
   const pauseLog = /LUCY_INFERRED_MAINTAINER=off/.test(logs);
 
   const probePass = readyOk

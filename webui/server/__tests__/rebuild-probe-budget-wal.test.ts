@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * P1-47 B-line (FDE R07 / F2++): wal_autocheckpoint tuning + LUCY_REBUILD_TRACE segments.
+ * P1-47 B-line + spike-shave W0/W1: wal_autocheckpoint, always PASSIVE, off-thread write.
  * Spec: lucy-20261118-rebuild-probe-budget-spec.md OQ-2 / SC-01 residual.
  */
 
@@ -44,16 +44,16 @@ describe("P1-47 B-line wal_autocheckpoint", () => {
     }
   });
 
-  it("write-slice budget stays within F2++ INITIAL..MAX", async () => {
+  it("write-slice budget stays within spike-shave INITIAL..MAX", async () => {
     const {
       REBUILD_WRITE_SLICE_INITIAL,
       REBUILD_WRITE_SLICE_MAX,
       REBUILD_WRITE_SLICE_MIN,
       nextSliceSize,
     } = await import("../admin/page-budget.js");
-    expect(REBUILD_WRITE_SLICE_MIN).toBe(2);
-    expect(REBUILD_WRITE_SLICE_INITIAL).toBe(3);
-    expect(REBUILD_WRITE_SLICE_MAX).toBe(12);
+    expect(REBUILD_WRITE_SLICE_MIN).toBe(1);
+    expect(REBUILD_WRITE_SLICE_INITIAL).toBe(2);
+    expect(REBUILD_WRITE_SLICE_MAX).toBe(8);
     expect(nextSliceSize(REBUILD_WRITE_SLICE_INITIAL, 5, REBUILD_WRITE_SLICE_MIN, REBUILD_WRITE_SLICE_MAX)).toBeLessThanOrEqual(
       REBUILD_WRITE_SLICE_MAX,
     );
@@ -146,15 +146,19 @@ describe("P1-47 B-line LUCY_REBUILD_TRACE", () => {
     const joined = lines.join("\n");
     expect(joined).toMatch(/\[lucy-rebuild-trace\].*read_pages/);
     expect(joined).toMatch(/\[lucy-rebuild-trace\].*delete_window/);
+    // Fresh rebuild has no prior turns → only delete_window_total; non-empty windows emit off_thread chunks.
+    if (/delete_window offset=/.test(joined)) {
+      expect(joined).toMatch(/\[lucy-rebuild-trace\].*delete_window.*off_thread=1/);
+    }
     expect(joined).toMatch(/\[lucy-rebuild-trace\].*allocate/);
     expect(joined).toMatch(/\[lucy-rebuild-trace\].*write_slice/);
-    // First write slice always runs PASSIVE (lastWalLogPages starts as +∞); later
-    // slices may emit wal_checkpoint_skip when residual log is already tiny.
-    expect(joined).toMatch(/\[lucy-rebuild-trace\].*wal_checkpoint/);
+    expect(joined).toMatch(/\[lucy-rebuild-trace\].*write_slice.*off_thread=1/);
+    expect(joined).toMatch(/\[lucy-rebuild-trace\].*wal_checkpoint.*off_thread=1/);
+    expect(joined).not.toMatch(/wal_checkpoint_skip/);
     expect(joined).toMatch(/\[lucy-rebuild-trace\].*complete/);
   });
 
-  it("skips PASSIVE on later fast slices when residual WAL log is already tiny", async () => {
+  it("never emits wal_checkpoint_skip after spike-shave W0a", async () => {
     process.env.LUCY_REBUILD_TRACE = "1";
     const lines: string[] = [];
     const spy = vi.spyOn(console, "info").mockImplementation((...args: unknown[]) => {
@@ -185,7 +189,6 @@ describe("P1-47 B-line LUCY_REBUILD_TRACE", () => {
         `INSERT INTO access_log (ts, user_id, lucy_session_id, tool, tables, outcome, duration_ms, request_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       );
-      // Enough clusters for several write slices (gap 120s → one plan per row).
       seed.transaction(() => {
         for (let i = 1; i < 24; i += 1) {
           insert.run(
@@ -210,6 +213,7 @@ describe("P1-47 B-line LUCY_REBUILD_TRACE", () => {
 
     const joined = lines.join("\n");
     expect(joined).toMatch(/\[lucy-rebuild-trace\].*wal_checkpoint/);
-    expect(joined).toMatch(/\[lucy-rebuild-trace\].*wal_checkpoint_skip/);
+    expect(joined).not.toMatch(/wal_checkpoint_skip/);
+    expect(joined).toMatch(/off_thread=1/);
   });
 });
