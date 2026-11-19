@@ -166,6 +166,7 @@ import { registerRowPolicyTemplateRoutes } from "./admin/routes/row-policy.js";
 import { registerAuthorizationSummaryRoutes } from "./admin/routes/authorization-summary.js";
 // Lucy v0.25 / L25-08 — 访问关系图（P1-3）。
 import { registerAccessMapRoutes } from "./admin/routes/access-map.js";
+import { registerAccessWriteStatusRoutes } from "./admin/access-write-status.js";
 // Lucy v0.25 / L25-10 — Hive 直连的配置面（P1-4，仅编译侧）。
 import { registerHiveConnectionRoutes } from "./admin/routes/hive.js";
 import { warmAuditDatabases } from "./admin/audit-warmup.js";
@@ -3198,6 +3199,8 @@ export function buildServer() {
   registerAuthorizationSummaryRoutes(app);
   // Lucy v0.25 / L25-08 — 访问关系图（只读）。
   registerAccessMapRoutes(app);
+  // P1-59 RACS — read-only save outcome by client operationId.
+  registerAccessWriteStatusRoutes(app);
   // Lucy v0.25 / L25-10 — Hive 连接配置面（凭据只存引用；本轮不含 JDBC 执行）。
   registerHiveConnectionRoutes(app);
   // Lucy v0.25 / L25-02、L25-03 — 审计只读对账视图（三端点）。

@@ -1,17 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
+import { timeAsync, withRequestTiming } from "../entry-performance-timing.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
 import {
-  buildAdminPermissionContext,
-  compileRoleForAdmin,
   expandSelectorSourceNames,
   normalizePermissionModelVersion,
   previewRolePermissionsForAdmin,
   absoluteDenyOrUnclassifiedReason,
   resolveRoleIds,
-  type EffectivePermissions,
-  type PerRoleCompilation
+  type EffectivePermissions
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
 // L25-16 — 控制面工具登记表（角色保存路径校验 `allow.ops` 用）。
@@ -25,11 +23,26 @@ import {
   ACCESS_YAML_REL,
   ROLE_ID_RE,
   accessWriteResponseBody,
+  attachRacsReceiptToNewSummary,
+  buildRolesAgentRacsReceipt,
+  evaluateRolesAgentRacsIdempotencyClaim,
   makeDiff,
+  mapRacsIdempotencyRejectToHttp,
   readAccessYaml,
   readAccessYamlVersion,
+  respondRacsIdempotencyReplay,
   runInAccessPublishWindow,
   writeAccessYaml,
+  assertPreviewTokenMatches,
+  assertRoleObjectBaseline,
+  computeRoleAgentPreviewBinding,
+  computeRoleBaseObjectVersion,
+  mapConcurrentEditError,
+  mergeConfigWithRole,
+  resolveAccessWriteVersionMode,
+  resolveCompileInputsDigest,
+  resolveRolesAgentRacsOperation,
+  serializeBaseObjectVersion,
   type AccessConfigWriteResult,
   type YamlAccessConfig,
   type YamlPermissionModelVersion,
@@ -61,8 +74,23 @@ import {
 } from "../proxy/context-inventory.js";
 import { computeContextPolicyVersion } from "../proxy/context-policy.js";
 import { getSecurityStore } from "../security/instance.js";
+import { generationKey, hasPendingDisplayWrite } from "../display-generation.js";
+import {
+  AGENT_PERMISSION_SCOPES,
+  createDisplayRequestBudget,
+  DisplaySnapshotBusyError,
+  getDisplaySnapshot,
+  registerDisplayPrewarmer,
+  type DisplayRequestBudget
+} from "../display-snapshot.js";
+import {
+  compileAdminRoleListRows,
+  readAccessSnapshot,
+  type RoleListDisplayRow,
+  type RoleListDisplaySource
+} from "./permission-display.js";
 
-type RoleSource = "yaml" | "template";
+type RoleSource = RoleListDisplaySource;
 
 type ResolvedRole = {
   id: string;
@@ -256,12 +284,6 @@ function sourceNamesFromPreview(
 ): string[] {
   if (!preview.ok) return [];
   return sourceNamesFromSources(preview.permissions.sources);
-}
-
-/** List-path helper: same name surface as preview, from a shared-context compile. */
-function sourceNamesFromCompilation(compiled: PerRoleCompilation): string[] {
-  if (!compiled.ok || !compiled.sources) return [];
-  return sourceNamesFromSources(compiled.sources);
 }
 
 function sourceNamesFromSources(
@@ -1003,53 +1025,91 @@ async function guardRoleIdForCreate(roleId: string, acknowledged: boolean): Prom
   return undefined;
 }
 
+function roleListEntries(config: YamlAccessConfig, includeTemplates: boolean): ResolvedRole[] {
+  const yamlEntries: ResolvedRole[] = Object.entries(config.roles ?? {})
+    .filter(([, role]) => role.allow !== undefined)
+    .map(([id, role]) => ({ id, role, source: "yaml" as const }));
+  const templateEntries: ResolvedRole[] = includeTemplates
+    ? Object.keys(ROLE_TEMPLATES).flatMap((id) => {
+        if (config.roles?.[id]?.allow) return [];
+        const expanded = expandTemplate(id);
+        return expanded ? [{ id, role: expanded, source: "template" as const }] : [];
+      })
+    : [];
+  return [...yamlEntries, ...templateEntries];
+}
+
+function listConfigWithTemplates(config: YamlAccessConfig, entries: ResolvedRole[]): YamlAccessConfig {
+  const templateEntries = entries.filter((entry) => entry.source === "template");
+  return {
+    ...config,
+    roles: {
+      ...(config.roles ?? {}),
+      ...Object.fromEntries(templateEntries.map((entry) => [entry.id, entry.role]))
+    }
+  };
+}
+
+type CachedRoleListSection = { rows: RoleListDisplayRow[] };
+
+async function roleListSection(
+  projectRoot: string,
+  config: YamlAccessConfig,
+  raw: string,
+  version: string,
+  includeTemplates: boolean,
+  budget?: DisplayRequestBudget
+): Promise<CachedRoleListSection & { snapshotVersion: string }> {
+  const entries = roleListEntries(config, includeTemplates);
+  const listConfig = listConfigWithTemplates(config, entries);
+  const extraKey = `${version}\u0000${includeTemplates ? "templates" : "yaml-only"}`;
+  const snapshot = await getDisplaySnapshot("role-list", AGENT_PERMISSION_SCOPES, async () => {
+    const accessSnapshot = await readAccessSnapshot(projectRoot, raw, version);
+    if (!accessSnapshot.runtimeConfig) {
+      return JSON.stringify({ rows: [] } satisfies CachedRoleListSection);
+    }
+    const compiled = await compileAdminRoleListRows(listConfig, entries);
+    return JSON.stringify({ rows: compiled.rows } satisfies CachedRoleListSection);
+  }, { extraKey, budget });
+  return {
+    ...(JSON.parse(snapshot.payload) as CachedRoleListSection),
+    snapshotVersion: snapshot.version
+  };
+}
+
+async function buildRolesListResponse(projectRoot: string, includeTemplates: boolean, budget?: DisplayRequestBudget) {
+  const { config, raw, version, mtimeMs } = await timeAsync("access", () => readAccessYaml(projectRoot));
+  const configUpdatedAt = new Date(mtimeMs).toISOString();
+  const section = await timeAsync("permissions", () =>
+    roleListSection(projectRoot, config, raw, version, includeTemplates, budget)
+  );
+  const roles = section.rows.map((row) => ({
+    ...row,
+    configUpdatedAt: row.source === "yaml" ? configUpdatedAt : null
+  }));
+  return { ok: true as const, data: { roles } };
+}
+
+registerDisplayPrewarmer("role-list", async () => {
+  const projectRoot = await resolveProjectRoot();
+  const { config, raw, version } = await readAccessYaml(projectRoot);
+  await roleListSection(projectRoot, config, raw, version, true);
+});
+
 export function registerRoleRoutes(app: FastifyInstance) {
   // GET /api/admin/roles — list with usageCount and users
-  app.get<{ Querystring: { includeTemplates?: string } }>("/api/admin/roles", async (request) => {
+  app.get<{ Querystring: { includeTemplates?: string } }>("/api/admin/roles", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
-    const { config, mtimeMs } = await readAccessYaml(projectRoot);
-    const configUpdatedAt = new Date(mtimeMs).toISOString();
     const includeTemplates = request.query.includeTemplates !== "false";
-
-    const yamlEntries: ResolvedRole[] = Object.entries(config.roles ?? {})
-        .filter(([, role]) => role.allow !== undefined)
-        .map(([id, role]) => ({ id, role, source: "yaml" }));
-    const templateEntries: ResolvedRole[] = includeTemplates
-      ? Object.keys(ROLE_TEMPLATES).flatMap((id) => {
-          if (config.roles?.[id]?.allow) return [];
-          const expanded = expandTemplate(id);
-          return expanded ? [{ id, role: expanded, source: "template" as const }] : [];
-        })
-      : [];
-    const entries: ResolvedRole[] = [...yamlEntries, ...templateEntries];
-
-    // Spec REQ-030-034 / Spec 174 parity — one AdminPermissionContext (one
-    // source-map build) for the whole list. Detail/dryRun keep fresh preview.
-    const listConfig: YamlAccessConfig = {
-      ...config,
-      roles: {
-        ...(config.roles ?? {}),
-        ...Object.fromEntries(templateEntries.map((entry) => [entry.id, entry.role]))
-      }
-    };
-    const context = await buildAdminPermissionContext(listConfig as Parameters<typeof buildAdminPermissionContext>[0]);
-    const roles = [];
-    for (const entry of entries) {
-      const compiled = await compileRoleForAdmin(entry.id, context);
-      const summary = buildRoleSummary(config, entry);
-      const sourceNames = sourceNamesFromCompilation(compiled);
-      roles.push({
-        ...summary,
-        sourceCount: compiled.ok ? (compiled.sources?.length ?? 0) : 0,
-        sourceNames,
-        invalid: !compiled.ok,
-        warnings: compiled.ok ? [] : [compiled.reason ?? "role_resolution_failed"],
-        configUpdatedAt: entry.source === "yaml" ? configUpdatedAt : null
-      });
+    const budget = createDisplayRequestBudget();
+    for (;;) {
+      const accessGeneration = generationKey(["P", "C"]);
+      const listing = await buildRolesListResponse(projectRoot, includeTemplates, budget);
+      if (generationKey(["P", "C"]) === accessGeneration && !hasPendingDisplayWrite(["P", "C"])) return listing;
+      if (budget.attemptsLeft <= 0) break;
     }
-
-    return { ok: true, data: { roles } };
-  });
+    throw new DisplaySnapshotBusyError("generation_changed");
+  }));
 
   // GET /api/admin/roles/:roleId — single role detail
   app.get<{ Params: { roleId: string } }>("/api/admin/roles/:roleId", async (request, reply) => {
@@ -1087,7 +1147,14 @@ export function registerRoleRoutes(app: FastifyInstance) {
         effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined,
         skillAccess,
         wikiAccess,
-        contextPolicyVersion
+        contextPolicyVersion,
+        ...(resolved.source === "yaml" && resolved.role.allow
+          ? {
+              baseObjectVersion: serializeBaseObjectVersion(
+                computeRoleBaseObjectVersion(resolved.id, resolved.role)
+              )
+            }
+          : {})
       }
     };
   });
@@ -1364,6 +1431,10 @@ export function registerRoleRoutes(app: FastifyInstance) {
     Body: {
       dryRun?: boolean;
       version?: string;
+      baseObjectVersion?: string;
+      previewToken?: string;
+      operationId?: string;
+      compileInputsDigest?: string;
       override?: AccessGovernanceOverrideRequest;
       patch?: { description?: unknown; allow?: unknown; permission_model_version?: unknown };
       /**
@@ -1376,8 +1447,19 @@ export function registerRoleRoutes(app: FastifyInstance) {
   }>("/api/admin/roles/:roleId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const projectRoot = await resolveProjectRoot();
+    let versionMode;
+    try {
+      versionMode = resolveAccessWriteVersionMode(request.body ?? {});
+    } catch (error) {
+      const mapped = mapConcurrentEditError(error);
+      if (mapped) {
+        return reply.status(mapped.status).send({ ok: false, error: { code: mapped.code, message: mapped.message, ...(mapped.detail ? { detail: mapped.detail } : {}) } });
+      }
+      throw error;
+    }
+    const compileInputsDigest = resolveCompileInputsDigest(request.body?.compileInputsDigest);
     const { raw, version: currentVersion } = await readAccessYamlVersion(projectRoot);
-    if (request.body?.version && request.body.version !== currentVersion) {
+    if (versionMode.mode === "legacy" && request.body?.version && request.body.version !== currentVersion) {
       return reply.status(409).send({ ok: false, error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" } });
     }
     const config = (await import("yaml")).parse(raw) as YamlAccessConfig;
@@ -1389,6 +1471,20 @@ export function registerRoleRoutes(app: FastifyInstance) {
         return reply.status(400).send({ ok: false, error: { code: "TEMPLATE_ROLE_READONLY", message: "template roles are read-only" } });
       }
       return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
+    }
+    if (versionMode.mode === "object") {
+      try {
+        assertRoleObjectBaseline(config, request.params.roleId, versionMode.baseObjectVersion);
+      } catch (error) {
+        const mapped = mapConcurrentEditError(error);
+        if (mapped) {
+          return reply.status(mapped.status).send({
+            ok: false,
+            error: { code: mapped.code, message: mapped.message, ...(mapped.detail ? { detail: mapped.detail } : {}) }
+          });
+        }
+        throw error;
+      }
     }
     // The write entry point that can change a row policy consumes the preview
     // confirmation (spec §14.2.1). The confirmation is REQUIRED whenever the
@@ -1464,8 +1560,38 @@ export function registerRoleRoutes(app: FastifyInstance) {
     });
     const gate = evaluateAccessGovernanceGate(gateInput);
 
+    const racsPreview =
+      versionMode.mode === "object"
+        ? computeRoleAgentPreviewBinding({
+            kind: "role",
+            objectId: request.params.roleId,
+            baseObjectVersion: versionMode.baseObjectVersion,
+            config: newConfig,
+            patch: request.body?.patch ?? {},
+            compileInputsDigest,
+            gate
+          })
+        : undefined;
+
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, version: currentVersion, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings } };
+      return {
+        ok: true,
+        data: {
+          diff,
+          proposedYaml,
+          version: currentVersion,
+          gate,
+          migration: validated.migration,
+          templateWarnings: templateDiagnostics.warnings,
+          ...(versionMode.mode === "object"
+            ? {
+                baseObjectVersion: serializeBaseObjectVersion(versionMode.baseObjectVersion),
+                previewToken: racsPreview!.previewToken,
+                compileInputsDigest
+              }
+            : {})
+        }
+      };
     }
 
     if (gate.decision === "block") {
@@ -1523,7 +1649,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       // 1) Re-read the access baseline INSIDE the window. The lock-outside raw
       //    must not be used to decide anything.
       const fresh = await readAccessYamlVersion(projectRoot);
-      if (request.body?.version && request.body.version !== fresh.version) {
+      if (versionMode.mode === "legacy" && request.body?.version && request.body.version !== fresh.version) {
         return reply.status(409).send({
           ok: false,
           error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
@@ -1531,6 +1657,20 @@ export function registerRoleRoutes(app: FastifyInstance) {
       }
       const freshConfig = (await import("yaml")).parse(fresh.raw) as YamlAccessConfig;
       if (!freshConfig.users) freshConfig.users = [];
+      if (versionMode.mode === "object") {
+        try {
+          assertRoleObjectBaseline(freshConfig, request.params.roleId, versionMode.baseObjectVersion);
+        } catch (error) {
+          const mapped = mapConcurrentEditError(error);
+          if (mapped) {
+            return reply.status(mapped.status).send({
+              ok: false,
+              error: { code: mapped.code, message: mapped.message, ...(mapped.detail ? { detail: mapped.detail } : {}) }
+            });
+          }
+          throw error;
+        }
+      }
       const freshExisting = freshConfig.roles?.[request.params.roleId];
       if (!freshExisting || !freshExisting.allow) {
         return reply.status(409).send({
@@ -1578,10 +1718,32 @@ export function registerRoleRoutes(app: FastifyInstance) {
         }
       }
 
-      const freshConfigWithRole: YamlAccessConfig = {
-        ...freshConfig,
-        roles: { ...(freshConfig.roles ?? {}), [request.params.roleId]: freshValidated.value }
-      };
+      const freshConfigWithRole = mergeConfigWithRole(freshConfig, request.params.roleId, freshValidated.value);
+      let publishPreviewEffectDigest: string | undefined;
+      if (versionMode.mode === "object") {
+        try {
+          const freshBinding = computeRoleAgentPreviewBinding({
+            kind: "role",
+            objectId: request.params.roleId,
+            baseObjectVersion: versionMode.baseObjectVersion,
+            config: freshConfigWithRole,
+            patch: request.body?.patch ?? {},
+            compileInputsDigest,
+            gate
+          });
+          assertPreviewTokenMatches(request.body?.previewToken, freshBinding.previewEffectDigest);
+          publishPreviewEffectDigest = freshBinding.previewEffectDigest;
+        } catch (error) {
+          const mapped = mapConcurrentEditError(error);
+          if (mapped) {
+            return reply.status(mapped.status).send({
+              ok: false,
+              error: { code: mapped.code, message: mapped.message, ...(mapped.detail ? { detail: mapped.detail } : {}) }
+            });
+          }
+          throw error;
+        }
+      }
       const freshDiff = makeDiff(fresh.raw, (await import("yaml")).stringify(freshConfigWithRole, { lineWidth: 0 }));
       const freshAttribution = buildRowPolicyAuditAttribution(
         request.params.roleId,
@@ -1591,9 +1753,77 @@ export function registerRoleRoutes(app: FastifyInstance) {
         operationId
       );
 
+      const racsOp = resolveRolesAgentRacsOperation(versionMode, request.body?.operationId);
+      if (racsOp.kind === "reject") {
+        return reply.status(racsOp.status).send({
+          ok: false,
+          error: { code: racsOp.code, message: racsOp.message }
+        });
+      }
+
+      let racsIdempotencyKey: string | undefined;
+      let newSummaryPayload: Record<string, unknown> = {
+        description: freshValidated.value.description,
+        allow: freshValidated.value.allow,
+        ...(freshAttribution
+          ? {
+              rowPolicy: {
+                operationId: freshAttribution.operationId,
+                tables: freshAttribution.tables,
+                beforeDigest: freshAttribution.beforeDigest,
+                afterDigest: freshAttribution.afterDigest,
+                affectedAgentCount: freshAttribution.affectedAgentCount
+              }
+            }
+          : {})
+      };
+
+      if (racsOp.kind === "racs") {
+        if (!publishPreviewEffectDigest) {
+          return reply.status(409).send({
+            ok: false,
+            error: { code: "PREVIEW_TOKEN_REQUIRED", message: "previewToken is required for object-version saves" }
+          });
+        }
+        const objectBase = versionMode.mode === "object" ? versionMode.baseObjectVersion : undefined;
+        if (!objectBase) {
+          return reply.status(400).send({
+            ok: false,
+            error: { code: "BAD_REQUEST", message: "baseObjectVersion is required for RACS saves" }
+          });
+        }
+        const receipt = buildRolesAgentRacsReceipt({
+          actor: trustedActorFromRequest(request),
+          objectKind: "role",
+          objectId: request.params.roleId,
+          previewEffectDigest: publishPreviewEffectDigest,
+          baseObjectVersionSerialized: serializeBaseObjectVersion(objectBase),
+          candidateConfig: freshConfigWithRole
+        });
+        const claim = await evaluateRolesAgentRacsIdempotencyClaim(racsOp.operationId, receipt);
+        if (claim.kind === "reject") {
+          const mapped = mapRacsIdempotencyRejectToHttp(claim.code);
+          return reply.status(mapped.status).send({
+            ok: false,
+            error: { code: mapped.code, message: mapped.message }
+          });
+        }
+        if (claim.kind === "replay") {
+          const replay = await respondRacsIdempotencyReplay(claim.auditId, {
+            operationId: racsOp.operationId,
+            baseObjectVersion: serializeBaseObjectVersion(
+              computeRoleBaseObjectVersion(request.params.roleId, freshValidated.value)
+            )
+          });
+          return reply.status(replay.statusCode).send(replay.body);
+        }
+        racsIdempotencyKey = claim.idempotencyKey;
+        newSummaryPayload = attachRacsReceiptToNewSummary(newSummaryPayload, receipt);
+      }
+
       const writeResult = await writeAccessYaml(projectRoot, freshConfigWithRole, {
         enabled: true,
-        expectedVersion: fresh.version,
+        expectedVersion: versionMode.mode === "legacy" ? fresh.version : undefined,
         changeType: freshAttribution ? "row_policy_update" : "role_patch",
         operation: freshAttribution ? "row_policy.update" : undefined,
         targetId: request.params.roleId,
@@ -1611,22 +1841,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
               }
             : {})
         },
-        newSummary: {
-          description: freshValidated.value.description,
-          allow: freshValidated.value.allow,
-          ...(freshAttribution
-            ? {
-                rowPolicy: {
-                  operationId: freshAttribution.operationId,
-                  tables: freshAttribution.tables,
-                  beforeDigest: freshAttribution.beforeDigest,
-                  afterDigest: freshAttribution.afterDigest,
-                  affectedAgentCount: freshAttribution.affectedAgentCount
-                }
-              }
-            : {})
-        },
+        newSummary: newSummaryPayload,
         diff: freshDiff,
+        idempotencyKey: racsIdempotencyKey,
         ...auditActorFields(trustedActorFromRequest(request)),
         source: "admin_roles_api"
       }).catch((error: unknown) => {
@@ -1651,7 +1868,14 @@ export function registerRoleRoutes(app: FastifyInstance) {
         rowPolicy: freshAttribution,
         gate,
         templateWarnings: templateDiagnostics.warnings,
-        operationId
+        operationId: request.body?.operationId ?? operationId,
+        ...(versionMode.mode === "object"
+          ? {
+              baseObjectVersion: serializeBaseObjectVersion(
+                computeRoleBaseObjectVersion(request.params.roleId, freshValidated.value)
+              )
+            }
+          : {})
       });
       return reply.status(response.statusCode).send(response.body);
     });
@@ -2026,3 +2250,5 @@ export function registerRoleRoutes(app: FastifyInstance) {
     });
   });
 }
+
+export { computeRoleBaseObjectVersion, computeRoleObjectDigest } from "./access-object-version.js";

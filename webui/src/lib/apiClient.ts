@@ -19,6 +19,10 @@ export class ApiError extends Error {
   code: string;
   detail?: unknown;
   data?: unknown;
+  httpStatus?: number;
+  requestId?: string;
+  serverTiming?: string;
+  retryAfterSeconds?: number;
 
   constructor(error: ApiFailure["error"], data?: unknown) {
     super(error.message);
@@ -27,6 +31,89 @@ export class ApiError extends Error {
     this.detail = error.detail;
     this.data = data;
   }
+}
+
+/** Internal code — never show verbatim in user-visible copy. */
+export const GATEWAY_UNAVAILABLE = "GATEWAY_UNAVAILABLE";
+
+const HTML_CONTENT_TYPE = /text\/html/i;
+const JSON_CONTENT_TYPE = /application\/json|\+json/i;
+
+function isHtmlContentType(contentType: string): boolean {
+  return HTML_CONTENT_TYPE.test(contentType);
+}
+
+function isJsonContentType(contentType: string): boolean {
+  return JSON_CONTENT_TYPE.test(contentType);
+}
+
+export function isGatewayHtmlResponse(status: number, contentType: string): boolean {
+  return (status === 502 || status === 503) && isHtmlContentType(contentType);
+}
+
+function responseHeader(response: Response, name: string): string | null {
+  return response.headers?.get?.(name) ?? null;
+}
+
+function readRequestId(response: Response): string | undefined {
+  for (const name of ["x-request-id", "request-id", "x-lucy-request-id"]) {
+    const value = responseHeader(response, name);
+    if (value?.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function parseRetryAfterSeconds(header: string | null): number | undefined {
+  if (!header?.trim()) return undefined;
+  const seconds = Number(header.trim());
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds;
+  const date = Date.parse(header);
+  if (Number.isNaN(date)) return undefined;
+  return Math.max(0, Math.ceil((date - Date.now()) / 1000));
+}
+
+function attachResponseMeta(error: ApiError, response: Response): ApiError {
+  error.httpStatus = response.status;
+  error.requestId = readRequestId(response);
+  error.serverTiming = responseHeader(response, "server-timing") ?? undefined;
+  const retryAfter = parseRetryAfterSeconds(responseHeader(response, "retry-after"));
+  if (retryAfter !== undefined) error.retryAfterSeconds = retryAfter;
+  return error;
+}
+
+function gatewayUnavailableError(response: Response): ApiError {
+  const error = new ApiError({
+    code: GATEWAY_UNAVAILABLE,
+    message: "服务暂不可用，请稍后重试。"
+  });
+  return attachResponseMeta(error, response);
+}
+
+/** User-visible copy without internal codes or raw gateway HTML. */
+export function userFacingApiErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiError)) {
+    return error instanceof Error && error.message ? error.message : "未知错误";
+  }
+  const base =
+    error.code === GATEWAY_UNAVAILABLE ? "服务暂不可用，请稍后重试。" : error.message.trim() || "未知错误";
+  return error.requestId ? `${base}（请求编号：${error.requestId}）` : base;
+}
+
+/** Bounded read retry (display lists): BUSY or HTML gateway only — not auth, conflict, or stale. */
+export function isRetryableDisplayReadError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  if (error.code === STALE_RESPONSE || error.code === WRITE_STALE_RESPONSE) return false;
+  if (error.httpStatus === 401 || error.httpStatus === 403 || error.httpStatus === 409) return false;
+  if (
+    error.code === "AUTH_REQUIRED" ||
+    error.code === "AUTH_INVALID" ||
+    error.code === "FORBIDDEN" ||
+    error.code === "VERSION_CONFLICT" ||
+    error.code === "ROLE_ID_TAKEN"
+  ) {
+    return false;
+  }
+  return error.code === "DISPLAY_SNAPSHOT_BUSY" || error.code === GATEWAY_UNAVAILABLE;
 }
 
 /**
@@ -205,19 +292,32 @@ async function apiRequest<T>(path: string, init: RequestInit, options: ApiReques
     ...(headers ? { headers } : {}),
     ...(options.signal ? { signal: options.signal } : {})
   });
+  const contentType = responseHeader(response, "content-type") ?? "";
+  if (isGatewayHtmlResponse(response.status, contentType)) {
+    await response.text();
+    if (startedAuthEpoch !== authEpoch) throw staleResponse();
+    throw gatewayUnavailableError(response);
+  }
+
   let envelope: ApiEnvelope<T>;
   try {
     envelope = (await response.json()) as ApiEnvelope<T>;
-  } catch (error) {
+  } catch {
     if (startedAuthEpoch !== authEpoch) throw staleResponse();
-    throw error;
+    if (response.status === 502 || response.status === 503) {
+      throw gatewayUnavailableError(response);
+    }
+    throw attachResponseMeta(
+      new ApiError({ code: "INVALID_RESPONSE", message: "响应格式无效。" }),
+      response
+    );
   }
 
   if (startedAuthEpoch !== authEpoch) throw staleResponse();
   if (scope && (startedWriteEpoch !== displayWriteEpochs[scope] || hasPendingDisplayWrite(scope))) throw writeStaleResponse();
   if (envelope.ok === false) {
     rejectIfAuthLost(response, envelope);
-    throw new ApiError(envelope.error, envelope.data);
+    throw attachResponseMeta(new ApiError(envelope.error, envelope.data), response);
   }
   if (scope && awaitingFreshRead[scope]) {
     awaitingFreshRead[scope] = false;

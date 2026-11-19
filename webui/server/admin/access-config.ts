@@ -17,7 +17,13 @@ import {
   readAccessRecoveryState,
   setInMemoryRecoveryRequiredSync
 } from "../access-recovery.js";
-import type { ConfigAuditAssetKind, ConfigAuditActorType } from "./audit.js";
+import type { ConfigAuditAssetKind, ConfigAuditActorType, ConfigAuditWriteStatus } from "./audit.js";
+import {
+  embedRacsReceiptInSummary,
+  mergeTerminalIntoRacsReceipt,
+  parseRacsReceiptFromSummary
+} from "./access-write-status.js";
+import { getAuditDb } from "./audit.js";
 import { withDisplayWriteBarrier } from "../display-generation.js";
 import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorization-barrier.js";
 import type { PolicyRuntimeStatus } from "../proxy/acl.js";
@@ -263,6 +269,25 @@ export async function runInAccessPublishWindow<T>(
   return withPublishCoordinator(kind, fn, { projectRoot });
 }
 
+function mergeRacsTerminalIntoAuditNewSummary(
+  newSummary: unknown,
+  terminal: {
+    runtimeAck: boolean;
+    effectiveDigest?: string;
+    writeStatus: ConfigAuditWriteStatus;
+  }
+): unknown {
+  if (newSummary === undefined || newSummary === null) return newSummary;
+  const receipt = parseRacsReceiptFromSummary(newSummary);
+  if (!receipt) return newSummary;
+  const merged = mergeTerminalIntoRacsReceipt(receipt, terminal);
+  const base =
+    typeof newSummary === "object" && !Array.isArray(newSummary)
+      ? (newSummary as Record<string, unknown>)
+      : {};
+  return embedRacsReceiptInSummary(base, merged);
+}
+
 async function writeAccessYamlInBarrier(
   projectRoot: string,
   config: YamlAccessConfig,
@@ -391,6 +416,8 @@ async function writeAccessConfigFileWithAuditClosureInner(
         newSummary: audit.newSummary,
         diff: audit.diff,
         requestId: audit.requestId,
+        // P1-59 RACS: client operationId → idempotency_key / racsReceipt via
+        // `access-write-status.ts` (59-CORE wires audit.idempotencyKey + summary).
         idempotencyKey: audit.idempotencyKey
       },
       { newText: content }
@@ -468,7 +495,11 @@ async function writeAccessConfigFileWithAuditClosureInner(
     try {
       await completeConfigAuditTerminal(intentId, {
         writeStatus: "failed",
-        errorReason: `recovery_required:${originalReason}:${recoveryReason}`
+        errorReason: `recovery_required:${originalReason}:${recoveryReason}`,
+        newSummary: mergeRacsTerminalIntoAuditNewSummary(audit?.newSummary, {
+          runtimeAck: false,
+          writeStatus: "failed"
+        })
       });
       terminalAudit = "persisted";
     } catch {
@@ -541,7 +572,12 @@ async function writeAccessConfigFileWithAuditClosureInner(
     try {
       await completeConfigAuditTerminal(intentId, {
         writeStatus: "rolled_back",
-        errorReason: originalReason
+        errorReason: originalReason,
+        newSummary: mergeRacsTerminalIntoAuditNewSummary(audit?.newSummary, {
+          runtimeAck: false,
+          effectiveDigest: rollbackStatus.accessConfigDigest,
+          writeStatus: "rolled_back"
+        })
       });
       terminalAudit = "rolled_back";
     } catch {
@@ -620,7 +656,11 @@ async function writeAccessConfigFileWithAuditClosureInner(
       writeStatus: "committed",
       diff: audit?.diff,
       oldSummary: audit?.oldSummary,
-      newSummary: audit?.newSummary
+      newSummary: mergeRacsTerminalIntoAuditNewSummary(audit?.newSummary, {
+        runtimeAck: true,
+        effectiveDigest: status.accessConfigDigest,
+        writeStatus: "committed"
+      })
     });
     releaseInFlightAccessConfigIntent(intentId);
     committedStatus = status;
@@ -708,6 +748,106 @@ export function accessWriteStatusMessage(status: AccessWriteStatus): string {
  * `runtimeAck` alone, or from the local draft state: only `committed` is a
  * success.
  */
+export async function respondRacsIdempotencyReplay(
+  auditId: number,
+  extra: Record<string, unknown> = {}
+): Promise<{ statusCode: number; body: Record<string, unknown> }> {
+  const database = await getAuditDb();
+  const row = database
+    .prepare(
+      `SELECT write_status, new_summary, error_reason
+         FROM config_change_log
+        WHERE id = ?`
+    )
+    .get(auditId) as
+    | { write_status: ConfigAuditWriteStatus; new_summary: string | null; error_reason: string | null }
+    | undefined;
+  if (!row) {
+    return {
+      statusCode: 409,
+      body: { ok: false, error: { code: "RACS_REPLAY_RECORD_MISSING", message: "幂等记录不存在。" } }
+    };
+  }
+  let parsedSummary: unknown = null;
+  if (row.new_summary) {
+    try {
+      parsedSummary = JSON.parse(row.new_summary) as unknown;
+    } catch {
+      parsedSummary = null;
+    }
+  }
+  const receipt = parseRacsReceiptFromSummary(parsedSummary);
+  const terminal = receipt?.terminal;
+  if (row.write_status === "pending") {
+    return {
+      statusCode: 409,
+      body: {
+        ok: false,
+        error: {
+          code: "RACS_OPERATION_IN_PROGRESS",
+          message: "同 operationId 的保存仍在进行，请稍后只读核对结果。"
+        },
+        data: { ...extra, auditId, racsReplay: true, status: "pending" }
+      }
+    };
+  }
+  let accessResult: AccessConfigWriteResult;
+  if (row.write_status === "committed" && terminal?.writeStatus === "committed" && terminal.runtimeAck) {
+    accessResult = {
+      status: "committed",
+      written: true,
+      runtimeAck: true,
+      recoveryRequired: false,
+      auditId,
+      policyVersion: "",
+      policyRuntimeAck: true,
+      candidateDigest: receipt?.candidateConfigDigest,
+      effectiveDigest: terminal.effectiveDigest
+    };
+  } else if (row.write_status === "rolled_back") {
+    accessResult = {
+      status: "rolled_back",
+      written: false,
+      runtimeAck: false,
+      recoveryRequired: false,
+      auditId,
+      policyVersion: "",
+      policyRuntimeAck: false,
+      candidateDigest: receipt?.candidateConfigDigest,
+      effectiveDigest: terminal?.effectiveDigest,
+      failureReason: row.error_reason ?? undefined,
+      rolledBack: true,
+      terminalAudit: terminal?.writeStatus === "rolled_back" ? "rolled_back" : "unconfirmed"
+    };
+  } else if (row.write_status === "failed") {
+    accessResult = {
+      status: "rolled_back",
+      written: false,
+      runtimeAck: false,
+      recoveryRequired: false,
+      auditId,
+      policyVersion: "",
+      policyRuntimeAck: false,
+      candidateDigest: receipt?.candidateConfigDigest,
+      failureReason: row.error_reason ?? undefined,
+      terminalAudit: "unconfirmed"
+    };
+  } else {
+    return {
+      statusCode: 409,
+      body: {
+        ok: false,
+        error: {
+          code: "RACS_REPLAY_OUTCOME_UNKNOWN",
+          message: "同 operationId 的终态证据不完整，请只读核对保存结果。"
+        },
+        data: { ...extra, auditId, racsReplay: true, writeStatus: row.write_status }
+      }
+    };
+  }
+  return accessWriteResponseBody(accessResult, { ...extra, auditId, racsReplay: true });
+}
+
 export function accessWriteResponseBody(
   result: AccessConfigWriteResult,
   extra: Record<string, unknown> = {}
@@ -748,6 +888,55 @@ export function accessWriteResponseBody(
     }
   };
 }
+
+export type { BaseObjectVersion, AccessObjectKind, GovernanceEffectFacts } from "./access-object-version.js";
+export {
+  ACCESS_OBJECT_VERSION_VOCABULARY,
+  ABSENT_OBJECT_MARKER,
+  baseObjectVersionForAbsence,
+  baseObjectVersionsEqual,
+  canonicalizeAgentWritable,
+  canonicalizeRoleWritable,
+  canonicalizeWritableValue,
+  collectAgentPreviewDependencies,
+  collectRolePreviewDependencies,
+  computeAgentBaseObjectVersion,
+  computeAgentObjectDigest,
+  computeCandidateConfigDigest,
+  computePreviewDependenciesDigest,
+  computePreviewEffectDigest,
+  computeRoleBaseObjectVersion,
+  computeRoleObjectDigest,
+  digestNormalizedPatch,
+  serializeBaseObjectVersion,
+  unrelatedRoleChangeDoesNotAlterAgentDependencies
+} from "./access-object-version.js";
+
+export {
+  MIXED_VERSION_PROTOCOL_CODE,
+  PREVIEW_INPUT_CHANGED_CODE,
+  assertAgentObjectBaseline,
+  assertPreviewTokenMatches,
+  assertRoleCreateAbsenceBaseline,
+  assertRoleObjectBaseline,
+  attachRacsReceiptToNewSummary,
+  buildRolesAgentRacsReceipt,
+  computeRoleAgentPreviewBinding,
+  evaluateRolesAgentRacsIdempotencyClaim,
+  governanceFactsFromGate,
+  mapConcurrentEditError,
+  mapRacsIdempotencyRejectToHttp,
+  mergeConfigWithAgent,
+  mergeConfigWithRole,
+  readAgentBaseObjectVersion,
+  readRoleBaseObjectVersion,
+  resolveAccessWriteVersionMode,
+  resolveCompileInputsDigest,
+  resolveRolesAgentRacsOperation,
+  type AccessWriteProtocolFields,
+  type AccessWriteVersionMode,
+  type RolesAgentRacsOperationResolution
+} from "./access-roles-agent-concurrent-edit.js";
 
 export function makeDiff(oldYaml: string, newYaml: string): string {
   const oldLines = oldYaml.split("\n");

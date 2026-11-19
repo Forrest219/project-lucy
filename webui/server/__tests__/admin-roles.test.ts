@@ -332,6 +332,62 @@ describe("GET /api/admin/roles", () => {
   });
 });
 
+describe("P1-58 SC-03 — role list display snapshot", () => {
+  it("merges 25 concurrent same-key reads into one display build", async () => {
+    const { displaySnapshotDiagnostics, resetDisplaySnapshotsForTests } = await import("../display-snapshot.js");
+    const { resetEntryPerfCounters, readEntryPerfCounters } = await import("../entry-performance-timing.js");
+    const app = buildServer();
+    await app.ready();
+    resetDisplaySnapshotsForTests();
+    resetEntryPerfCounters();
+    const beforeBuilds = displaySnapshotDiagnostics().builds;
+    const pending = Array.from({ length: 25 }, () => request(app.server).get("/api/admin/roles"));
+    const responses = await Promise.all(pending);
+    for (const res of responses) expect(res.status).toBe(200);
+    expect(displaySnapshotDiagnostics().builds - beforeBuilds).toBe(1);
+    expect(readEntryPerfCounters().sourceMapBuilds).toBe(1);
+    const hot = await request(app.server).get("/api/admin/roles");
+    expect(String(hot.headers["server-timing"] ?? "")).toMatch(/cache;desc=hit/);
+    expect(displaySnapshotDiagnostics().builds - beforeBuilds).toBe(1);
+    await app.close();
+  });
+
+  it("does not merge list builds across different includeTemplates keys", async () => {
+    const { displaySnapshotDiagnostics, resetDisplaySnapshotsForTests } = await import("../display-snapshot.js");
+    const app = buildServer();
+    await app.ready();
+    resetDisplaySnapshotsForTests();
+    const beforeBuilds = displaySnapshotDiagnostics().builds;
+    await request(app.server).get("/api/admin/roles?includeTemplates=true").expect(200);
+    await request(app.server).get("/api/admin/roles?includeTemplates=false").expect(200);
+    expect(displaySnapshotDiagnostics().builds - beforeBuilds).toBe(2);
+    await app.close();
+  });
+
+  it("SC-05: a warm list cache does not satisfy role detail or _preview", async () => {
+    const app = buildServer();
+    await app.ready();
+    await request(app.server).get("/api/admin/roles").expect(200);
+    const detail = await request(app.server).get("/api/admin/roles/wiki_only").expect(200);
+    expect(detail.body.data.effectivePermissions).toBeDefined();
+    const preview = await request(app.server)
+      .post("/api/admin/roles/_preview")
+      .send({
+        roleId: "preview_warm",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(preview.body.data.effectivePermissions.sources.length).toBeGreaterThan(0);
+    await app.close();
+  });
+});
+
 describe("GET /api/admin/roles/:roleId", () => {
   it("returns yaml role detail with allow body and effective permissions", async () => {
     await rm(projectRoot, { recursive: true, force: true });

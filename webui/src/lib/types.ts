@@ -1195,6 +1195,8 @@ export type RoleAllowConfig = {
 
 export type RoleDetail = Role & {
   version?: string;
+  /** P1-59 RACS — serialized object version at read time. */
+  baseObjectVersion?: string;
   usageCount: number;
   users: RoleUserReference[];
   role: {
@@ -1302,6 +1304,9 @@ export type AccessWriteAck = {
   recoveryRequired?: boolean;
   /** The durable audit record id — the intent id of this write. */
   auditId?: number;
+  /** P1-59 RACS — client operation id when object-version protocol was used. */
+  operationId?: string;
+  baseObjectVersion?: string;
 };
 
 export type ExecutionRuntimeStatus = "unknown" | "ok" | "stale" | "unavailable" | "error";
@@ -1524,6 +1529,33 @@ export type AgentsResponseSummary = {
     successfulWrites: number;
     lastSuccessfulWriteAt?: string;
     lastFailureAt?: string;
+  };
+};
+
+/** P1-58 — `GET /api/admin/agents?view=roster` (no audit statistics). */
+export type AgentsRosterResponse = {
+  agents: Agent[];
+  version: string;
+  meta?: {
+    snapshotVersion?: string;
+    generatedAt?: string;
+    permissionsState?: "ok" | "partial" | "unavailable";
+    runtimeConsistency?: "matched" | "unconfirmed";
+  };
+};
+
+/** P1-58 — `GET /api/admin/agents/statistics` partition. */
+export type AgentsStatisticsResponse = {
+  version: string;
+  range: "7d" | "14d" | "30d";
+  agents: Array<{ id: string; stats: AgentStats }>;
+  summary: AgentsResponseSummary;
+  meta: {
+    statisticsAsOf: string;
+    generatedAt: string;
+    snapshotVersion: string;
+    configVersion: string;
+    cache?: "hit" | "miss" | "bypass";
   };
 };
 

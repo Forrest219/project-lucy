@@ -1,9 +1,16 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { classifyRolesAgentWriteError, MSG_PUBLISH_BUSY } from "../../lib/rolesAgentAccessWrite";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent, AgentsResponseSummary, CreateAgentBody, EffectivePermissionsPreview, Role } from "../../lib/types";
+import type {
+  Agent,
+  AgentsResponseSummary,
+  CreateAgentBody,
+  EffectivePermissionsPreview,
+  Role
+} from "../../lib/types";
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable } from "../../components/AgentRoleField";
 import { PageHeader } from "../../components/PageHeader";
@@ -16,7 +23,11 @@ import { RowMoreMenu } from "../../components/RowMoreMenu";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
 import { LucyAdminRoleWarning } from "../../lib/LucyAdminRoleWarning";
 import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
-import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
+import {
+  adminAgentsRosterQueryOptions,
+  adminAgentsStatisticsQueryOptions,
+  formatListLoadError
+} from "../../lib/displayQueryOptions";
 import { queryKeys } from "../../lib/queryKeys";
 import {
   AGENT_STATS_RANGE_HOURS,
@@ -26,15 +37,23 @@ import {
   type AgentStatsRange
 } from "../../lib/agentStatsRange";
 
-type AgentsResponse = {
-  agents: Agent[];
-  version: string;
-  /** Optional server-side aggregate; absent on backends pre-dating M55. */
-  summary?: AgentsResponseSummary;
-  /** Spec 174 §3.3 — display permission meta. */
-  meta?: { runtimeConsistency?: "matched" | "unconfirmed" };
-};
 type RolesResponse = { roles: Role[] };
+
+function agentStatisticsVersionsMatch(
+  rosterVersion: string | undefined,
+  rosterSnapshot: string | undefined,
+  statsVersion: string | undefined,
+  statsSnapshot: string | undefined
+): boolean {
+  return Boolean(
+    rosterVersion
+    && statsVersion
+    && rosterSnapshot
+    && statsSnapshot
+    && rosterVersion === statsVersion
+    && rosterSnapshot === statsSnapshot
+  );
+}
 
 /**
  * Placeholder token marker used in the safe .mcp.json template.
@@ -339,6 +358,7 @@ function NewAgentModal({
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [preview, setPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
   const [step, setStep] = useState<"form" | "diff">("form");
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const previewMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; agent: CreateAgentBody }) => apiPost<{ diff: string; proposedYaml: string }>("/api/admin/agents", body),
@@ -346,7 +366,11 @@ function NewAgentModal({
       setPreview(data);
       setStep("diff");
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => {
+      const classified = classifyRolesAgentWriteError(err);
+      setSaveNotice(classified.userMessage);
+      toast.error(classified.userMessage);
+    }
   });
 
   const saveMutation = useMutation({
@@ -355,7 +379,11 @@ function NewAgentModal({
       toast.success(`Agent ${data.agent.name} 已创建`);
       onCreated(data.agent.id);
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => {
+      const classified = classifyRolesAgentWriteError(err);
+      setSaveNotice(classified.kind === "publish_busy" ? MSG_PUBLISH_BUSY : classified.userMessage);
+      toast.error(classified.userMessage);
+    }
   });
 
   function buildAgent(): CreateAgentBody {
@@ -397,6 +425,11 @@ function NewAgentModal({
     <div className="pl-modal-backdrop">
       <div className="pl-modal-panel flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden" data-testid="new-agent-modal">
         <h2 className="mb-4 shrink-0 text-lg font-semibold">新建 <span className="notranslate" translate="no">Agent</span></h2>
+        {saveNotice ? (
+          <p className="mb-3 rounded-md border border-warning-strong bg-warning-soft p-2 text-sm text-warning-strong" role="alert" data-testid="agent-create-save-notice">
+            {saveNotice}
+          </p>
+        ) : null}
         {step === "form" ? (
           <>
             <div className="grid min-h-0 gap-4 overflow-y-auto">
@@ -500,8 +533,19 @@ export function AgentList() {
     "all" | "business" | "connect_only" | "idle"
   >("all");
 
-  const agentsQuery = useQuery({
-    ...adminAgentsQueryOptions<AgentsResponse>(range),
+  const statsRefreshRef = useRef(false);
+  const rosterQuery = useQuery({
+    ...adminAgentsRosterQueryOptions(),
+    placeholderData: keepPreviousData
+  });
+  const statisticsQuery = useQuery({
+    ...adminAgentsStatisticsQueryOptions(range, statsRefreshRef.current),
+    queryFn: (ctx) => {
+      const refresh = statsRefreshRef.current;
+      statsRefreshRef.current = false;
+      return adminAgentsStatisticsQueryOptions(range, refresh).queryFn(ctx);
+    },
+    enabled: Boolean(rosterQuery.data),
     placeholderData: keepPreviousData
   });
 
@@ -510,7 +554,34 @@ export function AgentList() {
     nextParams.set("range", next);
     setSearchParams(nextParams, { replace: true });
   }
-  const { data, error } = agentsQuery;
+
+  function refreshAgents() {
+    statsRefreshRef.current = true;
+    void rosterQuery.refetch();
+    void statisticsQuery.refetch();
+  }
+
+  const rosterData = rosterQuery.data;
+  const statisticsData = statisticsQuery.data;
+  const statsJoined = agentStatisticsVersionsMatch(
+    rosterData?.version,
+    rosterData?.meta?.snapshotVersion,
+    statisticsData?.version,
+    statisticsData?.meta?.snapshotVersion
+  );
+
+  const agents = useMemo(() => {
+    const rosterAgents = rosterData?.agents ?? [];
+    if (!statsJoined || !statisticsData) return rosterAgents;
+    const statsById = new Map(statisticsData.agents.map((row) => [row.id, row.stats]));
+    return rosterAgents.map((agent) => ({
+      ...agent,
+      stats: statsById.get(agent.id) ?? agent.stats
+    }));
+  }, [rosterData, statisticsData, statsJoined]);
+
+  const rosterError = rosterQuery.error;
+  const statisticsError = statisticsQuery.error;
   // REQ-030-034 RPB-W4 — do not pull full Roles permission previews on cold entry;
   // New Agent modal is the only consumer on this page.
   const { data: rolesData, isPending: rolesPending, isFetching: rolesFetching } = useQuery({
@@ -520,14 +591,27 @@ export function AgentList() {
   });
   const rolesLoading = showNew && (rolesPending || rolesFetching) && !rolesData;
 
-  const agents = data?.agents ?? [];
-  const summary = data?.summary ?? summarizeAgents(agents);
+  const summary = statsJoined && statisticsData?.summary
+    ? statisticsData.summary
+    : summarizeAgents(agents);
+  const statisticsAsOf = statsJoined ? statisticsData?.meta?.statisticsAsOf : undefined;
+  const statisticsState: "loading" | "ok" | "unavailable" | "pending" =
+    statisticsQuery.isPending && !statisticsData
+      ? "loading"
+      : statisticsError
+        ? "unavailable"
+        : statisticsData && !statsJoined
+          ? "pending"
+          : statisticsData
+            ? "ok"
+            : "loading";
   // 名册窗口只读本响应的 summary。缺 summary 或缺任一端时按缺窗口处理，
   // 不在页面自造 7 天（Agent 名册 Spec D12）。
   const activityWindow: AgentActivityWindow = {
-    windowStart: data?.summary?.windowStart,
-    windowEnd: data?.summary?.windowEnd
+    windowStart: summary.windowStart,
+    windowEnd: summary.windowEnd
   };
+  const statsFiltersUsable = statisticsState === "ok" && summary.metricsState !== "unavailable";
   // Spec 189 §5.2 — the business-active count and the business call volume
   // read the **usage** layer. `usage*` is null when the response carries no
   // usage layer (legacy backend) — the UI then shows "—", never a 0 or a
@@ -568,11 +652,14 @@ export function AgentList() {
     // Agent 名册 Spec §5.4 —— 四档筛选：全部、有业务调用、仅连接、闲置。
     // 指标不可用的行落在 unknown，只留在「全部」；四档都不改变行的先后。
     const bucket = classifyAgentActivity(a, activityWindow);
-    const matchActivity = filterActivity === "all" || bucket === filterActivity;
+    const matchActivity =
+      !statsFiltersUsable
+        ? filterActivity === "all" || bucket === "unknown"
+        : filterActivity === "all" || bucket === filterActivity;
     return matchSearch && matchEnabled && matchRole && matchActivity;
   });
 
-  if (!data) {
+  if (!rosterData && rosterQuery.isPending) {
     return (
       <div className="pl-page-stack">
         <PageHeader
@@ -584,10 +671,32 @@ export function AgentList() {
           }
         />
         <AsyncRegion
-          status={asyncStatus(agentsQuery)}
-          label="Agent 列表"
-          error={error}
-          onRetry={() => void agentsQuery.refetch()}
+          status={asyncStatus(rosterQuery)}
+          label="Agent 名册"
+          error={rosterError ? new Error(formatListLoadError(rosterError)) : undefined}
+          onRetry={() => void rosterQuery.refetch()}
+          minHeight={480}
+        />
+      </div>
+    );
+  }
+
+  if (!rosterData && rosterError) {
+    return (
+      <div className="pl-page-stack">
+        <PageHeader
+          title={<span className="notranslate" translate="no">Agent</span>}
+          description={
+            <>
+              管理 <span className="notranslate" translate="no">Agent</span> 身份、角色、<span className="notranslate" translate="no">Token</span> 及数据访问边界。
+            </>
+          }
+        />
+        <AsyncRegion
+          status="error"
+          label="Agent 名册"
+          error={new Error(formatListLoadError(rosterError))}
+          onRetry={() => void rosterQuery.refetch()}
           minHeight={480}
         />
       </div>
@@ -631,8 +740,8 @@ export function AgentList() {
             <button
               type="button"
               className="pl-btn pl-btn--secondary"
-              onClick={() => void agentsQuery.refetch()}
-              disabled={agentsQuery.isFetching}
+              onClick={refreshAgents}
+              disabled={rosterQuery.isFetching || statisticsQuery.isFetching}
               data-testid="agent-refresh"
             >
               刷新
@@ -642,9 +751,38 @@ export function AgentList() {
         }
       />
 
-      <DisplayRefreshNotice query={agentsQuery} className="mt-4" />
+      <DisplayRefreshNotice query={rosterQuery} className="mt-4" />
 
-      {data.meta?.runtimeConsistency === "unconfirmed" ? (
+      {statisticsState === "loading" ? (
+        <div className="pl-notice" role="status" data-testid="agent-statistics-loading">
+          统计加载中…
+        </div>
+      ) : null}
+      {statisticsState === "unavailable" ? (
+        <div className="pl-notice" role="alert" data-testid="agent-statistics-error">
+          统计暂时不可用。
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost ml-2"
+            onClick={refreshAgents}
+            data-testid="agent-statistics-retry"
+          >
+            重试
+          </button>
+        </div>
+      ) : null}
+      {statisticsState === "pending" ? (
+        <div className="pl-notice" role="status" data-testid="agent-statistics-version-mismatch">
+          配置已更新，统计与名册版本不一致，已暂缓拼接。
+        </div>
+      ) : null}
+      {statisticsAsOf ? (
+        <p className="text-sm text-fg-muted" data-testid="agent-statistics-as-of">
+          统计时间：{new Date(statisticsAsOf).toLocaleString("zh-CN")}
+        </p>
+      ) : null}
+
+      {rosterData?.meta?.runtimeConsistency === "unconfirmed" ? (
         <div className="pl-notice" role="status" data-testid="agent-runtime-unconfirmed">
           权限生效状态待确认
         </div>
@@ -744,6 +882,9 @@ export function AgentList() {
                   setFilterActivity(e.target.value as "all" | "business" | "connect_only" | "idle")
                 }
                 aria-label={`${rangeLabel}活跃`}
+                disabled={!statsFiltersUsable}
+                title={!statsFiltersUsable ? "统计不可用或加载中时，活跃筛选仅保留「全部」" : undefined}
+                data-testid="agent-activity-filter"
               >
                 <option value="all">全部</option>
                 <option value="business">有业务调用</option>

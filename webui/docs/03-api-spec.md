@@ -176,6 +176,7 @@ GET    /api/semantic-assets/plans/:validationId
 GET    /api/publish-workbench/evidence
 
 GET    /api/admin/agents
+GET    /api/admin/agents/statistics
 POST   /api/admin/agents
 GET    /api/admin/agents/:userId
 PATCH  /api/admin/agents/:userId
@@ -184,6 +185,7 @@ GET    /api/admin/agents/:userId/effective-permissions
 POST   /api/admin/agents/:userId/tokens
 POST   /api/admin/agents/:userId/tokens/:label/renew
 DELETE /api/admin/agents/:userId/tokens/:label
+GET    /api/admin/access-write-status/:operationId
 GET    /api/admin/roles
 GET    /api/admin/roles/:roleId
 POST   /api/admin/roles/_preview
@@ -817,7 +819,9 @@ Field Questions：
 
 Agent 列表与详情：
 
-- `GET /api/admin/agents?range=7d|14d|30d`：窗口统计写入 `summary.range` 与每条 `stats.windowStart/windowEnd`。省略 `range` 时 API 仍为近 7 天；WebUI Agent 列表默认 `range=30d`，页头可切换 7 / 14 / 30 天。旧 `range=90d` 当作 30 天。兼容字段 `*Last7d` 表示**当前选中窗口**的计数，不是永远 7 天。
+- `GET /api/admin/agents?range=7d|14d|30d`：默认完整列表（兼容既有调用方）。窗口统计写入 `summary.range` 与每条 `stats.windowStart/windowEnd`。省略 `range` 时 API 仍为近 7 天；WebUI Agent 列表默认 `range=30d`，页头可切换 7 / 14 / 30 天。旧 `range=90d` 当作 30 天。兼容字段 `*Last7d` 表示**当前选中窗口**的计数，不是永远 7 天。
+- `GET /api/admin/agents?view=roster`（P1-58）：仅返回名册字段（身份、角色、配置凭据、已核实权限摘要、`version`/`meta.snapshotVersion`），不读取审计统计。
+- `GET /api/admin/agents/statistics?range=7d|14d|30d&refresh=true|false`（P1-58）：独立统计分区，返回 `agents[].stats`、`summary` 与 `meta.statisticsAsOf`（统计时间）。已完成结果可在读取完成后 5 秒内复用（`meta.cache=hit`）；`refresh=true` 绕过已完成缓存（`meta.cache=bypass`）。失败时指标为 `null`/`unavailable`，不造零。路由注册在 `/:userId` 之前。
 - `GET /api/admin/agents/:userId?range=7d|14d|30d`
 - `GET /api/admin/agents/:userId/effective-permissions`
 
@@ -855,6 +859,12 @@ Token：
 - `POST /api/admin/agents/:userId/tokens` 只在响应中返回一次明文 token，yaml/audit 只保存 hash。
 - `POST /api/admin/agents/:userId/tokens/:label/renew` 只更新 `expires_at`（审计 `token_renew`）；响应不含明文；已撤销不可续。
 - `DELETE /api/admin/agents/:userId/tokens/:label` 先写 `revoked_tokens`，再更新 yaml。
+
+Access write status（P1-59，只读）：
+
+- `GET /api/admin/access-write-status/:operationId` 按客户端 `operationId` 查询 Role／Agent 保存终态；需登录，仅原提交账号 UID 或 owner 可读。
+- 响应 `data.outcome` 为 `committed`｜`not_committed`｜`unknown`；返回历史提交绑定的对象版本与配置摘要，不返回 Token／完整 YAML，也不用当前文件冒充本次成功。
+- 无持久记录、intent 仍 `pending`、回执不完整或审计不可达时均为 `unknown`。
 
 Roles：
 

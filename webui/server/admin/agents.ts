@@ -5,6 +5,22 @@ import { stringify, parse } from "yaml";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   accessWriteResponseBody,
+  assertAgentObjectBaseline,
+  assertPreviewTokenMatches,
+  attachRacsReceiptToNewSummary,
+  buildRolesAgentRacsReceipt,
+  computeAgentBaseObjectVersion,
+  computeRoleAgentPreviewBinding,
+  evaluateRolesAgentRacsIdempotencyClaim,
+  mapConcurrentEditError,
+  mapRacsIdempotencyRejectToHttp,
+  mergeConfigWithAgent,
+  resolveAccessWriteVersionMode,
+  resolveCompileInputsDigest,
+  resolveRolesAgentRacsOperation,
+  respondRacsIdempotencyReplay,
+  runInAccessPublishWindow,
+  serializeBaseObjectVersion,
   writeAccessConfigFileWithAuditClosure,
   type AccessConfigWriteResult,
   type YamlRole
@@ -66,7 +82,7 @@ const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
 /** Spec 189 §4.3 — the default-view-excluded eval probes (reconciliation aid). */
 const EVAL_PROBE_CONDITION = evalProbeConditionSql().sql;
 import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/audit-write-health.js";
-import { countEntryPerf, timeAsync, withRequestTiming } from "../entry-performance-timing.js";
+import { countEntryPerf, markDisplayCache, timeAsync, withRequestTiming } from "../entry-performance-timing.js";
 import { readAccessSnapshot, resolvePermissionBatch, type PermissionBatch } from "./permission-display.js";
 import { generationKey, hasPendingDisplayWrite } from "../display-generation.js";
 import {
@@ -271,6 +287,7 @@ async function writeAccessYaml(
     actorIp?: string;
     sessionId?: string | null;
     expectedVersion?: string;
+    idempotencyKey?: string;
   },
   committedAgent?: YamlUser
 ): Promise<AgentAccessWriteResult> {
@@ -294,6 +311,7 @@ async function writeAccessYamlInBarrier(
     actorIp?: string;
     sessionId?: string | null;
     expectedVersion?: string;
+    idempotencyKey?: string;
   },
   committedAgent?: YamlUser
 ): Promise<AgentAccessWriteResult> {
@@ -480,6 +498,21 @@ async function getGlobalActiveTokenCount(win: MetricWindow): Promise<number | nu
   }
 }
 
+/** P1-58 — frozen id ceiling for one stats / last-used read batch (not MAX(ts)). */
+type AgentAuditReadSnapshot = {
+  ceilingId: number;
+};
+
+function captureAgentAuditReadSnapshot(db: Awaited<ReturnType<typeof getAuditDb>>): AgentAuditReadSnapshot {
+  const row = db.prepare(`SELECT COALESCE(MAX(id), 0) AS id FROM access_log`).get() as { id: number };
+  return { ceilingId: row.id };
+}
+
+function snapshotIdCeilingSql(snapshot: AgentAuditReadSnapshot): { clause: string; bind: number[] } {
+  if (snapshot.ceilingId <= 0) return { clause: "", bind: [] };
+  return { clause: " AND id <= ?", bind: [snapshot.ceilingId] };
+}
+
 function unavailableStats(user: YamlUser, win: MetricWindow): AgentStatsSummary {
   return {
     callsLast7d: null,
@@ -505,41 +538,38 @@ function unavailableStats(user: YamlUser, win: MetricWindow): AgentStatsSummary 
 
 async function getStatsMap(
   users: YamlUser[],
-  win: MetricWindow = build7dWindow()
+  win: MetricWindow = build7dWindow(),
+  sharedSnapshot?: AgentAuditReadSnapshot
 ): Promise<Map<string, AgentStatsSummary>> {
   const result = new Map<string, AgentStatsSummary>();
   if (users.length === 0) return result;
   // Spec 128 HR-5: one request-wide window and bulk aggregation; no per-agent N+1.
+  // P1-58 — window counts use WHERE push-down; lastSeen / lastBusinessSeen are a
+  // separate all-history query at the same id ceiling.
   try {
     const db = await getAuditDb();
+    const snapshot = db.transaction(() => sharedSnapshot ?? captureAgentAuditReadSnapshot(db))();
+    const ceiling = snapshotIdCeilingSql(snapshot);
     const placeholders = users.map(() => "?").join(", ");
+    const userIds = users.map((user) => user.id);
+    const windowWhere = `user_id IN (${placeholders}) AND ts >= ? AND ts < ?${ceiling.clause}`;
+    const windowBinds = [...userIds, win.startIso, win.endIso, ...ceiling.bind];
     const rows = db
       .prepare(
         `SELECT
            user_id,
-           SUM(CASE WHEN ts >= ? AND ts < ? THEN 1 ELSE 0 END) AS calls7,
-           SUM(CASE WHEN ts >= ? AND ts < ? AND NOT ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS business_calls7,
-           SUM(CASE WHEN ts >= ? AND ts < ? AND ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS protocol_calls7,
-           SUM(CASE WHEN ts >= ? AND ts < ? AND ${DEFAULT_USAGE_CONDITION} THEN 1 ELSE 0 END) AS usage_calls7,
-           SUM(CASE WHEN ts >= ? AND ts < ? AND ${EVAL_PROBE_CONDITION} THEN 1 ELSE 0 END) AS eval_probe_calls7,
-           SUM(CASE WHEN ts >= ? AND ts < ? AND ${DEFAULT_USAGE_CONDITION} AND outcome='denied' THEN 1 ELSE 0 END) AS denied7,
-           COUNT(DISTINCT CASE WHEN ts >= ? AND ts < ? AND token_hash_prefix IS NOT NULL THEN token_hash_prefix END) AS active_tokens,
-           MAX(ts) AS last_seen,
-           MAX(CASE WHEN ${DEFAULT_USAGE_CONDITION} THEN ts END) AS last_business_seen
+           COUNT(*) AS calls7,
+           SUM(CASE WHEN NOT ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS business_calls7,
+           SUM(CASE WHEN ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS protocol_calls7,
+           SUM(CASE WHEN ${DEFAULT_USAGE_CONDITION} THEN 1 ELSE 0 END) AS usage_calls7,
+           SUM(CASE WHEN ${EVAL_PROBE_CONDITION} THEN 1 ELSE 0 END) AS eval_probe_calls7,
+           SUM(CASE WHEN ${DEFAULT_USAGE_CONDITION} AND outcome='denied' THEN 1 ELSE 0 END) AS denied7,
+           COUNT(DISTINCT CASE WHEN token_hash_prefix IS NOT NULL THEN token_hash_prefix END) AS active_tokens
          FROM access_log
-         WHERE user_id IN (${placeholders})
+         WHERE ${windowWhere}
          GROUP BY user_id`
       )
-      .all(
-        win.startIso, win.endIso,
-        win.startIso, win.endIso,
-        win.startIso, win.endIso,
-        win.startIso, win.endIso,
-        win.startIso, win.endIso,
-        win.startIso, win.endIso,
-        win.startIso, win.endIso,
-        ...users.map((user) => user.id)
-      ) as Array<{
+      .all(...windowBinds) as Array<{
         user_id: string;
         calls7: number | null;
         business_calls7: number | null;
@@ -548,19 +578,36 @@ async function getStatsMap(
         eval_probe_calls7: number | null;
         denied7: number | null;
         active_tokens: number | null;
+      }>;
+    const rowsByUser = new Map(rows.map((row) => [row.user_id, row]));
+
+    const historyWhere = `user_id IN (${placeholders})${ceiling.clause}`;
+    const historyBinds = [...userIds, ...ceiling.bind];
+    const latestRows = db
+      .prepare(
+        `SELECT
+           user_id,
+           MAX(ts) AS last_seen,
+           MAX(CASE WHEN ${DEFAULT_USAGE_CONDITION} THEN ts END) AS last_business_seen
+         FROM access_log
+         WHERE ${historyWhere}
+         GROUP BY user_id`
+      )
+      .all(...historyBinds) as Array<{
+        user_id: string;
         last_seen: string | null;
         last_business_seen: string | null;
       }>;
-    const rowsByUser = new Map(rows.map((row) => [row.user_id, row]));
+    const latestByUser = new Map(latestRows.map((row) => [row.user_id, row]));
 
     const topRows = db
       .prepare(
         `SELECT user_id, tables, COUNT(*) AS cnt FROM access_log
-         WHERE user_id IN (${placeholders}) AND ts >= ? AND ts < ?
+         WHERE ${windowWhere}
            AND NOT ${PROTOCOL_CONDITION} AND tables IS NOT NULL
          GROUP BY user_id, tables`
       )
-      .all(...users.map((user) => user.id), win.startIso, win.endIso) as Array<{
+      .all(...windowBinds) as Array<{
         user_id: string;
         tables: string;
         cnt: number;
@@ -582,6 +629,7 @@ async function getStatsMap(
 
     for (const user of users) {
       const row = rowsByUser.get(user.id);
+      const latest = latestByUser.get(user.id);
       const tokenPrefixCollision = hasUserTokenPrefixCollision(user);
       const topTables = [...(tableCountsByUser.get(user.id)?.entries() ?? [])]
         .sort((a, b) => b[1] - a[1])
@@ -595,8 +643,8 @@ async function getStatsMap(
         usageCallsLast7d: row?.usage_calls7 ?? 0,
         evalProbeCallsLast7d: row?.eval_probe_calls7 ?? 0,
         deniedLast7d: row?.denied7 ?? 0,
-        lastSeen: row?.last_seen ?? undefined,
-        lastBusinessSeen: row?.last_business_seen ?? undefined,
+        lastSeen: latest?.last_seen ?? undefined,
+        lastBusinessSeen: latest?.last_business_seen ?? undefined,
         activeTokensLast7d: row?.active_tokens ?? 0,
         usedCredentialsLast7d: tokenPrefixCollision ? null : row?.active_tokens ?? 0,
         configuredTokens: user.tokens.length,
@@ -618,6 +666,12 @@ async function getStatsMap(
 async function getStats(user: YamlUser, win: MetricWindow = build7dWindow()): Promise<AgentStatsSummary> {
   return (await getStatsMap([user], win)).get(user.id) ?? unavailableStats(user, win);
 }
+
+/** Vitest-only; not part of the HTTP contract. */
+export const agentStatsTestExports = {
+  getStatsMap,
+  captureAgentAuditReadSnapshot
+} as const;
 
 export type TokenUsageSnapshot = {
   lastUsed: string;
@@ -676,14 +730,19 @@ export async function getLastBusinessUseMap(
 }
 
 export async function getLastUsedMap(
-  userIds: string[]
+  userIds: string[],
+  sharedSnapshot?: AgentAuditReadSnapshot
 ): Promise<Map<string, Map<string, TokenUsageSnapshot>>> {
   // Returns: userId -> (token hash prefix -> last usage snapshot)
   const result = new Map<string, Map<string, TokenUsageSnapshot>>();
   if (userIds.length === 0) return result;
   try {
     const db = await getAuditDb();
+    const snapshot = db.transaction(() => sharedSnapshot ?? captureAgentAuditReadSnapshot(db))();
+    const ceiling = snapshotIdCeilingSql(snapshot);
     const placeholders = userIds.map(() => "?").join(", ");
+    const prefixWhere = `user_id IN (${placeholders}) AND token_hash_prefix IS NOT NULL${ceiling.clause}`;
+    const prefixBinds = [...userIds, ...ceiling.bind];
     const rows = db
       .prepare(
         `SELECT user_id, token_hash_prefix, ts, tool, outcome, client_ip, user_agent, client, client_version, device_name
@@ -701,11 +760,11 @@ export async function getLastUsedMap(
              device_name,
              ROW_NUMBER() OVER (PARTITION BY user_id, token_hash_prefix ORDER BY ts DESC, id DESC) AS rn
            FROM access_log
-           WHERE user_id IN (${placeholders}) AND token_hash_prefix IS NOT NULL
+           WHERE ${prefixWhere}
          )
          WHERE rn = 1`
       )
-      .all(...userIds) as Array<{
+      .all(...prefixBinds) as Array<{
       user_id: string;
       token_hash_prefix: string;
       ts: string;
@@ -736,17 +795,15 @@ export async function getLastUsedMap(
     }
 
     const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const ipWhere = `${prefixWhere} AND client_ip IS NOT NULL AND ts >= ?`;
     const ipRows = db
       .prepare(
         `SELECT user_id, token_hash_prefix, COUNT(DISTINCT client_ip) AS distinct_ips
          FROM access_log
-         WHERE user_id IN (${placeholders})
-           AND token_hash_prefix IS NOT NULL
-           AND client_ip IS NOT NULL
-           AND ts >= ?
+         WHERE ${ipWhere}
          GROUP BY user_id, token_hash_prefix`
       )
-      .all(...userIds, since7d) as Array<{
+      .all(...prefixBinds, since7d) as Array<{
       user_id: string;
       token_hash_prefix: string;
       distinct_ips: number;
@@ -1452,10 +1509,213 @@ function agentWritePreview(raw: string, newConfig: YamlAccessConfig): { diff: st
   };
 }
 
+/** P1-58 D5 — completed statistics responses may be reused for up to 5s after completion. */
+const AGENT_STATISTICS_DISPLAY_CACHE_MS = 5000;
+const AGENT_USAGE_CLASSIFIER_KEY = "default-usage-classifier-v1";
+
+type AgentStatisticsDisplayBody = {
+  version: string;
+  range: AgentStatsRange;
+  agents: Array<{ id: string; stats: AgentStatsSummary }>;
+  summary: ReturnType<typeof buildAgentsSummary>;
+  meta: {
+    statisticsAsOf: string;
+    generatedAt: string;
+    snapshotVersion: string;
+    configVersion: string;
+    cache: "hit" | "miss" | "bypass";
+  };
+};
+
+type AgentStatisticsCacheSlot = {
+  key: string;
+  completedAt: number;
+  asOf: string;
+  data: AgentStatisticsDisplayBody;
+};
+
+let agentStatisticsDisplayCache: AgentStatisticsCacheSlot | null = null;
+const agentStatisticsDisplayInflight = new Map<string, Promise<AgentStatisticsCacheSlot>>();
+
+export const agentStatisticsDisplayTestState = {
+  reset(): void {
+    agentStatisticsDisplayCache = null;
+    agentStatisticsDisplayInflight.clear();
+  }
+};
+
+function agentStatisticsDisplayKey(input: {
+  projectRoot: string;
+  principalId: string;
+  range: AgentStatsRange;
+  configVersion: string;
+  snapshotVersion: string;
+}): string {
+  return [
+    input.projectRoot,
+    input.principalId,
+    input.range,
+    input.configVersion,
+    input.snapshotVersion,
+    AGENT_USAGE_CLASSIFIER_KEY
+  ].join("|");
+}
+
+function agentListSnapshotVersion(permissionSection: AgentPermissionSection): string {
+  const runtimeConsistency = runtimeConsistencyForInputs(permissionSection.policyInputs);
+  return createHash("sha256").update(`${permissionSection.snapshotVersion}:${runtimeConsistency}`).digest("hex").slice(0, 16);
+}
+
+async function buildAgentRoster(projectRoot: string, budget?: DisplayRequestBudget) {
+  const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
+  const userIds = config.users.map((user) => user.id);
+  const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version, budget));
+  const timelineMap = await timeAsync("permissions", () => getAgentConfigTimelineMap(userIds));
+  const agents = config.users.map((user) =>
+    userToAgentWithBatchPermissions(
+      user,
+      permissionSection.previews[user.id],
+      undefined,
+      undefined,
+      timelineMap.get(user.id)
+    )
+  );
+  const snapshotVersion = agentListSnapshotVersion(permissionSection);
+  return {
+    ok: true as const,
+    data: {
+      agents,
+      version,
+      meta: {
+        snapshotVersion,
+        generatedAt: new Date().toISOString(),
+        permissionsState: permissionSection.permissionsState,
+        runtimeConsistency: runtimeConsistencyForInputs(permissionSection.policyInputs)
+      }
+    }
+  };
+}
+
+async function readAgentStatisticsDisplay(
+  projectRoot: string,
+  range: AgentStatsRange,
+  principalId: string,
+  forceRefresh: boolean,
+  budget?: DisplayRequestBudget
+) {
+  const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
+  const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version, budget));
+  const snapshotVersion = agentListSnapshotVersion(permissionSection);
+  const key = agentStatisticsDisplayKey({
+    projectRoot,
+    principalId,
+    range,
+    configVersion: version,
+    snapshotVersion
+  });
+
+  if (!forceRefresh && agentStatisticsDisplayCache?.key === key) {
+    const age = Date.now() - agentStatisticsDisplayCache.completedAt;
+    if (age < AGENT_STATISTICS_DISPLAY_CACHE_MS) {
+      markDisplayCache("hit");
+      return {
+        ok: true as const,
+        data: {
+          ...agentStatisticsDisplayCache.data,
+          meta: {
+            ...agentStatisticsDisplayCache.data.meta,
+            cache: "hit" as const,
+            statisticsAsOf: agentStatisticsDisplayCache.asOf
+          }
+        }
+      };
+    }
+  }
+
+  const inflightKey = forceRefresh ? `${key}|force` : key;
+  let inflight = agentStatisticsDisplayInflight.get(inflightKey);
+  if (!inflight) {
+    const buildStartedAt = Date.now();
+    inflight = (async (): Promise<AgentStatisticsCacheSlot> => {
+      try {
+        const window = buildAgentStatsWindow(range);
+        const asOf = window.endIso;
+        const [statsMap, globalActiveTokenCount] = await timeAsync("stats", async () => {
+          const db = await getAuditDb();
+          const snapshot = db.transaction(() => captureAgentAuditReadSnapshot(db))();
+          return Promise.all([
+            getStatsMap(config.users, window, snapshot),
+            getGlobalActiveTokenCount(window)
+          ]);
+        });
+        const agentsForSummary = config.users.map((user) =>
+          userToAgent(user, statsMap.get(user.id) ?? unavailableStats(user, window))
+        );
+        const summary = buildAgentsSummary(
+          agentsForSummary,
+          globalActiveTokenCount,
+          hasTokenPrefixCollision(config.users),
+          readAuditWriteHealth(),
+          range
+        );
+        const agents = config.users.map((user) => ({
+          id: user.id,
+          stats: statsMap.get(user.id) ?? unavailableStats(user, window)
+        }));
+        const data: AgentStatisticsDisplayBody = {
+          version,
+          range,
+          agents,
+          summary,
+          meta: {
+            statisticsAsOf: asOf,
+            generatedAt: new Date().toISOString(),
+            snapshotVersion,
+            configVersion: version,
+            cache: forceRefresh ? "bypass" : "miss"
+          }
+        };
+        const completedAt = Date.now();
+        const slot: AgentStatisticsCacheSlot = { key, completedAt, asOf, data };
+        if (!forceRefresh && completedAt - buildStartedAt <= AGENT_STATISTICS_DISPLAY_CACHE_MS) {
+          agentStatisticsDisplayCache = slot;
+          markDisplayCache("miss");
+        }
+        return slot;
+      } finally {
+        agentStatisticsDisplayInflight.delete(inflightKey);
+      }
+    })();
+    agentStatisticsDisplayInflight.set(inflightKey, inflight);
+  }
+
+  const slot = await inflight;
+  return {
+    ok: true as const,
+    data: {
+      ...slot.data,
+      meta: {
+        ...slot.data.meta,
+        statisticsAsOf: slot.asOf
+      }
+    }
+  };
+}
+
 export function registerAgentRoutes(app: FastifyInstance) {
   // GET /api/admin/agents
-  app.get<{ Querystring: { range?: string } }>("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
+  app.get<{ Querystring: { range?: string; view?: string } }>("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
+    if (request.query.view === "roster") {
+      const budget = createDisplayRequestBudget();
+      for (;;) {
+        const accessGeneration = generationKey(["P", "C"]);
+        const listing = await buildAgentRoster(projectRoot, budget);
+        if (generationKey(["P", "C"]) === accessGeneration && !hasPendingDisplayWrite(["P", "C"])) return listing;
+        if (budget.attemptsLeft <= 0) break;
+      }
+      throw new DisplaySnapshotBusyError("generation_changed");
+    }
     const range = parseAgentStatsRange(request.query.range);
     // Spec 174 §3.1 — users / version / permissions come from one access snapshot;
     // if access changes while dynamic stats are read, rebuild the whole batch.
@@ -1478,12 +1738,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const userIds = config.users.map((user) => user.id);
     const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version, budget));
     const window = buildAgentStatsWindow(range);
-    const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await timeAsync("stats", () => Promise.all([
-      getLastUsedMap(userIds),
-      getAgentConfigTimelineMap(userIds),
-      getStatsMap(config.users, window),
-      getGlobalActiveTokenCount(window)
-    ]));
+    const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await timeAsync("stats", async () => {
+      const db = await getAuditDb();
+      const snapshot = db.transaction(() => captureAgentAuditReadSnapshot(db))();
+      return Promise.all([
+        getLastUsedMap(userIds, snapshot),
+        getAgentConfigTimelineMap(userIds),
+        getStatsMap(config.users, window, snapshot),
+        getGlobalActiveTokenCount(window)
+      ]);
+    });
     const agents = config.users.map((user) =>
       userToAgentWithBatchPermissions(
         user,
@@ -1502,8 +1766,8 @@ export function registerAgentRoutes(app: FastifyInstance) {
     );
     // Runtime-only changes need not bump a file generation. Compute this after
     // every asynchronous read, immediately before assembling the response.
+    const snapshotVersion = agentListSnapshotVersion(permissionSection);
     const runtimeConsistency = runtimeConsistencyForInputs(permissionSection.policyInputs);
-    const snapshotVersion = createHash("sha256").update(`${permissionSection.snapshotVersion}:${runtimeConsistency}`).digest("hex").slice(0, 16);
     return {
       ok: true,
       data: {
@@ -1664,6 +1928,24 @@ export function registerAgentRoutes(app: FastifyInstance) {
     return finishConfirmedAgentWrite(reply, writeResult, { gate });
   });
 
+  // GET /api/admin/agents/statistics — must register before /:userId (P1-58 SC-07).
+  app.get<{ Querystring: { range?: string; refresh?: string } }>("/api/admin/agents/statistics", async (request) =>
+    withRequestTiming(request, async () => {
+      const projectRoot = await resolveProjectRoot();
+      const range = parseAgentStatsRange(request.query.range);
+      const forceRefresh = request.query.refresh === "true";
+      const principalId = actorIdFromRequest(request);
+      const budget = createDisplayRequestBudget();
+      for (;;) {
+        const accessGeneration = generationKey(["P", "C"]);
+        const listing = await readAgentStatisticsDisplay(projectRoot, range, principalId, forceRefresh, budget);
+        if (generationKey(["P", "C"]) === accessGeneration && !hasPendingDisplayWrite(["P", "C"])) return listing;
+        if (budget.attemptsLeft <= 0) break;
+      }
+      throw new DisplaySnapshotBusyError("generation_changed");
+    })
+  );
+
   // GET /api/admin/agents/:userId
   app.get<{ Params: { userId: string }; Querystring: { range?: string } }>("/api/admin/agents/:userId", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
@@ -1679,7 +1961,11 @@ export function registerAgentRoutes(app: FastifyInstance) {
     ]);
     return {
       ok: true,
-      data: { agent: await userToAgentWithPermissions(user, stats, tokenUsage.get(user.id), timelineMap.get(user.id)), version }
+      data: {
+        agent: await userToAgentWithPermissions(user, stats, tokenUsage.get(user.id), timelineMap.get(user.id)),
+        version,
+        baseObjectVersion: serializeBaseObjectVersion(computeAgentBaseObjectVersion(user.id, user))
+      }
     };
   });
 
@@ -1703,6 +1989,10 @@ export function registerAgentRoutes(app: FastifyInstance) {
     Body: {
       dryRun?: boolean;
       version?: string;
+      baseObjectVersion?: string;
+      previewToken?: string;
+      operationId?: string;
+      compileInputsDigest?: string;
       override?: AccessGovernanceOverrideRequest;
       patch: {
         name?: string;
@@ -1722,12 +2012,23 @@ export function registerAgentRoutes(app: FastifyInstance) {
   }>("/api/admin/agents/:userId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const projectRoot = await resolveProjectRoot();
+    let versionMode;
+    try {
+      versionMode = resolveAccessWriteVersionMode(request.body ?? {});
+    } catch (error) {
+      const mapped = mapConcurrentEditError(error);
+      if (mapped) {
+        return reply.status(mapped.status).send({ ok: false, error: { code: mapped.code, message: mapped.message, ...(mapped.detail ? { detail: mapped.detail } : {}) } });
+      }
+      throw error;
+    }
+    const compileInputsDigest = resolveCompileInputsDigest(request.body?.compileInputsDigest);
     const filePath = path.join(projectRoot, ACCESS_YAML_REL);
     const raw = await readFile(filePath, "utf-8");
     const s = await stat(filePath);
     const currentVersion = computeVersion(raw, s.mtimeMs);
 
-    if (request.body?.version && request.body.version !== currentVersion) {
+    if (versionMode.mode === "legacy" && request.body?.version && request.body.version !== currentVersion) {
       return reply.status(409).send({ ok: false, error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" } });
     }
 
@@ -1737,6 +2038,20 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const userIndex = config.users.findIndex((u) => u.id === request.params.userId);
     if (userIndex === -1) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
+    }
+    if (versionMode.mode === "object") {
+      try {
+        assertAgentObjectBaseline(config, request.params.userId, versionMode.baseObjectVersion);
+      } catch (error) {
+        const mapped = mapConcurrentEditError(error);
+        if (mapped) {
+          return reply.status(mapped.status).send({
+            ok: false,
+            error: { code: mapped.code, message: mapped.message, ...(mapped.detail ? { detail: mapped.detail } : {}) }
+          });
+        }
+        throw error;
+      }
     }
 
     const patch = request.body?.patch ?? {};
@@ -1869,14 +2184,35 @@ export function registerAgentRoutes(app: FastifyInstance) {
     });
     const gate = evaluateAccessGovernanceGate(gateInput);
 
+    const racsPreview =
+      versionMode.mode === "object"
+        ? computeRoleAgentPreviewBinding({
+            kind: "agent",
+            objectId: updatedUser.id,
+            baseObjectVersion: versionMode.baseObjectVersion,
+            config: newConfig,
+            patch: request.body?.patch ?? {},
+            compileInputsDigest,
+            gate
+          })
+        : undefined;
+
     if (dryRun) {
       return {
         ok: true,
         data: {
           diff,
           proposedYaml,
+          version: currentVersion,
           gate,
-          ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {})
+          ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {}),
+          ...(versionMode.mode === "object"
+            ? {
+                baseObjectVersion: serializeBaseObjectVersion(versionMode.baseObjectVersion),
+                previewToken: racsPreview!.previewToken,
+                compileInputsDigest
+              }
+            : {})
         }
       };
     }
@@ -1911,41 +2247,160 @@ export function registerAgentRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
-    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
-      enabled: true,
-      expectedVersion: currentVersion,
-      changeType: "agent_patch",
-      targetId: updatedUser.id,
-      oldSummary: {
-        enabled: existingUser.enabled !== false,
-        role: summaryRole(existingUser),
-        roles: existingUser.roles,
-        hasLegacyAllow: Boolean(existingUser.allow),
-        hasConstraints: existingUser.constraints !== undefined
-      },
-      newSummary: {
+    const commitAgentPatch = async (): Promise<ReturnType<typeof finishConfirmedAgentWrite>> => {
+      let configToWrite = newConfig;
+      let freshExisting = existingUser;
+      let freshDiff = diff;
+      let expectedVersion: string | undefined = currentVersion;
+      let publishPreviewEffectDigest: string | undefined;
+      if (versionMode.mode === "object") {
+        const fresh = await readAccessYaml(projectRoot);
+        const freshConfig = fresh.config;
+        try {
+          assertAgentObjectBaseline(freshConfig, request.params.userId, versionMode.baseObjectVersion);
+        } catch (error) {
+          const mapped = mapConcurrentEditError(error);
+          if (mapped) {
+            return reply.status(mapped.status).send({
+              ok: false,
+              error: { code: mapped.code, message: mapped.message, ...(mapped.detail ? { detail: mapped.detail } : {}) }
+            });
+          }
+          throw error;
+        }
+        freshExisting = freshConfig.users.find((u) => u.id === request.params.userId) ?? existingUser;
+        configToWrite = mergeConfigWithAgent(freshConfig, updatedUser);
+        const freshBinding = computeRoleAgentPreviewBinding({
+          kind: "agent",
+          objectId: updatedUser.id,
+          baseObjectVersion: versionMode.baseObjectVersion,
+          config: configToWrite,
+          patch: request.body?.patch ?? {},
+          compileInputsDigest,
+          gate
+        });
+        try {
+          assertPreviewTokenMatches(request.body?.previewToken, freshBinding.previewEffectDigest);
+          publishPreviewEffectDigest = freshBinding.previewEffectDigest;
+        } catch (error) {
+          const mapped = mapConcurrentEditError(error);
+          if (mapped) {
+            return reply.status(mapped.status).send({
+              ok: false,
+              error: { code: mapped.code, message: mapped.message, ...(mapped.detail ? { detail: mapped.detail } : {}) }
+            });
+          }
+          throw error;
+        }
+        freshDiff = agentWritePreview(fresh.raw, configToWrite).diff;
+        expectedVersion = undefined;
+      }
+
+      const racsOp = resolveRolesAgentRacsOperation(versionMode, request.body?.operationId);
+      if (racsOp.kind === "reject") {
+        return reply.status(racsOp.status).send({
+          ok: false,
+          error: { code: racsOp.code, message: racsOp.message }
+        });
+      }
+
+      let racsIdempotencyKey: string | undefined;
+      let newSummaryPayload: Record<string, unknown> = {
         enabled: updatedUser.enabled !== false,
         role: summaryRole(updatedUser),
         roles: updatedUser.roles,
         hasLegacyAllow: Boolean(updatedUser.allow),
         hasConstraints: updatedUser.constraints !== undefined
-      },
-      diff,
-      ...auditActorFields(trustedActorFromRequest(request))
-    }, updatedUser).catch((error: unknown) => {
-      if ((error as { code?: string }).code === "VERSION_CONFLICT") return null;
-      throw error;
-    });
-    if (writeResult === null) {
-      return reply.status(409).send({
-        ok: false,
-        error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
+      };
+
+      if (racsOp.kind === "racs") {
+        if (!publishPreviewEffectDigest) {
+          return reply.status(409).send({
+            ok: false,
+            error: { code: "PREVIEW_TOKEN_REQUIRED", message: "previewToken is required for object-version saves" }
+          });
+        }
+        const objectBase = versionMode.mode === "object" ? versionMode.baseObjectVersion : undefined;
+        if (!objectBase) {
+          return reply.status(400).send({
+            ok: false,
+            error: { code: "BAD_REQUEST", message: "baseObjectVersion is required for RACS saves" }
+          });
+        }
+        const receipt = buildRolesAgentRacsReceipt({
+          actor: trustedActorFromRequest(request),
+          objectKind: "agent",
+          objectId: updatedUser.id,
+          previewEffectDigest: publishPreviewEffectDigest,
+          baseObjectVersionSerialized: serializeBaseObjectVersion(objectBase),
+          candidateConfig: configToWrite
+        });
+        const claim = await evaluateRolesAgentRacsIdempotencyClaim(racsOp.operationId, receipt);
+        if (claim.kind === "reject") {
+          const mapped = mapRacsIdempotencyRejectToHttp(claim.code);
+          return reply.status(mapped.status).send({
+            ok: false,
+            error: { code: mapped.code, message: mapped.message }
+          });
+        }
+        if (claim.kind === "replay") {
+          const replay = await respondRacsIdempotencyReplay(claim.auditId, {
+            operationId: racsOp.operationId,
+            baseObjectVersion: serializeBaseObjectVersion(computeAgentBaseObjectVersion(updatedUser.id, updatedUser))
+          });
+          return reply.status(replay.statusCode).send(replay.body);
+        }
+        racsIdempotencyKey = claim.idempotencyKey;
+        newSummaryPayload = attachRacsReceiptToNewSummary(newSummaryPayload, receipt);
+      }
+
+      const writeResult = await writeAccessYaml(
+        projectRoot,
+        configToWrite,
+        {
+          enabled: true,
+          expectedVersion,
+          changeType: "agent_patch",
+          targetId: updatedUser.id,
+          oldSummary: {
+            enabled: freshExisting.enabled !== false,
+            role: summaryRole(freshExisting),
+            roles: freshExisting.roles,
+            hasLegacyAllow: Boolean(freshExisting.allow),
+            hasConstraints: freshExisting.constraints !== undefined
+          },
+          newSummary: newSummaryPayload,
+          diff: freshDiff,
+          idempotencyKey: racsIdempotencyKey,
+          ...auditActorFields(trustedActorFromRequest(request))
+        },
+        updatedUser
+      ).catch((error: unknown) => {
+        if ((error as { code?: string }).code === "VERSION_CONFLICT") return null;
+        throw error;
       });
+      if (writeResult === null) {
+        return reply.status(409).send({
+          ok: false,
+          error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
+        });
+      }
+      return finishConfirmedAgentWrite(reply, writeResult, {
+        gate,
+        ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {}),
+        ...(versionMode.mode === "object"
+          ? {
+              baseObjectVersion: serializeBaseObjectVersion(computeAgentBaseObjectVersion(updatedUser.id, updatedUser)),
+              operationId: request.body?.operationId
+            }
+          : {})
+      });
+    };
+
+    if (versionMode.mode === "object") {
+      return runInAccessPublishWindow("agent_save", projectRoot, commitAgentPatch);
     }
-    return finishConfirmedAgentWrite(reply, writeResult, {
-      gate,
-      ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {})
-    });
+    return commitAgentPatch();
   });
 
   // DELETE /api/admin/agents/:userId
@@ -2044,3 +2499,5 @@ export function registerAgentRoutes(app: FastifyInstance) {
     };
   });
 }
+
+export { computeAgentBaseObjectVersion, computeAgentObjectDigest } from "./access-object-version.js";

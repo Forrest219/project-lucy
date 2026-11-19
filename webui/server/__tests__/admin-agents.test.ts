@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentCommitTestHooks } from "../admin/agents.js";
+import { agentCommitTestHooks, agentStatisticsDisplayTestState } from "../admin/agents.js";
 import { buildServer } from "../index";
 import { isMcpProtocolMethod } from "../proxy/usage-classification.js";
 
@@ -30,9 +30,14 @@ vi.mock("../admin/audit.js", () => ({
     prepare: vi.fn((sql: string) => {
       if (sql.includes("ROW_NUMBER() OVER")) {
         return {
-          all: vi.fn((...userIds: string[]) => auditRows
-            .filter((row) => userIds.includes(row.user_id))
-            .sort((a, b) => b.ts.localeCompare(a.ts)))
+          all: vi.fn((...args: unknown[]) => {
+            const userIds = args.filter(
+              (value): value is string => typeof value === "string" && !/^\d{4}-\d{2}-\d{2}T/.test(value)
+            );
+            return auditRows
+              .filter((row) => userIds.includes(row.user_id))
+              .sort((a, b) => b.ts.localeCompare(a.ts));
+          })
         };
       }
       // M55 + Spec 128 Task 7: COUNT(DISTINCT token_hash_prefix) can be called
@@ -65,36 +70,59 @@ vi.mock("../admin/audit.js", () => ({
           })
         };
       }
-      if (sql.includes("AS business_calls7")) {
+      const parseWindowedUserArgs = (args: unknown[]) => {
+        const userIds: string[] = [];
+        let index = 0;
+        while (index < args.length && typeof args[index] === "string" && !/^\d{4}-\d{2}-\d{2}T/.test(String(args[index]))) {
+          userIds.push(args[index] as string);
+          index += 1;
+        }
+        const startMs = Date.parse(String(args[index]));
+        const endMs = Date.parse(String(args[index + 1]));
+        return { userIds, startMs, endMs };
+      };
+      const statsForUser = (userId: string, startMs: number, endMs: number, includeLatest: boolean) => {
+        const allForUser = auditRows.filter((row) => row.user_id === userId);
+        if (allForUser.length === 0) return null;
+        const matched = allForUser.filter((row) => {
+          const ts = new Date(row.ts).getTime();
+          return Number.isFinite(startMs) && Number.isFinite(endMs)
+            ? ts >= startMs && ts < endMs
+            : false;
+        });
+        const business = matched.filter((row) => !isMcpProtocolMethod(row.tool));
+        const base = {
+          user_id: userId,
+          calls7: matched.length,
+          business_calls7: business.length,
+          protocol_calls7: matched.length - business.length,
+          usage_calls7: business.length,
+          eval_probe_calls7: 0,
+          denied7: business.filter((row) => row.outcome === "denied").length,
+          active_tokens: new Set(matched.map((row) => row.token_hash_prefix).filter(Boolean)).size
+        };
+        if (!includeLatest) return base;
+        return {
+          ...base,
+          last_seen: allForUser.map((row) => row.ts).sort().at(-1) ?? null,
+          last_business_seen: allForUser
+            .filter((row) => !isMcpProtocolMethod(row.tool))
+            .map((row) => row.ts)
+            .sort()
+            .at(-1) ?? null
+        };
+      };
+      if (sql.includes("AS last_seen") && sql.includes("last_business_seen")) {
         return {
           all: vi.fn((...args: unknown[]) => {
-            // Spec 189 — the stats query binds seven window pairs (14 params)
-            // before the user id list. The protocol set comes from the shared
-            // classification module, never from a local copy.
-            // Window bounds come from the first pair (args[0]/args[1]) so range=30d
-            // is not silently clamped to a hard-coded 7-day cutoff.
-            const startMs = Date.parse(String(args[0]));
-            const endMs = Date.parse(String(args[1]));
-            const userIds = args.slice(14) as string[];
+            const userIds = args.filter(
+              (value): value is string => typeof value === "string" && !/^\d{4}-\d{2}-\d{2}T/.test(value)
+            );
             return userIds.flatMap((userId) => {
               const allForUser = auditRows.filter((row) => row.user_id === userId);
               if (allForUser.length === 0) return [];
-              const matched = allForUser.filter((row) => {
-                const ts = new Date(row.ts).getTime();
-                return Number.isFinite(startMs) && Number.isFinite(endMs)
-                  ? ts >= startMs && ts < endMs
-                  : false;
-              });
-              const business = matched.filter((row) => !isMcpProtocolMethod(row.tool));
               return [{
                 user_id: userId,
-                calls7: matched.length,
-                business_calls7: business.length,
-                protocol_calls7: matched.length - business.length,
-                usage_calls7: business.length,
-                eval_probe_calls7: 0,
-                denied7: business.filter((row) => row.outcome === "denied").length,
-                active_tokens: new Set(matched.map((row) => row.token_hash_prefix).filter(Boolean)).size,
                 last_seen: allForUser.map((row) => row.ts).sort().at(-1) ?? null,
                 last_business_seen: allForUser
                   .filter((row) => !isMcpProtocolMethod(row.tool))
@@ -102,6 +130,17 @@ vi.mock("../admin/audit.js", () => ({
                   .sort()
                   .at(-1) ?? null
               }];
+            });
+          })
+        };
+      }
+      if (sql.includes("AS business_calls7")) {
+        return {
+          all: vi.fn((...args: unknown[]) => {
+            const { userIds, startMs, endMs } = parseWindowedUserArgs(args);
+            return userIds.flatMap((userId) => {
+              const row = statsForUser(userId, startMs, endMs, false);
+              return row ? [row] : [];
             });
           })
         };
@@ -419,6 +458,55 @@ describe("GET /api/admin/agents", () => {
     expect(effective.body.data.snapshotHash).toBeTruthy();
     expect(effective.body.data.sourceMapVersion).toBeTruthy();
     expect(effective.body.data.sources).toHaveLength(1);
+    await app.close();
+  });
+});
+
+describe("P1-58 agent roster and statistics partitions", () => {
+  beforeEach(() => {
+    agentStatisticsDisplayTestState.reset();
+  });
+
+  it("GET ?view=roster omits audit statistics on agents", async () => {
+    auditRows.push(
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-08-02T08:00:00.000Z", tool: "sl_query", outcome: "ok" }
+    );
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents?view=roster").expect(200);
+    expect(res.body.data.agents).toHaveLength(2);
+    expect(res.body.data.agents[0].stats).toBeUndefined();
+    expect(res.body.data.summary).toBeUndefined();
+    expect(res.body.data.meta?.snapshotVersion).toBeTruthy();
+    await app.close();
+  });
+
+  it("GET /api/admin/agents/statistics returns stats and is not swallowed by :userId", async () => {
+    auditRows.push(
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-08-02T08:00:00.000Z", tool: "sl_query", outcome: "ok" }
+    );
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents/statistics?range=7d").expect(200);
+    expect(res.body.data.agents[0].stats.callsLast7d).toBe(1);
+    expect(res.body.data.summary).toBeTruthy();
+    expect(res.body.data.meta.statisticsAsOf).toBeTruthy();
+    expect(res.body.data.meta.cache).toBe("miss");
+    const notFound = await request(app.server).get("/api/admin/agents/statistics").expect(200);
+    expect(notFound.body.ok).toBe(true);
+    await app.close();
+  });
+
+  it("SC-06 reuses completed statistics within 5s; refresh=true bypasses", async () => {
+    const app = buildServer();
+    await app.ready();
+    const first = await request(app.server).get("/api/admin/agents/statistics?range=7d").expect(200);
+    const asOf = first.body.data.meta.statisticsAsOf;
+    const second = await request(app.server).get("/api/admin/agents/statistics?range=7d").expect(200);
+    expect(second.body.data.meta.cache).toBe("hit");
+    expect(second.body.data.meta.statisticsAsOf).toBe(asOf);
+    const refreshed = await request(app.server).get("/api/admin/agents/statistics?range=7d&refresh=true").expect(200);
+    expect(refreshed.body.data.meta.cache).toBe("bypass");
     await app.close();
   });
 });

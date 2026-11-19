@@ -308,10 +308,11 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
   it("R1 unverified reconciliation: sources and agents are busy with no data, then serve the final disk state", async () => {
     await sources();
     await request(app.server).get("/api/admin/agents").expect(200);
+    await request(app.server).get("/api/admin/roles").expect(200);
     stopDisplayReconciler();
     await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), MANIFEST.replace("fin_budget", "fin_unverified"), "utf8");
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS.replace("name: Li Si", "name: Li Si 3"), "utf8");
-    for (const url of ["/api/sources", "/api/admin/agents"]) {
+    for (const url of ["/api/sources", "/api/admin/agents", "/api/admin/roles"]) {
       const busy = await request(app.server).get(url);
       expect(busy.status).toBe(503);
       expect(busy.headers["retry-after"]).toBe("1");
@@ -322,6 +323,7 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
     expect(recovered.body.data.tables.map((t: { table: string }) => t.table)).toContain("fin_unverified");
     const agents = await request(app.server).get("/api/admin/agents").expect(200);
     expect(agents.body.data.agents.find((a: { id: string }) => a.id === "lisi").name).toBe("Li Si 3");
+    await request(app.server).get("/api/admin/roles").expect(200);
   });
 
   it("R1 busy while unverified still runs RequireAuth first", async () => {
@@ -351,6 +353,7 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
   it("SI-04 an overlay-only save advances D but not P/C and does not rebuild the Agent permissions", async () => {
     await sources();
     await request(app.server).get("/api/admin/agents").expect(200);
+    await request(app.server).get("/api/admin/roles").expect(200);
     const gens = displayGenerations();
     const builds = displaySnapshotDiagnostics().builds;
 
@@ -363,8 +366,9 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
     // The write itself builds nothing.
     expect(displaySnapshotDiagnostics().builds).toBe(builds);
 
-    // The Agent list still serves the cached permission section.
+    // The Agent and role lists still serve the cached permission section.
     await request(app.server).get("/api/admin/agents").expect(200);
+    await request(app.server).get("/api/admin/roles").expect(200);
     expect(displaySnapshotDiagnostics().builds).toBe(builds);
 
     // The semantic asset display does rebuild, exactly once.

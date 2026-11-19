@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -31,14 +31,31 @@ import {
 import { LucyAdminRoleWarning } from "../../lib/LucyAdminRoleWarning";
 import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { queryKeys } from "../../lib/queryKeys";
+import { AccessWriteRecoveryPanel } from "../../components/admin/AccessWriteRecoveryPanel";
+import {
+  accessWriteAckFromCommittedStatus,
+  buildRacsWriteBody,
+  classifyRolesAgentWriteError,
+  extractRacsPreviewBinding,
+  newRolesAgentOperationId,
+  pollAccessWriteStatusBounded,
+  shouldOfferThreeWayCompare,
+  type ClassifiedRolesAgentWriteError,
+  type RacsPreviewBinding
+} from "../../lib/rolesAgentAccessWrite";
+import type { RolePermissionDraft } from "../../lib/rolePermissionDraft";
+import { rolePermissionDraftHash } from "../../lib/rolePermissionDraft";
 
-type AgentDetailResponse = { agent: Agent; version: string };
+type AgentDetailResponse = { agent: Agent; version: string; baseObjectVersion?: string };
 type PatchDryRunResponse = {
   diff: string;
   proposedYaml: string;
   effectivePermissions?: EffectivePermissionsPreview;
+  baseObjectVersion?: string;
+  previewToken?: string;
+  compileInputsDigest?: string;
 };
-type DiffPreview = PatchDryRunResponse & { patch: AgentPatch };
+type DiffPreview = PatchDryRunResponse & { patch: AgentPatch; racs?: RacsPreviewBinding };
 type PatchSaveResponse = AccessWriteAck & { agent: Agent };
 type RolesResponse = { roles: Role[] };
 
@@ -315,6 +332,15 @@ function usesCatalogBoundContext(
   });
 }
 
+function agentSnapshotRoleDraft(agent: Agent, id: string): RolePermissionDraft {
+  return {
+    roleId: id,
+    description: `${agent.name}${agent.note ? ` · ${agent.note}` : ""}`,
+    scope: { mode: "names", tables: [] },
+    tools: agentRoleIds(agent)
+  };
+}
+
 function buildChangeSummary(
   patch: AgentPatch,
   currentAgent: Agent
@@ -396,9 +422,19 @@ export function AgentDetail() {
   const [confirmSave, setConfirmSave] = useState<DiffPreview | null>(null);
   const [selectedTokenLabels, setSelectedTokenLabels] = useState<string[]>([]);
   const [renewingTokenLabel, setRenewingTokenLabel] = useState<string | null>(null);
+  const [writeRecoveryError, setWriteRecoveryError] = useState<ClassifiedRolesAgentWriteError | null>(null);
+  const [pendingOperation, setPendingOperation] = useState<{
+    operationId: string;
+    checking?: boolean;
+    status?: import("../../lib/rolesAgentAccessWrite").AccessWriteStatusResult;
+  } | null>(null);
+  const [compareCurrentAgent, setCompareCurrentAgent] = useState<Agent | null>(null);
+  const [compareDraftMatchesCurrent, setCompareDraftMatchesCurrent] = useState(false);
+  const writeInflightOperationIdRef = useRef<string | null>(null);
 
   const agent = data?.agent;
   const version = data?.version;
+  const baseObjectVersion = data?.baseObjectVersion;
   const constraintsDirty =
     editConstraints !== null
     && (!agent || !sameConstraints(editConstraints, constraintsFromAgent(agent)));
@@ -471,21 +507,111 @@ export function AgentDetail() {
     setEditConstraints(null);
   }
 
+  function clearWriteRecovery() {
+    setWriteRecoveryError(null);
+    setPendingOperation(null);
+    setCompareCurrentAgent(null);
+    setCompareDraftMatchesCurrent(false);
+    writeInflightOperationIdRef.current = null;
+  }
+
+  function currentAgentView(): Agent | null {
+    if (!agent) return null;
+    return {
+      ...agent,
+      name: editName ?? agent.name,
+      note: editNote !== null ? editNote : agent.note,
+      enabled: editEnabled ?? agent.enabled,
+      roles: editRoles ?? agent.roles,
+      role: editRoles?.[0] ?? agent.role
+    };
+  }
+
+  function handleClassifiedWriteError(error: unknown) {
+    const classified = classifyRolesAgentWriteError(error);
+    const inflight = writeInflightOperationIdRef.current;
+    if (inflight && classified.kind === "transport_uncertain") {
+      setWriteRecoveryError(classified);
+      setPendingOperation({ operationId: inflight, checking: true });
+      void pollAccessWriteStatusBounded(inflight).then((status) => {
+        setPendingOperation({ operationId: inflight, checking: false, status });
+        if (status.outcome === "committed") {
+          const ack = accessWriteAckFromCommittedStatus(status);
+          if (ack && userId && toastAccessWriteAck(ack)) {
+            void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
+            clearWriteRecovery();
+            clearEditForm();
+          }
+        }
+      });
+      writeInflightOperationIdRef.current = null;
+      return;
+    }
+    writeInflightOperationIdRef.current = null;
+    if (classified.kind === "write_terminal_failure") {
+      toast.error(classified.userMessage);
+      return;
+    }
+    if (classified.kind === "auth" || classified.kind === "rate_limited" || classified.kind === "other") {
+      toast.error(classified.userMessage);
+      return;
+    }
+    setWriteRecoveryError(classified);
+    if (shouldOfferThreeWayCompare(classified.kind)) void refreshCurrentAgentForCompare();
+  }
+
+  async function refreshCurrentAgentForCompare() {
+    if (!userId) return;
+    try {
+      const fresh = await apiGet<AgentDetailResponse>(`/api/admin/agents/${userId}`);
+      setCompareCurrentAgent(fresh.agent);
+      const mine = currentAgentView();
+      if (mine) {
+        setCompareDraftMatchesCurrent(
+          rolePermissionDraftHash(agentSnapshotRoleDraft(mine, userId))
+            === rolePermissionDraftHash(agentSnapshotRoleDraft(fresh.agent, userId))
+        );
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "读取最新值失败");
+    }
+  }
+
+  async function recheckPendingOperation() {
+    if (!pendingOperation?.operationId) return;
+    setPendingOperation({ ...pendingOperation, checking: true });
+    const status = await pollAccessWriteStatusBounded(pendingOperation.operationId);
+    setPendingOperation({ operationId: pendingOperation.operationId, checking: false, status });
+    if (status.outcome === "committed") {
+      const ack = accessWriteAckFromCommittedStatus(status);
+      if (ack && userId && toastAccessWriteAck(ack)) clearWriteRecovery();
+    }
+  }
+
+  function patchRequestBody(patch: AgentPatch, dryRun: boolean, racs?: RacsPreviewBinding, operationId?: string) {
+    let body: Record<string, unknown> = { dryRun, patch };
+    if (baseObjectVersion) body.baseObjectVersion = baseObjectVersion;
+    else if (version) body.version = version;
+    if (!dryRun && racs && operationId) body = buildRacsWriteBody(racs, operationId, body);
+    return body;
+  }
+
   const previewMutation = useMutation({
     mutationFn: async (patch: AgentPatch) => {
-      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
-      return { ...data, patch };
+      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, patchRequestBody(patch, true));
+      return { ...data, patch, racs: extractRacsPreviewBinding(data) };
     },
     onSuccess: (data) => {
       setDiffPreview(data);
+      setWriteRecoveryError(null);
       goToTab("diff");
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => handleClassifiedWriteError(err)
   });
 
   const saveMutation = useMutation({
-    mutationFn: (patch: AgentPatch) =>
-      apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, { dryRun: false, version, patch }),
+    mutationFn: ({ patch, racs, operationId }: { patch: AgentPatch; racs?: RacsPreviewBinding; operationId?: string }) =>
+      apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, patchRequestBody(patch, false, racs, operationId)),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
       if (!toastAccessWriteAck(result)) return;
@@ -493,17 +619,27 @@ export function AgentDetail() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
       setDiffPreview(null);
       setConfirmSave(null);
+      clearWriteRecovery();
       goToTab("info");
       clearEditForm();
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => handleClassifiedWriteError(err)
   });
+
+  function commitAgentSave(preview: DiffPreview) {
+    const operationId = preview.racs ? newRolesAgentOperationId() : undefined;
+    if (operationId) writeInflightOperationIdRef.current = operationId;
+    saveMutation.mutate({ patch: preview.patch, racs: preview.racs, operationId });
+  }
 
   const directSaveMutation = useMutation({
     mutationFn: async (patch: AgentPatch) => {
-      if (!version) throw new Error("配置版本未知，请刷新后重试");
-      await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
-      return apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, { dryRun: false, version, patch });
+      if (!version && !baseObjectVersion) throw new Error("配置版本未知，请刷新后重试");
+      const preview = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, patchRequestBody(patch, true));
+      const racs = extractRacsPreviewBinding(preview);
+      const operationId = racs ? newRolesAgentOperationId() : undefined;
+      if (operationId) writeInflightOperationIdRef.current = operationId;
+      return apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, patchRequestBody(patch, false, racs, operationId));
     },
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
@@ -514,16 +650,16 @@ export function AgentDetail() {
       setConfirmSave(null);
       clearEditForm();
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => handleClassifiedWriteError(err)
   });
 
   const confirmPreviewMutation = useMutation({
     mutationFn: async (patch: AgentPatch) => {
-      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
-      return { ...data, patch };
+      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, patchRequestBody(patch, true));
+      return { ...data, patch, racs: extractRacsPreviewBinding(data) };
     },
     onSuccess: (data) => setConfirmSave(data),
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => handleClassifiedWriteError(err)
   });
 
   const deleteMutation = useMutation({
@@ -799,6 +935,39 @@ export function AgentDetail() {
             </button>
           </>
         }
+      />
+
+      <AccessWriteRecoveryPanel
+        error={writeRecoveryError}
+        pending={pendingOperation}
+        compare={
+          agent && userId && writeRecoveryError && shouldOfferThreeWayCompare(writeRecoveryError.kind)
+            ? {
+                baseline: {
+                  title: "原始值",
+                  draft: agentSnapshotRoleDraft(agent, userId),
+                  subtitle: "加载时的基线"
+                },
+                mine: {
+                  title: "我的修改",
+                  draft: agentSnapshotRoleDraft(currentAgentView() ?? agent, userId)
+                },
+                current: compareCurrentAgent
+                  ? { title: "当前值", draft: agentSnapshotRoleDraft(compareCurrentAgent, userId) }
+                  : null,
+                draftMatchesCurrent: compareDraftMatchesCurrent
+              }
+            : null
+        }
+        onDismiss={clearWriteRecovery}
+        onRepreview={() => {
+          clearWriteRecovery();
+          const patch = buildPatch();
+          if (Object.keys(patch).length) previewMutation.mutate(patch);
+        }}
+        onRefreshCurrent={() => void refreshCurrentAgentForCompare()}
+        onRecheckStatus={() => void recheckPendingOperation()}
+        onDiscardDraft={handleDiscardEdits}
       />
 
       <PolicyDegradeNotice
@@ -1595,7 +1764,7 @@ export function AgentDetail() {
                   <button
                     type="button"
                     className="pl-btn pl-btn--primary"
-                    onClick={() => diffPreview && saveMutation.mutate(diffPreview.patch)}
+                    onClick={() => diffPreview && commitAgentSave(diffPreview)}
                     disabled={saveMutation.isPending}
                   >
                     {saveMutation.isPending ? "保存中…" : "保存"}
@@ -1723,7 +1892,7 @@ export function AgentDetail() {
                 type="button"
                 className="pl-btn pl-btn--primary"
                 data-testid="agent-save-confirm-submit"
-                onClick={() => saveMutation.mutate(confirmSave.patch)}
+                onClick={() => commitAgentSave(confirmSave)}
                 disabled={saveMutation.isPending}
               >
                 {saveMutation.isPending ? "保存中…" : "确认保存"}

@@ -725,3 +725,73 @@ describe("新建角色默认业务问答工具 Spec", () => {
     expect(screen.getByText(new RegExp(`已选 ${BUSINESS_QA_PRESET.length} 个`))).toBeInTheDocument();
   });
 });
+
+describe("P1-59 RoleDetail concurrent edit", () => {
+  it("shows publish-busy copy and keeps the in-memory draft", async () => {
+    installFetch(makeRole({ baseObjectVersion: "role/analyst@deadbeef" }), (url, init) => {
+      if (url === "/api/admin/roles/analyst" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body));
+        if (body.dryRun) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                diff: "+ change",
+                proposedYaml: "roles: {}",
+                baseObjectVersion: "role/analyst@deadbeef",
+                previewToken: "racs-preview-token"
+              }
+            })
+          );
+        }
+        return new Response(
+          JSON.stringify({ ok: false, error: { code: "PUBLISH_COORDINATOR_BUSY", message: "window busy" } }),
+          { status: 503 }
+        );
+      }
+    });
+    renderAt("/admin/roles/analyst");
+    fireEvent.change(await screen.findByLabelText("说明"), { target: { value: "并发占用测试" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存权限配置" }));
+    const drawer = await screen.findByTestId("role-permission-review-drawer");
+    fireEvent.click(within(drawer).getByRole("button", { name: "确认保存" }));
+    const panel = await screen.findByTestId("access-write-recovery-panel");
+    expect(panel).toHaveTextContent("有变更正在保存，请稍后重试");
+    expect(screen.getByLabelText("说明")).toHaveValue("并发占用测试");
+  });
+
+  it("sends RACS fields on confirm when dryRun returned previewToken", async () => {
+    const writes: unknown[] = [];
+    installFetch(makeRole({ baseObjectVersion: "role/analyst@deadbeef" }), (url, init) => {
+      if (url === "/api/admin/roles/analyst" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body));
+        writes.push(body);
+        if (body.dryRun) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                diff: "+ change",
+                proposedYaml: "roles: {}",
+                baseObjectVersion: "role/analyst@deadbeef",
+                previewToken: "racs-preview-token"
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, data: { written: true, status: "committed", runtimeAck: true } }));
+      }
+    });
+    renderAt("/admin/roles/analyst");
+    fireEvent.change(await screen.findByLabelText("说明"), { target: { value: "RACS save" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存权限配置" }));
+    const drawer = await screen.findByTestId("role-permission-review-drawer");
+    fireEvent.click(within(drawer).getByRole("button", { name: "确认保存" }));
+    await waitFor(() => expect(writes).toHaveLength(2));
+    const confirmBody = writes[1] as Record<string, unknown>;
+    expect(confirmBody.previewToken).toBe("racs-preview-token");
+    expect(confirmBody.baseObjectVersion).toBe("role/analyst@deadbeef");
+    expect(confirmBody.version).toBeUndefined();
+    expect(String(confirmBody.operationId)).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+});

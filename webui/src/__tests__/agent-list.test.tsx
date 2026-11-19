@@ -11,7 +11,7 @@ import {
 } from "../lib/lucyAdminRole";
 import type { Agent, AgentStats, McpEndpointInfo, Role } from "../lib/types";
 
-function renderAgentList() {
+async function renderAgentList() {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false }
@@ -28,6 +28,26 @@ function renderAgentList() {
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
+  );
+  await waitFor(
+    () => {
+      const pageReady =
+        screen.queryByTestId("agent-list-table")
+        || screen.queryByText(/还没有任何/)
+        || screen.queryByTestId("agent-metric-grid");
+      expect(pageReady).toBeTruthy();
+    },
+    { timeout: 5000 }
+  );
+  await waitFor(
+    () => {
+      const settled =
+        screen.queryByTestId("agent-statistics-as-of")
+        || screen.queryByTestId("agent-statistics-error")
+        || screen.queryByTestId("agent-statistics-version-mismatch");
+      expect(settled).toBeTruthy();
+    },
+    { timeout: 5000 }
   );
   return { ...result, client };
 }
@@ -78,7 +98,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-let agentsMeta: { runtimeConsistency: "matched" | "unconfirmed" } | undefined;
+let agentsMeta: { runtimeConsistency?: "matched" | "unconfirmed"; snapshotVersion?: string } | undefined;
+const ROSTER_SNAPSHOT_VERSION = "snap-test";
 /** 服务端 aggregate。Agent 名册的窗口（summary.windowStart / windowEnd）只从这里来。 */
 let agentsSummary: Record<string, unknown> | undefined;
 /** policy-runtime stub for the roster KPI. null → healthy default; false → omit (simulate failure). */
@@ -116,9 +137,44 @@ function stubAgentsEndpoints(
     sourceKey: `mysql-aliyun|dataforai|source_${index}`,
     rowGrant: "all" as const
   }));
+  const rosterMeta = {
+    snapshotVersion: agentsMeta?.snapshotVersion ?? ROSTER_SNAPSHOT_VERSION,
+    runtimeConsistency: agentsMeta?.runtimeConsistency ?? ("matched" as const)
+  };
+  const defaultStatisticsSummary = (range: string) => {
+    const usageCallsLast7d = agents.reduce((sum, agent) => sum + (agent.stats?.usageCallsLast7d ?? 0), 0);
+    return {
+      agentCount: agents.length,
+      enabledAgentCount: agents.filter((a) => a.enabled).length,
+      configuredTokenCount: agents.reduce((sum, agent) => sum + agent.tokens.length, 0),
+      activeTokenCountLast7d: agents.reduce((sum, agent) => sum + (agent.stats?.activeTokensLast7d ?? 0), 0),
+      callsLast7d: agents.reduce((sum, agent) => sum + (agent.stats?.callsLast7d ?? 0), 0),
+      deniedLast7d: agents.reduce((sum, agent) => sum + (agent.stats?.deniedLast7d ?? 0), 0),
+      metricsState: "ok" as const,
+      usageCallsLast7d,
+      usageActiveAgentCountLast7d: agents.filter((agent) => (agent.stats?.usageCallsLast7d ?? 0) > 0).length,
+      windowStart: "2026-01-01T00:00:00.000Z",
+      windowEnd: "2026-01-08T00:00:00.000Z",
+      range
+    };
+  };
+  const statisticsBody = (range: string) => ({
+    version: "v1",
+    range,
+    agents: agents.map((agent) => ({ id: agent.id, stats: agent.stats! })),
+  summary: (agentsSummary ?? defaultStatisticsSummary(range)) as Record<string, unknown>,
+    meta: {
+      statisticsAsOf: "2026-01-08T00:00:00.000Z",
+      generatedAt: "2026-01-08T00:00:00.000Z",
+      snapshotVersion: rosterMeta.snapshotVersion,
+      configVersion: "v1"
+    }
+  });
+
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url === "/api/project") {
+    const parsed = new URL(url, "http://localhost");
+    if (url === "/api/project" || parsed.pathname === "/api/project") {
       return new Response(
         JSON.stringify({
           ok: true,
@@ -131,9 +187,22 @@ function stubAgentsEndpoints(
         })
       );
     }
-    const agentsPath = url.split("?")[0];
+    const agentsPath = parsed.pathname;
+    if (agentsPath === "/api/admin/agents" && parsed.searchParams.get("view") === "roster" && (!init || !init.method || init.method === "GET")) {
+      const rosterAgents = agents.map(({ stats: _stats, ...rest }) => rest);
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: { agents: rosterAgents, version: "v1", meta: rosterMeta }
+        })
+      );
+    }
+    if (agentsPath === "/api/admin/agents/statistics" && (!init || !init.method || init.method === "GET")) {
+      const range = parsed.searchParams.get("range") ?? "30d";
+      return new Response(JSON.stringify({ ok: true, data: statisticsBody(range) }));
+    }
     if (agentsPath === "/api/admin/agents" && (!init || !init.method || init.method === "GET")) {
-      return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1", ...(agentsMeta ? { meta: agentsMeta } : {}), ...(agentsSummary ? { summary: agentsSummary } : {}) } }));
+      return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1", meta: rosterMeta, ...(agentsSummary ? { summary: agentsSummary } : {}) } }));
     }
     if (url.startsWith("/api/admin/roles")) {
       return new Response(JSON.stringify({ ok: true, data: { roles } }));
@@ -205,15 +274,62 @@ describe("AgentList", () => {
           data: { root: "/tmp/project-lucy", ktxAvailable: true, connections: [], mcpEndpoint: undefined }
         }));
       }
-      // Agent list defaults to ?range=30d; match path so refresh failure still hits this stub.
-      if (path === "/api/admin/agents") {
+      const parsed = new URL(url, "http://localhost");
+      if (parsed.pathname === "/api/admin/agents" && parsed.searchParams.get("view") === "roster") {
         if (failAgents) {
           return new Response(
             JSON.stringify({ ok: false, error: { code: "INTERNAL", message: "boom" } }),
             { status: 500 }
           );
         }
-        return new Response(JSON.stringify({ ok: true, data: { agents: [makeAgent()], version: "v1" } }));
+        const agent = makeAgent();
+        const { stats: _s, ...rosterAgent } = agent;
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              agents: [rosterAgent],
+              version: "v1",
+              meta: { snapshotVersion: ROSTER_SNAPSHOT_VERSION, runtimeConsistency: "matched" }
+            }
+          })
+        );
+      }
+      if (parsed.pathname === "/api/admin/agents/statistics") {
+        if (failAgents) {
+          return new Response(
+            JSON.stringify({ ok: false, error: { code: "INTERNAL", message: "boom" } }),
+            { status: 500 }
+          );
+        }
+        const agent = makeAgent();
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              version: "v1",
+              range: "30d",
+              agents: [{ id: agent.id, stats: agent.stats! }],
+              summary: {
+                agentCount: 1,
+                enabledAgentCount: 1,
+                configuredTokenCount: 0,
+                activeTokenCountLast7d: 0,
+                callsLast7d: 0,
+                deniedLast7d: 0,
+                metricsState: "ok",
+                usageCallsLast7d: 0,
+                usageActiveAgentCountLast7d: 0
+              },
+              meta: {
+                statisticsAsOf: "2026-01-08T00:00:00.000Z",
+                generatedAt: "2026-01-08T00:00:00.000Z",
+                snapshotVersion: ROSTER_SNAPSHOT_VERSION,
+                configVersion: "v1"
+              }
+            }
+          })
+        );
       }
       if (url.startsWith("/api/admin/roles")) {
         return new Response(JSON.stringify({ ok: true, data: { roles: [analystRole] } }));
@@ -225,7 +341,7 @@ describe("AgentList", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { client } = renderAgentList();
+    const { client } = await renderAgentList();
     expect(await screen.findByText("张三")).toBeInTheDocument();
 
     failAgents = true;
@@ -254,12 +370,12 @@ describe("AgentList", () => {
   it("Spec 174 R3: shows 权限生效状态待确认 only while runtime consistency is unconfirmed", async () => {
     agentsMeta = { runtimeConsistency: "unconfirmed" };
     stubAgentsEndpoints([makeAgent()]);
-    renderAgentList();
+    await renderAgentList();
     expect(await screen.findByTestId("agent-runtime-unconfirmed")).toHaveTextContent("权限生效状态待确认");
     cleanup();
     agentsMeta = { runtimeConsistency: "matched" };
     stubAgentsEndpoints([makeAgent()]);
-    renderAgentList();
+    await renderAgentList();
     expect(await screen.findByText("张三")).toBeInTheDocument();
     expect(screen.queryByTestId("agent-runtime-unconfirmed")).not.toBeInTheDocument();
   });
@@ -267,7 +383,7 @@ describe("AgentList", () => {
   it("renders 未使用 for agents that have never been used", async () => {
     stubAgentsEndpoints([makeAgent({ id: "no1", name: "冷账号", stats: { callsLast7d: 0, usageCallsLast7d: 0, evalProbeCallsLast7d: 0, deniedLast7d: 0, topTables: [] } })]);
 
-    renderAgentList();
+    await renderAgentList();
     expect(await screen.findByRole("heading", { name: "Agent" })).toBeInTheDocument();
     // M40: 一级根页面不再渲染面包屑
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
@@ -284,7 +400,7 @@ describe("AgentList", () => {
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三", stats: { callsLast7d: 4, usageCallsLast7d: 4, evalProbeCallsLast7d: 0, deniedLast7d: 0, lastBusinessSeen: tenMinAgo, topTables: [] } })]);
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => {
       expect(screen.getByText("张三")).toBeInTheDocument();
     });
@@ -318,7 +434,7 @@ describe("AgentList", () => {
       })
     ]);
 
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-row-unknown1");
     expect(screen.getByTestId("agent-calls-7d-unknown1")).toHaveTextContent("—");
     expect(screen.getByTestId("agent-metrics-unavailable-unknown1")).toHaveTextContent("数据不可用");
@@ -340,7 +456,7 @@ describe("AgentList", () => {
       })
     ]);
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => {
       expect(screen.getByText("旧ACL")).toBeInTheDocument();
     });
@@ -354,7 +470,7 @@ describe("AgentList", () => {
   it("renders agent list as pl-data-grid table without row-level MCP copy", async () => {
     stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三" })]);
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByText("张三")).toBeInTheDocument());
     expect(screen.getByTestId("agent-list-table")).toHaveClass("pl-data-grid");
     const section = screen.getByTestId("agent-list-section");
@@ -370,7 +486,7 @@ describe("AgentList", () => {
   it("view logs navigates to /admin/audit?user=<agentId>", async () => {
     stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三" })]);
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByText("张三")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "张三 更多操作" }));
     await waitFor(() => expect(screen.getByTestId("row-more-menu")).toBeInTheDocument());
@@ -397,7 +513,7 @@ describe("AgentList", () => {
       }
     ]);
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument()
     );
@@ -438,7 +554,7 @@ describe("AgentList", () => {
     };
     stubAgentsEndpoints([], [richRole]);
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
     fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
@@ -461,7 +577,7 @@ describe("AgentList", () => {
     stubAgentsEndpoints([]);
     const fetchMock = vi.spyOn(globalThis, "fetch");
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
 
@@ -488,7 +604,7 @@ describe("AgentList", () => {
     ]);
     const fetchMock = vi.spyOn(globalThis, "fetch");
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
     fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
@@ -520,7 +636,7 @@ describe("AgentList", () => {
   it("new agent create confirmation navigates to the token handoff tab", async () => {
     stubAgentsEndpoints([]);
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
     fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
@@ -539,7 +655,7 @@ describe("AgentList", () => {
 
   it("new agent modal role field shows 管理角色 link and empty-state when no roles", async () => {
     stubAgentsEndpoints([], []);
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
 
@@ -564,7 +680,7 @@ describe("AgentList", () => {
       16
     );
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
 
@@ -599,7 +715,7 @@ describe("AgentList", () => {
 
   it("new agent modal role field shows 管理角色 link to role admin", async () => {
     stubAgentsEndpoints([], [analystRole]);
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
 
@@ -648,7 +764,7 @@ describe("AgentList", () => {
       }
     );
 
-    renderAgentList();
+    await renderAgentList();
     await screen.findByRole("heading", { name: "Agent" });
     await screen.findByTestId("metric-agent-count");
 
@@ -718,7 +834,7 @@ describe("AgentList", () => {
       makeAgent({ id: "kr_agent", name: "韩国行权限", role: "chatbi-kr-analyst" }),
       makeAgent({ id: "us_agent", name: "美国行权限", role: "chatbi-us-analyst" })
     ]);
-    renderAgentList();
+    await renderAgentList();
     const card = await screen.findByTestId("metric-temporarily-unable-to-query");
     await waitFor(() => expect(card).toHaveTextContent("2"));
     expect(card).toHaveTextContent("暂时不能查数");
@@ -759,7 +875,7 @@ describe("AgentList", () => {
       makeAgent({ id: "a4", name: "A4" }),
       makeAgent({ id: "a5", name: "A5" })
     ]);
-    renderAgentList();
+    await renderAgentList();
     const card = await screen.findByTestId("metric-temporarily-unable-to-query");
     await waitFor(() => expect(card).toHaveTextContent("5"));
     expect(card.querySelector(".pl-metric-card--danger")).toBeTruthy();
@@ -771,7 +887,7 @@ describe("AgentList", () => {
     cleanup();
     policyRuntimeStub = false;
     stubAgentsEndpoints([makeAgent({ id: "only", name: "Only" })]);
-    renderAgentList();
+    await renderAgentList();
     const failed = await screen.findByTestId("metric-temporarily-unable-to-query");
     await waitFor(() => {
       expect(failed).toHaveTextContent("—");
@@ -799,7 +915,7 @@ describe("AgentList", () => {
       })
     ]);
 
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-row-demo_agent");
 
     const roleLink = screen.getByTestId("agent-role-link-demo_agent");
@@ -819,7 +935,7 @@ describe("AgentList", () => {
       makeAgent({ id: "multi_agent", name: "多角色", roles: ["alpha_role", "beta_role"] }),
       makeAgent({ id: "solo_agent", name: "单角色", role: "alpha_role" })
     ]);
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-row-multi_agent");
     expect(screen.getByTestId("agent-role-link-multi_agent-alpha_role")).toHaveAttribute("href", "/admin/roles/alpha_role");
     expect(screen.getByTestId("agent-role-link-multi_agent-beta_role")).toHaveAttribute("href", "/admin/roles/beta_role");
@@ -845,7 +961,7 @@ describe("AgentList", () => {
       })
     ]);
 
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-row-active_agent");
     expect(screen.getByTestId("agent-row-idle_agent")).toBeInTheDocument();
 
@@ -864,7 +980,7 @@ describe("AgentList", () => {
     stubAgentsEndpoints([
       makeAgent({ id: "demo_agent", name: "Demo Agent", role: "demo_readonly" })
     ]);
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-list-table");
     expect(screen.getByLabelText("搜索显示名或用户 ID")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "当前状态" })).toBeInTheDocument();
@@ -880,7 +996,7 @@ describe("AgentList", () => {
       makeAgent({ id: "a1", name: "Alpha" }),
       makeAgent({ id: "a2", name: "Beta" })
     ]);
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-list-table");
 
     // No active filter — button must not be visible
@@ -898,7 +1014,7 @@ describe("AgentList", () => {
 
   it("shows empty filtered message with clear-filters button when agents exist but none match", async () => {
     stubAgentsEndpoints([makeAgent({ id: "a1", name: "Alpha" })]);
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-list-table");
 
     fireEvent.change(screen.getByLabelText("搜索显示名或用户 ID"), { target: { value: "zzz_no_match" } });
@@ -913,7 +1029,7 @@ describe("AgentList", () => {
 
   it("agent name cell is a link to object detail search", async () => {
     stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三" })]);
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-row-zhangsan");
     const nameLink = screen.getByTestId("agent-name-link-zhangsan");
     expect(nameLink).toBeInTheDocument();
@@ -953,7 +1069,7 @@ describe("AgentList", () => {
       deniedLast7d: 0
     };
     stubAgentsEndpoints(withSummary, [{ ...analystRole, id: "demo_readonly" }]);
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("metric-business-calls");
     expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("10");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
@@ -999,7 +1115,7 @@ describe("AgentList", () => {
       })
     ]);
 
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-row-demo_agent");
     // Agent 名册 Spec SC-02 —— 表头恰好六列。
     expect(screen.getByRole("columnheader", { name: "显示名/用户 ID" })).toBeInTheDocument();
@@ -1118,7 +1234,7 @@ describe("Spec 149 — 绑定运维问数角色的高权限警示（SC-23）", (
       ]
     );
 
-    renderAgentList();
+    await renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
 
@@ -1234,8 +1350,7 @@ async function renderRoster(
     );
   }
   stubAgentsEndpoints(agents);
-  renderAgentList();
-  await screen.findByTestId("agent-list-table");
+  await renderAgentList();
   return agents;
 }
 
@@ -1263,7 +1378,7 @@ describe("Agent 名册 Spec —— 名册呈现（SC-03～SC-09、SC-11、SC-14�
       makeAgent({ id: "on", name: "张三" }),
       makeAgent({ id: "off", name: "李四", enabled: false })
     ]);
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-row-on");
 
     const enabledRow = screen.getByTestId("agent-row-on");
@@ -1291,7 +1406,7 @@ describe("Agent 名册 Spec —— 名册呈现（SC-03～SC-09、SC-11、SC-14�
       makeAgent({ id: "tk-missing-off", name: "缺字段停用", enabled: false, tokens: tokens(2), stats: { ...baseStats } }),
       makeAgent({ id: "tk-empty", name: "零配置", tokens: [], stats: { ...baseStats, availableTokens: 0 } })
     ]);
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-row-tk-zero");
 
     const zero = screen.getByTestId("agent-active-tokens-tk-zero");
@@ -1425,7 +1540,7 @@ describe("Agent 名册 Spec —— 名册呈现（SC-03～SC-09、SC-11、SC-14�
       usedCredentialReason: "token_prefix_collision"
     };
     stubAgentsEndpoints(agents);
-    renderAgentList();
+    await renderAgentList();
     await screen.findByTestId("agent-list-table");
     expect(screen.queryByTestId("agent-credential-partial-notice")).not.toBeInTheDocument();
     expect(screen.queryByText(/无法可靠映射/)).not.toBeInTheDocument();
