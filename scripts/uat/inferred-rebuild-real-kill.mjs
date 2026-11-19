@@ -34,6 +34,9 @@ try{
  result.persisted=JSON.parse(docker(['run','--rm','--entrypoint','node','-v',volume+':/data/lucy',image,'-e',stateCode]).trim().split('\n').pop());
  docker(['start',name]);const recoverDeadline=Date.now()+300000;let after;
  while(Date.now()<recoverDeadline){try{after=state();if(after.state?.status==='complete')break;}catch{}await pause(1000)}
- result.after=after;result.pass=result.processExit.exitCode===137&&!result.processExit.oomKilled&&result.persisted.state?.status==='in_progress'&&after?.state?.status==='complete'&&after.raw===n&&after.links===n&&after.duplicates===0;
+ result.after=after;
+ const readyDeadline=Date.now()+60000;let readyStatus=0;
+ while(Date.now()<readyDeadline){try{readyStatus=(await fetch('http://127.0.0.1:55459/api/readyz',{signal:AbortSignal.timeout(3000)})).status;if(readyStatus===200)break}catch{}await pause(1000)}
+ result.readyStatus=readyStatus;result.pass=readyStatus===200&&result.processExit.exitCode===137&&!result.processExit.oomKilled&&result.persisted.state?.status==='in_progress'&&after?.state?.status==='complete'&&after.raw===n&&after.links===n&&after.duplicates===0;
 }catch(e){result.pass=false;result.error=e.message}finally{try{writeFileSync(out+'/container.log',docker(['logs',name]))}catch{}writeFileSync(out+'/summary.json',JSON.stringify(result,null,2));rm();}
 console.log(JSON.stringify(result));process.exitCode=result.pass?0:1;

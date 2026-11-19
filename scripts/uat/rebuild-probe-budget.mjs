@@ -133,21 +133,48 @@ async function waitReady(budgetS) {
   return false;
 }
 
+function migratedFacts(volume) {
+  const out = docker(["run", "--rm", "--entrypoint", "node", "-v", `${volume}:/data/lucy:ro`, IMAGE, "-e", `
+const D=require('/app/webui/node_modules/better-sqlite3');const d=new D('/data/lucy/.ktx-ui/audit.sqlite',{readonly:true});
+const raw=d.prepare('SELECT COUNT(*) n,COUNT(DISTINCT user_id) users FROM access_log').get();
+const linked=d.prepare('SELECT COUNT(*) n,COUNT(DISTINCT l.access_log_id) unique_n,SUM(CASE WHEN t.inferred_turn_id IS NULL THEN 1 ELSE 0 END) missing_turns FROM inferred_turn_access_logs l JOIN access_log a ON a.id=l.access_log_id LEFT JOIN inferred_turns t ON t.inferred_turn_id=l.inferred_turn_id').get();
+const pending=d.prepare("SELECT COUNT(*) n FROM (SELECT user_id,MAX(id) newest FROM access_log GROUP BY user_id) a LEFT JOIN inferred_rebuild_state s ON s.user_id=a.user_id WHERE s.status IS NULL OR s.status<>'complete' OR s.watermark IS NULL OR s.watermark='' OR s.watermark GLOB '*[^0-9]*' OR CAST(s.watermark AS INTEGER)<a.newest").get().n;
+const turns=d.prepare('SELECT COUNT(*) n FROM inferred_turns').get().n;
+console.log(JSON.stringify({raw,linked,pending,turns,complete:raw.n>=200000&&raw.users>=67&&linked.n===raw.n&&linked.unique_n===raw.n&&linked.missing_turns===0&&pending===0}));d.close();`]);
+  return JSON.parse(out.trim().split("\n").pop());
+}
 async function premigrate() {
+  let source = SNAP_OLD;
   if (volumeExists(MIG) && !flag("remigrate")) {
-    log(`reuse migrated volume ${MIG}`);
-    return MIG;
+    const facts = migratedFacts(MIG);
+    if (facts.complete) {
+      log(`reuse complete migrated volume ${MIG}`);
+      writeFileSync(path.join(OUT, "premigrate-facts.json"), JSON.stringify(facts, null, 2));
+      return MIG;
+    }
+    log("incomplete migrated fixture must finish before UAT", facts);
+    source = MIG;
   }
-  if (!volumeExists(SNAP_OLD)) throw new Error(`missing ${SNAP_OLD}; run: npm run uat:cold-start -- seed`);
-  log(`premigrating ${SNAP_OLD} → ${MIG}`);
-  copyVolume(SNAP_OLD, `${RUN}-data`);
+  if (!volumeExists(source)) throw new Error(`missing ${source}; run: npm run uat:cold-start -- seed`);
+  log(`premigrating ${source} → ${MIG}`);
+  copyVolume(source, `${RUN}-data`);
   startContainer(`${RUN}-data`, { throttle: false });
   if (!(await waitReady(300))) throw new Error("premigrate ready failed");
-  // Wait for rebuild catch-up to finish (poll inferred_rebuild_state).
   const waitS = Number(opt("premigrate-wait-s") ?? 300);
-  log(`premigrate settle ${waitS}s`);
+  log(`premigrate settle ${waitS}s, then require complete materialization`);
   await sleep(waitS * 1000);
+  // Stop before checking/copying so SQLite/WAL represents one quiescent snapshot.
   docker(["stop", "-t", "60", RUN]); removeContainer();
+  let facts = migratedFacts(`${RUN}-data`);
+  for (let i = 0; !facts.complete && i < 10; i++) {
+    startContainer(`${RUN}-data`, { throttle: false });
+    if (!(await waitReady(300))) throw new Error("premigrate continuation not ready");
+    await sleep(60_000);
+    docker(["stop", "-t", "60", RUN]); removeContainer();
+    facts = migratedFacts(`${RUN}-data`);
+  }
+  writeFileSync(path.join(OUT, "premigrate-facts.json"), JSON.stringify(facts, null, 2));
+  if (!facts.complete) throw new Error("full inferred fixture incomplete; UAT blocked");
   copyVolume(`${RUN}-data`, MIG);
   return MIG;
 }
@@ -371,7 +398,7 @@ async function all() {
   if (flag("crossing-fixture")) {
     const out = docker(["run", "--rm", "--network", "none", "--entrypoint", "/app/webui/node_modules/.bin/tsx",
       "-e", "KTX_PROJECT_ROOT=/data/lucy", "-e", "LUCY_CONTENT_ROOT=/data/lucy/config",
-      "-v", `${RUN}-data:/data/lucy`, "-v", `${path.join(ROOT, "scripts/uat/fde-crossing-fixture.mts")}:/app/scripts/uat/fde-crossing-fixture.mts:ro`, IMAGE, "/app/scripts/uat/fde-crossing-fixture.mts", "seed"]);
+      "-v", `${RUN}-data:/data/lucy`, "-v", `${path.join(ROOT, "scripts/uat/fde-crossing-fixture.mts")}:/app/scripts/uat/fde-crossing-fixture.mts:ro`, IMAGE, "/app/scripts/uat/fde-crossing-fixture.mts", "seed", ...(flag("crossing-existing-user") ? ["--existing-user"] : [])]);
     crossingFixture = JSON.parse(out.trim().split("\n").pop());
     writeFileSync(path.join(OUT, "crossing-seed.json"), JSON.stringify(crossingFixture, null, 2));
   }
@@ -417,7 +444,7 @@ async function all() {
   if (crossingFixture) {
     let checked;
     // Preserve the actual 120s probe window; allow bounded background convergence afterwards.
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < Number(opt("crossing-check-count") ?? 60); i++) {
       const out = dockerTry(["exec", RUN, "/app/webui/node_modules/.bin/tsx", "/app/scripts/uat/fde-crossing-fixture.mts", "check"]);
       try { checked = JSON.parse(out.trim().split("\n").pop()); } catch {}
       if (checked?.pass) break;
