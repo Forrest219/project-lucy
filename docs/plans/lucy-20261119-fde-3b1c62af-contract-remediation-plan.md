@@ -11,7 +11,7 @@
 | 基于材料 | 本机复核回复 `inbox/uat-fde-3b1c62af-2026-11-19/reply-差异复核.md`；[错题本](../lessons/2026-11-19-fde-3b1c62af-defects-missed-by-uat.md)；[P1-20 §8](../specs/lucy-20261113-external-catalog-column-read-spec.md)；[P1-34 §11](../specs/lucy-20261115-large-schema-ingestion-spec.md)；[v2p5 §18.19 N26](../specs/lucy-20261020-v2p5-audit-increment-spec.md)；[P1-38 §8](../specs/lucy-20261117-inferred-turn-rebuild-yield-spec.md)；FDE 报告 `Lucy升级检查_3b1c62af_20261119` |
 | 适用范围 | 候选 `lucy-v0.30@3b1c62af` 上本机已复现的 5 个缺陷（F01／F02／F03／F04／AUDIT-01）的修复排期、红绿对照与复验门禁；**不含**客户环境、出包、发布 |
 | 输出位置 | `docs/plans/lucy-20261119-fde-3b1c62af-contract-remediation-plan.md` |
-| 状态 | v1.0 上一批实现已提交 d8c3f097；2026-11-19 Codex 复评仍检出混合权限及全局请求上限问题，部分合同检出证据未齐，不能按原绿灯关单。后续整改转 P1-57／REQ-030-078，须委托人确认后再实施；12:35 授权作为历史保留。O3 批量标脏未授权；测试台判定见 INDEX；≠ 可上线。 |
+| 状态 | v1.0 上一批实现 d8c3f097 及其复评记录保留；混合权限与全局请求上限已由获授权的 P1-57 修复并复验。当前修复候选整体测试台仍 FAIL，原因是 G6 正常新实例正式导出基线缺失，不能按旧绿灯关单。O3 批量标脏仍未授权；本条不扩修历史基线；≠ 可上线。 |
 | 后续执行边界 | 用户本轮要求先计划、确认后修复；下文历史 Task 1–7 的授权不代替本次确认。二次整改以 [P1-57 Plan](lucy-20261119-fde-acceptance-remediation-plan.md) 为准 |
 | 授权边界 | **已授权（2026-11-19 12:35，委托人「整批授权」「无需复审，整批定稿」）**：按 §3 的 Task 1–7 修改运行代码与测试；恢复 8 个 `it.skip`；UAT 套件与 runner 改动；登记 6 个未登记根测试；UAT 使用受控延迟注入、受控投影进度替身与缩短回看窗口（先尝试真实构造，做不到再降级，INDEX 标「受控降级」）；`npm run demo:upgrade` 平滑升级（保留账号／ACL／审计日志）用于复验。**仍未授权**：amd64 模拟代替原生门禁；治理类长期改进（`it.skip` lint、套件到源码映射）；**O3 的存量批量标脏**；出包、发布、客户部署、`--no-cache` 与清空运行时配置的升级。不得借本授权顺改 P1-50 水位、页预算或 mutation chunk 合同 |
 | 验收 | 见 §4 |

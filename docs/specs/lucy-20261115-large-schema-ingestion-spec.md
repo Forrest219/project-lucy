@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | Spec / **v0.2.2** |
 | 日期 / 目标版本 | 2026-11-15／不绑定产品版本号 |
 | 功能编号 / 优先级 | **P1-34**／REQ-030-055／**P1**（事故续作，客户规模）。**不入 0.30 核心分母** |
-| 状态 | v0.2.2 主体及 LS-01–18 既有结论保留；§11 v0.4 已确权、原范围开发授权已获得并实现。2026-11-19 Codex 复评：LS-20 仍失败，600 表缩批被全局 100 请求上限中止，LS-19／24 证据不足，§11 合同未收口。§11.9 v0.5-draft（LS-26–30）及 P1-57 整改已由委托人确认并授权 Task 1–7（2026-11-19）；实施中，尚未验收。历史 UAT 不迁移，当前判定见 INDEX；≠ 可上线。 |
+| 状态 | v0.2.2 主体及 LS-01–18 既有结论保留；§11 v0.5 已由委托人确认并授权实施，R1／R2 修复完成，LS-19–30 本轮本机功能验收通过。真实 MySQL 混合权限按 D5 受控降级，合法字段真实；正常规模套件本跑次通过，历史 SCALE-09 偶发超时未归因记录保留。整体 FDE 修复模式仍因 G6 正式导出 FAIL；测试台见 INDEX；≠ 可上线。 |
 | 决策来源 | 2026-11-15 委托人：客户存在列非常多的表、表数非常多的 Schema，普通 MySQL 上曾出现「小库很快、大库拉取失败」的先例。委托人要求把此规模写进 UAT 并制定优化 Spec／Plan，目标是**顺利接入，而不是超时报错** |
 | 需求来源 | [P1-16 库内扫表读法](lucy-20261111-catalog-scan-read-path-spec.md) 的 `tblu` 先例（789 张表，逐表查字段，20 秒内无响应体）；[P1-20 外部目录读字段](lucy-20261113-external-catalog-column-read-spec.md) 把「整库逐表批量准备耗时」明确划出本条并记 Follow-up；本次本机规模实测（[`inbox/hive-lab/REPORT.md`](../../inbox/hive-lab/REPORT.md)，诊断证据，非 UAT） |
 | 实施主体 | WebUI 服务端读字段通道（`schema-structure`、`catalog-show`、`live-discovery`）与前端 `prepareSchemaStructure` 库层。不改页面组件、不改 KTX、不改问数 |
@@ -14,7 +14,7 @@
 | 与既有 Spec 的关系 | **续作并收窄**：P1-16 的 SC-06／SC-07（`schema-wide` 一条 `information_schema.columns`、达 10000 行 fail-closed）**不改**；本条新增第三种读法 `batch`（有界表集、一次一条查询）。**修订** P1-20 的 `COLUMN_READ_ROW_LIMIT`（2000→10000）与「逐表新建连接」；EC-01–EC-13 的探针顺序与回退规则**保持有效**。**不改** Spec 190 的结构差异 20 张上限，只让它走同一批量读 |
 | 实施计划 | [`docs/plans/lucy-20261115-large-schema-ingestion-plan.md`](../plans/lucy-20261115-large-schema-ingestion-plan.md) |
 | 测试台 | [`UAT-SUITE-LARGE-SCHEMA`](../qa/uat/suites/large-schema-ingestion/suite.md)（INDEX 判定）。**规模下限不得降低**，见 §4 |
-| §11 修订（已确权） | v0.2.2 主体及 LS-01–18 既有结论保留；§11 v0.4 已确权、原范围开发授权已获得并实现。2026-11-19 Codex 复评：LS-20 仍失败，600 表缩批被全局 100 请求上限中止，LS-19／24 证据不足，§11 合同未收口。§11.9 v0.5-draft（LS-26–30）及 P1-57 整改已由委托人确认并授权 Task 1–7（2026-11-19）；实施中，尚未验收。历史 UAT 不迁移，当前判定见 INDEX；≠ 可上线。 |
+| §11 修订（已确权） | v0.2.2 主体及 LS-01–18 既有结论保留；§11 v0.5 已由委托人确认并授权实施，R1／R2 修复完成，LS-19–30 本轮本机功能验收通过。真实 MySQL 混合权限按 D5 受控降级，合法字段真实；正常规模套件本跑次通过，历史 SCALE-09 偶发超时未归因记录保留。整体 FDE 修复模式仍因 G6 正式导出 FAIL；测试台见 INDEX；≠ 可上线。 |
 
 ### Changelog
 
@@ -385,7 +385,7 @@ if failures: throw summarize(failures)                           # LS-12
 | LS-24 | UAT runner 判定：stub 服务对每批返回 `deferred` 全部表且 `columnCount=0`，`UAT-SCALE-04／06` 判 FAIL；完成数只数读到字段的表；字段总数低于期望判 FAIL。判定函数须抽出可测，并有红绿自检 | 本机 `node --test`（须登记进 `root-test-registry.json`）；属脚本改动，另行授权 |
 | LS-25 | 测试台承接（**不是本条出口**）：`seed-large-schema-fixtures.sh` 增 50×400 批次夹具；`UAT-SUITE-LARGE-SCHEMA` 增用例覆盖「正常速度读完」与「延迟注入下读完」两个变体，缺环境记 `BLOCKED` 并保留在套件里，不得删除 | 测试台 INDEX；整改 Plan Task 6 |
 
-证据等级：LS-19–LS-24 为本机自动化；**vitest 绿不得写成 UAT PASS**。真实 MySQL＋50×400 实表在自然耗时下是否触发，未实测。
+证据等级：LS-19–LS-24 为本机自动化；**vitest 绿不得写成 UAT PASS**。本轮真实50×400自然变体一次请求／20000字段、约1.25秒；延迟变体6请求完成，单次最慢约12.1秒。三次截断树仍为L1虚拟SQL条件，不能伪称三次真实截断。
 
 ### 11.5 受影响画像
 
@@ -420,11 +420,11 @@ if failures: throw summarize(failures)                           # LS-12
 
 ### 11.9 修复复评整改与验收补项（v0.5，委托人已确认并授权）
 
-总账 **P1-57-R1／R2／G1／G4**，需求 REQ-030-078；[整改 Plan](../plans/lucy-20261119-fde-acceptance-remediation-plan.md)。本节已由委托人确认并授权实施（2026-11-19），与 §11.2 共同约束本轮整改。LS-01–18 既有结论保留；LS-20 已被原断言证伪；LS-19／24 现有绿灯不足以证明各自完整出口。
+总账 **P1-57-R1／R2／G1／G4**，需求 REQ-030-078；[整改 Plan](../plans/lucy-20261119-fde-acceptance-remediation-plan.md)。本节已由委托人确认并授权实施（2026-11-19），与 §11.2 共同约束本轮整改。LS-01–18 既有结论保留；前轮LS-20红证据及LS-19／24不足保留为整改基线，本轮补证结果见末段。
 
-**R1 拟定规范**：保持直接单表失败 HTTP 400／READ_FAILED／原文案。对明确的表级终态拒绝，在错误细节增加可选 `tableRejection:{scope:"table",table,reason}`，reason 首版只允许 permission／missing／ambiguous／timeout／too_large／too_wide；unreadable 不在可继续白名单。服务端白名单只输出上述机器字段，不输出 SQL／driver stderr；平台鉴权、连接／网络及未知故障不得附表级标记。批量客户端仅在单表请求且标记合法、表名匹配时记入 failure 并继续；其他错误中止。不得根据中文文案或一切 READ_FAILED 决定继续。不修改 LS-08。
+**R1 已实施规范**：保持直接单表失败 HTTP 400／READ_FAILED／原文案。对明确的表级终态拒绝，在错误细节增加可选 `tableRejection:{scope:"table",table,reason}`，reason 首版只允许 permission／missing／ambiguous／timeout／too_large／too_wide；unreadable 不在可继续白名单。服务端白名单只输出上述机器字段，不输出 SQL／driver stderr；平台鉴权、连接／网络及未知故障不得附表级标记。批量客户端仅在单表请求且标记合法、表名匹配时记入 failure 并继续；其他错误中止。不得根据中文文案或一切 READ_FAILED 决定继续。不修改 LS-08。
 
-**R2 拟定规范**：去掉与输入规模无关的 100 请求硬上限。合法响应须对请求集精确划分；终态使 pending 严格减少；无终态大批次严格减半；单表连续两次 deferred 后终止该表。用有限状态进展防死循环；进度只数唯一终态。对 N>0 的有效唯一表集，保守请求上界为 `2N+ceil(log2(min(50,N)))`，不是新的无条件产品时限。LS-19 特定夹具仍保持 ≤100 次。单次 HTTP／SQL 预算保持不变，正常 600×30 的原总耗时门槛不变。
+**R2 已实施规范**：去掉与输入规模无关的 100 请求硬上限。合法响应须对请求集精确划分；终态使 pending 严格减少；无终态大批次严格减半；单表连续两次 deferred 后终止该表。用有限状态进展防死循环；进度只数唯一终态。对 N>0 的有效唯一表集，保守请求上界为 `2N+ceil(log2(min(50,N)))`，不是新的无条件产品时限。LS-19 特定夹具仍保持 ≤100 次。单次 HTTP／SQL 预算保持不变，正常 600×30 的原总耗时门槛不变。
 
 | 编号 | 拟增验收／补验要求 | 层级与映射 |
 |---|---|---|
@@ -440,3 +440,8 @@ if failures: throw summarize(failures)                           # LS-12
 **受影响画像补记**：P1 问数方＝（不改 Public MCP／运行指导，FIX-08 成交对照）；P2 治理方↑（LS-20／26–30，合法批量配置能完成）；P3 运维方＝（仍有界、不改部署和后台水位）；P4 管理层↑（完成数按真实产出，LS-24）。本节未引入新的负向路径；如实际负载增加暴露下降，保留原门槛并回到设计，不能以此放宽时限。
 
 **Terminology Compliance 补记**：This feature follows `webui/docs/00-product-terminology-standard.md`. New terms: None（用户术语）。拟新增内部机器字段 `error.detail.tableRejection` 及 `scope:"table"`，沿用现有原因枚举；不是 UI 新概念，直接单表与汇总文案保持现行术语。
+
+
+### 11.10 P1-57执行证据
+
+2026-11-19，委托人确认D1–D5并授权实施后，LS-19–30检出补项及R1／R2修复完成；原业务断言不改。600表真实91500字段经154次请求全齐，30表t0单表400后29表齐（权限拒绝D5，字段真实）；未知／鉴权／网络故障继续失败关闭。完整门禁与真实正常规模见[FDE修复跑次](../qa/uat/suites/fde-packcheck-3b1c62af/runs/2026-11-19-codex-p157-fix-retest.md)。本条局部通过不把整套FDE的G6正式导出FAIL改绿。

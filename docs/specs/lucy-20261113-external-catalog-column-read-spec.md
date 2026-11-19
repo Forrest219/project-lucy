@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | Spec / **v0.2** |
 | 日期 / 目标版本 | 2026-11-13／不绑定产品版本号 |
 | 功能编号 / 优先级 | **P1-20**／REQ-030-041／**P1**（事故续作）。**不入 0.30 核心分母** |
-| 状态 | 主体 v0.2 及 §8 v0.4 已确权，原范围开发授权已获得并实现；2026-11-19 原 F02 慢合法回退在 Node22 复评翻绿，lab 历史双目录结果保留，修复后延迟代理 L2 尚未完整复验。客户生产 SelectDB 未验；P1-57 仅承接本条回归与 UAT，不改探针合同；本轮执行已确认授权（2026-11-19），尚未验收。测试台判定见 INDEX；≠ 可上线。 |
+| 状态 | 主体 v0.2 及 §8 v0.4 已确权并实现；本轮真实 Doris→Hive 字段读取及 F02／F03 预算回归通过，指定慢语法拒绝按已授权 D5 受控降级并单列边界。客户生产 SelectDB 未验；不改本条探针合同。整体 FDE 因 G6 正式导出 FAIL；测试台见 INDEX；≠ 可上线。 |
 | 决策来源 | 2026-11-13 现场／测试反馈：`hive-1`＋Schema `dim` 在「准备表结构」侧边栏能列出全部表；选中 `dim_bidding_block_ad_id_2025` 提示「表「…」没有读到字段。」表侧确认有字段。服务端应用日志暂不可取；根因由 KTX 0.16.0 只读校验复现确认（§1.2） |
 | 需求来源 | P1-16 收口后遗留：外部目录字段仍走 `ktx sql`＋`DESC`；与列名直连 `SHOW` 通道不一致 |
 | 实施主体 | WebUI 服务端：`catalog-show`（直连适配器白名单）、`schema-structure.readCatalogTableColumns`／`previewSchemaStructure` |
@@ -13,7 +13,7 @@
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」与「功能闭口与发布取证」 |
 | 与既有 Spec 的关系 | **续作／修订** [库内扫表读法 Spec](lucy-20261111-catalog-scan-read-path-spec.md) 的 Follow-up 与 **SC-10**（原合同：外部目录字段 `DESC`＋`ktx sql`）。本条生效后，外部目录**单表字段读**以本 Spec 为准；P1-16 的列库／列表合同不变 |
 | 实施计划 | [`docs/plans/lucy-20261113-external-catalog-column-read-plan.md`](../plans/lucy-20261113-external-catalog-column-read-plan.md) |
-| §8 修订（已确权） | 主体 v0.2 及 §8 v0.4 已确权，原范围开发授权已获得并实现；2026-11-19 原 F02 慢合法回退在 Node22 复评翻绿，lab 历史双目录结果保留，修复后延迟代理 L2 尚未完整复验。客户生产 SelectDB 未验；P1-57 仅承接本条回归与 UAT，不改探针合同；本轮执行已确认授权（2026-11-19），尚未验收。测试台判定见 INDEX；≠ 可上线。 |
+| §8 修订（已确权） | 主体 v0.2 及 §8 v0.4 已确权并实现；本轮真实 Doris→Hive 字段读取及 F02／F03 预算回归通过，指定慢语法拒绝按已授权 D5 受控降级并单列边界。客户生产 SelectDB 未验；不改本条探针合同。整体 FDE 因 G6 正式导出 FAIL；测试台见 INDEX；≠ 可上线。 |
 
 ### Changelog
 
