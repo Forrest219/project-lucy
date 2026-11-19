@@ -7,6 +7,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { judgeReadTables } from "./lib/large-schema-judgment.mjs";
 
 /**
  * Extracted decision logic for UAT-SCALE-04/06.
@@ -15,12 +16,6 @@ import assert from "node:assert/strict";
  * @param {number} expectedColumnsMin
  * @returns {{ pass: boolean; reason: string }}
  */
-function judgeReadTables(result, expectedTables, expectedColumnsMin) {
-  if (result.failure) return { pass: false, reason: `request failed: ${result.failure}` };
-  if (result.done !== expectedTables) return { pass: false, reason: `done=${result.done} < expected=${expectedTables}` };
-  if (result.columns < expectedColumnsMin) return { pass: false, reason: `columns=${result.columns} < min=${expectedColumnsMin}` };
-  return { pass: true, reason: "ok" };
-}
 
 test("LS-24 judgment: 0 tables done → FAIL", () => {
   const j = judgeReadTables({ done: 0, columns: 0, failure: "" }, 600, 1);
@@ -46,4 +41,9 @@ test("LS-24 judgment: all done with expected columns → PASS", () => {
 test("LS-24 judgment: failure string set → FAIL", () => {
   const j = judgeReadTables({ done: 600, columns: 18000, failure: "HTTP 503" }, 600, 1);
   assert.equal(j.pass, false, `expected FAIL when failure set: ${j.reason}`);
+});
+
+test("LS-24 judgment: permission and missing metadata cannot be a successful output", () => {
+  assert.equal(judgeReadTables({ done: 599, columns: 17970, failure: "t0:permission" }, 600, 18000).pass, false);
+  assert.equal(judgeReadTables({ done: 600, columns: NaN, failure: "" }, 600, 18000).pass, false);
 });

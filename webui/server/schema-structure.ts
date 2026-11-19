@@ -23,6 +23,7 @@ import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
 import { SchemaReadDeadline, SchemaReadTimeout } from "./schema-read-deadline.js";
+import { readSchemaTableRejection } from "../shared/schema-table-rejection.js";
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -1124,9 +1125,14 @@ export async function previewSchemaStructure(
   const hasDeferred = (read.deferred?.length ?? 0) > 0;
   if (!batch && requested.length > 0 && (read.rejections?.length ?? 0) > 0 && !hasDeferred) {
     const rejection = read.rejections?.[0];
+    const tableRejection = read.rejections?.length === 1 && rejection?.table === requested[0]
+      ? readSchemaTableRejection({ scope: "table", ...rejection })
+      : undefined;
     throw new SchemaStructureError(
       "READ_FAILED",
-      rejection ? rejectionMessage(rejection) : `表「${requested[0]}」没有读到字段。`
+      rejection ? rejectionMessage(rejection) : `表「${requested[0]}」没有读到字段。`,
+      400,
+      tableRejection ? { tableRejection } : undefined
     );
   }
   const preview = buildMinimalSchemaManifest(safeSchema, read.columns, read.tables ?? []);

@@ -129,98 +129,40 @@ async function removeConnection(id: string) {
   await api("POST", `/api/connections/${encodeURIComponent(id)}/remove`, { dryRun: false }).catch(() => undefined);
 }
 
-/** LS-24 / Task 6: same pass criteria as `large-schema-ingestion-ls24.test.mjs`. */
-export function judgeReadTables(
-  result: { done: number; columns: number; failure: string },
-  expectedTables: number,
-  expectedColumnsMin: number
-): { pass: boolean; reason: string } {
-  if (result.failure) return { pass: false, reason: `request failed: ${result.failure}` };
-  if (result.done !== expectedTables) return { pass: false, reason: `done=${result.done} < expected=${expectedTables}` };
-  if (result.columns < expectedColumnsMin) return { pass: false, reason: `columns=${result.columns} < min=${expectedColumnsMin}` };
-  return { pass: true, reason: "ok" };
-}
+// The runner and root contract tests use the same implementation.
+export { judgeReadTables } from "./lib/large-schema-judgment.mjs";
+import { judgeReadTables } from "./lib/large-schema-judgment.mjs";
 
-/**
- * Read `tables` like `readCheckedTableColumns`: batches, deferred retries, halve on all-deferred.
- * `done` counts only tables that actually returned column data (not deferred-only advancement).
- */
+/** Exercise the actual product client; retain only metrics and real output for judgment. */
 async function readTables(conn: string, schema: string, tables: string[], budgetMs: number) {
   const start = performance.now();
-  let done = 0;
-  let columns = 0;
-  let maxCallMs = 0;
-  let calls = 0;
-  let mode: "batch" | "single" = "batch";
-  let failure = "";
-  let batchSize = BATCH;
-  const strikes = new Map<string, number>();
-  let pending = [...tables];
-  while (pending.length > 0) {
-    if (performance.now() - start > budgetMs) break;
-    const slice =
-      mode === "batch"
-        ? pending.slice(0, Math.min(batchSize, BATCH))
-        : [pending[0]];
-    const res = await api("POST", `/api/connections/${encodeURIComponent(conn)}/schema-structure`, { schema, tables: slice });
-    calls += 1;
-    maxCallMs = Math.max(maxCallMs, res.ms);
-    if (res.status === 400 && mode === "batch" && slice.length > 1 && /一次只读取一张表/.test(JSON.stringify(res.json))) {
-      mode = "single";
-      calls -= 1;
-      continue;
+  let done = 0, columns = 0, calls = 0, maxCallMs = 0, failure = "";
+  const nativeFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const remaining = Math.floor(budgetMs - (performance.now() - start));
+    if (remaining <= 0) throw new Error("schema read budget exhausted");
+    const at = performance.now();
+    calls++;
+    try {
+      const url = typeof input === "string" && input.startsWith("/") ? BASE + input : input;
+      const headers = new Headers(init?.headers);
+      headers.set("cookie", cookie);
+      return await nativeFetch(url, { ...init, headers, signal: AbortSignal.timeout(remaining) });
+    } finally {
+      maxCallMs = Math.max(maxCallMs, Math.round(performance.now() - at));
     }
-    if (res.status >= 400 || res.json?.ok === false) {
-      failure = `HTTP ${res.status} ${res.json?.error?.message ?? ""}`.trim();
-      break;
-    }
-    const data = res.json?.data ?? {};
-    const deferred: string[] = data.deferred ?? [];
-    const rejections: Array<{ table: string }> = data.rejections ?? [];
-    const deferredSet = new Set(deferred);
-    const dropped: string[] = [];
-    for (const t of deferred) {
-      if (slice.length === 1) {
-        const count = (strikes.get(t) ?? 0) + 1;
-        strikes.set(t, count);
-        if (count >= 2) {
-          failure = `表「${t}」这次没有读完，请稍后重试。`;
-          dropped.push(t);
-          deferredSet.delete(t);
-        }
-      } else {
-        strikes.delete(t);
-      }
-    }
-    const allDeferred =
-      deferredSet.size > 0 &&
-      rejections.length === 0 &&
-      slice.every((t) => deferredSet.has(t) || dropped.includes(t));
-    if (allDeferred && deferredSet.size > 0) {
-      batchSize = Math.max(1, Math.ceil(batchSize / 2));
-    }
-    let batchRead = 0;
-    for (const name of slice) {
-      if (deferredSet.has(name) || rejections.some((r) => r.table === name) || dropped.includes(name)) continue;
-      done += 1;
-      batchRead += 1;
-    }
-    if (batchRead > 0) columns += Number(data.columnCount ?? 0);
-    if (rejections.length > 0) {
-      failure = rejections.map((r) => `${r.table}:${(r as { message?: string }).message ?? "rejected"}`).join("; ");
-      break;
-    }
-    pending = [...deferredSet, ...pending.slice(slice.length)];
-    if (failure) break;
-    if (calls > 200) {
-      failure = "too many schema-structure calls";
-      break;
-    }
+  };
+  try {
+    const result = await readCheckedTableColumns(conn, schema, tables);
+    done = result.tableCount; columns = result.columnCount;
+  } catch (error) {
+    failure = error instanceof Error ? error.message : String(error);
+    const partial = (error as { data?: { partial?: { tableCount: number; columnCount: number } } })?.data?.partial;
+    if (partial) { done = partial.tableCount; columns = partial.columnCount; }
+  } finally {
+    globalThis.fetch = nativeFetch;
   }
-  if (!failure && done < tables.length) {
-    failure = `stopped at ${done}/${tables.length} before budget or completion`;
-  }
-  return { done, columns, calls, mode, maxCallMs, ms: Math.round(performance.now() - start), failure };
+  return { done, columns, calls, mode: "batch", maxCallMs, ms: Math.round(performance.now() - start), failure };
 }
 
 function syntheticTable(table: string, cols: number): string {

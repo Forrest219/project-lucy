@@ -353,6 +353,17 @@ async function all() {
   log("mint", { claimCode: business.claimCode, cookie: business.cookie, bearer: Boolean(business.bearer) });
   docker(["stop", "-t", "30", RUN]); removeContainer();
 
+  // P1-57 SC-16: materialize an actual multi-level crossing fixture while the service is stopped.
+  // Default P1-47 runs are unchanged. All reads/writes remain on an isolated synthetic volume.
+  let crossingFixture = null;
+  if (flag("crossing-fixture")) {
+    const out = docker(["run", "--rm", "--network", "none", "--entrypoint", "/app/webui/node_modules/.bin/tsx",
+      "-e", "KTX_PROJECT_ROOT=/data/lucy", "-e", "LUCY_CONTENT_ROOT=/data/lucy/config",
+      "-v", `${RUN}-data:/data/lucy`, IMAGE, "/app/scripts/uat/fde-crossing-fixture.mts", "seed"]);
+    crossingFixture = JSON.parse(out.trim().split("\n").pop());
+    writeFileSync(path.join(OUT, "crossing-seed.json"), JSON.stringify(crossingFixture, null, 2));
+  }
+
   dropCaches();
   copyVolume(`${RUN}-data`, `${RUN}-boot`);
   const t0 = performance.now();
@@ -383,6 +394,18 @@ async function all() {
     }
   }
   const window = await sampleWindow(LIMITS.windowS, { mcpBearer: pause && bearer ? bearer : null });
+  if (crossingFixture) {
+    let checked;
+    // Preserve the actual 120s probe window; allow bounded background convergence afterwards.
+    for (let i = 0; i < 60; i++) {
+      const out = dockerTry(["exec", RUN, "/app/webui/node_modules/.bin/tsx", "/app/scripts/uat/fde-crossing-fixture.mts", "check"]);
+      try { checked = JSON.parse(out.trim().split("\n").pop()); } catch {}
+      if (checked?.pass) break;
+      await sleep(1000);
+    }
+    writeFileSync(path.join(OUT, "crossing-check.json"), JSON.stringify(checked ?? { pass: false }, null, 2));
+    if (!checked?.pass) throw new Error("SC-16 crossing fixture did not converge; see crossing-check.json");
+  }
   const hits = [];
   for (let i = 0; i < 20; i += 1) {
     const r = await timed(`${WEB}/api/readyz`, {}, 8000);

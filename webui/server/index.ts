@@ -47,6 +47,7 @@ import {
   peekLiveSchemasCache
 } from "./live-catalog";
 import { previewSchemaStructure, SchemaStructureError } from "./schema-structure";
+import { readSchemaTableRejection } from "../shared/schema-table-rejection.js";
 import { SCHEMA_REQUEST_TIMEOUT_MS } from "./schema-read-deadline.js";
 import { CALL_BUDGET_MS, parseRequestedTables } from "./schema-structure-batch";
 import {
@@ -447,12 +448,14 @@ function supportedErrorDetail(error: SupportedError): unknown {
     const detail = error.detail;
     if (!detail || typeof detail !== "object") return undefined;
     const source = detail as Record<string, unknown>;
+    const tableRejection = readSchemaTableRejection(source.tableRejection);
     // SQL and driver stderr stay in server logs only — never on the wire.
     return {
       ...(typeof source.connectionId === "string" ? { connectionId: source.connectionId } : {}),
       ...(typeof source.schema === "string" ? { schema: source.schema } : {}),
       ...(typeof source.table === "string" ? { table: source.table } : {}),
-      ...(typeof source.phase === "string" ? { phase: source.phase } : {})
+      ...(typeof source.phase === "string" ? { phase: source.phase } : {}),
+      ...(tableRejection ? { tableRejection } : {})
     };
   }
   if (error.code === "connection_references_remain") {

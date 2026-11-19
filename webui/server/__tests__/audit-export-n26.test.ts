@@ -18,14 +18,20 @@ import Database from "better-sqlite3";
 // --- controlled projection mock ---
 const ctx = vi.hoisted(() => ({
   calls: 0,
-  kind: "zero-lag" as "zero-lag" | "caught-up" | "future-lag" | "stuck" | "post-s",
-  upperSeq: 3
+  kind: "zero-lag" as "zero-lag" | "caught-up" | "future-lag" | "stuck" | "post-s" | "budget-retry",
+  upperSeq: 3,
+  clock: 0, captureCostMs: 0, statusCostMs: 0, stepCostMs: 0
 }));
 
 vi.mock("../security/projector.js", async () => ({
   ...await vi.importActual<typeof import("../security/projector.js")>("../security/projector.js"),
   projectionStatus: () => {
     ctx.calls++;
+    ctx.clock += ctx.statusCostMs;
+    if (ctx.kind === "budget-retry") {
+      const lag = ctx.calls < 6 ? 1 : 0;
+      return { complete: lag === 0, cursor: ctx.upperSeq - lag, latestSeq: ctx.upperSeq, lag, delayMs: 0 };
+    }
     if (ctx.kind === "zero-lag")  return { complete: true,  cursor: ctx.upperSeq, latestSeq: ctx.upperSeq, lag: 0, delayMs: 0 };
     if (ctx.kind === "caught-up") {
       // first call: lag 1 (before wait); subsequent calls: lag 0 (caught up)
@@ -40,14 +46,14 @@ vi.mock("../security/projector.js", async () => ({
     return { complete: false, cursor: 0, latestSeq: 0, lag: 0, delayMs: 1 };
   },
   triggerAuditProjection: () => {},
-  runProjection: () => {}
+  runProjection: () => { ctx.clock += ctx.stepCostMs; }
 }));
 
 vi.mock("../security/instance.js", async () => ({
   ...await vi.importActual<typeof import("../security/instance.js")>("../security/instance.js"),
   getSecurityStore: async () => ({
     ok: true,
-    value: { maxEventSeq: () => ({ ok: true, value: ctx.upperSeq }) }
+    value: { maxEventSeq: () => { ctx.clock += ctx.captureCostMs; return { ok: true, value: ctx.upperSeq }; } }
   })
 }));
 
@@ -212,6 +218,7 @@ beforeEach(async () => {
   ctx.calls = 0;
   ctx.kind = "zero-lag";
   ctx.upperSeq = 3;
+  ctx.clock = Date.now(); ctx.captureCostMs = 0; ctx.statusCostMs = 0; ctx.stepCostMs = 0;
   root = await mkdtemp(path.join(os.tmpdir(), "lucy-n26-"));
   dbFile = path.join(root, "audit.sqlite");
   prevRoot = process.env.KTX_PROJECT_ROOT;
@@ -229,6 +236,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   if (prevRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = prevRoot;
   if (prevContent === undefined) delete process.env.LUCY_CONTENT_ROOT;
@@ -335,23 +343,34 @@ describe("N26 F01 追平口径修复", () => {
     }
   }, 10_000);
 
-  it("N26-6: T3 自捕获 S 之前起算（先记起点，再取 S，再读投影），重试不重置", async () => {
-    // 验证: 多次 waitForProjection 轮次耗完的时间包含在 T3 deadline 内 (即 deadline 不后移)
-    // 通过把 deadline 设得极短（500ms via mock）+ "stuck"，验证路由里先 startedAt 再取 S 才能在
-    // caught-up 场景里不因 (Date.now() - startedAt) 超时而返回 409.
-    // 若起点错误（先取 S 后记 startedAt），则在 auditProjectionStatus 耗时不为零时，
-    // 有效 deadline 会减少，导致即使已追平但 deadline 已过也返回 409.
-    // Here we just verify that the T3 order doesn't double-count: caught-up works within deadline.
-    ctx.kind = "caught-up";
-    ctx.calls = 0;
+  it.each(["export-v2", "export-pack-v2"])("N26-6: %s charges S capture and all retries to one deadline", async (route) => {
+    ctx.kind = "budget-retry";
+    ctx.captureCostMs = 300; ctx.statusCostMs = 100; ctx.stepCostMs = 60;
     const { app, resetAuditDbForTests } = await makeApp();
+    const start = ctx.clock;
+    vi.spyOn(Date, "now").mockImplementation(() => ctx.clock);
     try {
-      const csv = await app.inject({ method: "GET", url: "/api/admin/audit/export-v2?mode=complete" });
-      // If T3 starts correctly (before S), caught-up scenario must succeed.
-      expect(csv.statusCode, `N26-6: T3 order wrong? got ${csv.statusCode}: ${csv.body}`).toBe(200);
+      const result = await app.inject({ method: "GET", url: `/api/admin/audit/${route}?mode=complete` });
+      expect(result.statusCode).toBe(409);
+      expect(ctx.calls).toBe(2);
+      expect(ctx.clock - start).toBe(560);
     } finally {
       await app.close();
       resetAuditDbForTests();
     }
-  }, 5_000);
+  });
+
+  it.each(["export-v2", "export-pack-v2"])("N26-6: %s refuses a projection first observed after T3", async (route) => {
+    ctx.kind = "zero-lag";
+    ctx.captureCostMs = 400; ctx.statusCostMs = 150;
+    const { app, resetAuditDbForTests } = await makeApp();
+    vi.spyOn(Date, "now").mockImplementation(() => ctx.clock);
+    try {
+      const result = await app.inject({ method: "GET", url: `/api/admin/audit/${route}?mode=complete` });
+      expect(result.statusCode).toBe(409);
+      expect(ctx.calls).toBe(1);
+    } finally {
+      await app.close(); resetAuditDbForTests();
+    }
+  });
 });

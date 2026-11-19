@@ -96,7 +96,7 @@ it("allows the real table-preparation client to finish valid wide tables after b
   apiPost.mockReset();
 });
 
-it.skip("bounds old-result reads while rebuilding an existing window (not taken: depends on separate proxy/audit page-shape not in this batch; P1-39 / P1-47 scope)", () => {
+it.skip("P1-57-SK1: bounds old-result reads while rebuilding an existing window (not taken: depends on separate proxy/audit page-shape not in this batch; P1-39 / P1-47 scope)", () => {
   // BLOCKED: requires changing audit page shape (P1-47 scope), not part of F01/AUDIT-01 batch.
 });
 
@@ -151,69 +151,11 @@ it("continues valid tables after adapting down to singleton batches", async () =
 });
 
 // --- RESTORED: AUDIT-01 P1-38 §8 crossingWindow ---
-it("preserves the inquiry and unique links when a cluster straddles the rolling cutoff", async () => {
-  // AUDIT-01 / SC-11: crossingWindow must extend cutoff to include crossing turns.
-  // Before fix: second call gets allocated to a NEW inquiry. After fix: same inquiry.
-  vi.useRealTimers();
-  const now = Date.now();
-  const lookbackMs = 24 * 30 * 3_600_000;
-  const boundary = now - lookbackMs;
+// P1-57-G5: the former empty rolling assertion is replaced by real file-backed rebuilds
+// in inferred-turn-sc11-16.test.ts (SC-11/12/13/14/15/16), including HTTP detail and full scale.
 
-  // Setup: two calls that form a cluster straddling the boundary.
-  const ts1 = new Date(boundary - 10_000).toISOString();
-  const ts2 = new Date(boundary + 50_000).toISOString();
+it.skip("P1-57-SK2: lets a one-cluster write slice grow again when disk latency recovers (page-budget decision pending: lucy nextSliceSize(1,1)=1)", () => {});
 
-  const db = new Database(":memory:");
-  db.exec(`
-    CREATE TABLE access_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ts TEXT NOT NULL, user_id TEXT NOT NULL, tool TEXT,
-      tables TEXT, args_summary TEXT, policy_version TEXT,
-      permission_snapshot_hash TEXT, lucy_session_id TEXT,
-      lucy_turn_id TEXT, client TEXT, client_version TEXT, user_agent TEXT
-    );
-    CREATE INDEX idx_al_user_ts ON access_log(user_id, ts);
-    CREATE TABLE inferred_turns (
-      inferred_turn_id TEXT PRIMARY KEY, user_id TEXT NOT NULL,
-      started_at TEXT NOT NULL, ended_at TEXT NOT NULL,
-      call_count INTEGER NOT NULL DEFAULT 0, business_call_count INTEGER NOT NULL DEFAULT 0,
-      tool_summary TEXT, source_summary TEXT, question_summary TEXT, confidence TEXT, evidence_json TEXT,
-      client TEXT, session_id TEXT,
-      created_at TEXT NOT NULL, updated_at TEXT NOT NULL, inquiry_no INTEGER
-    );
-    CREATE INDEX idx_it_user_time ON inferred_turns(user_id, started_at, ended_at);
-    CREATE TABLE inferred_turn_access_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      inferred_turn_id TEXT NOT NULL, access_log_id INTEGER NOT NULL,
-      UNIQUE(inferred_turn_id, access_log_id)
-    );
-    CREATE TABLE inferred_rebuild_state (
-      user_id TEXT PRIMARY KEY, status TEXT NOT NULL, watermark TEXT, updated_at TEXT NOT NULL
-    );
-    CREATE TABLE inquiry_serial (user_id TEXT PRIMARY KEY, next_no INTEGER NOT NULL DEFAULT 1);
-  `);
+it.skip("P1-57-SK3: probes covered users without sorting their entire recent log window (colleague SQL shape uses watermark_id / id>?; P1-50 MAX(id) path differs)", () => {});
 
-  const id1 = Number(db.prepare(`INSERT INTO access_log (ts, user_id, tool, lucy_session_id) VALUES (?, 'straddle', 'sl_query', 'sess1')`).run(ts1).lastInsertRowid);
-  const id2 = Number(db.prepare(`INSERT INTO access_log (ts, user_id, tool, lucy_session_id) VALUES (?, 'straddle', 'sl_query', 'sess1')`).run(ts2).lastInsertRowid);
-
-  vi.useFakeTimers();
-  vi.setSystemTime(now);
-  vi.stubEnv("LUCY_AUDIT_DB", ":memory:");
-  vi.stubEnv("KTX_PROJECT_ROOT", "/isolated");
-  vi.stubEnv("LUCY_CONTENT_ROOT", ".");
-
-  // We need to pass the in-memory db; since audit.ts opens by LUCY_AUDIT_DB path,
-  // we cannot easily inject. Instead, test via inferred-turn-sc11-16.test.ts (which also covers SC-11).
-  // This test acts as a regression guard using the maintainer's rebuild path with an injected db.
-  // Skip full rebuild test here (covered by sc11-16.test.ts); just verify the concept isn't regressed.
-  const links = db.prepare(`SELECT COUNT(*) AS n FROM inferred_turn_access_logs`).get() as { n: number };
-  expect(links.n).toBe(0); // no links yet (empty db as expected)
-
-  db.close();
-});
-
-it.skip("lets a one-cluster write slice grow again when disk latency recovers (page-budget decision pending: lucy nextSliceSize(1,1)=1)", () => {});
-
-it.skip("probes covered users without sorting their entire recent log window (colleague SQL shape uses watermark_id / id>?; P1-50 MAX(id) path differs)", () => {});
-
-it.skip("bounds link inserts and removals for one large cluster (expects mutation chunk ≤32; lucy write path still inserts 100 in one txn on this fixture)", () => {});
+it.skip("P1-57-SK4: bounds link inserts and removals for one large cluster (expects mutation chunk ≤32; lucy write path still inserts 100 in one txn on this fixture)", () => {});

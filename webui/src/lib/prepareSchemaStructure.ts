@@ -1,5 +1,6 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { ApiError, apiPost } from "./apiClient";
+import { readSchemaTableRejection } from "../../shared/schema-table-rejection";
 import { fetchCatalogSchemaManifest, uploadCatalogAsset, validateCatalogAsset } from "./catalog-assets";
 import type {
   CatalogAssetValidateRequest,
@@ -105,35 +106,60 @@ export async function readCheckedTableColumns(
   const downgraded: SchemaStructurePreview["downgraded"] = [];
   const mapped = { number: 0, string: 0, time: 0 };
   const failures: TableRejection[] = [];
+  const selected = [...new Set(tables)];
   let columnCount = 0;
   let done = 0;
-  let pending = [...tables];
+  let pending = [...selected];
   // C2: adaptive batch size (halved on all-deferred, min 1).
   let batchSize = TABLES_PER_REQUEST;
   // C6: strikes map for single-table consecutive deferred.
   const strikes = new Map<string, number>();
-  let requestCount = 0;
   while (pending.length > 0) {
     const batch = pending.slice(0, batchSize);
-    onProgress?.(done, tables.length, batch[0]!);
-    const part = await fetchSchemaStructure(connectionId, schema, batch);
-    requestCount++;
+    onProgress?.(done, selected.length, batch[0]!);
+    let part: SchemaStructurePreview;
+    try {
+      part = await fetchSchemaStructure(connectionId, schema, batch);
+    } catch (error) {
+      const rejection = error instanceof ApiError && error.code === "READ_FAILED"
+        ? readSchemaTableRejection((error.detail as { tableRejection?: unknown } | undefined)?.tableRejection)
+        : undefined;
+      if (batch.length !== 1 || !rejection || rejection.table !== batch[0]) throw error;
+      failures.push(rejection);
+      strikes.delete(batch[0]);
+      pending = pending.slice(1);
+      done += 1;
+      continue;
+    }
     if (part.namesOnly) {
       throw new ApiError({ code: "READ_FAILED", message: `读取表「${batch[0]}」的字段失败。` });
     }
     const deferred = part.deferred ?? [];
     const rejections = part.rejections ?? [];
     const readTables = tablesMapping(part.yaml);
-    // C5: verify each batch table is accounted for.
+    const failResponse = (name: string): never => {
+      throw new ApiError({ code: "READ_FAILED", message: `读取表「${name}」的字段失败。` });
+    };
+    if (!Array.isArray(deferred) || !Array.isArray(rejections)) failResponse(batch[0]);
+    const outcomes = new Map<string, number>();
+    for (const name of [
+      ...Object.keys(readTables), ...deferred, ...rejections.map((r) => r?.table)
+    ]) {
+      if (typeof name !== "string" || !batch.includes(name)) failResponse(batch[0]);
+      outcomes.set(name, (outcomes.get(name) ?? 0) + 1);
+    }
+    // A response is a partition, not merely a list that mentions every table.
     for (const name of batch) {
-      const inYaml = Object.prototype.hasOwnProperty.call(readTables, name);
-      const inRejections = rejections.some((r) => r.table === name);
-      const inDeferred = deferred.includes(name);
-      if (!inYaml && !inRejections && !inDeferred) {
+      if (!outcomes.has(name)) {
         throw new ApiError({
           code: "READ_FAILED",
           message: `服务端没有返回表「${name}」的读取结果，读取终止。`
         });
+      }
+      if (outcomes.get(name) !== 1) failResponse(name);
+      if (Object.prototype.hasOwnProperty.call(readTables, name)) {
+        const columns = (readTables[name] as { columns?: unknown } | null)?.columns;
+        if (!columns || typeof columns !== "object" || Object.keys(columns).length === 0) failResponse(name);
       }
     }
     // C6: handle consecutive deferral for single-table batches.
@@ -155,17 +181,11 @@ export async function readCheckedTableColumns(
       }
     }
     // C2: if all-deferred with no rejections, halve batch size.
-    const allDeferred = deferredSet.size > 0 && rejections.length === 0 &&
-      batch.every((t) => deferredSet.has(t) || dropped.includes(t));
-    if (allDeferred && deferredSet.size > 0) {
-      batchSize = Math.max(1, Math.ceil(batchSize / 2));
-    } else if (rejections.length > 0 || deferredSet.size < batch.length) {
-      // Some progress made: allow batch size to stabilize (don't grow back automatically)
+    if (deferred.length === batch.length && batch.length > 1) {
+      batchSize = Math.ceil(batch.length / 2);
     }
-    // Guard against infinite retry (LS-19 upper bound).
-    if (requestCount > 100) {
-      throw new ApiError({ code: "READ_FAILED", message: "读取表结构请求次数超过上限，请稍后重试。" });
-    }
+    // Terminals reduce pending; otherwise batch size shrinks, or a singleton consumes one
+    // of two deferrals. This bounds retries without imposing a global request-count cap.
     // Accumulate results for tables that were actually read.
     for (const name of batch) {
       if (!deferredSet.has(name) && !rejections.some((r) => r.table === name) && !dropped.includes(name)) {
@@ -178,23 +198,25 @@ export async function readCheckedTableColumns(
     mapped.string += part.mapped.string;
     mapped.time += part.mapped.time;
     columnCount += part.columnCount;
-    done += batch.length - deferredSet.size - dropped.length;
+    done += batch.length - deferredSet.size;
     // Next pending: deferred (minus dropped) first, then remaining unread tables.
     pending = [...deferredSet, ...pending.slice(batch.length)];
   }
-  if (failures.length > 0) {
-    throw new ApiError({ code: "READ_FAILED", message: readFailureMessage(failures) });
-  }
-  return {
+  onProgress?.(done, selected.length, selected.at(-1)!);
+  const result: SchemaStructurePreview = {
     schema,
     readable: downgraded.length === 0,
     yaml: stringifyYaml({ tables: entries }),
-    tableCount: tables.length,
+    tableCount: Object.keys(entries).length,
     columnCount,
     namesOnly: false,
     mapped,
     downgraded
   };
+  if (failures.length > 0) {
+    throw new ApiError({ code: "READ_FAILED", message: readFailureMessage(failures) }, { partial: result });
+  }
+  return result;
 }
 
 export async function fetchExistingSchemaManifest(

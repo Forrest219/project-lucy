@@ -7,7 +7,7 @@
 | 版本 / 日期 | **v1.0-frozen / 2026-10-20，Asia/Shanghai**（v0.1 Kimi 初稿；v0.2 Codex 修订；v0.3 Kimi 裁决；v1.0 Codex 经授权完成复核修正与设计冻结） |
 | target_release | **v0.25** |
 | 功能编号 / 优先级 | **L25-09 / P0（P0-1）** |
-| 状态 | **2026-11-19 N26（§18.19）：委托人明示终稿确权＋整批开发授权（2026-11-19 12:35，「整批授权」「无需复审，整批定稿」）；Codex 首轮终审（同日）意见已全部采纳修订，**未做复审**。**N26 修订实现已落地（2026-11-19）；N26-1–N26-6 vitest 6 条全绿（`webui/server/__tests__/audit-export-n26.test.ts`；N26-2 走真实 `performExportV2`）；demo 容器复核未做；不是 UAT PASS。**** 以下为 N26 之前的现值：**功能合同已收口。** 出口是 S01–S07，逐条落点见 §18.16，闭口层级见 §18.17，收口记录见 [2026-11-01-l25-09-functional-contract-closure.md](../reviews/2026-11-01-l25-09-functional-contract-closure.md)。本条收口不表示可上线 |
+| 状态 | S01–S07 先前功能收口结论保留；N26（§18.19）已确权并实现，2026-11-19 原 12 个 CSV／ZIP 场景在 Node22 复评通过。N26-6 计时起点检出证据不足，P1-57 补验草案已确认并授权补验（2026-11-19）；不据此宣称 N26 全部出口已验足。当前 demo 正式导出因归属修订证据基线缺失拒绝，不能以 diagnostic 代通过；不扩修历史基线。测试台判定见 INDEX；≠ 可上线。 |
 | 交叉审阅 | **独立静态审阅结论为「退回，待修订后复审」**（`docs/reviews/2026-10-27-codex-review-audit-increment-p0.md`，阻塞 0／高 2／中 2，2026-10-27 19:29 落盘）。F-01～F-04 的文档修订记录见 §18.10；本 Spec 状态行的事实对齐与 Stage 1 取证记录见 §18.13 |
 | 撰写人 | **Kimi（起草）** |
 | 审阅者 / 冻结执行人 | **Codex（委托人明确授权“修改，完成冻结”）** |
@@ -1393,6 +1393,8 @@ D-28 仍开放。窗口里还有切分前无序号行时，正式读取继续 40
   | N26-4 | complete，持续 lag 到截止：409 `projection_lag_exceeded`；无半成品包 |
   | N26-5 | diagnostic：追平与持续 lag 两种场景均 200。追平场景在其他证明成立时 manifest 可为 `projectionComplete = true`、`combinedComplete = true`（与 FDE 原断言一致）；持续 lag 场景必须 `projectionComplete = false`、`combinedComplete = false`。无论哪种，诊断导出的结果都不能当作正式 complete 导出交付 |
   | N26-6 | T3 自捕获 S 之前起算且不因重试重置（回归 B21）：用受控时钟断言（a）初始投影读取与 S 捕获所耗时间计入 T3，（b）同一次请求内多次等待重试，截止时刻不后移。移植时保留 84 的起点顺序（先记起点，再取 S，再读投影），不只移植返回字段 |
+
+- **2026-11-19 修复复评补验草案（P1-57-G3／REQ-030-078，待确认）**：N26-6 必须为 CSV／ZIP 分别注入捕获 S 与首次投影读取的已知耗时，证明两者计入 T3；多次等待不后移同一截止。仅 caught-up 返回 200 不能证明计时起点。用临时把起点移到捕获 S 之后的 mutation 对照确认断言能红，再恢复实现；不提交故意错误代码。若先红证明现有 N26 合同违约，仅在确认后的整改范围内修计时，不改变 T3、投影完整性、as-of-S 或失败关闭语义。真实正式导出仍由测试台验证；当前 demo 的基线缺失不能用 diagnostic 或假基线代通过。见 [整改 Plan](../plans/lucy-20261119-fde-acceptance-remediation-plan.md)。其他已收口 S01–S07 不因补验整批重开。
 
 - **证据等级**：N26-1–N26-6 为本机 vitest（路由与 SQLite 为真实实现，**投影进度为受控**）。真实投影 lag 的构造由测试台承接（整改 Plan Task 6）：委托人 2026-11-19 已授权受控投影进度替身，条件是**先尝试真实构造，做不到再降级，INDEX 标「受控降级」，不与全真 PASS 混写**。**vitest 绿不得写成 UAT PASS。**
 - **受影响画像**（事实源 [`user-personas.md`](../governance/user-personas.md)）：
