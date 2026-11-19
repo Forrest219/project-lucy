@@ -125,10 +125,11 @@ try {
     const refusal = mode === "mix" && /FROM information_schema.columns/i.test(sql) && selected.includes("t0");
     return { delayMs: metadata ? delay : 0, ...(refusal ? { errorCode: 1142, message: "command denied to UAT table t0" } : {}), evidence: { mode, selected, metadata, fault: refusal ? "D5-permission" : null } };
   } }); proxies.push(mysqlProxy);
-  for (const [id, database] of [["uat-fde-wide", "uat_fde_wide"], ["uat-fde-mix", "uat_fde_mix"], ["uat-fde-progress", "uat_fde_progress"]]) await create(id, database, mysqlProxy.port);
+  await create("uat-fde-wide", "uat_fde_wide", mysqlProxy.port);
   mode = "wide"; delay = 6000;
   const wide = await read("uat-fde-wide", "uat_fde_wide", Array.from({ length: 50 }, (_, i) => `t${i}`), (done) => { if (done > 0) delay = 0; });
   record("UAT-FDE-FIX-04-wide", wide.result?.tableCount === 50 && wide.result?.columnCount === 20000, { tables: wide.result?.tableCount, columns: wide.result?.columnCount, error: wide.error?.message, calls: wide.calls }, "real SQL + authorized latency");
+  await api("/api/connections/uat-fde-wide/remove", { dryRun: false });
 
   // First attempt real metadata permissions. MySQL hides t0 rather than reporting a table error.
   const naturalPw = randomBytes(24).toString("hex");
@@ -139,11 +140,15 @@ try {
   await create("uat-fde-natural", "uat_fde_mix", mysqlProxy.port, "host.docker.internal", "uat_fde_natural", naturalPw);
   const hidden = await api("/api/connections/uat-fde-natural/schema-structure", { schema: "uat_fde_mix", tables: ["t0"] });
   attempts.push({ step: "R1 real permission construction", status: hidden.status, errorCode: hidden.error?.code, detail: hidden.error?.detail, boundary: "information_schema hides the denied table; cannot trigger permission-refusal split" });
+  await api("/api/connections/uat-fde-natural/remove", { dryRun: false });
+  await create("uat-fde-mix", "uat_fde_mix", mysqlProxy.port);
   mode = "mix"; delay = 6000;
   const mixed = await read("uat-fde-mix", "uat_fde_mix", Array.from({ length: 30 }, (_, i) => `t${i}`), (done) => { if (done > 0) delay = 0; });
   record("UAT-FDE-FIX-04-mixed", mixed.error?.data?.partial?.tableCount === 29 && /有 1 张表没有读到字段/.test(mixed.error?.message ?? ""), { tables: mixed.error?.data?.partial?.tableCount, columns: mixed.error?.data?.partial?.columnCount, error: mixed.error?.message, calls: mixed.calls }, "受控降级 D5: t0 permission refusal, 29 tables from real MySQL");
+  await api("/api/connections/uat-fde-mix/remove", { dryRun: false });
 
   mode = "progress"; delay = 6000;
+  await create("uat-fde-progress", "uat_fde_progress", mysqlProxy.port);
   const progress = await read("uat-fde-progress", "uat_fde_progress", Array.from({ length: 600 }, (_, i) => `t${i}`), (done) => { if (done > 0) delay = 0; });
   record("UAT-FDE-FIX-06", progress.result?.tableCount === 600 && progress.result?.columnCount === 91500 && progress.calls.length > 100, { tables: progress.result?.tableCount, columns: progress.result?.columnCount, error: progress.error?.message, calls: progress.calls }, "real SQL + authorized latency");
 
