@@ -1,0 +1,8 @@
+FROM project-lucy:uat-readyz-deps-c1cd67a0
+USER 0
+RUN rm -rf /app/webui/server /app/scripts/runtime /app/webui/config
+COPY webui/server /app/webui/server
+COPY scripts/runtime /app/scripts/runtime
+COPY webui/config /app/webui/config
+COPY BUILD_REVISION /app/BUILD_REVISION
+USER 10001:10001

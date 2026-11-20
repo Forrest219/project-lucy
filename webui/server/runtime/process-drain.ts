@@ -299,6 +299,7 @@ class ProcessDrainCoordinator {
     }
 
     await this.writeDrainAck();
+    console.info(`[process-drain] draining pid=${process.pid} inFlight=${this.inFlight.size}`);
     // Stop new heavy scheduling; waiting not-started items settle without executing.
     // Dirty/recovery facts remain with their owners (e.g. inferred-turn dirty set).
     try {
@@ -329,6 +330,7 @@ class ProcessDrainCoordinator {
     }
 
     if (hasRemaining()) {
+      console.warn(`[process-drain] deadline pid=${process.pid} inFlight=${this.inFlight.size}`);
       try {
         getHeavyWorkCapacity().requestCancelRunningForProcessDrain();
       } catch {
@@ -345,6 +347,7 @@ class ProcessDrainCoordinator {
       // Late retire after STOPPING is ignored for phase (still deletes map entry).
     }
 
+    console.info(`[process-drain] settled pid=${process.pid} inFlight=${this.inFlight.size}`);
     this.phase = "STOPPING";
     // Parent stops supervisor/KTX after ack+drain; Lucy then wraps up.
     this.phase = "STOPPED";

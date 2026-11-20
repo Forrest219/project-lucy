@@ -1,0 +1,183 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/inbox/readyz-repair-20261120/baseline-unit/webui
+
+{"level":30,"time":1795150082716,"pid":10877,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/admin/audit/export-pack?user=smoke_agent","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795150082724,"pid":10877,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":8.297250000000076,"msg":"request completed"}
+stderr | server/__tests__/mcp-proxy-smoke.test.ts > MCP proxy smoke > falls back to local initialize and local tools/list when upstream is unavailable
+[lucy-proxy] data-qa-instructions unavailable; initialize will pass through Error: ENOENT: no such file or directory, open '/app/webui/config/data-qa-instructions.md'
+    at open (node:internal/fs/promises:637:25)
+    at readFile (node:internal/fs/promises:1269:14)
+    at readDataQaInstructionsFile (/Users/zhangxingchen/Projects/project-lucy/inbox/readyz-repair-20261120/baseline-unit/webui/server/proxy/mcp-proxy.ts:2014:17)
+    at loadDataQaInstructions (/Users/zhangxingchen/Projects/project-lucy/inbox/readyz-repair-20261120/baseline-unit/webui/server/proxy/mcp-proxy.ts:2039:20)
+    at buildRoleAwareInstructionsUntimed (/Users/zhangxingchen/Projects/project-lucy/inbox/readyz-repair-20261120/baseline-unit/webui/server/proxy/mcp-proxy.ts:2092:23)
+    at buildRoleAwareInstructions (/Users/zhangxingchen/Projects/project-lucy/inbox/readyz-repair-20261120/baseline-unit/webui/server/proxy/mcp-proxy.ts:2081:18)
+    at handlePostTraced (/Users/zhangxingchen/Projects/project-lucy/inbox/readyz-repair-20261120/baseline-unit/webui/server/proxy/mcp-proxy.ts:7182:61)
+    at handlePost (/Users/zhangxingchen/Projects/project-lucy/inbox/readyz-repair-20261120/baseline-unit/webui/server/proxy/mcp-proxy.ts:4229:3)
+    at /Users/zhangxingchen/Projects/project-lucy/inbox/readyz-repair-20261120/baseline-unit/webui/server/proxy/mcp-proxy.ts:8102:11
+    at Server.<anonymous> (/Users/zhangxingchen/Projects/project-lucy/inbox/readyz-repair-20261120/baseline-unit/webui/server/proxy/mcp-proxy.ts:8098:7) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/app/webui/config/data-qa-instructions.md'
+}
+
+ ❯ server/__tests__/mcp-proxy-smoke.test.ts (27 tests | 8 failed) 7830ms
+     × injects kx_catalog into tools/list and serves it from the proxy 52ms
+     × exposes exactly the seven Lucy R1 tools for an exact R1 release token 42ms
+     × falls back to local initialize and local tools/list when upstream is unavailable 58ms
+     × injects lucy_begin_question, handles it locally, and auto-attaches its turnId to the next business call 50ms
+     × isolates auto-attached turns across two sessions sharing one token 48ms
+     × [v0.3] does NOT back-bind a same-session catalog call that landed just before lucy_begin_question 101ms
+     × [v0.3] does NOT re-bind a read_source that finishes after lucy_begin_question; admission is frozen 3097ms
+     × enforces Spec 162 question binding, budget, filter pushdown, and applied version 85ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  server/__tests__/mcp-proxy-smoke.test.ts > MCP proxy smoke > injects kx_catalog into tools/list and serves it from the proxy
+AssertionError: expected [ 'connection_list', …(7) ] to deeply equal [ 'connection_list', …(8) ]
+
+- Expected
++ Received
+
+@@ -4,8 +4,7 @@
+    "lucy_read_source",
+    "lucy_query",
+    "lucy_explain_query",
+    "lucy_freshness",
+    "kx_catalog",
+-   "lucy_begin_question",
+    "lucy_continue_question",
+  ]
+
+ ❯ server/__tests__/mcp-proxy-smoke.test.ts:612:62
+    610|       expect(listBody.result.tools.map((tool) => tool.name)).toContain…
+    611|       expect(listBody.result.tools.find((tool) => tool.name === "conne…
+    612|       expect(listBody.result.tools.map((tool) => tool.name)).toEqual([
+       |                                                              ^
+    613|         "connection_list",
+    614|         "lucy_catalog",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  server/__tests__/mcp-proxy-smoke.test.ts > MCP proxy smoke > exposes exactly the seven Lucy R1 tools for an exact R1 release token
+AssertionError: expected [ 'lucy_catalog', …(5) ] to deeply equal [ 'lucy_catalog', …(6) ]
+
+- Expected
++ Received
+
+@@ -2,8 +2,7 @@
+    "lucy_catalog",
+    "lucy_read_source",
+    "lucy_query",
+    "lucy_explain_query",
+    "lucy_freshness",
+-   "lucy_begin_question",
+    "lucy_continue_question",
+  ]
+
+ ❯ server/__tests__/mcp-proxy-smoke.test.ts:734:21
+    732|       const listBody = await listRes.json() as { result: { tools: Arra…
+    733|       const names = listBody.result.tools.map((tool) => tool.name);
+    734|       expect(names).toEqual([
+       |                     ^
+    735|         "lucy_catalog",
+    736|         "lucy_read_source",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  server/__tests__/mcp-proxy-smoke.test.ts > MCP proxy smoke > falls back to local initialize and local tools/list when upstream is unavailable
+AssertionError: expected [ 'connection_list', …(7) ] to deeply equal [ 'connection_list', …(8) ]
+
+- Expected
++ Received
+
+@@ -4,8 +4,7 @@
+    "lucy_read_source",
+    "lucy_query",
+    "lucy_explain_query",
+    "lucy_freshness",
+    "kx_catalog",
+-   "lucy_begin_question",
+    "lucy_continue_question",
+  ]
+
+ ❯ server/__tests__/mcp-proxy-smoke.test.ts:1662:62
+    1660|       expect(listRes.status).toBe(200);
+    1661|       const listBody = await listRes.json() as { result: { tools: Arra…
+    1662|       expect(listBody.result.tools.map((tool) => tool.name)).toEqual([
+       |                                                              ^
+    1663|         "connection_list",
+    1664|         "lucy_catalog",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  server/__tests__/mcp-proxy-smoke.test.ts > MCP proxy smoke > injects lucy_begin_question, handles it locally, and auto-attaches its turnId to the next business call
+AssertionError: expected undefined to be defined
+ ❯ server/__tests__/mcp-proxy-smoke.test.ts:1774:25
+    1772|       const listBody = await listRes.json() as { result: { tools: Arra…
+    1773|       const beginTool = listBody.result.tools.find((tool) => tool.name…
+    1774|       expect(beginTool).toBeDefined();
+       |                         ^
+    1775|       expect(beginTool?.description).toContain("Recommended at the sta…
+    1776|       expect(beginTool?.description).toContain("Skipping begin does no…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  server/__tests__/mcp-proxy-smoke.test.ts > MCP proxy smoke > isolates auto-attached turns across two sessions sharing one token
+SyntaxError: Unexpected token '当', "当前未启用问询上报，"... is not valid JSON
+ ❯ server/__tests__/mcp-proxy-smoke.test.ts:1883:27
+    1881|     try {
+    1882|       const beginA = await call("begin-session-a", "session-a", "lucy_…
+    1883|       const turnA = (JSON.parse(beginA.result.content[0]?.text ?? "{}"…
+       |                           ^
+    1884|       const beginB = await call("begin-session-b", "session-b", "lucy_…
+    1885|       const turnB = (JSON.parse(beginB.result.content[0]?.text ?? "{}"…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  server/__tests__/mcp-proxy-smoke.test.ts > MCP proxy smoke > [v0.3] does NOT back-bind a same-session catalog call that landed just before lucy_begin_question
+SyntaxError: Unexpected token '当', "当前未启用问询上报，"... is not valid JSON
+ ❯ server/__tests__/mcp-proxy-smoke.test.ts:1948:28
+    1946|       await waitForAuditRow("prior-catalog");
+    1947|       const begun = await call("prior-begin", "lucy_begin_question", {…
+    1948|       const turnId = (JSON.parse(begun.result.content[0]?.text ?? "{}"…
+       |                            ^
+    1949|       const catalog = await waitForAuditRow("prior-catalog");
+    1950|       const begin = await waitForAuditRow("prior-begin");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  server/__tests__/mcp-proxy-smoke.test.ts > MCP proxy smoke > [v0.3] does NOT re-bind a read_source that finishes after lucy_begin_question; admission is frozen
+SyntaxError: Unexpected token '当', "当前未启用问询上报，"... is not valid JSON
+ ❯ server/__tests__/mcp-proxy-smoke.test.ts:2012:28
+    2010|       expect(beginResponse.status).toBe(200);
+    2011|       const beginBody = await beginResponse.json() as { result: { cont…
+    2012|       const turnId = (JSON.parse(beginBody.result.content[0]?.text ?? …
+       |                            ^
+    2013|       releaseRead();
+    2014|       const readResponse = await readPromise;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  server/__tests__/mcp-proxy-smoke.test.ts > MCP proxy smoke > enforces Spec 162 question binding, budget, filter pushdown, and applied version
+AssertionError: expected 'begin_not_available' to be 'missing_intent_summary' // Object.is equality
+
+Expected: "missing_intent_summary"
+Received: "begin_not_available"
+
+ ❯ server/__tests__/mcp-proxy-smoke.test.ts:2666:41
+    2664|       expect(missing.result?.isError).toBe(true);
+    2665|       const missingAudit = await waitForAuditRow("missing-intent");
+    2666|       expect(missingAudit.error_detail).toBe("missing_intent_summary");
+       |                                         ^
+    2667|
+    2668|       const stillQueries = await post("after-missing-intent", "lucy_qu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 19 passed (27)
+   Start at  12:47:59
+   Duration  8.13s (transform 1.51s, setup 143ms, import 66ms, tests 7.83s, environment 0ms)
+

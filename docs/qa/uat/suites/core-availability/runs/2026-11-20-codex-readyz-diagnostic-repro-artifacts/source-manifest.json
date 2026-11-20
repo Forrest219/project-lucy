@@ -1,0 +1,11 @@
+{
+  "baselineSource": "6208ea5727bdb72b19333c574e8fbe047871f846",
+  "candidateSource": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+  "nativeArchitecture": "linux/arm64",
+  "method": "git archive server/runtime/config atop pinned local dependency image; lab derived, not customer artifact",
+  "runtimeWorkingTreeModified": false,
+  "archives": {
+    "baseline": "89d0808f1573605fe6db4b4e7757ccd152610c84e7931e074ddefa071453c0c6",
+    "candidate": "3a74488053eee565cb50e53acad81b0c2225eea3f76608fb1ef90c16dd07ccf9"
+  }
+}

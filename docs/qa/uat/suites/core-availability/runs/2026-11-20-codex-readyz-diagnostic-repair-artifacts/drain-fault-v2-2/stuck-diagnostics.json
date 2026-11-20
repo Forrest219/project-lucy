@@ -1,0 +1,76 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 6.832,
+  "body": {
+    "ok": true,
+    "data": {
+      "status": "ok",
+      "insecureTestProfile": true,
+      "lucyVersion": "0.30.0",
+      "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+      "gitDirty": true,
+      "bundledKtxVersion": "0.16.0",
+      "ktxRuntime": {
+        "ready": true,
+        "status": "ready",
+        "detail": "status: ready"
+      },
+      "policy": {
+        "policyVersion": "bea0d2c690bfafda9dbb5ebacf8aa58796c2cfe0cb5a55dad2f91744eb39295f",
+        "degradedGlobal": false,
+        "degradedAgents": [],
+        "healthy": true
+      },
+      "execution": {
+        "status": "unknown",
+        "lastCheckedAt": "2026-11-20T04:53:33.853Z",
+        "unknownConnections": [
+          "lucy-ops",
+          "uat-mysql"
+        ],
+        "activation": "unknown",
+        "reload": {
+          "state": "idle"
+        },
+        "verification": {
+          "state": "unverified"
+        }
+      },
+      "dataQaInstructions": {
+        "source": "missing",
+        "length": 0,
+        "lastError": null,
+        "loadedAt": null
+      },
+      "contentLayout": {
+        "contentRoot": "/data/lucy/config",
+        "contentRootSource": "env",
+        "authoring": {
+          "semanticLayer": "/data/lucy/config/semantic-layer",
+          "wiki": "/data/lucy/config/wiki",
+          "evals": "/data/lucy/config/evals",
+          "skills": "/data/lucy/config/skills"
+        },
+        "mirror": {
+          "semanticLayer": "/data/lucy/semantic-layer",
+          "wiki": "/data/lucy/wiki",
+          "evals": "/data/lucy/evals",
+          "skills": "/data/lucy/skills"
+        },
+        "mirrorActive": true,
+        "drift": [],
+        "driftTruncated": false
+      },
+      "eventLoop": {
+        "p99Ms": 30.13,
+        "maxMs": 98.042,
+        "windowSeconds": 60
+      }
+    },
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:53:39.170Z",
+      "ageMs": 15468,
+      "freshness": "stale"
+    }
+  }
+}

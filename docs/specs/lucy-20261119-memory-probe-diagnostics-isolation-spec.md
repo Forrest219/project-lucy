@@ -6,10 +6,10 @@
 | 日期 / 产品线 | 2026-11-19 / 0.30.0 |
 | 功能编号 / 优先级 | P1-61／REQ-030-082；建议 P1 第一批；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
-| 授权边界 | 委托人授权按本合同实施运行代码、配套 Vitest、API 文档同步；禁止提交／推送／发布／客户升级；禁止执行真实 UAT／压测／Docker 故障演练（须另行授权） |
+| 状态 | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-01真实停止／自动恢复局部复测PASS WITH GAP；完整F61矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
+| 授权边界 | 2026-11-20委托人明示按原合同修复已复现缺口，授权相关运行代码、测试工具及本机隔离Docker全真复测；不改客户环境、不提交、不推送、不发布；完整矩阵不得推定通过 2026-11-20委托人后续批准：本进程已完成修复、回归及取证可作阶段性本地commit；不含push、发布或客户变更，未完成矩阵仍保留GAP。 |
 | 需求 / 计划 | [总账](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261119-memory-probe-diagnostics-isolation-plan.md) |
-| 测试台 | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md)，F61；无跑次 |
+| 测试台 | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md)，F61；[修复跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repair.md) |
 
 ## 闭口层级
 
@@ -62,7 +62,7 @@ collectorTick():
 
 ## 受影响画像
 
-下列为设计目标，未取得实现证据；[画像规范](../governance/user-personas.md)。
+下列为设计目标，当前实现及局部证据见头部和修复跑次；[画像规范](../governance/user-personas.md)。
 
 | 画像 | 变更前 → 变更后 | 判定 | 依据 | 补偿路径 |
 |---|---|---|---|---|
@@ -101,4 +101,18 @@ New terms:
 
 ## 4. 决策、范围与风险
 
-推荐内存状态加后台诊断；仅增加TTL不能消除请求刷新，独立“永远健康”的探针进程又会掩盖主进程卡死，均不采用。新增字段及30秒诊断滞后需终稿评审确认。失去磁盘或CPU仍可能影响业务；本条不承诺任意资源条件下零503。多副本、权限陈旧宽限、KTX源码改动均不在范围。
+推荐内存状态加后台诊断；仅增加TTL不能消除请求刷新，独立“永远健康”的探针进程又会掩盖主进程卡死，均不采用。新增字段及30秒诊断滞后已在终稿确权范围内，本次保持原合同。失去磁盘或CPU仍可能影响业务；本条不承诺任意资源条件下零503。多副本、权限陈旧宽限、KTX源码改动均不在范围。
+
+## 2026-11-20 首轮仅复现（历史）
+
+[首轮跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro.md)当时仅获复现授权，保留局部FAIL，不回改历史。后续委托人已明示授权按原Spec／Plan修复并本机Docker复测；当前授权及状态见头部。
+
+## 已授权缺口修复与本次结果
+
+诊断目录／文件I/O在独立Node子进程执行，主进程传已有探测、KTX缓存和执行观测证据；策略与授权仍归主进程。已有KTX CLI刷新不在短命读者中重复运行。10秒周期／5秒截止不变，abort／close终止私有进程组，等真实close再释放单在途；旧代／迟到结果不发布。未确认退出不假释放，保留stale。
+
+仅给readFile加Signal不能停止每个底层OS请求，依据[Node22文档](https://nodejs.org/download/release/latest-jod/docs/api/fs.html)。本次用真实FIFO验证可终止执行边界，不外推不可中断内核I/O或任意PVC故障必可自愈。
+
+先补真实FIFO取消／恢复／close回归，再在同一冻结候选做120秒探针采样与两轮路径恢复；恢复时不释放旧FIFO、不重启。
+
+[修复跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repair.md)记录最终镜像、真实I/O／DB／TERM证据、PASS WITH GAP与完整矩阵剩余项。没有客户变更、提交、推送或发布；本次浏览器不适用。

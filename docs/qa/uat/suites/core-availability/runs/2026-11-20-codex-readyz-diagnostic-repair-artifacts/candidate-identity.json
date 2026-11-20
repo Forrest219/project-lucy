@@ -1,0 +1,11 @@
+{
+  "image": "project-lucy:uat-readyz-repaired-20261120-v2",
+  "imageId": "sha256:333e6dc986e92dc32a1697b3035f197877cbf82fd5bcca2de47d0be9d5a7f893",
+  "architecture": "linux/arm64",
+  "node": "v22.23.5",
+  "ktx": "0.16.0",
+  "sourceIdentity": "6b8deec4 plus nine repair files, gitDirty=true; lab artifact only",
+  "runnerSha256": "ab8021a6605f4c8e4927dbaddb695cf96e95911ab3c7c0a635b48ee4cbf7bd2a",
+  "helperAtomicAtImport": true,
+  "runnerHashMeaning": "final delivered entry point; normal TERM control preceded Docker timestamp logging, later fault runs include it; no product behavior changed between final runs"
+}

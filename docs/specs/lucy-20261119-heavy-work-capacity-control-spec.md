@@ -6,10 +6,10 @@
 | 日期 / 产品线 | 2026-11-19 / 0.30.0 |
 | 功能编号 / 优先级 | P1-62／REQ-030-083；建议 P1 第二批；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
-| 授权边界 | 委托人授权按本合同实施运行代码、配套 Vitest、API 文档同步；不撤销正式完整导出延期，不新增 schema；禁止提交／推送／发布／客户升级；禁止执行真实 UAT／压测／Docker 故障演练（须另行授权） |
+| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现已落地（本机单元与组件测试通过）；本机 Docker 局部 UAT PASS WITH GAP（仅真实导出入口；完整 F62 未完成）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
+| 授权边界 | 委托人授权按本合同实施运行代码、配套 Vitest、API 文档同步；不撤销正式完整导出延期，不新增 schema；禁止提交／推送／发布／客户升级；此前执行限制已被 2026-11-20 本次具名局部 Docker 执行授权覆盖，范围见 readyz 执行 Plan；完整矩阵不视为已验 2026-11-20委托人后续批准：本进程已完成修复、回归及取证可作阶段性本地commit；不含push、发布或客户变更，未完成矩阵仍保留GAP。 |
 | 需求 / 计划 | [总账](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261119-heavy-work-capacity-control-plan.md) |
-| 测试台 | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md)，F62；无跑次 |
+| 测试台 | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md)，F62；[2026-11-20 局部跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro.md) |
 
 ## 闭口层级
 
@@ -121,3 +121,7 @@ New terms:
 ## 4. 待决与非目标
 
 优先选现有队列外的薄容量协调层；每模块各自调大阈值无法保证总上界，另建分布式任务系统则超出现单实例范围。默认2/16/5秒与适配接缝须终稿确认；若无法保持原模块截止/事务边界，回到本稿评审而非绕过模块合同。任何新的worker、索引、schema、KTX改动均须另行明确授权；本条不能靠限流掩盖原模块算法退化。
+
+## 2026-11-20 本机局部复现
+
+[具名跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro.md)记录冻结候选、真实故障、逐项判定及剩余缺口；[执行 Plan](../plans/lucy-20261120-readyz-diagnostic-repro-uat-plan.md)限定本次授权。保留原SC和门槛，本次不修改产品运行代码，不改客户环境。

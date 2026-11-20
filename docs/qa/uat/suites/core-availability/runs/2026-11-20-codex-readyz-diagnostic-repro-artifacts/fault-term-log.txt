@@ -1,0 +1,7 @@
+{"level":30,"time":1795148661212,"pid":247,"hostname":"ff2cdad8e9f7","tool":"sl_query","callId":"ef37397b-9da1-4546-ae0b-523c49fe9d81","sessionId":"adaa5860-f30b-434a-ae40-b6ff75c1e9c7","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795148663251,"pid":247,"hostname":"ff2cdad8e9f7","tool":"sl_query","callId":"ef37397b-9da1-4546-ae0b-523c49fe9d81","sessionId":"adaa5860-f30b-434a-ae40-b6ff75c1e9c7","durationMs":2039.0850420000006,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+{"level":30,"time":1795148675021,"pid":247,"hostname":"ff2cdad8e9f7","tool":"sl_query","callId":"75cb0d05-f887-4c2f-9713-c11779d828c9","sessionId":"adaa5860-f30b-434a-ae40-b6ff75c1e9c7","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+[lucy] drain: begin pid=288 budget=20s
+[lucy] drain: ack received
+[lucy] drain: lucy settled exit
+[lucy] drain: stopping supervisor pid=239

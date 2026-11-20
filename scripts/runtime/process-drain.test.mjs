@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -40,6 +40,39 @@ test("entrypoint preserves exit status through drain-first shutdown", async () =
   assert.match(source, /exit "\$\{status\}"/);
   assert.match(source, /trap 'shutdown 143' TERM INT/);
   assert.match(source, /LUCY_SHUTDOWN_STARTED/);
+});
+
+test("entrypoint owns the actual Node PID, not an early-exiting npm launcher", async () => {
+  const source = await readEntrypoint();
+  const start = source.lastIndexOf('cd "${WEBUI_ROOT}"');
+  const launch = source.slice(start, source.indexOf('\nwait -n ', start));
+  const root = await mkdtemp(path.join(tmpdir(), "lucy-drain-pid-"));
+  try {
+    await mkdir(path.join(root, "server"));
+    await symlink(path.join(repoRoot, "webui/node_modules"), path.join(root, "node_modules"));
+    await writeFile(path.join(root, "package.json"), JSON.stringify({ type: "module", scripts: { start: "tsx server/index.ts" } }));
+    await writeFile(path.join(root, "server/index.ts"), `
+      import { writeFileSync } from "node:fs";
+      writeFileSync("actual.pid", String(process.pid));
+      process.on("SIGTERM", () => setTimeout(() => { writeFileSync("settled", "yes"); process.exit(0); }, 100));
+      setInterval(() => {}, 1000);
+    `);
+    const script = `set -eu
+      WEBUI_ROOT="$1"
+      ${launch}
+      trap 'if test -f actual.pid; then kill -TERM "$(cat actual.pid)" 2>/dev/null || true; fi; kill -TERM "$LUCY_PID" 2>/dev/null || true; wait "$LUCY_PID" 2>/dev/null || true' EXIT
+      for i in $(seq 1 100); do test -f actual.pid && break; sleep .05; done
+      test "$LUCY_PID" = "$(cat actual.pid)"
+      kill -TERM "$LUCY_PID"
+      wait "$LUCY_PID"
+      test "$(cat settled)" = yes
+      trap - EXIT
+    `;
+    const result = spawnSync("bash", ["-c", script, "sh", root], { encoding: "utf8", timeout: 10_000 });
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("entrypoint budgets and stop-timeout conflict warning", async () => {

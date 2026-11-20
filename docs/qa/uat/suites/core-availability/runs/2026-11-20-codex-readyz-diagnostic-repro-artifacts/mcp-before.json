@@ -1,0 +1,7 @@
+{
+  "initialize": 200,
+  "toolsList": 200,
+  "query": 200,
+  "oracle": "count=4,sum=100",
+  "httpProject": 200
+}

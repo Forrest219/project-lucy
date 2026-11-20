@@ -1,0 +1,16 @@
+[diagnostic-collector] closed pid=359 aborted=false code=0 signal=null
+[diagnostic-collector] closed pid=501 aborted=false code=0 signal=null
+[diagnostic-collector] closed pid=690 aborted=false code=0 signal=null
+[diagnostic-collector] stage=reading pid=359
+[diagnostic-collector] stage=reading pid=501
+[diagnostic-collector] stage=reading pid=690
+[lucy] drain: ack received
+[lucy] drain: begin pid=289 budget=20s
+[lucy] drain: lucy settled exit
+[lucy] drain: stopping supervisor pid=240
+[process-drain] draining pid=289 inFlight=1
+[process-drain] settled pid=289 inFlight=0
+{"level":30,"time":1795150243749,"pid":248,"hostname":"a61f415bff04","tool":"sl_query","callId":"29272c15-0af8-44e2-b6ca-08a126556a48","sessionId":"18dd104f-42a3-4085-85f9-5708c2759548","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795150245843,"pid":248,"hostname":"a61f415bff04","tool":"sl_query","callId":"29272c15-0af8-44e2-b6ca-08a126556a48","sessionId":"18dd104f-42a3-4085-85f9-5708c2759548","durationMs":2094.146751,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+{"level":30,"time":1795150246097,"pid":248,"hostname":"a61f415bff04","tool":"sl_query","callId":"50da7285-d6b1-4a09-8cb8-025baf4d2617","sessionId":"18dd104f-42a3-4085-85f9-5708c2759548","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":40,"time":1795150256622,"pid":248,"hostname":"a61f415bff04","tool":"sl_query","callId":"50da7285-d6b1-4a09-8cb8-025baf4d2617","sessionId":"18dd104f-42a3-4085-85f9-5708c2759548","durationMs":10524.364213,"outcome":"ok","resultSize":310,"msg":"tool.end"}

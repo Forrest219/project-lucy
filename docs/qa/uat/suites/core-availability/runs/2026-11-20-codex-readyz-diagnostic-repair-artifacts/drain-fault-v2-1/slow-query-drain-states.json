@@ -1,0 +1,14 @@
+[
+  {
+    "elapsedS": 9.912,
+    "running": true,
+    "exitCode": 0,
+    "oomKilled": false
+  },
+  {
+    "elapsedS": 10.936,
+    "running": false,
+    "exitCode": 143,
+    "oomKilled": false
+  }
+]

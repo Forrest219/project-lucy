@@ -1,0 +1,20 @@
+{
+  "image": "sha256:333e6dc986e92dc32a1697b3035f197877cbf82fd5bcca2de47d0be9d5a7f893 linux/arm64",
+  "container": "509668a674b960bd4c2063144a4370d213cb045b410403d4a3456740caae72ca",
+  "code": "73e128dd3f88ec763af4be1cfc7067922b5797fd0342a29c28bcf5580850296d  /app/webui/server/proxy/mcp-proxy.ts\nb52e91ac7b98b6f5803ead716fca9a753414a8b4c431e328e33f0ef1001194f3  /app/webui/server/proxy/caliber-binding-registry.ts\n40ace28f21617e058cf10a0b358bd9c488049370209924251b4b2e19b5bd76e8  /app/webui/server/proxy/caliber-binding-session.ts\nf78747f0c24bed3eca4565da769d63054a5b98d9acf97fe9ca50c7d82ae40023  /app/webui/server/proxy/caliber-binding.ts",
+  "resources": {
+    "cpus": 2,
+    "memory": "2g",
+    "stateStorage": "Docker native named volume",
+    "mysqlStorage": "Docker native anonymous volume"
+  },
+  "webUrl": "http://127.0.0.1:63737",
+  "mcpUrl": "http://127.0.0.1:63738/mcp",
+  "fixtureFingerprints": {
+    "ktx.yaml": "7d591123c042227dc4457681f7f78d4cf81ec52c3b73f244b50badf4a60bfaa8",
+    "config/semantic-layer/uat-mysql/uat_begin_zero_orders.yaml": "a753c40c4eb7e5ba65a40a5fa5fe9fd841d238531284455bb48f46c2b8e06bac",
+    "config/semantic-layer/uat-mysql/_schema/uat.yaml": "49904b314ccefbe1b4e73d8d01911e3e230360cb15d00c84ec894c2392e9a9b9",
+    "webui/config/access.yaml": "236728de67fb9bc8ac82b94b57b405e3bedff98e930e93c8b9c73cd08e96f954"
+  },
+  "startedAt": "2026-11-20T04:50:58.085223+00:00"
+}

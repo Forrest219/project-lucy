@@ -1,0 +1,41 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/inbox/availability-checkpoint-20261120/worktree/webui
+
+ ❯ server/__tests__/memory-probe-diagnostics.test.ts (9 tests | 2 failed) 10416ms
+     × SC-01: livez/readyz/health handlers perform zero diagnostic I/O readers 5032ms
+     × SC-02/03: readyz warming_up + field compatibility golden; freshness sibling 5187ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  server/__tests__/memory-probe-diagnostics.test.ts > probe routes memory path (SC-01/02/03/07/09) > SC-01: livez/readyz/health handlers perform zero diagnostic I/O readers
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ server/__tests__/memory-probe-diagnostics.test.ts:326:3
+    324|   });
+    325|
+    326|   it("SC-01: livez/readyz/health handlers perform zero diagnostic I/O …
+       |   ^
+    327|     const project = await import("../project.js");
+    328|     const mcpRuntime = await import("../admin/mcp-runtime.js");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  server/__tests__/memory-probe-diagnostics.test.ts > probe routes memory path (SC-01/02/03/07/09) > SC-02/03: readyz warming_up + field compatibility golden; freshness sibling
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ server/__tests__/memory-probe-diagnostics.test.ts:373:3
+    371|   });
+    372|
+    373|   it("SC-02/03: readyz warming_up + field compatibility golden; freshn…
+       |   ^
+    374|     const { buildServer } = await import("../index.js");
+    375|     const { markWebuiWarmupComplete, resetWebuiWarmupForTests } = awai…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 4 passed (5)
+      Tests  2 failed | 40 passed (42)
+   Start at  15:04:08
+   Duration  22.22s (transform 7.66s, setup 2.30s, import 450ms, tests 17.72s, environment 0ms)
+

@@ -177,14 +177,14 @@ import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
 import {
   peekExecutionProbe,
-  readMcpRuntimeStatus,
   registerMcpRuntimeRoutes,
   runMcpRuntimeCanary,
   startExecutionProbeRefresh,
   stopExecutionProbeRefresh
 } from "./admin/mcp-runtime.js";
 import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
-import { readKtxYamlDigest } from "./mcp-runtime-state.js";
+import { readKtxYamlDigest, snapshotExecutionRuntimeObservations } from "./mcp-runtime-state.js";
+import { collectDiagnosticIo } from "./runtime/diagnostic-collector.js";
 import { reloadKtxMcpAfterConfigWrite } from "./ktx-mcp-reload.js";
 
 async function settleExecutionRuntime(
@@ -761,42 +761,25 @@ async function resolvePendingValidationTargets(
 let contentLayoutCache: { at: number; value: ContentLayoutStatus | null } | null = null;
 const CONTENT_LAYOUT_TTL_MS = 30_000;
 
-async function readContentLayoutCached(refresh: boolean): Promise<ContentLayoutStatus | null> {
-  const fresh = contentLayoutCache !== null && Date.now() - contentLayoutCache.at < CONTENT_LAYOUT_TTL_MS;
-  if (contentLayoutCache && (fresh || !refresh)) return contentLayoutCache.value;
-  if (!refresh) return null;
-  try {
-    const projectRoot = await resolveProjectRoot();
-    const contentPaths = await resolveContentPaths(projectRoot);
-    const value = await collectContentLayout(projectRoot, contentPaths);
-    contentLayoutCache = { at: Date.now(), value };
-    return value;
-  } catch {
-    return contentLayoutCache?.value ?? null;
-  }
-}
-
 /**
  * Full diagnostic collect for the P1-61 background snapshot.
  * May perform file / subprocess / network I/O — never call from probe handlers.
  */
-async function collectDependencyDiagnostics(_signal: AbortSignal): Promise<DiagnosticData> {
+async function collectDependencyDiagnostics(signal: AbortSignal): Promise<DiagnosticData> {
   const policy = getPolicyRuntimeStatus();
-  const contentLayout = await readContentLayoutCached(true);
-  const ktxRuntime = await readKtxRuntimeStatusCached();
-  const cachedProbe = peekExecutionProbe();
-  const mcpRuntime = await readMcpRuntimeStatus(async () => cachedProbe ?? {
-    status: "reachable" as const,
-    checkedAt: new Date().toISOString()
-  }).catch((error) => ({
-    execution: {
-      status: "error" as const,
-      lastCheckedAt: new Date().toISOString(),
-      lastError: error instanceof Error ? error.message : String(error)
-    }
-  }));
+  const reusedLayout = contentLayoutCache?.value && Date.now() - contentLayoutCache.at < CONTENT_LAYOUT_TTL_MS
+    ? contentLayoutCache.value : undefined;
+  const io = await collectDiagnosticIo(signal, {
+    probe: peekExecutionProbe(),
+    observations: snapshotExecutionRuntimeObservations(),
+    ktxRuntime: peekKtxRuntimeStatus(),
+    ...(reusedLayout ? { contentLayout: reusedLayout } : {})
+  });
+  const { ktxRuntime } = io;
+  const contentLayout = io.contentLayout ?? contentLayoutCache?.value;
+  if (io.contentLayout && !reusedLayout) contentLayoutCache = { at: Date.now(), value: io.contentLayout };
   const policyHealthy = isPolicyRuntimeHealthy(policy);
-  const executionHardFailure = ["stale", "unavailable", "error"].includes(mcpRuntime.execution.status);
+  const executionHardFailure = ["stale", "unavailable", "error"].includes(io.execution.status);
   const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
   return {
     status: healthy ? "ok" : "degraded",
@@ -815,7 +798,7 @@ async function collectDependencyDiagnostics(_signal: AbortSignal): Promise<Diagn
       degradedAgents: policy.degradedAgents,
       healthy: policyHealthy
     },
-    execution: mcpRuntime.execution,
+    execution: io.execution,
     dataQaInstructions: getDataQaInstructionsStatus(),
     ...(contentLayout ? { contentLayout } : {})
   };
