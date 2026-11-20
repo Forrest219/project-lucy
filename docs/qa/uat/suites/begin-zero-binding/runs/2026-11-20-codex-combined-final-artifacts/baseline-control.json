@@ -1,0 +1,7 @@
+{
+  "image": "sha256:d4ee128c273873b06c0e8fcee296638e030882f08a3d05a745a4fa39be981af8",
+  "baseImage": "sha256:40104b7f1acc666af3d82f2733d38c733c76474e36d424cab4cca29678549650",
+  "change": "same budget persistence transaction lock fix only; no P1-60 recovery/hiding fixes",
+  "file": "webui/server/proxy/audit.ts",
+  "sha256": "b0542ac1f663640bb99ff8cbc6948c99a66a866dd14fe6b7bc32d228d2e3197d"
+}

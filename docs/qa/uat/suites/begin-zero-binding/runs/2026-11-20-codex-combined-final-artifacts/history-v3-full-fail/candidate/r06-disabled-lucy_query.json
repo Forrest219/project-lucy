@@ -1,0 +1,12 @@
+{
+  "httpStatus": 403,
+  "elapsedMs": 2.514,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 139,
+    "error": {
+      "code": -32003,
+      "message": "Access denied: agent_disabled"
+    }
+  }
+}

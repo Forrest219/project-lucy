@@ -1,0 +1,201 @@
+{"level":30,"time":1795149875643,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-y","req":{"method":"GET","url":"/api/admin/audit?sessionId=persona-0&includeAuthFailures=0&includeProtocol=1&limit=50","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":57340},"msg":"incoming request"}
+{"level":30,"time":1795149875647,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-y","res":{"statusCode":200},"responseTime":4.195791999984067,"msg":"request completed"}
+{"level":30,"time":1795149875651,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-z","req":{"method":"GET","url":"/api/admin/audit?sessionId=persona-1&includeAuthFailures=0&includeProtocol=1&limit=50","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":57350},"msg":"incoming request"}
+{"level":30,"time":1795149875654,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-z","res":{"statusCode":200},"responseTime":2.6473340000084136,"msg":"request completed"}
+{"level":30,"time":1795149875656,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-10","req":{"method":"GET","url":"/api/admin/audit?sessionId=persona-2&includeAuthFailures=0&includeProtocol=1&limit=50","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":57352},"msg":"incoming request"}
+{"level":30,"time":1795149875659,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-10","res":{"statusCode":200},"responseTime":2.255457999999635,"msg":"request completed"}
+{"level":30,"time":1795149875661,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-11","req":{"method":"GET","url":"/api/admin/audit?sessionId=persona-3&includeAuthFailures=0&includeProtocol=1&limit=50","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":57360},"msg":"incoming request"}
+{"level":30,"time":1795149875663,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-11","res":{"statusCode":200},"responseTime":2.03020799998194,"msg":"request completed"}
+{"level":30,"time":1795149875666,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-12","req":{"method":"GET","url":"/api/admin/audit?sessionId=persona-4&includeAuthFailures=0&includeProtocol=1&limit=50","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":57374},"msg":"incoming request"}
+{"level":30,"time":1795149875668,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-12","res":{"statusCode":200},"responseTime":2.0087080000084825,"msg":"request completed"}
+{"level":30,"time":1795149875671,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-13","req":{"method":"GET","url":"/api/admin/audit?sessionId=persona-5&includeAuthFailures=0&includeProtocol=1&limit=50","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":57386},"msg":"incoming request"}
+{"level":30,"time":1795149875673,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-13","res":{"statusCode":200},"responseTime":2.3342919999849983,"msg":"request completed"}
+{"level":30,"time":1795149878507,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-14","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":54956},"msg":"incoming request"}
+{"level":30,"time":1795149878509,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-14","res":{"statusCode":200},"responseTime":1.370708000002196,"msg":"request completed"}
+{"level":30,"time":1795149901324,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-15","req":{"method":"GET","url":"/api/admin/agents/uat_zb_denied","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":60684},"msg":"incoming request"}
+{"level":30,"time":1795149901349,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-15","res":{"statusCode":200},"responseTime":24.908583999960683,"msg":"request completed"}
+{"level":30,"time":1795149901351,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-16","req":{"method":"PATCH","url":"/api/admin/agents/uat_zb_denied","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":60700},"msg":"incoming request"}
+{"level":30,"time":1795149901392,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-16","res":{"statusCode":200},"responseTime":40.46950000000652,"msg":"request completed"}
+{"level":30,"time":1795149901393,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-17","req":{"method":"PATCH","url":"/api/admin/agents/uat_zb_denied","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":60704},"msg":"incoming request"}
+{"level":30,"time":1795149901471,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-17","res":{"statusCode":200},"responseTime":77.22179099998903,"msg":"request completed"}
+{"level":30,"time":1795149901606,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-18","req":{"method":"GET","url":"/api/admin/agents/uat_zb_denied","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":60718},"msg":"incoming request"}
+{"level":30,"time":1795149901621,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-18","res":{"statusCode":200},"responseTime":14.658584000018891,"msg":"request completed"}
+{"level":30,"time":1795149901623,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-19","req":{"method":"PATCH","url":"/api/admin/agents/uat_zb_denied","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":60720},"msg":"incoming request"}
+{"level":30,"time":1795149901646,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-19","res":{"statusCode":200},"responseTime":22.74587500002235,"msg":"request completed"}
+{"level":30,"time":1795149901648,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1a","req":{"method":"PATCH","url":"/api/admin/agents/uat_zb_denied","host":"127.0.0.1:56136","remoteAddress":"172.26.0.1","remotePort":60732},"msg":"incoming request"}
+{"level":30,"time":1795149901725,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1a","res":{"statusCode":200},"responseTime":76.82608400000026,"msg":"request completed"}
+{"level":30,"time":1795149909782,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1b","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":44892},"msg":"incoming request"}
+{"level":30,"time":1795149909785,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1b","res":{"statusCode":200},"responseTime":3.15320800000336,"msg":"request completed"}
+{"level":30,"time":1795149940734,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1c","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":48954},"msg":"incoming request"}
+{"level":30,"time":1795149940737,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1c","res":{"statusCode":200},"responseTime":2.468583000008948,"msg":"request completed"}
+{"level":30,"time":1795149971616,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1d","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":36930},"msg":"incoming request"}
+{"level":30,"time":1795149971617,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1d","res":{"statusCode":200},"responseTime":1.2957089999690652,"msg":"request completed"}
+{"level":30,"time":1795150002631,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1e","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":54718},"msg":"incoming request"}
+{"level":30,"time":1795150002638,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1e","res":{"statusCode":200},"responseTime":6.412207999965176,"msg":"request completed"}
+{"level":30,"time":1795150033673,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1f","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":60302},"msg":"incoming request"}
+{"level":30,"time":1795150033675,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1f","res":{"statusCode":200},"responseTime":1.4335839999839664,"msg":"request completed"}
+{"level":30,"time":1795150064555,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1g","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":54342},"msg":"incoming request"}
+{"level":30,"time":1795150064557,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1g","res":{"statusCode":200},"responseTime":1.4477089999709278,"msg":"request completed"}
+{"level":30,"time":1795150095465,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1h","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":53612},"msg":"incoming request"}
+{"level":30,"time":1795150095467,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1h","res":{"statusCode":200},"responseTime":1.7877919999882579,"msg":"request completed"}
+{"level":30,"time":1795150126283,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1i","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":50962},"msg":"incoming request"}
+{"level":30,"time":1795150126285,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1i","res":{"statusCode":200},"responseTime":2.2149999999674037,"msg":"request completed"}
+{"level":30,"time":1795150157107,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1j","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":49320},"msg":"incoming request"}
+{"level":30,"time":1795150157108,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1j","res":{"statusCode":200},"responseTime":0.957916000043042,"msg":"request completed"}
+{"level":30,"time":1795150188138,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1k","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":43086},"msg":"incoming request"}
+{"level":30,"time":1795150188141,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1k","res":{"statusCode":200},"responseTime":2.740375000052154,"msg":"request completed"}
+{"level":30,"time":1795150219213,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1l","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":51226},"msg":"incoming request"}
+{"level":30,"time":1795150219215,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1l","res":{"statusCode":200},"responseTime":2.7087090000277385,"msg":"request completed"}
+{"level":30,"time":1795150250039,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1m","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":60932},"msg":"incoming request"}
+{"level":30,"time":1795150250040,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1m","res":{"statusCode":200},"responseTime":1.5323329999810085,"msg":"request completed"}
+{"level":30,"time":1795150280880,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1n","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":46084},"msg":"incoming request"}
+{"level":30,"time":1795150280881,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1n","res":{"statusCode":200},"responseTime":1.1663750000298023,"msg":"request completed"}
+{"level":30,"time":1795150311766,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1o","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":41246},"msg":"incoming request"}
+{"level":30,"time":1795150311769,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1o","res":{"statusCode":200},"responseTime":2.606249999953434,"msg":"request completed"}
+{"level":30,"time":1795150342659,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1p","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":46184},"msg":"incoming request"}
+{"level":30,"time":1795150342661,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1p","res":{"statusCode":200},"responseTime":1.8017499999841675,"msg":"request completed"}
+{"level":30,"time":1795150374056,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1q","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":33702},"msg":"incoming request"}
+{"level":30,"time":1795150374059,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1q","res":{"statusCode":200},"responseTime":2.2091249999357387,"msg":"request completed"}
+{"level":30,"time":1795150405106,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1r","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":37142},"msg":"incoming request"}
+{"level":30,"time":1795150405108,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1r","res":{"statusCode":200},"responseTime":2.0675829999381676,"msg":"request completed"}
+{"level":30,"time":1795150436336,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1s","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":59166},"msg":"incoming request"}
+{"level":30,"time":1795150436355,"pid":330,"hostname":"1bc50a7b8aeb","reqId":"req-1s","res":{"statusCode":200},"responseTime":17.617459000088274,"msg":"request completed"}
+{"level":30,"time":1795149874277,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"ef8a45de-b784-4963-a671-9bdb8f9052ba","sessionId":"ca6c3ca1-58c9-4a57-bc36-67e00399cc69","durationMs":417.4342089999991,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+{"level":30,"time":1795149874322,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"2926af32-474a-4c07-b139-e3b6a432040c","sessionId":"ca6c3ca1-58c9-4a57-bc36-67e00399cc69","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795149874797,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"2926af32-474a-4c07-b139-e3b6a432040c","sessionId":"ca6c3ca1-58c9-4a57-bc36-67e00399cc69","durationMs":475.0417920000036,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+{"level":30,"time":1795149874863,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"1b874970-9eca-47d3-bcaa-e773d0b41fb5","sessionId":"ca6c3ca1-58c9-4a57-bc36-67e00399cc69","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795149875333,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"1b874970-9eca-47d3-bcaa-e773d0b41fb5","sessionId":"ca6c3ca1-58c9-4a57-bc36-67e00399cc69","durationMs":469.75887499999953,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+{"level":30,"time":1795149875687,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_read_source","callId":"3842788e-525e-4d5b-87ea-98af63c76087","sessionId":"ca6c3ca1-58c9-4a57-bc36-67e00399cc69","params":{"connectionId":"uat-mysql","sourceName":"uat_begin_zero_orders"},"msg":"tool.start"}
+{"level":30,"time":1795149875702,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_read_source","callId":"3842788e-525e-4d5b-87ea-98af63c76087","sessionId":"ca6c3ca1-58c9-4a57-bc36-67e00399cc69","durationMs":15.226209000014933,"outcome":"ok","resultSize":379,"msg":"tool.end"}
+{"level":30,"time":1795149878051,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"997a58dc-a3ee-4e98-8cf6-cbf6f6bc32a1","msg":"session.open"}
+{"level":30,"time":1795149883054,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"12094080-4a8e-4c25-bf45-40356ee17037","msg":"session.open"}
+{"level":30,"time":1795149888056,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"705e6b14-a8cb-4878-8bb3-e79c0b4adf76","msg":"session.open"}
+{"level":30,"time":1795149893058,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"d9a45818-af96-42a6-bbe9-556d76e3794b","msg":"session.open"}
+{"level":30,"time":1795149898057,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"d351b919-4440-4ccc-bf4e-934e37957409","msg":"session.open"}
+{"level":30,"time":1795149899285,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"88fa3e38-48bf-4efa-b5c3-47f6cb806075","msg":"session.open"}
+{"level":30,"time":1795149899549,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"aea6f502-a588-4327-9789-3ee537a08e5e","sessionId":"88fa3e38-48bf-4efa-b5c3-47f6cb806075","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795149900130,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"aea6f502-a588-4327-9789-3ee537a08e5e","sessionId":"88fa3e38-48bf-4efa-b5c3-47f6cb806075","durationMs":580.3546249999781,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+{"level":30,"time":1795149900870,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"619803da-4c95-4449-8a76-6872fbb8cc02","sessionId":"88fa3e38-48bf-4efa-b5c3-47f6cb806075","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795149901318,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"619803da-4c95-4449-8a76-6872fbb8cc02","sessionId":"88fa3e38-48bf-4efa-b5c3-47f6cb806075","durationMs":447.6895839999779,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+[acl] policy_degraded_deny agent=uat_zb_a cause=source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision
+[acl] policy_degraded_deny agent=uat_zb_b cause=source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision
+[acl] policy_degraded_deny agent=uat_zb_c cause=source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision
+[acl] policy_degraded_deny agent=uat_zb_expired cause=source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision
+[acl] policy_degraded_deny agent=uat_zb_disabled cause=source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision
+[acl] policy_degraded_deny agent=uat_zb_denied cause=source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision
+{"level":30,"time":1795149901732,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"59d02dd0-1a51-4aa7-8c80-f242bb2e3015","msg":"session.open"}
+{"level":30,"time":1795149901832,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"9ef4f0ed-cfee-4b86-aeaf-e0e86c16d0d6","sessionId":"59d02dd0-1a51-4aa7-8c80-f242bb2e3015","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795149902312,"pid":249,"hostname":"1bc50a7b8aeb","tool":"sl_query","callId":"9ef4f0ed-cfee-4b86-aeaf-e0e86c16d0d6","sessionId":"59d02dd0-1a51-4aa7-8c80-f242bb2e3015","durationMs":479.8863340000389,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+{"level":30,"time":1795149903051,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"ad30cf39-bf7c-4a78-bb8c-f62e9b1e985f","msg":"session.open"}
+{"level":30,"time":1795149908067,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"87325658-4e59-4879-8ea4-41815f9b91b9","msg":"session.open"}
+{"level":30,"time":1795149913050,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"b9a4f5aa-248f-40cc-b0ba-c355259a91ae","msg":"session.open"}
+{"level":30,"time":1795149918052,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"d7dbfd98-01b9-43ca-86e5-4ffb04f1840f","msg":"session.open"}
+{"level":30,"time":1795149923060,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"cd3ba904-86cd-4400-a6ec-e8090629b848","msg":"session.open"}
+{"level":30,"time":1795149928059,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"c7f7fdea-123b-4e2d-92b9-8739bed584a7","msg":"session.open"}
+{"level":30,"time":1795149933066,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"81490d48-b83f-41f7-9a83-4a47420fe628","msg":"session.open"}
+{"level":30,"time":1795149938066,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"d26b5d1a-f061-42d0-b27b-08700a360d64","msg":"session.open"}
+{"level":30,"time":1795149943061,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"1751b737-af12-4aec-ba91-6a582441c7f6","msg":"session.open"}
+{"level":30,"time":1795149948068,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"5181b93f-35e1-4d7e-a606-13043b5f4fc6","msg":"session.open"}
+{"level":30,"time":1795149953062,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"fbc0ddc0-126f-408f-8824-6f8fd4940f9e","msg":"session.open"}
+{"level":30,"time":1795149958066,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"973cb816-f548-4cdc-9668-45e537351022","msg":"session.open"}
+{"level":30,"time":1795149963066,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"d144681a-de54-4944-b19c-61ec5a7095f6","msg":"session.open"}
+{"level":30,"time":1795149968068,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"39fb8441-ea7e-42e1-83c8-aef188cbeb2d","msg":"session.open"}
+{"level":30,"time":1795149973068,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"882bd7a5-7085-4133-b0a8-9d3839dc3741","msg":"session.open"}
+{"level":30,"time":1795149978069,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"c310a4f5-030a-4d67-9d83-5889bb2ba982","msg":"session.open"}
+{"level":30,"time":1795149983074,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"1b567583-b178-4a12-95ef-c1cdd9ee268e","msg":"session.open"}
+{"level":30,"time":1795149988071,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"808aee43-9722-4555-856b-d5566ccf01a2","msg":"session.open"}
+{"level":30,"time":1795149993072,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"99d60ec7-7303-4510-8e67-70590790f150","msg":"session.open"}
+{"level":30,"time":1795149998074,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"9c1de3db-e5a3-423d-a0ff-af1a501aec1a","msg":"session.open"}
+{"level":30,"time":1795150003077,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"91f62714-52e2-4001-90d9-459a55a8ae54","msg":"session.open"}
+{"level":30,"time":1795150008076,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"95997447-b47c-48dc-84dd-3d736c181ef3","msg":"session.open"}
+{"level":30,"time":1795150013081,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"aeb58034-be65-4e1f-9f52-e1bbf479d434","msg":"session.open"}
+{"level":30,"time":1795150018082,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"6fc3ab53-d077-4caa-84c6-53fff834f3eb","msg":"session.open"}
+{"level":30,"time":1795150023081,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"76453de0-949d-4312-b85e-5c0b471ca91c","msg":"session.open"}
+{"level":30,"time":1795150028081,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"80fcda1a-1d92-4902-a7ce-a63934fb5644","msg":"session.open"}
+{"level":30,"time":1795150033084,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"8107a630-9f38-4f64-b032-19142f141721","msg":"session.open"}
+{"level":30,"time":1795150038085,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"e99a03fa-bb69-44f9-9788-fce522aae980","msg":"session.open"}
+{"level":30,"time":1795150043084,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"60e3562d-9643-4523-a658-9d2dde76e291","msg":"session.open"}
+{"level":30,"time":1795150048085,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"594867c0-82df-4c17-8730-6e36dec5dcad","msg":"session.open"}
+{"level":30,"time":1795150053088,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"eda4a913-957c-48eb-b04e-376b9561813b","msg":"session.open"}
+{"level":30,"time":1795150058091,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"40d19e35-f96e-47df-8ec8-22476a0f8d26","msg":"session.open"}
+{"level":30,"time":1795150063089,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"0c630cf3-05f5-4d9c-99c3-8c987f6eab1d","msg":"session.open"}
+{"level":30,"time":1795150068092,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"6ce2b646-19f3-4b0c-b173-65c565b75fb0","msg":"session.open"}
+{"level":30,"time":1795150073106,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"60364710-2351-450d-8a66-fb75c0d383d4","msg":"session.open"}
+{"level":30,"time":1795150078094,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"7996fd35-5a60-42ca-8177-16f3eff47f02","msg":"session.open"}
+{"level":30,"time":1795150083098,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"ed6e6d89-fe42-4ae7-abd1-9ff530cda6a0","msg":"session.open"}
+{"level":30,"time":1795150088096,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"2a2d05ab-759e-4fc7-85a0-1a4cf2e65ae5","msg":"session.open"}
+{"level":30,"time":1795150093093,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"c2b37a0a-de08-486e-a25f-6c03efa7c21a","msg":"session.open"}
+{"level":30,"time":1795150098103,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"b2eba7ad-14d0-4bb8-9059-ca27297ab7d6","msg":"session.open"}
+{"level":30,"time":1795150103098,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"98c55acd-8dd1-4ae2-93ac-6df23255d048","msg":"session.open"}
+{"level":30,"time":1795150108100,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"59711008-6a64-4a34-b3ab-a4dd6f8f346f","msg":"session.open"}
+{"level":30,"time":1795150113100,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"a3c84e3a-5b80-4925-9f92-2b7d186f825d","msg":"session.open"}
+{"level":30,"time":1795150118101,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"0564ec5f-eb76-4114-930e-3c3705932c5d","msg":"session.open"}
+{"level":30,"time":1795150123104,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"f915dd51-d3db-458c-ad89-ff6dcc825d05","msg":"session.open"}
+{"level":30,"time":1795150128104,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"7024b0ed-4cfa-4c3d-932f-ec06a56d525c","msg":"session.open"}
+{"level":30,"time":1795150133105,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"0e2b5795-4551-4fbe-83a4-c06feb21208c","msg":"session.open"}
+{"level":30,"time":1795150138114,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"df4d0f17-c357-41d2-9d14-999d27511c81","msg":"session.open"}
+{"level":30,"time":1795150143106,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"a506eff5-7b17-4280-9b15-272ea718bc89","msg":"session.open"}
+{"level":30,"time":1795150148107,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"d4329b53-1cc2-48c8-b60e-2883882e2b54","msg":"session.open"}
+{"level":30,"time":1795150153108,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"f67e4fb2-5988-4f97-8838-bf909a121fd8","msg":"session.open"}
+{"level":30,"time":1795150158109,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"eaba0ee4-cefd-4b13-87e3-75d6109e146e","msg":"session.open"}
+{"level":30,"time":1795150163110,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"8c72c0e4-0655-440a-8818-e754a0d0aa6f","msg":"session.open"}
+{"level":30,"time":1795150168111,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"3b4afaa9-5b1c-410b-a8e4-325598caf1da","msg":"session.open"}
+{"level":30,"time":1795150173114,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"265f8939-09bd-42ff-a56d-cf578de0d0c6","msg":"session.open"}
+{"level":30,"time":1795150178114,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"0426595c-c82d-41ce-850e-91f9e2413329","msg":"session.open"}
+{"level":30,"time":1795150183120,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"587f0ec3-1164-4f58-83f0-cb6b3110d7d2","msg":"session.open"}
+{"level":30,"time":1795150188119,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"603e088a-3425-4123-8862-6cd297192ca8","msg":"session.open"}
+{"level":30,"time":1795150193125,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"84ebdecf-036a-4c1f-a763-e901de55798a","msg":"session.open"}
+{"level":30,"time":1795150198129,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"18094120-a022-47dc-9094-1550159447a2","msg":"session.open"}
+{"level":30,"time":1795150203122,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"99116523-8345-4494-a19a-fcc731cd6b37","msg":"session.open"}
+{"level":30,"time":1795150208128,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"0e15eda9-85a6-457e-85ae-e21dd1c7f992","msg":"session.open"}
+{"level":30,"time":1795150213127,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"9b1af007-fb0c-4a62-9468-f907474522bc","msg":"session.open"}
+{"level":30,"time":1795150218144,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"5054f85e-c8d5-4374-bbc8-b9d838959ced","msg":"session.open"}
+{"level":30,"time":1795150223163,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"a6623d1c-c40e-4cc4-b7f9-77e67939492b","msg":"session.open"}
+{"level":30,"time":1795150228136,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"a209cf1b-2a4d-4e2d-a03c-b0b6b822dc3e","msg":"session.open"}
+{"level":30,"time":1795150233139,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"5654e433-401b-4865-8bd9-c2160702f9f1","msg":"session.open"}
+{"level":30,"time":1795150238136,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"8f1754d2-3790-411f-89c8-dfc8f1e88484","msg":"session.open"}
+{"level":30,"time":1795150243136,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"ca0fa516-9b47-4d6b-9fc9-573defa9fbfc","msg":"session.open"}
+{"level":30,"time":1795150248135,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"7b32634a-7896-4777-a6b9-1b56d470d102","msg":"session.open"}
+{"level":30,"time":1795150253135,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"2d22d2be-e98c-40ff-93d9-ac0e83201a14","msg":"session.open"}
+{"level":30,"time":1795150258136,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"fc18e6bc-4c60-4457-940d-0b604f588e13","msg":"session.open"}
+{"level":30,"time":1795150263141,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"077a1179-a979-4806-9ff0-6334f6bfd447","msg":"session.open"}
+{"level":30,"time":1795150268136,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"dbcc2a9a-bef1-4679-a776-295e442f1c47","msg":"session.open"}
+{"level":30,"time":1795150273139,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"a260bc36-9315-4a0d-a8a7-7078d40be4db","msg":"session.open"}
+{"level":30,"time":1795150278137,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"75048b72-b05b-4390-8618-f11784d3c433","msg":"session.open"}
+{"level":30,"time":1795150283141,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"22c589b6-2737-4e50-a896-01f76affdb4b","msg":"session.open"}
+{"level":30,"time":1795150288142,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"a5530ccc-cac9-4992-83b7-02bff6fbc586","msg":"session.open"}
+{"level":30,"time":1795150293144,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"39271cd7-cb94-4999-b940-97f9c80c11ee","msg":"session.open"}
+{"level":30,"time":1795150298146,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"5b82b48f-3ffb-4318-ba9c-169d41db321a","msg":"session.open"}
+{"level":30,"time":1795150303148,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"57a67c6e-3d30-4e73-a664-6ace668d8023","msg":"session.open"}
+{"level":30,"time":1795150308152,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"703273af-c697-48d0-b5a2-49629f51f849","msg":"session.open"}
+{"level":30,"time":1795150313149,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"840340ac-0afb-4ad4-9c98-6d4aa0c66c6e","msg":"session.open"}
+{"level":30,"time":1795150318154,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"9555fbbd-3579-4a28-8079-6e231a93a3c8","msg":"session.open"}
+{"level":30,"time":1795150323151,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"ddf68038-bb38-4c34-ab67-581a85ff4733","msg":"session.open"}
+{"level":30,"time":1795150328152,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"a83ff146-0f98-4286-b10f-d7c611949d41","msg":"session.open"}
+{"level":30,"time":1795150333153,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"c932b546-236d-4b91-9578-b4bf5fc6347f","msg":"session.open"}
+{"level":30,"time":1795150338161,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"1ede1171-eebc-4777-bc1f-a4b1fc142a91","msg":"session.open"}
+{"level":30,"time":1795150343158,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"c5942f5e-beaf-48e8-b903-4db54b7e5b93","msg":"session.open"}
+{"level":30,"time":1795150348160,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"54790e2a-388f-4996-9d4b-0315e88c6f9c","msg":"session.open"}
+{"level":30,"time":1795150353159,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"3d45bb20-2dad-459d-bf1a-2b7fdbc92abd","msg":"session.open"}
+{"level":30,"time":1795150358158,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"a1fe276b-0159-4ebc-9cea-2aa86ab130bb","msg":"session.open"}
+{"level":30,"time":1795150363159,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"7133c628-d715-4ee7-bd56-09eb6254c3ab","msg":"session.open"}
+{"level":30,"time":1795150368165,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"1b2c8389-abdc-4c49-8e32-dc869ff9644b","msg":"session.open"}
+{"level":30,"time":1795150373167,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"f1295f80-b3cf-400f-94a9-ff8e8fa0d742","msg":"session.open"}
+{"level":30,"time":1795150378168,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"241179f3-b73d-4546-af18-7e5b471410a2","msg":"session.open"}
+{"level":30,"time":1795150383171,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"a93f7990-96a7-4f32-b2fa-9480461f125f","msg":"session.open"}
+{"level":30,"time":1795150388169,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"ff1764a7-3983-474c-834a-005c0b808120","msg":"session.open"}
+{"level":30,"time":1795150393184,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"42b1d86a-1e36-4bb0-8124-a35f87c7d5eb","msg":"session.open"}
+{"level":30,"time":1795150398172,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"0b6cc120-a183-4d02-bc71-b60e897ce688","msg":"session.open"}
+{"level":30,"time":1795150403173,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"8a565731-d9cd-43d5-817d-82062a6f33d7","msg":"session.open"}
+{"level":30,"time":1795150408174,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"914c2f12-29a6-4a7b-95da-e42da30b4b09","msg":"session.open"}
+{"level":30,"time":1795150413172,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"616b33f5-34fb-4f96-a2cf-b2c6058fa858","msg":"session.open"}
+{"level":30,"time":1795150418180,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"cfb92573-dcd0-4f86-8448-60941fb492d1","msg":"session.open"}
+{"level":30,"time":1795150423186,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"d768d68d-9e01-43be-b509-f02d8702b8d5","msg":"session.open"}
+{"level":30,"time":1795150428177,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"ad40f290-e94a-4052-ba6f-259ca25595b6","msg":"session.open"}
+{"level":30,"time":1795150433181,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"f05c429b-d2f9-40f7-a06d-d9d3e37c58cd","msg":"session.open"}
+{"level":30,"time":1795150438180,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"76511ed8-36ce-4d96-85be-75b0a9953f2c","msg":"session.open"}
+{"level":30,"time":1795150443182,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"02dffe74-1262-4c36-a4fc-38062be642e8","msg":"session.open"}
+{"level":30,"time":1795150448179,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"20a0a11b-3ca8-4964-96bb-636aad33eb9e","msg":"session.open"}
+{"level":30,"time":1795150453197,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"99930f47-5759-4578-9ea2-39928d6995f7","msg":"session.open"}
+{"level":30,"time":1795150458183,"pid":249,"hostname":"1bc50a7b8aeb","sessionId":"394c3ed3-d18c-487b-bb9a-b969996dbc75","msg":"session.open"}
+

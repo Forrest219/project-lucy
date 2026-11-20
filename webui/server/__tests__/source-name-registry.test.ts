@@ -132,6 +132,29 @@ describe("allocateSourceNames", () => {
     expect(a.get("alpha")).toBe("alpha");
     expect(a.get("zebra")).toBe("zebra");
   });
+
+  it("R1: reserves every valid old alias before allocating names for newly scanned tables", () => {
+    const registry = registryWith("hive-1", [
+      { schema: "weather", tables: { zebra: "weather.zebra" } },
+      { schema: "ods", tables: { ods_zebra: "ods.zebra" } }
+    ]);
+    for (const input of [["zebra", "ods_zebra"], ["ods_zebra", "zebra"]]) {
+      const result = allocateSourceNames("ods", input, registry);
+      expect(result.get("zebra")).toBe("ods_zebra");
+      expect(result.get("ods_zebra")).toBe("ods_ods_zebra");
+    }
+  });
+
+  it("R2: preserves physical identifier case while comparing only source names case-insensitively", () => {
+    const registry = registryWith("hive-1", [
+      { schema: "weather", tables: { city: "weather.city" } },
+      { schema: "ods", tables: { legacy_city: "ods.City" } }
+    ]);
+    const result = allocateSourceNames("ods", ["City", "city"], registry);
+    expect(result.size).toBe(2);
+    expect(result.get("City")).toBe("legacy_city");
+    expect(result.get("city")).toBe("ods_city");
+  });
 });
 
 describe("findSourceNameConflicts", () => {

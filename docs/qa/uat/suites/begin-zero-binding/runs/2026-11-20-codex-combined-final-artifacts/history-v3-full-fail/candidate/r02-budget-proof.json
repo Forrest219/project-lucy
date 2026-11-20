@@ -1,0 +1,40 @@
+{
+  "before": {
+    "scope_key": "bq:uat_zb_a|sha256:093664f81e92:r02",
+    "started_at": 1795149630414,
+    "origin_started_at": 1795149630414,
+    "calls": 1,
+    "continuations": 0,
+    "attempts": 1,
+    "peak_concurrency": 1,
+    "current_concurrency": 0,
+    "updated_at": 1795149631275,
+    "busy_ms": 803.4172510000008,
+    "round": 0,
+    "turn_id": null,
+    "window_id": 0,
+    "pending_token": null,
+    "presented_token": null,
+    "archived_busy_json": "{}"
+  },
+  "after": {
+    "scope_key": "bq:uat_zb_a|sha256:093664f81e92:r02",
+    "started_at": 1795149630414,
+    "origin_started_at": 1795149630414,
+    "calls": 2,
+    "continuations": 0,
+    "attempts": 2,
+    "peak_concurrency": 1,
+    "current_concurrency": 0,
+    "updated_at": 1795149632982,
+    "busy_ms": 1489.7095840000002,
+    "round": 0,
+    "turn_id": null,
+    "window_id": 0,
+    "pending_token": null,
+    "presented_token": null,
+    "archived_busy_json": "{}"
+  },
+  "bindingBefore": {},
+  "bindingAfter": {}
+}

@@ -1,0 +1,93 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 2.986,
+  "body": {
+    "ok": true,
+    "data": {
+      "total": 1,
+      "projection": {
+        "complete": true,
+        "cursor": 669,
+        "latestSeq": 669,
+        "lag": 0,
+        "delayMs": 0
+      },
+      "entries": [
+        {
+          "id": 163,
+          "eventType": "call",
+          "ts": "2026-11-20T05:11:16.242Z",
+          "userId": "uat_zb_a",
+          "tokenLabel": "isolated-a",
+          "tokenHashPrefix": "sha256:b29968cc1750",
+          "lucySessionId": "persona-1",
+          "accessGrade": "query",
+          "turnAttributionMode": "unassigned",
+          "turnAttributionConfidence": "none",
+          "clientIp": "172.26.0.1",
+          "userAgent": "Python-urllib/3.9",
+          "tool": "lucy_query",
+          "tables": [
+            "uat.uat_begin_zero_orders"
+          ],
+          "argsSummary": {
+            "connectionId": "uat-mysql",
+            "measures": [
+              "uat_begin_zero_orders.order_count",
+              "uat_begin_zero_orders.amount_sum"
+            ]
+          },
+          "queryHash": "d8fc49ed6cd4e5a51ef0e49f51e91cf924c827e688570aa3cd0d8bbdd52a54f3",
+          "queryLength": 183,
+          "queryOperation": "select",
+          "generatedSql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100",
+          "outcome": "ok",
+          "durationMs": 564,
+          "responseBytes": 3498,
+          "responseRowCount": 1,
+          "responseColumnCount": 2,
+          "responseTruncated": false,
+          "requestId": "167",
+          "traceId": "trace_1a88d3a7-2ddc-4589-8953-39b604614b9d",
+          "roleIds": [
+            "a"
+          ],
+          "permissionSnapshotHash": "cabeefd9a92aa79371f955b7401157c5e1c4b41916d1447f1f52daf363c8db55",
+          "effectiveTablesCount": 1,
+          "decisionReason": "allowed",
+          "policyVersion": "110b1114c4c75acaa2fff2c1f7755e84cb0761d9c753d0e31f9cc1534602090a",
+          "capabilityDigest": "9fba8fd3704486cd",
+          "usageSlowCall": false,
+          "primaryStatus": "succeeded",
+          "executionStatus": "succeeded",
+          "authorizationStatus": "allowed",
+          "associationStatus": "unassigned",
+          "deliveryStatus": "unknown",
+          "nullReason": "not_applicable",
+          "usabilityStatus": "usable"
+        }
+      ],
+      "authFailureCount": 0,
+      "summary": {
+        "protocolCalls": 0,
+        "businessCalls": 1,
+        "deniedCalls": 0,
+        "dataBearingCalls": 1,
+        "primaryStatus": {
+          "succeeded": 1,
+          "failed": 0,
+          "denied": 0,
+          "budget_stopped": 0,
+          "cancelled": 0,
+          "timeout": 0,
+          "indeterminate": 0,
+          "unknown": 0
+        },
+        "primaryStatusClosed": true,
+        "legacyOutcome": {
+          "ok": 1
+        }
+      }
+    }
+  }
+}

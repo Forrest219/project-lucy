@@ -321,7 +321,7 @@ describe("DEP-01–11 dependency matrix (digest oracle)", () => {
       lastSeen: "2026-11-19T00:00:00.000Z"
     } as YamlUser & { usageCallsLast7d: number; lastSeen: string };
     expect(computeAgentObjectDigest(clean)).toBe(computeAgentObjectDigest(withStats));
-    expect(stripAgentDisplayOnlyFields(withStats as Record<string, unknown>)).not.toHaveProperty("lastSeen");
+    expect(stripAgentDisplayOnlyFields(withStats)).not.toHaveProperty("lastSeen");
   });
 
   it("DEP-10: canonicalizeWritableValue keeps unknown fields", () => {

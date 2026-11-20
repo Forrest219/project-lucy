@@ -1,0 +1,86 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/webui
+
+ ❯ server/__tests__/schema-structure.test.ts (14 tests | 3 failed) 35ms
+     × R2: uppercase physical names use allocated keys (namesOnly=false) 4ms
+     × R2: uppercase physical names use allocated keys (namesOnly=true) 1ms
+     × R2: case-distinct physical tables remain separate with unique semantic names 2ms
+ ❯ server/__tests__/source-name-registry.test.ts (12 tests | 2 failed) 24ms
+     × R1: reserves every valid old alias before allocating names for newly scanned tables 2ms
+     × R2: preserves physical identifier case while comparing only source names case-insensitively 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  server/__tests__/schema-structure.test.ts > previewSchemaStructure source-name allocation (P1-64) > R2: uppercase physical names use allocated keys (namesOnly=false)
+ FAIL  server/__tests__/schema-structure.test.ts > previewSchemaStructure source-name allocation (P1-64) > R2: uppercase physical names use allocated keys (namesOnly=true)
+TypeError: Cannot read properties of undefined (reading 'table')
+ ❯ server/__tests__/schema-structure.test.ts:314:32
+    312|     );
+    313|     const doc = parse(result.yaml);
+    314|     expect(doc.tables.ods_City.table).toBe("ods.City");
+       |                                ^
+    315|     expect(doc.tables.City).toBeUndefined();
+    316|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  server/__tests__/schema-structure.test.ts > previewSchemaStructure source-name allocation (P1-64) > R2: case-distinct physical tables remain separate with unique semantic names
+AssertionError: expected 1 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ server/__tests__/schema-structure.test.ts:324:75
+    322|     const entries = Object.entries(parse(result.yaml).tables) as Array…
+    323|     expect(entries.map(([, definition]) => definition.table).sort()).t…
+    324|     expect(new Set(entries.map(([source]) => source.toLowerCase())).si…
+       |                                                                           ^
+    325|   });
+    326|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  server/__tests__/source-name-registry.test.ts > allocateSourceNames > R1: reserves every valid old alias before allocating names for newly scanned tables
+AssertionError: expected 'ods_zebra_2' to be 'ods_zebra' // Object.is equality
+
+Expected: "ods_zebra"
+Received: "ods_zebra_2"
+
+ ❯ server/__tests__/source-name-registry.test.ts:143:35
+    141|     for (const input of [["zebra", "ods_zebra"], ["ods_zebra", "zebra"…
+    142|       const result = allocateSourceNames("ods", input, registry);
+    143|       expect(result.get("zebra")).toBe("ods_zebra");
+       |                                   ^
+    144|       expect(result.get("ods_zebra")).toBe("ods_ods_zebra");
+    145|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  server/__tests__/source-name-registry.test.ts > allocateSourceNames > R2: preserves physical identifier case while comparing only source names case-insensitively
+AssertionError: expected 1 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ server/__tests__/source-name-registry.test.ts:154:25
+    152|     ]);
+    153|     const result = allocateSourceNames("ods", ["City", "city"], regist…
+    154|     expect(result.size).toBe(2);
+       |                         ^
+    155|     expect(result.get("City")).toBe("legacy_city");
+    156|     expect(result.get("city")).toBe("ods_city");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  5 failed | 21 passed (26)
+   Start at  11:20:18
+   Duration  837ms (transform 317ms, setup 129ms, import 501ms, tests 59ms, environment 0ms)
+

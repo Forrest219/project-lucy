@@ -1,0 +1,57 @@
+{
+  "httpStatus": 400,
+  "elapsedMs": 10,
+  "body": {
+    "ok": false,
+    "error": {
+      "code": "DUPLICATE_SOURCE_NAME",
+      "message": "短名「shared」在最终集合中冲突（物理表：race_a.city、race_b.city）。请重新扫描该 Schema，或将冲突短名改为「race_b_city」后再上传。"
+    },
+    "data": {
+      "validation": {
+        "valid": false,
+        "connectionId": "hive-1",
+        "schema": "race_b",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/race_b.yaml",
+        "originalFilename": "race_b.yaml",
+        "sizeBytes": 92,
+        "sha256": "2b710437149a5bfa1765db3424f82c5e7742ce6e13229207cbe4ad0b21d4581a",
+        "errors": [
+          {
+            "code": "DUPLICATE_SOURCE_NAME",
+            "message": "短名「shared」在最终集合中冲突（物理表：race_a.city、race_b.city）。请重新扫描该 Schema，或将冲突短名改为「race_b_city」后再上传。"
+          }
+        ],
+        "warnings": [],
+        "tableNames": [
+          "shared"
+        ],
+        "tables": 1,
+        "sourceNameConflicts": [
+          {
+            "sourceName": "shared",
+            "entries": [
+              {
+                "targetPath": "hive-1/_schema/race_a.yaml",
+                "schema": "race_a",
+                "physicalTable": "race_a.city",
+                "sourceName": "shared"
+              },
+              {
+                "targetPath": "hive-1/_schema/race_b.yaml",
+                "schema": "race_b",
+                "physicalTable": "race_b.city",
+                "sourceName": "shared"
+              }
+            ],
+            "involvesCandidate": true,
+            "suggestedSourceName": "race_b_city"
+          }
+        ],
+        "exists": false
+      }
+    }
+  }
+}

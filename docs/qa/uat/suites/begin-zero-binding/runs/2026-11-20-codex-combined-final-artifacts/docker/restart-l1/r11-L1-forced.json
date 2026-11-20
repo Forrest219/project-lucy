@@ -1,0 +1,21 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 6.567,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "本次问询的口径绑定状态不可信，本次开题未提交。"
+        }
+      ],
+      "data": {
+        "reason": "caliber_binding_unresolved",
+        "trace": "trace_9b0f2e14-3178-4ef5-b510-d17e3f3247d2"
+      }
+    }
+  }
+}

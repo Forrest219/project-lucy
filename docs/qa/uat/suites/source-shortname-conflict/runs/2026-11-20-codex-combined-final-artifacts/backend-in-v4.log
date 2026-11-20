@@ -1,0 +1,31 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/app/webui[39m
+
+ [32m✓[39m server/__tests__/source-ambiguity-gate.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 280[2mms[22m[39m
+ [32m✓[39m server/__tests__/caliber-binding.test.ts [2m([22m[2m64 tests[22m[2m)[22m[33m 1358[2mms[22m[39m
+     [33m[2m✓[22m[39m SC-29：D11 写入前改／删／降 draft／依赖失败；generation 不变 → 核验失败；旧 Session 不变；续查仍按快照 [33m 322[2mms[22m[39m
+ [32m✓[39m server/__tests__/question-budget-scope-identity.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 1423[2mms[22m[39m
+     [33m[2m✓[22m[39m SC-04 restores the cumulative state and the attribution after a real proxy restart [33m 1417[2mms[22m[39m
+ [32m✓[39m server/__tests__/begin-hide-inactive.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 1724[2mms[22m[39m
+     [33m[2m✓[22m[39m tools/list 无 lucy_begin_question（D1） [33m 359[2mms[22m[39m
+ [32m✓[39m server/__tests__/caliber-binding-participation.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 188[2mms[22m[39m
+[90mstderr[2m | server/__tests__/caliber-binding-proxy.test.ts[2m > [22m[2mP0-1 Proxy 口径绑定门禁[2m > [22m[2mSC-17a：① 失败 → 仍 never_begun，查询不受绑定约束
+[22m[39m[lucy-proxy] failed to write conversation turn Error: turn write failed
+    at [90m/app/webui/[39mserver/__tests__/caliber-binding-proxy.test.ts:432:81
+    at Mock [90m(file:///app/webui/[39mnode_modules/[4m@vitest/spy[24m/dist/index.js:332:34[90m)[39m
+    at [90m/app/webui/[39mserver/proxy/mcp-proxy.ts:6199:19
+
+[90mstderr[2m | server/__tests__/caliber-binding-proxy.test.ts[2m > [22m[2mP0-1 Proxy 口径绑定门禁[2m > [22m[2mSC-17b：失败 begin → 旧 committed 状态不变（仍受旧绑定约束）
+[22m[39m[lucy-proxy] failed to write conversation turn Error: turn write failed
+    at [90m/app/webui/[39mserver/__tests__/caliber-binding-proxy.test.ts:453:83
+    at Mock [90m(file:///app/webui/[39mnode_modules/[4m@vitest/spy[24m/dist/index.js:332:34[90m)[39m
+    at [90m/app/webui/[39mserver/proxy/mcp-proxy.ts:6199:19
+
+ [32m✓[39m server/__tests__/caliber-binding-proxy.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 1729[2mms[22m[39m
+ [32m✓[39m server/__tests__/budget-state-sqlite-contention.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 429[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m162 passed[39m[22m[90m (162)[39m
+[2m   Start at [22m 05:03:06
+[2m   Duration [22m 9.19s[2m (transform 1.52s, setup 493ms, import 1.11s, tests 7.13s, environment 0ms)[22m
+

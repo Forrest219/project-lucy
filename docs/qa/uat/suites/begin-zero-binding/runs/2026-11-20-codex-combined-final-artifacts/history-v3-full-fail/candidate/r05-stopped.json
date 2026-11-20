@@ -1,0 +1,16 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 37.904,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 123,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"reason\":\"question_budget_exhausted\",\"partial\":true,\"continueToken\":\"[REDACTED_CONTINUATION]\",\"continuable\":true}"
+        }
+      ]
+    }
+  }
+}

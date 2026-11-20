@@ -1,0 +1,412 @@
+{
+  "startedAt": "2026-11-20T03:45:39.224277+00:00",
+  "mode": "verify",
+  "containers": [
+    "lucy-snc-8f6c5d-app",
+    "lucy-snc-8f6c5d-db"
+  ],
+  "network": "lucy-snc-8f6c5d",
+  "imageTag": "project-lucy:p164-final-fix",
+  "cases": {
+    "UAT-SNC-R0": {
+      "status": "PASS",
+      "image": "sha256:d7c23943eba33c9f13405c80e18e45661842c175eeb61b97de37d84c5cebb90f linux/arm64",
+      "hashesMatched": true
+    },
+    "UAT-SNC-12": {
+      "status": "PASS",
+      "summary": {
+        "status": "PASS",
+        "headed": true,
+        "webui": "http://127.0.0.1:56610",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "measurements": [
+          {
+            "label": "whitelist-success",
+            "kind": "navigation",
+            "primaryReadyMs": 124,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "whitelist-success",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 1594,
+            "apiMs": 1308,
+            "httpStatus": 200,
+            "runtimeAck": true,
+            "issueReasons": [],
+            "feedback": "启用表范围已保存，本地目录已刷新。",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-success",
+            "kind": "navigation",
+            "primaryReadyMs": 128,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-success",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 2071,
+            "apiMs": 2007,
+            "httpStatus": 200,
+            "runtimeAck": true,
+            "issueReasons": [],
+            "feedback": "连接已成功创建并保存",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "cleanup-success",
+            "kind": "fixture-cleanup",
+            "httpStatus": 200
+          },
+          {
+            "label": "whitelist-unconfirmed",
+            "kind": "navigation",
+            "primaryReadyMs": 134,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "whitelist-unconfirmed",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 1593,
+            "apiMs": 1313,
+            "httpStatus": 200,
+            "runtimeAck": false,
+            "issueReasons": [
+              "source_map_compile_failed:duplicate_source_name:hive-1:city"
+            ],
+            "feedback": "启用表范围已写入，策略运行态未确认：Source Map 编译失败：source_map_compile_failed:duplicate_source_name:hive-1:city",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-unconfirmed",
+            "kind": "navigation",
+            "primaryReadyMs": 83,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-unconfirmed",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 2258,
+            "apiMs": 2179,
+            "httpStatus": 200,
+            "runtimeAck": false,
+            "issueReasons": [
+              "source_map_compile_failed:duplicate_source_name:hive-1:city"
+            ],
+            "feedback": "连接已写入磁盘，策略运行态未确认",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "cleanup-unconfirmed",
+            "kind": "fixture-cleanup",
+            "httpStatus": 200
+          },
+          {
+            "label": "whitelist-recovered",
+            "kind": "navigation",
+            "primaryReadyMs": 80,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "whitelist-recovered",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 1562,
+            "apiMs": 1292,
+            "httpStatus": 200,
+            "runtimeAck": true,
+            "issueReasons": [],
+            "feedback": "启用表范围已保存，正在刷新本地目录...",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-recovered",
+            "kind": "navigation",
+            "primaryReadyMs": 91,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-recovered",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 2804,
+            "apiMs": 2703,
+            "httpStatus": 200,
+            "runtimeAck": true,
+            "issueReasons": [],
+            "feedback": "连接已成功创建并保存",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "cleanup-recovered",
+            "kind": "fixture-cleanup",
+            "httpStatus": 200
+          }
+        ],
+        "consoleErrors": [],
+        "browserVersion": "157.0.8103.79",
+        "loginPayloadMatches": {
+          "adminId": true,
+          "password": true
+        },
+        "loginStatus": 200
+      }
+    }
+  },
+  "steps": [
+    {
+      "step": "bootstrap",
+      "httpStatus": 200,
+      "cookieIssued": true
+    },
+    {
+      "step": "case-UAT-SNC-R0",
+      "status": "PASS",
+      "image": "sha256:d7c23943eba33c9f13405c80e18e45661842c175eeb61b97de37d84c5cebb90f linux/arm64",
+      "hashesMatched": true
+    },
+    {
+      "step": "scan-weather",
+      "httpStatus": 200,
+      "tableCount": 1,
+      "yamlHead": "tables:\n  city:\n    table: weather.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    {
+      "step": "browser-seed-weather-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "scan-ods",
+      "httpStatus": 200,
+      "tableCount": 2,
+      "yamlHead": "tables:\n  ods_city:\n    table: ods.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n  ods_zebra:\n    table: ods.ods_zebra\n    col"
+    },
+    {
+      "step": "browser-seed-ods-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "browser-seed-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "written": true,
+      "policyRuntimeAck": true,
+      "runtimeAck": true,
+      "policyRuntimeIssues": []
+    },
+    {
+      "step": "case-UAT-SNC-12",
+      "status": "PASS",
+      "summary": {
+        "status": "PASS",
+        "headed": true,
+        "webui": "http://127.0.0.1:56610",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "measurements": [
+          {
+            "label": "whitelist-success",
+            "kind": "navigation",
+            "primaryReadyMs": 124,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "whitelist-success",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 1594,
+            "apiMs": 1308,
+            "httpStatus": 200,
+            "runtimeAck": true,
+            "issueReasons": [],
+            "feedback": "启用表范围已保存，本地目录已刷新。",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-success",
+            "kind": "navigation",
+            "primaryReadyMs": 128,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-success",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 2071,
+            "apiMs": 2007,
+            "httpStatus": 200,
+            "runtimeAck": true,
+            "issueReasons": [],
+            "feedback": "连接已成功创建并保存",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "cleanup-success",
+            "kind": "fixture-cleanup",
+            "httpStatus": 200
+          },
+          {
+            "label": "whitelist-unconfirmed",
+            "kind": "navigation",
+            "primaryReadyMs": 134,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "whitelist-unconfirmed",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 1593,
+            "apiMs": 1313,
+            "httpStatus": 200,
+            "runtimeAck": false,
+            "issueReasons": [
+              "source_map_compile_failed:duplicate_source_name:hive-1:city"
+            ],
+            "feedback": "启用表范围已写入，策略运行态未确认：Source Map 编译失败：source_map_compile_failed:duplicate_source_name:hive-1:city",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-unconfirmed",
+            "kind": "navigation",
+            "primaryReadyMs": 83,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-unconfirmed",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 2258,
+            "apiMs": 2179,
+            "httpStatus": 200,
+            "runtimeAck": false,
+            "issueReasons": [
+              "source_map_compile_failed:duplicate_source_name:hive-1:city"
+            ],
+            "feedback": "连接已写入磁盘，策略运行态未确认",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "cleanup-unconfirmed",
+            "kind": "fixture-cleanup",
+            "httpStatus": 200
+          },
+          {
+            "label": "whitelist-recovered",
+            "kind": "navigation",
+            "primaryReadyMs": 80,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "whitelist-recovered",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 1562,
+            "apiMs": 1292,
+            "httpStatus": 200,
+            "runtimeAck": true,
+            "issueReasons": [],
+            "feedback": "启用表范围已保存，正在刷新本地目录...",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-recovered",
+            "kind": "navigation",
+            "primaryReadyMs": 91,
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "connection-recovered",
+            "kind": "save-feedback",
+            "outcomeVisibleMs": 2804,
+            "apiMs": 2703,
+            "httpStatus": 200,
+            "runtimeAck": true,
+            "issueReasons": [],
+            "feedback": "连接已成功创建并保存",
+            "visibility": "visible",
+            "hasFocus": true
+          },
+          {
+            "label": "cleanup-recovered",
+            "kind": "fixture-cleanup",
+            "httpStatus": 200
+          }
+        ],
+        "consoleErrors": [],
+        "browserVersion": "157.0.8103.79",
+        "loginPayloadMatches": {
+          "adminId": true,
+          "password": true
+        },
+        "loginStatus": 200
+      }
+    }
+  ],
+  "image": "sha256:d7c23943eba33c9f13405c80e18e45661842c175eeb61b97de37d84c5cebb90f linux/arm64",
+  "buildRevisionAndHashes": "7e8ee88442c006d839e4fe13334f7fc45056d85e\n6871c63c2136c04e3b7e6915025f2bef88c5f353354c635df5c60a28da59f560  /app/webui/server/schema-structure.ts\n5ece1bdfaffee77d4bdb17389963831e53f10892a84e77349361494a26869933  /app/webui/server/catalog-assets.ts\n7102f243e5f247dcfe8417a48ae2b281e69e15b67dd00804fc6a62a9356f0db1  /app/webui/server/proxy/acl.ts\nf724b05921916641848ef073e2eaf4c16bce3920b8d2e23188e25d327e42e8b3  /app/webui/server/index.ts\n390de191c59030acf11c9f6b605f08949860340db5af243136f403cd269780d5  /app/webui/server/source-name-registry.ts",
+  "sourceComparison": {
+    "webui/server/schema-structure.ts": {
+      "hostSha256": "6871c63c2136c04e3b7e6915025f2bef88c5f353354c635df5c60a28da59f560",
+      "imageMatchesHost": true
+    },
+    "webui/server/catalog-assets.ts": {
+      "hostSha256": "5ece1bdfaffee77d4bdb17389963831e53f10892a84e77349361494a26869933",
+      "imageMatchesHost": true
+    },
+    "webui/server/proxy/acl.ts": {
+      "hostSha256": "7102f243e5f247dcfe8417a48ae2b281e69e15b67dd00804fc6a62a9356f0db1",
+      "imageMatchesHost": true
+    },
+    "webui/server/index.ts": {
+      "hostSha256": "f724b05921916641848ef073e2eaf4c16bce3920b8d2e23188e25d327e42e8b3",
+      "imageMatchesHost": true
+    },
+    "webui/server/source-name-registry.ts": {
+      "hostSha256": "390de191c59030acf11c9f6b605f08949860340db5af243136f403cd269780d5",
+      "imageMatchesHost": true
+    }
+  },
+  "hostGitHead": "7e8ee88442c006d839e4fe13334f7fc45056d85e",
+  "hostGitDirty": true,
+  "database": "MySQL 8.4; synthetic schemas; connection label hive-1",
+  "webui": "http://127.0.0.1:56610",
+  "mcp": "http://127.0.0.1:56611/mcp",
+  "status": "SELECTOR_12_PASS",
+  "cleanedUp": true,
+  "finishedAt": "2026-11-20T03:46:24.773647+00:00"
+}

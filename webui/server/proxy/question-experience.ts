@@ -343,7 +343,7 @@ export class QuestionBudget {
     now: number,
     continueToken?: string,
     fallbackScope?: string
-  ): { action: "allow" } | BudgetStop {
+  ): BudgetAllow | BudgetStop {
     const scopeKey = this.scopeKeyFor(turnId, fallbackScope);
     let state = this.turns.get(scopeKey);
     if (!state) {

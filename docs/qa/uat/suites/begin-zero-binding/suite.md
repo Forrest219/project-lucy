@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | Suite ID | `UAT-SUITE-BEGIN-ZERO-BINDING` |
-| 版本 / 状态 | v0.6；配对Spec／Plan v0.8；原四项与完整R已执行；判定见INDEX／最终77e2ad84跑次 |
+| 版本 / 状态 | v0.6；配对Spec／Plan v0.9；原四项与完整R已执行；判定见INDEX／最终77e2ad84跑次 |
 | 总账 / 需求 | P1-60／REQ-030-081；P0 主路径修复 |
 | 合同 / 计划 | [Spec](../../../../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md)；[Plan](../../../../plans/lucy-20261119-webui-publish-caliber-registry-repair-plan.md) |
 | 目标 | 纯 MCP 在 inactive 下看不到／不调用 begin 即可问数；合法强制 call 无副作用且不挡 query；现行权限、预算、continue 和真实强制快照不变 |

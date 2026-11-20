@@ -1,0 +1,64 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 166,
+  "body": {
+    "ok": true,
+    "data": {
+      "uploaded": true,
+      "record": {
+        "id": "up_20261120_050230_570",
+        "createdAt": "2026-11-20T05:02:30.570Z",
+        "connectionId": "hive-1",
+        "schema": "race_b",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/race_b.yaml",
+        "originalFilename": "race_b.yaml",
+        "sizeBytes": 92,
+        "sha256": "2b710437149a5bfa1765db3424f82c5e7742ce6e13229207cbe4ad0b21d4581a",
+        "tables": 1,
+        "overwritten": false,
+        "warnings": [],
+        "reloadRunId": "rel_20261120_050230_570"
+      },
+      "validation": {
+        "valid": true,
+        "connectionId": "hive-1",
+        "schema": "race_b",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/race_b.yaml",
+        "originalFilename": "race_b.yaml",
+        "sizeBytes": 92,
+        "sha256": "2b710437149a5bfa1765db3424f82c5e7742ce6e13229207cbe4ad0b21d4581a",
+        "errors": [],
+        "warnings": [],
+        "tableNames": [
+          "shared"
+        ],
+        "tables": 1,
+        "sourceNameConflicts": [],
+        "exists": false
+      },
+      "reload": {
+        "id": "rel_20261120_050230_570",
+        "status": "success",
+        "startedAt": "2026-11-20T05:02:30.570Z",
+        "finishedAt": "2026-11-20T05:02:30.574Z",
+        "durationMs": 4,
+        "requestedConnectionId": "hive-1",
+        "requestedSchema": "race_b",
+        "connections": 1,
+        "connectionIds": [
+          "hive-1"
+        ],
+        "configuredSchemas": 1,
+        "manifestSchemas": 1,
+        "tables": 1,
+        "enabledTables": 0,
+        "warnings": [],
+        "source": "static-yaml"
+      }
+    }
+  }
+}

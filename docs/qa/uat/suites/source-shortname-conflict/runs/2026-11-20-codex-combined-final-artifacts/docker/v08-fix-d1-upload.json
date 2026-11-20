@@ -1,0 +1,205 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 187,
+  "body": {
+    "ok": true,
+    "data": {
+      "uploaded": true,
+      "record": {
+        "id": "up_20261120_050718_249",
+        "createdAt": "2026-11-20T05:07:18.249Z",
+        "connectionId": "hive-1",
+        "schema": "d1",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/d1.yaml",
+        "originalFilename": "d1.yaml",
+        "sizeBytes": 83,
+        "sha256": "26c2708698e9bd4a4b504f4d51489a21c217f6d1378c4859b10a76b76e6ddef9",
+        "tables": 1,
+        "overwritten": true,
+        "warnings": [
+          {
+            "code": "TARGET_EXISTS",
+            "message": "目标文件已存在：semantic-layer/hive-1/_schema/d1.yaml"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t2」（物理表：c2.t、d2.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t3」（物理表：c3.t、d3.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t4」（物理表：c4.t、d4.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t5」（物理表：c5.t、d5.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t6」（物理表：c6.t、d6.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          }
+        ],
+        "reloadRunId": "rel_20261120_050718_249"
+      },
+      "validation": {
+        "valid": true,
+        "connectionId": "hive-1",
+        "schema": "d1",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/d1.yaml",
+        "originalFilename": "d1.yaml",
+        "sizeBytes": 83,
+        "sha256": "26c2708698e9bd4a4b504f4d51489a21c217f6d1378c4859b10a76b76e6ddef9",
+        "errors": [],
+        "warnings": [
+          {
+            "code": "TARGET_EXISTS",
+            "message": "目标文件已存在：semantic-layer/hive-1/_schema/d1.yaml"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t2」（物理表：c2.t、d2.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t3」（物理表：c3.t、d3.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t4」（物理表：c4.t、d4.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t5」（物理表：c5.t、d5.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          },
+          {
+            "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+            "message": "连接内已有与本次候选无关的短名冲突「t6」（物理表：c6.t、d6.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+          }
+        ],
+        "tableNames": [
+          "d1_t"
+        ],
+        "tables": 1,
+        "sourceNameConflicts": [
+          {
+            "sourceName": "t2",
+            "entries": [
+              {
+                "targetPath": "hive-1/_schema/c2.yaml",
+                "schema": "c2",
+                "physicalTable": "c2.t",
+                "sourceName": "t2"
+              },
+              {
+                "targetPath": "hive-1/_schema/d2.yaml",
+                "schema": "d2",
+                "physicalTable": "d2.t",
+                "sourceName": "t2"
+              }
+            ],
+            "involvesCandidate": false
+          },
+          {
+            "sourceName": "t3",
+            "entries": [
+              {
+                "targetPath": "hive-1/_schema/c3.yaml",
+                "schema": "c3",
+                "physicalTable": "c3.t",
+                "sourceName": "t3"
+              },
+              {
+                "targetPath": "hive-1/_schema/d3.yaml",
+                "schema": "d3",
+                "physicalTable": "d3.t",
+                "sourceName": "t3"
+              }
+            ],
+            "involvesCandidate": false
+          },
+          {
+            "sourceName": "t4",
+            "entries": [
+              {
+                "targetPath": "hive-1/_schema/c4.yaml",
+                "schema": "c4",
+                "physicalTable": "c4.t",
+                "sourceName": "t4"
+              },
+              {
+                "targetPath": "hive-1/_schema/d4.yaml",
+                "schema": "d4",
+                "physicalTable": "d4.t",
+                "sourceName": "t4"
+              }
+            ],
+            "involvesCandidate": false
+          },
+          {
+            "sourceName": "t5",
+            "entries": [
+              {
+                "targetPath": "hive-1/_schema/c5.yaml",
+                "schema": "c5",
+                "physicalTable": "c5.t",
+                "sourceName": "t5"
+              },
+              {
+                "targetPath": "hive-1/_schema/d5.yaml",
+                "schema": "d5",
+                "physicalTable": "d5.t",
+                "sourceName": "t5"
+              }
+            ],
+            "involvesCandidate": false
+          },
+          {
+            "sourceName": "t6",
+            "entries": [
+              {
+                "targetPath": "hive-1/_schema/c6.yaml",
+                "schema": "c6",
+                "physicalTable": "c6.t",
+                "sourceName": "t6"
+              },
+              {
+                "targetPath": "hive-1/_schema/d6.yaml",
+                "schema": "d6",
+                "physicalTable": "d6.t",
+                "sourceName": "t6"
+              }
+            ],
+            "involvesCandidate": false
+          }
+        ],
+        "exists": true
+      },
+      "reload": {
+        "id": "rel_20261120_050718_249",
+        "status": "success",
+        "startedAt": "2026-11-20T05:07:18.249Z",
+        "finishedAt": "2026-11-20T05:07:18.256Z",
+        "durationMs": 7,
+        "requestedConnectionId": "hive-1",
+        "requestedSchema": "d1",
+        "connections": 1,
+        "connectionIds": [
+          "hive-1"
+        ],
+        "configuredSchemas": 1,
+        "manifestSchemas": 1,
+        "tables": 1,
+        "enabledTables": 0,
+        "warnings": [],
+        "source": "static-yaml"
+      }
+    }
+  }
+}

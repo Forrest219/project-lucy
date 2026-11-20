@@ -45,9 +45,44 @@ TOOLS = [
 ]
 
 
+def classify_race_responses(responses):
+    """A busy response is a retry obligation, never proof of uniqueness."""
+    winners = [i for i, result in enumerate(responses)
+               if result["httpStatus"] == 200
+               and result["body"].get("ok") is True
+               and result["body"].get("data", {}).get("uploaded") is True]
+    if len(responses) != 2 or len(winners) != 1:
+        raise RuntimeError("race requires exactly one confirmed upload")
+    loser = 1 - winners[0]
+    result = responses[loser]
+    code = result["body"].get("error", {}).get("code")
+    if result["httpStatus"] == 400 and code == "DUPLICATE_SOURCE_NAME":
+        return loser, False
+    if result["httpStatus"] in (409, 500) and code == "PUBLISH_COORDINATOR_BUSY":
+        return loser, True
+    raise RuntimeError(f"unexpected race failure: HTTP {result['httpStatus']} / {code}")
+
+
+def expected_inactive_begin(results, tool):
+    """Current P1-60 contract: hidden begin rejects legacy calls without blocking query."""
+    if tool != "begin":
+        return False
+    listed = results.get("tools-list", {}).get("body", {}).get("result", {}).get("tools", [])
+    result = results.get("begin", {})
+    reply = result.get("body", {}).get("result", {})
+    return (result.get("httpStatus") == 200
+            and not result.get("body", {}).get("error")
+            and not any(item.get("name") == "lucy_begin_question" for item in listed)
+            and reply.get("isError") is True
+            and reply.get("data", {}).get("reason") == "begin_not_available")
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--mode", choices=("repro", "verify"), default="repro")
+    p.add_argument("--source-root", type=pathlib.Path, default=REPO, help="independent frozen build-input checkout for exact source comparison")
+    p.add_argument("--browser", action="store_true", help="run real foreground WebUI timing checks")
+    p.add_argument("--browser-only", action="store_true", help="debug selector 12 only; never a full suite PASS")
     return p.parse_args()
 
 
@@ -271,8 +306,12 @@ def main():
         return results
 
     def assert_probe_ok(results, label):
-        if results["tools-list"]["httpStatus"] != 200:
-            raise RuntimeError(label + " tools/list not 200")
+        for tool, result in results.items():
+            if expected_inactive_begin(results, tool):
+                step(label + "-begin-contract", {"status": "expected_inactive_rejection", "reason": "begin_not_available", "queryStillRequired": True})
+                continue
+            if result["httpStatus"] != 200 or result["body"].get("error") or result["body"].get("result", {}).get("isError"):
+                raise RuntimeError(label + " " + tool + " failed")
         if results["query"]["body"].get("result", {}).get("isError"):
             raise RuntimeError(label + " query isError")
         rows = inner(results["query"]).get("rows")
@@ -289,6 +328,24 @@ def main():
 
     def file_sha(path: pathlib.Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else ""
+
+    def run_browser():
+        login_check = request(web, "/api/auth/login", "POST", {"adminId": "repro_owner", "password": password})
+        save("browser-login-preflight.json", {"httpStatus": login_check["httpStatus"], "ok": login_check["body"].get("ok")})
+        if login_check["httpStatus"] != 200:
+            raise RuntimeError("browser synthetic login preflight failed")
+        browser_env = {**os.environ, "SNC_WEB": web, "SNC_PROJECT_DIR": str(project),
+            "SNC_ADMIN_ID": "repro_owner", "SNC_ADMIN_PASSWORD": password,
+            "SNC_DB_HOST": db, "SNC_DB_PASSWORD": dbpass, "SNC_OUT": str(out / "browser")}
+        result = subprocess.run(["node", str(REPO / "scripts/uat/source-shortname-browser.mjs")],
+            env=browser_env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        save("browser-runner.log", result.stdout + result.stderr)
+        if result.returncode:
+            raise RuntimeError("foreground browser verification failed: " + redact(result.stderr[-1600:]))
+        browser_result = json.loads((out / "browser/summary.json").read_text())
+        if browser_result.get("status") != "PASS":
+            raise RuntimeError("browser result is not PASS")
+        case("UAT-SNC-12", "PASS", {"summary": browser_result})
 
     try:
         for name in [
@@ -364,13 +421,15 @@ defaults:
         code = run(["docker", "run", "--rm", "--entrypoint", "/bin/sh", image, "-c", "cat /app/BUILD_REVISION; " + hash_cmd])
         matches = {}
         for file in SOURCE_FILES:
-            sha = hashlib.sha256((REPO / file).read_bytes()).hexdigest()
+            sha = hashlib.sha256((args.source_root.resolve() / file).read_bytes()).hexdigest()
             matches[file] = {"hostSha256": sha, "imageMatchesHost": sha in code}
         summary.update(
             {
                 "image": info,
                 "buildRevisionAndHashes": code,
                 "sourceComparison": matches,
+                "sourceReferenceRoot": str(args.source_root.resolve()),
+                "sourceReferenceKind": "live workspace" if args.source_root.resolve() == REPO else "frozen independent build inputs",
                 "hostGitHead": run(["git", "rev-parse", "HEAD"]),
                 "hostGitDirty": bool(run(["git", "status", "--porcelain"])),
                 "database": "MySQL 8.4; synthetic schemas; connection label hive-1",
@@ -397,8 +456,12 @@ defaults:
 CREATE DATABASE race_a; CREATE DATABASE race_b;
 CREATE DATABASE c1; CREATE DATABASE c2; CREATE DATABASE c3; CREATE DATABASE c4; CREATE DATABASE c5; CREATE DATABASE c6;
 CREATE DATABASE d1; CREATE DATABASE d2; CREATE DATABASE d3; CREATE DATABASE d4; CREATE DATABASE d5; CREATE DATABASE d6;
+CREATE DATABASE snc_ui_success; CREATE DATABASE snc_ui_unconfirmed; CREATE DATABASE snc_ui_recovered;
 CREATE TABLE weather.city(id INT PRIMARY KEY, name VARCHAR(50));
 CREATE TABLE ods.city(id INT PRIMARY KEY, name VARCHAR(50));
+CREATE TABLE weather.zebra(id INT PRIMARY KEY); INSERT INTO weather.zebra VALUES(1);
+CREATE TABLE ods.zebra(id INT PRIMARY KEY); INSERT INTO ods.zebra VALUES(11);
+CREATE TABLE aux.City(id INT PRIMARY KEY); INSERT INTO aux.City VALUES(31);
 CREATE TABLE aux.holder(id INT PRIMARY KEY, name VARCHAR(50));
 CREATE TABLE race_a.city(id INT PRIMARY KEY, name VARCHAR(50));
 CREATE TABLE race_b.city(id INT PRIMARY KEY, name VARCHAR(50));
@@ -409,6 +472,9 @@ INSERT INTO race_a.city VALUES(4,'race-a');
 INSERT INTO race_b.city VALUES(5,'race-b');
 CREATE USER 'lucy'@'%' IDENTIFIED BY '{dbpass}';
 GRANT SELECT, SHOW VIEW ON weather.* TO 'lucy'@'%';
+GRANT SELECT, SHOW VIEW ON snc_ui_success.* TO 'lucy'@'%';
+GRANT SELECT, SHOW VIEW ON snc_ui_unconfirmed.* TO 'lucy'@'%';
+GRANT SELECT, SHOW VIEW ON snc_ui_recovered.* TO 'lucy'@'%';
 GRANT SELECT, SHOW VIEW ON ods.* TO 'lucy'@'%';
 GRANT SELECT, SHOW VIEW ON aux.* TO 'lucy'@'%';
 GRANT SELECT, SHOW VIEW ON race_a.* TO 'lucy'@'%';
@@ -513,6 +579,16 @@ GRANT SELECT, SHOW VIEW ON d6.* TO 'lucy'@'%';
             raise RuntimeError("bootstrap failed: " + json.dumps(auth))
         step("bootstrap", {"httpStatus": auth["httpStatus"], "cookieIssued": bool(list(jar))})
         case("UAT-SNC-R0", "PASS", {"image": info, "hashesMatched": True})
+
+        if args.browser_only:
+            upload("weather", scan("weather", ["city"]), "browser-seed-weather")
+            run(["docker", "exec", "-i", db, "sh", "-c", 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot'],
+                "CREATE TABLE ods.ods_zebra(id INT PRIMARY KEY); INSERT INTO ods.ods_zebra VALUES(21),(22);")
+            upload("ods", scan("ods", ["city", "ods_zebra"]), "browser-seed-ods")
+            enabled(["weather.city", "ods.city", "ods.ods_zebra"], "browser-seed", must=True)
+            run_browser()
+            summary["status"] = "SELECTOR_12_PASS"
+            return
 
         if args.mode == "repro":
             weather = scan("weather", ["city"])
@@ -687,52 +763,45 @@ GRANT SELECT, SHOW VIEW ON d6.* TO 'lucy'@'%';
 
             # Keep aux.ods_city; weather.city; ods.ods_city_2 as current healthy set.
 
-            # 06 race: two bare city candidates for race_a / race_b
-            bare_a = "tables:\n  city:\n    table: race_a.city\n    columns:\n      - name: id\n        type: number\n"
-            bare_b = "tables:\n  city:\n    table: race_b.city\n    columns:\n      - name: id\n        type: number\n"
-            # ensure neither schema file exists so both early validates can pass
-            for s in ("race_a", "race_b"):
-                p = manifest_path(s)
-                if p.exists():
-                    p.unlink()
-            va, _ = upload("race_a", bare_a, "v06-early-a", must=False)
-            vb, _ = upload("race_b", bare_b, "v06-early-b", must=False)
-            # early validate only — delete any successful early uploads for fair race
-            for s in ("race_a", "race_b"):
-                p = manifest_path(s)
-                if p.exists():
-                    p.unlink()
-            if va["body"].get("data", {}).get("valid") is not True or vb["body"].get("data", {}).get("valid") is not True:
-                # If early already conflicts with weather city, race still meaningful between race_a/race_b once weather keeps city:
-                # both will conflict with weather — change race to unique unused name collision between themselves only.
-                # Use source key `shared` colliding across race_a/race_b without touching weather.city.
-                bare_a = "tables:\n  shared:\n    table: race_a.city\n    columns:\n      - name: id\n        type: number\n"
-                bare_b = "tables:\n  shared:\n    table: race_b.city\n    columns:\n      - name: id\n        type: number\n"
-
-            def do_upload(schema, content, prefix):
-                return upload(schema, content, prefix, must=False)
-
+            # 06: Both previews must be valid against the same empty race schemas.
+            bare_a = "tables:\n  shared:\n    table: race_a.city\n    columns:\n      - name: id\n        type: number\n"
+            bare_b = "tables:\n  shared:\n    table: race_b.city\n    columns:\n      - name: id\n        type: number\n"
+            for schema in ("race_a", "race_b"):
+                if manifest_path(schema).exists():
+                    raise RuntimeError("race fixture is not empty")
+            for schema, content in [("race_a", bare_a), ("race_b", bare_b)]:
+                preview = api("v06-early-" + schema, "/api/catalog/assets/validate", {
+                    "connectionId": "hive-1", "schema": schema, "assetKind": "schema_manifest",
+                    "filename": schema + ".yaml", "content": content,
+                })
+                if preview["body"].get("data", {}).get("valid") is not True:
+                    raise RuntimeError("race candidate was not valid before either upload")
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-                fa = ex.submit(do_upload, "race_a", bare_a, "v06-race-a")
-                fb = ex.submit(do_upload, "race_b", bare_b, "v06-race-b")
-                ra = fa.result()
-                rb = fb.result()
-            statuses = sorted([ra[1]["httpStatus"], rb[1]["httpStatus"]])
-            # one success (200) one failure (400), or one busy/409 — accept exactly one 200
-            ok_count = sum(1 for r in (ra, rb) if r[1]["httpStatus"] == 200 and r[1]["body"].get("ok") is not False)
-            if ok_count != 1:
-                case("UAT-SNC-06", "FAIL", {"reason": "expected exactly one successful upload", "a": ra[1], "b": rb[1], "statuses": statuses})
-            # final set must not contain duplicate shared/city across race schemas
-            texts = []
-            for s in ("race_a", "race_b"):
-                p = manifest_path(s)
-                if p.exists():
-                    texts.append(p.read_text())
-            if len(texts) == 2 and ("  shared:" in texts[0] and "  shared:" in texts[1]):
-                case("UAT-SNC-06", "FAIL", {"reason": "both race manifests kept shared"})
-            still6 = probe("v06", read_source="city", query_expr="COUNT(city.id)")
+                futures = [ex.submit(upload, schema, content, "v06-race-" + schema, False)
+                           for schema, content in [("race_a", bare_a), ("race_b", bare_b)]]
+                responses = [future.result()[1] for future in futures]
+            loser, busy = classify_race_responses(responses)
+            loser_schema, loser_content = [("race_a", bare_a), ("race_b", bare_b)][loser]
+            if manifest_path(loser_schema).exists():
+                raise RuntimeError("failed race candidate wrote a manifest")
+            uploads_before = api("v06-uploads-before-retry", "/api/catalog/assets/uploads", method="GET")
+            journals_before = sorted(str(p.relative_to(project)) for p in (project / ".ktx-ui/semantic-recovery-journals").glob("*.json"))
+            # Both requests have settled: the winning publisher has released its lock.
+            # A busy loser must now prove that its unchanged stale candidate is rejected.
+            payload = {"connectionId": "hive-1", "schema": loser_schema, "assetKind": "schema_manifest",
+                       "filename": loser_schema + ".yaml", "content": loser_content, "confirmOverwrite": True}
+            retry = api("v06-postwindow-retry", "/api/catalog/assets/upload", payload, must=False)
+            if retry["httpStatus"] != 400 or retry["body"].get("error", {}).get("code") != "DUPLICATE_SOURCE_NAME":
+                raise RuntimeError("stale race candidate was not rejected with DUPLICATE_SOURCE_NAME")
+            uploads_after = api("v06-uploads-after-retry", "/api/catalog/assets/uploads", method="GET")
+            if uploads_before["body"] != uploads_after["body"] or manifest_path(loser_schema).exists():
+                raise RuntimeError("rejected race retry advanced upload state")
+            if journals_before != sorted(str(p.relative_to(project)) for p in (project / ".ktx-ui/semantic-recovery-journals").glob("*.json")):
+                raise RuntimeError("rejected race retry advanced journal state")
+            still6 = probe("v06")
             assert_probe_ok(still6, "v06")
-            case("UAT-SNC-06", "PASS", {"okCount": ok_count})
+            case("UAT-SNC-06", "PASS", {"busyObserved": busy, "postWindowStatus": 400,
+                 "postWindowCode": "DUPLICATE_SOURCE_NAME", "proof": "real API contention and stale-candidate retry; controlled in-lock timing covered separately by Vitest"})
 
             # 07 ack negative: inject weather+ods both named city
             write_manifest(
@@ -798,6 +867,45 @@ GRANT SELECT, SHOW VIEW ON d6.* TO 'lucy'@'%';
             p8 = probe("v08")
             assert_probe_ok(p8, "v08")
             case("UAT-SNC-08", "PASS", {"startAck": (en8["body"].get("data") or {}).get("runtimeAck")})
+
+            # 10: An old allocated alias must never be stolen by a later new table.
+            upload("weather", scan("weather", ["city", "zebra"]), "v10-weather")
+            old_ods = scan("ods", ["city", "zebra"])
+            if "  ods_zebra:" not in old_ods:
+                raise RuntimeError("old zebra alias was not established")
+            upload("ods", old_ods, "v10-ods-before")
+            run(["docker", "exec", "-i", db, "sh", "-c", 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot'],
+                "CREATE TABLE ods.ods_zebra(id INT PRIMARY KEY); INSERT INTO ods.ods_zebra VALUES(21),(22);")
+            expanded = scan("ods", ["city", "zebra", "ods_zebra"])
+            upload("ods", expanded, "v10-ods-expanded")
+            enabled(["weather.city", "ods.city", "ods.zebra", "ods.ods_zebra"], "v10", must=True)
+            counts = []
+            for source, expected in [("ods_zebra", 1), ("ods_ods_zebra", 2)]:
+                result = mcp("v10-query-" + source, "lucy_query", {"connectionId": "hive-1", "measures": [{"expr": "COUNT(" + source + ".id)", "name": "row_count"}]})
+                payload = inner(result)
+                if not isinstance(payload, dict) or payload.get("rows") != [[expected]]:
+                    raise RuntimeError("old alias or new table returned wrong rows: " + repr(payload))
+                counts.append({"source": source, "rows": payload["rows"], "sql": payload.get("sql")})
+            case("UAT-SNC-10", "PASS", {"queries": counts})
+
+            # 11: Actual mixed-case table; verify both names-only and column scan outputs.
+            names_only = scan("aux")
+            if "  aux_City:" not in names_only or "table: aux.City" not in names_only:
+                raise RuntimeError("names-only uppercase allocation was lost")
+            upper = scan("aux", ["City"])
+            if "  aux_City:" not in upper or "table: aux.City" not in upper:
+                raise RuntimeError("uppercase allocation or physical identifier case was lost")
+            upload("aux", upper, "v11-aux")
+            enabled(["weather.city", "ods.city", "ods.zebra", "ods.ods_zebra", "aux.City"], "v11", must=True)
+            upper_query = mcp("v11-query", "lucy_query", {"connectionId": "hive-1", "measures": [{"expr": "COUNT(aux_City.id)", "name": "row_count"}]})
+            if inner(upper_query).get("rows") != [[1]]:
+                raise RuntimeError("mixed-case physical table query failed")
+            case("UAT-SNC-11", "PASS", {"result": inner(upper_query)})
+
+            if args.browser:
+                run_browser()
+            else:
+                case("UAT-SNC-12", "NOT RUN", {"reason": "--browser required for full suite verdict"})
 
             # 09 evidence rollup
             case(

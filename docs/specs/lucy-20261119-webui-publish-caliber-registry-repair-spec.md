@@ -2,18 +2,19 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能 Spec / **v0.7** / 2026-11-20 |
-| 状态 | **v0.7；终稿已确权；T1–T5 已实现并 commit**（Wave A–D；vitest **109 PASS**；demo 冒烟：tools/list 无 begin＋直调 `begin_not_available`）。预算／ACL 待商议且本条不改；OQ-3 数值待采样前冻结；测试台 NOT RUN；T6／R 另授；不入新增核心分母；≠ 功能合同收口；≠ 可上线。 |
+| 文档类型 / 版本 | 功能 Spec / **v0.9** / 2026-11-20 |
+| 状态 | v0.9；功能合同已收口（SC-01–12通过，P1-60／P1-64同一冻结候选完整复验）；预算持久化锁竞争修复纳入；本轮增量已提交；未推送／发布；不入新增核心分母；本条收口不表示可上线。 |
 | 功能编号 / 优先级 | P1-60／REQ-030-081；P0 主路径修复；沿用 P0-1 核心分母，不重复计数 |
 | 台账号 | 无；挂 0.30 产品线执行总账 |
-| 授权边界 | **T1–T5 已授权并已 commit**。**仍禁止未另授**：push；Docker／R／ZB 全真与 INDEX PASS（T6）；关闭预算、改 ACL、隐藏 continue、KTX。预算／ACL 未获变更决议（OQ-4） |
+| 授权边界 | 委托人 2026-11-20 明示授权修复最终评审 R-01–04、完整 UAT、制品取证、台账同步、Docker 重建与交付复审；不推送、不发布；不混入其他任务。 |
 | 总账与需求 | [执行总账](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) |
 | 配对 Plan | [实施计划](../plans/lucy-20261119-webui-publish-caliber-registry-repair-plan.md) |
-| 测试台 | [UAT-SUITE-BEGIN-ZERO-BINDING](../qa/uat/suites/begin-zero-binding/suite.md)；判定只见 [INDEX](../qa/uat/INDEX.md)，尚无跑次 |
+| 测试台 | [UAT-SUITE-BEGIN-ZERO-BINDING](../qa/uat/suites/begin-zero-binding/suite.md)；判定只见 [INDEX](../qa/uat/INDEX.md)；[合并候选完整R](../qa/uat/suites/begin-zero-binding/runs/2026-11-20-codex-combined-final.md) |
 | 评审依据 | [首轮决议](../reviews/2026-11-19-begin-zero-binding-review-decisions.md)；[隐藏决议](../reviews/2026-11-20-begin-hide-decision.md)；[新定位复审](../../inbox/20261120-kimi-begin-hidden-positioning-review.md) |
 | 复盘 | [测试漏检与已发现问题未独立跟进](../lessons/2026-11-19-begin-zero-binding-test-gap.md) |
 | 适用环境 | Docker 单实例单副本；纯 MCP Token，无 WebUI Session／person／attestation |
 | 既有合同 | [P0-1](lucy-20261107-question-type-caliber-binding-spec.md)；[问询审计 173](../../webui/docs/173-audit-one-question-one-inquiry-spec.md)；[问询预算 162](../../webui/docs/162-customer-query-experience-and-usage-evidence-spec.md)；[冻结预算优化 D6](lucy-20261029-question-budget-window-optimization-spec.md) |
+| 终审记录 | [同候选整包最终评审](../reviews/2026-11-20-p160-p164-combined-final-review.md)；本条功能收口，当前整包不放行用户更新。 |
 
 ## 闭口层级
 
@@ -127,14 +128,14 @@ query_or_read_source_or_explain(request):
 
 ## 6. 受影响画像
 
-事实源：[user-personas.md](../governance/user-personas.md)。下表为合同预期，未执行的补偿不是已证成；同画像按最差子面判整体。
+事实源：[user-personas.md](../governance/user-personas.md)。下表为合同预期与本次ZB-08已取得的补偿证据；同画像按最差子面判整体。
 
 | 画像 | 变更前体验 | 变更后体验 | 判定 | 依据 | 负向补偿 |
 |---|---|---|---|---|---|
 | P1 问数方 | 问数面会被可选 begin 故障影响；报告面沿现有 Live Report | inactive 隐藏 begin，N 成交；报告入口及授权不变 | 问数面 ↑／报告面 ＝，整体 ＝ | SC-01／02／12 | — |
 | P2 治理方 | 未启用绑定也需理解 begin／注册表；权限面由 Token／工具／表行规则决定 | 可信零无需补空提交；权限与预算配置不变 | 语义口径面 ↑／权限授权面 ＝，整体 ＝ | SC-03／06／07 | — |
-| P3 运维方 | 有显式上报关联，但 begin 故障影响问数 | 显式覆盖下降，以请求／trace／身份／版本定位并核恢复；交付路径不变 | 运行观察面 ↓（补偿待验）／交付运维面 ＝，整体 ↓ | SC-08／ZB-08 | 纯 MCP 下用只读调用证据定位强制 call／查询故障，解除隔离问题后同 Token 成交；未成功不收口 |
-| P4 管理层 | 可读显式／推断摘要，业务问数可受 begin 阻断 | 显式覆盖下降但分母可复算；N 业务结果可核对 | 口径质量面 ↓（补偿待验）／业务结果面 ↑，整体 ↓ | SC-08、ZB-01／08 | 管理只读摘要区分显式／推断／缺失与真实成败，不声称取得未上报原文；SC-08／ZB-08 必验 |
+| P3 运维方 | 有显式上报关联，但 begin 故障影响问数 | 显式覆盖下降，以请求／trace／身份／版本定位并核恢复；交付路径不变 | 运行观察面 ↓（补偿已验证：ZB-08）／交付运维面 ＝，整体 ↓ | SC-08／ZB-08 | 纯 MCP 下用只读调用证据定位强制 call／查询故障，解除隔离问题后同 Token 成交；未成功不收口 |
+| P4 管理层 | 可读显式／推断摘要，业务问数可受 begin 阻断 | 显式覆盖下降但分母可复算；N 业务结果可核对 | 口径质量面 ↓（补偿已验证：ZB-08）／业务结果面 ↑，整体 ↓ | SC-08、ZB-01／08 | 管理只读摘要区分显式／推断／缺失与真实成败，不声称取得未上报原文；SC-08／ZB-08 必验 |
 
 若补偿任务失败，保留下降并回治理裁决；本稿不代委托人批准无补偿损失。未命中 P1 问数面↓或 P3 交付运维面↓的专项复核，跨画像最差口径仍适用。
 
@@ -152,10 +153,10 @@ v0.5 的 OQ-2 新表／原子事务和 C1／C2 方案不再属于本条出口。
 
 - **OQ-1（闭合为复用方案）**：只复用现有凭据／注册表／BindingSession 分类，不新增参与格式或第二份计数。
 - **OQ-2（移出本条）**：预算＋有效归属原子事务、新表和 C1／C2 属未来露出合同，不是当前待实施项。
-- **OQ-3（数值待冻结）**：N 每组每轮 100 问、三轮各算 nearest-rank p95，预热与随机交错固定；实际基线、资源指纹和绝对／相对容差在采样前冻结，不得测后放宽。
+- **OQ-3（执行前已冻结）**：原c1cd67a0基线与最终77e2ad84候选，Lucy均2 CPU／2 GiB；每轮每组10问预热＋100问采样，三轮分别nearest-rank p95；A_ms＝250ms、R＝50%、随机种子60120。没有引入预算修正版对照，也未测后放宽；预算writer另行处理，原始失败保留。
 - **OQ-4（待商议但边界明确）**：预算／ACL 没有变更授权；本条不得关闭预算、隐藏 continue、修改授予表或行权限。该待议项不阻断纯隐藏与 N 修复。
 
-终稿确权与 T1–T5 开发授权已获得；实现仍须按 SC 证明。T6／R 未授权执行；测试台保持 NOT RUN，直至另授。
+终稿确权与 T1–T5 开发授权保留；委托人 2026-11-20 进一步授权 R-01–04 修复、T6／完整 R、制品取证、Docker 重建及交付复审；不推送、不发布。实际结果以测试台跑次为准。
 
 ## 9. 评审处置对照
 
@@ -203,3 +204,19 @@ New terms: 无新增产品名称。`begin_not_available` 是协议拒绝原因�
 ### Follow-up Needed
 
 真实 RC1 隐藏与强制调用兼容由 SC-12／ZB-12 验证；未来若新增管理 UI 或动态露出，另补合同。
+
+## v0.8 最终评审整改
+
+对照 [890a0394 最终评审](../reviews/2026-11-20-begin-zero-binding-final-delivery-review.md)：R-01 只读识别可证明 L0，保留 L1／U0；R-02 以现有凭据与作者状态证明可信零，兼容两种旧空摘要，不依赖 source map 编译；R-03 分类异常 fail-hidden 并清理 fallback 指导；R-04 身份／工具授权后先判断 D2，再处理业务参数。未新增凭据格式、配置开关、预算或 ACL 规则。
+
+SC-09 的授权前置不变：作者 source map 故障与生效 ACL 快照分别取证；可信零的本地 D2 不触发编译，但既有生效 ACL 编译拒绝仍先于 D2，同场 query 亦拒绝，不能冒称数据面已修复。
+
+## 并行合并候选取证记录（不属于本次77e2ad84出口）
+
+以下为另一任务的记录；预算修正未进入本次a794f7e0镜像，不可作为本次R已通过证据。原文保留。
+
+委托人续授两项同候选最终验收。完整R发现预算保存的deferred SQLite事务会与独立审计写者争用并产生SQLITE_BUSY；真实双连接反例及故障零写入回归已覆盖。仅调整保存事务取锁时机，不改变预算额度、轮次、幂等或ACL。M08对照与候选共享这一修正，消除已证实会令改前功能基线失败的共同缺陷；前瞻冻结新对照，不删原失败样本、不放宽原性能阈值。
+
+## 本次77e2ad84执行结论
+
+原四项修复已复核，R-01另补source-ambiguity第二门禁；完整Proxy反例先红后绿。最终12文件245项回归通过；同一镜像R0／01–12完整执行，12 PASS／1 FAIL。ZB-10保留预算不可用失败，委托人明确仅修原四项、预算另行处理，不把此裁决冒充整套PASS或用户更新批准。最终运行证据、镜像摘要与清理在正式跑次；未推送、未发布。

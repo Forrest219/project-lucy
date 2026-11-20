@@ -1,0 +1,45 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 7.197,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": true,
+      "validationId": "val_20261120_044117_355_924c62b6",
+      "files": [
+        {
+          "originalFilename": "uat.yaml",
+          "kind": "schemaManifest",
+          "targetPath": "semantic-layer/uat-mysql/_schema/uat.yaml",
+          "exists": true,
+          "sizeBytes": 242,
+          "sha256": "1d165b0687d61bcf69931991840658e1310db282057a4287d43f6119ac503d0e",
+          "connectionId": "uat-mysql",
+          "schema": "uat",
+          "warnings": [
+            {
+              "code": "TARGET_EXISTS",
+              "message": "目标文件已存在：semantic-layer/uat-mysql/_schema/uat.yaml",
+              "filePath": "semantic-layer/uat-mysql/_schema/uat.yaml"
+            }
+          ]
+        }
+      ],
+      "changedSources": [
+        {
+          "connectionId": "uat-mysql",
+          "sourceName": "uat_begin_zero_orders"
+        }
+      ],
+      "diff": "Index: semantic-layer/uat-mysql/_schema/uat.yaml\n===================================================================\n--- semantic-layer/uat-mysql/_schema/uat.yaml\tcurrent\n+++ semantic-layer/uat-mysql/_schema/uat.yaml\tproposed\n@@ -1,2 +1,3 @@\n {\"tables\": {\"uat_begin_zero_orders\": {\"table\": \"uat.uat_begin_zero_orders\", \"columns\": [{\"name\": \"order_id\", \"type\": \"number\", \"pk\": true}, {\"name\": \"tenant\", \"type\": \"string\"}, {\"name\": \"amount\", \"type\": \"number\"}]}}}\n # I1-first\n+# I1-second\n",
+      "warnings": [
+        {
+          "code": "TARGET_EXISTS",
+          "message": "目标文件已存在：semantic-layer/uat-mysql/_schema/uat.yaml",
+          "filePath": "semantic-layer/uat-mysql/_schema/uat.yaml"
+        }
+      ],
+      "errors": []
+    }
+  }
+}

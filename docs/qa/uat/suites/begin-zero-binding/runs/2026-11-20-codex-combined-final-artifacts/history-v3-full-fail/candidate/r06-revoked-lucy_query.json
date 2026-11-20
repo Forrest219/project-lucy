@@ -1,0 +1,12 @@
+{
+  "httpStatus": 401,
+  "elapsedMs": 2.839,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": null,
+    "error": {
+      "code": -32001,
+      "message": "Unauthorized"
+    }
+  }
+}

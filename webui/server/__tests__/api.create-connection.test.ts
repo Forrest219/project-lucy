@@ -58,7 +58,10 @@ const ktxMcpReload = vi.hoisted(() => ({
 }));
 
 const mcpRuntimeCanary = vi.hoisted(() => ({
-  runMcpRuntimeCanary: vi.fn(async () => ({
+  runMcpRuntimeCanary: vi.fn(async (): Promise<Pick<
+    Awaited<ReturnType<typeof import("../admin/mcp-runtime.js").runMcpRuntimeCanary>>,
+    "executionRuntimeAck" | "decisionReason" | "checks"
+  >> => ({
     executionRuntimeAck: false,
     decisionReason: "execution_runtime_unavailable",
     checks: [{ name: "execution_query", status: "fail" as const, detail: "no upstream in unit test" }]

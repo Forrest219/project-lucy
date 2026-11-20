@@ -1,0 +1,11 @@
+{
+  "source": "P1-64 independent archived build inputs, already validated against candidate 40104b7f",
+  "inheritedByFinal": "55007afe4923405f7bf0b1343d0dd4a7a010b3186256382a2e804dd31f01e1b0",
+  "files": {
+    "webui/server/schema-structure.ts": "6871c63c2136c04e3b7e6915025f2bef88c5f353354c635df5c60a28da59f560",
+    "webui/server/catalog-assets.ts": "5ece1bdfaffee77d4bdb17389963831e53f10892a84e77349361494a26869933",
+    "webui/server/proxy/acl.ts": "7102f243e5f247dcfe8417a48ae2b281e69e15b67dd00804fc6a62a9356f0db1",
+    "webui/server/index.ts": "f724b05921916641848ef073e2eaf4c16bce3920b8d2e23188e25d327e42e8b3",
+    "webui/server/source-name-registry.ts": "390de191c59030acf11c9f6b605f08949860340db5af243136f403cd269780d5"
+  }
+}

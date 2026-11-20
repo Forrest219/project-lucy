@@ -1,0 +1,151 @@
+{
+  "status": "PASS",
+  "headed": true,
+  "webui": "http://127.0.0.1:50148",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "measurements": [
+    {
+      "label": "whitelist-success",
+      "kind": "navigation",
+      "primaryReadyMs": 233,
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "whitelist-success",
+      "kind": "save-feedback",
+      "outcomeVisibleMs": 1528,
+      "apiMs": 1310,
+      "httpStatus": 200,
+      "runtimeAck": true,
+      "issueReasons": [],
+      "feedback": "启用表范围已保存，正在刷新本地目录...",
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "connection-success",
+      "kind": "navigation",
+      "primaryReadyMs": 139,
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "connection-success",
+      "kind": "save-feedback",
+      "outcomeVisibleMs": 1986,
+      "apiMs": 1947,
+      "httpStatus": 200,
+      "runtimeAck": true,
+      "issueReasons": [],
+      "feedback": "连接已成功创建并保存",
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "cleanup-success",
+      "kind": "fixture-cleanup",
+      "httpStatus": 200
+    },
+    {
+      "label": "whitelist-unconfirmed",
+      "kind": "navigation",
+      "primaryReadyMs": 73,
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "whitelist-unconfirmed",
+      "kind": "save-feedback",
+      "outcomeVisibleMs": 1548,
+      "apiMs": 1340,
+      "httpStatus": 200,
+      "runtimeAck": false,
+      "issueReasons": [
+        "source_map_compile_failed:duplicate_source_name:hive-1:city"
+      ],
+      "feedback": "启用表范围已写入，策略运行态未确认：Source Map 编译失败：source_map_compile_failed:duplicate_source_name:hive-1:city",
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "connection-unconfirmed",
+      "kind": "navigation",
+      "primaryReadyMs": 67,
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "connection-unconfirmed",
+      "kind": "save-feedback",
+      "outcomeVisibleMs": 1886,
+      "apiMs": 1841,
+      "httpStatus": 200,
+      "runtimeAck": false,
+      "issueReasons": [
+        "source_map_compile_failed:duplicate_source_name:hive-1:city"
+      ],
+      "feedback": "连接已写入磁盘，策略运行态未确认",
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "cleanup-unconfirmed",
+      "kind": "fixture-cleanup",
+      "httpStatus": 200
+    },
+    {
+      "label": "whitelist-recovered",
+      "kind": "navigation",
+      "primaryReadyMs": 72,
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "whitelist-recovered",
+      "kind": "save-feedback",
+      "outcomeVisibleMs": 1510,
+      "apiMs": 1196,
+      "httpStatus": 200,
+      "runtimeAck": true,
+      "issueReasons": [],
+      "feedback": "启用表范围已保存，正在刷新本地目录...",
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "connection-recovered",
+      "kind": "navigation",
+      "primaryReadyMs": 72,
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "connection-recovered",
+      "kind": "save-feedback",
+      "outcomeVisibleMs": 1931,
+      "apiMs": 1899,
+      "httpStatus": 200,
+      "runtimeAck": true,
+      "issueReasons": [],
+      "feedback": "连接已成功创建并保存",
+      "visibility": "visible",
+      "hasFocus": true
+    },
+    {
+      "label": "cleanup-recovered",
+      "kind": "fixture-cleanup",
+      "httpStatus": 200
+    }
+  ],
+  "consoleErrors": [],
+  "browserVersion": "157.0.8103.79",
+  "loginPayloadMatches": {
+    "adminId": true,
+    "password": true
+  },
+  "loginStatus": 200
+}

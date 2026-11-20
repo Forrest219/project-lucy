@@ -14,6 +14,9 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| 合并候选复验 | 2026-11-20 | P1-60／P1-64同一30ec4ae0完整验收，功能终审收口；SC-05／10预算持久化锁竞争修复纳入原P1-60；整包有P1-58／59合同缺口及核心可用性修复版本差集，不批准用户更新；[最终评审](../reviews/2026-11-20-p160-p164-combined-final-review.md)；不入新增核心分母；不提交／推送／发布。 |
+| v1.97 | 2026-11-20 | P1-64 SC-09类型49→0；413＋29回归及最终候选Docker／前台浏览器全套PASS；类型缺口关闭，进入最终评审；不外推整包更新放行。 |
+| v1.95 | 2026-11-20 | P1-64／REQ-030-085 R1–R3整改、169＋5回归与Docker／真实前台浏览器复验完成；测试台R0／01–12 PASS；SC-09全库49条基线诊断未关闭，≠ 功能合同收口／可上线。 |
 | v1.99 | 2026-11-20 | P1-65／REQ-030-086 按委托人授权完成四项验证缺口整改：真实前台浏览器／遗漏子例、严格 MCP、清理及状态一致性；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md) 51 项 PASS，153 份角色检查／306 条工具断言，最终零残留；重新确认功能合同收口；不 commit／push；≠ 可上线。 |
 | v1.96 | 2026-11-20 | P1-65／REQ-030-086 GAP 补跑后 Docker UAT＝PASS；功能合同已收口；关闭 GAP-UAT-P1-65；≠ 可上线。 |
 | v1.80 | 2026-11-20 | P1-58／59 demo Docker F58-smoke／F59-smoke＝SMOKE_PASS WITH GAP（roster／statistics／5s cache／对象协议＋operationId→committed）；测试台 INDEX／suite／跑次已登记。完整 F58／F59／R／浏览器／2×／5× 造数仍 NOT RUN；≠ 功能收口；≠ 可上线。 |
@@ -291,12 +294,12 @@
 
 | 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 核心分母 | 跟进状态 | Spec／Plan |
 |---|---|---|---|---|---|---|---|
-| P1-64 | P1（事故修复） | 同连接跨 Schema 短名冲突与保存运行时确认修复 | REQ-030-085 | 扫描生成／Manifest 上传／Source Map 编译与保存 ack | 否 | v0.1-draft。仅修复方案与验收设计；终稿未确权；开发未授权；测试台最近跑次 FAIL（缺陷已复现），修复后复测 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) · [Plan](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) · [UAT](../qa/uat/suites/source-shortname-conflict/suite.md) |
+| P1-64 | P1（事故修复） | 同连接跨 Schema 短名冲突与保存运行时确认修复 | REQ-030-085 | 扫描生成／Manifest 上传／Source Map 编译与保存 ack | 否 | v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 | [Spec](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) · [Plan](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) · [UAT](../qa/uat/suites/source-shortname-conflict/suite.md) |
 | P1-65 | P1（事故修复） | Wiki 覆盖上传采用 YAML 授权声明（差异／损坏须显式选择） | REQ-030-086 | Spec 193 §5 增量；治理主路径 | 否 | v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md) · [Plan](lucy-20261120-wiki-upload-acl-adoption-plan.md) · [UAT](../qa/uat/suites/wiki-upload-acl-adoption/suite.md) |
 | P1-61 | P1（第一批；建议） | 存活／就绪探针纯内存响应与诊断隔离 | REQ-030-082 | P1-21／46 续作；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) · [Plan](lucy-20261119-memory-probe-diagnostics-isolation-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-62 | P1（第二批；建议） | 重任务跨模块容量控制与许可生命周期 | REQ-030-083 | 复用局部队列；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-heavy-work-capacity-control-spec.md) · [Plan](lucy-20261119-heavy-work-capacity-control-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-63 | P2（第三批；建议） | 进程关停准入关闭与在途请求排空 | REQ-030-084 | Spec 191 生命周期增量；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md) · [Plan](lucy-20261119-process-drain-lifecycle-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
-| P1-60 | P0（问数主路径事故修复） | begin 价值重评与零绑定 MCP 问数不受影响 | REQ-030-081 | P0-1 修复／零绑定主路径／有绑定发布一致性另段 | 否（沿用 P0-1） | **v0.7；终稿已确权；T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟：tools/list 无 begin＋直调 begin_not_available）**；预算／ACL 待商议且本条不改；测试台 NOT RUN；T6／R 另授；不入新增核心分母；≠ 功能合同收口；≠ 可上线。 | [Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md) · [Plan](lucy-20261119-webui-publish-caliber-registry-repair-plan.md) · [UAT](../qa/uat/suites/begin-zero-binding/suite.md) · [任务包](../../inbox/20261120-1037-p1-60-multi-agent-dev-pack.md) · [决议](../reviews/2026-11-20-begin-hide-decision.md) · [错题](../lessons/2026-11-19-begin-zero-binding-test-gap.md) |
+| P1-60 | P0（问数主路径事故修复） | begin 价值重评与零绑定 MCP 问数不受影响 | REQ-030-081 | P0-1 修复／零绑定主路径／有绑定发布一致性另段 | 否（沿用 P0-1） | v0.9；功能合同已收口（SC-01–12通过，P1-60／P1-64同一冻结候选完整复验）；预算持久化锁竞争修复纳入；本轮增量已提交；未推送／发布；不入新增核心分母；本条收口不表示可上线。 | [Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md) · [Plan](lucy-20261119-webui-publish-caliber-registry-repair-plan.md) · [UAT](../qa/uat/suites/begin-zero-binding/suite.md) · [任务包](../../inbox/20261120-1037-p1-60-multi-agent-dev-pack.md) · [决议](../reviews/2026-11-20-begin-hide-decision.md) · [错题](../lessons/2026-11-19-begin-zero-binding-test-gap.md) |
 | P1-58 | P1（第一批） | 角色权限与 Agent 列表读取响应、展示复用与统计减负 | REQ-030-079 | 治理主路径／性能 | 否 | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE；demo Docker 已跑 F58-smoke（roster／statistics／cache）＝SMOKE_PASS WITH GAP；完整 F58／浏览器／2×／5× 仍 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 | [Spec](../specs/lucy-20261119-roles-agent-read-responsiveness-spec.md) · [Plan](lucy-20261119-roles-agent-read-responsiveness-plan.md) · [UAT](../qa/uat/suites/roles-agent-concurrency-scale/suite.md) |
 | P1-59 | P1（第二批） | 角色权限与 Agent 多人编辑的对象级冲突与草稿恢复 | REQ-030-080 | 治理主路径／并发正确性 | 否 | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE；demo Docker 已跑 F59-smoke（对象协议＋operationId→committed）＝SMOKE_PASS WITH GAP；完整 F59／浏览器／DEP 全矩阵仍 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 | [Spec](../specs/lucy-20261119-roles-agent-concurrent-edit-spec.md) · [Plan](lucy-20261119-roles-agent-concurrent-edit-plan.md) · [UAT](../qa/uat/suites/roles-agent-concurrency-scale/suite.md) |
 | **P0-1** | P0 | 问题类型 → 唯一表 + 固定口径绑定 | REQ-030-027 | 约束 | 是 | **v0.9；R2-F＋R3＋R4 已闭合；功能合同已收口（2026-11-13）**。SC-01–SC-30 证据关闭。本条收口不表示可上线 | [Spec](../specs/lucy-20261107-question-type-caliber-binding-spec.md) · [Plan](lucy-20261107-question-type-caliber-binding-plan.md) · [评审](../reviews/2026-11-07-question-type-caliber-binding-codex-review.md) · [CR](../reviews/2026-11-08-p0-1-caliber-binding-code-review.md) · [证据审计](../reviews/2026-11-13-question-type-caliber-binding-sc-evidence-audit.md) · **测试台** [`UAT-SUITE-CALIBER-BINDING`](../qa/uat/suites/question-type-caliber-binding/suite.md)（INDEX：[PASS WITH GAP](../qa/uat/INDEX.md)） |
@@ -768,3 +771,13 @@
 - 本文件是 `0.30` **执行总账 SOT**（见 DEVELOPMENT）。v0.89 补入 REQ-030-049／050。测试台判定只看 INDEX，不写进本表跟进状态代替 INDEX。
 - P0 立项范围与 §2／§3 一致；**P0-B O1–O3 已闭合（建议包 F），待 R2-F**；**P1-8／P1-9 仍待立项**；**P1-10 委托人结案**；**P1-11…14 已落地／收口**；**P1-15…18 差集补录（不入核心分母）**；agent 规则可被本分支会话引用。
 - **不构成任何功能验收或上线许可。**
+
+### P1-64 SC-09 修复授权补记（2026-11-20）
+
+委托人本轮授权修复49条全库类型诊断并补回归；归属原SC-09与Plan Task 9，不新增产品能力。前次UAT保留为同摘要历史结果；本轮验收完成前不主张新PASS。RACS相关仅修既有类型契约与依赖计算，不扩展权限语义。
+
+### P1-60＋P1-64同候选最终验收授权（2026-11-20）
+
+委托人续授P1-60剩余整改、完整Docker UAT与两项同候选合并、类型／浏览器取证和整包终审。归属现有P1-60／REQ-030-081与P1-64／REQ-030-085，不新增能力；保留历史判定，本轮完整结果前不主张新PASS。
+
+P1-60完整R补记：N性能采样的预算持久化SQLITE_BUSY已在独立真SQLite观测中核实，改前镜像亦出现；本轮补真实写争用及故障零写入回归，修正保存事务取锁时机，预算／ACL规则保持。归属既有SC-05／10，不新增产品能力；未过完整矩阵前不主张PASS。

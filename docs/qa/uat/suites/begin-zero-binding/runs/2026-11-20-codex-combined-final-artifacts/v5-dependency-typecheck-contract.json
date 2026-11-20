@@ -1,0 +1,36 @@
+{
+  "image": "sha256:30ec4ae032db81201f35f78a8c1b56592ada53d5577862b1d6e7879db25fec3a",
+  "files": [
+    {
+      "path": "package.json",
+      "matchesCommittedBaseline": true,
+      "sha256": "30c7e9ca2062103a043a230359ca38d774cc6f76f1fc765af6d6d6c8ad815425"
+    },
+    {
+      "path": "package-lock.json",
+      "matchesCommittedBaseline": true,
+      "sha256": "0fe847049adc1099558d272afe51db619f16ed5a2f2e1e1735dc8f322242b8f1"
+    },
+    {
+      "path": "webui/package.json",
+      "matchesCommittedBaseline": true,
+      "sha256": "9b56ba3509de3089fa2f37e06cf147c2d969aefa6c9eb560c3226be35a1b059e"
+    },
+    {
+      "path": "webui/package-lock.json",
+      "matchesCommittedBaseline": true,
+      "sha256": "0457269204f099faaef36ff1f930763b83d912d6d388cfa407071453e4e8c91f"
+    },
+    {
+      "path": "webui/tsconfig.json",
+      "matchesCommittedBaseline": true,
+      "sha256": "08638e8eca3805bd53af2ee7f06f51f90390271fd8542043107e71b92b61f87e"
+    },
+    {
+      "path": "webui/vitest.config.ts",
+      "matchesCommittedBaseline": true,
+      "sha256": "b85e5472255fecedb47c75b08b97c491ed13d1a1a8402b9432efdd6705391858"
+    }
+  ],
+  "validation": "typecheck uses unchanged include/strict configuration; installed host dependencies from existing lock-matched install"
+}

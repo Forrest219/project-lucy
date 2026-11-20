@@ -1,0 +1,26 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 14.336,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 9,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "Access denied: caliber_binding_violation（偏离固定口径）：度量超出固定口径允许集合"
+        }
+      ],
+      "data": {
+        "reason": "caliber_binding_violation",
+        "failureDimension": "口径绑定",
+        "dimension": "measures",
+        "bindingId": "uat_zero",
+        "allowed": [
+          "uat_begin_zero_orders.order_count"
+        ]
+      }
+    }
+  }
+}

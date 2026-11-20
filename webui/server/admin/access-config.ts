@@ -60,6 +60,8 @@ export interface YamlUser {
   note?: string;
   enabled?: boolean;
   role?: string;
+  /** Multi-role assignment, resolved together with the legacy singular role. */
+  roles?: string[];
   tokens: YamlToken[];
   allow?: {
     tables: string[];

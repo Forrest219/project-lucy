@@ -1,0 +1,40 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 23.832,
+  "body": {
+    "ok": true,
+    "data": {
+      "diff": "Index: webui/config/access.yaml\n===================================================================\n--- webui/config/access.yaml\tcurrent\n+++ webui/config/access.yaml\tproposed\n@@ -110,7 +110,7 @@\n       - hash: [REDACTED]\n         label: isolated-denied\n         created: 2026-11-20\n-    note: isolated UAT control r06-deny-restore\n+    note: isolated UAT control r09-fault-activate\n defaults:\n   deny_tools:\n     - sl_query\n",
+      "proposedYaml": "roles:\n  a:\n    permission_model_version: 2\n    allow:\n      connections:\n        - uat-mysql\n      tableSelectors:\n        - connection: uat-mysql\n          schema: uat\n          names:\n            - uat_begin_zero_orders\n          row_access: all\n      tools:\n        - lucy_catalog\n        - lucy_query\n        - lucy_read_source\n        - lucy_explain_query\n        - lucy_begin_question\n        - lucy_continue_question\n        - connection_list\n  b:\n    permission_model_version: 2\n    allow:\n      connections:\n        - uat-mysql\n      tableSelectors:\n        - connection: uat-mysql\n          schema: uat\n          names:\n            - uat_begin_zero_orders\n          row_access: scoped\n          row_policy:\n            predicates:\n              - field: tenant\n                op: eq\n                value: NORTH\n      tools:\n        - lucy_catalog\n        - lucy_query\n        - lucy_read_source\n        - lucy_explain_query\n        - lucy_begin_question\n        - lucy_continue_question\n        - connection_list\n  c:\n    permission_model_version: 2\n    allow:\n      connections:\n        - uat-mysql\n      tableSelectors:\n        - connection: uat-mysql\n          schema: uat\n          names:\n            - uat_begin_zero_orders\n          row_access: all\n      tools:\n        - lucy_catalog\n        - lucy_query\n        - lucy_read_source\n        - lucy_explain_query\n        - lucy_continue_question\n        - connection_list\nusers:\n  - id: uat_zb_a\n    name: ZB a\n    enabled: true\n    role: a\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-a\n        created: 2026-11-20\n  - id: uat_zb_b\n    name: ZB b\n    enabled: true\n    role: b\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-b\n        created: 2026-11-20\n  - id: uat_zb_c\n    name: ZB c\n    enabled: true\n    role: c\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-c\n        created: 2026-11-20\n  - id: uat_zb_expired\n    name: ZB expired\n    enabled: true\n    role: a\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-expired\n        created: 2026-11-20\n        expires_at: 2020-01-01T00:00:00Z\n  - id: uat_zb_disabled\n    name: ZB disabled\n    enabled: true\n    role: a\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-disabled\n        created: 2026-11-20\n  - id: uat_zb_denied\n    name: ZB denied\n    enabled: true\n    role: a\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-denied\n        created: 2026-11-20\n    note: isolated UAT control r09-fault-activate\ndefaults:\n  deny_tools:\n    - sl_query\n    - sl_read_source\n    - sql_execution\n",
+      "version": "1795151440678-8fa8428fa7ddb946",
+      "gate": {
+        "traceId": "gate-1e30980b-f6b2-46d5-afb0-dcfd183bd984",
+        "targetKind": "agent",
+        "targetId": "uat_zb_denied",
+        "decision": "allow",
+        "tierSummary": {
+          "P0": {
+            "count": 0,
+            "reasons": []
+          },
+          "P1": {
+            "count": 0,
+            "reasons": []
+          },
+          "P2": {
+            "count": 0,
+            "reasons": []
+          }
+        },
+        "findings": [],
+        "evidenceRefs": [
+          {
+            "kind": "role_diff_hash",
+            "ref": "439eb9426e8ed6c0c45bf315c28cffdd",
+            "relation": "observed"
+          }
+        ]
+      }
+    }
+  }
+}

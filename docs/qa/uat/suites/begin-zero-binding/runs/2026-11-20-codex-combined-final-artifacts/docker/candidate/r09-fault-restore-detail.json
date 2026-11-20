@@ -1,0 +1,129 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 21.136,
+  "body": {
+    "ok": true,
+    "data": {
+      "agent": {
+        "id": "uat_zb_denied",
+        "name": "ZB denied",
+        "note": "isolated UAT control r09-fault-activate",
+        "enabled": true,
+        "roles": [
+          "a"
+        ],
+        "role": "a",
+        "tokens": [
+          {
+            "hash": "sha256:78ad4529de30088f7baa5cbc753d33e96f2c211a54ddbe62e90c06986c89921b",
+            "label": "isolated-denied",
+            "created": "2026-11-20",
+            "expires_at": null,
+            "device_name": null,
+            "last_used": "2026-11-20T05:10:41.118Z",
+            "last_tool": "lucy_query",
+            "last_outcome": "ok",
+            "last_ip": "172.26.0.1",
+            "last_user_agent": "Python-urllib/3.9",
+            "last_client": null,
+            "last_client_version": null,
+            "last_device_name_seen": null,
+            "distinct_ips_7d": 1
+          }
+        ],
+        "configUpdatedAt": "2026-11-20T05:11:38.507Z",
+        "stats": {
+          "callsLast7d": 3,
+          "businessCallsLast7d": 3,
+          "protocolCallsLast7d": 0,
+          "usageCallsLast7d": 3,
+          "evalProbeCallsLast7d": 0,
+          "deniedLast7d": 2,
+          "lastSeen": "2026-11-20T05:10:41.118Z",
+          "lastBusinessSeen": "2026-11-20T05:10:41.118Z",
+          "activeTokensLast7d": 1,
+          "usedCredentialsLast7d": 1,
+          "configuredTokens": 1,
+          "availableTokens": 1,
+          "credentialMetricsState": "ok",
+          "topTables": [
+            {
+              "table": "uat.uat_begin_zero_orders",
+              "calls": 1
+            }
+          ],
+          "metricsState": "ok",
+          "windowStart": "2026-11-13T05:11:38.667Z",
+          "windowEnd": "2026-11-20T05:11:38.667Z"
+        },
+        "effectivePermissions": {
+          "roleIds": [
+            "a"
+          ],
+          "snapshotHash": "cabeefd9a92aa79371f955b7401157c5e1c4b41916d1447f1f52daf363c8db55",
+          "sourceMapVersion": "9933be71e9430f0e",
+          "tools": [
+            "connection_list",
+            "lucy_begin_question",
+            "lucy_catalog",
+            "lucy_continue_question",
+            "lucy_explain_query",
+            "lucy_query",
+            "lucy_read_source"
+          ],
+          "connections": [
+            "uat-mysql"
+          ],
+          "sources": [
+            {
+              "connectionId": "uat-mysql",
+              "schema": "uat",
+              "sourceName": "uat_begin_zero_orders",
+              "table": "uat.uat_begin_zero_orders"
+            }
+          ],
+          "legacyAllow": false,
+          "capabilityDigest": "9fba8fd3704486cd",
+          "capabilities": [
+            {
+              "tool": "lucy_explain_query",
+              "connectionId": "uat-mysql",
+              "schema": "uat",
+              "sourceName": "uat_begin_zero_orders",
+              "physicalTable": "uat.uat_begin_zero_orders",
+              "sourceKey": "uat-mysql|uat|uat_begin_zero_orders|uat.uat_begin_zero_orders",
+              "rowGrant": "all",
+              "finalRows": "all",
+              "protected": false
+            },
+            {
+              "tool": "lucy_query",
+              "connectionId": "uat-mysql",
+              "schema": "uat",
+              "sourceName": "uat_begin_zero_orders",
+              "physicalTable": "uat.uat_begin_zero_orders",
+              "sourceKey": "uat-mysql|uat|uat_begin_zero_orders|uat.uat_begin_zero_orders",
+              "rowGrant": "all",
+              "finalRows": "all",
+              "protected": false
+            },
+            {
+              "tool": "lucy_read_source",
+              "connectionId": "uat-mysql",
+              "schema": "uat",
+              "sourceName": "uat_begin_zero_orders",
+              "physicalTable": "uat.uat_begin_zero_orders",
+              "sourceKey": "uat-mysql|uat|uat_begin_zero_orders|uat.uat_begin_zero_orders",
+              "rowGrant": "all",
+              "finalRows": "all",
+              "protected": false
+            }
+          ]
+        },
+        "permissionWarnings": []
+      },
+      "version": "1795151498511-254fd3cd5d1ae369",
+      "baseObjectVersion": "agent:uat_zb_denied:b8cecc2d25bd0d44ad9386843d4a060a9d209a80be1c137b3e886daa69d1a22c"
+    }
+  }
+}

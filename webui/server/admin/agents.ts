@@ -1117,7 +1117,7 @@ function defaultActor(request?: FastifyRequest): AccessGovernanceApprover {
  * (agentCount, enabledAgentCount, configuredTokenCount) are always present.
  */
 function buildAgentsSummary(
-  agents: Array<Awaited<ReturnType<typeof userToAgentWithPermissions>>>,
+  agents: Array<ReturnType<typeof userToAgent>>,
   /** Spec 128 Task 7: global DISTINCT active token count from audit DB. */
   globalActiveTokenCount: number | null,
   tokenPrefixCollision: boolean,

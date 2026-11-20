@@ -1,0 +1,129 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 4,
+  "body": {
+    "ok": true,
+    "data": {
+      "records": [
+        {
+          "id": "up_20261120_050215_270",
+          "createdAt": "2026-11-20T05:02:15.270Z",
+          "connectionId": "hive-1",
+          "schema": "weather",
+          "assetKind": "schema_manifest",
+          "assetType": "schemaManifest",
+          "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+          "originalFilename": "weather.yaml",
+          "sizeBytes": 195,
+          "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+          "tables": 1,
+          "overwritten": false,
+          "warnings": [],
+          "reloadRunId": "rel_20261120_050215_270"
+        },
+        {
+          "id": "up_20261120_050218_676",
+          "createdAt": "2026-11-20T05:02:18.676Z",
+          "connectionId": "hive-1",
+          "schema": "ods",
+          "assetKind": "schema_manifest",
+          "assetType": "schemaManifest",
+          "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+          "originalFilename": "ods.yaml",
+          "sizeBytes": 195,
+          "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+          "tables": 1,
+          "overwritten": false,
+          "warnings": [],
+          "reloadRunId": "rel_20261120_050218_676"
+        },
+        {
+          "id": "up_20261120_050224_308",
+          "createdAt": "2026-11-20T05:02:24.308Z",
+          "connectionId": "hive-1",
+          "schema": "weather",
+          "assetKind": "schema_manifest",
+          "assetType": "schemaManifest",
+          "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+          "originalFilename": "weather.yaml",
+          "sizeBytes": 195,
+          "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+          "tables": 1,
+          "overwritten": true,
+          "warnings": [
+            {
+              "code": "TARGET_EXISTS",
+              "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+            }
+          ],
+          "reloadRunId": "rel_20261120_050224_308"
+        },
+        {
+          "id": "up_20261120_050224_501",
+          "createdAt": "2026-11-20T05:02:24.501Z",
+          "connectionId": "hive-1",
+          "schema": "ods",
+          "assetKind": "schema_manifest",
+          "assetType": "schemaManifest",
+          "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+          "originalFilename": "ods.yaml",
+          "sizeBytes": 195,
+          "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+          "tables": 1,
+          "overwritten": true,
+          "warnings": [
+            {
+              "code": "TARGET_EXISTS",
+              "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+            }
+          ],
+          "reloadRunId": "rel_20261120_050224_501"
+        }
+      ],
+      "lastBySchema": {
+        "hive-1.ods": {
+          "id": "up_20261120_050224_501",
+          "createdAt": "2026-11-20T05:02:24.501Z",
+          "connectionId": "hive-1",
+          "schema": "ods",
+          "assetKind": "schema_manifest",
+          "assetType": "schemaManifest",
+          "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+          "originalFilename": "ods.yaml",
+          "sizeBytes": 195,
+          "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+          "tables": 1,
+          "overwritten": true,
+          "warnings": [
+            {
+              "code": "TARGET_EXISTS",
+              "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+            }
+          ],
+          "reloadRunId": "rel_20261120_050224_501"
+        },
+        "hive-1.weather": {
+          "id": "up_20261120_050224_308",
+          "createdAt": "2026-11-20T05:02:24.308Z",
+          "connectionId": "hive-1",
+          "schema": "weather",
+          "assetKind": "schema_manifest",
+          "assetType": "schemaManifest",
+          "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+          "originalFilename": "weather.yaml",
+          "sizeBytes": 195,
+          "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+          "tables": 1,
+          "overwritten": true,
+          "warnings": [
+            {
+              "code": "TARGET_EXISTS",
+              "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+            }
+          ],
+          "reloadRunId": "rel_20261120_050224_308"
+        }
+      }
+    }
+  }
+}

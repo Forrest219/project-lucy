@@ -1,0 +1,48 @@
+{
+  "budgetBefore": [
+    {
+      "scope_key": "bq:uat_zb_a|sha256:a1f47087ac3b:r11-budget-I3",
+      "started_at": 1795151987836,
+      "origin_started_at": 1795151987836,
+      "calls": 1,
+      "continuations": 0,
+      "attempts": 1,
+      "peak_concurrency": 1,
+      "current_concurrency": 0,
+      "updated_at": 1795151989763,
+      "busy_ms": 1889.7085009999996,
+      "round": 0,
+      "turn_id": null,
+      "window_id": 0,
+      "pending_token": null,
+      "presented_token": null,
+      "archived_busy_json": "{}"
+    }
+  ],
+  "budgetAfter": [
+    {
+      "scope_key": "bq:uat_zb_a|sha256:a1f47087ac3b:r11-budget-I3",
+      "started_at": 1795151987836,
+      "origin_started_at": 1795151987836,
+      "calls": 1,
+      "continuations": 0,
+      "attempts": 1,
+      "peak_concurrency": 1,
+      "current_concurrency": 0,
+      "updated_at": 1795151989763,
+      "busy_ms": 1889.7085009999996,
+      "round": 0,
+      "turn_id": null,
+      "window_id": 0,
+      "pending_token": null,
+      "presented_token": null,
+      "archived_busy_json": "{}"
+    }
+  ],
+  "bindingsBefore": {
+    "config/caliber-bindings/.caliber-binding/active-generation.json": "39354993b23acb1eaf310317d3c300f1d450b97bb758858217b6408d60f08b17"
+  },
+  "bindingsAfter": {
+    "config/caliber-bindings/.caliber-binding/active-generation.json": "39354993b23acb1eaf310317d3c300f1d450b97bb758858217b6408d60f08b17"
+  }
+}

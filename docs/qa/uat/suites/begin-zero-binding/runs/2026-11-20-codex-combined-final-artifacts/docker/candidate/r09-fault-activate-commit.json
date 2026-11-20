@@ -1,0 +1,98 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 49.716,
+  "body": {
+    "ok": true,
+    "data": {
+      "written": true,
+      "policyVersion": "c542c4b22ee62cb8ea6a2770829b95a4ea1d7321c1709b9536acec9f39528765",
+      "policyRuntimeAck": true,
+      "runtimeAck": true,
+      "after": {
+        "agent": {
+          "id": "uat_zb_denied",
+          "name": "ZB denied",
+          "note": "isolated UAT control r09-fault-activate",
+          "enabled": true,
+          "roles": [
+            "a"
+          ],
+          "role": "a",
+          "tokens": [
+            {
+              "hash": "sha256:78ad4529de30088f7baa5cbc753d33e96f2c211a54ddbe62e90c06986c89921b",
+              "label": "isolated-denied",
+              "created": "2026-11-20",
+              "expires_at": null,
+              "device_name": null,
+              "last_ip": null,
+              "last_user_agent": null,
+              "last_client": null,
+              "last_client_version": null,
+              "last_device_name_seen": null
+            }
+          ],
+          "permissionWarnings": [
+            "source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision"
+          ]
+        },
+        "version": "1795151498511-254fd3cd5d1ae369"
+      },
+      "agent": {
+        "id": "uat_zb_denied",
+        "name": "ZB denied",
+        "note": "isolated UAT control r09-fault-activate",
+        "enabled": true,
+        "roles": [
+          "a"
+        ],
+        "role": "a",
+        "tokens": [
+          {
+            "hash": "sha256:78ad4529de30088f7baa5cbc753d33e96f2c211a54ddbe62e90c06986c89921b",
+            "label": "isolated-denied",
+            "created": "2026-11-20",
+            "expires_at": null,
+            "device_name": null,
+            "last_ip": null,
+            "last_user_agent": null,
+            "last_client": null,
+            "last_client_version": null,
+            "last_device_name_seen": null
+          }
+        ],
+        "permissionWarnings": [
+          "source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision"
+        ]
+      },
+      "gate": {
+        "traceId": "gate-da4aa413-0fec-4e79-8125-81c64120e8dd",
+        "targetKind": "agent",
+        "targetId": "uat_zb_denied",
+        "decision": "allow",
+        "tierSummary": {
+          "P0": {
+            "count": 0,
+            "reasons": []
+          },
+          "P1": {
+            "count": 0,
+            "reasons": []
+          },
+          "P2": {
+            "count": 0,
+            "reasons": []
+          }
+        },
+        "findings": [],
+        "evidenceRefs": [
+          {
+            "kind": "role_diff_hash",
+            "ref": "439eb9426e8ed6c0c45bf315c28cffdd",
+            "relation": "observed"
+          }
+        ]
+      }
+    }
+  }
+}

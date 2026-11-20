@@ -1,0 +1,27 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 51.172,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 141,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "Access denied: tool_forbidden_global 可用连接：uat-mysql。 可用来源：uat_begin_zero_orders。 请改用当前角色已授权的来源：uat_begin_zero_orders。"
+        }
+      ],
+      "data": {
+        "reason": "tool_forbidden_global",
+        "failureDimension": "权限拒绝",
+        "connections": [
+          "uat-mysql"
+        ],
+        "sources": [
+          "uat_begin_zero_orders"
+        ]
+      }
+    }
+  }
+}

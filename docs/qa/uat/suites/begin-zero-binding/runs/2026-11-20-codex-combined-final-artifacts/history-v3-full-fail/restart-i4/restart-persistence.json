@@ -1,0 +1,44 @@
+{
+  "budgetBefore": [
+    {
+      "scope_key": "bq:uat_zb_a|sha256:dcb0f634a0c5:r11-budget-I4",
+      "started_at": 1795150390170,
+      "origin_started_at": 1795150390170,
+      "calls": 1,
+      "continuations": 0,
+      "attempts": 1,
+      "peak_concurrency": 1,
+      "current_concurrency": 0,
+      "updated_at": 1795150392442,
+      "busy_ms": 2221.4065850000006,
+      "round": 0,
+      "turn_id": null,
+      "window_id": 0,
+      "pending_token": null,
+      "presented_token": null,
+      "archived_busy_json": "{}"
+    }
+  ],
+  "budgetAfter": [
+    {
+      "scope_key": "bq:uat_zb_a|sha256:dcb0f634a0c5:r11-budget-I4",
+      "started_at": 1795150390170,
+      "origin_started_at": 1795150390170,
+      "calls": 1,
+      "continuations": 0,
+      "attempts": 1,
+      "peak_concurrency": 1,
+      "current_concurrency": 0,
+      "updated_at": 1795150392442,
+      "busy_ms": 2221.4065850000006,
+      "round": 0,
+      "turn_id": null,
+      "window_id": 0,
+      "pending_token": null,
+      "presented_token": null,
+      "archived_busy_json": "{}"
+    }
+  ],
+  "bindingsBefore": {},
+  "bindingsAfter": {}
+}

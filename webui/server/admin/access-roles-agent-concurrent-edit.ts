@@ -191,7 +191,10 @@ export function computeRoleAgentPreviewBinding(input: RoleAgentPreviewBindingInp
   previewDependenciesDigest: string;
   previewToken: string;
 } {
-  const expanded = expandRowPolicyTemplatesInConfig(input.config as AccessConfigWithTemplates);
+  const expansion = expandRowPolicyTemplatesInConfig(input.config as AccessConfigWithTemplates);
+  // Expansion returns an envelope. Dependencies need its configuration, while
+  // preserving the caller's required users and the expanded role definitions.
+  const expanded = { ...input.config, roles: expansion.config.roles as YamlAccessConfig["roles"] };
   const patchDigest = digestNormalizedPatch(input.patch);
   const depInput =
     input.kind === "role"

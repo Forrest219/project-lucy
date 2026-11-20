@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "base": "77e2ad84",
+  "candidate": "sha256:30ec4ae032db81201f35f78a8c1b56592ada53d5577862b1d6e7879db25fec3a",
+  "sourceDifferencesReconstructed": 30,
+  "method": "extract committed base, apply archived unified patch, compare every changed file SHA256 against actual frozen candidate; OS metadata excluded"
+}

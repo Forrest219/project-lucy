@@ -1,0 +1,16 @@
+{
+  "frozenAt": "2026-11-20T05:12:09.732920+00:00",
+  "baselineImage": "project-lucy:p160-control-budget-fixed",
+  "candidateImage": "project-lucy:p160-p164-final-v5",
+  "controlQualification": "image and source fingerprints recorded per rig; original failing baseline evidence retained",
+  "absoluteToleranceMs": 250,
+  "relativeTolerance": 0.5,
+  "seed": 60120,
+  "warmups": 10,
+  "samplesPerRound": 100,
+  "rounds": [],
+  "failures": [],
+  "warmupFailures": [],
+  "storage": "Docker native named volumes; independently fresh I0 in both groups",
+  "scope": "protocol N catalog/read_source/query; all 300 planned problems/group are attempted, no retry or dropped failures"
+}

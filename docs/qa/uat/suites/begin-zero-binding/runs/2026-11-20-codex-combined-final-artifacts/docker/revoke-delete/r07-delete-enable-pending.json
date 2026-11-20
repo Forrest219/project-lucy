@@ -1,0 +1,348 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 140.732,
+  "body": {
+    "ok": true,
+    "data": {
+      "files": [
+        {
+          "filePath": "caliber-bindings/bound.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/_schema/main.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_access_paths.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_agent_activity.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_agents.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_call_tables.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_calls.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_edge_signals.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_grant_paths.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_map_meta.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_map_nodes.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_question_kpi_agents.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_table_adoption.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/lucy-ops/ops_tokens.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/uat-mysql/_schema/uat.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "semantic-layer/uat-mysql/uat_begin_zero_orders.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        },
+        {
+          "filePath": "wiki/lucy-ops/ops-questioning.md",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        }
+      ],
+      "pendingDigest": "f5b8825ee81aad91136ca770b26f5e49ceb531311100ae75188d06857ebf7575",
+      "baselineState": "uninitialized",
+      "baselineGeneration": 0,
+      "impact": {
+        "pendingDigest": "f5b8825ee81aad91136ca770b26f5e49ceb531311100ae75188d06857ebf7575",
+        "complete": true,
+        "counts": {
+          "files": 17,
+          "tables": 13,
+          "manifests": 2,
+          "wikiPages": 1
+        },
+        "tables": [
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_access_paths"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_access_paths.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_access_paths.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_agent_activity"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_agent_activity.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_agent_activity.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_agents"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_agents.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_agents.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_call_tables"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_call_tables.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_call_tables.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_calls"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_calls.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_calls.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_edge_signals"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_edge_signals.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_edge_signals.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_grant_paths"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_grant_paths.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_grant_paths.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_map_meta"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_map_meta.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_map_meta.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_map_nodes"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_map_nodes.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_map_nodes.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_question_kpi_agents"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_question_kpi_agents.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_question_kpi_agents.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_table_adoption"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_table_adoption.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_table_adoption.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "lucy-ops",
+              "schema": "main",
+              "table": "ops_tokens"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/lucy-ops/ops_tokens.yaml",
+                "evidenceRef": "diff:semantic-layer/lucy-ops/ops_tokens.yaml"
+              }
+            ]
+          },
+          {
+            "identity": {
+              "connectionId": "uat-mysql",
+              "schema": "uat",
+              "table": "uat_begin_zero_orders"
+            },
+            "reasons": [
+              {
+                "kind": "first_verification",
+                "summary": "首次核对：尚无完整生效基线，本次为该表的首次发布核对。",
+                "source": "pending_disk_change",
+                "filePath": "semantic-layer/uat-mysql/uat_begin_zero_orders.yaml",
+                "evidenceRef": "diff:semantic-layer/uat-mysql/uat_begin_zero_orders.yaml"
+              }
+            ]
+          }
+        ],
+        "wikiChanges": [
+          {
+            "filePath": "wiki/lucy-ops/ops-questioning.md",
+            "title": "运维问数连接（lucy-ops）",
+            "changeType": "added"
+          }
+        ],
+        "schemaChanges": [
+          {
+            "connectionId": "lucy-ops",
+            "schema": "main",
+            "evidenceRef": "snapshot:semantic-layer/lucy-ops/_schema/main.yaml"
+          },
+          {
+            "connectionId": "uat-mysql",
+            "schema": "uat",
+            "evidenceRef": "snapshot:semantic-layer/uat-mysql/_schema/uat.yaml"
+          }
+        ],
+        "relatedScope": [],
+        "otherChanges": [
+          {
+            "filePath": "caliber-bindings/bound.yaml",
+            "changeType": "added"
+          }
+        ],
+        "unresolved": []
+      },
+      "mirrorOnlySemanticFiles": [],
+      "mirrorDriftTruncated": false
+    }
+  }
+}

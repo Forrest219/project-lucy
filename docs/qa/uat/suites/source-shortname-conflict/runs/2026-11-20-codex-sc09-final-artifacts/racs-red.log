@@ -1,0 +1,39 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/webui
+
+ ❯ server/__tests__/roles-agent-concurrent-edit.test.ts (11 tests | 2 failed | 9 skipped) 11ms
+     × SC09: agent preview depends on assigned role permissions 8ms
+     × SC09: role preview binds referenced template and access defaults 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  server/__tests__/roles-agent-concurrent-edit.test.ts > SC-01 unrelated object edits > SC09: agent preview depends on assigned role permissions
+AssertionError: expected '08d6092b8dfb7d33f50ef1a99897b9b3934ba…' not to be '08d6092b8dfb7d33f50ef1a99897b9b3934ba…' // Object.is equality
+ ❯ server/__tests__/roles-agent-concurrent-edit.test.ts:94:59
+     92|       compileInputsDigest: COMPILE, gate
+     93|     });
+     94|     expect(preview(role()).previewDependenciesDigest).not.toBe(preview…
+       |                                                           ^
+     95|       allow: { tools: ["lucy_query", "lucy_catalog"], connections: ["d…
+     96|     })).previewDependenciesDigest);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  server/__tests__/roles-agent-concurrent-edit.test.ts > SC-01 unrelated object edits > SC09: role preview binds referenced template and access defaults
+AssertionError: expected '0f5029ebfb7f5bb22a8952457a10461085a38…' not to be '0f5029ebfb7f5bb22a8952457a10461085a38…' // Object.is equality
+ ❯ server/__tests__/roles-agent-concurrent-edit.test.ts:113:49
+    111|     });
+    112|     const first = preview("east", "role_a");
+    113|     expect(first.previewDependenciesDigest).not.toBe(preview("west", "…
+       |                                                 ^
+    114|     expect(first.previewDependenciesDigest).not.toBe(preview("east", "…
+    115|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 9 skipped (11)
+   Start at  12:02:57
+   Duration  747ms (transform 431ms, setup 112ms, import 546ms, tests 11ms, environment 0ms)
+

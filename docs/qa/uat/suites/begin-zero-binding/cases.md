@@ -1,6 +1,6 @@
 # Cases — UAT-SUITE-BEGIN-ZERO-BINDING
 
-v0.6，配对 Spec／Plan v0.8；执行授权已获得，逐例结果以 runs 为准。R0＋01–12 共 13 项全部必做。当前范围只有 N（不 begin）、隐藏面和既有安全／预算回归；不包含启用后 B／D、G1／G2／G5 或 C1／C2 begin 写入恢复。F 与 R 分开，不用 mock／源码序锁凑绿。
+v0.6，配对 Spec／Plan v0.9；执行授权已获得，逐例结果以 runs 为准。R0＋01–12 共 13 项全部必做。当前范围只有 N（不 begin）、隐藏面和既有安全／预算回归；不包含启用后 B／D、G1／G2／G5 或 C1／C2 begin 写入恢复。F 与 R 分开，不用 mock／源码序锁凑绿。
 
 | ID | 主题 | SC 映射 |
 |---|---|---|

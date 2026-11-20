@@ -1,0 +1,42 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 37.4,
+  "body": {
+    "ok": true,
+    "data": {
+      "files": [
+        {
+          "filePath": "caliber-bindings/bound.yaml",
+          "status": "deleted",
+          "diff": "--- caliber-bindings/bound.yaml（生效版本）\n+++ caliber-bindings/bound.yaml（当前内容）\n-{\"bindingId\": \"uat_zero\", \"title\": \"UAT count only\", \"status\": \"published\", \"triggers\": [\"\\u56fa\\u5b9a\\u8ba2\\u5355\\u6570\"], \"connectionId\": \"uat-mysql\", \"source\": \"uat_begin_zero_orders\", \"caliber\": {\"measures\": [\"uat_begin_zero_orders.order_count\"], \"dimensions\": [], \"segments\": [], \"filterFields\": [], \"requireMeasures\": [\"uat_begin_zero_orders.order_count\"]}}\n+\n"
+        }
+      ],
+      "pendingDigest": "ce0b98868efafd9ac750adbbb63db665972578ba45c04c6521cdfbf4f0c0e07c",
+      "baselineState": "ready",
+      "baselineGeneration": 1,
+      "impact": {
+        "pendingDigest": "ce0b98868efafd9ac750adbbb63db665972578ba45c04c6521cdfbf4f0c0e07c",
+        "complete": true,
+        "counts": {
+          "files": 1,
+          "tables": 0,
+          "manifests": 0,
+          "wikiPages": 0
+        },
+        "tables": [],
+        "wikiChanges": [],
+        "schemaChanges": [],
+        "relatedScope": [],
+        "otherChanges": [
+          {
+            "filePath": "caliber-bindings/bound.yaml",
+            "changeType": "deleted"
+          }
+        ],
+        "unresolved": []
+      },
+      "mirrorOnlySemanticFiles": [],
+      "mirrorDriftTruncated": false
+    }
+  }
+}

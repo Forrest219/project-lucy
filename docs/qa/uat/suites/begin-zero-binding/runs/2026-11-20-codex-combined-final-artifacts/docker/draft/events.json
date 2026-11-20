@@ -1,0 +1,326 @@
+[
+  {
+    "name": "r04-invalid-business-fields-init",
+    "tool": "initialize",
+    "who": "a",
+    "session": "r04-invalid-business-fields-init",
+    "ok": true,
+    "elapsedMs": 40.319,
+    "rpcId": 1
+  },
+  {
+    "name": "r04-invalid-business-fields-tools",
+    "tool": "tools/list",
+    "who": "a",
+    "session": "r04-invalid-business-fields-tools",
+    "ok": true,
+    "elapsedMs": 15.121,
+    "rpcId": 2
+  },
+  {
+    "name": "r04-invalid-business-fields-forced-valid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-invalid-business-fields-forced-valid",
+    "ok": false,
+    "elapsedMs": 11.935,
+    "rpcId": 3
+  },
+  {
+    "name": "r04-invalid-business-fields-forced-missing",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-invalid-business-fields-forced-missing",
+    "ok": false,
+    "elapsedMs": 7.569,
+    "rpcId": 4
+  },
+  {
+    "name": "r04-invalid-business-fields-forced-invalid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-invalid-business-fields-forced-invalid",
+    "ok": false,
+    "elapsedMs": 7.608,
+    "rpcId": 5
+  },
+  {
+    "name": "r04-invalid-business-fields-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r04-invalid-business-fields-query",
+    "ok": true,
+    "elapsedMs": 2231.683,
+    "rpcId": 6
+  },
+  {
+    "name": "r04-after-rejected-candidate-init",
+    "tool": "initialize",
+    "who": "a",
+    "session": "r04-after-rejected-candidate-init",
+    "ok": true,
+    "elapsedMs": 11.473,
+    "rpcId": 7
+  },
+  {
+    "name": "r04-after-rejected-candidate-tools",
+    "tool": "tools/list",
+    "who": "a",
+    "session": "r04-after-rejected-candidate-tools",
+    "ok": true,
+    "elapsedMs": 11.424,
+    "rpcId": 8
+  },
+  {
+    "name": "r04-after-rejected-candidate-forced-valid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-after-rejected-candidate-forced-valid",
+    "ok": false,
+    "elapsedMs": 6.112,
+    "rpcId": 9
+  },
+  {
+    "name": "r04-after-rejected-candidate-forced-missing",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-after-rejected-candidate-forced-missing",
+    "ok": false,
+    "elapsedMs": 5.677,
+    "rpcId": 10
+  },
+  {
+    "name": "r04-after-rejected-candidate-forced-invalid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-after-rejected-candidate-forced-invalid",
+    "ok": false,
+    "elapsedMs": 5.86,
+    "rpcId": 11
+  },
+  {
+    "name": "r04-after-rejected-candidate-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r04-after-rejected-candidate-query",
+    "ok": true,
+    "elapsedMs": 477.006,
+    "rpcId": 12
+  },
+  {
+    "name": "r04-invalid-business-fields-during-tools",
+    "tool": "tools/list",
+    "who": "a",
+    "session": "r04-invalid-business-fields-during-tools",
+    "ok": true,
+    "elapsedMs": 11.141,
+    "rpcId": 13
+  },
+  {
+    "name": "r04-invalid-business-fields-during-forced",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-invalid-business-fields-during-forced",
+    "ok": false,
+    "elapsedMs": 6.459,
+    "rpcId": 14
+  },
+  {
+    "name": "r04-invalid-business-fields-during-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r04-invalid-business-fields-during-query",
+    "ok": true,
+    "elapsedMs": 463.34,
+    "rpcId": 15
+  },
+  {
+    "name": "r04-invalid-business-fields-after-init",
+    "tool": "initialize",
+    "who": "a",
+    "session": "r04-invalid-business-fields-after-init",
+    "ok": true,
+    "elapsedMs": 48.098,
+    "rpcId": 16
+  },
+  {
+    "name": "r04-invalid-business-fields-after-tools",
+    "tool": "tools/list",
+    "who": "a",
+    "session": "r04-invalid-business-fields-after-tools",
+    "ok": true,
+    "elapsedMs": 10.529,
+    "rpcId": 17
+  },
+  {
+    "name": "r04-invalid-business-fields-after-forced-valid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-invalid-business-fields-after-forced-valid",
+    "ok": false,
+    "elapsedMs": 5.593,
+    "rpcId": 18
+  },
+  {
+    "name": "r04-invalid-business-fields-after-forced-missing",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-invalid-business-fields-after-forced-missing",
+    "ok": false,
+    "elapsedMs": 5.946,
+    "rpcId": 19
+  },
+  {
+    "name": "r04-invalid-business-fields-after-forced-invalid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-invalid-business-fields-after-forced-invalid",
+    "ok": false,
+    "elapsedMs": 4.806,
+    "rpcId": 20
+  },
+  {
+    "name": "r04-invalid-business-fields-after-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r04-invalid-business-fields-after-query",
+    "ok": true,
+    "elapsedMs": 507.391,
+    "rpcId": 21
+  },
+  {
+    "name": "r04-valid-draft-init",
+    "tool": "initialize",
+    "who": "a",
+    "session": "r04-valid-draft-init",
+    "ok": true,
+    "elapsedMs": 12.951,
+    "rpcId": 22
+  },
+  {
+    "name": "r04-valid-draft-tools",
+    "tool": "tools/list",
+    "who": "a",
+    "session": "r04-valid-draft-tools",
+    "ok": true,
+    "elapsedMs": 11.146,
+    "rpcId": 23
+  },
+  {
+    "name": "r04-valid-draft-forced-valid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-valid-draft-forced-valid",
+    "ok": false,
+    "elapsedMs": 13.673,
+    "rpcId": 24
+  },
+  {
+    "name": "r04-valid-draft-forced-missing",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-valid-draft-forced-missing",
+    "ok": false,
+    "elapsedMs": 5.851,
+    "rpcId": 25
+  },
+  {
+    "name": "r04-valid-draft-forced-invalid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-valid-draft-forced-invalid",
+    "ok": false,
+    "elapsedMs": 6.006,
+    "rpcId": 26
+  },
+  {
+    "name": "r04-valid-draft-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r04-valid-draft-query",
+    "ok": true,
+    "elapsedMs": 501.558,
+    "rpcId": 27
+  },
+  {
+    "name": "r04-valid-draft-during-tools",
+    "tool": "tools/list",
+    "who": "a",
+    "session": "r04-valid-draft-during-tools",
+    "ok": true,
+    "elapsedMs": 12.537,
+    "rpcId": 28
+  },
+  {
+    "name": "r04-valid-draft-during-forced",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-valid-draft-during-forced",
+    "ok": false,
+    "elapsedMs": 5.489,
+    "rpcId": 29
+  },
+  {
+    "name": "r04-valid-draft-during-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r04-valid-draft-during-query",
+    "ok": true,
+    "elapsedMs": 415.533,
+    "rpcId": 30
+  },
+  {
+    "name": "r04-valid-draft-after-init",
+    "tool": "initialize",
+    "who": "a",
+    "session": "r04-valid-draft-after-init",
+    "ok": true,
+    "elapsedMs": 30.469,
+    "rpcId": 31
+  },
+  {
+    "name": "r04-valid-draft-after-tools",
+    "tool": "tools/list",
+    "who": "a",
+    "session": "r04-valid-draft-after-tools",
+    "ok": true,
+    "elapsedMs": 18.516,
+    "rpcId": 32
+  },
+  {
+    "name": "r04-valid-draft-after-forced-valid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-valid-draft-after-forced-valid",
+    "ok": false,
+    "elapsedMs": 9.249,
+    "rpcId": 33
+  },
+  {
+    "name": "r04-valid-draft-after-forced-missing",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-valid-draft-after-forced-missing",
+    "ok": false,
+    "elapsedMs": 10.733,
+    "rpcId": 34
+  },
+  {
+    "name": "r04-valid-draft-after-forced-invalid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r04-valid-draft-after-forced-invalid",
+    "ok": false,
+    "elapsedMs": 7.592,
+    "rpcId": 35
+  },
+  {
+    "name": "r04-valid-draft-after-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r04-valid-draft-after-query",
+    "ok": true,
+    "elapsedMs": 431.552,
+    "rpcId": 36
+  }
+]

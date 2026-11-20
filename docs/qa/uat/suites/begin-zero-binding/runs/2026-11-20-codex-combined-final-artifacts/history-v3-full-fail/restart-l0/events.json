@@ -1,0 +1,65 @@
+[
+  {
+    "name": "r11-budget-before-L0",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r11-budget-L0",
+    "ok": true,
+    "elapsedMs": 2221.203,
+    "rpcId": 1
+  },
+  {
+    "name": "r11-L0-init",
+    "tool": "initialize",
+    "who": "a",
+    "session": "legacy",
+    "ok": true,
+    "elapsedMs": 94.626,
+    "rpcId": 2
+  },
+  {
+    "name": "r11-L0-tools",
+    "tool": "tools/list",
+    "who": "a",
+    "session": "legacy",
+    "ok": true,
+    "elapsedMs": 30.012,
+    "rpcId": 3
+  },
+  {
+    "name": "r11-L0-forced-valid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "legacy",
+    "ok": false,
+    "elapsedMs": 24.698,
+    "rpcId": 4
+  },
+  {
+    "name": "r11-L0-forced-missing",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "legacy",
+    "ok": false,
+    "elapsedMs": 27.602,
+    "rpcId": 5
+  },
+  {
+    "name": "r11-L0-forced-invalid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "legacy",
+    "ok": false,
+    "elapsedMs": 25.327,
+    "rpcId": 6
+  },
+  {
+    "name": "r11-L0-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "legacy",
+    "ok": false,
+    "elapsedMs": 95.952,
+    "rpcId": 7
+  }
+]

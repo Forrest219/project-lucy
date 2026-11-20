@@ -1,0 +1,65 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 21.819,
+  "body": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"sourceName\":\"uat_begin_zero_orders\",\"yaml\":\"name: uat_begin_zero_orders\\ntable: uat.uat_begin_zero_orders\\ngrain:\\n  - order_id\\ncolumns:\\n  - name: order_id\\n    type: number\\n  - name: tenant\\n    type: string\\n  - name: amount\\n    type: number\\njoins: []\\nmeasures:\\n  - name: order_count\\n    expr: count(distinct order_id)\\n  - name: amount_sum\\n    expr: sum(amount)\\n\"}"
+        }
+      ],
+      "structuredContent": {
+        "sourceName": "uat_begin_zero_orders",
+        "yaml": "name: uat_begin_zero_orders\ntable: uat.uat_begin_zero_orders\ngrain:\n  - order_id\ncolumns:\n  - name: order_id\n    type: number\n  - name: tenant\n    type: string\n  - name: amount\n    type: number\njoins: []\nmeasures:\n  - name: order_count\n    expr: count(distinct order_id)\n  - name: amount_sum\n    expr: sum(amount)\n"
+      },
+      "_meta": {
+        "lucy": {
+          "contract": "lucy-r1-controlled-data-service",
+          "tool": "lucy_read_source",
+          "upstreamTool": "sl_read_source",
+          "sources": [
+            {
+              "connectionId": "uat-mysql",
+              "schema": "uat",
+              "sourceName": "uat_begin_zero_orders",
+              "physicalTable": "uat.uat_begin_zero_orders",
+              "extractionMethod": "args_source_name",
+              "confidence": "high"
+            }
+          ],
+          "guardrails": {
+            "rawSqlAllowed": false,
+            "writeOperationsAllowed": false,
+            "defaultLimit": 100,
+            "maxLimit": 1000,
+            "maxConcurrentQueries": 4
+          },
+          "result": {
+            "rowCount": null,
+            "columnCount": null,
+            "truncated": null
+          },
+          "provenance": {
+            "connectionId": "uat-mysql",
+            "sourceName": "uat_begin_zero_orders",
+            "measures": null,
+            "dimensions": null,
+            "filters": null,
+            "segments": null,
+            "orderBy": null,
+            "sourceResolution": "acl_source_map",
+            "freshness": {
+              "status": "not_checked",
+              "tool": "lucy_freshness",
+              "note": "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+            },
+            "truncation": "unknown; upstream did not expose a truncated flag"
+          }
+        }
+      }
+    },
+    "jsonrpc": "2.0",
+    "id": 173
+  }
+}

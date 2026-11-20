@@ -1,0 +1,6 @@
+{
+  "baselineImage": "sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218",
+  "variant": "L1",
+  "result": "{\"legacyFixture\":true,\"fileCount\":1,\"sourceMapVersion\":\"9933be71e9430f0e\",\"phase\":\"committed\",\"variant\":\"L1\"}",
+  "method": "baseline production APIs offline before candidate starts; no fabricated commit bytes"
+}

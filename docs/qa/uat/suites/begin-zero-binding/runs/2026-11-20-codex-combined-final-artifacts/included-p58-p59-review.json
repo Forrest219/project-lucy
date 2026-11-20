@@ -1,0 +1,20 @@
+{
+  "asOf": "2026-11-20T05:14:45.819557+00:00",
+  "candidate": "sha256:30ec4ae032db81201f35f78a8c1b56592ada53d5577862b1d6e7879db25fec3a",
+  "includedCode": {
+    "webui/server/admin/agents.ts": "39b378e7048c74c561962bc363e1c8305f3ff0a7f87052f9718321dd78240667",
+    "webui/server/admin/roles.ts": "e42eb25ab6dcca625f9276a8a8c2f39b51fefd5a5d47b73da0a2eeb341ac1b64",
+    "webui/server/admin/access-roles-agent-concurrent-edit.ts": "5b5c78b75ee84ecee2f41fb715b0d88aa4ca58004f8d5bea68c0d2db3b4d8b4e",
+    "webui/src/pages/admin/AgentDetail.tsx": "c16f2fd3bba09e877483df97169355042060e5485ff65efc8e264e3067faaecc",
+    "webui/src/pages/admin/RoleDetail.tsx": "096092f2597caf56ba529dcd8265025e6af18b9feb5ff8c3453c9e4d081d489c",
+    "webui/src/lib/rolesAgentAccessWrite.ts": "d76860f9e908457ffe17619cb84e5fc77faffd4a50eac01ce67b694faddb2638"
+  },
+  "specStatusSnapshot": {
+    "docs/specs/lucy-20261119-roles-agent-read-responsiveness-spec.md": "| 状态 | v1.0。终稿确权；委托人2026-11-20授权补齐实现缺口、冻结候选并执行F58／F59及前台浏览器UAT；实现补齐与验收进行中；通过全部合同验收后收口；R未执行；不入核心分母；≠ 可上线。 |",
+    "docs/specs/lucy-20261119-roles-agent-concurrent-edit-spec.md": "| 状态 | v1.0。终稿确权；委托人2026-11-20授权补齐实现缺口、冻结候选并执行F58／F59及前台浏览器UAT；实现补齐与验收进行中；通过全部合同验收后收口；R未执行；不入核心分母；≠ 可上线。 |"
+  },
+  "testIndexRows": [
+    "| `UAT-SUITE-ROLES-AGENT-CONCURRENCY-SCALE` | P1-58／REQ-030-079；P1-59／REQ-030-080 | [suites/roles-agent-concurrency-scale](suites/roles-agent-concurrency-scale/suite.md) | 隔离Docker单实例；F58读取模块、F59并发事务、R完整2×／5×组合发布取证；当前倍率校准单列 | [2026-11-20-cursor-roles-agents-ab-browser](suites/roles-agent-concurrency-scale/runs/2026-11-20-cursor-roles-agents-ab-browser.md)（A/B 远程）；[2026-11-20-kimi-double-dom-risk](suites/roles-agent-concurrency-scale/runs/2026-11-20-kimi-double-dom-risk.md)；[2026-11-20-cursor-roles-agents-browser-timing](suites/roles-agent-concurrency-scale/runs/2026-11-20-cursor-roles-agents-browser-timing.md)；[2026-11-20-cursor-f58-f59-b-floor](suites/roles-agent-concurrency-scale/runs/2026-11-20-cursor-f58-f59-b-floor.md)；[2026-11-20-kimi-scale-stress](suites/roles-agent-concurrency-scale/runs/2026-11-20-kimi-scale-stress.md) | **SMOKE_PASS**＋**B-floor PASS WITH GAP**（fixtures B 读路径全过线）＋**F58-browser-timing PASS WITH GAP**（前台 223 roles／82 agents primaryReady 26–189 ms，API 33–69 ms）＋**翻倍档 PASS**（463 行前台 primaryReady p95=184 ms、DOM 12.3k 线性 ~26.6 nodes/行、longtask ≤166 ms、consoleErrors 0——O-1 风险下调为低优先级规模观察，看守阈值 1,000 行）＋**kimi stress PASS WITH GAP**（超 5× 造数 10 rps 600/600 全 200 p95 ≤115 ms）。**完整 F58／F59／R／E 全矩阵／2×／5× 联合仍 NOT RUN**；未经17校准；≠功能收口；≠可上线。遗留：browser-timing fixture 220 个未清理未声明保留（复核 R-2）；写风暴中断两次（复核 R-4，翻倍造数单会话串行未复现）；筛选异步观察未定性（复核 R-3） |"
+  ],
+  "finding": "P1-58/59 are present in this candidate; their mandatory complete F58/F59/browser/scale/R evidence is not qualified on this candidate; independent two-fix UAT success does not approve the full package."
+}

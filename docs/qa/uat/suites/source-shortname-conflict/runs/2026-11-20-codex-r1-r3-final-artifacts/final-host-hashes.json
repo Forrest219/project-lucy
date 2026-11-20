@@ -1,0 +1,9 @@
+{
+  "webui/server/source-name-registry.ts": "390de191c59030acf11c9f6b605f08949860340db5af243136f403cd269780d5",
+  "scripts/uat/reproduce-source-shortname-conflict.py": "14d97390fd67910ca143b2ae3e05e5d96eaa2dfb66f807c41e3866fe83e1d515",
+  "scripts/uat/source-shortname-browser.mjs": "79507e4699eb93386aca6f78c95a75cb6e824f4b6d6635d88004d61095ce7bd2",
+  "scripts/uat/source-shortname-runner.test.py": "2cb7a70a9f6ac7cda1f2743f167baf3942a00ef898f0bcae398ff448cf476ce3",
+  "webui/server/__tests__/schema-structure.test.ts": "744e6a2da121659f827aef13d2e0c4cbcaaa472aca7e01057898a47ec640afd7",
+  "webui/server/__tests__/source-name-registry.test.ts": "afa9e831ccf69d2c22a0c8d27b19f61f5771b2d6523a9743359e8d37d1f3d8c7",
+  "webui/src/__tests__/catalog-asset-upload.test.tsx": "3869e664284940e114db783741453af88da8ed814648a0ceb855da6959663d95"
+}

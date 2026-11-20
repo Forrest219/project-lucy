@@ -1,0 +1,12 @@
+{
+  "budgetBefore": [],
+  "budgetAfter": [],
+  "bindingsBefore": {
+    ".ktx-ui/caliber-binding/sessions/session-fba053f6c1d50b25c27690b5b32fffb1.json": "ed28aa3f4d1c9f8480147c32f4803d8ebe448f0c4d1311906803db8555050c27",
+    "config/caliber-bindings/.caliber-binding/active-generation.json": "91a20bc618e9c0d62b3513809fee8bca45bfca170041c2e32e202445e1cc8460"
+  },
+  "bindingsAfter": {
+    ".ktx-ui/caliber-binding/sessions/session-fba053f6c1d50b25c27690b5b32fffb1.json": "ed28aa3f4d1c9f8480147c32f4803d8ebe448f0c4d1311906803db8555050c27",
+    "config/caliber-bindings/.caliber-binding/active-generation.json": "91a20bc618e9c0d62b3513809fee8bca45bfca170041c2e32e202445e1cc8460"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 77,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": true,
+      "connectionId": "hive-1",
+      "schema": "race_b",
+      "assetKind": "schema_manifest",
+      "assetType": "schemaManifest",
+      "targetPath": "semantic-layer/hive-1/_schema/race_b.yaml",
+      "originalFilename": "race_b.yaml",
+      "sizeBytes": 92,
+      "sha256": "2b710437149a5bfa1765db3424f82c5e7742ce6e13229207cbe4ad0b21d4581a",
+      "errors": [],
+      "warnings": [],
+      "tableNames": [
+        "shared"
+      ],
+      "tables": 1,
+      "sourceNameConflicts": [],
+      "exists": false
+    }
+  }
+}

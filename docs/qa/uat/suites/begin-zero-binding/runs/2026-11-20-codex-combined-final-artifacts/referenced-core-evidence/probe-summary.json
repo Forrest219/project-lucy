@@ -1,0 +1,76 @@
+{
+  "startedAt": "2026-11-20T04:18:45.806370+00:00",
+  "method": "real OS FIFO at diagnostic reload-state file; source-derived lab images; not customer root-cause proof",
+  "helperSha256": "c73fa8240d880a3ff4650c4c41be3d97ec10596e4b10ff7cb1c76bdb0daa2c6c",
+  "results": {
+    "baseline": {
+      "readyzBlocked": true,
+      "livez": 200,
+      "blockedIoWitness": {
+        "time": 1795148348.8899016,
+        "file": {
+          "kind": "fifo",
+          "inode": 584067
+        },
+        "processes": [
+          {
+            "pid": "359",
+            "blockedThreads": [
+              {
+                "tid": "370",
+                "wchan": "pipe_read"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "candidateIsolation": {
+      "stats": {
+        "/api/livez": {
+          "count": 120,
+          "non200": 0,
+          "p99Ms": 64.81124999999884,
+          "maxMs": 90.9608339999977
+        },
+        "/api/readyz": {
+          "count": 120,
+          "non200": 0,
+          "p99Ms": 66.17658300000767,
+          "maxMs": 72.79604099999415
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:19:33.184Z",
+        "ageMs": 124954,
+        "freshness": "stale"
+      },
+      "sameObservedAt": true
+    },
+    "pathOnlyRecovery": {
+      "freshCount": 0,
+      "lastDiagnostics": {
+        "observedAt": "2026-11-20T04:19:33.184Z",
+        "ageMs": 162984,
+        "freshness": "stale"
+      },
+      "observationSeconds": 35,
+      "meaning": "path restored, but previously accepted FIFO read remains outstanding"
+    },
+    "realIoReleaseRecovery": {
+      "fresh": true,
+      "observations": 7,
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:22:22.722Z",
+        "ageMs": 740,
+        "freshness": "fresh"
+      }
+    },
+    "normalDrainSmoke": {
+      "exited": true,
+      "elapsedS": 1.094,
+      "exitCode": 143
+    }
+  },
+  "finishedAt": "2026-11-20T04:22:26.067759+00:00"
+}

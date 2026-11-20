@@ -1,0 +1,48 @@
+{
+  "status": "INTERRUPTED",
+  "reason": "whole-candidate source review found six inherited Wiki files behind committed baseline; stopped before full R completion; not release evidence",
+  "at": "2026-11-20T05:05:57.874451+00:00",
+  "rawSummaryStatus": "RUNNING may remain from KeyboardInterrupt; original summary preserved",
+  "cleanupRecords": [
+    {
+      "path": "candidate/cleanup.json",
+      "at": "2026-11-20T05:05:42.719138+00:00",
+      "volumeRemoved": true,
+      "privateRemoved": true,
+      "containersRemoved": true,
+      "networkRemoved": true
+    },
+    {
+      "path": "draft/cleanup.json",
+      "at": "2026-11-20T05:05:41.870207+00:00",
+      "volumeRemoved": true,
+      "privateRemoved": true,
+      "containersRemoved": true,
+      "networkRemoved": true
+    },
+    {
+      "path": "i1/cleanup.json",
+      "at": "2026-11-20T05:04:30.847255+00:00",
+      "volumeRemoved": true,
+      "privateRemoved": true,
+      "containersRemoved": true,
+      "networkRemoved": true
+    },
+    {
+      "path": "i3/cleanup.json",
+      "at": "2026-11-20T05:05:20.578766+00:00",
+      "volumeRemoved": true,
+      "privateRemoved": true,
+      "containersRemoved": true,
+      "networkRemoved": true
+    },
+    {
+      "path": "i2/cleanup.json",
+      "at": "2026-11-20T05:04:56.380164+00:00",
+      "volumeRemoved": true,
+      "privateRemoved": true,
+      "containersRemoved": true,
+      "networkRemoved": true
+    }
+  ]
+}

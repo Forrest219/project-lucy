@@ -1,0 +1,53 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 587.967,
+  "body": {
+    "ok": true,
+    "data": {
+      "accepted": true,
+      "release": {
+        "id": "rel_20261120_051004_673_db77c599",
+        "createdAt": "2026-11-20T05:10:04.674Z",
+        "actor": "uat_owner",
+        "status": "reindexing",
+        "trigger": "webui_publish",
+        "connectionIds": [
+          "uat-mysql"
+        ],
+        "files": [
+          {
+            "targetPath": "semantic-layer/uat-mysql/_schema/uat.yaml",
+            "kind": "schemaManifest",
+            "sha256": "2b3a053dfd3ece802be5d7799154f5763beee1196aa253e0e88bfa69db7ba210",
+            "overwritten": true
+          }
+        ],
+        "changedSources": [
+          {
+            "connectionId": "uat-mysql",
+            "sourceName": "uat_begin_zero_orders"
+          }
+        ],
+        "diff": "Index: semantic-layer/uat-mysql/_schema/uat.yaml\n===================================================================\n--- semantic-layer/uat-mysql/_schema/uat.yaml\tcurrent\n+++ semantic-layer/uat-mysql/_schema/uat.yaml\tproposed\n@@ -1,1 +1,2 @@\n-{\"tables\": {\"uat_begin_zero_orders\": {\"table\": \"uat.uat_begin_zero_orders\", \"columns\": [{\"name\": \"order_id\", \"type\": \"number\", \"pk\": true}, {\"name\": \"tenant\", \"type\": \"string\"}, {\"name\": \"amount\", \"type\": \"number\"}]}}}\n\\ No newline at end of file\n+{\"tables\": {\"uat_begin_zero_orders\": {\"table\": \"uat.uat_begin_zero_orders\", \"columns\": [{\"name\": \"order_id\", \"type\": \"number\", \"pk\": true}, {\"name\": \"tenant\", \"type\": \"string\"}, {\"name\": \"amount\", \"type\": \"number\"}]}}}\n+# r04-invalid-business-fields\n",
+        "validation": {
+          "ok": true,
+          "results": [
+            {
+              "connectionId": "uat-mysql",
+              "sourceName": "uat_begin_zero_orders",
+              "ok": true,
+              "exitCode": 0,
+              "issues": []
+            }
+          ]
+        },
+        "recoveryRequired": false,
+        "activationStatus": "unconfirmed",
+        "attemptId": "att_87953b98-3c23-40f3-a365-35a0e52307b7",
+        "idempotencyKey": "zb-r04-invalid-business-fields",
+        "snapshotId": "snap_c2ad4708-21e5-4952-8ec6-323456a0cfd8",
+        "recoveryJournalId": "rj_f35d0edf-d021-4d66-9e0a-fe6a7e0b3801"
+      }
+    }
+  }
+}

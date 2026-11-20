@@ -1,0 +1,37 @@
+✔ SC-match: exact / bounded / identifier (1.2745ms)
+✔ SC-match: measure_key high; description medium; wiki body ignored (0.129792ms)
+✔ SC-id fence: valid and invalid concept ids (0.270166ms)
+✔ SC-authority: null canonical requires zero canonical roles (1.507208ms)
+✔ SC-conflicts: needs_authority when ≥2 live high candidates and no canonical (0.997291ms)
+✔ SC-conflicts: degraded when asset status unknown (0.125833ms)
+✔ SC-currentlyMatches: rematch respects confidence (0.204666ms)
+✔ SC-12: 资产管理人员 does not yield medium/high for alias 资产 (1.214875ms)
+✔ SC-09: broken_canonical when asset deleted; canonical+summary kept (92.314083ms)
+✔ SC-07: load rejects inconsistent authority (1.492042ms)
+✔ SC-05 allow helper: scripts/concepts paths allowed (135.856ms)
+✔ SC-02 deriveConflicts ignores absent high candidates (0.105125ms)
+✔ SC-11: atomic write failure leaves original bytes (15.191333ms)
+✔ SC-13/SC-17: id fence and filename/id mismatch (8.619042ms)
+✔ SC-14: set-canonical clears needs_authority without rescan (32.251458ms)
+✔ SC-15: rematch miss drops needs_authority for historical high (0.142917ms)
+✔ SC-content-root: flag / env / ktx / default (8.393208ms)
+✔ SC-scan: discovers measure + wiki; needs_authority; set-canonical clears (144.389625ms)
+✔ SC-scan: rejected stays rejected across rescan (58.331666ms)
+✔ SC-list ids from disk (21.148458ms)
+✔ SC-atomic: write then read roundtrip (22.315416ms)
+✔ SC-id fence: path escape blocked (10.481959ms)
+✔ SC-seed: whitelist creates empty concepts (41.285583ms)
+✔ SC-merge: preserve rejected; promote canonical exclusivity (49.298792ms)
+✔ SC-merge: empty evidence cannot become candidate (0.138ms)
+✔ SC-19: conceptsDir symlink rejected (4.153208ms)
+✔ SC-19: concept file symlink rejected (4.229291ms)
+✔ planScan: preview does not write concepts/ (7.91625ms)
+✔ planSetCanonical + applyConceptPlan roundtrip (31.875666ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 440.341584

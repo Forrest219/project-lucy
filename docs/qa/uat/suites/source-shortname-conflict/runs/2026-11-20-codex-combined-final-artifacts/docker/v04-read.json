@@ -1,0 +1,65 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 23,
+  "body": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"sourceName\":\"city\",\"yaml\":\"name: city\\ntable: weather.city\\ngrain:\\n  - id\\ncolumns:\\n  - name: id\\n    type: number\\n  - name: name\\n    type: string\\njoins: []\\nmeasures:\\n  - name: snc_city_fixture\\n    expr: count(id)\\n    description: shortname uat city overlay\\n\"}"
+        }
+      ],
+      "structuredContent": {
+        "sourceName": "city",
+        "yaml": "name: city\ntable: weather.city\ngrain:\n  - id\ncolumns:\n  - name: id\n    type: number\n  - name: name\n    type: string\njoins: []\nmeasures:\n  - name: snc_city_fixture\n    expr: count(id)\n    description: shortname uat city overlay\n"
+      },
+      "_meta": {
+        "lucy": {
+          "contract": "lucy-r1-controlled-data-service",
+          "tool": "lucy_read_source",
+          "upstreamTool": "sl_read_source",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "physicalTable": "weather.city",
+              "extractionMethod": "args_source_name",
+              "confidence": "high"
+            }
+          ],
+          "guardrails": {
+            "rawSqlAllowed": false,
+            "writeOperationsAllowed": false,
+            "defaultLimit": 100,
+            "maxLimit": 1000,
+            "maxConcurrentQueries": 4
+          },
+          "result": {
+            "rowCount": null,
+            "columnCount": null,
+            "truncated": null
+          },
+          "provenance": {
+            "connectionId": "hive-1",
+            "sourceName": "city",
+            "measures": null,
+            "dimensions": null,
+            "filters": null,
+            "segments": null,
+            "orderBy": null,
+            "sourceResolution": "acl_source_map",
+            "freshness": {
+              "status": "not_checked",
+              "tool": "lucy_freshness",
+              "note": "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+            },
+            "truncation": "unknown; upstream did not expose a truncated flag"
+          }
+        }
+      }
+    },
+    "jsonrpc": "2.0",
+    "id": 22
+  }
+}

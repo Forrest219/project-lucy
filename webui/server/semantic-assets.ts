@@ -164,6 +164,7 @@ export type SemanticAssetErrorCode =
   | "VALIDATION_GATE_FAILED"
   /** Spec 162 §8 / SC-24 — a failing TS/Python contract check. */
   | "CONTRACT_VIOLATION"
+  | "admission_stop_failed"
   | "PUBLISH_IN_PROGRESS"
   | "REINDEX_IN_PROGRESS"
   /**

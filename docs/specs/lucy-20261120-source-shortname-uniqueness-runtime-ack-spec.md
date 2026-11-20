@@ -2,15 +2,16 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能 Spec / v0.2 |
+| 文档类型 / 版本 | 功能 Spec / v0.4 |
 | 日期 / 产品线 | 2026-11-20 / 0.30.0 |
 | 功能编号 / 优先级 | P1-64／REQ-030-085；事故修复；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.2。终稿已确权；开发授权已获得；Task 1–6 实现完成（聚焦 vitest 120／11 PASS；API 文档已同步）；Task 7 改后 Docker UAT 已执行（判定见测试台 INDEX）；不入核心分母；≠ 功能合同收口（实现 CR／提交推送须另行明示）；≠ 可上线。 |
+| 状态 | v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 |
 | 授权边界 | Task 1–6 与 Task 7 UAT 执行已获授权；禁止本轮 git commit／push（除非另授）；不改 KTX；不放宽 Source Map 判重 |
 | 需求 / 计划 | [REQ-030-085](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [总账 P1-64](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) |
-| 复现证据 / 测试台 | 改前 [Docker 复现](../qa/uat/suites/source-shortname-conflict/runs/2026-11-19-codex-docker-repro.md)；改后 [Docker verify PASS](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-cursor-docker-verify.md) · [UAT-SUITE-SOURCE-SHORTNAME-CONFLICT](../qa/uat/suites/source-shortname-conflict/suite.md) |
+| 复现证据 / 测试台 | 改前 [Docker 复现](../qa/uat/suites/source-shortname-conflict/runs/2026-11-19-codex-docker-repro.md)；本轮 [合并最终候选复验](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-combined-final.md) · [UAT-SUITE-SOURCE-SHORTNAME-CONFLICT](../qa/uat/suites/source-shortname-conflict/suite.md) |
 | 评审修订 | 2026-11-20 Cursor 评审：撤销「无 WebUI 变更」豁免；补陈旧预览与 `compileError` 残留；画像证据分层；出口扩至 SC-01–10 |
+| 终审记录 | [同候选整包最终评审](../reviews/2026-11-20-p160-p164-combined-final-review.md)；本条功能收口，当前整包不放行用户更新。 |
 
 ## 闭口层级
 
@@ -47,7 +48,7 @@
 | D8 | 引用兼容 | 不自动改名已有 Manifest，不批量改写 overlay、Role、已保存查询或审计历史。新增冲突表此前没有可用的无歧义短名引用，其新引用使用分配后的 `sourceName`；重扫稳定性由 D2 保证。旧冲突的人工修复须显式修改短名，产品不猜测应迁移哪些引用。 |
 | D9 | 保存 ack（API） | 连接创建和启用表保存时，只要 `PolicyRuntimeStatus.issues` 含 `source_map_compile_failed:*`，`policyRuntimeAck=false` 且兼容别名 `runtimeAck=false`。响应新增 `policyRuntimeIssues` 保留具体原因；既有 `written=true`、磁盘不回滚和 HTTP 200 语义不变。 |
 | D10 | 既有行为不变 | 不把 `runtimeAck` 改成三个 ack 的合取，不把 `catalogRuntimeAck`／`executionRuntimeAck` 强制改为 false，不改变 Access 写入对普通单 Agent Role 编译失败的既有处理。Source Map 编译器继续判重并失败关闭；不改 KTX。 |
-| D11 | WebUI 认读 ack | 启用表保存（`TableWhitelist`）与连接创建成功反馈（`CreateConnectionDrawer`）对齐 Spec 14 §0.3：`runtimeAck===true` 才可展示无条件成功；`runtimeAck!==true`（含缺失）须 error／warning，并可读展示 `policyRuntimeIssues` 中的 `source_map_compile_failed:*`（或等价摘要）。不得仅凭 `written`／HTTP 200／步进到 success 步冒充“已可用”。不要求全页浏览器 UAT；以组件／交互测试覆盖。 |
+| D11 | WebUI 认读 ack | 启用表保存（`TableWhitelist`）与连接创建成功反馈（`CreateConnectionDrawer`）对齐 Spec 14 §0.3：`runtimeAck===true` 才可展示无条件成功；`runtimeAck!==true`（含缺失）须 error／warning，并可读展示 `policyRuntimeIssues` 中的 `source_map_compile_failed:*`（或等价摘要）。不得仅凭 `written`／HTTP 200／步进到 success 步冒充“已可用”。组件／交互测试继续保留；本轮另按 UAT-SNC-12 做真实前台浏览器与即时计时。 |
 
 ### 2.1 校验响应增量
 
@@ -156,7 +157,7 @@ ackKtxWrite():
 | SC-07 | 冲突消除并重新提交后两个保存路径恢复 `policyRuntimeAck=true`／`runtimeAck=true`；`catalogRuntimeAck` 与 `executionRuntimeAck` 仍按各自事实返回；普通 `role_resolution_failed` 的既有 Access 写入语义不变 | 本机真实进程 API＋回归 |
 | SC-08 | 在真实进程中依次完成 weather／ods 扫描、validate、upload、启用表保存，生成结果分别为 `city`／`ods_city`，最终集合无冲突，保存 ack 为 true，策略运行时无 Source Map issue；不通过手工改生成 YAML 获得通过。**本条不含 MCP**；P1 可用性见第 5 节 UAT | 本机真实进程 API |
 | SC-09 | 既有重复 Source Map 仍按原拒绝码失败关闭；相关 schema-structure、catalog-assets、policy-compile、canonical-source-key、Spec 178、连接创建和启用表回归通过，TypeScript 类型检查通过 | 本机自动化 |
-| SC-10 | 启用表保存与连接创建的 WebUI：当响应 `runtimeAck!==true` 时不得展示无条件成功 toast／success 步；须 error 或 warning，并暴露 Source Map issue 摘要；`runtimeAck===true` 时既有成功路径不变。以组件／交互测试覆盖，默认不做浏览器 E2E | 本机 Vitest（组件） |
+| SC-10 | 启用表保存与连接创建的 WebUI：当响应 `runtimeAck!==true` 时不得展示无条件成功 toast／success 步；须 error 或 warning，并暴露 Source Map issue 摘要；`runtimeAck===true` 时既有成功路径不变。组件测试与 UAT-SNC-12 真实前台浏览器＋计时共同覆盖 | 本机 Vitest（组件）＋UAT-SNC-12（真实前台浏览器／计时） |
 
 SC-01–10 全部通过只表示本条功能合同候选可进入收口评审，不表示 UAT PASS 或可上线。完整 MCP 与合法用户恢复路径必须另按第 5 节全真执行。
 
@@ -164,17 +165,21 @@ SC-01–10 全部通过只表示本条功能合同候选可进入收口评审，
 
 测试台沿用 `UAT-SUITE-SOURCE-SHORTNAME-CONFLICT`，详细步骤见 [cases.md](../qa/uat/suites/source-shortname-conflict/cases.md)。必做范围：
 
-1. **R0／01 基线**：候选镜像身份和关键源码哈希一致；独立 Docker＋真实 MySQL；weather 单表的 tools/list、catalog、begin、read、query 可用。
-2. **02 原始事故转绿**：不手改扫描 YAML，ods 自动生成 `ods_city`；validate／upload／启用表保存成功且 ack 真实；不重启容器，五条 MCP 路径全部成功，weather.city 与 ods.city 的 `COUNT(id)` 各为 1。
+1. **R0／01 基线**：候选镜像身份和关键源码哈希一致；独立 Docker＋真实 MySQL；weather 单表的 tools/list、catalog、read、query 可用；begin 按当前 P1-60 工具面合同验收。
+2. **02 原始事故转绿**：不手改扫描 YAML，ods 自动生成 `ods_city`；validate／upload／启用表保存成功且 ack 真实；不重启容器，公开 MCP 路径全部成功（当前 P1-60 零绑定隐藏 begin，按 tools/list＋精确 begin_not_available 验兼容，不算调用成功），weather.city 与 ods.city 的 `COUNT(id)` 各为 1。
 3. **03 引用稳定**：重扫 weather／ods 后短名不漂移，既有 Role、overlay 和已保存查询夹具仍可读、可查。
 4. **04 负向写入保护**：手工提交裸 `city` 冲突时 validate 明确失败、upload 400、磁盘不变，先前合法 MCP 路径仍可用；错误含重扫／建议短名提示。
 5. **05 二次前缀冲突**：预置 `ods_city` 占用后，ods.city 分配 `ods_city_2`，两表真实可查。
 6. **06 并发竞态**：两个锁前同名候选只有一个能发布，另一个明确失败；最终无冲突且既有 MCP 不受影响。
-7. **07 ack 负控与恢复**：以磁盘夹具注入旧冲突，保存不得返回 `runtimeAck=true`，须带具体 issue；经 API 修复后无需重启，ack 与五条 MCP 路径恢复。WebUI 认读由 SC-10 覆盖，本套件默认不跑浏览器。
+7. **07 ack 负控与恢复**：以磁盘夹具注入旧冲突，保存不得返回 `runtimeAck=true`，须带具体 issue；经 API 修复后无需重启，ack 与公开 MCP 路径恢复。WebUI 认读由 SC-10 与 UAT-SNC-12 真实前台浏览器／计时共同覆盖。
 8. **08 多组旧冲突**：至少六组合成旧冲突可逐份修复，不被无关旧冲突阻断；最后一组修复后编译与查询恢复。该用例只证明合成六组，不冒充客户现场六对逐一核验。运行时 `compileError` 可能只暴露最后一对——完整清单以治理校验 `sourceNameConflicts[]` 为准。
 9. **09 回归与证据**：原始响应、磁盘前后摘要、策略 issue、查询结果和清理状态留档；INDEX 只在全部必做项真实通过后改为 PASS，任一失败保持 FAIL。
 
-禁止以 Code Review、Vitest、容器重启、手工修绿后跳过 02、只验证“拦住冲突”或只检查 ack 字段代替全真 UAT。默认不做浏览器或移动窄屏测试。
+10. **10 旧别名防抢占**：已有 ods_zebra→ods.zebra 后新增 ods.ods_zebra；旧别名仍查原表，新别名 ods_ods_zebra 查新表且不同值可辨。
+11. **11 大写物理名**：aux.City 的 columns／namesOnly 扫描自动避名为 aux_City；物理名和实际SQL保留大小写。
+12. **12 真实前台反馈**：启用表保存／创建连接两入口各验成功、未确认、恢复，记录导航和反馈时延、可见／焦点与API分列；不得出现未确认的成功Toast。
+
+禁止以 Code Review、Vitest、容器重启、手工修绿后跳过 02、只验证“拦住冲突”或只检查 ack 字段代替全真 UAT。本轮须执行 UAT-SNC-12 真实前台浏览器／计时；不做移动窄屏测试。
 
 ## 6. 非目标与风险
 
@@ -200,5 +205,27 @@ New terms:
 
 - 范围：启用表保存页与连接创建 Drawer 的成功／失败反馈；对齐 Spec 14 §0.3 的 `runtimeAck` 认读（D11／SC-10）。
 - 改变：当 `runtimeAck!==true` 时，不得展示无条件成功 toast 或把创建流程标为已可用成功；须 error／warning，并可读暴露 Source Map issue 摘要。
-- 不改变：页面路由、组件布局主结构、按钮排布、空态、浏览器全页旅程；默认不做浏览器或移动窄屏测试。
+- 不改变：页面路由、组件布局主结构、按钮排布、空态、浏览器全页旅程；本轮须执行 UAT-SNC-12 真实前台浏览器／计时；不做移动窄屏测试。
 - 文案须遵守术语标准；不得把 `policyRuntimeIssues` 说成“运行时已生效”。
+
+
+## 2026-11-20 最终评审整改（R1–R3；委托人已授权）
+
+- R1：分配前先预留本次扫描仍存在的所有有效旧映射，再为新物理表分配；新增表名等于旧短名不得抢占旧来源。D2／SC-02 含此反例。
+- R2：物理表身份保留真实大小写；只有 sourceName 占用比较使用归一化。allocator 的返回键与 builder 查询键须一致；City／city 为两个物理表时也不能合并。D1／D4／SC-01 含字段与 namesOnly 两分支。
+- R3：并发 UAT 不再把任意非 200 当通过。PUBLISH_COORDINATOR_BUSY 只记为忙拒绝，须在窗口释放后重试同一过期候选并收到 400／DUPLICATE_SOURCE_NAME；其他 5xx 直接 FAIL。保留 SC-04 的受控锁内复核单测。
+- 本轮按新的浏览器规则补充 UAT-SNC-12：独立 Docker 上真实前台浏览器，实际操作启用表页及连接创建 Drawer；分别覆盖 ack=true、Source Map issue 导致 ack=false、恢复后合法路径。记录导航→关键内容、点击保存→结果可见的端到端时间，与同次 API 耗时分列，检查 visible／hasFocus；不使用 API mock。
+- 新增 UAT-SNC-10（旧别名防抢占并查原表／新表不同值）、11（大写物理表自动避名并查数）；现有 R0／01–09 继续执行。新跑次以本轮完整分母登记，旧 PASS 与改前 FAIL 均保留。
+- SC-10、D11 与第 5 节旧的“仅组件／默认不跑浏览器”约定仅作为 v0.2 历史口径；本轮明确由真实前台浏览器＋计时取代该豁免。
+
+当前工具面说明：P1-60 已生效时，零绑定夹具的 begin 不公开，强制调用只接受精确 begin_not_available，不能将其写成可调用路径成功；本轮公开四主路径必须全部成功。该兼容分支由 runner 独立回归固定。
+
+## R1–R3阶段历史验收记录（SC-09修复前，2026-11-20）
+
+R1–R3整改、169项Vitest与5项判定器回归完成；[完整Docker／浏览器跑次](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-r1-r3-final.md) R0／01–12 PASS，另补视口断言复跑。SC-09仍未满足：全库TypeScript 49条基线错误（新增0），不修改合同或静默豁免；因此功能合同未收口。Spec头部状态为现值，之前确权与授权叙述为历史记录。
+
+## SC-09修复后验收记录（2026-11-20）
+
+委托人授权继续处理49条类型错误；宿主与最终候选容器均0错误，strict与include未改。413项Vitest、29项概念核心回归通过；新增角色／Agent依赖反例覆盖模板与defaults变化。最终镜像40104b7f的[完整Docker与前台浏览器跑次](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-sc09-final.md) R0／01–12 PASS。SC-09已满足，先前三台账类型缺口关闭；当前开发状态看头部。
+
+最终[SC-09修复后终审](../reviews/2026-11-20-p1-64-sc09-final-review.md)通过本条功能合同收口；当前候选整包仍受已纳入P1-60未关闭问题约束，本条收口不等于用户更新放行。

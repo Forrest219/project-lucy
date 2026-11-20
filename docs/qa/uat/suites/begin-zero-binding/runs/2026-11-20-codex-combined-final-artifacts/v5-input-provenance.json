@@ -1,0 +1,12 @@
+{
+  "base": "77e2ad8425ae0e7a2918803e497da10636b14e5a",
+  "reason": "align inherited Wiki files to already committed baseline, avoid replay of old image source",
+  "files": {
+    "webui/server/__tests__/wiki-upload-access.test.ts": "e31b73a3d6fb11628c2c0eedf8700b2f7f954160f059b04549ad2f14fc8731c4",
+    "webui/src/__tests__/wiki-access-components.test.tsx": "f4cf221e445598fc2b12e28fb34c3d10861f45926fc7aa4dd2de8cdfcb563a96",
+    "webui/src/__tests__/wiki.test.tsx": "80517090a3efee1059df8693f6557a0bcc2ab78b44f4dafdec087085f2b80e24",
+    "webui/src/components/WikiUploadPreflight.tsx": "94dbdfc27c89ed4ba27caa21157bf34bdc58d94b324b54e2e50d1563080b9d4d",
+    "webui/src/lib/wikiAccess.ts": "686a2c75fa5d2f0b34dcbbc2a6ff92d9e694ab69aa7276ad60c6cd53ca7420c2",
+    "webui/src/pages/WikiEditor.tsx": "bbdca31a9b775f5b25168f5eef4b3533c182f752c8639d7ec195ef3780d2c41a"
+  }
+}

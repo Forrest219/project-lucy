@@ -19,3 +19,5 @@
 - 多组冲突：至少六组可独立唯一化的合成 Manifest，验证逐份修复不死锁；不外推为客户现场六对已核验。
 - 引用兼容：weather.city／ods_city 的 Role、overlay 与已保存查询，重扫后检查短名、文件和查询结果不漂移。
 - 所有扩展均须真实 API／MCP 执行；环境不能构造时记 BLOCKED，未经独立授权不得用 mock 或 Code Review 替代。
+
+R1–R3 补充夹具：weather.zebra 与 ods.zebra；建立旧映射后再创建 ods.ods_zebra，旧／新表分别 1／2 行以识别误路由；aux.City 为真实大写表，1 行。浏览器凭据仅由父进程 env 传入，截图只在保存终态采集；故障态只改本次独立临时项目的 ods Manifest，结束恢复并统一清理。

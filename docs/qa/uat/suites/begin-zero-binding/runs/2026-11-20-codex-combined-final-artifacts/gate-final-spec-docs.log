@@ -1,0 +1,7 @@
+Spec/Plan doc lint passed (557 files scanned, 1035 baseline exemptions, 1 warnings on untracked files).
+
+WARN — 以下文件尚未被 git 跟踪（未 git add），形态违规不阻塞本工作树；一旦 git add 或提交即转为阻塞项：
+  docs/specs/lucy-20261120-user-journey-performance-gate-spec.md [interaction-contract] 交互合同非空行应有 9 行，实际 5 行
+
+STALE baseline entries (1) —— 这些条目已不再违规，可从基线移除：
+  docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md [metadata]

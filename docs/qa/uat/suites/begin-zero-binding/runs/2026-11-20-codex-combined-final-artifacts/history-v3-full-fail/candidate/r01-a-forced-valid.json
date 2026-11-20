@@ -1,0 +1,21 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 32.54,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "当前未启用问询上报，可直接按现有权限查询。"
+        }
+      ],
+      "data": {
+        "reason": "begin_not_available",
+        "trace": "trace_3c8e731c-dd86-433f-a99e-8f31e3924bab"
+      }
+    }
+  }
+}

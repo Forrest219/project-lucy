@@ -1,0 +1,67 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 26.657,
+  "body": {
+    "ok": true,
+    "data": {
+      "agent": {
+        "id": "uat_zb_denied",
+        "name": "ZB denied",
+        "note": "isolated UAT control r06-deny-restore",
+        "enabled": true,
+        "roles": [
+          "a"
+        ],
+        "role": "a",
+        "tokens": [
+          {
+            "hash": "sha256:d07d51ceb0173825830c8533ee6516305189f21c835aa9af7ca22a1aa4957713",
+            "label": "isolated-denied",
+            "created": "2026-11-20",
+            "expires_at": null,
+            "device_name": null,
+            "last_used": "2026-11-20T04:43:57.269Z",
+            "last_tool": "lucy_query",
+            "last_outcome": "ok",
+            "last_ip": "172.26.0.1",
+            "last_user_agent": "Python-urllib/3.9",
+            "last_client": null,
+            "last_client_version": null,
+            "last_device_name_seen": null,
+            "distinct_ips_7d": 1
+          }
+        ],
+        "configUpdatedAt": "2026-11-20T04:43:56.691Z",
+        "stats": {
+          "callsLast7d": 3,
+          "businessCallsLast7d": 3,
+          "protocolCallsLast7d": 0,
+          "usageCallsLast7d": 3,
+          "evalProbeCallsLast7d": 0,
+          "deniedLast7d": 2,
+          "lastSeen": "2026-11-20T04:43:57.269Z",
+          "lastBusinessSeen": "2026-11-20T04:43:57.269Z",
+          "activeTokensLast7d": 1,
+          "usedCredentialsLast7d": 1,
+          "configuredTokens": 1,
+          "availableTokens": 1,
+          "credentialMetricsState": "ok",
+          "topTables": [
+            {
+              "table": "uat.uat_begin_zero_orders",
+              "calls": 1
+            }
+          ],
+          "metricsState": "ok",
+          "windowStart": "2026-11-13T04:45:01.336Z",
+          "windowEnd": "2026-11-20T04:45:01.336Z"
+        },
+        "permissionWarnings": [
+          "source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision"
+        ]
+      },
+      "version": "1795149836698-7dbbc78aaa3ac226",
+      "baseObjectVersion": "agent:uat_zb_denied:d465caaa9ad7b6e5373e6b08bd948918fe9666f36195f91746caa46e48413597"
+    }
+  }
+}

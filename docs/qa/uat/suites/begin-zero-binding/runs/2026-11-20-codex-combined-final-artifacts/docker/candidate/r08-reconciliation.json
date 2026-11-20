@@ -1,0 +1,101 @@
+{
+  "queries": [
+    {
+      "request_id": "159",
+      "trace_id": "trace_b1234721-2824-481b-97a6-1d94f06d558f",
+      "user_id": "uat_zb_a",
+      "tool": "lucy_query",
+      "outcome": "ok",
+      "error_detail": null,
+      "lucy_session_id": "r08-0",
+      "attribution_mode": "unassigned",
+      "effective_turn_id": null,
+      "lucy_turn_id": null
+    },
+    {
+      "request_id": "160",
+      "trace_id": "trace_c072a4f8-f30c-423b-8d91-a8653285983a",
+      "user_id": "uat_zb_a",
+      "tool": "lucy_query",
+      "outcome": "ok",
+      "error_detail": null,
+      "lucy_session_id": "r08-1",
+      "attribution_mode": "unassigned",
+      "effective_turn_id": null,
+      "lucy_turn_id": null
+    },
+    {
+      "request_id": "161",
+      "trace_id": "trace_f608b3a0-08fb-48b6-b915-82a5ee23dbca",
+      "user_id": "uat_zb_a",
+      "tool": "lucy_query",
+      "outcome": "ok",
+      "error_detail": null,
+      "lucy_session_id": "r08-2",
+      "attribution_mode": "unassigned",
+      "effective_turn_id": null,
+      "lucy_turn_id": null
+    },
+    {
+      "request_id": "162",
+      "trace_id": "trace_2258ce88-38df-47ff-90a4-ae44125f9cf4",
+      "user_id": "uat_zb_a",
+      "tool": "lucy_query",
+      "outcome": "ok",
+      "error_detail": null,
+      "lucy_session_id": "r08-3",
+      "attribution_mode": "unassigned",
+      "effective_turn_id": null,
+      "lucy_turn_id": null
+    },
+    {
+      "request_id": "163",
+      "trace_id": "trace_46b8d4e4-de62-4b16-aa90-207c1da6f4b9",
+      "user_id": "uat_zb_a",
+      "tool": "lucy_query",
+      "outcome": "ok",
+      "error_detail": null,
+      "lucy_session_id": "r08-4",
+      "attribution_mode": "unassigned",
+      "effective_turn_id": null,
+      "lucy_turn_id": null
+    },
+    {
+      "request_id": "165",
+      "trace_id": "trace_04320589-7858-4f1b-a23f-50fe2f2c7f26",
+      "user_id": "uat_zb_a",
+      "tool": "lucy_query",
+      "outcome": "ok",
+      "error_detail": null,
+      "lucy_session_id": "r08-forced",
+      "attribution_mode": "unassigned",
+      "effective_turn_id": null,
+      "lucy_turn_id": null
+    }
+  ],
+  "attributionCounts": {
+    "explicit": 0,
+    "session_bound": 0,
+    "identity_inferred": 0,
+    "unassigned": 6
+  },
+  "forcedBegin": [
+    {
+      "request_id": "164",
+      "trace_id": "trace_08197278-5d59-4650-9880-64635cee3001",
+      "user_id": "uat_zb_a",
+      "tool": "lucy_begin_question",
+      "outcome": "denied",
+      "error_detail": "begin_not_available",
+      "lucy_session_id": "r08-forced",
+      "attribution_mode": "unassigned",
+      "effective_turn_id": null,
+      "lucy_turn_id": null
+    }
+  ],
+  "explicitReportedFromHidden": 0,
+  "actualQueries": 6,
+  "successes": 6,
+  "operatorTask": "located D2 by session/request/trace and verified subsequent query outcome; version in artifact",
+  "managementTask": "six queries/six successes; hidden original question reports zero; active R07 report excluded"
+}

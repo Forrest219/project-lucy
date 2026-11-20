@@ -1,0 +1,1202 @@
+// M17: Controlled YAML catalog asset upload.
+//
+// WebUI is allowed to write only one kind of artifact:
+// `semantic-layer/<connection>/_schema/<schema>.yaml`. The target path is
+// computed on the server, never accepted from the client. Symlinks in the
+// target chain are rejected: MVP can't reason about what they point at, so
+// the safe default is to refuse the write.
+//
+// The audit sidecar (`.ktx-ui/catalog-asset-uploads.json`) only stores metadata
+// + hashes. YAML content is never persisted to the sidecar.
+//
+// No ktx subprocess is invoked from this module. The only side effect after
+// writing the manifest is the static `reloadCatalog(...)` call so the UI
+// immediately sees the new asset.
+
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, rename, writeFile, lstat, readFile } from "node:fs/promises";
+import path from "node:path";
+import { realpath } from "node:fs/promises";
+import { parse as parseYaml } from "yaml";
+import { reloadCatalog, type CatalogReloadRun } from "./catalog-reload";
+import { syncContentToProjectRoot } from "./content-mirror";
+import { resolveContentPaths } from "./paths";
+import { readProject } from "./project";
+import { registerDisplayTouchedPath, scopeContextFor, scopesForPath, withDisplayWriteBarrier } from "./display-generation";
+import { withPublishCoordinator } from "./publish-coordinator.js";
+import { SEMANTIC_BATCH_LIMITS } from "./semantic-limits.js";
+import {
+  allocateSourceNames,
+  findSourceNameConflicts,
+  flattenRegistryEntries,
+  normalizeSourceRef,
+  physicalTableBareName,
+  readConnectionSourceManifests,
+  SourceNameRegistryError,
+  type SourceManifestEntry,
+  type SourceNameConflict
+} from "./source-name-registry";
+
+const MAX_BYTES = SEMANTIC_BATCH_LIMITS.maxSingleYamlBytes;
+const MAX_RECORDS = 50;
+const SIDECAR_REL = ".ktx-ui/catalog-asset-uploads.json";
+
+// ─── M17 types (mirror of `webui/src/lib/types.ts`) ──────────────────────
+// Server-side definition of the public shape. Frontend type definitions
+// must stay in lock-step. Only export names that route handlers re-use.
+
+export type CatalogAssetKind = "schema_manifest";
+export type LegacyCatalogAssetType = "schemaManifest";
+export type CatalogAssetType = LegacyCatalogAssetType;
+
+export type CatalogAssetErrorCode =
+  | "UNKNOWN_CONNECTION"
+  | "SCHEMA_NOT_CONFIGURED"
+  | "ASSET_KIND_REQUIRED"
+  | "ASSET_KIND_UNSUPPORTED"
+  | "ASSET_KIND_ROUTE_MISMATCH"
+  | "INVALID_ASSET_TYPE"
+  | "INVALID_FILENAME"
+  | "FILE_TOO_LARGE"
+  | "YAML_PARSE_FAILED"
+  | "INVALID_MANIFEST"
+  | "SCHEMA_MANIFEST_EXPECTED"
+  | "SEMANTIC_OVERLAY_EXPECTED"
+  | "OVERLAY_FIELD_IN_MANIFEST"
+  | "MANIFEST_SHAPE_IN_OVERLAY"
+  | "PATH_NOT_ALLOWED"
+  | "ASSET_NOT_FOUND"
+  | "DUPLICATE_SOURCE_NAME";
+
+export type CatalogAssetError = {
+  code: CatalogAssetErrorCode;
+  message: string;
+};
+
+export type CatalogAssetWarningCode =
+  | "EMPTY_MANIFEST"
+  | "TARGET_EXISTS"
+  | "TABLE_SCHEMA_MISMATCH"
+  | "UNKNOWN_MANIFEST_SHAPE"
+  | "PREEXISTING_SOURCE_NAME_CONFLICT";
+
+export type CatalogAssetWarning = {
+  code: CatalogAssetWarningCode;
+  message: string;
+  table?: string;
+};
+
+export type CatalogAssetSourceNameConflictEntry = {
+  targetPath: string;
+  schema: string;
+  physicalTable: string;
+  sourceName: string;
+};
+
+export type CatalogAssetSourceNameConflict = {
+  sourceName: string;
+  entries: CatalogAssetSourceNameConflictEntry[];
+  involvesCandidate: boolean;
+  suggestedSourceName?: string;
+};
+
+export type CatalogAssetValidateRequest = {
+  connectionId: string;
+  schema: string;
+  assetKind?: CatalogAssetKind | "semantic_overlay" | "asset_package";
+  assetType?: LegacyCatalogAssetType;
+  filename: string;
+  content: string;
+};
+
+export type CatalogAssetValidateResponse = {
+  valid: boolean;
+  connectionId: string;
+  schema: string;
+  assetKind: CatalogAssetKind;
+  assetType: CatalogAssetType;
+  targetPath: string;
+  exists: boolean;
+  originalFilename: string;
+  sizeBytes: number;
+  sha256: string;
+  tables: number;
+  tableNames: string[];
+  warnings: CatalogAssetWarning[];
+  errors: CatalogAssetError[];
+  sourceNameConflicts: CatalogAssetSourceNameConflict[];
+};
+
+export type CatalogAssetUploadRequest = CatalogAssetValidateRequest & {
+  confirmOverwrite?: boolean;
+};
+
+export type CatalogAssetUploadRecord = {
+  id: string;
+  createdAt: string;
+  connectionId: string;
+  schema: string;
+  assetKind: CatalogAssetKind;
+  assetType: CatalogAssetType;
+  targetPath: string;
+  originalFilename: string;
+  sizeBytes: number;
+  sha256: string;
+  tables: number;
+  overwritten: boolean;
+  warnings: CatalogAssetWarning[];
+  reloadRunId?: string;
+};
+
+export type CatalogAssetUploadsResponse = {
+  records: CatalogAssetUploadRecord[];
+  lastBySchema: Record<string, CatalogAssetUploadRecord>;
+};
+
+export type CatalogSchemaManifestReadRequest = {
+  connectionId: string;
+  schema: string;
+};
+
+export type CatalogSchemaManifestReadResponse = {
+  connectionId: string;
+  schema: string;
+  assetKind: CatalogAssetKind;
+  assetType: CatalogAssetType;
+  targetPath: string;
+  filename: string;
+  content: string;
+  sizeBytes: number;
+  sha256: string;
+};
+
+export class CatalogAssetValidationError extends Error {
+  code: CatalogAssetErrorCode;
+  statusCode: 400 | 403;
+  validation: CatalogAssetValidateResponse;
+  field?: string;
+
+  constructor(
+    code: CatalogAssetErrorCode,
+    message: string,
+    validation: CatalogAssetValidateResponse,
+    statusCode: 400 | 403 = 400,
+    field?: string
+  ) {
+    super(message);
+    this.name = "CatalogAssetValidationError";
+    this.code = code;
+    this.statusCode = statusCode;
+    this.validation = validation;
+    this.field = field;
+  }
+}
+
+export class CatalogAssetOverwriteRequiredError extends Error {
+  code = "TARGET_EXISTS";
+  statusCode = 409;
+  validation: CatalogAssetValidateResponse;
+
+  constructor(validation: CatalogAssetValidateResponse) {
+    super("目标 YAML 已存在，请确认覆盖后重试。");
+    this.name = "CatalogAssetOverwriteRequiredError";
+    this.validation = validation;
+  }
+}
+
+export class CatalogAssetReadError extends Error {
+  code: CatalogAssetErrorCode;
+  statusCode: 400 | 403 | 404;
+
+  constructor(code: CatalogAssetErrorCode, message: string, statusCode: 400 | 403 | 404 = 400) {
+    super(message);
+    this.name = "CatalogAssetReadError";
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
+function buildTargetRel(connectionId: string, schema: string): string {
+  return path.posix.join("semantic-layer", connectionId, "_schema", `${schema}.yaml`);
+}
+
+function isSafePathSegment(segment: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(segment);
+}
+
+function sha256(content: string): string {
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+type AssetKindNormalization =
+  | { ok: true; assetKind: CatalogAssetKind }
+  | { ok: false; code: CatalogAssetErrorCode; message: string };
+
+function normalizeCatalogAssetKind(request: {
+  assetKind?: unknown;
+  assetType?: unknown;
+}): AssetKindNormalization {
+  if (request.assetKind !== undefined) {
+    if (request.assetKind === "schema_manifest") {
+      return { ok: true, assetKind: "schema_manifest" };
+    }
+    if (request.assetKind === "semantic_overlay" || request.assetKind === "asset_package") {
+      return {
+        ok: false,
+        code: "ASSET_KIND_ROUTE_MISMATCH",
+        message: "此入口只接受 Schema Manifest，请切换到对应模块。"
+      };
+    }
+    return {
+      ok: false,
+      code: "ASSET_KIND_UNSUPPORTED",
+      message: `不支持的 assetKind: ${String(request.assetKind)}`
+    };
+  }
+
+  if (request.assetType !== undefined) {
+    if (request.assetType === "schemaManifest") {
+      return { ok: true, assetKind: "schema_manifest" };
+    }
+    return {
+      ok: false,
+      code: "ASSET_KIND_UNSUPPORTED",
+      message: `不支持的 assetType: ${String(request.assetType)}`
+    };
+  }
+
+  return {
+    ok: false,
+    code: "ASSET_KIND_REQUIRED",
+    message: "请选择要上传的资产类型。"
+  };
+}
+
+function pad2(value: number): string {
+  return value.toString().padStart(2, "0");
+}
+function pad3(value: number): string {
+  return value.toString().padStart(3, "0");
+}
+function formatTimestamp(date: Date): string {
+  return (
+    `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}_` +
+    `${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}_${pad3(date.getMilliseconds())}`
+  );
+}
+
+function sanitizeFilename(raw: string): string {
+  // Strip any path components the client might try to inject.
+  const base = path.basename(raw);
+  return base;
+}
+
+function hasYamlExtension(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith(".yaml") || lower.endsWith(".yml");
+}
+
+type SchemaNameValidation =
+  | { ok: true }
+  | { ok: false; code: "SCHEMA_NOT_CONFIGURED" | "UNKNOWN_CONNECTION"; message: string };
+
+async function validateSchemaAgainstConfig(
+  projectRoot: string,
+  connectionId: string,
+  schema: string
+): Promise<SchemaNameValidation> {
+  const project = await readProject(projectRoot);
+  if (!project) {
+    return {
+      ok: false,
+      code: "UNKNOWN_CONNECTION",
+      message: "readProject returned undefined"
+    };
+  }
+  const conn = project.connections.find((c) => c.id === connectionId);
+  if (!conn) {
+    return {
+      ok: false,
+      code: "UNKNOWN_CONNECTION",
+      message: `未在 ktx.yaml 中找到 connection '${connectionId}'`
+    };
+  }
+  if (!conn.schemas.includes(schema)) {
+    return {
+      ok: false,
+      code: "SCHEMA_NOT_CONFIGURED",
+      message: `Schema '${schema}' 未在 connection '${connectionId}' 中声明`
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Resolve the real, symlink-free path of the target. We intentionally allow
+ * the project root itself to be a symlink, because developers often open a
+ * project through a convenient workspace link. Starting at `semantic-layer`,
+ * though, every existing path component in the target chain must be a real
+ * directory, not a symlink. Validation never creates directories; upload may
+ * create the missing tail and then re-run this check.
+ *
+ * A2 (M31): the anchor is the *content root* semantic layer
+ * (`<contentRoot>/semantic-layer/`, default `<projectRoot>/config/semantic-layer/`),
+ * not the legacy sibling of `ktx.yaml`. The catalog reload reads the content
+ * root; anchoring anywhere else makes uploaded manifests invisible to it.
+ */
+export async function assertSafeTarget(
+  projectRoot: string,
+  targetRel: string,
+  errors: CatalogAssetError[],
+  options: { createParent?: boolean } = {}
+): Promise<{ safeParentAbs: string; targetAbs: string; exists: boolean } | null> {
+  const contentPaths = await resolveContentPaths(projectRoot);
+  const targetAbs = path.resolve(contentPaths.configDir, targetRel);
+  const targetParentAbs = path.dirname(targetAbs);
+  const semanticLayerAbs = contentPaths.semanticLayer;
+
+  let semanticLstat = await lstat(semanticLayerAbs).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!semanticLstat) {
+    if (options.createParent) {
+      // Upload may bootstrap the content-root semantic-layer dir (the server
+      // owns the content root; loadContentPaths normally ensures it exists).
+      await mkdir(semanticLayerAbs, { recursive: true });
+      semanticLstat = await lstat(semanticLayerAbs);
+    } else {
+      errors.push({
+        code: "PATH_NOT_ALLOWED",
+        message: "内容根缺少 semantic-layer 目录，无法写入 schema manifest"
+      });
+      return null;
+    }
+  }
+  if (semanticLstat.isSymbolicLink()) {
+    errors.push({
+      code: "PATH_NOT_ALLOWED",
+      message: "semantic-layer 目录是符号链接，拒绝写入"
+    });
+    return null;
+  }
+
+  let realSemantic: string;
+  try {
+    realSemantic = await realpath(semanticLayerAbs);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      errors.push({
+        code: "PATH_NOT_ALLOWED",
+        message: "内容根缺少 semantic-layer 目录，无法写入 schema manifest"
+      });
+      return null;
+    }
+    throw error;
+  }
+
+  const parentRelToSemantic = path.relative(semanticLayerAbs, targetParentAbs);
+  if (parentRelToSemantic.startsWith("..") || path.isAbsolute(parentRelToSemantic)) {
+    errors.push({
+      code: "PATH_NOT_ALLOWED",
+      message: "目标路径不在 semantic-layer 之内"
+    });
+    return null;
+  }
+
+  const parentSegments = parentRelToSemantic
+    .split(path.sep)
+    .filter((segment) => segment.length > 0);
+  let currentAbs = semanticLayerAbs;
+  let deepestExistingAbs = semanticLayerAbs;
+  for (const segment of parentSegments) {
+    currentAbs = path.join(currentAbs, segment);
+    const info = await lstat(currentAbs).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (!info) break;
+    if (info.isSymbolicLink()) {
+      errors.push({
+        code: "PATH_NOT_ALLOWED",
+        message: "目标目录链路包含符号链接，拒绝写入"
+      });
+      return null;
+    }
+    if (!info.isDirectory()) {
+      errors.push({
+        code: "PATH_NOT_ALLOWED",
+        message: "目标父路径中存在非目录节点"
+      });
+      return null;
+    }
+    deepestExistingAbs = currentAbs;
+  }
+
+  const relative = path.relative(realSemantic, await realpath(deepestExistingAbs));
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    errors.push({
+      code: "PATH_NOT_ALLOWED",
+      message: "解析后的目标路径不在 semantic-layer 之内"
+    });
+    return null;
+  }
+
+  // Existing target file: must not be a symlink.
+  let exists = false;
+  try {
+    const targetLstat = await lstat(targetAbs);
+    exists = true;
+    if (targetLstat.isSymbolicLink()) {
+      errors.push({
+        code: "PATH_NOT_ALLOWED",
+        message: "目标 YAML 是符号链接，拒绝覆盖"
+      });
+      return null;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  if (options.createParent) {
+    await mkdir(targetParentAbs, { recursive: true });
+    const parentAfterCreate = await lstat(targetParentAbs);
+    if (parentAfterCreate.isSymbolicLink() || !parentAfterCreate.isDirectory()) {
+      errors.push({
+        code: "PATH_NOT_ALLOWED",
+        message: "目标父目录创建后不是安全目录"
+      });
+      return null;
+    }
+  }
+
+  let safeParentAbs: string;
+  try {
+    safeParentAbs = await realpath(targetParentAbs);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      safeParentAbs = targetParentAbs;
+    } else {
+      throw error;
+    }
+  }
+
+  return { safeParentAbs, targetAbs, exists };
+}
+
+type ManifestParseResult =
+  | {
+      ok: true;
+      tables: string[];
+      warnings: CatalogAssetWarning[];
+    }
+  | {
+      ok: false;
+      code: CatalogAssetErrorCode;
+      message: string;
+    };
+
+function parseManifest(
+  raw: string
+): ManifestParseResult {
+  let doc: unknown;
+  try {
+    doc = parseYaml(raw);
+  } catch (error) {
+    return {
+      ok: false,
+      code: "YAML_PARSE_FAILED",
+      message: error instanceof Error ? error.message : "YAML 解析失败"
+    };
+  }
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+    return {
+      ok: false,
+      code: "INVALID_MANIFEST",
+      message: "manifest 顶层必须是 mapping，目前不是合法对象"
+    };
+  }
+  const root = doc as Record<string, unknown>;
+  const overlayOnlyKeys = ["grain", "measures", "segments"];
+  const foundOverlayOnlyKey = overlayOnlyKeys.find((key) => Object.prototype.hasOwnProperty.call(root, key));
+  if (foundOverlayOnlyKey) {
+    return {
+      ok: false,
+      code: "OVERLAY_FIELD_IN_MANIFEST",
+      message: `业务语义字段 ${foundOverlayOnlyKey} 应写入 semantic overlay，不应写入 Schema Manifest。`
+    };
+  }
+  const tablesNode = root.tables;
+  if (tablesNode === undefined) {
+    return {
+      ok: false,
+      code: "SCHEMA_MANIFEST_EXPECTED",
+      message: "这是 semantic overlay 或普通 YAML，不是 Schema Manifest：顶层缺少 `tables` 字段。"
+    };
+  }
+  if (tablesNode === null || typeof tablesNode !== "object" || Array.isArray(tablesNode)) {
+    return {
+      ok: false,
+      code: "INVALID_MANIFEST",
+      message: "`tables` 必须是 mapping"
+    };
+  }
+  const tables = Object.keys(tablesNode as Record<string, unknown>).filter(
+    (name) => typeof name === "string" && name.length > 0
+  );
+  if (tables.length === 0) {
+    return {
+      ok: true,
+      tables: [],
+      warnings: [
+        {
+          code: "EMPTY_MANIFEST",
+          message: "manifest 解析成功但未声明任何表，确认后仍可上传"
+        }
+      ]
+    };
+  }
+  return { ok: true, tables, warnings: [] };
+}
+
+function buildBaseValidation(
+  request: CatalogAssetValidateRequest,
+  assetKind: CatalogAssetKind,
+  projectRoot: string,
+  errors: CatalogAssetError[],
+  warnings: CatalogAssetWarning[],
+  targetRel: string
+): Pick<
+  CatalogAssetValidateResponse,
+  | "valid"
+  | "connectionId"
+  | "schema"
+  | "assetKind"
+  | "assetType"
+  | "targetPath"
+  | "originalFilename"
+  | "sizeBytes"
+  | "sha256"
+  | "errors"
+  | "warnings"
+  | "tableNames"
+  | "tables"
+  | "sourceNameConflicts"
+> {
+  const sanitized = sanitizeFilename(request.filename);
+  if (!sanitized || !hasYamlExtension(sanitized)) {
+    errors.push({
+      code: "INVALID_FILENAME",
+      message: "文件名必须是 .yaml 或 .yml 扩展名"
+    });
+  }
+
+  const sizeBytes = Buffer.byteLength(request.content, "utf8");
+  if (sizeBytes > MAX_BYTES) {
+    errors.push({
+      code: "FILE_TOO_LARGE",
+      message: `文件超过 ${MAX_BYTES / 1024 / 1024} MiB 上限，请减少文件内容后重试。`
+    });
+  }
+
+  return {
+    valid: errors.length === 0,
+    connectionId: request.connectionId,
+    schema: request.schema,
+    assetKind,
+    assetType: "schemaManifest",
+    targetPath: targetRel,
+    originalFilename: sanitized,
+    sizeBytes,
+    sha256: sha256(request.content),
+    errors,
+    warnings,
+    tableNames: [],
+    tables: 0,
+    sourceNameConflicts: []
+  };
+}
+
+function formatPhysicalList(entries: SourceManifestEntry[]): string {
+  return entries.map((e) => e.physicalTable).join("、");
+}
+
+function entryInvolvesCandidateSchema(
+  entry: SourceManifestEntry,
+  candidateSchema: string
+): boolean {
+  return normalizeSourceRef(entry.schema) === normalizeSourceRef(candidateSchema);
+}
+
+function buildSourceNameConflictPayload(
+  conflict: SourceNameConflict,
+  candidateSchema: string,
+  suggestedSourceName?: string
+): CatalogAssetSourceNameConflict {
+  const involvesCandidate = conflict.entries.some((e) =>
+    entryInvolvesCandidateSchema(e, candidateSchema)
+  );
+  const payload: CatalogAssetSourceNameConflict = {
+    sourceName: conflict.sourceName,
+    entries: conflict.entries.map((e) => ({
+      targetPath: e.targetPath,
+      schema: e.schema,
+      physicalTable: e.physicalTable,
+      sourceName: e.sourceName
+    })),
+    involvesCandidate
+  };
+  if (involvesCandidate && suggestedSourceName !== undefined) {
+    payload.suggestedSourceName = suggestedSourceName;
+  }
+  return payload;
+}
+
+function suggestSourceNameForConflict(
+  schema: string,
+  conflict: SourceNameConflict,
+  allocationRegistry: Awaited<ReturnType<typeof readConnectionSourceManifests>>
+): string | undefined {
+  const candidateEntry = conflict.entries.find((e) => entryInvolvesCandidateSchema(e, schema));
+  if (!candidateEntry) return undefined;
+  const bare = physicalTableBareName(candidateEntry.physicalTable);
+  if (!bare) return undefined;
+  return allocateSourceNames(schema, [bare], allocationRegistry).get(bare);
+}
+
+async function appendSourceNameUniquenessChecks(
+  projectRoot: string,
+  request: CatalogAssetValidateRequest,
+  errors: CatalogAssetError[],
+  warnings: CatalogAssetWarning[]
+): Promise<CatalogAssetSourceNameConflict[]> {
+  let finalRegistry: Awaited<ReturnType<typeof readConnectionSourceManifests>>;
+  let allocationRegistry: Awaited<ReturnType<typeof readConnectionSourceManifests>>;
+  try {
+    finalRegistry = await readConnectionSourceManifests(projectRoot, request.connectionId, {
+      schema: request.schema,
+      content: request.content
+    });
+    // Suggestions allocate against disk (target kept for D2 retention; reserved excludes it).
+    allocationRegistry = await readConnectionSourceManifests(projectRoot, request.connectionId);
+  } catch (error) {
+    if (error instanceof SourceNameRegistryError) {
+      errors.push({
+        code: "INVALID_MANIFEST",
+        message: error.message
+      });
+      return [];
+    }
+    throw error;
+  }
+
+  const conflicts = findSourceNameConflicts(flattenRegistryEntries(finalRegistry));
+  const sourceNameConflicts: CatalogAssetSourceNameConflict[] = [];
+
+  for (const conflict of conflicts) {
+    const involvesCandidate = conflict.entries.some((e) =>
+      entryInvolvesCandidateSchema(e, request.schema)
+    );
+    const suggested = involvesCandidate
+      ? suggestSourceNameForConflict(request.schema, conflict, allocationRegistry)
+      : undefined;
+    sourceNameConflicts.push(
+      buildSourceNameConflictPayload(conflict, request.schema, suggested)
+    );
+
+    const physicals = formatPhysicalList(conflict.entries);
+    if (involvesCandidate) {
+      const suggestionText =
+        suggested !== undefined
+          ? `请重新扫描该 Schema，或将冲突短名改为「${suggested}」后再上传。`
+          : "请重新扫描该 Schema 或改用唯一短名后再上传。";
+      errors.push({
+        code: "DUPLICATE_SOURCE_NAME",
+        message: `短名「${conflict.sourceName}」在最终集合中冲突（物理表：${physicals}）。${suggestionText}`
+      });
+    } else {
+      warnings.push({
+        code: "PREEXISTING_SOURCE_NAME_CONFLICT",
+        message: `连接内已有与本次候选无关的短名冲突「${conflict.sourceName}」（物理表：${physicals}）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。`
+      });
+    }
+  }
+
+  return sourceNameConflicts;
+}
+
+export async function validateCatalogAsset(
+  projectRoot: string,
+  request: CatalogAssetValidateRequest
+): Promise<CatalogAssetValidateResponse> {
+  const errors: CatalogAssetError[] = [];
+  const warnings: CatalogAssetWarning[] = [];
+  const normalizedKind = normalizeCatalogAssetKind(request);
+  const assetKind: CatalogAssetKind = normalizedKind.ok ? normalizedKind.assetKind : "schema_manifest";
+  if (!normalizedKind.ok) {
+    errors.push({
+      code: normalizedKind.code,
+      message: normalizedKind.message
+    });
+  }
+
+  const safeSegments =
+    isSafePathSegment(request.connectionId) && isSafePathSegment(request.schema);
+  if (!safeSegments) {
+    errors.push({
+      code: "PATH_NOT_ALLOWED",
+      message: "connectionId 与 schema 只能作为安全路径段使用"
+    });
+  }
+
+  const targetRel = safeSegments
+    ? buildTargetRel(request.connectionId, request.schema)
+    : "semantic-layer/_invalid/_schema/_invalid.yaml";
+  const base = buildBaseValidation(request, assetKind, projectRoot, errors, warnings, targetRel);
+
+  // Configuration checks (connection + schema in ktx.yaml).
+  if (errors.length === 0) {
+    const configCheck = await validateSchemaAgainstConfig(
+      projectRoot,
+      request.connectionId,
+      request.schema
+    );
+    if (!configCheck.ok) {
+      errors.push({ code: configCheck.code, message: configCheck.message });
+    }
+  }
+
+  // File / size / extension checks (these short-circuit the manifest parse).
+  if (errors.length > 0) {
+    return {
+      ...base,
+      valid: false,
+      exists: false,
+      tables: 0,
+      tableNames: [],
+      sourceNameConflicts: []
+    };
+  }
+
+  // Manifest parse.
+  const parsed = parseManifest(request.content);
+  if (!parsed.ok) {
+    errors.push({ code: parsed.code, message: parsed.message });
+    return {
+      ...base,
+      valid: false,
+      exists: false,
+      tables: 0,
+      tableNames: [],
+      sourceNameConflicts: []
+    };
+  }
+
+  // Path safety check: compute realpaths, reject symlinks.
+  const safety = await assertSafeTarget(projectRoot, targetRel, errors);
+  if (!safety) {
+    return {
+      ...base,
+      valid: false,
+      exists: false,
+      tables: 0,
+      tableNames: [],
+      sourceNameConflicts: []
+    };
+  }
+
+  if (safety.exists) {
+    warnings.push({
+      code: "TARGET_EXISTS",
+      message: `目标文件已存在：${targetRel}`
+    });
+  }
+
+  const sourceNameConflicts = await appendSourceNameUniquenessChecks(
+    projectRoot,
+    request,
+    errors,
+    warnings
+  );
+
+  return {
+    ...base,
+    valid: errors.length === 0,
+    exists: safety.exists,
+    tables: parsed.tables.length,
+    tableNames: parsed.tables,
+    warnings: [...warnings, ...parsed.warnings],
+    sourceNameConflicts
+  };
+}
+
+// ─── Audit sidecar helpers ────────────────────────────────────────────────
+
+type SidecarFile = {
+  version: 1;
+  records: CatalogAssetUploadRecord[];
+};
+
+function emptySidecar(): SidecarFile {
+  return { version: 1, records: [] };
+}
+
+function normalizeSidecar(raw: unknown): SidecarFile {
+  if (!raw || typeof raw !== "object") return emptySidecar();
+  const obj = raw as { version?: unknown; records?: unknown };
+  if (!Array.isArray(obj.records)) return emptySidecar();
+  const records: CatalogAssetUploadRecord[] = [];
+  for (const item of obj.records) {
+    if (item && typeof item === "object") {
+      records.push(item as CatalogAssetUploadRecord);
+    }
+  }
+  return { version: 1, records };
+}
+
+async function readSidecar(projectRoot: string): Promise<SidecarFile> {
+  try {
+    const text = await readFile(path.resolve(projectRoot, SIDECAR_REL), "utf8");
+    return normalizeSidecar(JSON.parse(text) as unknown);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return emptySidecar();
+    }
+    throw error;
+  }
+}
+
+async function appendRecord(
+  projectRoot: string,
+  record: CatalogAssetUploadRecord
+): Promise<SidecarFile> {
+  const current = await readSidecar(projectRoot);
+  const next: SidecarFile = {
+    version: 1,
+    records: [...current.records, record].slice(-MAX_RECORDS)
+  };
+  const abs = path.resolve(projectRoot, SIDECAR_REL);
+  await mkdir(path.dirname(abs), { recursive: true });
+  await writeFile(abs, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  return next;
+}
+
+function buildLastBySchema(
+  records: CatalogAssetUploadRecord[]
+): Record<string, CatalogAssetUploadRecord> {
+  const out: Record<string, CatalogAssetUploadRecord> = {};
+  // records are stored oldest-first; iterate in reverse so the most recent
+  // record for each (connection.schema) key wins.
+  for (let i = records.length - 1; i >= 0; i -= 1) {
+    const record = records[i];
+    if (!record) continue;
+    const key = `${record.connectionId}.${record.schema}`;
+    if (!out[key]) out[key] = record;
+  }
+  return out;
+}
+
+export async function readCatalogAssetUploads(
+  projectRoot: string
+): Promise<CatalogAssetUploadsResponse> {
+  const file = await readSidecar(projectRoot);
+  const records = file.records.slice(-MAX_RECORDS);
+  return {
+    records,
+    lastBySchema: buildLastBySchema(records)
+  };
+}
+
+export async function readCatalogSchemaManifest(
+  projectRoot: string,
+  request: CatalogSchemaManifestReadRequest
+): Promise<CatalogSchemaManifestReadResponse> {
+  const safeSegments =
+    isSafePathSegment(request.connectionId) && isSafePathSegment(request.schema);
+  if (!safeSegments) {
+    throw new CatalogAssetReadError(
+      "PATH_NOT_ALLOWED",
+      "connectionId 与 schema 只能作为安全路径段使用",
+      403
+    );
+  }
+
+  const configCheck = await validateSchemaAgainstConfig(
+    projectRoot,
+    request.connectionId,
+    request.schema
+  );
+  if (!configCheck.ok) {
+    throw new CatalogAssetReadError(configCheck.code, configCheck.message, 400);
+  }
+
+  const targetPath = buildTargetRel(request.connectionId, request.schema);
+  const errors: CatalogAssetError[] = [];
+  const safety = await assertSafeTarget(projectRoot, targetPath, errors);
+  if (!safety) {
+    const first = errors[0];
+    throw new CatalogAssetReadError(
+      first?.code ?? "PATH_NOT_ALLOWED",
+      first?.message ?? "目标路径不安全",
+      403
+    );
+  }
+  if (!safety.exists) {
+    throw new CatalogAssetReadError(
+      "ASSET_NOT_FOUND",
+      `未找到 Schema Manifest：${targetPath}`,
+      404
+    );
+  }
+
+  const content = await readFile(safety.targetAbs, "utf8");
+  return {
+    connectionId: request.connectionId,
+    schema: request.schema,
+    assetKind: "schema_manifest",
+    assetType: "schemaManifest",
+    targetPath,
+    filename: `${request.schema}.yaml`,
+    content,
+    sizeBytes: Buffer.byteLength(content, "utf8"),
+    sha256: sha256(content)
+  };
+}
+
+// ─── Upload path ──────────────────────────────────────────────────────────
+
+export type UploadCatalogAssetResult = {
+  uploaded: true;
+  record: CatalogAssetUploadRecord;
+  validation: CatalogAssetValidateResponse;
+  reload: CatalogReloadRun;
+};
+
+function rejectInvalidOrUnconfirmedOverwrite(
+  validation: CatalogAssetValidateResponse,
+  request: CatalogAssetUploadRequest
+): void {
+  if (!validation.valid) {
+    const first = validation.errors[0];
+    throw new CatalogAssetValidationError(
+      first?.code ?? "INVALID_MANIFEST",
+      first?.message ?? "Catalog asset validation failed",
+      validation,
+      first?.code === "PATH_NOT_ALLOWED" ? 403 : 400
+    );
+  }
+  if (validation.exists && request.confirmOverwrite !== true) {
+    throw new CatalogAssetOverwriteRequiredError(validation);
+  }
+}
+
+export async function uploadCatalogAsset(
+  projectRoot: string,
+  request: CatalogAssetUploadRequest
+): Promise<UploadCatalogAssetResult> {
+  // Early validate is feedback only (D7). Authoritative checks run inside the lock.
+  const early = await validateCatalogAsset(projectRoot, request);
+  rejectInvalidOrUnconfirmedOverwrite(early, request);
+
+  if (__test.beforePublishLock) {
+    await __test.beforePublishLock(request);
+  }
+
+  // Lucy v0.25 (L25-11 D4) — the manifest upload shares the publish window with the
+  // single-table save, the batch import, the manual reindex and the access.yaml writers.
+  return withPublishCoordinator(
+    "manifest_upload",
+    async () => {
+      const validation = await validateCatalogAsset(projectRoot, request);
+      rejectInvalidOrUnconfirmedOverwrite(validation, request);
+
+      const targetRel = validation.targetPath;
+      const errors: CatalogAssetError[] = [];
+      const safety = await assertSafeTarget(projectRoot, targetRel, errors, {
+        createParent: true
+      });
+      if (!safety) {
+        throw new CatalogAssetValidationError(
+          "PATH_NOT_ALLOWED",
+          "目标路径在写入前被检测为不安全",
+          validation,
+          403
+        );
+      }
+
+      return writeCatalogAssetIntoWindow(projectRoot, request, validation, safety);
+    },
+    { projectRoot }
+  );
+}
+
+async function writeCatalogAssetIntoWindow(
+  projectRoot: string,
+  request: CatalogAssetUploadRequest,
+  validation: CatalogAssetValidateResponse,
+  safety: { safeParentAbs: string; targetAbs: string }
+): Promise<UploadCatalogAssetResult> {
+  const targetRel = validation.targetPath;
+  const { openPromotingContentRelease, closeContentBatch, failContentBatch } = await import(
+    "./semantic-assets.js"
+  );
+  const { createRecoveryJournal, markRecoveryJournalFilesSaved } = await import(
+    "./semantic-recovery-journal.js"
+  );
+  const { readOrCreateSemanticInstanceId } = await import("./semantic-release-snapshots.js");
+  const opened = await openPromotingContentRelease({
+    projectRoot,
+    actor: "local-admin",
+    targets: [
+      {
+        targetPath: targetRel,
+        assetKind: "manifest",
+        expectedNewDigest: createHash("sha256").update(request.content, "utf8").digest("hex"),
+        identity: {
+          connectionId: request.connectionId,
+          schema: request.schema,
+          table: request.schema
+        }
+      }
+    ]
+  });
+  const journal = await createRecoveryJournal(projectRoot, {
+    releaseId: opened.releaseId,
+    operationId: opened.releaseId,
+    actor: "local-admin",
+    instanceId: await readOrCreateSemanticInstanceId(projectRoot),
+    targets: [
+      {
+        targetPath: targetRel,
+        identity: {
+          connectionId: request.connectionId,
+          schema: request.schema,
+          table: request.schema
+        },
+        newContent: request.content
+      }
+    ]
+  });
+
+  // Atomic write: temp file in the same directory, then rename.
+  const tempName = `.${randomUUID()}.upload.tmp`;
+  const tempAbs = path.join(safety.safeParentAbs, tempName);
+  await writeFile(tempAbs, request.content, "utf8");
+  // Ensure the temp file is not a symlink that snuck in.
+  try {
+    const tempLstat = await lstat(tempAbs);
+    if (tempLstat.isSymbolicLink()) {
+      throw new CatalogAssetValidationError(
+        "PATH_NOT_ALLOWED",
+        "临时文件被替换为符号链接",
+        validation,
+        403
+      );
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      // already moved
+    } else {
+      throw error;
+    }
+  }
+  // Spec 174 §3.2 — the rename bypasses safeWrite; barrier it explicitly (tmp file is ignored).
+  // Spec 195 §4 — the scope comes from the target path itself: a Manifest feeds D and P.
+  const contentPaths = await resolveContentPaths(projectRoot);
+  const scopeContext = scopeContextFor(projectRoot, contentPaths.semanticLayer);
+  const targetScopes = scopesForPath(safety.targetAbs, scopeContext);
+  await withDisplayWriteBarrier(targetScopes, async () => {
+    registerDisplayTouchedPath(safety.targetAbs, targetScopes);
+    await rename(tempAbs, safety.targetAbs);
+  });
+
+  // A2: the ktx daemon/CLI still read the project-root sibling view. Push the
+  // just-written manifest (and any other content-root drift) there so query
+  // execution sees the same state the catalog now reads. Per-file failures
+  // are counted; a hard failure here must not silently continue.
+  const mirror = await syncContentToProjectRoot(projectRoot, await resolveContentPaths(projectRoot));
+  if (mirror.failed > 0) {
+    throw new CatalogAssetValidationError(
+      "PATH_NOT_ALLOWED",
+      `内容根到 ktx 兄弟视图的同步有 ${mirror.failed} 个文件失败`,
+      validation,
+      403
+    );
+  }
+
+  // Audit record (no YAML content).
+  const createdAt = new Date();
+  const id = `up_${formatTimestamp(createdAt)}`;
+  const record: CatalogAssetUploadRecord = {
+    id,
+    createdAt: createdAt.toISOString(),
+    connectionId: validation.connectionId,
+    schema: validation.schema,
+    assetKind: validation.assetKind,
+    assetType: validation.assetType,
+    targetPath: targetRel,
+    originalFilename: validation.originalFilename,
+    sizeBytes: validation.sizeBytes,
+    sha256: validation.sha256,
+    tables: validation.tables,
+    overwritten: validation.exists,
+    warnings: validation.warnings
+  };
+
+  // Static catalog reload so the rest of the UI sees the new manifest.
+  const reload = await reloadCatalog(projectRoot, {
+    connectionId: validation.connectionId,
+    schema: validation.schema
+  });
+  const finalRecord: CatalogAssetUploadRecord = {
+    ...record,
+    reloadRunId: reload.id
+  };
+  await appendRecord(projectRoot, finalRecord);
+  await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
+  // L25-15 — the batch has to reach a terminal state inside the publish
+  // window. A record left at `promoting` blocks every later content write.
+  try {
+    await closeContentBatch(projectRoot, {
+      releaseId: opened.releaseId,
+      attemptId: opened.attemptId,
+      actor: "local-admin",
+      journalId: journal.journalId,
+      changeType: "manifest_upload_terminal",
+      source: "catalog_asset_upload_api",
+      targetId: targetRel,
+      operation: "upload_terminal",
+      newSummary: {
+        connectionId: validation.connectionId,
+        schema: validation.schema,
+        tableCount: validation.tables
+      }
+    });
+  } catch (error) {
+    await failContentBatch(projectRoot, {
+      releaseId: opened.releaseId,
+      journalId: journal.journalId
+    });
+    throw error;
+  }
+  return {
+    uploaded: true,
+    record: finalRecord,
+    validation,
+    reload
+  };
+}
+
+// Surface internal helpers for tests; do not export from any user-facing
+// module path. Kept exported from this file because vitest tests are colocated
+// under server/__tests__ and can import them directly.
+export const __test = {
+  buildTargetRel,
+  sha256,
+  formatTimestamp,
+  MAX_BYTES,
+  MAX_RECORDS,
+  SIDECAR_REL,
+  /** Test-only barrier between early validate and publish-lock acquisition (SC-04). */
+  beforePublishLock: null as null | ((request: CatalogAssetUploadRequest) => Promise<void>)
+};

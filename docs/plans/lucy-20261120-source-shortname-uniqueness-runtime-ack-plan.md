@@ -10,11 +10,11 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 实施 Plan / v0.2 |
+| 文档类型 / 版本 | 实施 Plan / v0.4 |
 | 功能编号 | P1-64／REQ-030-085 |
-| 状态 | v0.2。终稿已确权；开发授权已获得；Task 1–6 实现完成（聚焦 vitest 120／11 PASS；API 文档已同步）；Task 7 改后 Docker UAT 已执行（判定见测试台 INDEX）；不入核心分母；≠ 功能合同收口（实现 CR／提交推送须另行明示）；≠ 可上线。 |
+| 状态 | v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 |
 | 授权边界 | Task 1–6 与 Task 7 UAT 执行已获授权；禁止本轮 git commit／push（除非另授）；编排见 `inbox/20261120-0054-p1-64-multi-agent-dev-pack.md` |
-| 验收 | [Spec](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) SC-01–10；[UAT 用例](../qa/uat/suites/source-shortname-conflict/cases.md) R0／01–09 |
+| 验收 | [Spec](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) SC-01–10；[UAT 用例](../qa/uat/suites/source-shortname-conflict/cases.md) R0／01–12 |
 | 原始证据 | [2026-11-19 Docker 复现](../qa/uat/suites/source-shortname-conflict/runs/2026-11-19-codex-docker-repro.md) |
 
 ## 目标
@@ -32,7 +32,7 @@
 3. 确认 D1–D11，尤其是：只给新增冲突表避名、无关旧冲突允许增量修复、`runtimeAck` 仍是 Policy ack 别名、WebUI 认读 ack、普通单 Agent Role 编译失败的 Access 写入语义不变。
 4. 沿用单实例、单副本；不引入分布式锁，不改 KTX、数据库 schema、客户配置、现有 demo 数据卷或部署制品。
 5. 测试文件与 runner 修改也须在授权范围内；不新增 npm 命令或 CI job，因此无需新增测试门禁命令登记。若后续新增命令，先补 `docs/governance/test-layers-and-release-gates.md` §2／§8。
-6. 默认不做浏览器 E2E。本条已含 WebUI 成功反馈合同（D11／SC-10），以组件测试验收；若实现扩大到新页面或新文案布局，先回 Spec 补交互合同，不能隐式扩大范围。
+6. 本轮已授权真实前台浏览器＋即时计时，覆盖 D11／SC-10 的两个 WebUI 写入入口（UAT-SNC-12）；不扩大到新页面布局或移动窄屏。
 
 ## 实施任务（开发已授权；按多 agent 波次执行）
 
@@ -302,6 +302,8 @@ Expected: 全部 exit 0；共享工作树中他人的未跟踪草案 WARN 单独
 
 ### Task 7：扩展原始 runner 并执行修复后 Docker UAT
 
+本节为上一轮执行方案；当前分母、浏览器要求与执行结果由 Task 8 扩展，旧 R0／01–09 不作为本轮完整分母。
+
 **Files:**
 - Modify after separate test-runner authorization: `scripts/uat/reproduce-source-shortname-conflict.py`
 - Verify: `docs/qa/uat/suites/source-shortname-conflict/{suite,cases,fixtures}.md`
@@ -357,7 +359,7 @@ Expected: 只包含获授权的实现、测试、文档和真实 UAT 证据；�
 
 ## 浏览器验证
 
-本条含 WebUI 成功反馈合同，但以**组件测试（SC-10）**验收；按仓库默认不执行浏览器或移动窄屏 E2E。若实施引入新页面布局或新交互表面，先补交互合同并重新取得对应验证授权。
+本条含 WebUI 成功反馈合同；组件测试（SC-10）与本轮已授权的真实前台浏览器＋即时计时（UAT-SNC-12）共同验收。两条写入路径分别验证成功、未确认、恢复；UI 与 API 耗时分列，不做移动窄屏。
 
 ## 验收
 
@@ -368,9 +370,9 @@ Expected: 只包含获授权的实现、测试、文档和真实 UAT 证据；�
 
 ## 完成定义
 
-- 本轮文档交付完成＝配对 Spec／Plan 定稿、用例、总账／需求池／三台账和索引登记完成，形态门禁通过；**终稿已确权；开发仍未授权**；不代表修复完成。
+- 历史 v0.1 文档阶段出口（已由本轮授权推进）＝配对 Spec／Plan 定稿、用例、总账／需求池／三台账和索引登记完成，形态门禁通过；**终稿已确权；开发仍未授权**；不代表修复完成。
 - 未来实现完成＝全部 Task 的获授权改动完成，SC-01–10 有证据，标准检查通过，实现 CR 完成。
-- 未来 UAT 完成＝同一候选镜像的 R0／01–09 全部真实通过并登记 INDEX；失败或 NOT RUN 均不得写成修复已验收。
+- 本轮 UAT 完成＝同一候选镜像的 R0／01–12 全部真实通过并登记 INDEX；失败或 NOT RUN 均不得写成修复已验收。
 - 发布仍需另行发布取证；本条任何完成状态都不表示可上线。
 
 ## 风险
@@ -394,4 +396,53 @@ Expected: 只包含获授权的实现、测试、文档和真实 UAT 证据；�
 - 采用“新增冲突表自动避名”而非“冲突双方统一改名”，因此不需要多文件原子改名和引用批量迁移。
 - 无关旧冲突允许增量修复是必要逃生路径；它不表示运行时健康，最后仍须全部消除才能 ack=true。
 - 不改 KTX、ACL 拒绝码、execution canary、客户配置和部署拓扑；WebUI 仅改成功反馈认读，不改页面主布局。
-- 当前已终稿确权；**不**选择或启动执行会话，待开发授权后再按任务顺序实施。
+- 历史前置约束已由委托人本轮实施与验收授权满足；执行结果见 Task 8 记录。
+
+
+## Task 8：最终评审整改与复验（本轮已授权）
+
+授权来源：委托人 2026-11-20 明示“按这三项评审意见修复，补齐回归和 Docker UAT，WebUI 反馈也按新规则做真实浏览器计时验证，同步三台账后再做最终评审”。包含实现、测试脚本、隔离镜像构建、Docker／浏览器执行与登记；不包含 git commit／push 或对外发布。
+
+1. 先补失败回归：旧别名被新表抢占；City 与 city 的分配、原始物理名及 namesOnly；UAT 失败响应分类（非预期 5xx 不可通过）。
+2. 修复分配器：按完整扫描集合预留有效旧映射，之后为新增表分配；物理身份与 sourceName 比较分离。不得只修审阅示例而合并大小写不同的物理表。
+3. 修正并发 UAT：两个锁前均合法候选；并发结果只接受冲突拒绝或具名忙拒绝；忙拒绝后原候选重试必须 400／DUPLICATE_SOURCE_NAME，失败侧不推进文件、上传记录与 journal。unexpected 5xx 立即失败。
+4. 在同一隔离候选上执行完整 R0／01–12，增量用例 10／11 真实建表并查不同的值，原事故剧本不手改扫描结果。
+5. 浏览器验证：见下一小节。运行全部相关 Vitest、TypeScript、术语／Spec 文档与三台勾连检查，记录候选源码 hash／镜像 digest，保留失败记录。
+6. 同步 Spec 状态、Plan、索引、需求总账、需求池、e2e-ledger 与测试台，再按 R1–R3 做最终复审；自审不代替全真执行。
+
+### 浏览器验证（真实前台＋即时计时）
+
+- 环境：独立 Docker／真实 MySQL；不操作共享 demo 或远程客户实例。浏览器为 Playwright headed 安装版 Chrome，前台聚焦；每段记录 document.visibilityState、document.hasFocus。
+- 路径：启用表范围保存与连接创建 Drawer。分别实测成功（runtimeAck=true）、旧冲突导致未确认（runtimeAck=false，具体 Source Map issue 可见）、修复后的成功。
+- 方法：导航→关键内容可见，以及点击提交→结果状态／Toast 可见；同次 HTTP 响应耗时另列，禁止用 API 时间替代 UI 时间。不得 route.fulfill、拦截 API 或注入假 DOM。
+- 证据：每段原始计时 JSON、真实响应摘要与脱敏截图进本套件 runs；密码／token／Cookie 不入证据。观察到假成功或缺失焦点证明则不能宣称浏览器 PASS。
+- 本轮覆盖此处交互合同；不新增布局或移动窄屏验证。
+
+### Task 8 执行结果（2026-11-20）
+
+R1–R3已修复，169项Vitest、5项runner判定回归通过；[同候选完整Docker与前台浏览器复验](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-r1-r3-final.md) R0／01–12 PASS，新增视口内断言同摘要补跑PASS。标准镜像源403后复用本地依赖层、校验lockfile并在隔离容器重新build，偏离标准Dockerfile路径已在跑次中说明，不充当发布制品证据。SC-09的全库类型检查仍FAIL（49条基线、新增0），不能主张全部出口通过或功能合同收口；没有提交／推送／发布。
+
+## Task 9：SC-09 全库 TypeScript 修复（2026-11-20 已授权）
+
+授权来源：委托人要求修复剩余49条类型错误、补必要回归、SC-09通过后同步三台账并最终评审；不包含提交／推送／发布。
+
+1. 保存当前全库类型失败，核对类型、MJS返回结构及测试夹具，保留他人改动。
+2. 最小修复；不降低strict、不排除文件、不用ts-ignore或any绕过。MJS增加与实际实现一致的声明；若发现运行时结构错误，补行为回归。
+3. 执行typecheck、受影响模块及原SC-09回归。若运行行为变化，更新隔离Docker候选并重跑相关UAT。
+4. 同步三台账及镜像后终审；SC-09通过不豁免其他发布范围的未关闭问题。
+
+浏览器验证：本任务无新界面；新运行候选沿用headed Chrome、visible／focus、视口断言和导航／反馈／API分列，再验两入口六场景。
+
+### Task 9 执行结果
+
+已完成49→0类型诊断修复；宿主及隔离候选容器npm run typecheck退出0，27文件413项Vitest、概念核心29项通过；两条预览依赖反例转绿。最终候选40104b7f[Docker与真实前台浏览器全套复验](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-sc09-final.md) R0／01–12 PASS；补真实Docker tsx进程依赖摘要探针PASS。SC-09缺口已关闭，三台账已同步供终审；不混入他人P1-60实现，不提交／推送／发布。
+
+最终[SC-09修复后终审](../reviews/2026-11-20-p1-64-sc09-final-review.md)通过本条功能合同收口；当前候选整包仍受已纳入P1-60未关闭问题约束，本条收口不等于用户更新放行。
+
+## Task 10：P1-60合并候选复验与浏览器验证
+
+本轮30ec4ae0同镜像完整短名R0／01–12及P1-60完整13项通过；全库类型0错误；42文件782项Vitest与29项概念模块通过。Chrome157 headed、1440×1000，六组成功／未确认／恢复均visible／focus且反馈在视口；导航关键内容82–840ms、提交反馈1557–2464ms，与API分列；未确认无成功Toast。详情和原图见[同候选跑次](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-combined-final.md)。整包是否更新由独立最终评审给出，不由本条收口外推。
+
+## 本进程提交授权（2026-11-20）
+
+委托人明确要求“commit 本进程”。本次只提交本进程的短名／类型／预算持久化修复、回归及Docker／浏览器证据和P1-60／P1-64台账；共享文件按变更片段拆分，其他任务的运行代码与状态不纳入。未推送、未发布；整包不放行结论保持。

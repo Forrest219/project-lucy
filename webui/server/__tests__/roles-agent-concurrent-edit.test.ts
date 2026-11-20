@@ -84,6 +84,39 @@ describe("resolveAccessWriteVersionMode", () => {
 });
 
 describe("SC-01 unrelated object edits", () => {
+  it("SC09: agent preview depends on assigned role permissions", () => {
+    const user = agent();
+    const preview = (assigned: YamlRole) => computeRoleAgentPreviewBinding({
+      kind: "agent", objectId: user.id, baseObjectVersion: computeAgentBaseObjectVersion(user.id, user),
+      config: config({ role_a: assigned }, [user]), patch: { name: "renamed" },
+      compileInputsDigest: COMPILE, gate
+    });
+    expect(preview(role()).previewDependenciesDigest).not.toBe(preview(role({
+      allow: { tools: ["lucy_query", "lucy_catalog"], connections: ["doris-main"] }
+    })).previewDependenciesDigest);
+  });
+
+  it("SC09: role preview binds referenced template and access defaults", () => {
+    const assigned = role({ allow: { tableSelectors: [{
+      connection: "doris-main", schema: "chatbi", names: ["orders"], row_access: "scoped",
+      row_policy: { template: "region_scope" }
+    }] } });
+    const preview = (value: string, defaultRole: string) => {
+      const candidate = {
+        ...config({ role_a: assigned }, [agent()]), defaults: { deny_tools: [defaultRole] },
+        row_policy_templates: { region_scope: { predicates: [{ field: "region", op: "eq", value }] } }
+      };
+      return computeRoleAgentPreviewBinding({
+        kind: "role", objectId: "role_a", baseObjectVersion: computeRoleBaseObjectVersion("role_a", assigned),
+        config: candidate,
+        patch: { description: "edited" }, compileInputsDigest: COMPILE, gate
+      });
+    };
+    const first = preview("east", "role_a");
+    expect(first.previewDependenciesDigest).not.toBe(preview("west", "role_a").previewDependenciesDigest);
+    expect(first.previewDependenciesDigest).not.toBe(preview("east", "role_b").previewDependenciesDigest);
+  });
+
   it("allows role patch binding when another role description changes (DEP-04)", () => {
     const baseConfig = config({ role_a: role(), role_b: role({ description: "b1" }) }, [agent()]);
     const baseVersion = computeRoleBaseObjectVersion("role_a", baseConfig.roles!.role_a);
@@ -221,7 +254,10 @@ describe("RACS receipt binding", () => {
       gate
     });
     const receipt = buildRolesAgentRacsReceipt({
-      actor: { actorId: "admin-a", accountUid: "uid-a", role: "owner" },
+      actor: {
+        actorId: "admin-a", actorType: "ui_admin", accountUid: "uid-a", role: "owner",
+        authMode: "required", sessionId: null, requestId: null, actorIp: null
+      },
       objectKind: "role",
       objectId: "role_a",
       previewEffectDigest: binding.previewEffectDigest,

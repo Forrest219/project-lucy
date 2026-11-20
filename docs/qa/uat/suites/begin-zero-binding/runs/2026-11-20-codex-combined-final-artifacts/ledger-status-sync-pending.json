@@ -1,0 +1,48 @@
+{
+  "status": "PASS",
+  "mode": "pending",
+  "P160": "v0.9；整改与完整合同验收已完成，待Codex整包终审；预算持久化锁竞争修复纳入；本轮增量未提交／推送／发布；不入新增核心分母；功能合同待收口；本条收口不表示可上线。",
+  "P164": "v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量未提交／推送／发布；不入核心分母；本条收口不表示可上线。",
+  "replacements": {
+    "docs/specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md": {
+      "P160": 1,
+      "P164": 0
+    },
+    "docs/specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md": {
+      "P160": 0,
+      "P164": 1
+    },
+    "docs/plans/lucy-20261119-webui-publish-caliber-registry-repair-plan.md": {
+      "P160": 1,
+      "P164": 0
+    },
+    "docs/plans/lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md": {
+      "P160": 0,
+      "P164": 1
+    },
+    "docs/README.md": {
+      "P160": 1,
+      "P164": 1
+    },
+    "docs/plans/README.md": {
+      "P160": 1,
+      "P164": 1
+    },
+    "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md": {
+      "P160": 1,
+      "P164": 1
+    },
+    "docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md": {
+      "P160": 2,
+      "P164": 1
+    },
+    "docs/governance/project-overview.md": {
+      "P160": 1,
+      "P164": 0
+    },
+    "docs/governance/e2e-ledger.md": {
+      "P160": 0,
+      "P164": 1
+    }
+  }
+}

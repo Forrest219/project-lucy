@@ -1,0 +1,7 @@
+{
+  "commit": "77e2ad8425ae0e7a2918803e497da10636b14e5a",
+  "files": {
+    "webui/server/proxy/source-ambiguity-gate.ts": "9a666e93d4e57de5cdf16067e6e05083451222b3d163c862f6f121a747c779d6",
+    "webui/server/__tests__/begin-hide-inactive.test.ts": "9c9d2aac80eb4834ae164e6442e3b5d971ff590d92d41770df58d6382bb656c6"
+  }
+}

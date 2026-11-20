@@ -1,0 +1,74 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 157,
+  "body": {
+    "ok": true,
+    "data": {
+      "uploaded": true,
+      "record": {
+        "id": "up_20261120_050719_185",
+        "createdAt": "2026-11-20T05:07:19.185Z",
+        "connectionId": "hive-1",
+        "schema": "d6",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/d6.yaml",
+        "originalFilename": "d6.yaml",
+        "sizeBytes": 83,
+        "sha256": "e4ae02d52d3362e38e6cb15384f501a4b382f285e6be4f5cffc1f3b06621d02f",
+        "tables": 1,
+        "overwritten": true,
+        "warnings": [
+          {
+            "code": "TARGET_EXISTS",
+            "message": "目标文件已存在：semantic-layer/hive-1/_schema/d6.yaml"
+          }
+        ],
+        "reloadRunId": "rel_20261120_050719_185"
+      },
+      "validation": {
+        "valid": true,
+        "connectionId": "hive-1",
+        "schema": "d6",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/d6.yaml",
+        "originalFilename": "d6.yaml",
+        "sizeBytes": 83,
+        "sha256": "e4ae02d52d3362e38e6cb15384f501a4b382f285e6be4f5cffc1f3b06621d02f",
+        "errors": [],
+        "warnings": [
+          {
+            "code": "TARGET_EXISTS",
+            "message": "目标文件已存在：semantic-layer/hive-1/_schema/d6.yaml"
+          }
+        ],
+        "tableNames": [
+          "d6_t"
+        ],
+        "tables": 1,
+        "sourceNameConflicts": [],
+        "exists": true
+      },
+      "reload": {
+        "id": "rel_20261120_050719_185",
+        "status": "success",
+        "startedAt": "2026-11-20T05:07:19.185Z",
+        "finishedAt": "2026-11-20T05:07:19.192Z",
+        "durationMs": 7,
+        "requestedConnectionId": "hive-1",
+        "requestedSchema": "d6",
+        "connections": 1,
+        "connectionIds": [
+          "hive-1"
+        ],
+        "configuredSchemas": 1,
+        "manifestSchemas": 1,
+        "tables": 1,
+        "enabledTables": 0,
+        "warnings": [],
+        "source": "static-yaml"
+      }
+    }
+  }
+}

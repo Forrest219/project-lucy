@@ -1,0 +1,29 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/webui
+
+ ❯ server/__tests__/budget-state-sqlite-contention.test.ts (2 tests | 1 failed) 98ms
+   × waits for a real concurrent WAL writer before checking the idempotency key 70ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  server/__tests__/budget-state-sqlite-contention.test.ts > waits for a real concurrent WAL writer before checking the idempotency key
+SqliteError: database is locked
+ ❯ server/proxy/audit.ts:1523:8
+    1521|            archived_busy_json = excluded.archived_busy_json`
+    1522|       )
+    1523|       .run(
+       |        ^
+    1524|         scopeKey,
+    1525|         state.startedAt,
+ ❯ sqliteTransaction node_modules/better-sqlite3/lib/methods/transaction.js:65:24
+ ❯ saveBudgetState server/proxy/audit.ts:1549:3
+ ❯ server/__tests__/budget-state-sqlite-contention.test.ts:58:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  12:24:06
+   Duration  750ms (transform 329ms, setup 139ms, import 421ms, tests 98ms, environment 0ms)
+

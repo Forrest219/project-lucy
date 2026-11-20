@@ -1,0 +1,83 @@
+{
+  "status": "PASS",
+  "image": "sha256:30ec4ae032db81201f35f78a8c1b56592ada53d5577862b1d6e7879db25fec3a",
+  "buildRevision": "77e2ad8425ae0e7a2918803e497da10636b14e5a-dirty",
+  "P160Cases": 13,
+  "P164Cases": 13,
+  "sameCandidateArtifactsChecked": [
+    "uncommitted-published/artifact.json",
+    "restart-l0/artifact.json",
+    "restart-i4/artifact.json",
+    "candidate/artifact.json",
+    "restart-i3/artifact.json",
+    "draft/artifact.json",
+    "restart-l1/artifact.json",
+    "restart-i2/artifact.json",
+    "performance-candidate/artifact.json",
+    "restart-i4-valid/artifact.json",
+    "i1/artifact.json",
+    "restart-i0/artifact.json",
+    "restart-i1/artifact.json",
+    "restart-u0/artifact.json",
+    "i3/artifact.json",
+    "i2/artifact.json",
+    "revoke-delete/artifact.json"
+  ],
+  "cleanupRecordsChecked": [
+    "uncommitted-published/cleanup.json",
+    "restart-l0/cleanup.json",
+    "restart-i4/cleanup.json",
+    "candidate/cleanup.json",
+    "restart-i3/cleanup.json",
+    "draft/cleanup.json",
+    "restart-l1/cleanup.json",
+    "restart-i2/cleanup.json",
+    "performance-candidate/cleanup.json",
+    "restart-i4-valid/cleanup.json",
+    "i1/cleanup.json",
+    "baseline/cleanup.json",
+    "restart-i0/cleanup.json",
+    "restart-i1/cleanup.json",
+    "restart-u0/cleanup.json",
+    "i3/cleanup.json",
+    "i2/cleanup.json",
+    "revoke-delete/cleanup.json"
+  ],
+  "sourceInputsMatched": 38,
+  "runnerSha256": "9f6bb5271ed917aeb9f057e36beb252b3a7c7f6977366aafe3d83ed5946ca8bd",
+  "performanceProblemsPerGroup": 300,
+  "performanceFailures": 0,
+  "performanceRounds": [
+    {
+      "round": 1,
+      "baselineP95Ms": 639.791,
+      "candidateP95Ms": 773.366,
+      "p95WithinTolerance": true,
+      "failureCounts": {
+        "baseline": 0,
+        "candidate": 0
+      }
+    },
+    {
+      "round": 2,
+      "baselineP95Ms": 780.151,
+      "candidateP95Ms": 806.683,
+      "p95WithinTolerance": true,
+      "failureCounts": {
+        "baseline": 0,
+        "candidate": 0
+      }
+    },
+    {
+      "round": 3,
+      "baselineP95Ms": 740.149,
+      "candidateP95Ms": 876.858,
+      "p95WithinTolerance": true,
+      "failureCounts": {
+        "baseline": 0,
+        "candidate": 0
+      }
+    }
+  ]
+}
+browser evidence: six real foreground pairs qualified

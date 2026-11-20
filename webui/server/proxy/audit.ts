@@ -1546,7 +1546,10 @@ export async function saveBudgetState(
         .run(scopeKey, idempotencyKey);
     }
   });
-  write();
+  // Acquire the writer reservation before reading the idempotency key. A
+  // deferred WAL transaction cannot wait when upgrading its read snapshot
+  // while another audit writer holds the lock (SQLITE_BUSY).
+  write.immediate();
   const loaded = await loadBudgetState(scopeKey);
   if (!loaded || !("row" in loaded)) {
     throw new Error("question_budget_state_missing_after_save");

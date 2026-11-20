@@ -1,0 +1,78 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 6,
+  "body": {
+    "ok": true,
+    "data": {
+      "status": "degraded",
+      "insecureTestProfile": true,
+      "lucyVersion": "0.30.0",
+      "gitSha": "77e2ad8425ae0e7a2918803e497da10636b14e5a",
+      "gitDirty": true,
+      "bundledKtxVersion": "0.16.0",
+      "ktxRuntime": {
+        "ready": true,
+        "status": "ready",
+        "detail": "status: ready"
+      },
+      "policy": {
+        "policyVersion": "e877722e659b39a78088f9e0d61e28b61ff9fa66dd68ff6f633b44f82a3c70ea",
+        "degradedGlobal": false,
+        "degradedAgents": [
+          "repro_reader"
+        ],
+        "healthy": false
+      },
+      "execution": {
+        "status": "unknown",
+        "lastCheckedAt": "2026-11-20T05:02:09.386Z",
+        "unknownConnections": [
+          "hive-1",
+          "lucy-ops"
+        ],
+        "activation": "unknown",
+        "reload": {
+          "state": "idle"
+        },
+        "verification": {
+          "state": "unverified"
+        }
+      },
+      "dataQaInstructions": {
+        "source": "missing",
+        "length": 0,
+        "lastError": null,
+        "loadedAt": null
+      },
+      "contentLayout": {
+        "contentRoot": "/data/lucy/config",
+        "contentRootSource": "env",
+        "authoring": {
+          "semanticLayer": "/data/lucy/config/semantic-layer",
+          "wiki": "/data/lucy/config/wiki",
+          "evals": "/data/lucy/config/evals",
+          "skills": "/data/lucy/config/skills"
+        },
+        "mirror": {
+          "semanticLayer": "/data/lucy/semantic-layer",
+          "wiki": "/data/lucy/wiki",
+          "evals": "/data/lucy/evals",
+          "skills": "/data/lucy/skills"
+        },
+        "mirrorActive": true,
+        "drift": [],
+        "driftTruncated": false
+      },
+      "eventLoop": {
+        "p99Ms": 132.121,
+        "maxMs": 132.121,
+        "windowSeconds": 60
+      }
+    },
+    "diagnostics": {
+      "observedAt": "2026-11-20T05:02:09.690Z",
+      "ageMs": 101,
+      "freshness": "fresh"
+    }
+  }
+}

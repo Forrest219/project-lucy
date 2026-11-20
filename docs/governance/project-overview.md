@@ -4,6 +4,7 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
+| P1-60／64合并候选更新 | 2026-11-20：30ec4ae0两套完整Docker各13项、782＋29回归与类型／浏览器取证完成；两项功能终审收口；整包因已纳入模块的版本与合同缺口未放行，现值见§9。 |
 | 版本 | v1.151 |
 | v1.150 更新 | 2026-11-19：核对核心可用性已有修复后，新增P1-61／62／63三份独立Spec／Plan及共享模块UAT设计；仅文档，未确权、开发未授权；现值见§9。 |
 | v1.157 更新 | 2026-11-20：P1-60／REQ-030-081 T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟）；测试台 NOT RUN；T6／R 另授；≠ 功能合同收口；≠ 可上线。现值见§9。 |
@@ -293,7 +294,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | P1-61／REQ-030-082：存活／就绪探针纯内存响应与诊断隔离 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 [Spec](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) · [Plan](../plans/lucy-20261119-memory-probe-diagnostics-isolation-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-62／REQ-030-083：重任务跨模块容量控制与许可生命周期 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 [Spec](../specs/lucy-20261119-heavy-work-capacity-control-spec.md) · [Plan](../plans/lucy-20261119-heavy-work-capacity-control-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-63／REQ-030-084：进程关停准入关闭与在途请求排空 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 [Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md) · [Plan](../plans/lucy-20261119-process-drain-lifecycle-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
-| P1-60／REQ-030-081：零绑定 begin 不影响 MCP 问数 | **v0.7；终稿已确权；T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟）**；测试台 NOT RUN；T6／R 另授；≠ 功能合同收口；≠ 可上线。 [Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md) · [Plan](../plans/lucy-20261119-webui-publish-caliber-registry-repair-plan.md) · [UAT](../qa/uat/suites/begin-zero-binding/suite.md) · [任务包](../../inbox/20261120-1037-p1-60-multi-agent-dev-pack.md) · [决议](../reviews/2026-11-20-begin-hide-decision.md) |
+| P1-60／REQ-030-081：零绑定 begin 不影响 MCP 问数 | v0.9；功能合同已收口（SC-01–12通过，P1-60／P1-64同一冻结候选完整复验）；预算持久化锁竞争修复纳入；本轮增量已提交；未推送／发布；不入新增核心分母；本条收口不表示可上线。 [Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md) · [Plan](../plans/lucy-20261119-webui-publish-caliber-registry-repair-plan.md) · [UAT](../qa/uat/suites/begin-zero-binding/suite.md) · [任务包](../../inbox/20261120-1037-p1-60-multi-agent-dev-pack.md) · [决议](../reviews/2026-11-20-begin-hide-decision.md) |
 | P1-58／REQ-030-079：角色权限与 Agent 读取响应 | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F58／浏览器）；本轮验证仅 vitest＋code review，未跑 docker／UAT；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 [Spec](../specs/lucy-20261119-roles-agent-read-responsiveness-spec.md) · [Plan](../plans/lucy-20261119-roles-agent-read-responsiveness-plan.md) |
 | P1-59／REQ-030-080：角色权限与 Agent 多人编辑 | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F59／浏览器）；本轮验证仅 vitest＋code review，未跑 docker／UAT；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 [Spec](../specs/lucy-20261119-roles-agent-concurrent-edit-spec.md) · [Plan](../plans/lucy-20261119-roles-agent-concurrent-edit-plan.md) |
 

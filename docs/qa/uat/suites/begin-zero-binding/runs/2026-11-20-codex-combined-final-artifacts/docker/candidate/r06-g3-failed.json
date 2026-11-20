@@ -1,0 +1,15 @@
+{
+  "httpStatus": 503,
+  "elapsedMs": 25.672,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 145,
+    "error": {
+      "code": -32000,
+      "message": "audit_unavailable",
+      "data": {
+        "reason": "question_budget_unavailable"
+      }
+    }
+  }
+}

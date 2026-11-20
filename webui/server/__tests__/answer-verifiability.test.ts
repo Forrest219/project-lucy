@@ -861,7 +861,7 @@ describe("answer-verifiability 排除与错误形状（SC-07／SC-15／SC-16 文
         },
         boundKey: {
           connectionId: "c",
-          schema: null,
+          schema: "",
           sourceName: "s",
           physicalTable: "t"
         }

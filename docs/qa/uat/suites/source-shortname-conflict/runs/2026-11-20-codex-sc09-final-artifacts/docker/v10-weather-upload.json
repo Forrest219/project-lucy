@@ -1,0 +1,75 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 191,
+  "body": {
+    "ok": true,
+    "data": {
+      "uploaded": true,
+      "record": {
+        "id": "up_20261120_040831_874",
+        "createdAt": "2026-11-20T04:08:31.874Z",
+        "connectionId": "hive-1",
+        "schema": "weather",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+        "originalFilename": "weather.yaml",
+        "sizeBytes": 321,
+        "sha256": "4cbebdecc9ac388b2181801a4a660a557c01454041723a25cc40e6a9270de114",
+        "tables": 2,
+        "overwritten": true,
+        "warnings": [
+          {
+            "code": "TARGET_EXISTS",
+            "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+          }
+        ],
+        "reloadRunId": "rel_20261120_040831_874"
+      },
+      "validation": {
+        "valid": true,
+        "connectionId": "hive-1",
+        "schema": "weather",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+        "originalFilename": "weather.yaml",
+        "sizeBytes": 321,
+        "sha256": "4cbebdecc9ac388b2181801a4a660a557c01454041723a25cc40e6a9270de114",
+        "errors": [],
+        "warnings": [
+          {
+            "code": "TARGET_EXISTS",
+            "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+          }
+        ],
+        "tableNames": [
+          "city",
+          "zebra"
+        ],
+        "tables": 2,
+        "sourceNameConflicts": [],
+        "exists": true
+      },
+      "reload": {
+        "id": "rel_20261120_040831_874",
+        "status": "success",
+        "startedAt": "2026-11-20T04:08:31.874Z",
+        "finishedAt": "2026-11-20T04:08:31.879Z",
+        "durationMs": 5,
+        "requestedConnectionId": "hive-1",
+        "requestedSchema": "weather",
+        "connections": 1,
+        "connectionIds": [
+          "hive-1"
+        ],
+        "configuredSchemas": 1,
+        "manifestSchemas": 1,
+        "tables": 2,
+        "enabledTables": 1,
+        "warnings": [],
+        "source": "static-yaml"
+      }
+    }
+  }
+}

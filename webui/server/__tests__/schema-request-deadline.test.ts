@@ -37,6 +37,7 @@ describe("schema API shared request deadline", () => {
       expect(read.message).toContain("超时");
     } else {
       expect(read.status).toBe("ok");
+      if (read.status !== "ok") throw new Error(`Unexpected schema status: ${read.status}`);
       expect(read.columns).toEqual([]);
       expect(read.rejections).toEqual([{ table: "orders", reason: "timeout" }]);
     }

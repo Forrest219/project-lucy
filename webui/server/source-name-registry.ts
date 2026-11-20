@@ -55,9 +55,11 @@ export class SourceNameRegistryError extends Error {
 
 /** Bare physical table name from `schema.table` or a bare identifier. */
 export function physicalTableBareName(physicalTable: string): string {
-  const normalized = normalizeSourceRef(physicalTable);
-  const dot = normalized.lastIndexOf(".");
-  return dot >= 0 ? normalized.slice(dot + 1) : normalized;
+  // Physical identifiers can be case-sensitive (e.g. MySQL on Linux). Only
+  // semantic-name occupancy uses normalizeSourceRef; Map keys keep real case.
+  const identifier = physicalTable.trim().replace(/[`"']/g, "");
+  const dot = identifier.lastIndexOf(".");
+  return dot >= 0 ? identifier.slice(dot + 1) : identifier;
 }
 
 function schemaManifestRelPath(connectionId: string, schema: string): string {
@@ -244,20 +246,31 @@ export function allocateSourceNames(
     )
   ].sort((a, b) => a.localeCompare(b));
 
+  // Reserve the complete set of valid old mappings first. Otherwise a newly
+  // discovered physical table sorting before its old alias owner can steal
+  // that alias, silently changing the source of existing queries.
+  const oldClaims = new Map<string, string[]>();
   for (const bare of uniqueBare) {
-    const old = existing.get(normalizeSourceRef(bare));
-    let candidate: string;
-    if (old !== undefined && !reserved.has(normalizeSourceRef(old))) {
-      candidate = old;
-    } else if (!used.has(normalizeSourceRef(bare))) {
-      candidate = bare;
-    } else {
-      candidate = firstAvailable(`${schema}_${bare}`, used);
-    }
-    const normalized = normalizeSourceRef(candidate);
-    if (used.has(normalized)) {
-      candidate = firstAvailable(`${schema}_${bare}`, used);
-    }
+    const old = existing.get(bare);
+    if (old === undefined) continue;
+    const normalized = normalizeSourceRef(old);
+    if (!normalized || reserved.has(normalized)) continue;
+    const owners = oldClaims.get(normalized) ?? [];
+    owners.push(bare);
+    oldClaims.set(normalized, owners);
+  }
+  for (const [normalized, owners] of oldClaims) {
+    if (owners.length !== 1) continue; // An already ambiguous mapping is not valid.
+    const bare = owners[0]!;
+    result.set(bare, existing.get(bare)!);
+    used.add(normalized);
+  }
+
+  for (const bare of uniqueBare) {
+    if (result.has(bare)) continue;
+    const candidate = !used.has(normalizeSourceRef(bare))
+      ? bare
+      : firstAvailable(`${schema}_${bare}`, used);
     result.set(bare, candidate);
     used.add(normalizeSourceRef(candidate));
   }

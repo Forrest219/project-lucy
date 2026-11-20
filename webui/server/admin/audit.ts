@@ -2977,7 +2977,7 @@ const ACCESS_LOG_FIELD_METADATA_V2: Record<(typeof ACCESS_LOG_CSV_HEADERS_V2)[nu
   // REQ-030-035 R9：v2 metadata 不得声明预算复盘列
   ...Object.fromEntries(
     Object.entries(ACCESS_LOG_FIELD_METADATA).filter(([key]) => !BUDGET_RETROSPECTIVE_HEADER_SET.has(key))
-  ),
+  ) as Record<Exclude<(typeof ACCESS_LOG_CSV_HEADERS)[number], BudgetRetrospectiveCsvHeader>, Omit<CsvFieldMetadata, "name">>,
   // B27 新增列的元数据已在 ACCESS_LOG_FIELD_METADATA 中声明（单一来源）。
   event_type: {
     label: "事件类型",

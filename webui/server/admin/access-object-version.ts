@@ -107,10 +107,10 @@ export function canonicalizeWritableValue(value: unknown, path = ""): unknown {
   return value;
 }
 
-export function stripAgentDisplayOnlyFields<T extends Record<string, unknown>>(user: T): T {
+export function stripAgentDisplayOnlyFields<T extends object>(user: T): T {
   const out = { ...user };
   for (const key of AGENT_DISPLAY_ONLY_KEYS) {
-    delete out[key];
+    if (key in out) Reflect.deleteProperty(out, key);
   }
   return out;
 }
@@ -152,9 +152,9 @@ export function canonicalizeRoleWritable(role: YamlRole): Record<string, unknown
 }
 
 export function canonicalizeAgentWritable(user: YamlUser): Record<string, unknown> {
-  const stripped = stripAgentDisplayOnlyFields({ ...user } as Record<string, unknown>);
-  const resolved = resolveRoleIds(stripped as YamlUser);
-  const base = { ...stripped } as Record<string, unknown>;
+  const stripped = stripAgentDisplayOnlyFields(user);
+  const resolved = resolveRoleIds(stripped);
+  const base: Record<string, unknown> = { ...stripped };
   delete base.role;
   delete base.roles;
   const canonical = canonicalizeWritableValue(base, "agent") as Record<string, unknown>;

@@ -1,0 +1,26 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 10,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": true,
+      "connectionId": "hive-1",
+      "schema": "ods",
+      "assetKind": "schema_manifest",
+      "assetType": "schemaManifest",
+      "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+      "originalFilename": "ods.yaml",
+      "sizeBytes": 197,
+      "sha256": "60f36ca21fa0efe6f82e0818a2ef4a6709280d6bf76156178edcbbf493c9bcb1",
+      "errors": [],
+      "warnings": [],
+      "tableNames": [
+        "ods_city_2"
+      ],
+      "tables": 1,
+      "sourceNameConflicts": [],
+      "exists": false
+    }
+  }
+}

@@ -1,0 +1,19 @@
+tables:
+  ods_city:
+    table: ods.city
+    columns:
+      - name: id
+        type: number
+        nullable: false
+        pk: true
+      - name: name
+        type: string
+        nullable: true
+  ods_zebra:
+    table: ods.ods_zebra
+    columns:
+      - name: id
+        type: number
+        nullable: false
+        pk: true
+

@@ -1,0 +1,38 @@
+{
+  "before": {
+    "scope_key": "bq:uat_zb_a|sha256:b29968cc1750:g3",
+    "started_at": 1795151441553,
+    "origin_started_at": 1795151441553,
+    "calls": 1,
+    "continuations": 0,
+    "attempts": 1,
+    "peak_concurrency": 1,
+    "current_concurrency": 0,
+    "updated_at": 1795151442009,
+    "busy_ms": 430.40620800000033,
+    "round": 0,
+    "turn_id": null,
+    "window_id": 0,
+    "pending_token": null,
+    "presented_token": null,
+    "archived_busy_json": "{}"
+  },
+  "after": {
+    "scope_key": "bq:uat_zb_a|sha256:b29968cc1750:g3",
+    "started_at": 1795151441553,
+    "origin_started_at": 1795151441553,
+    "calls": 2,
+    "continuations": 0,
+    "attempts": 2,
+    "peak_concurrency": 1,
+    "current_concurrency": 0,
+    "updated_at": 1795151442732,
+    "busy_ms": 892.9354580000218,
+    "round": 0,
+    "turn_id": null,
+    "window_id": 0,
+    "pending_token": null,
+    "presented_token": null,
+    "archived_busy_json": "{}"
+  }
+}

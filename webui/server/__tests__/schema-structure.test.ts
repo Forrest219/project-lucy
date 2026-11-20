@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SqlResult } from "../ktx";
 import type { ConnectionInfo } from "../model";
-import { previewSchemaStructure, readSchemaColumns } from "../schema-structure";
+import { buildMinimalSchemaManifest, previewSchemaStructure, readSchemaColumns } from "../schema-structure";
 import { parse } from "yaml";
 
 const mysqlConn: ConnectionInfo = {
@@ -298,6 +298,31 @@ describe("previewSchemaStructure source-name allocation (P1-64)", () => {
     schemas: ["ods", "weather"],
     enabledTables: []
   };
+
+  it.each([false, true])("R2: uppercase physical names use allocated keys (namesOnly=%s)", (namesOnly) => {
+    const registry = {
+      connectionId: "hive-1",
+      manifests: [{ schema: "weather", targetPath: "hive-1/_schema/weather.yaml", tables: { city: { table: "weather.city" } } }]
+    };
+    const result = buildMinimalSchemaManifest(
+      "ods",
+      namesOnly ? [] : [{ table: "City", column: "id", dataType: "int", nullable: false, primaryKey: true, comment: "" }],
+      namesOnly ? ["City"] : [],
+      { registry }
+    );
+    const doc = parse(result.yaml);
+    expect(doc.tables.ods_City.table).toBe("ods.City");
+    expect(doc.tables.City).toBeUndefined();
+  });
+
+  it("R2: case-distinct physical tables remain separate with unique semantic names", () => {
+    const result = buildMinimalSchemaManifest("ods", [], ["City", "city"], {
+      registry: { connectionId: "hive-1", manifests: [] }
+    });
+    const entries = Object.entries(parse(result.yaml).tables) as Array<[string, { table: string }]>;
+    expect(entries.map(([, definition]) => definition.table).sort()).toEqual(["ods.City", "ods.city"].sort());
+    expect(new Set(entries.map(([source]) => source.toLowerCase())).size).toBe(2);
+  });
 
   async function projectWithWeatherCity(): Promise<string> {
     root = await mkdtemp(path.join(os.tmpdir(), "lucy-schema-snr-"));

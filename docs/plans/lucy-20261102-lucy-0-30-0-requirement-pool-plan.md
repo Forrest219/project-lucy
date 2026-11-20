@@ -11,6 +11,8 @@
 | 核心方向 | [Lucy 0.30 升级核心方向](lucy-20261107-lucy-0-30-core-direction.md)（v0.5）：辅线＝现有 UX；**主线＝存量用户每日可信交互，加上行级隔离** |
 | 功能清单池 | [lucy-20261107-lucy-0-30-feature-inventory-pool](lucy-20261107-lucy-0-30-feature-inventory-pool.md)——**本产品线执行总账（SOT）**（见 DEVELOPMENT）；REQ 与之双向可追 |
 | 维护规则 | 只追加条目；开工前须另立 Spec／Plan 并获授权。不得把本文件当作默认可实施依据。优先级／立项状态与功能清单池对齐。**事故修复／旁路落地也须有 REQ＋总账行** |
+| P1-64 本轮变更 | v0.121（2026-11-20）：R1–R3整改、169＋5回归与Docker／真实前台浏览器复验完成；测试台R0／01–12 PASS；SC-09全库49条基线诊断未关闭，≠ 功能合同收口／可上线。 |
+| P1-64 SC-09变更 | v0.122（2026-11-20）：49→0，SC-09通过；413＋29回归及最终候选Docker／前台浏览器PASS；不外推整包更新放行。 |
 | 最新变更 | v0.120（2026-11-20）：P1-60／REQ-030-081 T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟）；测试台 NOT RUN；T6／R 另授；≠ 功能合同收口；≠ 可上线。 |
 | 前次变更 | v0.116（2026-11-20）：P1-60／REQ-030-081 终稿确权＋开发授权 T1–T5；T6／commit 另授；实现进行中；测试台 NOT RUN；≠ 功能合同收口；≠ 可上线。 |
 | 前次变更 | v0.114（2026-11-20）：P1-60／REQ-030-081 按新定位复审收缩为 N＋隐藏面＋D2 无副作用；Spec／Plan v0.7-draft、UAT v0.5-draft；复用现有参与事实，未来 B／D／事务／C1／C2 移出本条；预算／ACL／continue 保持。终稿未确权、开发未授权；测试台 NOT RUN；≠ 可上线。 |
@@ -51,7 +53,7 @@
 | REQ-030-086 | Wiki 覆盖上传采用 YAML 授权声明 | 2026-11-20 本机 demo Docker 复现：覆盖上传 `allowed_roles` 差异被默认 `preserve_current` 静默剥掉 | P1（清单 P1-65；事故修复） | v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
 | REQ-030-079 | 角色权限与 Agent 列表读取响应、展示复用与统计减负 | 高频卡顿只读探查；历史日志聚合与角色上下文重复构建 | P1（清单 P1-58；第一批） | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F58／浏览器）；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | REQ-030-080 | 角色权限与 Agent 多人编辑的对象级冲突与草稿恢复 | 共用配置版本造成无关对象冲突；多人同账号与独立账号场景 | P1（清单 P1-59；第二批） | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F59／浏览器）；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
-| REQ-030-081 | begin 价值重评与零绑定 MCP 问数不受影响 | 2026-11-19 MCP 故障只读排查；2026-11-20 批准隐藏 begin；同日终稿确权＋T1–T5 开发授权 | P0（清单 P1-60；P0-1 修复） | **v0.7；终稿已确权；T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟：tools/list 无 begin＋直调 begin_not_available）**；预算／ACL 待商议且本条不改；测试台 NOT RUN；T6／R 另授；不入新增核心分母；≠ 功能合同收口；≠ 可上线。 |
+| REQ-030-081 | begin 价值重评与零绑定 MCP 问数不受影响 | 2026-11-19 MCP 故障只读排查；2026-11-20 批准隐藏 begin；同日终稿确权＋T1–T5 开发授权 | P0（清单 P1-60；P0-1 修复） | v0.9；功能合同已收口（SC-01–12通过，P1-60／P1-64同一冻结候选完整复验）；预算持久化锁竞争修复纳入；本轮增量已提交；未推送／发布；不入新增核心分母；本条收口不表示可上线。 |
 
 正文与双向回链见本文末 REQ-030-079／080；现行跟进 SOT 仍为执行总账。
 
@@ -1342,11 +1344,11 @@ P1-40 同类排查证明：界面成功反馈与动作真实结果不一致是�
 - 总账：[P1-60](lucy-20261107-lucy-0-30-feature-inventory-pool.md)，P0 主路径修复；沿用 P0-1 核心分母，不重复计数。
 - 来源：11-19 只读排查与委托人零绑定不受影响要求；v0.1 未获认可 → v0.5 事务方案 → v0.6 批准 inactive 隐藏 begin → **v0.7 按新定位收缩为 N＋隐藏面**（预算／ACL 待商议且不改）。
 - 本修复 [Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md)／[Plan](lucy-20261119-webui-publish-caliber-registry-repair-plan.md)；父 P0-1 及审计／预算／ACL 合同本条不借隐藏 begin 改写（OQ-4）。
-- 跟进状态：**v0.7；终稿已确权；T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟：tools/list 无 begin＋直调 begin_not_available）**；预算／ACL 待商议且本条不改；测试台 NOT RUN；T6／R 另授；不入新增核心分母；≠ 功能合同收口；≠ 可上线。
+- 跟进状态：v0.9；功能合同已收口（SC-01–12通过，P1-60／P1-64同一冻结候选完整复验）；预算持久化锁竞争修复纳入；本轮增量已提交；未推送／发布；不入新增核心分母；本条收口不表示可上线。
 - 评审：[决议](../reviews/2026-11-19-begin-zero-binding-review-decisions.md)；[隐藏 begin 决议](../reviews/2026-11-20-begin-hide-decision.md)；F-01–07 与 H-01–05 见 Spec §9。
-- 验收：F＝SC-01–12（T5）；[UAT](../qa/uat/suites/begin-zero-binding/suite.md) R0／01–12＝T6 另授；编排 [任务包](../../inbox/20261120-1037-p1-60-multi-agent-dev-pack.md)。
+- 验收：F＝SC-01–12；已授权T6完整Docker R，最新[同候选完整跑次](../qa/uat/suites/begin-zero-binding/runs/2026-11-20-codex-combined-final.md)；结果见INDEX。
 - 复盘：[测试漏检](../lessons/2026-11-19-begin-zero-binding-test-gap.md)。
-- 授权边界：**T1–T5 已授权**；禁止 commit／push／T6 Docker／R／INDEX PASS（除非另授）；不得关预算、改 ACL、隐藏 continue。
+- 授权边界：本轮已授权剩余整改、必要回归、完整Docker UAT、合并P1-64与类型／浏览器核验、三台账和整包终审；包含SC-05／10必要预算持久化锁竞争修复，不改额度／轮次／ACL；本进程提交已获后续授权；不推送／发布。
 
 
 ## REQ-030-085：同连接跨 Schema 短名冲突与保存运行时确认修复
@@ -1354,10 +1356,10 @@ P1-40 同类排查证明：界面成功反馈与动作真实结果不一致是�
 - 来源：委托人 2026-11-19 提供《Lucy问题反馈.md》，要求排查代码并在 Docker 或指定 WebUI 做一次复现；2026-11-20 要求按仓库规范制定修复方案和验收步骤，暂不改运行代码。
 - 清单：P1-64（不入核心分母）。
 - 已复现缺陷：扫描单独生成两个 Schema 时同名物理表均生成裸短名，Source Map 却按连接要求短名唯一；Manifest 上传后合法 MCP 请求被 `source_map_compile_failed:duplicate_source_name` 拒绝。启用表保存同时报告 `runtimeAck=true`，与实际可用性分叉。
-- 修复合同：[Spec v0.1-draft](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md)／[Plan v0.1-draft](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md)。新增冲突表确定性别名、有效旧映射保留、最终文件集合校验、发布锁内复核、旧冲突增量修复，以及两条 `ktx.yaml` 写入路径的 Source Map issue ack 负控。
-- 跟进状态：v0.1-draft。仅修复方案与验收设计；终稿未确权；开发未授权；测试台最近跑次 FAIL（缺陷已复现），修复后复测 NOT RUN；不入核心分母；≠ 可上线。
-- 验收：SC-01–09；测试台 [UAT-SUITE-SOURCE-SHORTNAME-CONFLICT](../qa/uat/suites/source-shortname-conflict/suite.md) 的 R0／01–09 全部必做，覆盖原始事故转绿、引用稳定、负向零写入、二次前缀冲突、并发竞态、ack 负控恢复和合成六组旧冲突逐份修复。
-- 授权边界：本轮只写文档与台账，不改运行代码、配置或 runner，不构建、不执行修复后 UAT；2026-11-19 排查与复现授权不继承为开发授权。
+- 修复合同：[Spec v0.4](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md)／[Plan v0.4](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md)。新增冲突表确定性别名、有效旧映射保留、最终文件集合校验、发布锁内复核、旧冲突增量修复，以及两条 `ktx.yaml` 写入路径的 Source Map issue ack 负控。
+- 跟进状态：v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。
+- 验收：SC-01–10均通过；[最终候选跑次](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-combined-final.md) R0／01–12与前台浏览器PASS；SC-09全库0错误、782项Vitest及29项概念模块回归PASS。
+- 授权边界：本轮续授49条类型修复与回归、隔离Docker／浏览器验收、台账同步与最终评审；已执行，本进程提交已另授；不含推送／发布。
 
 ## REQ-030-082：存活／就绪探针纯内存响应与诊断隔离
 

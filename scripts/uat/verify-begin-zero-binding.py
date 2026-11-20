@@ -7,7 +7,7 @@ import pathlib, random, re, secrets, shutil, sqlite3, subprocess, tempfile, time
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONN, SOURCE, SCHEMA = 'uat-mysql', 'uat_begin_zero_orders', 'uat'
 TOOLS = ['lucy_catalog','lucy_query','lucy_read_source','lucy_explain_query','lucy_begin_question','lucy_continue_question','connection_list']
-CODE = ['webui/server/proxy/'+f for f in ['mcp-proxy.ts','caliber-binding-registry.ts','caliber-binding-session.ts','caliber-binding.ts']]
+CODE = ['webui/server/proxy/'+f for f in ['mcp-proxy.ts','caliber-binding-registry.ts','caliber-binding-session.ts','caliber-binding.ts','source-ambiguity-gate.ts','audit.ts']]
 SECRETS = []
 
 def scrub(s):
@@ -474,7 +474,7 @@ def main():
             require(sum(attribution.values())==6,'unknown attribution mode omitted from denominator')
             require(attribution['explicit']==0,'hidden questions falsely reported as explicit')
             rig.save('r08-reconciliation',{'queries':queries,'attributionCounts':attribution,'forcedBegin':begin,'explicitReportedFromHidden':0,'actualQueries':6,'successes':6,'operatorTask':'located D2 by session/request/trace and verified subsequent query outcome; version in artifact','managementTask':'six queries/six successes; hidden original question reports zero; active R07 report excluded'})
-            mark('UAT-ZB-08')
+            rig.public_persona_tasks();mark('UAT-ZB-08',{'operatorManagementTasks':'public read-only audit API + independent reconciliation'})
             for tool,a in [('lucy_read_source',{'connectionId':CONN,'sourceName':SOURCE}),('lucy_explain_query',{'connectionId':CONN,'measures':[SOURCE+'.order_count']})]:
                 require(successful(rig.call('r09-'+tool,tool,a)),'other tool regression '+tool)
             # No commit credential + published content is independently unknown.

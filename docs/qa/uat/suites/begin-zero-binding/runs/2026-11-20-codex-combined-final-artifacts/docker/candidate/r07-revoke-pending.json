@@ -1,0 +1,42 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 18.286,
+  "body": {
+    "ok": true,
+    "data": {
+      "files": [
+        {
+          "filePath": "caliber-bindings/bound.yaml",
+          "status": "modified",
+          "diff": "--- caliber-bindings/bound.yaml（生效版本）\n+++ caliber-bindings/bound.yaml（当前内容）\n-{\"bindingId\": \"uat_zero\", \"title\": \"UAT count only\", \"status\": \"published\", \"triggers\": [\"\\u56fa\\u5b9a\\u8ba2\\u5355\\u6570\"], \"connectionId\": \"uat-mysql\", \"source\": \"uat_begin_zero_orders\", \"caliber\": {\"measures\": [\"uat_begin_zero_orders.order_count\"], \"dimensions\": [], \"segments\": [], \"filterFields\": [], \"requireMeasures\": [\"uat_begin_zero_orders.order_count\"]}}\n+{\"bindingId\": \"uat_zero\", \"title\": \"UAT count only\", \"status\": \"draft\", \"triggers\": [\"\\u56fa\\u5b9a\\u8ba2\\u5355\\u6570\"], \"connectionId\": \"uat-mysql\", \"source\": \"uat_begin_zero_orders\", \"caliber\": {\"measures\": [\"uat_begin_zero_orders.order_count\"], \"dimensions\": [], \"segments\": [], \"filterFields\": [], \"requireMeasures\": [\"uat_begin_zero_orders.order_count\"]}}\n"
+        }
+      ],
+      "pendingDigest": "38de7593c18b25ef26898f025446fac7f4eb789881ee48e3e69e8f8a659c1a07",
+      "baselineState": "ready",
+      "baselineGeneration": 3,
+      "impact": {
+        "pendingDigest": "38de7593c18b25ef26898f025446fac7f4eb789881ee48e3e69e8f8a659c1a07",
+        "complete": true,
+        "counts": {
+          "files": 1,
+          "tables": 0,
+          "manifests": 0,
+          "wikiPages": 0
+        },
+        "tables": [],
+        "wikiChanges": [],
+        "schemaChanges": [],
+        "relatedScope": [],
+        "otherChanges": [
+          {
+            "filePath": "caliber-bindings/bound.yaml",
+            "changeType": "modified"
+          }
+        ],
+        "unresolved": []
+      },
+      "mirrorOnlySemanticFiles": [],
+      "mirrorDriftTruncated": false
+    }
+  }
+}

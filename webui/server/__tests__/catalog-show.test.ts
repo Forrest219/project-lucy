@@ -40,7 +40,7 @@ function driver(mode = "ok") {
       if (mode === "connect-hang") return;
       callback(mode === "auth" ? new Error("Access denied fixture-private-password") : null);
     }),
-    query: vi.fn((_options: unknown, callback: (error: Error | null, rows?: unknown, fields?: Array<{ name: string }>) => void) => {
+    query: vi.fn((_options: Parameters<CatalogShowConnection["query"]>[0], callback: (error: Error | null, rows?: unknown, fields?: Array<{ name: string }>) => void) => {
       if (mode === "query-hang") return;
       callback(
         mode === "query-error" ? new Error("Unknown database fixture-private-password") : null,

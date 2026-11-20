@@ -1,0 +1,50 @@
+{
+  "budgetBefore": [
+    {
+      "scope_key": "bq:uat_zb_a|sha256:0b5db0573809:r11-budget-L0",
+      "started_at": 1795152062863,
+      "origin_started_at": 1795152062863,
+      "calls": 1,
+      "continuations": 0,
+      "attempts": 1,
+      "peak_concurrency": 1,
+      "current_concurrency": 0,
+      "updated_at": 1795152064900,
+      "busy_ms": 1993.4023339999999,
+      "round": 0,
+      "turn_id": null,
+      "window_id": 0,
+      "pending_token": null,
+      "presented_token": null,
+      "archived_busy_json": "{}"
+    }
+  ],
+  "budgetAfter": [
+    {
+      "scope_key": "bq:uat_zb_a|sha256:0b5db0573809:r11-budget-L0",
+      "started_at": 1795152062863,
+      "origin_started_at": 1795152062863,
+      "calls": 1,
+      "continuations": 0,
+      "attempts": 1,
+      "peak_concurrency": 1,
+      "current_concurrency": 0,
+      "updated_at": 1795152064900,
+      "busy_ms": 1993.4023339999999,
+      "round": 0,
+      "turn_id": null,
+      "window_id": 0,
+      "pending_token": null,
+      "presented_token": null,
+      "archived_busy_json": "{}"
+    }
+  ],
+  "bindingsBefore": {
+    ".ktx-ui/caliber-binding/sessions/session-183f006d8aa6173f153cde9c5764b045.json": "eaef18b74ab03eec4705ce2ec37898e1a0e07807c45dcef7002f163f1255839f",
+    "config/caliber-bindings/.caliber-binding/active-generation.json": "d56ef8c2abc323ab9edabbff82e994d443059ea38cf792ba6b40382b9a096e33"
+  },
+  "bindingsAfter": {
+    ".ktx-ui/caliber-binding/sessions/session-183f006d8aa6173f153cde9c5764b045.json": "eaef18b74ab03eec4705ce2ec37898e1a0e07807c45dcef7002f163f1255839f",
+    "config/caliber-bindings/.caliber-binding/active-generation.json": "d56ef8c2abc323ab9edabbff82e994d443059ea38cf792ba6b40382b9a096e33"
+  }
+}

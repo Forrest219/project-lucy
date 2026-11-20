@@ -1,6 +1,6 @@
 # Fixtures — UAT-SUITE-BEGIN-ZERO-BINDING
 
-本文件为 v0.6 执行夹具，对齐 Spec／Plan v0.8：inactive 隐藏 begin，当前只验 N＋隐藏面；预算／ACL 保持现状。完整执行已授权；仅在独立 Docker 网络与临时私有目录构造数据库、Role、Token 及运行夹具，测试结束清理；不修改现有 demo 配置。
+本文件为 v0.6 执行夹具，对齐 Spec／Plan v0.9：inactive 隐藏 begin，当前只验 N＋隐藏面；预算／ACL 保持现状。完整执行已授权；仅在独立 Docker 网络与临时私有目录构造数据库、Role、Token 及运行夹具，测试结束清理；不修改现有 demo 配置。
 
 ## 1. 环境与身份
 

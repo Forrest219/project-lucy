@@ -1,0 +1,317 @@
+[
+  {
+    "status": 200,
+    "ms": 5.471,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 128654,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 4.041,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 129661,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 8.146,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 130669,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 2.409,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 131675,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 4.212,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 132682,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 2.923,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 133685,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 4.084,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 134690,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 9.216,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 135701,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 2.312,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 136706,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 13.552,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 137719,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 7.342,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 138730,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 14.278,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 139746,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 3.479,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 140755,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 4.193,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 141765,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 4.518,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 142774,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 3.805,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 143779,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 2.797,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 144784,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 6.238,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 145790,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 3.206,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 146794,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 5.673,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 147800,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 1.897,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 148807,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 9.619,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 149816,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 8.159,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 150831,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 2.441,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 151835,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 4.504,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 152839,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 2.855,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 153848,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 2.981,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 154851,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 21.191,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 155879,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 2.59,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 156889,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 5.299,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 157899,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 9.362,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 158908,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 2.562,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 159914,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 16.591,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 160928,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 40.093,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 161973,
+      "freshness": "stale"
+    }
+  },
+  {
+    "status": 200,
+    "ms": 9.223,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 162984,
+      "freshness": "stale"
+    }
+  }
+]

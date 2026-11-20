@@ -89,7 +89,7 @@ describe("listLiveSchemas", () => {
       schemas: ["chatbi"],
       enabledTables: []
     };
-    const runSqlImpl = vi.fn(async () => okSql([["chatbi", 12]]));
+    const runSqlImpl = vi.fn<typeof import("../ktx").runSql>(async () => okSql([["chatbi", 12]]));
     const runCatalogShowImpl = vi.fn();
 
     const result = await listLiveSchemas("/project", "doris-main", { refresh: true }, {
