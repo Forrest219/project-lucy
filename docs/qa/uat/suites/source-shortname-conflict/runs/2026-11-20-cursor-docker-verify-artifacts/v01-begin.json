@@ -1,0 +1,16 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 27,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"turnId\":\"lucy_706ca9ad-f673-4d6b-9305-79ecc1cf5ab9\",\"activeBindingId\":null,\"note\":\"Subsequent tool calls within the attach window will be associated with this turn automatically; no need to pass extra params.\"}"
+        }
+      ]
+    }
+  }
+}

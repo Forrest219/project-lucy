@@ -92,7 +92,23 @@ type EnabledTablesWrite = {
   oldEnabledTables: string[];
   newEnabledTables: string[];
   warnings?: EnabledTableWarning[];
+  /** Spec 14 §0.3 / P1-64 D11 — success UI only when runtimeAck === true. */
+  runtimeAck?: boolean;
+  policyRuntimeAck?: boolean;
+  policyRuntimeIssues?: Array<{ agentId?: string; reason?: string }>;
 };
+
+function summarizePolicyRuntimeIssues(
+  issues: Array<{ reason?: string }> | undefined
+): string {
+  const sourceMapReasons = (issues ?? [])
+    .map((issue) => issue.reason ?? "")
+    .filter((reason) => reason.startsWith("source_map_compile_failed:"));
+  if (sourceMapReasons.length > 0) {
+    return `Source Map 编译失败：${sourceMapReasons.slice(0, 3).join("；")}`;
+  }
+  return "策略运行态未确认（runtimeAck≠true）";
+}
 
 const STATUS_LABELS: Record<WhitelistStatus, string> = {
   enabled_complete: "已启用，语义完成",
@@ -744,6 +760,33 @@ export function TableWhitelist() {
         toast.error("启用表范围保存未完成，请重试。");
         setStatusMessage("启用表范围保存未完成");
         setStatusTone("danger");
+        return;
+      }
+
+      // Spec 14 §0.3 / P1-64 D11 — written alone is not success; missing ack fails closed.
+      const ackFailed = results.filter((r) => r.write.runtimeAck !== true);
+      if (ackFailed.length > 0) {
+        const issueSummary = summarizePolicyRuntimeIssues(
+          ackFailed.flatMap((r) => r.write.policyRuntimeIssues ?? [])
+        );
+        toast.error(
+          `启用表范围已写入磁盘，但策略运行态未确认。${issueSummary}。请修复 Source Map 冲突后重新保存。`
+        );
+        setStatusMessage(
+          `启用表范围已写入，策略运行态未确认：${issueSummary}`
+        );
+        setStatusTone("danger");
+        setDraftByConnection((prev) => {
+          const next = { ...prev };
+          for (const r of results) delete next[r.connId];
+          return next;
+        });
+        setPreviewOpen(false);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
+        for (const r of results) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(r.connId) });
+        }
         return;
       }
 

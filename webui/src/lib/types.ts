@@ -213,6 +213,10 @@ export type CreateConnectionResult = {
   };
   /** Spec 191 / connection-create plan: three-layer ack after write. */
   policyRuntimeAck?: boolean;
+  /** Spec 14 §0.3 / P1-64 D9 — Policy ack alias; UI success requires === true. */
+  runtimeAck?: boolean;
+  /** P1-64 D9 — Policy degrade / Source Map issues from commitEffectivePolicy. */
+  policyRuntimeIssues?: Array<{ agentId?: string; reason?: string }>;
   catalogRuntimeAck?: boolean;
   executionRuntimeAck?: boolean;
   executionRuntimeStatus?: ExecutionRuntimeStatus;
@@ -2377,7 +2381,8 @@ export type CatalogAssetWarningCode =
   | "EMPTY_MANIFEST"
   | "TARGET_EXISTS"
   | "TABLE_SCHEMA_MISMATCH"
-  | "UNKNOWN_MANIFEST_SHAPE";
+  | "UNKNOWN_MANIFEST_SHAPE"
+  | "PREEXISTING_SOURCE_NAME_CONFLICT";
 
 export type CatalogAssetWarning = {
   code: CatalogAssetWarningCode;
@@ -2401,11 +2406,27 @@ export type CatalogAssetErrorCode =
   | "OVERLAY_FIELD_IN_MANIFEST"
   | "MANIFEST_SHAPE_IN_OVERLAY"
   | "PATH_NOT_ALLOWED"
-  | "ASSET_NOT_FOUND";
+  | "ASSET_NOT_FOUND"
+  | "DUPLICATE_SOURCE_NAME";
 
 export type CatalogAssetError = {
   code: CatalogAssetErrorCode;
   message: string;
+};
+
+/** P1-64 — final-set sourceName conflict object from catalog validate. */
+export type CatalogAssetSourceNameConflictEntry = {
+  targetPath: string;
+  schema: string;
+  physicalTable: string;
+  sourceName: string;
+};
+
+export type CatalogAssetSourceNameConflict = {
+  sourceName: string;
+  entries: CatalogAssetSourceNameConflictEntry[];
+  involvesCandidate: boolean;
+  suggestedSourceName?: string;
 };
 
 export type CatalogAssetValidateRequest = {
@@ -2432,6 +2453,8 @@ export type CatalogAssetValidateResponse = {
   tableNames: string[];
   warnings: CatalogAssetWarning[];
   errors: CatalogAssetError[];
+  /** P1-64 — empty array when no conflicts; includes unrelated old conflicts as diagnostics. */
+  sourceNameConflicts: CatalogAssetSourceNameConflict[];
 };
 
 export type CatalogAssetUploadRequest = CatalogAssetValidateRequest & {

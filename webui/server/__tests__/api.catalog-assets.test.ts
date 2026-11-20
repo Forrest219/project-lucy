@@ -176,6 +176,7 @@ describe("POST /api/catalog/assets/validate", () => {
     expect(data.exists).toBe(false);
     expect(data.warnings).toEqual([]);
     expect(data.errors).toEqual([]);
+    expect(data.sourceNameConflicts).toEqual([]);
     expect(data.sizeBytes).toBe(Buffer.byteLength(SAMPLE_MANIFEST, "utf8"));
     expect(typeof data.sha256).toBe("string");
     expect(data.sha256).toMatch(/^[0-9a-f]{64}$/);

@@ -229,6 +229,9 @@ describe("CreateConnectionDrawer", () => {
                   enabledTables: []
                 },
                 test: { status: "ok", durationMs: 12 },
+                runtimeAck: true,
+                policyRuntimeAck: true,
+                policyRuntimeIssues: [],
                 executionRuntimeAck: true,
                 executionRuntimeStatus: "ok",
                 executionDecisionReason: "ok"
@@ -297,6 +300,9 @@ describe("CreateConnectionDrawer", () => {
                   enabledTables: []
                 },
                 test: { status: "ok", durationMs: 12 },
+                runtimeAck: true,
+                policyRuntimeAck: true,
+                policyRuntimeIssues: [],
                 executionRuntimeAck: false,
                 executionRuntimeStatus: "stale",
                 executionDecisionReason: "execution_connection_not_loaded",
@@ -376,7 +382,10 @@ describe("CreateConnectionDrawer", () => {
                   schemas: [],
                   enabledTables: []
                 },
-                test: { status: "error", message: "Access denied for user", durationMs: 8 }
+                test: { status: "error", message: "Access denied for user", durationMs: 8 },
+                runtimeAck: true,
+                policyRuntimeAck: true,
+                policyRuntimeIssues: []
               }
             })
           );
@@ -435,7 +444,10 @@ describe("CreateConnectionDrawer", () => {
                   schemas: [],
                   enabledTables: []
                 },
-                test: { status: "ok", durationMs: 5 }
+                test: { status: "ok", durationMs: 5 },
+                runtimeAck: true,
+                policyRuntimeAck: true,
+                policyRuntimeIssues: []
               }
             })
           );
@@ -799,7 +811,10 @@ describe("CreateConnectionDrawer endpoint gate", () => {
               data: {
                 written: true,
                 connection: { id: "demo-mysql", driver: "mysql", schemas: ["analytics"], enabledTables: [] },
-                test: { status: "ok" }
+                test: { status: "ok" },
+                runtimeAck: true,
+                policyRuntimeAck: true,
+                policyRuntimeIssues: []
               }
             })
           );

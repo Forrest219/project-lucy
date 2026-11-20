@@ -17,7 +17,9 @@ REST over HTTP，仅 `127.0.0.1`。所有响应为 JSON，遵循统一 envelope�
 > 禁止在 `ok:false` 时回退渲染空/假数据（历史 bug 教训）。
 
 错误码：`PROJECT_NOT_FOUND` `SOURCE_NOT_FOUND` `WIKI_NOT_FOUND` `FORBIDDEN_PATH`
-`VALIDATION_FAILED` `KTX_CLI_ERROR` `YAML_PARSE_ERROR` `BAD_REQUEST` `INTERNAL`。
+`VALIDATION_FAILED` `KTX_CLI_ERROR` `YAML_PARSE_ERROR` `BAD_REQUEST` `INTERNAL`
+`WORKLOAD_CAPACITY_BUSY`（HTTP 429，`Retry-After: 1`；重任务容量繁忙，用户提示「任务较多，请稍后重试。」；无副作用，显式重试）。
+`SERVICE_DRAINING`（HTTP 503；整实例关停排空中拒绝新业务请求；用户提示「服务正在停止接收新请求，请在服务恢复后重试。」；**不**返回固定 `Retry-After`；写请求不得自动重放；恢复后显式重试。探针 `/api/livez`／`/api/readyz`／`/api/health` 不走此业务准入：`DRAINING` 时 `readyz` 503，监听仍在则 `livez` 200，`health` 保持原诊断语义）。
 
 ## 2. 端点总览
 
@@ -261,8 +263,28 @@ POST /mcp                                      # MCP proxy, port 7879
 | 路径 | 语义 | 成功 | 未就绪 |
 | --- | --- | --- | --- |
 | `GET /api/livez` | 进程存活（liveness） | 恒 `{ "ok": true }`／200 | 无（进程在即应答） |
-| `GET /api/readyz` | 服务可接流量（readiness；含 MCP listen 对齐，见 P1-46） | `{ "ok": true, "data": … }`／200 | `{ "ok": false, "reason": "warming_up", "data": … }`／503 |
-| `GET /api/health` | 诊断快照（依赖、event-loop 等；**不是** K8s readiness 合同） | `{ "ok": true, "data": … }`／200 | 见依赖降级字段；主路径仍可能 200 |
+| `GET /api/readyz` | 服务可接流量（readiness；含 MCP listen 对齐，见 P1-46；P1-63 `DRAINING` 亦 503） | `{ "ok": true, "data": …, "diagnostics": … }`／200 | `{ "ok": false, "reason": "warming_up"\|"draining", "data": …, "diagnostics": … }`／503 |
+| `GET /api/health` | 诊断快照（依赖、event-loop 等；**不是** K8s readiness 合同） | `{ "ok": true, "data": …, "diagnostics": … }`／200 | 见依赖降级字段；主路径仍可能 200 |
+
+P1-61：三个探针的请求处理路径**不**触发文件／SQLite／子进程／网络诊断读取；`data` 来自后台周期采集的内存快照（`/api/health` 的 `eventLoop` 仍为进程内直方图，纯内存）。后台至多每 10 秒启动一轮采集、单在途、5 秒真实截止；响应**不**等待采集中的 Promise。
+
+`diagnostics` 是 `data` 的**兄弟字段**（不改变 `data` 既有含义与字段），形状：
+
+```jsonc
+{
+  "observedAt": "2026-11-19T12:00:00.000Z", // 最近一次**完整成功**采集的 UTC 墙钟；尚无成功采集时为 null
+  "ageMs": 1234,                              // 相对该次成功采集的单调时钟年龄（毫秒）；尚无成功采集时为 null
+  "freshness": "fresh"                        // "unknown" | "fresh" | "stale"
+}
+```
+
+| `freshness` | 含义 |
+| --- | --- |
+| `unknown` | 进程尚无完整成功采集；`observedAt`／`ageMs` 均为 `null`；不得据此伪造 `data.status=ok` |
+| `fresh` | 最近成功采集仍在 30 秒内，且之后无失败／超时／配置代次作废 |
+| `stale` | 首次失败／超时即立即陈旧（保留原 `observedAt`，不用请求时间冒充）；或距最近成功采集超过 30 秒；或 project／配置代次已切换。下一轮完整成功采集后才恢复 `fresh` |
+
+`data.status`（`ok`／`degraded`）仍只表示**采集时点**的依赖汇总语义；**不**因 `diagnostics.freshness` 为 `unknown`／`stale` 而单独改写。诊断快照**不得**用于鉴权、吊销宽限或 fail-closed 旁路。
 
 ### `GET /api/openapi.json`
 公开可读的 Admin OpenAPI 文档（无登录、无密钥；**仅 GET**）。机器可读枚举登录、Agent／Role／Token 开通相关 operation（含 per-operation `dryRun` 语义）。响应为 OpenAPI JSON 文档本体，**不**包在统一 envelope 里。契约与验收见 [`docs/specs/lucy-20261103-admin-api-agent-discoverability-spec.md`](../../docs/specs/lucy-20261103-admin-api-agent-discoverability-spec.md)。
@@ -501,7 +523,7 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 
 `GET /api/connections` 返回 `ConnectionInfo[]`，字段见 `04-data-model.md`。
 
-`POST /api/connections`（Spec 124 Phase A）新建连接配置：默认 `dryRun:true`；确认写入时创建 `.ktx/secrets/<id>-password`（0600，拒绝覆盖），并在 `ktx.yaml` 追加 `connections.<id>`（`password` 仅 `file:` 引用）与 `setup.database_connection_ids`。写入后执行 `ktx connection test`；失败则回滚 yaml 与 secret。响应与审计 diff **永不包含明文密码**。通用 `fs-safe` 对 `.ktx/secrets/**` 仍 DENY；仅专用写通道可创建约定文件名。本 Phase **无 UI**。
+`POST /api/connections`（Spec 124 Phase A）新建连接配置：默认 `dryRun:true`；确认写入时创建 `.ktx/secrets/<id>-password`（0600，拒绝覆盖），并在 `ktx.yaml` 追加 `connections.<id>`（`password` 仅 `file:` 引用）与 `setup.database_connection_ids`。写入后执行 `ktx connection test`；失败则回滚 yaml 与 secret。响应与审计 diff **永不包含明文密码**。通用 `fs-safe` 对 `.ktx/secrets/**` 仍 DENY；仅专用写通道可创建约定文件名。确认写入成功响应含三层 ack（`policyRuntimeAck`／`catalogRuntimeAck`／`executionRuntimeAck`）；**P1-64**：`runtimeAck`＝`policyRuntimeAck` 别名，Source Map 编译失败时二者为 `false` 并附 `policyRuntimeIssues`（口径同启用表保存）。
 
 `POST /api/connections/:connId/remove`（Spec 127）删除连接配置：默认 `dryRun:true`；确认写入时删除 `connections.<id>` 并从 `setup.database_connection_ids` prune。可选 `deleteSecret`（仅约定 `.ktx/secrets/<id>-password`）与 `deleteAssets`（`semantic-layer/<id>/` 下 YAML）。**不**改 `access.yaml`、**不**删 Wiki、**不**触碰物理库。响应与审计 diff 脱敏。
 
@@ -569,8 +591,22 @@ dryRun 响应：
 `dryRun:false` 写 `ktx.yaml` 并记录 `config_change_log`：
 
 ```jsonc
-{ "ok": true, "data": { "written": true, "auditId": 1, "oldEnabledTables": [], "newEnabledTables": ["dataforai.superstore_orders"], "warnings": [] }}
+{ "ok": true, "data": {
+  "written": true,
+  "auditId": 1,
+  "oldEnabledTables": [],
+  "newEnabledTables": ["dataforai.superstore_orders"],
+  "warnings": [],
+  "policyVersion": "...",
+  "policyRuntimeAck": true,
+  "runtimeAck": true,
+  "policyRuntimeIssues": [],
+  "catalogRuntimeAck": true,
+  "executionRuntimeAck": true
+}}
 ```
+
+**P1-64／REQ-030-085（保存 ack）：** `runtimeAck` 是 `policyRuntimeAck` 的兼容别名。只要 `PolicyRuntimeStatus.issues` 含 `source_map_compile_failed:*`，二者均为 `false`，且 `policyRuntimeIssues` 复用现有 issue 对象（可按 `reason` 去重展示）。`written=true`／HTTP 200 与磁盘不回滚语义不变；`catalogRuntimeAck`／`executionRuntimeAck` 仍按各自事实返回。WebUI 成功反馈须以 `runtimeAck===true` 为准（Spec 14 §0.3）。
 
 错误码：`CONNECTION_NOT_FOUND` `INVALID_ENABLED_TABLE` `DUPLICATE_ENABLED_TABLE` `TABLE_NOT_SCANNED`。
 
@@ -586,7 +622,15 @@ dryRun 响应：
 
 `POST /api/catalog/assets/validate` 校验待上传 Schema Manifest。请求使用规范字段 `assetKind: "schema_manifest"`；兼容旧客户端 `assetType: "schemaManifest"`。其他 asset kind 必须走对应语义资产入口，不能混用。
 
-`POST /api/catalog/assets/upload` 在校验通过后写入 `semantic-layer/<connection>/_schema/<schema>.yaml`，目标路径由系统根据 connection/schema 计算，不接受客户端任意路径。
+**P1-64／REQ-030-085（同连接短名唯一性）：** validate 以「候选内容替换目标文件、其他文件不变」的最终文件集合判重（与 ACL `(connectionId, normalize(sourceName))` 同口径）。响应新增：
+
+- `sourceNameConflicts[]`：每项含归一化 `sourceName`、冲突条目（`targetPath`／`schema`／`physicalTable`／`sourceName`）、`involvesCandidate`；候选冲突可含 `suggestedSourceName`。无冲突时为 `[]`。
+- 错误码 `DUPLICATE_SOURCE_NAME`：候选引入或保留的冲突；`valid=false`。
+- 警告码 `PREEXISTING_SOURCE_NAME_CONFLICT`：与本候选无关的既有冲突，不阻断能减少旧冲突的合法修复上传；候选自身仍冲突时不得借此放行。
+
+目录列举或任一既有 Manifest 读取／解析失败须 fail-closed（不得当成无冲突）。
+
+`POST /api/catalog/assets/upload` 在校验通过后写入 `semantic-layer/<connection>/_schema/<schema>.yaml`，目标路径由系统根据 connection/schema 计算，不接受客户端任意路径。正式写入必须在现有 `withPublishCoordinator` 发布锁内**重新 validate** 并使用锁内结果；候选冲突返回 HTTP 400／`DUPLICATE_SOURCE_NAME`，目标文件与发布记录不得前进。
 
 容量契约（2026-10-30 修订）：上述 Manifest 校验、上传接口与 `POST /api/semantic-assets/validate` 的 HTTP 请求体上限为 32 MiB；单 YAML 文件上限为 8 MiB，按 UTF-8 字节数计算。超出请求体上限返回 HTTP 413、`FST_ERR_CTP_BODY_TOO_LARGE` 及中文说明；目录 Manifest 文件超限返回既有 `FILE_TOO_LARGE` 校验错误。上传、导出与维护包导入统一引用 `server/semantic-limits.ts`，包总量及数量上限不变。只传引用的发布、批量校验等接口维持默认 HTTP 上限。
 

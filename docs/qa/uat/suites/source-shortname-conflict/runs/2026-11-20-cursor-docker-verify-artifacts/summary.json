@@ -1,0 +1,1876 @@
+{
+  "startedAt": "2026-11-20T02:36:33.727747+00:00",
+  "mode": "verify",
+  "containers": [
+    "lucy-snc-90eec9-app",
+    "lucy-snc-90eec9-db"
+  ],
+  "network": "lucy-snc-90eec9",
+  "imageTag": "project-lucy:demo",
+  "cases": {
+    "UAT-SNC-R0": {
+      "status": "PASS",
+      "image": "sha256:7a43b1399cababdd72965f5835561bd0d9b5eacdbac561af1974092121542e69 linux/arm64",
+      "hashesMatched": true
+    },
+    "UAT-SNC-01": {
+      "status": "PASS"
+    },
+    "UAT-SNC-02": {
+      "status": "PASS",
+      "odsYamlHasOdsCity": true
+    },
+    "UAT-SNC-03": {
+      "status": "PASS"
+    },
+    "UAT-SNC-04": {
+      "status": "PASS",
+      "suggested": "ods_city",
+      "uploadsBefore": {
+        "records": [
+          {
+            "id": "up_20261120_023648_376",
+            "createdAt": "2026-11-20T02:36:48.376Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": false,
+            "warnings": [],
+            "reloadRunId": "rel_20261120_023648_376"
+          },
+          {
+            "id": "up_20261120_023651_223",
+            "createdAt": "2026-11-20T02:36:51.223Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": false,
+            "warnings": [],
+            "reloadRunId": "rel_20261120_023651_223"
+          },
+          {
+            "id": "up_20261120_023655_439",
+            "createdAt": "2026-11-20T02:36:55.439Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_439"
+          },
+          {
+            "id": "up_20261120_023655_524",
+            "createdAt": "2026-11-20T02:36:55.524Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_524"
+          }
+        ],
+        "lastBySchema": {
+          "hive-1.ods": {
+            "id": "up_20261120_023655_524",
+            "createdAt": "2026-11-20T02:36:55.524Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_524"
+          },
+          "hive-1.weather": {
+            "id": "up_20261120_023655_439",
+            "createdAt": "2026-11-20T02:36:55.439Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_439"
+          }
+        }
+      },
+      "uploadsAfter": {
+        "records": [
+          {
+            "id": "up_20261120_023648_376",
+            "createdAt": "2026-11-20T02:36:48.376Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": false,
+            "warnings": [],
+            "reloadRunId": "rel_20261120_023648_376"
+          },
+          {
+            "id": "up_20261120_023651_223",
+            "createdAt": "2026-11-20T02:36:51.223Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": false,
+            "warnings": [],
+            "reloadRunId": "rel_20261120_023651_223"
+          },
+          {
+            "id": "up_20261120_023655_439",
+            "createdAt": "2026-11-20T02:36:55.439Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_439"
+          },
+          {
+            "id": "up_20261120_023655_524",
+            "createdAt": "2026-11-20T02:36:55.524Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_524"
+          }
+        ],
+        "lastBySchema": {
+          "hive-1.ods": {
+            "id": "up_20261120_023655_524",
+            "createdAt": "2026-11-20T02:36:55.524Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_524"
+          },
+          "hive-1.weather": {
+            "id": "up_20261120_023655_439",
+            "createdAt": "2026-11-20T02:36:55.439Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_439"
+          }
+        }
+      }
+    },
+    "UAT-SNC-05": {
+      "status": "PASS",
+      "odsYaml": "tables:\n  ods_city_2:\n    table: ods.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    "UAT-SNC-06": {
+      "status": "PASS",
+      "okCount": 1
+    },
+    "UAT-SNC-07": {
+      "status": "PASS"
+    },
+    "UAT-SNC-08": {
+      "status": "PASS",
+      "startAck": false
+    },
+    "UAT-SNC-09": {
+      "status": "PASS",
+      "evidenceDir": "/Users/zhangxingchen/Projects/project-lucy/inbox/source-shortname-conflict/evidence/20261120T023633",
+      "allCases": {
+        "UAT-SNC-R0": "PASS",
+        "UAT-SNC-01": "PASS",
+        "UAT-SNC-02": "PASS",
+        "UAT-SNC-03": "PASS",
+        "UAT-SNC-04": "PASS",
+        "UAT-SNC-05": "PASS",
+        "UAT-SNC-06": "PASS",
+        "UAT-SNC-07": "PASS",
+        "UAT-SNC-08": "PASS"
+      }
+    }
+  },
+  "steps": [
+    {
+      "step": "bootstrap",
+      "httpStatus": 200,
+      "cookieIssued": true
+    },
+    {
+      "step": "case-UAT-SNC-R0",
+      "status": "PASS",
+      "image": "sha256:7a43b1399cababdd72965f5835561bd0d9b5eacdbac561af1974092121542e69 linux/arm64",
+      "hashesMatched": true
+    },
+    {
+      "step": "scan-weather",
+      "httpStatus": 200,
+      "tableCount": 1,
+      "yamlHead": "tables:\n  city:\n    table: weather.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    {
+      "step": "v01-weather-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v01-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "written": true,
+      "policyRuntimeAck": true,
+      "runtimeAck": true,
+      "policyRuntimeIssues": []
+    },
+    {
+      "step": "v01-tools-list",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v01-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v01-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v01-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v01-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      }
+    },
+    {
+      "step": "case-UAT-SNC-01",
+      "status": "PASS"
+    },
+    {
+      "step": "scan-ods",
+      "httpStatus": 200,
+      "tableCount": 1,
+      "yamlHead": "tables:\n  ods_city:\n    table: ods.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    {
+      "step": "v02-ods-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v02-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "written": true,
+      "policyRuntimeAck": true,
+      "runtimeAck": true,
+      "policyRuntimeIssues": []
+    },
+    {
+      "step": "v02-tools-list",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v02-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v02-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v02-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v02-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      }
+    },
+    {
+      "step": "case-UAT-SNC-02",
+      "status": "PASS",
+      "odsYamlHasOdsCity": true
+    },
+    {
+      "step": "scan-weather",
+      "httpStatus": 200,
+      "tableCount": 1,
+      "yamlHead": "tables:\n  city:\n    table: weather.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    {
+      "step": "scan-ods",
+      "httpStatus": 200,
+      "tableCount": 1,
+      "yamlHead": "tables:\n  ods_city:\n    table: ods.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    {
+      "step": "v03-weather-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v03-ods-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v03-tools-list",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v03-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v03-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v03-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v03-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      }
+    },
+    {
+      "step": "case-UAT-SNC-03",
+      "status": "PASS"
+    },
+    {
+      "step": "v04-bare-upload",
+      "httpStatus": 400,
+      "valid": false,
+      "errors": [
+        {
+          "code": "DUPLICATE_SOURCE_NAME",
+          "message": "短名「city」在最终集合中冲突（物理表：ods.city、weather.city）。请重新扫描该 Schema，或将冲突短名改为「ods_city」后再上传。"
+        }
+      ],
+      "sourceNameConflicts": [
+        {
+          "sourceName": "city",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/ods.yaml",
+              "schema": "ods",
+              "physicalTable": "ods.city",
+              "sourceName": "city"
+            },
+            {
+              "targetPath": "hive-1/_schema/weather.yaml",
+              "schema": "weather",
+              "physicalTable": "weather.city",
+              "sourceName": "city"
+            }
+          ],
+          "involvesCandidate": true,
+          "suggestedSourceName": "ods_city"
+        }
+      ],
+      "ok": false,
+      "uploaded": null,
+      "code": "DUPLICATE_SOURCE_NAME"
+    },
+    {
+      "step": "v04-tools-list",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v04-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v04-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v04-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v04-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      }
+    },
+    {
+      "step": "case-UAT-SNC-04",
+      "status": "PASS",
+      "suggested": "ods_city",
+      "uploadsBefore": {
+        "records": [
+          {
+            "id": "up_20261120_023648_376",
+            "createdAt": "2026-11-20T02:36:48.376Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": false,
+            "warnings": [],
+            "reloadRunId": "rel_20261120_023648_376"
+          },
+          {
+            "id": "up_20261120_023651_223",
+            "createdAt": "2026-11-20T02:36:51.223Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": false,
+            "warnings": [],
+            "reloadRunId": "rel_20261120_023651_223"
+          },
+          {
+            "id": "up_20261120_023655_439",
+            "createdAt": "2026-11-20T02:36:55.439Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_439"
+          },
+          {
+            "id": "up_20261120_023655_524",
+            "createdAt": "2026-11-20T02:36:55.524Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_524"
+          }
+        ],
+        "lastBySchema": {
+          "hive-1.ods": {
+            "id": "up_20261120_023655_524",
+            "createdAt": "2026-11-20T02:36:55.524Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_524"
+          },
+          "hive-1.weather": {
+            "id": "up_20261120_023655_439",
+            "createdAt": "2026-11-20T02:36:55.439Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_439"
+          }
+        }
+      },
+      "uploadsAfter": {
+        "records": [
+          {
+            "id": "up_20261120_023648_376",
+            "createdAt": "2026-11-20T02:36:48.376Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": false,
+            "warnings": [],
+            "reloadRunId": "rel_20261120_023648_376"
+          },
+          {
+            "id": "up_20261120_023651_223",
+            "createdAt": "2026-11-20T02:36:51.223Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": false,
+            "warnings": [],
+            "reloadRunId": "rel_20261120_023651_223"
+          },
+          {
+            "id": "up_20261120_023655_439",
+            "createdAt": "2026-11-20T02:36:55.439Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_439"
+          },
+          {
+            "id": "up_20261120_023655_524",
+            "createdAt": "2026-11-20T02:36:55.524Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_524"
+          }
+        ],
+        "lastBySchema": {
+          "hive-1.ods": {
+            "id": "up_20261120_023655_524",
+            "createdAt": "2026-11-20T02:36:55.524Z",
+            "connectionId": "hive-1",
+            "schema": "ods",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+            "originalFilename": "ods.yaml",
+            "sizeBytes": 195,
+            "sha256": "91f97de29031ea4386a0280e715bf7dbf79a59abbb1cf099839b6d9a0ec1c29a",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_524"
+          },
+          "hive-1.weather": {
+            "id": "up_20261120_023655_439",
+            "createdAt": "2026-11-20T02:36:55.439Z",
+            "connectionId": "hive-1",
+            "schema": "weather",
+            "assetKind": "schema_manifest",
+            "assetType": "schemaManifest",
+            "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+            "originalFilename": "weather.yaml",
+            "sizeBytes": 195,
+            "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+            "tables": 1,
+            "overwritten": true,
+            "warnings": [
+              {
+                "code": "TARGET_EXISTS",
+                "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+              }
+            ],
+            "reloadRunId": "rel_20261120_023655_439"
+          }
+        }
+      }
+    },
+    {
+      "step": "v05-aux-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "scan-ods",
+      "httpStatus": 200,
+      "tableCount": 1,
+      "yamlHead": "tables:\n  ods_city_2:\n    table: ods.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    {
+      "step": "v05-ods-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v05-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "written": true,
+      "policyRuntimeAck": true,
+      "runtimeAck": true,
+      "policyRuntimeIssues": []
+    },
+    {
+      "step": "case-UAT-SNC-05",
+      "status": "PASS",
+      "odsYaml": "tables:\n  ods_city_2:\n    table: ods.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    {
+      "step": "v06-early-a-upload",
+      "httpStatus": 400,
+      "valid": false,
+      "errors": [
+        {
+          "code": "DUPLICATE_SOURCE_NAME",
+          "message": "短名「city」在最终集合中冲突（物理表：race_a.city、weather.city）。请重新扫描该 Schema，或将冲突短名改为「race_a_city」后再上传。"
+        }
+      ],
+      "sourceNameConflicts": [
+        {
+          "sourceName": "city",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/race_a.yaml",
+              "schema": "race_a",
+              "physicalTable": "race_a.city",
+              "sourceName": "city"
+            },
+            {
+              "targetPath": "hive-1/_schema/weather.yaml",
+              "schema": "weather",
+              "physicalTable": "weather.city",
+              "sourceName": "city"
+            }
+          ],
+          "involvesCandidate": true,
+          "suggestedSourceName": "race_a_city"
+        }
+      ],
+      "ok": false,
+      "uploaded": null,
+      "code": "DUPLICATE_SOURCE_NAME"
+    },
+    {
+      "step": "v06-early-b-upload",
+      "httpStatus": 400,
+      "valid": false,
+      "errors": [
+        {
+          "code": "DUPLICATE_SOURCE_NAME",
+          "message": "短名「city」在最终集合中冲突（物理表：race_b.city、weather.city）。请重新扫描该 Schema，或将冲突短名改为「race_b_city」后再上传。"
+        }
+      ],
+      "sourceNameConflicts": [
+        {
+          "sourceName": "city",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/race_b.yaml",
+              "schema": "race_b",
+              "physicalTable": "race_b.city",
+              "sourceName": "city"
+            },
+            {
+              "targetPath": "hive-1/_schema/weather.yaml",
+              "schema": "weather",
+              "physicalTable": "weather.city",
+              "sourceName": "city"
+            }
+          ],
+          "involvesCandidate": true,
+          "suggestedSourceName": "race_b_city"
+        }
+      ],
+      "ok": false,
+      "uploaded": null,
+      "code": "DUPLICATE_SOURCE_NAME"
+    },
+    {
+      "step": "v06-race-a-upload",
+      "httpStatus": 500,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": false,
+      "uploaded": null,
+      "code": "PUBLISH_COORDINATOR_BUSY"
+    },
+    {
+      "step": "v06-race-b-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v06-tools-list",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v06-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v06-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v06-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v06-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      }
+    },
+    {
+      "step": "case-UAT-SNC-06",
+      "status": "PASS",
+      "okCount": 1
+    },
+    {
+      "step": "v07-neg-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "written": true,
+      "policyRuntimeAck": false,
+      "runtimeAck": false,
+      "policyRuntimeIssues": [
+        {
+          "agentId": "repro_reader",
+          "reason": "source_map_compile_failed:duplicate_source_name:hive-1:city",
+          "diagnostic": {
+            "declaredRoleIds": [],
+            "steps": [],
+            "contentRoot": "/data/lucy/config",
+            "contentRootSource": "env",
+            "sourceMapVersion": "60c0e01300d4dced",
+            "sourceMapConnectionIds": [
+              "hive-1",
+              "lucy-ops"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "step": "v07-fix-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v07-fix-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "written": true,
+      "policyRuntimeAck": true,
+      "runtimeAck": true,
+      "policyRuntimeIssues": []
+    },
+    {
+      "step": "v07-tools-list",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v07-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v07-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v07-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v07-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      }
+    },
+    {
+      "step": "case-UAT-SNC-07",
+      "status": "PASS"
+    },
+    {
+      "step": "v08-start-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "written": true,
+      "policyRuntimeAck": false,
+      "runtimeAck": false,
+      "policyRuntimeIssues": [
+        {
+          "agentId": "repro_reader",
+          "reason": "source_map_compile_failed:duplicate_source_name:hive-1:t6",
+          "diagnostic": {
+            "declaredRoleIds": [],
+            "steps": [],
+            "contentRoot": "/data/lucy/config",
+            "contentRootSource": "env",
+            "sourceMapVersion": "2b9d22ac223e0baf",
+            "sourceMapConnectionIds": [
+              "hive-1",
+              "lucy-ops"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "step": "v08-fix-d1-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [
+        {
+          "sourceName": "t2",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c2.yaml",
+              "schema": "c2",
+              "physicalTable": "c2.t",
+              "sourceName": "t2"
+            },
+            {
+              "targetPath": "hive-1/_schema/d2.yaml",
+              "schema": "d2",
+              "physicalTable": "d2.t",
+              "sourceName": "t2"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t3",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c3.yaml",
+              "schema": "c3",
+              "physicalTable": "c3.t",
+              "sourceName": "t3"
+            },
+            {
+              "targetPath": "hive-1/_schema/d3.yaml",
+              "schema": "d3",
+              "physicalTable": "d3.t",
+              "sourceName": "t3"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t4",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c4.yaml",
+              "schema": "c4",
+              "physicalTable": "c4.t",
+              "sourceName": "t4"
+            },
+            {
+              "targetPath": "hive-1/_schema/d4.yaml",
+              "schema": "d4",
+              "physicalTable": "d4.t",
+              "sourceName": "t4"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t5",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c5.yaml",
+              "schema": "c5",
+              "physicalTable": "c5.t",
+              "sourceName": "t5"
+            },
+            {
+              "targetPath": "hive-1/_schema/d5.yaml",
+              "schema": "d5",
+              "physicalTable": "d5.t",
+              "sourceName": "t5"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t6",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c6.yaml",
+              "schema": "c6",
+              "physicalTable": "c6.t",
+              "sourceName": "t6"
+            },
+            {
+              "targetPath": "hive-1/_schema/d6.yaml",
+              "schema": "d6",
+              "physicalTable": "d6.t",
+              "sourceName": "t6"
+            }
+          ],
+          "involvesCandidate": false
+        }
+      ],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v08-progress-1",
+      "remainingEstimate": 5,
+      "conflictDiagCount": 5
+    },
+    {
+      "step": "v08-fix-d2-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [
+        {
+          "sourceName": "t3",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c3.yaml",
+              "schema": "c3",
+              "physicalTable": "c3.t",
+              "sourceName": "t3"
+            },
+            {
+              "targetPath": "hive-1/_schema/d3.yaml",
+              "schema": "d3",
+              "physicalTable": "d3.t",
+              "sourceName": "t3"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t4",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c4.yaml",
+              "schema": "c4",
+              "physicalTable": "c4.t",
+              "sourceName": "t4"
+            },
+            {
+              "targetPath": "hive-1/_schema/d4.yaml",
+              "schema": "d4",
+              "physicalTable": "d4.t",
+              "sourceName": "t4"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t5",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c5.yaml",
+              "schema": "c5",
+              "physicalTable": "c5.t",
+              "sourceName": "t5"
+            },
+            {
+              "targetPath": "hive-1/_schema/d5.yaml",
+              "schema": "d5",
+              "physicalTable": "d5.t",
+              "sourceName": "t5"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t6",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c6.yaml",
+              "schema": "c6",
+              "physicalTable": "c6.t",
+              "sourceName": "t6"
+            },
+            {
+              "targetPath": "hive-1/_schema/d6.yaml",
+              "schema": "d6",
+              "physicalTable": "d6.t",
+              "sourceName": "t6"
+            }
+          ],
+          "involvesCandidate": false
+        }
+      ],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v08-progress-2",
+      "remainingEstimate": 4,
+      "conflictDiagCount": 4
+    },
+    {
+      "step": "v08-fix-d3-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [
+        {
+          "sourceName": "t4",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c4.yaml",
+              "schema": "c4",
+              "physicalTable": "c4.t",
+              "sourceName": "t4"
+            },
+            {
+              "targetPath": "hive-1/_schema/d4.yaml",
+              "schema": "d4",
+              "physicalTable": "d4.t",
+              "sourceName": "t4"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t5",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c5.yaml",
+              "schema": "c5",
+              "physicalTable": "c5.t",
+              "sourceName": "t5"
+            },
+            {
+              "targetPath": "hive-1/_schema/d5.yaml",
+              "schema": "d5",
+              "physicalTable": "d5.t",
+              "sourceName": "t5"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t6",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c6.yaml",
+              "schema": "c6",
+              "physicalTable": "c6.t",
+              "sourceName": "t6"
+            },
+            {
+              "targetPath": "hive-1/_schema/d6.yaml",
+              "schema": "d6",
+              "physicalTable": "d6.t",
+              "sourceName": "t6"
+            }
+          ],
+          "involvesCandidate": false
+        }
+      ],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v08-progress-3",
+      "remainingEstimate": 3,
+      "conflictDiagCount": 3
+    },
+    {
+      "step": "v08-fix-d4-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [
+        {
+          "sourceName": "t5",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c5.yaml",
+              "schema": "c5",
+              "physicalTable": "c5.t",
+              "sourceName": "t5"
+            },
+            {
+              "targetPath": "hive-1/_schema/d5.yaml",
+              "schema": "d5",
+              "physicalTable": "d5.t",
+              "sourceName": "t5"
+            }
+          ],
+          "involvesCandidate": false
+        },
+        {
+          "sourceName": "t6",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c6.yaml",
+              "schema": "c6",
+              "physicalTable": "c6.t",
+              "sourceName": "t6"
+            },
+            {
+              "targetPath": "hive-1/_schema/d6.yaml",
+              "schema": "d6",
+              "physicalTable": "d6.t",
+              "sourceName": "t6"
+            }
+          ],
+          "involvesCandidate": false
+        }
+      ],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v08-progress-4",
+      "remainingEstimate": 2,
+      "conflictDiagCount": 2
+    },
+    {
+      "step": "v08-fix-d5-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [
+        {
+          "sourceName": "t6",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c6.yaml",
+              "schema": "c6",
+              "physicalTable": "c6.t",
+              "sourceName": "t6"
+            },
+            {
+              "targetPath": "hive-1/_schema/d6.yaml",
+              "schema": "d6",
+              "physicalTable": "d6.t",
+              "sourceName": "t6"
+            }
+          ],
+          "involvesCandidate": false
+        }
+      ],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v08-progress-5",
+      "remainingEstimate": 1,
+      "conflictDiagCount": 1
+    },
+    {
+      "step": "v08-fix-d6-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "errors": [],
+      "sourceNameConflicts": [],
+      "ok": true,
+      "uploaded": true,
+      "code": null
+    },
+    {
+      "step": "v08-progress-6",
+      "remainingEstimate": 0,
+      "conflictDiagCount": 0
+    },
+    {
+      "step": "v08-end-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "written": true,
+      "policyRuntimeAck": true,
+      "runtimeAck": true,
+      "policyRuntimeIssues": []
+    },
+    {
+      "step": "v08-tools-list",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v08-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v08-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v08-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "v08-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      }
+    },
+    {
+      "step": "case-UAT-SNC-08",
+      "status": "PASS",
+      "startAck": false
+    },
+    {
+      "step": "case-UAT-SNC-09",
+      "status": "PASS",
+      "evidenceDir": "/Users/zhangxingchen/Projects/project-lucy/inbox/source-shortname-conflict/evidence/20261120T023633",
+      "allCases": {
+        "UAT-SNC-R0": "PASS",
+        "UAT-SNC-01": "PASS",
+        "UAT-SNC-02": "PASS",
+        "UAT-SNC-03": "PASS",
+        "UAT-SNC-04": "PASS",
+        "UAT-SNC-05": "PASS",
+        "UAT-SNC-06": "PASS",
+        "UAT-SNC-07": "PASS",
+        "UAT-SNC-08": "PASS"
+      }
+    },
+    {
+      "step": "completed",
+      "verifyPassed": true
+    }
+  ],
+  "image": "sha256:7a43b1399cababdd72965f5835561bd0d9b5eacdbac561af1974092121542e69 linux/arm64",
+  "buildRevisionAndHashes": "1fb73f721d8df4bd149f99c27aca69feada51556-dirty\n6871c63c2136c04e3b7e6915025f2bef88c5f353354c635df5c60a28da59f560  /app/webui/server/schema-structure.ts\n5ece1bdfaffee77d4bdb17389963831e53f10892a84e77349361494a26869933  /app/webui/server/catalog-assets.ts\n7102f243e5f247dcfe8417a48ae2b281e69e15b67dd00804fc6a62a9356f0db1  /app/webui/server/proxy/acl.ts\nf724b05921916641848ef073e2eaf4c16bce3920b8d2e23188e25d327e42e8b3  /app/webui/server/index.ts\ndda9a980d093782786fd092618d03ebe9619558b7065a952bb206964290472b7  /app/webui/server/source-name-registry.ts",
+  "sourceComparison": {
+    "webui/server/schema-structure.ts": {
+      "hostSha256": "6871c63c2136c04e3b7e6915025f2bef88c5f353354c635df5c60a28da59f560",
+      "imageMatchesHost": true
+    },
+    "webui/server/catalog-assets.ts": {
+      "hostSha256": "5ece1bdfaffee77d4bdb17389963831e53f10892a84e77349361494a26869933",
+      "imageMatchesHost": true
+    },
+    "webui/server/proxy/acl.ts": {
+      "hostSha256": "7102f243e5f247dcfe8417a48ae2b281e69e15b67dd00804fc6a62a9356f0db1",
+      "imageMatchesHost": true
+    },
+    "webui/server/index.ts": {
+      "hostSha256": "f724b05921916641848ef073e2eaf4c16bce3920b8d2e23188e25d327e42e8b3",
+      "imageMatchesHost": true
+    },
+    "webui/server/source-name-registry.ts": {
+      "hostSha256": "dda9a980d093782786fd092618d03ebe9619558b7065a952bb206964290472b7",
+      "imageMatchesHost": true
+    }
+  },
+  "hostGitHead": "1fb73f721d8df4bd149f99c27aca69feada51556",
+  "hostGitDirty": true,
+  "database": "MySQL 8.4; synthetic schemas; connection label hive-1",
+  "webui": "http://127.0.0.1:55982",
+  "mcp": "http://127.0.0.1:55983/mcp",
+  "verifyPassed": true,
+  "status": "PASS",
+  "cleanedUp": true,
+  "finishedAt": "2026-11-20T02:37:08.488471+00:00"
+}

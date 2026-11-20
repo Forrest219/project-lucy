@@ -25,6 +25,17 @@ import { readProject } from "./project";
 import { registerDisplayTouchedPath, scopeContextFor, scopesForPath, withDisplayWriteBarrier } from "./display-generation";
 import { withPublishCoordinator } from "./publish-coordinator.js";
 import { SEMANTIC_BATCH_LIMITS } from "./semantic-limits.js";
+import {
+  allocateSourceNames,
+  findSourceNameConflicts,
+  flattenRegistryEntries,
+  normalizeSourceRef,
+  physicalTableBareName,
+  readConnectionSourceManifests,
+  SourceNameRegistryError,
+  type SourceManifestEntry,
+  type SourceNameConflict
+} from "./source-name-registry";
 
 const MAX_BYTES = SEMANTIC_BATCH_LIMITS.maxSingleYamlBytes;
 const MAX_RECORDS = 50;
@@ -54,7 +65,8 @@ export type CatalogAssetErrorCode =
   | "OVERLAY_FIELD_IN_MANIFEST"
   | "MANIFEST_SHAPE_IN_OVERLAY"
   | "PATH_NOT_ALLOWED"
-  | "ASSET_NOT_FOUND";
+  | "ASSET_NOT_FOUND"
+  | "DUPLICATE_SOURCE_NAME";
 
 export type CatalogAssetError = {
   code: CatalogAssetErrorCode;
@@ -65,12 +77,27 @@ export type CatalogAssetWarningCode =
   | "EMPTY_MANIFEST"
   | "TARGET_EXISTS"
   | "TABLE_SCHEMA_MISMATCH"
-  | "UNKNOWN_MANIFEST_SHAPE";
+  | "UNKNOWN_MANIFEST_SHAPE"
+  | "PREEXISTING_SOURCE_NAME_CONFLICT";
 
 export type CatalogAssetWarning = {
   code: CatalogAssetWarningCode;
   message: string;
   table?: string;
+};
+
+export type CatalogAssetSourceNameConflictEntry = {
+  targetPath: string;
+  schema: string;
+  physicalTable: string;
+  sourceName: string;
+};
+
+export type CatalogAssetSourceNameConflict = {
+  sourceName: string;
+  entries: CatalogAssetSourceNameConflictEntry[];
+  involvesCandidate: boolean;
+  suggestedSourceName?: string;
 };
 
 export type CatalogAssetValidateRequest = {
@@ -97,6 +124,7 @@ export type CatalogAssetValidateResponse = {
   tableNames: string[];
   warnings: CatalogAssetWarning[];
   errors: CatalogAssetError[];
+  sourceNameConflicts: CatalogAssetSourceNameConflict[];
 };
 
 export type CatalogAssetUploadRequest = CatalogAssetValidateRequest & {
@@ -553,6 +581,7 @@ function buildBaseValidation(
   | "warnings"
   | "tableNames"
   | "tables"
+  | "sourceNameConflicts"
 > {
   const sanitized = sanitizeFilename(request.filename);
   if (!sanitized || !hasYamlExtension(sanitized)) {
@@ -583,8 +612,117 @@ function buildBaseValidation(
     errors,
     warnings,
     tableNames: [],
-    tables: 0
+    tables: 0,
+    sourceNameConflicts: []
   };
+}
+
+function formatPhysicalList(entries: SourceManifestEntry[]): string {
+  return entries.map((e) => e.physicalTable).join("、");
+}
+
+function entryInvolvesCandidateSchema(
+  entry: SourceManifestEntry,
+  candidateSchema: string
+): boolean {
+  return normalizeSourceRef(entry.schema) === normalizeSourceRef(candidateSchema);
+}
+
+function buildSourceNameConflictPayload(
+  conflict: SourceNameConflict,
+  candidateSchema: string,
+  suggestedSourceName?: string
+): CatalogAssetSourceNameConflict {
+  const involvesCandidate = conflict.entries.some((e) =>
+    entryInvolvesCandidateSchema(e, candidateSchema)
+  );
+  const payload: CatalogAssetSourceNameConflict = {
+    sourceName: conflict.sourceName,
+    entries: conflict.entries.map((e) => ({
+      targetPath: e.targetPath,
+      schema: e.schema,
+      physicalTable: e.physicalTable,
+      sourceName: e.sourceName
+    })),
+    involvesCandidate
+  };
+  if (involvesCandidate && suggestedSourceName !== undefined) {
+    payload.suggestedSourceName = suggestedSourceName;
+  }
+  return payload;
+}
+
+function suggestSourceNameForConflict(
+  schema: string,
+  conflict: SourceNameConflict,
+  allocationRegistry: Awaited<ReturnType<typeof readConnectionSourceManifests>>
+): string | undefined {
+  const candidateEntry = conflict.entries.find((e) => entryInvolvesCandidateSchema(e, schema));
+  if (!candidateEntry) return undefined;
+  const bare = physicalTableBareName(candidateEntry.physicalTable);
+  if (!bare) return undefined;
+  return allocateSourceNames(schema, [bare], allocationRegistry).get(bare);
+}
+
+async function appendSourceNameUniquenessChecks(
+  projectRoot: string,
+  request: CatalogAssetValidateRequest,
+  errors: CatalogAssetError[],
+  warnings: CatalogAssetWarning[]
+): Promise<CatalogAssetSourceNameConflict[]> {
+  let finalRegistry: Awaited<ReturnType<typeof readConnectionSourceManifests>>;
+  let allocationRegistry: Awaited<ReturnType<typeof readConnectionSourceManifests>>;
+  try {
+    finalRegistry = await readConnectionSourceManifests(projectRoot, request.connectionId, {
+      schema: request.schema,
+      content: request.content
+    });
+    // Suggestions allocate against disk (target kept for D2 retention; reserved excludes it).
+    allocationRegistry = await readConnectionSourceManifests(projectRoot, request.connectionId);
+  } catch (error) {
+    if (error instanceof SourceNameRegistryError) {
+      errors.push({
+        code: "INVALID_MANIFEST",
+        message: error.message
+      });
+      return [];
+    }
+    throw error;
+  }
+
+  const conflicts = findSourceNameConflicts(flattenRegistryEntries(finalRegistry));
+  const sourceNameConflicts: CatalogAssetSourceNameConflict[] = [];
+
+  for (const conflict of conflicts) {
+    const involvesCandidate = conflict.entries.some((e) =>
+      entryInvolvesCandidateSchema(e, request.schema)
+    );
+    const suggested = involvesCandidate
+      ? suggestSourceNameForConflict(request.schema, conflict, allocationRegistry)
+      : undefined;
+    sourceNameConflicts.push(
+      buildSourceNameConflictPayload(conflict, request.schema, suggested)
+    );
+
+    const physicals = formatPhysicalList(conflict.entries);
+    if (involvesCandidate) {
+      const suggestionText =
+        suggested !== undefined
+          ? `请重新扫描该 Schema，或将冲突短名改为「${suggested}」后再上传。`
+          : "请重新扫描该 Schema 或改用唯一短名后再上传。";
+      errors.push({
+        code: "DUPLICATE_SOURCE_NAME",
+        message: `短名「${conflict.sourceName}」在最终集合中冲突（物理表：${physicals}）。${suggestionText}`
+      });
+    } else {
+      warnings.push({
+        code: "PREEXISTING_SOURCE_NAME_CONFLICT",
+        message: `连接内已有与本次候选无关的短名冲突「${conflict.sourceName}」（物理表：${physicals}）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。`
+      });
+    }
+  }
+
+  return sourceNameConflicts;
 }
 
 export async function validateCatalogAsset(
@@ -635,7 +773,8 @@ export async function validateCatalogAsset(
       valid: false,
       exists: false,
       tables: 0,
-      tableNames: []
+      tableNames: [],
+      sourceNameConflicts: []
     };
   }
 
@@ -648,7 +787,8 @@ export async function validateCatalogAsset(
       valid: false,
       exists: false,
       tables: 0,
-      tableNames: []
+      tableNames: [],
+      sourceNameConflicts: []
     };
   }
 
@@ -660,7 +800,8 @@ export async function validateCatalogAsset(
       valid: false,
       exists: false,
       tables: 0,
-      tableNames: []
+      tableNames: [],
+      sourceNameConflicts: []
     };
   }
 
@@ -671,13 +812,21 @@ export async function validateCatalogAsset(
     });
   }
 
+  const sourceNameConflicts = await appendSourceNameUniquenessChecks(
+    projectRoot,
+    request,
+    errors,
+    warnings
+  );
+
   return {
     ...base,
     valid: errors.length === 0,
     exists: safety.exists,
     tables: parsed.tables.length,
     tableNames: parsed.tables,
-    warnings: [...warnings, ...parsed.warnings]
+    warnings: [...warnings, ...parsed.warnings],
+    sourceNameConflicts
   };
 }
 
@@ -823,11 +972,10 @@ export type UploadCatalogAssetResult = {
   reload: CatalogReloadRun;
 };
 
-export async function uploadCatalogAsset(
-  projectRoot: string,
+function rejectInvalidOrUnconfirmedOverwrite(
+  validation: CatalogAssetValidateResponse,
   request: CatalogAssetUploadRequest
-): Promise<UploadCatalogAssetResult> {
-  const validation = await validateCatalogAsset(projectRoot, request);
+): void {
   if (!validation.valid) {
     const first = validation.errors[0];
     throw new CatalogAssetValidationError(
@@ -840,26 +988,44 @@ export async function uploadCatalogAsset(
   if (validation.exists && request.confirmOverwrite !== true) {
     throw new CatalogAssetOverwriteRequiredError(validation);
   }
+}
 
-  // Recompute the safe target abs path (validate already did this, but we
-  // re-resolve in case of a TOCTOU race with another writer).
-  const targetRel = validation.targetPath;
-  const errors: CatalogAssetError[] = [];
-  const safety = await assertSafeTarget(projectRoot, targetRel, errors, { createParent: true });
-  if (!safety) {
-    throw new CatalogAssetValidationError(
-      "PATH_NOT_ALLOWED",
-      "目标路径在写入前被检测为不安全",
-      validation,
-      403
-    );
+export async function uploadCatalogAsset(
+  projectRoot: string,
+  request: CatalogAssetUploadRequest
+): Promise<UploadCatalogAssetResult> {
+  // Early validate is feedback only (D7). Authoritative checks run inside the lock.
+  const early = await validateCatalogAsset(projectRoot, request);
+  rejectInvalidOrUnconfirmedOverwrite(early, request);
+
+  if (__test.beforePublishLock) {
+    await __test.beforePublishLock(request);
   }
 
   // Lucy v0.25 (L25-11 D4) — the manifest upload shares the publish window with the
   // single-table save, the batch import, the manual reindex and the access.yaml writers.
   return withPublishCoordinator(
     "manifest_upload",
-    () => writeCatalogAssetIntoWindow(projectRoot, request, validation, safety),
+    async () => {
+      const validation = await validateCatalogAsset(projectRoot, request);
+      rejectInvalidOrUnconfirmedOverwrite(validation, request);
+
+      const targetRel = validation.targetPath;
+      const errors: CatalogAssetError[] = [];
+      const safety = await assertSafeTarget(projectRoot, targetRel, errors, {
+        createParent: true
+      });
+      if (!safety) {
+        throw new CatalogAssetValidationError(
+          "PATH_NOT_ALLOWED",
+          "目标路径在写入前被检测为不安全",
+          validation,
+          403
+        );
+      }
+
+      return writeCatalogAssetIntoWindow(projectRoot, request, validation, safety);
+    },
     { projectRoot }
   );
 }
@@ -1030,5 +1196,7 @@ export const __test = {
   formatTimestamp,
   MAX_BYTES,
   MAX_RECORDS,
-  SIDECAR_REL
+  SIDECAR_REL,
+  /** Test-only barrier between early validate and publish-lock acquisition (SC-04). */
+  beforePublishLock: null as null | ((request: CatalogAssetUploadRequest) => Promise<void>)
 };

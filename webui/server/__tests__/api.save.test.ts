@@ -469,6 +469,7 @@ describe("connection enabled_tables API", () => {
     expect(typeof response.body.data.policyVersion).toBe("string");
     expect(typeof response.body.data.runtimeAck).toBe("boolean");
     expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
+    expect(Array.isArray(response.body.data.policyRuntimeIssues)).toBe(true);
     expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");
     expect(typeof response.body.data.executionRuntimeAck).toBe("boolean");
     expect(["unknown", "ok", "stale", "unavailable", "error"]).toContain(

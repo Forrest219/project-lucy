@@ -224,6 +224,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot, "demo-mysql");
     expect(response.body.data.test.status).toBe("ok");
     expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
+    expect(Array.isArray(response.body.data.policyRuntimeIssues)).toBe(true);
     expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");
     expect(response.body.data.executionRuntimeAck).toBe(true);
     expect(response.body.data.executionRuntimeStatus).toBe("ok");

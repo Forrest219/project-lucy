@@ -154,6 +154,9 @@ function defaultHandlers(opts: {
           ok: true,
           data: {
             written: true,
+            runtimeAck: true,
+            policyRuntimeAck: true,
+            policyRuntimeIssues: [],
             oldEnabledTables: persisted,
             newEnabledTables: newEnabled,
             warnings

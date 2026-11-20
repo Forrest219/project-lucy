@@ -1,16 +1,19 @@
 # 隔离复现夹具
 
-- 入口：`python3 scripts/uat/reproduce-source-shortname-conflict.py`；本机需已有 `project-lucy:demo` 与 `mysql:8.4`。修复后拟增加 `--mode verify`，当前尚未实现。
+- 入口：`python3 scripts/uat/reproduce-source-shortname-conflict.py --mode repro|verify`
+- 镜像：默认 `project-lucy:demo`（`SNC_IMAGE` 可覆盖）；本机需已有 `mysql:8.4`。
+- 隔离栈：独立网络／容器／临时目录；entrypoint 需至少一份 semantic-layer YAML（runner 写入 `_uat_boot` stub）；**不**挂 demo 数据卷、**不**使用演示管理员口令。
 - 两个一次性 Docker 容器与专属网络，名称前缀 `lucy-snc-`；端口仅绑定 127.0.0.1，随机分配。
 - 物理表：`weather.city(id INT PRIMARY KEY, name VARCHAR(50))` 与 `ods.city`，各插入一条合成数据；连接名 `hive-1`，实际数据库为 MySQL。
-- 管理员：真实 bootstrap；普通数据面 Agent：`repro_reader`，Role 只授予 hive-1 的启用表范围与指定 MCP 工具。
+- 管理员：隔离项目内真实 bootstrap（随机口令）；普通数据面 Agent：`repro_reader`，Role 只授予 hive-1 的启用表范围与指定 MCP 工具。
+- **不使用**本机 demo compose 数据卷或演示管理员口令；演示环境凭据不得写入 fixtures／证据。
 - 数据目录及随机凭据：进程临时目录，目录 0700、凭据文件 0600；证据只保留脱敏后的响应。脚本 finally 删除容器、网络及私有目录。
 - 原始证据：`inbox/source-shortname-conflict/evidence/<UTC跑次>/`；完成后留档本套件 `runs/`。
 - 本夹具不依赖或修改现有 demo 数据卷，不访问远程管理台；不代表客户 SelectDB／Hive 元数据适配已验。
 
-## 修复后扩展夹具（NOT RUN）
+## 修复后扩展夹具（verify 模式）
 
-- 二次前缀占用：同 Connection 的合法 `ods_city`，验证 `ods_city_2`。
+- 二次前缀占用：同 Connection 的合法 `ods_city`，验证新表／重分配得到 `ods_city_2`。
 - 并发候选：两个不同 Schema 的裸 `city` 内容，验证发布锁内复核与失败方零推进。
 - 旧冲突：直接写入隔离项目的 Manifest 夹具，模拟升级前已损坏资产；不修改产品代码、现有 demo 或客户配置。
 - 多组冲突：至少六组可独立唯一化的合成 Manifest，验证逐份修复不死锁；不外推为客户现场六对已核验。

@@ -24,6 +24,11 @@ import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
 import { SchemaReadDeadline, SchemaReadTimeout } from "./schema-read-deadline.js";
 import { readSchemaTableRejection } from "../shared/schema-table-rejection.js";
+import {
+  allocateSourceNames,
+  readConnectionSourceManifests,
+  type ConnectionSourceRegistry
+} from "./source-name-registry";
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -184,11 +189,27 @@ type ColumnInput = {
   comment: string;
 };
 
+export type SchemaManifestAllocContext = {
+  /** Connection-scoped registry; when omitted, bare physical names are used as sourceNames. */
+  registry?: ConnectionSourceRegistry;
+};
+
 export function buildMinimalSchemaManifest(
   schema: string,
   columns: ColumnInput[],
-  ensureTables: string[] = []
+  ensureTables: string[] = [],
+  alloc?: SchemaManifestAllocContext
 ): SchemaStructurePreview {
+  const physicalNames = [
+    ...new Set([
+      ...columns.map((column) => column.table).filter(Boolean),
+      ...ensureTables.filter(Boolean)
+    ])
+  ].sort((a, b) => a.localeCompare(b));
+  const assignments = alloc?.registry
+    ? allocateSourceNames(schema, physicalNames, alloc.registry)
+    : new Map(physicalNames.map((name) => [name, name]));
+
   const tables: Record<string, { table: string; columns: Array<Record<string, unknown>> }> = {};
   const mapped = { number: 0, string: 0, time: 0 };
   const downgraded: SchemaStructureColumn[] = [];
@@ -198,7 +219,8 @@ export function buildMinimalSchemaManifest(
     if (mappedType.downgraded) {
       downgraded.push({ table: column.table, column: column.column, rawType: column.dataType });
     }
-    const entry = tables[column.table] ?? {
+    const sourceName = assignments.get(column.table) ?? column.table;
+    const entry = tables[sourceName] ?? {
       table: `${schema}.${column.table}`,
       columns: []
     };
@@ -210,13 +232,15 @@ export function buildMinimalSchemaManifest(
     if (column.primaryKey) spec.pk = true;
     if (column.comment.trim()) spec.descriptions = { db: column.comment.trim() };
     entry.columns.push(spec);
-    tables[column.table] = entry;
+    tables[sourceName] = entry;
   }
   // External catalogs may list tables while every column probe is rejected.
   // Keep those names in the manifest so "启用表范围" can still select them.
   for (const name of ensureTables) {
-    if (!name || tables[name]) continue;
-    tables[name] = { table: `${schema}.${name}`, columns: [] };
+    if (!name) continue;
+    const sourceName = assignments.get(name) ?? name;
+    if (tables[sourceName]) continue;
+    tables[sourceName] = { table: `${schema}.${name}`, columns: [] };
   }
   const yaml = stringify({ tables });
   return {
@@ -733,6 +757,12 @@ export type ReadSchemaColumnsDeps = {
    * Pass `schema-wide` explicitly for catalog-scan SC-06/07 full-schema reads.
    */
   mode?: SchemaReadMode;
+  /**
+   * Test / direct-call override for connection-scoped sourceName registry.
+   * Production `previewSchemaStructure` loads the real registry when this is omitted.
+   */
+  sourceNameRegistry?: ConnectionSourceRegistry;
+  readConnectionSourceManifestsImpl?: typeof readConnectionSourceManifests;
 };
 
 type ResolvedSchemaRead =
@@ -1135,7 +1165,13 @@ export async function previewSchemaStructure(
       tableRejection ? { tableRejection } : undefined
     );
   }
-  const preview = buildMinimalSchemaManifest(safeSchema, read.columns, read.tables ?? []);
+  const readRegistry = deps.readConnectionSourceManifestsImpl ?? readConnectionSourceManifests;
+  const registry =
+    deps.sourceNameRegistry
+    ?? await readRegistry(projectRoot, connectionId);
+  const preview = buildMinimalSchemaManifest(safeSchema, read.columns, read.tables ?? [], {
+    registry
+  });
   const namesOnly = requested.length === 0 && read.columns.length === 0 && (read.tables?.length ?? 0) > 0;
   const rejections = (read.rejections ?? []).map((item) => ({
     table: item.table,

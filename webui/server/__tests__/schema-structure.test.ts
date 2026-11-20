@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SqlResult } from "../ktx";
 import type { ConnectionInfo } from "../model";
 import { previewSchemaStructure, readSchemaColumns } from "../schema-structure";
+import { parse } from "yaml";
 
 const mysqlConn: ConnectionInfo = {
   id: "demo",
@@ -275,5 +279,78 @@ describe("previewSchemaStructure", () => {
     expect(result.columnCount).toBe(0);
     expect(result.namesOnly).toBe(false);
     expect(runSqlImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("previewSchemaStructure source-name allocation (P1-64)", () => {
+  let root: string | undefined;
+
+  afterEach(async () => {
+    if (root) await rm(root, { recursive: true, force: true });
+    root = undefined;
+  });
+
+  const odsConn: ConnectionInfo = {
+    id: "hive-1",
+    driver: "mysql",
+    engine: "mysql",
+    wireProtocol: "mysql",
+    schemas: ["ods", "weather"],
+    enabledTables: []
+  };
+
+  async function projectWithWeatherCity(): Promise<string> {
+    root = await mkdtemp(path.join(os.tmpdir(), "lucy-schema-snr-"));
+    const schemaDir = path.join(root, "config", "semantic-layer", "hive-1", "_schema");
+    await mkdir(schemaDir, { recursive: true });
+    await writeFile(
+      path.join(schemaDir, "weather.yaml"),
+      "tables:\n  city:\n    table: weather.city\n",
+      "utf8"
+    );
+    return root;
+  }
+
+  function odsCityColumnsSql() {
+    return vi.fn(async (_projectRoot: string, _connectionId: string, sql: string) => {
+      if (sql.includes("FROM information_schema.tables") && sql.includes("LOWER(table_name) = 'city'")) {
+        return sqlResult({ json: { rows: [["city"]] } });
+      }
+      if (sql.includes("FROM information_schema.columns") && sql.includes("table_name = 'city'")) {
+        return sqlResult({ json: { rows: [["id", "int", "NO", "PRI", ""]] } });
+      }
+      return sqlResult({ ok: false, exitCode: 1, stderr: `unexpected ${sql}`, json: null });
+    });
+  }
+
+  it("allocates ods_city when weather already owns city; rescan stays stable", async () => {
+    const projectRoot = await projectWithWeatherCity();
+    const runSqlImpl = odsCityColumnsSql();
+
+    const first = await previewSchemaStructure(projectRoot, "hive-1", "ods", {
+      readConnectionsImpl: async () => [odsConn],
+      runSqlImpl,
+      tables: ["city"]
+    });
+
+    const firstDoc = parse(first.yaml) as { tables?: Record<string, { table?: string }> };
+    expect(firstDoc.tables?.ods_city?.table).toBe("ods.city");
+    expect(firstDoc.tables?.city).toBeUndefined();
+
+    // Persist the allocated preview as the target Manifest, then rescan.
+    await writeFile(
+      path.join(projectRoot, "config", "semantic-layer", "hive-1", "_schema", "ods.yaml"),
+      first.yaml,
+      "utf8"
+    );
+
+    const second = await previewSchemaStructure(projectRoot, "hive-1", "ods", {
+      readConnectionsImpl: async () => [odsConn],
+      runSqlImpl,
+      tables: ["city"]
+    });
+    const secondDoc = parse(second.yaml) as { tables?: Record<string, { table?: string }> };
+    expect(secondDoc.tables?.ods_city?.table).toBe("ods.city");
+    expect(Object.keys(secondDoc.tables ?? {})).toEqual(["ods_city"]);
   });
 });

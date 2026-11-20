@@ -354,6 +354,22 @@ export function CreateConnectionDrawer({
       void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
       void queryClient.invalidateQueries({ queryKey: queryKeys.catalogReloads });
+
+      // Spec 14 §0.3 / P1-64 D11 — missing or false runtimeAck is not full availability.
+      if (data.runtimeAck !== true) {
+        const sourceMapReasons = (data.policyRuntimeIssues ?? [])
+          .map((issue) => issue.reason ?? "")
+          .filter((reason) => reason.startsWith("source_map_compile_failed:"));
+        const issueSummary =
+          sourceMapReasons.length > 0
+            ? `Source Map 编译失败：${sourceMapReasons.slice(0, 3).join("；")}`
+            : "策略运行态未确认（runtimeAck≠true）";
+        toast.error(
+          `连接已写入磁盘，但策略运行态未确认。${issueSummary}。请修复后重试保存或检查策略降级状态。`
+        );
+        return;
+      }
+
       const executionHint =
         data.executionRuntimeAck === true
           ? ""
@@ -1062,9 +1078,24 @@ export function CreateConnectionDrawer({
 
         {step === "success" && created && (
           <section className="pl-drawer-body notranslate" aria-label="创建完成" translate="no">
-            <div className="rounded-md border border-success-strong/40 bg-success-soft/30 p-3">
-              <p className="text-sm font-medium text-success-strong" data-testid="create-connection-success">
-                连接已成功创建并保存
+            <div
+              className={
+                created.runtimeAck === true
+                  ? "rounded-md border border-success-strong/40 bg-success-soft/30 p-3"
+                  : "rounded-md border border-warning-strong/40 bg-warning-soft/30 p-3"
+              }
+            >
+              <p
+                className={
+                  created.runtimeAck === true
+                    ? "text-sm font-medium text-success-strong"
+                    : "text-sm font-medium text-warning-strong"
+                }
+                data-testid="create-connection-success"
+              >
+                {created.runtimeAck === true
+                  ? "连接已成功创建并保存"
+                  : "连接已写入磁盘，策略运行态未确认"}
               </p>
               <p className="mt-1 text-xs text-fg-muted">
                 连接 ID：<strong className="notranslate" translate="no">{created.connection.id}</strong>
@@ -1083,6 +1114,25 @@ export function CreateConnectionDrawer({
                 ) : (
                   <span className="text-danger" data-testid="create-connection-test-warning">
                     连通测试未通过（{created.test.message || "连接失败"}），配置已保存
+                  </span>
+                )}
+              </p>
+              <p className="mt-2 text-xs" data-testid="create-connection-policy-runtime">
+                策略运行态：
+                {created.runtimeAck === true ? (
+                  <span className="text-success-strong">已确认</span>
+                ) : (
+                  <span className="text-danger">
+                    未确认
+                    {(() => {
+                      const reasons = (created.policyRuntimeIssues ?? [])
+                        .map((issue) => issue.reason ?? "")
+                        .filter((reason) => reason.startsWith("source_map_compile_failed:"));
+                      return reasons.length > 0
+                        ? `（${reasons.slice(0, 3).join("；")}）`
+                        : "（runtimeAck≠true）";
+                    })()}
+                    。配置已落盘，但问数能力可能不可用，请修复 Source Map 冲突后重新保存。
                   </span>
                 )}
               </p>
