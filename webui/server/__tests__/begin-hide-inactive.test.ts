@@ -567,3 +567,28 @@ describe("P1-60 final-review regressions", () => {
     });
   });
 });
+
+
+describe("SC-10 actual registry call counters", () => {
+  it("D2 does not load or commit a registry (with positive controls)", async () => {
+    await withProxyInactive(async (port, mods) => {
+      const load = vi.spyOn(mods.registry, "loadCaliberBindingCandidate");
+      const commit = vi.spyOn(mods.registry, "commitCaliberBindingRegistry");
+      try {
+        const result = await callBegin(port);
+        expect(result.data?.reason).toBe("begin_not_available");
+        expect(load).toHaveBeenCalledTimes(0);
+        expect(commit).toHaveBeenCalledTimes(0);
+        const candidate = await mods.registry.loadCaliberBindingCandidate();
+        expect(candidate.ok).toBe(true);
+        if (!candidate.ok) throw new Error(candidate.reason);
+        const committed = await mods.registry.commitCaliberBindingRegistry(candidate, {
+          releaseId: "counter-positive-control", attemptId: "counter-positive-control"
+        });
+        expect(committed.ok).toBe(true);
+        expect(load).toHaveBeenCalledTimes(1);
+        expect(commit).toHaveBeenCalledTimes(1);
+      } finally { load.mockRestore(); commit.mockRestore(); }
+    });
+  });
+});
