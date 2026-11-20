@@ -1,6 +1,6 @@
 # Cases — Wiki 覆盖上传 YAML 授权采用
 
-版本：v0.2（2026-11-20）。用例已定稿／终稿确权；改后证据见 [gap-fill PASS](runs/2026-11-20-cursor-docker-gap-fill.md)（INDEX＝PASS）；历史基线 FAIL 保留。
+版本：v0.2（2026-11-20）。用例已定稿／终稿确权；当前证据见 [本轮收口复核 PASS](runs/2026-11-20-codex-closure-recheck.md)（INDEX＝PASS）；旧 gap-fill 仅作历史对照；历史基线 FAIL 保留。
 
 [改前基线](runs/2026-11-20-cursor-docker-baseline.md) 按当时 v0.1 的定义保留：01 FAIL、02–05 PASS、06–07 NOT RUN；没有 08–12 的历史执行证据。v0.2 将 01 收敛为 API 显式保留，原默认 UI 缺陷由 07 验；不得把历史 01 FAIL 重释为新 01 PASS。
 
@@ -98,4 +98,4 @@ all 状态按既有全角色语义验通道有效的 Agent；不制造「所有�
 
 SC-01→07／10；SC-02→01／07；SC-03→02／07；SC-04→03；SC-05→04；SC-06→07；SC-07→05／10／12；SC-08→06 及各检查点；SC-09→09；SC-10→10；SC-11→08／07；SC-12→11；SC-13→09／11／12；SC-14→07／12。
 
-改后同候选完整 R0／01–12 及全部子例已有真实证据（gap-fill）。清理按 fixtures，不 `down -v`。≠ 可上线。
+旧 gap-fill 的四项缺口已由本轮真实复核关闭；[新跑次](runs/2026-11-20-codex-closure-recheck.md) 51 个独立验收 ID PASS，逐写入严格 MCP、真实前台浏览器／遗漏子例与清理零残留已取得。清理按 fixtures，不 `down -v`。≠ 可上线。

@@ -6,10 +6,10 @@
 | 日期 / 产品线 | 2026-11-20 / 0.30.0 |
 | 功能编号 / 优先级 | P1-65／REQ-030-086；事故修复／治理主路径；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.2。终稿已确权；开发授权已获得；实现完成；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
-| 授权边界 | 2026-11-20 委托人授权开发实现＋改后 UAT；同日授权 GAP 补跑与功能合同收口判定；未授权 commit／push／可上线 |
+| 状态 | v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
+| 授权边界 | 委托人已授权四项缺口整改、真实 UAT、清理与收口复核；本轮追加授权仅 commit 本任务；不 push、不发布，≠ 可上线 |
 | 需求 / 计划 | [REQ-030-086](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [总账 P1-65](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261120-wiki-upload-acl-adoption-plan.md) |
-| 复现证据 / 测试台 | [Docker 基线](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-cursor-docker-baseline.md) · [UAT-SUITE-WIKI-UPLOAD-ACL-ADOPTION](../qa/uat/suites/wiki-upload-acl-adoption/suite.md) |
+| 复现证据 / 测试台 | [历史 Docker 基线](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-cursor-docker-baseline.md) · [本轮收口复核 PASS](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md) · [测试台](../qa/uat/suites/wiki-upload-acl-adoption/suite.md) |
 | 相关合同 | [Spec 193 §5.2–5.4／§9.1](../../webui/docs/193-business-wiki-access-management-spec.md)（业务 Wiki 访问权限）；本条替代 §5.3 的差异态隐式可提交默认，不废除「覆盖上传不得静默采用上传声明」的安全前提，只补「差异可见＋显式选择＋可逃生」 |
 
 ## 闭口层级
@@ -111,7 +111,7 @@ onCommit():
 
 ## 4. 验收（SC）
 
-| ID | 要求 | 必做 UAT 映射（改后 gap-fill＝PASS） |
+| ID | 要求 | 必做 UAT 映射（本轮收口复核＝PASS） |
 |---|---|---|
 | SC-01 | 全部合法差异及 corrupt 初始均无可提交默认；含加宽、收窄、角色替换、all→roles、roles→missing／empty、missing↔empty、roles→all；未选择不得发出 commit | 07·M1–M9、10 |
 | SC-02 | 显式 `preserve_current` 成功；磁盘声明＝当前，正文按上传变更；UI 点击与预检披露另有证据 | 01、07·保留 |
@@ -128,7 +128,7 @@ onCommit():
 | SC-13 | missing／empty／all 的确认不可因新增显式选择而跳过；未确认零写入，确认后成功；确认随选择变更重置 | 09、12 |
 | SC-14 | 预检乱序、失败及 stale 恢复不得复用旧摘要提交；合法用户可重新预检／取消重开后成功完成上传 | 07·E2／E3、12 |
 
-交互设计评审为合同设计结论；改后 E1–E7 与 07·M1–M9／保留／重设已由 gap-fill 浏览器证据覆盖。
+交互设计合同 E1–E7 已由本轮真实前台可视 Chrome 复核通过，浏览器计时与 API 时间分列；证据见 [收口复核](../reviews/2026-11-20-wiki-upload-acl-adoption-closure-recheck.md)。
 
 ## 交互合同
 
@@ -203,8 +203,11 @@ New terms: none. 复用「管理访问权限」「业务 Wiki」「上传预检�
 
 ## 修订记录
 
+以下记录为各阶段历史快照，现值只以头部状态为准。
+
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v0.2-recheck | 2026-11-20 | 四项验证缺口实测整改完成：51 个独立验收 ID／153 份角色检查／306 条工具断言均通过，前台浏览器与遗漏子例补齐，233 页／9 个 Agent 清理、补轮 13 个 Token 吊销，最终零残留；重新判定功能合同收口。见 [本轮记录](../reviews/2026-11-20-wiki-upload-acl-adoption-closure-recheck.md)。 |
 | v0.2 | 2026-11-20 | 独立终审通过；委托人明示本提示词＝终稿确权（免 Codex CLI）；开发未授权。见 [终审记录](../reviews/2026-11-20-wiki-upload-acl-adoption-review.md)。 |
 | v0.2-close | 2026-11-20 | GAP 补跑后 Docker UAT＝PASS；SC-01–14 证据齐；功能合同已收口；≠ 可上线。 |
 | v0.2-uat | 2026-11-20 | 改后 Docker UAT＝PASS WITH GAP；浏览器 E1–E7 抽样＋API R0／01–05／08／11 等；见测试台。 |

@@ -1,0 +1,657 @@
+{
+  "caseFilter": "07-E2|12-T1-API",
+  "runId": "wua-recheck-1795148928656",
+  "startedAt": "2026-11-20T04:28:48.656Z",
+  "head": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+  "results": [
+    {
+      "id": "R0-isolated-identities",
+      "ok": true,
+      "ms": 0,
+      "detail": {
+        "candidate": {
+          "image": "sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218",
+          "startedAt": "2026-11-20T03:19:12.335405216Z"
+        },
+        "roles": [
+          "demo_readonly",
+          "lucy_admin",
+          "lucy_ops_reader"
+        ],
+        "agents": [
+          "wuar_mwohbmcz_0",
+          "wuar_mwohbmi0_1",
+          "wuar_mwohbmob_2"
+        ]
+      }
+    },
+    {
+      "id": "07-E2-real-preview-loading",
+      "ok": true,
+      "ms": 5182,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148928656-1-e2.md",
+        "timing": {
+          "primaryReadyMs": 190.35,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:3158fb8ff5c242ea1d810a8a243fabcfdf10d917e00aa86cf570e5a290191274",
+        "hash": "3158fb8ff5c242ea1d810a8a243fabcfdf10d917e00aa86cf570e5a290191274"
+      }
+    },
+    {
+      "id": "12-T1-API-missing",
+      "ok": true,
+      "ms": 1093,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+        "deniedStatus": 400,
+        "deniedCode": "wiki_upload_access_required",
+        "zeroWriteHash": "5e6c04109dec6422bb9d3ad712b7302bf92cb49c0b18caad0b5b31a94646037d"
+      }
+    },
+    {
+      "id": "12-T1-API-empty",
+      "ok": true,
+      "ms": 1182,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+        "deniedStatus": 400,
+        "deniedCode": "wiki_upload_access_required",
+        "zeroWriteHash": "5e6c04109dec6422bb9d3ad712b7302bf92cb49c0b18caad0b5b31a94646037d"
+      }
+    },
+    {
+      "id": "12-T1-API-all",
+      "ok": true,
+      "ms": 1427,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+        "deniedStatus": 400,
+        "deniedCode": "wiki_upload_access_required",
+        "zeroWriteHash": "5e6c04109dec6422bb9d3ad712b7302bf92cb49c0b18caad0b5b31a94646037d"
+      }
+    },
+    {
+      "id": "CLEANUP-suite-fixtures-and-tokens",
+      "ok": true,
+      "ms": 1448,
+      "detail": {
+        "deletedPages": 4,
+        "deletedTokens": 13,
+        "deletedAgents": 3,
+        "residuals": 0
+      }
+    }
+  ],
+  "apiTimes": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "ms": 3.93,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/agents",
+      "ms": 135.21,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/agents",
+      "ms": 166.41,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/agents",
+      "ms": 132.5,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/preview",
+      "ms": 269.93,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 276.63,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-1-e2.md",
+      "ms": 19.62,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-1-e2.md",
+      "ms": 39.27,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/preview",
+      "ms": 9.93,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 32.83,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-2-t1-api-missing.md",
+      "ms": 2.89,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-2-t1-api-missing.md",
+      "ms": 3.24,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/preview",
+      "ms": 7.76,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 7.33,
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-2-t1-api-missing.md",
+      "ms": 2.54,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 39.25,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/preview",
+      "ms": 7.71,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 24.73,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-3-t1-api-empty.md",
+      "ms": 2.38,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-3-t1-api-empty.md",
+      "ms": 1.63,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/preview",
+      "ms": 5.64,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 3.25,
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-3-t1-api-empty.md",
+      "ms": 2.21,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 23.08,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/preview",
+      "ms": 17.29,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 38.68,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-4-t1-api-all.md",
+      "ms": 3.68,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-4-t1-api-all.md",
+      "ms": 2.14,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/preview",
+      "ms": 4.65,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 3.63,
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-4-t1-api-all.md",
+      "ms": 1.81,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/wiki/upload/commit",
+      "ms": 32.41,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki",
+      "ms": 31.99,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-1-e2.md",
+      "ms": 4.26,
+      "status": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-1-e2.md?expected_version=sha256%3A3158fb8ff5c242ea1d810a8a243fabcfdf10d917e00aa86cf570e5a290191274",
+      "ms": 14,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-2-t1-api-missing.md",
+      "ms": 6.19,
+      "status": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-2-t1-api-missing.md?expected_version=sha256%3A1a0c04f581931efe5001a920e032effc08a899038551080dc37c3dd0242bc3c2",
+      "ms": 54.29,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-3-t1-api-empty.md",
+      "ms": 3.93,
+      "status": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-3-t1-api-empty.md?expected_version=sha256%3A06469742a05cf7761e5a8cced7d2d8e1c4892cc8d4fd925cccb4076b72a2aafb",
+      "ms": 17.04,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-4-t1-api-all.md",
+      "ms": 6.5,
+      "status": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/wiki/global%2Fuat-wua-recheck-1795148928656-4-t1-api-all.md?expected_version=sha256%3A26aa93eba2fbbd877e02abe03520e58766e5b570068b479b54f006871bd2d714",
+      "ms": 18.88,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/agents",
+      "ms": 65.39,
+      "status": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/agents/wuar_mwohbmcz_0",
+      "ms": 78.03,
+      "status": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/agents/wuar_mwohbmi0_1",
+      "ms": 71.15,
+      "status": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/agents/wuar_mwohbmob_2",
+      "ms": 77.34,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/wiki",
+      "ms": 8.34,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/agents",
+      "ms": 23.92,
+      "status": 200
+    }
+  ],
+  "mcpChecks": [
+    {
+      "label": "E2-recovered",
+      "key": "global/uat-wua-recheck-1795148928656-1-e2.md",
+      "role": "demo_readonly",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-1-e2.md",
+        "visible": true,
+        "resultCount": 1
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-1-e2.md",
+        "allowed": true,
+        "markerMatched": true
+      }
+    },
+    {
+      "label": "E2-recovered",
+      "key": "global/uat-wua-recheck-1795148928656-1-e2.md",
+      "role": "lucy_admin",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-1-e2.md",
+        "visible": true,
+        "resultCount": 1
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-1-e2.md",
+        "allowed": true,
+        "markerMatched": true
+      }
+    },
+    {
+      "label": "E2-recovered",
+      "key": "global/uat-wua-recheck-1795148928656-1-e2.md",
+      "role": "lucy_ops_reader",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-1-e2.md",
+        "visible": true,
+        "resultCount": 1
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-1-e2.md",
+        "allowed": true,
+        "markerMatched": true
+      }
+    },
+    {
+      "label": "T1-api-missing",
+      "key": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+      "role": "demo_readonly",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+        "visible": false,
+        "resultCount": 1
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+        "allowed": false,
+        "code": "context_not_available"
+      }
+    },
+    {
+      "label": "T1-api-missing",
+      "key": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+      "role": "lucy_admin",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+        "visible": false,
+        "resultCount": 1
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+        "allowed": false,
+        "code": "context_not_available"
+      }
+    },
+    {
+      "label": "T1-api-missing",
+      "key": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+      "role": "lucy_ops_reader",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+        "visible": false,
+        "resultCount": 1
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+        "allowed": false,
+        "code": "context_not_available"
+      }
+    },
+    {
+      "label": "T1-api-empty",
+      "key": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+      "role": "demo_readonly",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+        "visible": false,
+        "resultCount": 1
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+        "allowed": false,
+        "code": "context_not_available"
+      }
+    },
+    {
+      "label": "T1-api-empty",
+      "key": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+      "role": "lucy_admin",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+        "visible": false,
+        "resultCount": 1
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+        "allowed": false,
+        "code": "context_not_available"
+      }
+    },
+    {
+      "label": "T1-api-empty",
+      "key": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+      "role": "lucy_ops_reader",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+        "visible": false,
+        "resultCount": 1
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+        "allowed": false,
+        "code": "context_not_available"
+      }
+    },
+    {
+      "label": "T1-api-all",
+      "key": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+      "role": "demo_readonly",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+        "visible": true,
+        "resultCount": 2
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+        "allowed": true,
+        "markerMatched": true
+      }
+    },
+    {
+      "label": "T1-api-all",
+      "key": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+      "role": "lucy_admin",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+        "visible": true,
+        "resultCount": 2
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+        "allowed": true,
+        "markerMatched": true
+      }
+    },
+    {
+      "label": "T1-api-all",
+      "key": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+      "role": "lucy_ops_reader",
+      "search": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+        "visible": true,
+        "resultCount": 2
+      },
+      "read": {
+        "exactKey": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+        "allowed": true,
+        "markerMatched": true
+      }
+    }
+  ],
+  "candidateStart": {
+    "image": "sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218",
+    "startedAt": "2026-11-20T03:19:12.335405216Z"
+  },
+  "health": {
+    "lucyVersion": "0.30.0",
+    "gitSha": "7e8ee88442c006d839e4fe13334f7fc45056d85e",
+    "gitDirty": true
+  },
+  "browser": {
+    "channel": "chrome",
+    "headless": false,
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "foregroundRequired": true
+  },
+  "candidateEnd": {
+    "image": "sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218",
+    "startedAt": "2026-11-20T03:19:12.335405216Z"
+  },
+  "cleanup": {
+    "pages": [
+      "global/uat-wua-recheck-1795148928656-1-e2.md",
+      "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+      "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+      "global/uat-wua-recheck-1795148928656-4-t1-api-all.md"
+    ],
+    "tokens": [
+      {
+        "agent": "demo_agent",
+        "label": "uat-wua-b-wua-gap-1795145893167"
+      },
+      {
+        "agent": "demo_agent",
+        "label": "uat-wua-b-wua-gap-1795145962607"
+      },
+      {
+        "agent": "demo_agent",
+        "label": "uat-wua-b-wua-gap-1795145993235"
+      },
+      {
+        "agent": "demo_agent",
+        "label": "uat-wua-b-wua-gap-1795146213929"
+      },
+      {
+        "agent": "demo_ops",
+        "label": "uat-wua-gap-demo_ops"
+      },
+      {
+        "agent": "demo_ops",
+        "label": "uat-wua-gap-struct"
+      },
+      {
+        "agent": "demo_ops",
+        "label": "uat-wua-w-wua-gap-1795145893167"
+      },
+      {
+        "agent": "demo_ops",
+        "label": "uat-wua-w-wua-gap-1795145962607"
+      },
+      {
+        "agent": "demo_ops",
+        "label": "uat-wua-w-wua-gap-1795145993235"
+      },
+      {
+        "agent": "demo_ops",
+        "label": "uat-wua-w-wua-gap-1795146213929"
+      },
+      {
+        "agent": "wuar_mwohbmcz_0",
+        "label": "uat-wua-recheck-1795148928656-0"
+      },
+      {
+        "agent": "wuar_mwohbmi0_1",
+        "label": "uat-wua-recheck-1795148928656-1"
+      },
+      {
+        "agent": "wuar_mwohbmob_2",
+        "label": "uat-wua-recheck-1795148928656-2"
+      }
+    ],
+    "agents": [
+      "wuar_mwohbmcz_0",
+      "wuar_mwohbmi0_1",
+      "wuar_mwohbmob_2"
+    ],
+    "remainingPages": [],
+    "remainingTokens": [],
+    "remainingAgents": [],
+    "errors": [],
+    "containerFiles": []
+  },
+  "finishedAt": "2026-11-20T04:29:02.233Z",
+  "verdict": "PASS",
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "mcpCheckpoints": 12
+  }
+}

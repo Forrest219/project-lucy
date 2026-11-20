@@ -12,8 +12,8 @@
 |---|---|
 | 文档类型 / 版本 | 实施 Plan / v0.2 |
 | 功能编号 | P1-65／REQ-030-086 |
-| 状态 | v0.2。终稿已确权；开发授权已获得；实现完成；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
-| 授权边界 | 2026-11-20 委托人授权开发实现＋改后 UAT；同日授权 GAP 补跑与功能合同收口判定；未授权 commit／push／可上线 |
+| 状态 | v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
+| 授权边界 | 委托人已授权四项缺口整改、真实 UAT、清理与收口复核；本轮追加授权仅 commit 本任务；不 push、不发布，≠ 可上线 |
 | 验收 | [Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md) SC-01–14；[UAT](../qa/uat/suites/wiki-upload-acl-adoption/cases.md) R0／01–12，含全部子例；[终审记录](../reviews/2026-11-20-wiki-upload-acl-adoption-review.md) |
 
 ## 目标
@@ -25,12 +25,12 @@
 
 ## 开工前置
 
-1. 终稿已确权；开发须委托人另授；本轮独立终审与状态同步不构成开发授权。改后 Docker／浏览器／MCP UAT 执行亦未授权。
+1. 终稿确权及开发／改后 UAT 授权已登记；本轮委托人追加四项验证缺口整改、夹具清理、状态同步与收口复核授权；禁止 commit／push。
 2. 开发开始时重新记录候选 `gitSha`、工作树补丁标识；执行 Docker UAT 时记录实际镜像 ID／digest 与产品版本，不能用旧基线替代新候选。
 3. 核对 Spec D1–D8、声明比较规则和 corrupt 矩阵；开发前先读 Spec 193 §5.2–5.4／§9.1，以及 Spec 引用的设计系统章节。
 4. 明确仅支持单实例进程内并发。本条验证基于本机 Docker；不新增客户交付或 K8s 门槛。
 
-## 实施任务（开发授权后执行；本轮不实施）
+## 实施任务（原实现已完成；本轮按文末四项整改节复核）
 
 ### Task 1：冻结组件与服务端断言
 
@@ -67,7 +67,7 @@ npx vitest run src/__tests__/wiki.test.tsx src/__tests__/wiki-access-components.
 3. 确认最终空／全角色风险确认、选择变化重置、独立管理访问、预检乱序与失败恢复。相同合法声明不新增必选步骤。
 4. 复用既有命令，不新增测试脚本；记录 SC-01–14 到自动化断言与将来 UAT 子例的映射。
 
-### Task 4：Docker 全真 UAT（另获执行授权后）
+### Task 4：Docker 全真 UAT（已获执行授权，本轮整改复核 PASS）
 
 **Files:** `docs/qa/uat/suites/wiki-upload-acl-adoption/runs/`、`docs/qa/uat/INDEX.md` 及本条已有状态镜像。
 
@@ -76,25 +76,25 @@ npx vitest run src/__tests__/wiki.test.tsx src/__tests__/wiki-access-components.
 3. 负控记录原始正文／声明／版本；MCP 用有相应通道且角色隔离的 Agent，分别验证合法读与被移除／未授权拒绝。空／损坏保留时验拒绝，再由管理访问恢复后验成功。
 4. 清理通过后记录新 verify 跑次；按实际结果维护 INDEX。原基线跑次不重写、不升级为 PASS；不得以手工写 ACL 冒充受测上传或管理访问。
 
-以下浏览器验证仅在开发与 UAT 执行均获授权后执行，本轮不执行。07 逐编号记录 E1–E7，并覆盖 M1–M9 和三条显式选择；失败恢复／风险确认由 07·E3 与 12 验证。组件测试不替代全真浏览器 UAT；若另授降级，逐项记 GAP 与证据边界。只验桌面，不要求移动窄屏。
+以下浏览器验证已获本轮整改执行授权，并已以真实前台可视会话完成。07 逐编号记录 E1–E7，并覆盖 M1–M9 和三条显式选择；失败恢复／风险确认由 07·E3 与 12 验证。组件测试不替代全真浏览器 UAT；若另授降级，逐项记 GAP 与证据边界。只验桌面，不要求移动窄屏。
 
 ## 浏览器验证
 
 - 路由：/wiki
 - 视口：1920×1080
 - 状态：E1、E2、E3、E4、E5、E6、E7
-- 证据：docs/reviews/2026-11-20-wiki-upload-acl-adoption-browser.md
+- 证据：docs/reviews/2026-11-20-wiki-upload-acl-adoption-closure-recheck.md
 
 ## 验收
 
-- SC-01–14 均有自动化或真实接口的适配证据，并与 UAT R0／01–12 全子例逐项勾连；当前全部改后 verify NOT RUN。
+- SC-01–14 均有自动化或真实接口的适配证据，并与 UAT R0／01–12 全子例逐项勾连；本轮改后复核 PASS；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md)与 INDEX 已同步，旧跑次保留。
 - 文档门禁用 `npm run lint:spec-docs`、`npm run lint:spec`、`npm run lint:terminology`、`npm run lint:ia-boundary`；`npm run lint:e2e-ledger` 仅作补充，本条未登记进其硬编码检查集合，须人工核对 P1-65 链接。
 - 文档终审、功能合同收口、UAT 判定与发布取证分别登记，任何一项不得互相替代。
 
 ## 完成定义
 
-- 本轮文档出口：独立终审通过并已同步终稿确权；四项意见闭合、声明／选择规则一致、隔离可执行、SC↔UAT 无悬空编号、台账与索引现值同句；开发与改后 UAT 仍未授权。
-- 未来实现出口：另获开发授权后，代码与聚焦测试通过、Spec SC 有对应证据；测试台按改后全真执行独立判定，不把终稿确权计作修复成功或 UAT PASS。
+- 本轮文档出口：独立终审通过并已同步终稿确权；四项意见闭合、声明／选择规则一致、隔离可执行、SC↔UAT 无悬空编号、台账与索引现值同句；本轮整改执行完成，最终验证与清理均通过。
+- 实现／验证出口：原实现完成，本轮聚焦测试 161 项及严格断言 3 项通过；SC-01–14 有真实接口／前台浏览器／逐写入纯 MCP 证据，最终清理零残留；重新判定功能合同收口，UAT PASS 不替代发布取证。
 - 功能合同收口仍不表示可上线；不以本条代替整包发布取证。不 commit／push，除非将来另获授权。
 
 ## 风险
@@ -109,7 +109,21 @@ npx vitest run src/__tests__/wiki.test.tsx src/__tests__/wiki-access-components.
 
 ## 修订记录
 
+以下仅为各阶段历史快照，当前授权／实现／验证结果以头部与本轮新跑次为准。
+
 - v0.2（2026-11-20）：独立终审通过；委托人明示本提示词＝终稿确权。见终审记录。
 - v0.2-uat（2026-11-20）：改后 Docker UAT＝PASS WITH GAP。
 - v0.2-impl（2026-11-20）：开发授权已获得；Task 1–3 实现完成待 UAT（vitest 161 PASS）；Task 4 NOT RUN。
 - v0.2-review（2026-11-20）：按四项意见修订；SC-01–14 对齐 R0／01–12。历史基线 FAIL 保留。
+
+## 四项验证缺口整改（2026-11-20，本轮已授权）
+
+1. 固定 demo 镜像 ID／实际候选、运行中相关文件摘要与未提交补丁；重开 GAP-UAT-P1-65，历史证据原样保留。
+2. 将 MCP 搜索、读取分别解析并严格断言目标 key、正文标记、结构化拒绝；每条合法写入即时检查，负控验证不被无关结果／网络错误／空响应误判。
+3. 同一真实 Chrome 前台可视会话（headless=false），记录 visibilityState／document.hasFocus、导航→primaryReady、API 时间与截图；补 M1–M9、显式保留／采用／重设、corrupt 与同键 UI、T1 确认重置、T2 乱序、T3 真实失败恢复、T4 empty／missing／corrupt 管理访问恢复。
+4. 仅删除本套件专用 Wiki 与本轮 Token，保留共享正式页／Role／Agent；恢复网络设置；核对清理后 API 与容器文件均无残留。
+5. 聚焦回归与文档门禁通过后，按实际证据重判收口并同步全部既有状态镜像、INDEX／e2e。发现失败继续整改或如实保留缺口；不 commit／push。
+
+新增受测脚本落 `scripts/uat/`，证据落本套件新跑次附件；不修改 KTX，不扩大到客户部署交付。上述步骤即委托人本次四项整改授权的具体执行范围。
+
+整改结果：主轮 46 项功能／环境通过，中间清理错误原样留痕；补轮 6／6 通过并完成吊销与零残留检查，合并去重为 51 个独立验收 ID 全通过。153 份角色检查分别验搜索／读取，共 306 条工具断言。前台 primaryReady 28 个样本 190.35–5966.84 ms，中位 863.25 ms；API 时间独立记录。详见本轮浏览器证据与新跑次；未改产品运行代码、未 commit／push。
