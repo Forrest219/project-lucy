@@ -672,6 +672,8 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Audit Event ID | 事件 ID | — | access_log id（裸露作主标签） | 调用流水 L1 身份列；`access_log.id` |
 | Trace ID | 调用链路 ID | — | 追踪号、链路号、trace id（裸露作主标签） | P1-36：调用流水列 `trace_id` 的展示名；同一请求从准入到响应共用一个。见 `docs/specs/lucy-20261116-trace-span-ledger-spec.md` |
 | Trace Span | 阶段记录 | — | 子调用、节点、span（裸露作主标签） | P1-36：一次请求内某一阶段的耗时与结果；导出文件 `spans.csv` 的行对象 |
+| Ops Step | 运维步骤 | — | 阶段记录、调用流水、span（裸露作主标签） | P1-68：一次运维操作进入的一个命名步骤。读者是 Lucy 运维与 IT 运维。与调用流水的阶段记录不是同一本账 |
+| Ops Step Journal | 运维步骤账 | — | 审计账、调用流水、阶段记录 | P1-68：上述步骤的记录。容器标准输出与管理台「运维步骤」页读的是同一条。操作号、步骤名在 DOM 上保留翻译防御 |
 | Range preset | 近 24 小时 / 近 7 天 | — | 地址栏 `hours=168`（新写入） | URL `range=24h\|7d`；兼容读 `hours=24\|168` |
 | Reported turn | 已上报问询 | — | reported turn | 来源 badge |
 | Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |
