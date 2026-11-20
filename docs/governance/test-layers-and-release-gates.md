@@ -28,6 +28,8 @@ Lucy 的测试分三层，不能互相替代：
 
 ## 2. Current Commands
 
+P1-58／59 首批入口：`RACS_WEB=http://127.0.0.1:<port> RACS_CONTAINER=lucy-racs-<name> RACS_SECRET_DIR=/private/tmp/<private-dir> node scripts/uat/racs-browser-functional.mjs inbox/p1-58-59-finalization-20261120/<run>`（真实前台Chrome）；夹具 `npx tsx scripts/uat/racs-fixture.mts <out> <1|2|5>`；候选／实例 `python3 scripts/uat/racs-candidate.py <name>`／`python3 scripts/uat/racs-instance.py <name> <fixture> <image> <port>`。`roles-agent-concurrency-scale.mts`与`racs-functional.mts`保留完整模块／事务入口，完整长测按委托人决议延期，未完成不得主张PASS。仅隔离本机，凭据不入库；无新增CI或发布入口。
+
 | Command | Layer | Purpose |
 |---|---|---|
 | `npm run smoke:fast` | platform + tier 0 fast smoke | 快速静态规范、元数据契约、WebUI L1 及轻量握手（≤45s，PR 阻塞门禁） |

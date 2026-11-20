@@ -1,0 +1,2725 @@
+{
+  "at": "2026-11-20T07:23:16.511Z",
+  "target": "http://127.0.0.1:55289",
+  "container": "lucy-racs-batch1-v2-browser",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "headless": false,
+  "mode": "write",
+  "verdict": "PASS",
+  "records": [
+    {
+      "id": "F58-E1-E6-E8-E9-role-main-path",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F58-primaryReady-roles",
+      "verdict": "PASS",
+      "detail": {
+        "round": 0,
+        "ms": 824.7000000029802,
+        "visible": "visible",
+        "focused": true
+      }
+    },
+    {
+      "id": "F58-primaryReady-agents",
+      "verdict": "PASS",
+      "detail": {
+        "round": 0,
+        "ms": 51.599999994039536,
+        "visible": "visible",
+        "focused": true
+      }
+    },
+    {
+      "id": "F58-E1-E6-E8-E9-role-main-path",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F58-primaryReady-roles",
+      "verdict": "PASS",
+      "detail": {
+        "round": 1,
+        "ms": 60,
+        "visible": "visible",
+        "focused": true
+      }
+    },
+    {
+      "id": "F58-primaryReady-agents",
+      "verdict": "PASS",
+      "detail": {
+        "round": 1,
+        "ms": 59.8999999910593,
+        "visible": "visible",
+        "focused": true
+      }
+    },
+    {
+      "id": "F58-E1-E6-E8-E9-role-main-path",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F58-primaryReady-roles",
+      "verdict": "PASS",
+      "detail": {
+        "round": 2,
+        "ms": 61.70000000298023,
+        "visible": "visible",
+        "focused": true
+      }
+    },
+    {
+      "id": "F58-primaryReady-agents",
+      "verdict": "PASS",
+      "detail": {
+        "round": 2,
+        "ms": 61.30000001192093,
+        "visible": "visible",
+        "focused": true
+      }
+    },
+    {
+      "id": "F58-E10-E17-agent-main-actions",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F58-E14-filter-empty-recoverable",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-E1-E6-E7-role-preview",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-E3-role-busy-draft-retained",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-E2-E4-role-confirmed-created",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "setup-real-baseline",
+      "verdict": "PASS",
+      "detail": {
+        "kind": "role",
+        "id": "racs_ui_role_664f5e",
+        "status": 200
+      }
+    },
+    {
+      "id": "setup-real-preview",
+      "verdict": "PASS",
+      "detail": {
+        "kind": "role",
+        "id": "racs_ui_role_664f5e",
+        "status": 200
+      }
+    },
+    {
+      "id": "setup-real-commit",
+      "verdict": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "id": "F59-E8-E10-E14-role-conflict-three-way",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-role-refresh-keeps-mine",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-E9-E11-E13-role-reconfirmed",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-E15-E17-E20-E21-agent-busy-retains",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-agent-form-retained",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-E16-E19-agent-unknown-no-replay",
+      "verdict": "PASS",
+      "detail": {
+        "dropped": 1
+      }
+    },
+    {
+      "id": "F59-E18-agent-receipt-recovered",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "setup-real-baseline",
+      "verdict": "PASS",
+      "detail": {
+        "kind": "agent",
+        "id": "racs_ui_agent_664f5e",
+        "status": 200
+      }
+    },
+    {
+      "id": "setup-real-preview",
+      "verdict": "PASS",
+      "detail": {
+        "kind": "agent",
+        "id": "racs_ui_agent_664f5e",
+        "status": 200
+      }
+    },
+    {
+      "id": "setup-real-commit",
+      "verdict": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "id": "F59-E22-E24-E28-agent-conflict-keeps-mine",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-agent-refresh-keeps-mine",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-agent-real-recovered-value",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-E23-E25-E27-agent-reconfirmed",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-E26-agent-unknown-retains",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "F59-E5-E12-role-unknown-recovers",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "B1-role-edit-unknown-draft",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "B1-role-edit-receipt-recovered",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "B1-role-delete-busy",
+      "verdict": "PASS",
+      "detail": {
+        "status": 503
+      }
+    },
+    {
+      "id": "B1-role-delete-recovered",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "B1-role-delete-busy",
+      "verdict": "PASS",
+      "detail": {
+        "status": 503
+      }
+    },
+    {
+      "id": "B1-role-delete-recovered",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "B1-agent-delete-busy",
+      "verdict": "PASS",
+      "detail": {
+        "status": 503
+      }
+    },
+    {
+      "id": "B1-agent-delete-recovered",
+      "verdict": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "browser-page-errors",
+      "verdict": "PASS",
+      "detail": {
+        "errors": []
+      }
+    }
+  ],
+  "apiTimes": [
+    {
+      "route": "/api/admin/agents?view=roster",
+      "method": "GET",
+      "status": 200,
+      "ms": 106.85,
+      "serverTiming": "access;dur=23.2, permissions;dur=71.9, total;dur=101.1, cache;desc=miss, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles",
+      "method": "GET",
+      "status": 200,
+      "ms": 313.469,
+      "serverTiming": "access;dur=75.9, permissions;dur=228.8, total;dur=306.3, cache;desc=miss, builds;desc=1"
+    },
+    {
+      "route": "/api/admin/agents",
+      "method": "GET",
+      "status": 200,
+      "ms": 589.061,
+      "serverTiming": "access;dur=108.5, permissions;dur=3.8, stats;dur=402.6, total;dur=576.4, cache;desc=hit, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 80.137,
+      "serverTiming": "access;dur=21.6, permissions;dur=46.5, total;dur=72.6, cache;desc=hit, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents?view=roster",
+      "method": "GET",
+      "status": 200,
+      "ms": 87.22,
+      "serverTiming": "access;dur=37.0, permissions;dur=32.0, total;dur=74.6, cache;desc=hit, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles",
+      "method": "POST",
+      "status": 200,
+      "ms": 293.929,
+      "serverTiming": "total;dur=280.0, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/preview-row-policy",
+      "method": "POST",
+      "status": 200,
+      "ms": 365.683,
+      "serverTiming": "total;dur=358.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles",
+      "method": "POST",
+      "status": 503,
+      "ms": 25.103,
+      "serverTiming": "total;dur=14.7, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles",
+      "method": "POST",
+      "status": 200,
+      "ms": 233.746,
+      "serverTiming": "total;dur=227.2, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles",
+      "method": "POST",
+      "status": 200,
+      "ms": 729.328,
+      "serverTiming": "total;dur=724.9, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 65.923,
+      "serverTiming": "total;dur=63.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/preview-row-policy",
+      "method": "POST",
+      "status": 200,
+      "ms": 268.872,
+      "serverTiming": "total;dur=264.7, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/preview-row-policy",
+      "method": "POST",
+      "status": 200,
+      "ms": 263.04,
+      "serverTiming": "total;dur=247.0, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 290.447,
+      "serverTiming": "total;dur=282.0, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 101.1,
+      "serverTiming": "total;dur=95.2, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 219.723,
+      "serverTiming": "total;dur=213.7, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 924.669,
+      "serverTiming": "total;dur=921.1, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "PATCH",
+      "status": 409,
+      "ms": 23.767,
+      "serverTiming": "total;dur=20.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 69.061,
+      "serverTiming": "total;dur=66.7, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 77.331,
+      "serverTiming": "total;dur=73.9, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 126.594,
+      "serverTiming": "total;dur=65.8, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 113.469,
+      "serverTiming": "total;dur=68.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 132.584,
+      "serverTiming": "total;dur=61.0, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 300.979,
+      "serverTiming": "total;dur=234.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 906.197,
+      "serverTiming": "total;dur=902.2, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 76.068,
+      "serverTiming": "total;dur=69.2, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents?view=roster",
+      "method": "GET",
+      "status": 200,
+      "ms": 124.475,
+      "serverTiming": "access;dur=34.1, permissions;dur=80.9, total;dur=117.5, cache;desc=miss, builds;desc=1"
+    },
+    {
+      "route": "/api/admin/roles?includeTemplates=false",
+      "method": "GET",
+      "status": 200,
+      "ms": 104.392,
+      "serverTiming": "access;dur=23.1, permissions;dur=76.1, total;dur=100.8, cache;desc=miss, builds;desc=1"
+    },
+    {
+      "route": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 460.709,
+      "serverTiming": "access;dur=21.4, permissions;dur=1.4, stats;dur=430.9, total;dur=456.4, cache;desc=miss, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents",
+      "method": "POST",
+      "status": 200,
+      "ms": 581.457,
+      "serverTiming": "total;dur=577.0, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents",
+      "method": "POST",
+      "status": 200,
+      "ms": 576.468,
+      "serverTiming": "total;dur=555.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents",
+      "method": "POST",
+      "status": 503,
+      "ms": 7.506,
+      "serverTiming": "total;dur=4.5, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 105.238,
+      "serverTiming": "access;dur=16.8, permissions;dur=19.2, total;dur=38.2, cache;desc=hit, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents?view=roster",
+      "method": "GET",
+      "status": 200,
+      "ms": 106.113,
+      "serverTiming": "access;dur=33.7, permissions;dur=3.2, total;dur=39.2, cache;desc=hit, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents",
+      "method": "POST",
+      "status": 200,
+      "ms": 242.358,
+      "serverTiming": "total;dur=237.2, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents",
+      "method": "POST",
+      "status": 502,
+      "ms": 738.529
+    },
+    {
+      "route": "/api/admin/agents?view=roster",
+      "method": "GET",
+      "status": 200,
+      "ms": 113.007,
+      "serverTiming": "access;dur=30.9, permissions;dur=73.7, total;dur=107.9, cache;desc=miss, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 323.508,
+      "serverTiming": "access;dur=16.3, permissions;dur=87.8, stats;dur=212.5, total;dur=319.3, cache;desc=miss, builds;desc=1"
+    },
+    {
+      "route": "/api/admin/agents?view=roster",
+      "method": "GET",
+      "status": 200,
+      "ms": 78.192,
+      "serverTiming": "access;dur=48.1, permissions;dur=21.9, total;dur=73.0, cache;desc=hit, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 84.403,
+      "serverTiming": "access;dur=64.8, permissions;dur=5.3, stats;dur=5.4, total;dur=80.7, cache;desc=miss, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 143.712,
+      "serverTiming": "total;dur=140.8, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles?includeTemplates=false",
+      "method": "GET",
+      "status": 200,
+      "ms": 144.242,
+      "serverTiming": "access;dur=21.5, permissions;dur=117.8, total;dur=141.8, cache;desc=miss, builds;desc=1"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 77.159,
+      "serverTiming": "total;dur=74.5, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 192.008,
+      "serverTiming": "total;dur=188.9, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 757.722,
+      "serverTiming": "total;dur=754.7, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "PATCH",
+      "status": 409,
+      "ms": 39.279,
+      "serverTiming": "total;dur=32.5, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 76.354,
+      "serverTiming": "total;dur=73.4, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 94.35,
+      "serverTiming": "total;dur=63.1, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 113.906,
+      "serverTiming": "total;dur=74.9, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 156.515,
+      "serverTiming": "total;dur=152.8, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 755.092,
+      "serverTiming": "total;dur=752.0, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 66.307,
+      "serverTiming": "total;dur=63.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 100.22,
+      "serverTiming": "total;dur=59.8, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 193.44,
+      "serverTiming": "total;dur=186.2, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "PATCH",
+      "status": 502,
+      "ms": 740.023
+    },
+    {
+      "route": "/api/admin/roles/preview-row-policy",
+      "method": "POST",
+      "status": 200,
+      "ms": 282.24,
+      "serverTiming": "total;dur=277.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles",
+      "method": "POST",
+      "status": 200,
+      "ms": 243.651,
+      "serverTiming": "total;dur=225.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles",
+      "method": "POST",
+      "status": 502,
+      "ms": 737.716
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "GET",
+      "status": 200,
+      "ms": 99.99,
+      "serverTiming": "total;dur=96.1, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/preview-row-policy",
+      "method": "POST",
+      "status": 200,
+      "ms": 435.788,
+      "serverTiming": "total;dur=413.7, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/preview-row-policy",
+      "method": "POST",
+      "status": 200,
+      "ms": 396.887,
+      "serverTiming": "total;dur=391.9, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 268.588,
+      "serverTiming": "total;dur=260.6, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "PATCH",
+      "status": 502,
+      "ms": 848.406
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "GET",
+      "status": 200,
+      "ms": 156.499,
+      "serverTiming": "total;dur=153.5, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "GET",
+      "status": 200,
+      "ms": 315.577,
+      "serverTiming": "total;dur=166.8, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "GET",
+      "status": 200,
+      "ms": 125.459,
+      "serverTiming": "total;dur=123.2, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "DELETE",
+      "status": 200,
+      "ms": 287.104,
+      "serverTiming": "total;dur=277.0, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/preview-row-policy",
+      "method": "POST",
+      "status": 200,
+      "ms": 326.125,
+      "serverTiming": "total;dur=323.6, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "DELETE",
+      "status": 503,
+      "ms": 6.156,
+      "serverTiming": "total;dur=3.8, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "DELETE",
+      "status": 200,
+      "ms": 174.017,
+      "serverTiming": "total;dur=168.0, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "DELETE",
+      "status": 200,
+      "ms": 633.453,
+      "serverTiming": "total;dur=628.5, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "method": "GET",
+      "status": 404,
+      "ms": 25.38,
+      "serverTiming": "total;dur=20.5, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 145.585,
+      "serverTiming": "total;dur=135.1, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "DELETE",
+      "status": 200,
+      "ms": 374.087,
+      "serverTiming": "total;dur=355.4, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/preview-row-policy",
+      "method": "POST",
+      "status": 200,
+      "ms": 404.89,
+      "serverTiming": "total;dur=401.4, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "DELETE",
+      "status": 503,
+      "ms": 5.58,
+      "serverTiming": "total;dur=2.8, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "DELETE",
+      "status": 200,
+      "ms": 167.553,
+      "serverTiming": "total;dur=162.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "DELETE",
+      "status": 200,
+      "ms": 527.122,
+      "serverTiming": "total;dur=524.0, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "method": "GET",
+      "status": 404,
+      "ms": 18.188,
+      "serverTiming": "total;dur=16.4, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "GET",
+      "status": 200,
+      "ms": 117.808,
+      "serverTiming": "total;dur=114.9, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/roles?includeTemplates=false",
+      "method": "GET",
+      "status": 200,
+      "ms": 119.082,
+      "serverTiming": "access;dur=15.8, permissions;dur=98.9, total;dur=116.7, cache;desc=miss, builds;desc=1"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "DELETE",
+      "status": 200,
+      "ms": 147.262,
+      "serverTiming": "total;dur=142.7, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "DELETE",
+      "status": 503,
+      "ms": 4.022,
+      "serverTiming": "total;dur=1.7, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "DELETE",
+      "status": 200,
+      "ms": 129.411,
+      "serverTiming": "total;dur=126.3, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "DELETE",
+      "status": 200,
+      "ms": 498.386,
+      "serverTiming": "total;dur=495.6, builds;desc=0"
+    },
+    {
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "method": "GET",
+      "status": 404,
+      "ms": 19.469,
+      "serverTiming": "total;dur=17.3, builds;desc=0"
+    }
+  ],
+  "events": [
+    {
+      "method": "GET",
+      "route": "/login",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/index-BOMd15fA.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/jsx-runtime-bzQ4Vb5N.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/react-dom-DUKFG4MT.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/apiClient-iXEeuihv.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/dist-B1out86J.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/index-D_x1W2EE.css",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/queryKeys-CbaU3gwp.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/branding",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/login",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/AsyncRegion-Bvmaq1-J.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/clipboard-9cWXkKS1.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/Onboarding-CHZfB3np.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/PageHeader-HPgECmoi.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/opsDashboard-1X1hZU5Q.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/mcpEndpoint-_ZVROJDX.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/project",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/login",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/index-BOMd15fA.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/dist-B1out86J.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/react-dom-DUKFG4MT.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/jsx-runtime-bzQ4Vb5N.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/apiClient-iXEeuihv.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/index-D_x1W2EE.css",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/queryKeys-CbaU3gwp.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/branding",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/eval/runs/summary",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/login",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/Onboarding-CHZfB3np.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/AsyncRegion-Bvmaq1-J.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/PageHeader-HPgECmoi.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/clipboard-9cWXkKS1.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/mcpEndpoint-_ZVROJDX.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/opsDashboard-1X1hZU5Q.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/project",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/RowMoreMenu-Uwrlt7UE.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/AgentList-DhHqAqnF.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/useMutation-By8BrFfN.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/AgentRoleField-BY2hRlA-.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/lucyAdminRole-C_AWNFA0.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/DisplayRefreshNotice-ChK6KYp7.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/MetricCard-CLrNPrOl.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/PolicyDegradeBanner-BJFsyvPS.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/AccessWriteRecoveryPanel-BpUqicfK.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/objectDetail-vpVjl8QX.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/LucyAdminRoleWarning-DucoRXzb.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/opsEvidence-BosoCzj_.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/useRolesAgentDraftGuard-Bx9GUp4a.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/branding",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/policy-runtime",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/eval/runs/summary",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/GovernanceOverview-Bn_0atyW.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/RoleList-cIvDzboQ.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/RoleDeleteBlockedNotice-DFgGIPf5.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/diff",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/statistics",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/statistics",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/statistics",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/statistics",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/new",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/useQueries-CFUjml4T.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/RoleDetail-COSL1BYV.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/RowPolicyTemplatePicker-IYYrCVq0.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/clsx-CjueKrWZ.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/AuthorizationSummarySection-CAteZwjY.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/RowPolicyDnfPreview-DPYdsm-8.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/diff",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/branding",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/mcp-tools",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c1/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c0/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c2/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c3/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c4/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c5/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c6/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c7/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/lucy-ops/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/sources",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/sources",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles",
+      "status": 503,
+      "write": true
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/authorization-summary/role/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 409,
+      "write": true
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/admin/agents",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/branding",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/policy-runtime",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/statistics",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/agents",
+      "status": 503,
+      "write": true
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/statistics",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/agents",
+      "event": "committed-response-dropped"
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/6be47860-0a79-46ea-9084-30abbbb1c224",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/6be47860-0a79-46ea-9084-30abbbb1c224",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/statistics",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/6be47860-0a79-46ea-9084-30abbbb1c224",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/6be47860-0a79-46ea-9084-30abbbb1c224",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/DiffViewer-B8_e5uoj.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/AgentDetail-CapDd52W.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/statistics",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/assets/RenewTokenDialog-CLqo2_t0.js",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/policy-runtime",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 409,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/policy-runtime",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "event": "committed-response-dropped"
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/56e07264-b733-4b20-92c4-41a60a9134b8",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/56e07264-b733-4b20-92c4-41a60a9134b8",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/56e07264-b733-4b20-92c4-41a60a9134b8",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/56e07264-b733-4b20-92c4-41a60a9134b8",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/new",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/branding",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/mcp-tools",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c0/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c4/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c2/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c1/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c3/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c5/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c6/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c7/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/lucy-ops/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles",
+      "event": "committed-response-dropped"
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/46eef204-bd34-490b-b746-ced1b5028dfe",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/46eef204-bd34-490b-b746-ced1b5028dfe",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/46eef204-bd34-490b-b746-ced1b5028dfe",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/46eef204-bd34-490b-b746-ced1b5028dfe",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/authorization-summary/role/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "event": "committed-response-dropped"
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/11fb5b7e-d8d6-4361-8b4a-509a8a27cae9",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/11fb5b7e-d8d6-4361-8b4a-509a8a27cae9",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/11fb5b7e-d8d6-4361-8b4a-509a8a27cae9",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/access-write-status/11fb5b7e-d8d6-4361-8b4a-509a8a27cae9",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/branding",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/mcp-tools",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c3/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c0/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c1/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c2/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c4/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c5/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c6/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c7/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/lucy-ops/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/authorization-summary/role/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 503,
+      "write": true
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e_lost",
+      "status": 404,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/branding",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/mcp-tools",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c0/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c1/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c2/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c3/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c4/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c5/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c6/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/racs-c7/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/connections/lucy-ops/tables",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/authorization-summary/role/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/roles/preview-row-policy",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 503,
+      "write": true
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles/racs_ui_role_664f5e",
+      "status": 404,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/status",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/branding",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/roles",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/policy-runtime",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "POST",
+      "route": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 503,
+      "write": true
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": false
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 200,
+      "write": true
+    },
+    {
+      "method": "GET",
+      "route": "/favicon.ico",
+      "status": 304,
+      "write": false
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/agents/racs_ui_agent_664f5e",
+      "status": 404,
+      "write": false
+    }
+  ],
+  "errors": []
+}

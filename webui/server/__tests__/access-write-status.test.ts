@@ -40,6 +40,7 @@ function sampleReceipt(overrides: Partial<ReturnType<typeof buildRacsReceipt>> =
     objectId: "analyst",
     requestDigest: "a".repeat(64),
     baseObjectVersion: "role/analyst@v1",
+    committedObjectVersion: "role/analyst@v2",
     candidateConfigDigest: "b".repeat(64),
     ...overrides
   });
@@ -133,7 +134,7 @@ describe("access write status query (SC-08 / SC-09)", () => {
     await seedIntent(OPERATION_ID, receipt, "committed");
     const result = await queryAccessWriteStatus(OPERATION_ID);
     expect(result.outcome).toBe("committed");
-    expect(result.committedObjectVersion).toBe("role/analyst@v1");
+    expect(result.committedObjectVersion).toBe("role/analyst@v2");
     expect(result.committedConfigDigest).toBe("b".repeat(64));
   });
 
@@ -266,6 +267,20 @@ describe("racs helpers", () => {
 });
 
 describe("Wave2 integrator — idempotency replay and status", () => {
+  it("does not grant a reused display id access to a previous immutable account's receipt", () => {
+    const receipt = sampleReceipt();
+    const viewer = { ...trustedActorFromRequest({ lucyAdmin: { authMode: "open" } } as never),
+      actorId: receipt.submitterActorId, accountUid: "a-different-immutable-account", role: "operator" as const };
+    expect(canViewAccessWriteStatus(viewer, receipt, receipt.submitterActorId)).toBe(false);
+  });
+
+  it("does not call a legacy receipt's baseline the committed object version", async () => {
+    const receipt = sampleReceipt({ committedObjectVersion: undefined });
+    await seedIntent(OPERATION_ID, receipt, "committed");
+    const status = await queryAccessWriteStatus(OPERATION_ID);
+    expect(status.outcome).toBe("unknown");
+    expect(status.committedObjectVersion).toBeUndefined();
+  });
   it("replays the same operationId without inserting a second audit row", async () => {
     const db = await getAuditDb();
     const receipt = sampleReceipt();

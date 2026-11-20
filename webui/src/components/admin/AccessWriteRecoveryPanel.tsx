@@ -11,6 +11,7 @@ export type RoleDraftCompareColumn = {
   title: string;
   draft: RolePermissionDraft;
   subtitle?: string;
+  fields?: Array<{ label: string; value: string }>;
 };
 
 type AccessWriteRecoveryPanelProps = {
@@ -47,7 +48,10 @@ function CompareColumn({ column }: { column: RoleDraftCompareColumn }) {
     <div className="pl-card grid gap-2 p-3" data-testid={`access-write-compare-${column.title}`}>
       <p className="text-sm font-semibold">{column.title}</p>
       {column.subtitle ? <p className="text-xs text-fg-muted">{column.subtitle}</p> : null}
-      <dl className="grid gap-1 text-xs text-fg-muted">
+      {column.fields ? <dl className="grid gap-2 text-xs">
+        {column.fields.map((field) => <div key={field.label}><dt className="text-fg-muted">{field.label}</dt>
+          <dd className="notranslate whitespace-pre-wrap break-words" translate="no">{field.value}</dd></div>)}
+      </dl> : <><dl className="grid gap-1 text-xs text-fg-muted">
         <div>
           <dt>说明</dt>
           <dd className="font-medium text-fg-default">{summary.description}</dd>
@@ -63,6 +67,19 @@ function CompareColumn({ column }: { column: RoleDraftCompareColumn }) {
           <dd className="font-medium text-fg-default">{summary.tables}</dd>
         </div>
       </dl>
+      <details className="text-xs" data-testid="access-write-permission-values">
+        <summary className="cursor-pointer">权限明细</summary>
+        <div className="mt-2 max-h-64 overflow-auto notranslate whitespace-pre-wrap break-words" translate="no">
+          <p>{column.draft.tools.join("\n") || "—"}</p>
+          {column.draft.scope.mode === "catalog_bound"
+            ? <p>{column.draft.scope.connections.join("\n") || "—"}</p>
+            : column.draft.scope.tables.map((table) => <div key={`${table.connection}/${table.schema}/${table.name}`} className="mt-2">
+                <p>{table.connection}/{table.schema}/{table.name}</p>
+                {table.rowPolicyTemplate ? <p>{table.rowPolicyTemplate}</p> : null}
+                <p>{table.predicates?.map(predicate => `${predicate.field} ${predicate.op} ${JSON.stringify(predicate.value)}`).join("\n") || "全部行"}</p>
+              </div>)}
+        </div>
+      </details></>}
     </div>
   );
 }

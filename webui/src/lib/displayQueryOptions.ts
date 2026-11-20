@@ -37,15 +37,35 @@ export const DISPLAY_GC_TIME_MS = 300_000;
  * payload). Auth-epoch staleness and aborts are not retried.
  */
 const MAX_DISPLAY_READ_ATTEMPTS = 3;
+const displayReadJourneys = new WeakMap<AbortSignal, number>();
 
 async function displayRead<T>(path: string, scope: DisplayReadScope, signal: AbortSignal | undefined): Promise<T> {
-  for (let attempt = 1; ; attempt += 1) {
-    if (hasPendingDisplayWrite(scope)) await waitForDisplayWritesSettled(scope, signal);
-    try {
-      return await apiGet<T>(path, { signal, displayRead: scope });
-    } catch (error) {
-      if (!isWriteStaleResponseError(error) || signal?.aborted || attempt >= MAX_DISPLAY_READ_ATTEMPTS) throw error;
+  const started = signal ? displayReadJourneys.get(signal) ?? Date.now() : Date.now();
+  if (signal) displayReadJourneys.set(signal, started);
+  const remaining = Math.min(10000, 15000 - (Date.now() - started));
+  const timeout = () => new ApiError({ code: "DISPLAY_READ_TIMEOUT", message: "页面数据读取超时，请重试。" });
+  if (remaining <= 0) throw timeout();
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal?.reason);
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, remaining);
+  try {
+    for (let attempt = 1; ; attempt += 1) {
+      if (hasPendingDisplayWrite(scope)) await waitForDisplayWritesSettled(scope, controller.signal);
+      try {
+        return await apiGet<T>(path, { signal: controller.signal, displayRead: scope });
+      } catch (error) {
+        if (!isWriteStaleResponseError(error) || controller.signal.aborted || attempt >= MAX_DISPLAY_READ_ATTEMPTS) throw error;
+      }
     }
+  } catch (error) {
+    if (timedOut) throw timeout();
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
   }
 }
 

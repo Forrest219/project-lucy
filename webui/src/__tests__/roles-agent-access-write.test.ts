@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "../lib/apiClient";
+import { ApiError, GATEWAY_UNAVAILABLE } from "../lib/apiClient";
 import {
   MSG_OBJECT_CHANGED,
   MSG_PUBLISH_BUSY,
@@ -41,6 +41,15 @@ describe("classifyRolesAgentWriteError (P1-59 / 58-ERR)", () => {
     const classified = classifyRolesAgentWriteError(new TypeError("Failed to fetch"));
     expect(classified.kind).toBe("transport_uncertain");
     expect(classified.userMessage).toBe(MSG_SAVE_PENDING);
+  });
+
+  it.each([502, 503])("treats an HTML gateway %s as an uncertain write, preserving status diagnostics", (status) => {
+    const error = new ApiError({ code: GATEWAY_UNAVAILABLE, message: "gateway" });
+    error.httpStatus = status;
+    const result = classifyRolesAgentWriteError(error);
+    expect(result.kind).toBe("transport_uncertain");
+    expect(result.userMessage).toBe(MSG_SAVE_PENDING);
+    expect(result.code).toBe(GATEWAY_UNAVAILABLE);
   });
 
   it("does not treat 401 as transport uncertain", () => {

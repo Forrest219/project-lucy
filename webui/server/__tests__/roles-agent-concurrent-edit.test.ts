@@ -15,6 +15,8 @@ import {
   PreviewInputChangedError,
   resolveAccessWriteVersionMode,
   resolveCompileInputsDigest,
+  resolveRolesAgentRacsOperation,
+  rolesAgentRequestDigest,
   serializeBaseObjectVersion
 } from "../admin/access-roles-agent-concurrent-edit.js";
 import {
@@ -59,6 +61,17 @@ const gate = evaluateAccessGovernanceGate({
 });
 
 describe("resolveAccessWriteVersionMode", () => {
+  it("requires an operation id for an object save, preserving legacy writes", () => {
+    const mode = resolveAccessWriteVersionMode({ baseObjectVersion: serializeBaseObjectVersion(computeRoleBaseObjectVersion("role_a", role())) });
+    expect(resolveRolesAgentRacsOperation(mode, undefined)).toMatchObject({ kind: "reject", code: "OPERATION_ID_REQUIRED" });
+    expect(resolveRolesAgentRacsOperation({ mode: "legacy" }, undefined)).toEqual({ kind: "legacy" });
+  });
+
+  it("binds the original patch as well as its preview so an operation cannot be reused for another payload", () => {
+    const original = { baseObjectVersion: "role:a:baseline", previewToken: "preview", patch: { description: "first" } };
+    expect(rolesAgentRequestDigest(original)).not.toBe(rolesAgentRequestDigest({ ...original, patch: { description: "second" } }));
+    expect(rolesAgentRequestDigest(original)).toBe(rolesAgentRequestDigest({ ...original, operationId: "another" }));
+  });
   it("legacy when only version is present", () => {
     expect(resolveAccessWriteVersionMode({ version: "1-hash" }).mode).toBe("legacy");
   });

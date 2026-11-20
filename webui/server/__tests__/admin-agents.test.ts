@@ -28,7 +28,7 @@ const KX_TEMPLATE_NAMES = [
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
     prepare: vi.fn((sql: string) => {
-      if (sql.includes("ROW_NUMBER() OVER")) {
+      if (sql.includes("ROW_NUMBER() OVER") || sql.includes("WITH configured")) {
         return {
           all: vi.fn((...args: unknown[]) => {
             const userIds = args.filter(
@@ -42,7 +42,7 @@ vi.mock("../admin/audit.js", () => ({
       }
       // M55 + Spec 128 Task 7: COUNT(DISTINCT token_hash_prefix) can be called
       // per-agent (args: userId, startIso, endIso) or globally (args: startIso, endIso).
-      if (sql.includes("COUNT(DISTINCT token_hash_prefix)")) {
+      if (sql.includes("COUNT(DISTINCT token_hash_prefix)") && !sql.includes("AS business_calls7")) {
         const isGlobal = !sql.includes("user_id = ?");
         return {
           get: vi.fn((...args: unknown[]) => {
@@ -201,6 +201,7 @@ defaults:
 `;
 
 let projectRoot: string;
+let previousAuth: string | undefined;
 let prevRoot: string | undefined;
 
 async function makeProject(yamlContent = ACCESS_YAML) {
@@ -231,6 +232,8 @@ ${allEnabled.map((t) => `      - ${t}`).join("\n")}
 }
 
 beforeEach(async () => {
+  previousAuth = process.env.LUCY_WEBUI_AUTH;
+  process.env.LUCY_WEBUI_AUTH = "off";
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-08-02T12:00:00.000Z"));
   projectRoot = await makeProject();
@@ -238,9 +241,22 @@ beforeEach(async () => {
   process.env.KTX_PROJECT_ROOT = projectRoot;
   process.env.LUCY_CONTENT_ROOT = ".";
   auditRows.length = 0;
+  agentStatisticsDisplayTestState.setReader(async (input) => {
+    const { agentStatsTestExports } = await import("../admin/agents.js");
+    const { getAuditDb } = await import("../admin/audit.js");
+    const { buildAgentStatsWindow } = await import("../admin/metric-window.js");
+    const db = await getAuditDb(); const window = buildAgentStatsWindow(input.range);
+    const snapshot = agentStatsTestExports.captureAgentAuditReadSnapshot(db);
+    return { asOf: window.endIso, window, snapshot,
+      stats: [...agentStatsTestExports.queryAgentStatsFromDb(db, input.users, window, snapshot)],
+      globalActiveTokenCount: agentStatsTestExports.queryGlobalActiveTokenCount(db, window, snapshot),
+      tokenUsage: [...agentStatsTestExports.queryLastUsedMapFromDb(db, input.users.map(user=>user.id), snapshot, input.users, Date.parse(window.endIso))].map(([id,tokens])=>[id,[...tokens]]) };
+  });
 });
 
 afterEach(async () => {
+  if (previousAuth === undefined) delete process.env.LUCY_WEBUI_AUTH; else process.env.LUCY_WEBUI_AUTH = previousAuth;
+  agentStatisticsDisplayTestState.setReader();
   agentCommitTestHooks.afterCapture = null;
   agentCommitTestHooks.beforeResponse = null;
   if (prevRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
@@ -512,6 +528,28 @@ describe("P1-58 agent roster and statistics partitions", () => {
 });
 
 describe("POST /api/admin/agents", () => {
+  it("P1-58 SC-07: a failed audit worker preserves the compatible full roster with unavailable metrics", async () => {
+    agentStatisticsDisplayTestState.setReader(async () => { throw new Error("real read unavailable"); });
+    const app = buildServer(); await app.ready();
+    const response = await request(app.server).get("/api/admin/agents?range=7d").expect(200);
+    expect(response.body.data.agents.length).toBeGreaterThan(0);
+    expect(response.body.data.summary.metricsState).toBe("unavailable");
+    expect(response.body.data.agents[0].stats.callsLast7d).toBeNull();
+    await app.close();
+  });
+  it("P1-59 SC-02: a deleted/recreated Agent cannot accept the previous lifetime's draft", async () => {
+    const app = buildServer(); await app.ready();
+    const body = { dryRun: false, agent: { id: "lifetime", name: "Lifetime", roles: ["analyst"] } };
+    await request(app.server).post("/api/admin/agents").send(body).expect(200);
+    const before = await request(app.server).get("/api/admin/agents/lifetime").expect(200);
+    await request(app.server).delete("/api/admin/agents/lifetime").expect(200);
+    await request(app.server).post("/api/admin/agents").send(body).expect(200);
+    const after = await request(app.server).get("/api/admin/agents/lifetime").expect(200);
+    expect(after.body.data.baseObjectVersion).not.toEqual(before.body.data.baseObjectVersion);
+    await request(app.server).patch("/api/admin/agents/lifetime").send({ dryRun: true,
+      baseObjectVersion: before.body.data.baseObjectVersion, patch: { note: "old draft" } }).expect(409);
+    await app.close();
+  });
   it("returns diff on dryRun", async () => {
     const app = buildServer();
     await app.ready();
@@ -826,7 +864,7 @@ defaults:
           rollbackPlan: "Revert via git"
         }
       })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     expect(ok.body.ok).toBe(true);
     expect(ok.body.data.gate.decision).toBe("override_required");
     expect(ok.body.data.written).toBe(true);
@@ -1270,7 +1308,7 @@ describe("Spec 168 Agent role set", () => {
     const res = await request(app.server)
       .post("/api/admin/agents")
       .send({ dryRun: false, agent: { id: "multi", name: "Multi", roles: ["reader", "analyst"] } })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     expect(res.body.data.agent.roles).toEqual(["analyst", "reader"]);
     expect(res.body.data.agent.role).toBeUndefined();
     const yaml = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
@@ -1281,7 +1319,7 @@ describe("Spec 168 Agent role set", () => {
     const preview = await request(app.server)
       .post("/api/admin/agents")
       .send({ dryRun: true, agent: { id: "multi2", name: "Multi 2", roles: ["reader", "analyst"] } })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     expect(preview.body.data.effectivePermissions.roleIds).toEqual(["analyst", "reader"]);
     const pairs = preview.body.data.effectivePermissions.capabilities.map(
       (capability: { tool: string; sourceName: string }) => `${capability.tool}:${capability.sourceName}`
@@ -1291,7 +1329,7 @@ describe("Spec 168 Agent role set", () => {
     expect(gateText).toContain("dataforai.superstore_orders");
     expect(gateText).toContain("dataforai.superstore_returns");
 
-    const roles = await request(app.server).get("/api/admin/roles?includeTemplates=false").expect(200);
+    const roles = await request(app.server).get("/api/admin/roles?includeTemplates=false").expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     const reader = roles.body.data.roles.find((role: { id: string }) => role.id === "reader");
     expect(reader.users.map((user: { id: string }) => user.id)).toContain("multi");
     expect(reader.users.map((user: { id: string }) => user.id)).not.toContain("conflicted");
@@ -1483,7 +1521,7 @@ describe("admin agent discoverability writes", () => {
     const created = await request(app.server)
       .post("/api/admin/agents")
       .send({ dryRun: false, agent: { id: "okbot", name: "成功", role: "analyst" } })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     expect(created.body.data.written).toBe(true);
     expect(created.body.data.after.agent.id).toBe("okbot");
     expect(created.body.data.after.version).not.toBe(created.body.data.policyVersion);

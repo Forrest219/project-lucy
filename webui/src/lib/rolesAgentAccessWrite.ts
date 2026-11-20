@@ -65,6 +65,13 @@ export function isTransportUncertainError(error: unknown): boolean {
 }
 
 export function classifyRolesAgentWriteError(error: unknown): ClassifiedRolesAgentWriteError {
+  if (isTransportUncertainError(error)) {
+    return {
+      kind: "transport_uncertain",
+      userMessage: MSG_SAVE_PENDING,
+      code: error instanceof ApiError ? error.code : "TRANSPORT_UNCERTAIN"
+    };
+  }
   if (error instanceof ApiError) {
     const detail = error.detail as Record<string, unknown> | undefined;
     const conflictKind = detail?.conflictKind;
@@ -95,7 +102,7 @@ export function classifyRolesAgentWriteError(error: unknown): ClassifiedRolesAge
         requestId: error.requestId
       };
     }
-    if (error.code === "VERSION_CONFLICT" && conflictKind === "target_changed") {
+    if (error.code === "OBJECT_TARGET_CHANGED" || (error.code === "VERSION_CONFLICT" && conflictKind === "target_changed")) {
       return {
         kind: "conflict_target_changed",
         userMessage: MSG_OBJECT_CHANGED,
@@ -141,21 +148,14 @@ export function classifyRolesAgentWriteError(error: unknown): ClassifiedRolesAge
       requestId: error.requestId
     };
   }
-  if (isTransportUncertainError(error)) {
-    return {
-      kind: "transport_uncertain",
-      userMessage: MSG_SAVE_PENDING,
-      code: error instanceof ApiError ? error.code : "TRANSPORT_UNCERTAIN"
-    };
-  }
   return {
     kind: "other",
     userMessage: error instanceof Error ? error.message : String(error)
   };
 }
 
-export async function fetchAccessWriteStatus(operationId: string): Promise<AccessWriteStatusResult> {
-  return apiGet<AccessWriteStatusResult>(`/api/admin/access-write-status/${encodeURIComponent(operationId)}`);
+export async function fetchAccessWriteStatus(operationId: string, signal?: AbortSignal): Promise<AccessWriteStatusResult> {
+  return apiGet<AccessWriteStatusResult>(`/api/admin/access-write-status/${encodeURIComponent(operationId)}`, { signal });
 }
 
 function sleep(ms: number): Promise<void> {
@@ -169,7 +169,11 @@ export async function pollAccessWriteStatusBounded(operationId: string): Promise
   let last: AccessWriteStatusResult = { operationId, outcome: "unknown" };
   while (attempts < RACS_STATUS_POLL_MAX_ATTEMPTS && Date.now() - started < RACS_STATUS_POLL_MAX_MS) {
     attempts += 1;
-    last = await fetchAccessWriteStatus(operationId);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(1900, RACS_STATUS_POLL_MAX_MS - (Date.now() - started))));
+    try { last = await fetchAccessWriteStatus(operationId, controller.signal); }
+    catch { last = { operationId, outcome: "unknown" }; }
+    finally { clearTimeout(timer); }
     if (last.outcome === "committed" || last.outcome === "not_committed") return last;
     if (attempts < RACS_STATUS_POLL_MAX_ATTEMPTS && Date.now() - started < RACS_STATUS_POLL_MAX_MS) {
       await sleep(Math.min(250, Math.max(50, RACS_STATUS_POLL_MAX_MS / RACS_STATUS_POLL_MAX_ATTEMPTS)));

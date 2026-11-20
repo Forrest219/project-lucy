@@ -1,0 +1,69 @@
+{
+  "results": [
+    {
+      "name": "focused-and-equivalence",
+      "verdict": "PASS",
+      "logSha256": "0630c7598ecd63f69ae9edc950e42b01aad6c151ff9f687b1a810191356b38e6",
+      "summary": [
+        " Test Files  19 passed (19)",
+        "      Tests  283 passed (283)",
+        "   Duration  49.84s (transform 2.98s, setup 1.44s, import 5.95s, tests 39.24s, environment 1.50s)"
+      ]
+    },
+    {
+      "name": "final-ui",
+      "verdict": "PASS",
+      "logSha256": "ffc74bc3f2c5d221b9356faa98ff7807689ce727e399694e5b74805937cc071a",
+      "summary": [
+        " Test Files  4 passed (4)",
+        "      Tests  95 passed (95)",
+        "   Duration  4.71s (transform 347ms, setup 279ms, import 631ms, tests 2.63s, environment 874ms)"
+      ]
+    },
+    {
+      "name": "typecheck",
+      "verdict": "PASS",
+      "logSha256": "7b8beb6533b78ce33c5ebc37fdd8632c2b05dda530c713d66069577668c1bac6",
+      "summary": []
+    },
+    {
+      "name": "terminology",
+      "verdict": "PASS",
+      "logSha256": "ff6444f14cf8fcae72a384bccb1de344eb0118a9322079aebbd949043f638437",
+      "summary": [
+        "Terminology lint passed (1178 files scanned)."
+      ]
+    },
+    {
+      "name": "button-feedback",
+      "verdict": "PASS",
+      "logSha256": "f223c401333cf32aeeda76c8f17e5369a707531a8ad33c57b1adbb7e21b1e7ce",
+      "summary": [
+        "PASSED: button-feedback gate"
+      ]
+    },
+    {
+      "name": "spec",
+      "verdict": "PASS",
+      "logSha256": "7bfe55c0e45ed639980143af8e2166b5361440da69a487c6008501a8e6519884",
+      "summary": []
+    },
+    {
+      "name": "spec-docs",
+      "verdict": "PASS",
+      "logSha256": "6f3a6d6c2faef4d82eda4ff19d0a7e8d49da740f5f9f23ef446dfc5dd798bcb6",
+      "summary": [
+        "Spec/Plan doc lint passed (559 files scanned, 1035 baseline exemptions, 1 warnings on untracked files)."
+      ]
+    },
+    {
+      "name": "e2e-ledger",
+      "verdict": "PASS",
+      "logSha256": "6f4ae7755decd18fe35627557225eae4246a48ce93ee8ff5954aa85769d275af",
+      "summary": [
+        "PASSED: e2e ledger links"
+      ]
+    }
+  ],
+  "note": "19文件283项为首批修复前的全选回归；随后仅两处UI修正，以4文件95项覆盖复验，不累加为独立测试总数。无CI；隔离源码lint:spec因缺本机Manifest无法解析demo来源，实际工作区lint:spec通过；spec-docs另有未提交其他任务的交互合同警告，不纳入本提交。"
+}

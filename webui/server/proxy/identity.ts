@@ -1,3 +1,5 @@
+import { isTokenExpired } from "./token-expiry.js";
+export { isTokenExpired } from "./token-expiry.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -231,23 +233,6 @@ function plaintextTokenMatches(configured: string | undefined, presented: string
  * - unparseable → fail-closed (treat as expired)
  * - date-only `YYYY-MM-DD` → end of that UTC day
  */
-export function isTokenExpired(expiresAt: string | number | Date | null | undefined, nowMs = Date.now()): boolean {
-  if (expiresAt == null || expiresAt === "") return false;
-  if (expiresAt instanceof Date) {
-    const ts = expiresAt.getTime();
-    return Number.isNaN(ts) || ts <= nowMs;
-  }
-  if (typeof expiresAt === "number") {
-    return !Number.isFinite(expiresAt) || expiresAt <= nowMs;
-  }
-  const trimmed = expiresAt.trim();
-  if (!trimmed || /^(never|none|null|permanent)$/i.test(trimmed)) return false;
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T23:59:59.999Z` : trimmed;
-  const ts = Date.parse(normalized);
-  if (Number.isNaN(ts)) return true;
-  return ts <= nowMs;
-}
-
 /** Normalize create-token input to ISO-8601 or null. Throws on invalid non-empty values. */
 export function normalizeExpiresAtInput(raw: string | null | undefined): string | null {
   if (raw == null || raw === "") return null;

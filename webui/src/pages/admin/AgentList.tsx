@@ -1,8 +1,10 @@
+import { useRolesAgentDraftGuard } from "../../lib/useRolesAgentDraftGuard";
+import { AccessWriteRecoveryPanel } from "../../components/admin/AccessWriteRecoveryPanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { classifyRolesAgentWriteError, MSG_PUBLISH_BUSY } from "../../lib/rolesAgentAccessWrite";
+import { classifyRolesAgentWriteError, MSG_PUBLISH_BUSY, buildRacsWriteBody, extractRacsPreviewBinding, newRolesAgentOperationId, pollAccessWriteStatusBounded, type DryRunRacsFields, type AccessWriteStatusResult } from "../../lib/rolesAgentAccessWrite";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import type {
   Agent,
@@ -360,12 +362,25 @@ function NewAgentModal({
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [preview, setPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
+  const [preview, setPreview] = useState<({ diff: string; proposedYaml: string } & DryRunRacsFields) | null>(null);
   const [step, setStep] = useState<"form" | "diff">("form");
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const inflightOperation = useRef<string | null>(null);
+  const [pendingOperation, setPendingOperation] = useState<{ operationId: string; status?: AccessWriteStatusResult; checking?: boolean } | null>(null);
+  const hasDraft = Boolean(id || name || note || selectedRoles.length || pendingOperation);
+  useRolesAgentDraftGuard(hasDraft, Boolean(pendingOperation));
+  function closeCreation() {
+    if (!hasDraft || window.confirm(pendingOperation ? "保存结果仍待确认，离开后请使用请求编号继续核对。确认离开？" : "您有未保存的修改，离开后将丢失。确认离开？")) onClose();
+  }
+  async function recheckCreation(operationId: string) {
+    setPendingOperation({ operationId, checking: true });
+    const status = await pollAccessWriteStatusBounded(operationId);
+    setPendingOperation({ operationId, checking: false, status });
+    if (status.outcome === "committed") { toast.success("Agent 已创建"); onCreated(status.objectId ?? id.trim()); }
+  }
 
   const previewMutation = useMutation({
-    mutationFn: (body: { dryRun: boolean; agent: CreateAgentBody }) => apiPost<{ diff: string; proposedYaml: string }>("/api/admin/agents", body),
+    mutationFn: (body: { dryRun: boolean; agent: CreateAgentBody }) => apiPost<{ diff: string; proposedYaml: string } & DryRunRacsFields>("/api/admin/agents", body),
     onSuccess: (data) => {
       setPreview(data);
       setStep("diff");
@@ -378,13 +393,23 @@ function NewAgentModal({
   });
 
   const saveMutation = useMutation({
-    mutationFn: (body: { dryRun: boolean; agent: CreateAgentBody }) => apiPost<{ written: boolean; agent: Agent }>("/api/admin/agents", body),
+    mutationFn: (body: { dryRun: boolean; agent: CreateAgentBody }) => {
+      const binding = preview ? extractRacsPreviewBinding(preview) : undefined;
+      const operationId = binding ? newRolesAgentOperationId() : undefined;
+      inflightOperation.current = operationId ?? null;
+      return apiPost<{ written: boolean; agent: Agent }>("/api/admin/agents",
+        binding && operationId ? buildRacsWriteBody(binding, operationId, body) : body);
+    },
     onSuccess: (data) => {
       toast.success(`Agent ${data.agent.name} 已创建`);
       onCreated(data.agent.id);
     },
     onError: (err: Error) => {
       const classified = classifyRolesAgentWriteError(err);
+      if (classified.kind === "transport_uncertain" && inflightOperation.current) {
+        void recheckCreation(inflightOperation.current);
+        setSaveNotice(classified.userMessage); return;
+      }
       setSaveNotice(classified.kind === "publish_busy" ? MSG_PUBLISH_BUSY : classified.userMessage);
       toast.error(classified.userMessage);
     }
@@ -496,7 +521,7 @@ function NewAgentModal({
               )}
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-border-default pt-3">
-              <button type="button" className="pl-btn pl-btn--ghost" onClick={onClose}>取消</button>
+              <button type="button" className="pl-btn pl-btn--ghost" onClick={closeCreation}>取消</button>
               <button type="button" className="pl-btn pl-btn--primary" onClick={handlePreview} disabled={!canSubmit || previewMutation.isPending}>
                 {previewMutation.isPending ? "生成中…" : "下一步：预览配置"}
               </button>
@@ -506,13 +531,16 @@ function NewAgentModal({
           <>
             <div className="grid min-h-0 gap-4 overflow-y-auto">
               <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml：</p>
+              <AccessWriteRecoveryPanel pending={pendingOperation}
+                onRecheckStatus={() => { if (pendingOperation) void recheckCreation(pendingOperation.operationId); }}
+                onRepreview={() => { setPendingOperation(null); setStep("form"); }} />
               <pre className="pl-diff-viewer text-xs max-h-64 overflow-auto">
                 {preview?.diff}
               </pre>
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-border-default pt-3">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setStep("form")}>返回编辑</button>
-              <button type="button" className="pl-btn pl-btn--primary" onClick={handleSave} disabled={saveMutation.isPending}>
+              <button type="button" className="pl-btn pl-btn--primary" onClick={handleSave} disabled={saveMutation.isPending || Boolean(pendingOperation)}>
                 {saveMutation.isPending ? "保存中…" : "确认创建"}
               </button>
             </div>

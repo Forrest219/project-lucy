@@ -19,7 +19,7 @@ function renderAgentDetail(initialPath = "/admin/agents/zhangsan") {
       queries: { retry: false }
     }
   });
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
@@ -30,6 +30,7 @@ function renderAgentDetail(initialPath = "/admin/agents/zhangsan") {
       </MemoryRouter>
     </QueryClientProvider>
   );
+  return { ...rendered, client };
 }
 
 function makeAgentDetailResponse(overrides: Record<string, unknown> = {}) {
@@ -1049,5 +1050,49 @@ describe("AgentDetail", () => {
       .map((n) => (n as Element).textContent ?? "")
       .join("");
     expect(mainText).not.toContain("ae0a470dc0ca9931");
+  });
+});
+
+
+describe("P1-59 Agent edit baseline and explicit recovery", () => {
+  it("keeps the edit baseline across background refresh and only adopts a fresh version for explicit repreview", async () => {
+    const fallback = stubAgentEndpoints().getMockImplementation()!;
+    let generation = "one";
+    let currentNote = "original";
+    const patches: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/admin/agents/zhangsan") {
+        if (!init?.method || init.method === "GET") {
+          const detail = makeAgentDetailResponse({ note: currentNote });
+          return new Response(JSON.stringify({ ...detail, data: { ...detail.data, baseObjectVersion: `agent:zhangsan:${generation}` } }));
+        }
+        if (init.method === "PATCH") {
+          const body = JSON.parse(String(init.body)); patches.push(body);
+          if (body.baseObjectVersion !== `agent:zhangsan:${generation}`) return new Response(JSON.stringify({ ok: false,
+            error: { code: "VERSION_CONFLICT", message: "changed", detail: { conflictKind: "object_version" } } }), { status: 409 });
+          if (body.dryRun) return new Response(JSON.stringify({ ok: true, data: { diff: "+ note", proposedYaml: "", baseObjectVersion: body.baseObjectVersion, previewToken: "reviewed" } }));
+          currentNote = body.patch.note; generation = "three";
+          return new Response(JSON.stringify({ ok: true, data: { status: "committed", written: true, runtimeAck: true, policyRuntimeAck: true } }));
+        }
+      }
+      return fallback(input, init);
+    }));
+    const { client } = renderAgentDetail();
+    fireEvent.change(await screen.findByRole("textbox", { name: "备注" }), { target: { value: "mine" } });
+    generation = "two"; currentNote = "other";
+    await client.refetchQueries({ queryKey: ["admin", "agent", "zhangsan"] });
+    fireEvent.click(screen.getByRole("button", { name: /^保存$/ }));
+    await screen.findByTestId("access-write-three-way-compare");
+    expect(patches[0].baseObjectVersion).toBe("agent:zhangsan:one");
+    expect(screen.getByRole("textbox", { name: "备注" })).toHaveValue("mine");
+    expect(screen.getByTestId("access-write-compare-原始值")).toHaveTextContent("original");
+    await screen.findByText("other");
+    fireEvent.click(screen.getByTestId("access-write-repreview"));
+    await screen.findByTestId("diff-change-summary");
+    expect(patches.at(-1)?.baseObjectVersion).toBe("agent:zhangsan:two");
+    expect(patches.filter(body => body.dryRun === false)).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: /^保存$/ }));
+    await waitFor(() => expect(patches.filter(body => body.dryRun === false)).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "备注" })).toHaveValue("mine"));
   });
 });
