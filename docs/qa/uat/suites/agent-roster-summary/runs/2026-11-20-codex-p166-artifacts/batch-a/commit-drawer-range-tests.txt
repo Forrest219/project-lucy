@@ -1,0 +1,8 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/inbox/p166-implementation-20261120/commit-review/webui
+
+
+ Test Files  1 passed (1)
+      Tests  51 passed (51)
+   Start at  15:11:30
+   Duration  2.86s (transform 175ms, setup 130ms, import 338ms, tests 1.63s, environment 685ms)

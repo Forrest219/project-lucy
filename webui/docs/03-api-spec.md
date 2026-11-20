@@ -864,7 +864,8 @@ Field Questions：
 Agent 列表与详情：
 
 - `GET /api/admin/agents?range=7d|14d|30d`：默认完整列表（兼容既有调用方）。窗口统计写入 `summary.range` 与每条 `stats.windowStart/windowEnd`。省略 `range` 时 API 仍为近 7 天；WebUI Agent 列表默认 `range=30d`，页头可切换 7 / 14 / 30 天。旧 `range=90d` 当作 30 天。兼容字段 `*Last7d` 表示**当前选中窗口**的计数，不是永远 7 天。
-- `GET /api/admin/agents?view=roster`（P1-58）：仅返回名册字段（身份、角色、配置凭据、已核实权限摘要、`version`/`meta.snapshotVersion`），不读取审计统计。
+- `GET /api/admin/agents?view=roster`（P1-58）：保持旧完整名册表示，含身份、角色、`tokens[]`、完整 `effectivePermissions`、`version`/`meta.snapshotVersion`，不读取审计统计。
+- `GET /api/admin/agents?view=roster&projection=summary`（P1-66）：显式摘要白名单。身份、角色、配置时间、`legacyWildcard`、响应时刻的 `credentialSummary`、同槽编译结果的 `permissionSummary` 与警告；不含 `tokens[]`、`effectivePermissions`、`allow`、`constraints`、`stats`。`meta.projection=summary`、`projectionVersion=1`，与 statistics 共用原快照版本，严格匹配后 join；统计不可覆盖当前凭据计数。可带 range 兼容忽略新参数的旧端，新端摘要不读审计窗口。空、重复、未知 projection 或未配 roster 返回 400 `BAD_REQUEST`。默认与旧 roster、单对象、effective-permissions 和写入合同保持。名称抽屉只读 `/:userId?range=7d`；编辑继续完整 fresh 读取。
 - `GET /api/admin/agents/statistics?range=7d|14d|30d&refresh=true|false`（P1-58）：独立统计分区，返回 `agents[].stats`、`summary` 与 `meta.statisticsAsOf`（统计时间）。已完成结果可在读取完成后 5 秒内复用（`meta.cache=hit`）；`refresh=true` 绕过已完成缓存（`meta.cache=bypass`）。失败时指标为 `null`/`unavailable`，不造零。路由注册在 `/:userId` 之前。
 - `GET /api/admin/agents/:userId?range=7d|14d|30d`
 - `GET /api/admin/agents/:userId/effective-permissions`

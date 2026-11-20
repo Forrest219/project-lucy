@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { QueryFunctionContext } from "@tanstack/react-query";
 import {
   apiGet,
+  ApiError,
   displayFactsPending,
   hasPendingDisplayWrite,
   isRetryableDisplayReadError,
@@ -11,9 +12,12 @@ import {
   waitForDisplayWritesSettled,
   type DisplayReadScope
 } from "./apiClient";
+import { normalizeAgentRoster } from "./agentRosterSummary";
 import { queryKeys } from "./queryKeys";
 import type { AgentStatsRange } from "./agentStatsRange";
 import type {
+  Agent,
+  AgentRosterRead,
   AgentsRosterResponse,
   AgentsStatisticsResponse,
   CatalogReloadsResponse,
@@ -127,6 +131,55 @@ export function adminAgentsRosterQueryOptions() {
       displayRead<AgentsRosterResponse>("/api/admin/agents?view=roster", "agents", signal),
     ...displayRetry
   };
+}
+
+const rosterReadJourneys = new WeakMap<AbortSignal,{startedAt:number}>();
+async function boundedRosterRead<T>(path:string, signal?:AbortSignal, deadline?:number):Promise<T> {
+  let journey=signal?rosterReadJourneys.get(signal):undefined;
+  if(!journey) {journey={startedAt:Date.now()};if(signal) rosterReadJourneys.set(signal,journey);}
+  const remaining=Math.min(15000-(Date.now()-journey.startedAt),deadline===undefined?Infinity:deadline-Date.now());
+  const timeoutError=()=>new ApiError({code:"ROSTER_READ_TIMEOUT",message:"页面数据读取超时，请重试。"});
+  if(remaining<=0) throw timeoutError();
+  const controller=new AbortController();
+  const abort=()=>controller.abort(signal?.reason);
+  signal?.addEventListener("abort",abort,{once:true});
+  if(signal?.aborted) abort();
+  let timedOut=false;
+  const timer=setTimeout(()=>{timedOut=true;controller.abort();},Math.min(10000,remaining));
+  try{return await displayRead<T>(path,"agents",controller.signal);}
+  catch(error){if(timedOut) throw timeoutError();throw error;}
+  finally{clearTimeout(timer);signal?.removeEventListener("abort",abort);}
+}
+
+/** Explicit P1-66 projection; range also preserves ignored-parameter legacy full responses. */
+export function adminAgentsSummaryQueryOptions(range: AgentStatsRange, deadline?:()=>number|undefined) {
+  return {queryKey:[...queryKeys.adminAgents,"roster","summary","v1",range] as const,
+    queryFn:async ({signal}:QueryFunctionContext)=>normalizeAgentRoster(
+      await boundedRosterRead<unknown>(`/api/admin/agents?view=roster&projection=summary&range=${range}`,signal,deadline?.()),range),...displayRetry};
+}
+export function adminAgentDrawerQueryOptions(id:string) {
+  const validate=(data:{agent:Agent;version:string})=>{
+    if(!data || data.agent?.id!==id || !Array.isArray(data.agent.tokens) || typeof data.version!=="string")
+      throw new ApiError({code:"INVALID_AGENT_RESPONSE",message:"Agent 详情数据不完整，请重试。"});
+    return data;
+  };
+  return {queryKey:[...queryKeys.adminAgents,"detail",id,"7d"] as const,
+    queryFn:async ({signal}:QueryFunctionContext)=> {
+      const data=await boundedRosterRead<{agent:Agent;version:string}>(`/api/admin/agents/${encodeURIComponent(id)}?range=7d`,signal);
+      return validate(data);
+    },
+    // React Query select validates cached data too, including accidental DTO pollution.
+    select:validate,
+    ...displayRetry};
+}
+export function adminAgentsCompatibleStatisticsQueryOptions(range:AgentStatsRange, legacy:boolean, refresh=false, deadline?:()=>number|undefined, roster?:AgentRosterRead) {
+  const base=adminAgentsStatisticsQueryOptions(range,refresh);
+  return {...base,queryKey:[...base.queryKey,legacy?"legacy-roster":"summary-v1",roster?.version??null,roster?.meta?.snapshotVersion??null,...(legacy?[roster?.legacyReadContext??null]:[])],queryFn:async (ctx:QueryFunctionContext)=>{
+    try {return await boundedRosterRead<AgentsStatisticsResponse>(`/api/admin/agents/statistics?range=${range}${refresh?"&refresh=true":""}`,ctx.signal,deadline?.());} catch(error) {
+      if(legacy && error instanceof ApiError && error.httpStatus===404 && ["NOT_FOUND","AGENT_NOT_FOUND"].includes(error.code)) return null;
+      throw error;
+    }
+  }};
 }
 
 /** P1-58 — dynamic statistics; server may reuse completed results for ≤5s unless refresh=true. */

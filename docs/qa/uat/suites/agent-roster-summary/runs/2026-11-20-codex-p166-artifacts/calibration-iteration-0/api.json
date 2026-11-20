@@ -1,0 +1,40 @@
+{
+  "fixture": "BAL-1",
+  "candidate": "b",
+  "startedAt": "2026-11-20T05:07:11.072Z",
+  "failures": [],
+  "samples": [],
+  "oracle": {
+    "agents": 71,
+    "capabilities": 15240,
+    "permissionCompactBytes": 8340463,
+    "rosterBodyBytes": 8420953,
+    "max": 2100,
+    "configDigest": "569085bfc3848f6fa7cb9507a3428a47dbba37e627324bfa7dc95eb393dd8014",
+    "widest": "ars_00_a00",
+    "summaryBodyBytes": 36372,
+    "bodyRatio": 0.004319226101843817
+  },
+  "diagnostics": {
+    "hot": {
+      "counters": {
+        "builds": 0,
+        "fullParses": 0,
+        "sidecarParses": 2
+      },
+      "startup": {
+        "policyMs": 32953.675682,
+        "catalogScanMs": 78.87379099999816,
+        "listenMs": 105.76570899999933,
+        "displayReadyMs": 73976.335117
+      }
+    }
+  },
+  "p95": {
+    "roster": null,
+    "full": null,
+    "statistics": null,
+    "detail": null,
+    "summary": null
+  }
+}

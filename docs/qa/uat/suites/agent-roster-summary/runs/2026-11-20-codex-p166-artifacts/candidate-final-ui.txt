@@ -1,0 +1,8 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/inbox/p166-implementation-20261120/candidate-regression-context/webui
+
+
+ Test Files  5 passed (5)
+      Tests  93 passed (93)
+   Start at  14:41:24
+   Duration  4.59s (transform 259ms, setup 381ms, import 572ms, tests 1.98s, environment 1.31s)

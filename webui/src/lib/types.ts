@@ -1536,6 +1536,30 @@ export type AgentsResponseSummary = {
   };
 };
 
+/** P1-66: deliberately excludes tokens[], constraints and complete permissions. */
+export type AgentRosterSummaryRow = Pick<Agent, "id" | "name" | "note" | "enabled" | "roles" | "role" | "roleResolutionError" | "declaredRole" | "declaredRoles" | "createdAt" | "configUpdatedAt"> & {
+  legacyWildcard: boolean;
+  credentialSummary: { state: "ok" | "unavailable"; configured: number | null; available: number | null; evaluatedAt: string | null };
+  permissionSummary: { state: "ok" | "unavailable"; sourceCount: number | null; connectionCount: number | null;
+    toolCount: number | null; capabilityCount: number | null; snapshotHash: string | null; sourceMapVersion: string | null };
+  permissionWarnings: string[];
+};
+export type AgentsRosterSummaryResponse = {
+  agents: AgentRosterSummaryRow[];
+  version: string;
+  meta: { projection: "summary"; projectionVersion: 1; snapshotVersion: string; generatedAt: string;
+    permissionsState: "ok" | "partial" | "unavailable"; runtimeConsistency: "matched" | "unconfirmed" };
+};
+export type AgentRosterRead = {
+  kind: "summary-v1" | "legacy-roster" | "legacy-full";
+  /** Client-only capability-probe scope; never a server version or observation timestamp. */
+  legacyReadContext?: number;
+  agents: AgentRosterSummaryRow[];
+  version?: string;
+  meta?: { snapshotVersion?: string; generatedAt?: string; runtimeConsistency?: "matched" | "unconfirmed" };
+  inlineStatistics?: { agents: Array<{id: string; stats?: AgentStats}>; summary: AgentsResponseSummary };
+};
+
 /** P1-58 — `GET /api/admin/agents?view=roster` (no audit statistics). */
 export type AgentsRosterResponse = {
   agents: Agent[];

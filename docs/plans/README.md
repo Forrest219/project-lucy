@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261120-agent-roster-summary-projection-plan.md](lucy-20261120-agent-roster-summary-projection-plan.md) | P1-66／REQ-030-087；v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 |
 | [lucy-20261120-wiki-upload-acl-adoption-plan.md](lucy-20261120-wiki-upload-acl-adoption-plan.md) | P1-65／REQ-030-086；v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
 | [lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) | P1-64／REQ-030-085；v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 |
 | [lucy-20261119-memory-probe-diagnostics-isolation-plan.md](lucy-20261119-memory-probe-diagnostics-isolation-plan.md) | P1-61／REQ-030-082；v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |

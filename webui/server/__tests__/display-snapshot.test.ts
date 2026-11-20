@@ -35,6 +35,7 @@ import {
   DISPLAY_RECOVERY_WAIT_BUDGET_MS,
   DisplaySnapshotBusyError,
   getDisplaySnapshot,
+  evictDisplaySnapshotSlot,
   reconcileFullDigest,
   reconcileMetadata,
   resetDisplaySnapshotsForTests,
@@ -88,6 +89,16 @@ afterEach(async () => {
 });
 
 describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
+  it("P1-66 CAS preserves a rebuilt slot even when its public key-derived version is unchanged", async () => {
+    const first = await getDisplaySnapshot("pair", ["P"], async () => ({payload:"full-1",sidecar:"small-1"}));
+    expect(evictDisplaySnapshotSlot("pair", first.incarnation)).toBe(true);
+    const rebuilt = await getDisplaySnapshot("pair", ["P"], async () => ({payload:"full-2",sidecar:"small-2"}));
+    expect(rebuilt.version).toBe(first.version);
+    expect(evictDisplaySnapshotSlot("pair", first.incarnation)).toBe(false);
+    const still = await getDisplaySnapshot("pair", ["P"], async () => "wrong");
+    expect(still.payload).toBe("full-2"); expect(still.sidecar).toBe("small-2"); expect(still.cache).toBe("hit");
+  });
+
   it("merges concurrent cold requests for one key and caches empty results", async () => {
     let builds = 0;
     const gate = deferred();

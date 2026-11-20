@@ -1,0 +1,75 @@
+{
+  "at": "2026-11-20T15:18:44.872632+08:00",
+  "containers": [
+    {
+      "name": "lucy-p166-a",
+      "imageId": "sha256:14f43b5d0878d955fe398982bfce4c150f6a3545beb7b6e708bd236351a09df2",
+      "removed": true
+    },
+    {
+      "name": "lucy-p166-b",
+      "imageId": "sha256:5ddf2a28bcf2764d93a4bdd063292c3134dca3bb9316782a63215e505de39f1c",
+      "removed": true
+    },
+    {
+      "name": "lucy-p166-legacy",
+      "imageId": "sha256:d04141f957f50ef698abbf185ad05de8095c1d8738d058859b59658f894b68bd",
+      "removed": true
+    },
+    {
+      "name": "lucy-p166-old-ui",
+      "imageId": "sha256:71fc96ef3193abc79b944c14964171087ba52e66fe9ddb32ece2dff6b9a7c60d",
+      "removed": true
+    },
+    {
+      "name": "p166-db",
+      "imageId": "sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70",
+      "removed": true
+    },
+    {
+      "name": "p166-functional-db",
+      "imageId": "sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70",
+      "removed": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "lucy-p166-data-a",
+      "removed": true
+    },
+    {
+      "name": "lucy-p166-data-b",
+      "removed": true
+    },
+    {
+      "name": "lucy-p166-data-legacy",
+      "removed": true
+    },
+    {
+      "name": "lucy-p166-data-old-ui",
+      "removed": true
+    }
+  ],
+  "sharedContainersUntouched": true,
+  "failures": [],
+  "networkRemoved": true,
+  "privateTestCredentialsRemoved": [
+    "mysql-root",
+    "login.json",
+    "mcp-token",
+    "edge-tokens.json"
+  ],
+  "remainingOwnedContainers": [],
+  "retained": {
+    "images": [
+      "project-lucy:p166-baseline-20261120",
+      "project-lucy:p166-candidate-20261120",
+      "project-lucy:p166-legacy-20261120",
+      "project-lucy:p166-legacy-roster-20261120",
+      "project-lucy:p166-old-ui-20261120"
+    ],
+    "purpose": "Local review only; no push or release",
+    "reviewUntil": "2026-11-27",
+    "temporarySeeds": "inbox/p166-implementation-20261120; disposable; permanent evidence in docs/qa/uat runs"
+  }
+}

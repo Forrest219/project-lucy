@@ -45,6 +45,7 @@
 
 | 日期 | 一句话错题 | 标签 | 文件 |
 |---|---|---|---|
+| 2026-11-20 | Agent 摘要缩至原 roster 的 0.43%，热读变轻，完整冷编译和预热仍超预算；不得以热态收益冒充整项 PASS | `gate-gap` `ux-regression` `contract-stack` `sev-med` | [2026-11-20-agent-summary-cold-compile-cost.md](2026-11-20-agent-summary-cold-compile-cost.md) |
 | 2026-11-20 | Roles 卡顿被误判为「P1-13 已修」：客户 `3a9f0711` 已含 batch 仍慢；demo 5 Role UAT 不能消客户单；真修是 P1-58 跨请求展示快照／统计分区（`af13b9d5`） | `gate-gap` `ux-regression` `contract-stack` `ops-delivery` `sev-high` | [2026-11-20-roles-lag-p113-claimed-fixed-still-slow.md](2026-11-20-roles-lag-p113-claimed-fixed-still-slow.md) |
 | 2026-11-20 | KSC 实例（0.25.0／6d2664b3，更旧）实测：roles API 48–73 s、页面 58 s；agents 4.8 MB/次无分区、页面 14 s——同症状第三处版本根因；卡的是旧版缺 P1-13+P1-58 全部优化，非新代码回归 | `ux-regression` `ops-delivery` `evidence` | [2026-11-20-ksc-025-roles-agents-stuck-old-build.md](2026-11-20-ksc-025-roles-agents-stuck-old-build.md) |
 | 2026-11-19 | begin unresolved 早在行权限 UAT 已记录，但零绑定首次发布／空凭据生命周期没覆盖；组件测试直接提交注册表、源码序锁只看手动 reindex，普通发布成功没有接着验 MCP begin，独立主路径跟进不足；11-20追记真实SQLite锁竞争、完整链路漏装与整包源码差集 | `gate-gap` `contract-stack` `ux-regression` `sev-high` | [2026-11-19-begin-zero-binding-test-gap.md](2026-11-19-begin-zero-binding-test-gap.md) |

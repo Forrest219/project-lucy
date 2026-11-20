@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -7,6 +7,8 @@ import { apiGet, apiPost } from "../../lib/apiClient";
 import type {
   Agent,
   AgentsResponseSummary,
+  AgentRosterSummaryRow,
+  AgentStats,
   CreateAgentBody,
   EffectivePermissionsPreview,
   Role
@@ -18,16 +20,18 @@ import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { DisplayRefreshNotice } from "../../components/DisplayRefreshNotice";
 import { MetricCard } from "../../components/MetricCard";
 import { PolicyDegradeMetric } from "../../components/PolicyDegradeMetric";
-import { buildObjectDetailSearch } from "../../lib/objectDetail";
+import { mergeObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
 import { LucyAdminRoleWarning } from "../../lib/LucyAdminRoleWarning";
 import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import {
-  adminAgentsRosterQueryOptions,
-  adminAgentsStatisticsQueryOptions,
+  adminAgentsSummaryQueryOptions,
+  adminAgentsCompatibleStatisticsQueryOptions,
+
   formatListLoadError
 } from "../../lib/displayQueryOptions";
+import { rosterConfigurationSummary, rosterStatisticsSummary } from "../../lib/agentRosterSummary";
 import { queryKeys } from "../../lib/queryKeys";
 import {
   AGENT_STATS_RANGE_HOURS,
@@ -534,19 +538,26 @@ export function AgentList() {
   >("all");
 
   const statsRefreshRef = useRef(false);
+  const [joinRevision,setJoinRevision]=useState(0);
+  const joinBudget = useRef({range,startedAt:Date.now(),attempts:0});
+  if(joinBudget.current.range!==range) joinBudget.current={range,startedAt:Date.now(),attempts:0};
+  const joinDeadline=()=>joinBudget.current.attempts>0?joinBudget.current.startedAt+15000:undefined;
   const rosterQuery = useQuery({
-    ...adminAgentsRosterQueryOptions(),
+    ...adminAgentsSummaryQueryOptions(range,joinDeadline),
+    queryFn:ctx=>{
+      if(joinBudget.current.attempts===0) joinBudget.current.startedAt=Date.now();
+      return adminAgentsSummaryQueryOptions(range,joinDeadline).queryFn(ctx);
+    },
     placeholderData: keepPreviousData
   });
+  const rosterKind = rosterQuery.data?.kind;
   const statisticsQuery = useQuery({
-    ...adminAgentsStatisticsQueryOptions(range, statsRefreshRef.current),
+    ...adminAgentsCompatibleStatisticsQueryOptions(range,rosterKind==="legacy-roster",statsRefreshRef.current,joinDeadline,rosterQuery.data),
     queryFn: (ctx) => {
-      const refresh = statsRefreshRef.current;
-      statsRefreshRef.current = false;
-      return adminAgentsStatisticsQueryOptions(range, refresh).queryFn(ctx);
+      const refresh = statsRefreshRef.current; statsRefreshRef.current = false;
+      return adminAgentsCompatibleStatisticsQueryOptions(range,rosterKind==="legacy-roster",refresh,joinDeadline,rosterQuery.data).queryFn(ctx);
     },
-    enabled: Boolean(rosterQuery.data),
-    placeholderData: keepPreviousData
+    enabled:Boolean(rosterQuery.data) && rosterKind!=="legacy-full", placeholderData:keepPreviousData
   });
 
   function setRange(next: AgentStatsRange) {
@@ -556,29 +567,38 @@ export function AgentList() {
   }
 
   function refreshAgents() {
+    joinBudget.current={range,startedAt:Date.now(),attempts:0};
+    setJoinRevision(value=>value+1);
     statsRefreshRef.current = true;
-    void rosterQuery.refetch();
-    void statisticsQuery.refetch();
+    // Finish the primary read before the audit query can occupy the server event loop.
+    void rosterQuery.refetch().then(result=>{
+      const next=result.data,previous=rosterQuery.data;
+      // A changed scope starts its own enabled statistics query on the next render.
+      if((next?.kind??rosterKind)!=="legacy-full" && next?.kind===previous?.kind && next?.version===previous?.version
+        && next?.meta?.snapshotVersion===previous?.meta?.snapshotVersion && next?.legacyReadContext===previous?.legacyReadContext)
+        void statisticsQuery.refetch();
+    });
   }
 
   const rosterData = rosterQuery.data;
+  const inline = rosterData?.inlineStatistics?.summary.range === range ? rosterData.inlineStatistics : undefined;
   const statisticsData = statisticsQuery.data;
-  const statsJoined = agentStatisticsVersionsMatch(
+  const statsJoined = rosterKind==="legacy-full" ? Boolean(inline) : statisticsData?.range === range && agentStatisticsVersionsMatch(
     rosterData?.version,
     rosterData?.meta?.snapshotVersion,
     statisticsData?.version,
     statisticsData?.meta?.snapshotVersion
   );
 
-  const agents = useMemo(() => {
+  const agents = useMemo<Array<AgentRosterSummaryRow & {stats?: AgentStats}>>(() => {
     const rosterAgents = rosterData?.agents ?? [];
-    if (!statsJoined || !statisticsData) return rosterAgents;
-    const statsById = new Map(statisticsData.agents.map((row) => [row.id, row.stats]));
+    if (!statsJoined) return rosterAgents;
+    const statsById = new Map((inline?.agents??statisticsData?.agents??[]).map((row) => [row.id, row.stats]));
     return rosterAgents.map((agent) => ({
       ...agent,
-      stats: statsById.get(agent.id) ?? agent.stats
+      stats: statsById.get(agent.id)
     }));
-  }, [rosterData, statisticsData, statsJoined]);
+  }, [rosterData, statisticsData, statsJoined,inline]);
 
   const rosterError = rosterQuery.error;
   const statisticsError = statisticsQuery.error;
@@ -591,27 +611,37 @@ export function AgentList() {
   });
   const rolesLoading = showNew && (rolesPending || rolesFetching) && !rolesData;
 
-  const summary = statsJoined && statisticsData?.summary
-    ? statisticsData.summary
-    : summarizeAgents(agents);
-  const statisticsAsOf = statsJoined ? statisticsData?.meta?.statisticsAsOf : undefined;
+  const configurationSummary = rosterConfigurationSummary(agents);
+  const windowSummary = statsJoined ? inline?.summary??statisticsData?.summary : undefined;
+  const joinedFallback = statsJoined ? rosterStatisticsSummary(agents) : configurationSummary;
+  const summary = {...(windowSummary??joinedFallback),configuredTokenCount:configurationSummary.configuredTokenCount,
+    availableTokenCount:configurationSummary.availableTokenCount};
+  const statisticsAsOf = statsJoined ? inline?.summary?.windowEnd??statisticsData?.meta?.statisticsAsOf : undefined;
+  const joinExhausted=joinBudget.current.attempts>=2 || Date.now()-joinBudget.current.startedAt>=15000;
+  useEffect(()=>{
+    if(rosterKind==="legacy-full" || !statisticsData || statsJoined || rosterQuery.isFetching || statisticsQuery.isFetching || joinExhausted) return;
+    joinBudget.current.attempts+=1;
+    setJoinRevision(value=>value+1);
+    void rosterQuery.refetch(); void statisticsQuery.refetch();
+  },[rosterKind,statisticsData,statsJoined,rosterQuery.isFetching,statisticsQuery.isFetching,joinExhausted,joinRevision]);
+  useEffect(()=>{
+    if(!rosterData || rosterKind==="legacy-full" || statsJoined || statisticsError || statisticsData===null || joinExhausted)return;
+    const timer=setTimeout(()=>setJoinRevision(value=>value+1),Math.max(0,joinBudget.current.startedAt+15000-Date.now()));
+    return ()=>clearTimeout(timer);
+  },[range,rosterKind,rosterData,statsJoined,statisticsError,statisticsData,joinExhausted,joinRevision]);
   const statisticsState: "loading" | "ok" | "unavailable" | "pending" =
-    statisticsQuery.isPending && !statisticsData
-      ? "loading"
-      : statisticsError
-        ? "unavailable"
-        : statisticsData && !statsJoined
-          ? "pending"
-          : statisticsData
-            ? "ok"
-            : "loading";
+    rosterKind==="legacy-full" ? inline?"ok":"unavailable"
+      : statisticsError || statisticsData===null || (statsJoined && summary.metricsState === "unavailable") || (!statsJoined && joinExhausted)?"unavailable"
+      : statisticsQuery.isPending && !statisticsData?"loading"
+      : statisticsData && !statsJoined?"pending":statisticsData?"ok":"loading";
   // 名册窗口只读本响应的 summary。缺 summary 或缺任一端时按缺窗口处理，
   // 不在页面自造 7 天（Agent 名册 Spec D12）。
   const activityWindow: AgentActivityWindow = {
     windowStart: summary.windowStart,
     windowEnd: summary.windowEnd
   };
-  const statsFiltersUsable = statisticsState === "ok" && summary.metricsState !== "unavailable";
+  const statsFiltersUsable = statisticsState === "ok" && summary.metricsState !== "unavailable"
+    && summary.usageCallsLast7d != null && summary.usageActiveAgentCountLast7d != null;
   // Spec 189 §5.2 — the business-active count and the business call volume
   // read the **usage** layer. `usage*` is null when the response carries no
   // usage layer (legacy backend) — the UI then shows "—", never a 0 or a
@@ -648,7 +678,7 @@ export function AgentList() {
     const roleIds = agentRoleIds(a);
     const matchRole =
       filterRole === "all" ||
-      (filterRole === "unbound" ? roleIds.length === 0 : roleIds.includes(filterRole));
+      (filterRole === "unbound" ? roleIds.length === 0 && !a.roleResolutionError : roleIds.includes(filterRole));
     // Agent 名册 Spec §5.4 —— 四档筛选：全部、有业务调用、仅连接、闲置。
     // 指标不可用的行落在 unknown，只留在「全部」；四档都不改变行的先后。
     const bucket = classifyAgentActivity(a, activityWindow);
@@ -948,15 +978,15 @@ export function AgentList() {
               <tbody>
                 {filtered.map((agent) => {
                   const legacyWildcard =
-                    agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
+                    agent.legacyWildcard;
                   const metricsUnavailable = agent.stats?.metricsState === "unavailable";
                   // Spec 189 §6 — the table reads the Default Usage layer.
                   const callsLast7d = agent.stats?.usageCallsLast7d;
                   // Agent 名册 Spec §6 —— 分档在页面派生，窗口只读响应里的 summary。
                   const bucket = classifyAgentActivity(agent, activityWindow);
-                  const configuredTokens = configuredTokenCount(agent);
-                  const availableTokens = agent.stats?.availableTokens ?? (agent.enabled ? configuredTokens : 0);
-                  const noAvailableToken = availableTokens === 0 && configuredTokens > 0;
+                  const configuredTokens = agent.credentialSummary.configured;
+                  const availableTokens = agent.credentialSummary.available;
+                  const noAvailableToken = availableTokens === 0 && configuredTokens !== null && configuredTokens > 0;
 
                   return (
                     <tr key={agent.id} data-testid={`agent-row-${agent.id}`}>
@@ -964,7 +994,7 @@ export function AgentList() {
                         <div className="pl-agent-list-table-name">
                           <div className="flex items-center gap-1.5">
                             <Link
-                              to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
+                              to={`?${mergeObjectDetailSearch(searchParams, { kind: "agent", agentId: agent.id }).toString()}`}
                               className="font-medium pl-agent-list-table-name-link"
                               aria-label={`查看 ${agent.name} 的对象详情`}
                               data-testid={`agent-name-link-${agent.id}`}
@@ -982,7 +1012,7 @@ export function AgentList() {
                         </div>
                       </td>
                       <td data-testid={`agent-role-line-${agent.id}`}>
-                        {agentRoleIds(agent).length > 0 ? (
+                        {agent.roleResolutionError ? <span className="text-warning-strong">角色声明冲突</span> : agentRoleIds(agent).length > 0 ? (
                           <span className="inline-flex flex-wrap gap-2">
                             {agentRoleIds(agent).map((roleId) => (
                               <Link
@@ -1015,9 +1045,9 @@ export function AgentList() {
                               无可用 <span className="notranslate" translate="no">Token</span>
                             </span>
                           ) : (
-                            <span className="pl-agent-list-table-num">可用 {availableTokens}</span>
+                            <span className="pl-agent-list-table-num">可用 {availableTokens??"—"}</span>
                           )}
-                          <span className="pl-agent-list-table-meta">配置 {configuredTokens}</span>
+                          <span className="pl-agent-list-table-meta">配置 {configuredTokens??"—"}</span>
                         </div>
                       </td>
                       <td data-testid={`agent-calls-7d-${agent.id}`}>

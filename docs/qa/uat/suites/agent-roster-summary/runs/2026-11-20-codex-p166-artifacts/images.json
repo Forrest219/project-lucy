@@ -1,0 +1,47 @@
+[
+  {
+    "Id": "sha256:14f43b5d0878d955fe398982bfce4c150f6a3545beb7b6e708bd236351a09df2",
+    "RepoTags": [
+      "project-lucy:p166-baseline-20261120"
+    ],
+    "Created": "2026-11-20T04:44:03.571244753Z",
+    "Architecture": "arm64",
+    "Os": "linux"
+  },
+  {
+    "Id": "sha256:e820e73847cc0545f40e3fd7831ede5d0a43413fd4d3d1f5d69bb4cbfe6a3697",
+    "RepoTags": [
+      "project-lucy:p166-candidate-20261120"
+    ],
+    "Created": "2026-11-20T06:41:26.825214597Z",
+    "Architecture": "arm64",
+    "Os": "linux"
+  },
+  {
+    "Id": "sha256:d04141f957f50ef698abbf185ad05de8095c1d8738d058859b59658f894b68bd",
+    "RepoTags": [
+      "project-lucy:p166-legacy-20261120"
+    ],
+    "Created": "2026-11-20T06:42:59.824734001Z",
+    "Architecture": "arm64",
+    "Os": "linux"
+  },
+  {
+    "Id": "sha256:863847336781ba39b8486e905371fbf3e14a62699f533e73787be90c31a7f9f2",
+    "RepoTags": [
+      "project-lucy:p166-legacy-roster-20261120"
+    ],
+    "Created": "2026-11-20T06:43:03.384221711Z",
+    "Architecture": "arm64",
+    "Os": "linux"
+  },
+  {
+    "Id": "sha256:71fc96ef3193abc79b944c14964171087ba52e66fe9ddb32ece2dff6b9a7c60d",
+    "RepoTags": [
+      "project-lucy:p166-old-ui-20261120"
+    ],
+    "Created": "2026-11-20T06:43:08.277120838Z",
+    "Architecture": "arm64",
+    "Os": "linux"
+  }
+]

@@ -233,6 +233,12 @@ export function buildAdminOpenApiDocument(): Record<string, unknown> {
         get: {
           operationId: "listAgents",
           summary: "列出 Agent",
+          description: "默认及 view=roster 保留完整 Agent 权限与凭据字段。显式 view=roster&projection=summary 返回白名单摘要，不含 tokens、effectivePermissions、allow、constraints 或 stats；业务统计另读 statistics 并核对版本。未知或不匹配的 projection 返回 400。",
+          parameters: [
+            { name: "view", in: "query", schema: { type: "string", enum: ["roster"] } },
+            { name: "projection", in: "query", description: "summary 仅可与 view=roster 同用；省略保留旧完整表示。", schema: { type: "string", enum: ["summary"] } },
+            { name: "range", in: "query", description: "默认完整列表为 7d；摘要不含窗口统计。", schema: { type: "string", enum: ["7d", "14d", "30d"] } }
+          ],
           tags: ["admin"],
           security: sessionSecurity,
           responses: responses()

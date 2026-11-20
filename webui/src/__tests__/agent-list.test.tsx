@@ -11,7 +11,7 @@ import {
 } from "../lib/lucyAdminRole";
 import type { Agent, AgentStats, McpEndpointInfo, Role } from "../lib/types";
 
-async function renderAgentList() {
+async function renderAgentList(initialPath = "/admin/agents") {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false }
@@ -19,9 +19,9 @@ async function renderAgentList() {
   });
   const result = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/admin/agents"]}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
-          <Route path="/admin/agents" element={<AgentList />} />
+          <Route path="/admin/agents" element={<><AgentList /><AgentListLocationProbe /></>} />
           <Route path="/admin/agents/:userId" element={<AgentDetailProbe />} />
           <Route path="/admin/audit" element={<div data-testid="audit-page">audit</div>} />
           <Route path="/admin/roles" element={<div data-testid="roles-page">roles</div>} />
@@ -50,6 +50,11 @@ async function renderAgentList() {
     { timeout: 5000 }
   );
   return { ...result, client };
+}
+
+function AgentListLocationProbe() {
+  const location = useLocation();
+  return <output data-testid="agent-list-location">{location.search}</output>;
 }
 
 function AgentDetailProbe() {
@@ -190,6 +195,17 @@ function stubAgentsEndpoints(
     const agentsPath = parsed.pathname;
     if (agentsPath === "/api/admin/agents" && parsed.searchParams.get("view") === "roster" && (!init || !init.method || init.method === "GET")) {
       const rosterAgents = agents.map(({ stats: _stats, ...rest }) => rest);
+      if(parsed.searchParams.get("projection")==="summary") return new Response(JSON.stringify({ok:true,data:{
+        version:"v1",meta:{...rosterMeta,projection:"summary",projectionVersion:1,generatedAt:"2026-01-08T00:00:00Z",permissionsState:"ok"},
+        agents:agents.map(a=>({id:a.id,name:a.name,note:a.note,enabled:a.enabled,roles:a.roles,role:a.role,
+          roleResolutionError:a.roleResolutionError,declaredRole:a.declaredRole,declaredRoles:a.declaredRoles,
+          createdAt:a.createdAt,configUpdatedAt:a.configUpdatedAt,
+          legacyWildcard:Boolean(a.allow?.tables?.includes("*")||a.allow?.tools?.includes("*")),
+          credentialSummary:{state:"ok",configured:a.tokens.length,available:Math.min(a.tokens.length,a.stats?.availableTokens??(a.enabled?a.tokens.length:0)),evaluatedAt:"2026-01-08T00:00:00Z"},
+          permissionSummary:{state:"unavailable",sourceCount:null,connectionCount:null,toolCount:null,capabilityCount:null,snapshotHash:null,sourceMapVersion:null},permissionWarnings:a.permissionWarnings??[]
+        }))
+      }}));
+
       return new Response(
         JSON.stringify({
           ok: true,
@@ -258,6 +274,89 @@ function stubAgentsEndpoints(
 }
 
 describe("AgentList", () => {
+  it("P1-66 bounds incompatible statistics versions and recovers without losing the roster",async()=>{
+    const fetch=stubAgentsEndpoints([makeAgent({id:"bounded",name:"仍可浏览"})]);const normal=fetch.getMockImplementation()!;
+    let mismatch=true,statReads=0;
+    fetch.mockImplementation(async(input,init)=>{
+      const response=await normal(input,init);
+      if(String(input).startsWith("/api/admin/agents/statistics")){
+        statReads++;const body=await response.json();if(mismatch)body.data.meta.snapshotVersion="different-snapshot";
+        return new Response(JSON.stringify(body));
+      }return response;
+    });
+    await renderAgentList();await screen.findByTestId("agent-statistics-error");
+    await waitFor(()=>expect(statReads).toBe(3));expect(screen.getByTestId("agent-row-bounded")).toBeInTheDocument();
+    expect(screen.getByRole("combobox",{name:"近 30 天活跃"})).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText("搜索显示名或用户 ID"),{target:{value:"bounded"}});
+    mismatch=false;fireEvent.click(screen.getByTestId("agent-statistics-retry"));
+    await screen.findByTestId("agent-statistics-as-of");expect(screen.getByPlaceholderText("搜索显示名或用户 ID")).toHaveValue("bounded");
+  });
+  it("P1-66 uses atomic legacy-full windows on 30d→7d→refresh without probing statistics",async()=>{
+    const agent=makeAgent({id:"old",tokens:[{hash:"hash",label:"t",created:"2026-01-01",expires_at:null}]});
+    const fetch=stubAgentsEndpoints([agent]),normal=fetch.getMockImplementation()!;
+    fetch.mockImplementation(async(input,init)=>{
+      const url=new URL(String(input),"http://localhost");
+      if(url.pathname==="/api/admin/agents"&&url.searchParams.has("projection")){
+        const range=url.searchParams.get("range")??"30d",days=range==="7d"?7:30,end=Date.parse("2026-11-20T00:00:00Z");
+        return new Response(JSON.stringify({ok:true,data:{agents:[agent],summary:{agentCount:1,range,windowStart:new Date(end-days*86400000).toISOString(),windowEnd:new Date(end).toISOString(),usageCallsLast7d:days,usageActiveAgentCountLast7d:1,metricsState:"ok"}}}));
+      }return normal(input,init);
+    });
+    await renderAgentList();expect(screen.getByTestId("metric-business-calls-value")).toHaveTextContent("30");
+    fireEvent.click(screen.getByTestId("agent-stats-range-7d"));await waitFor(()=>expect(screen.getByTestId("metric-business-calls-value")).toHaveTextContent("7"));
+    await waitFor(()=>expect(screen.getByTestId("agent-refresh")).toBeEnabled());fireEvent.click(screen.getByTestId("agent-refresh"));
+    await waitFor(()=>expect(fetch.mock.calls.filter(([url])=>String(url).includes("projection=summary")).length).toBe(3));
+    expect(fetch.mock.calls.some(([url])=>String(url).startsWith("/api/admin/agents/statistics"))).toBe(false);
+  });
+  it("P1-66 late cached audit availability never overwrites the current credential summary",async()=>{
+    const agent=makeAgent({id:"expired",tokens:[{hash:"hash",label:"t",created:"2026-01-01",expires_at:"2026-01-02T00:00:00Z"}],stats:{callsLast7d:1,usageCallsLast7d:1,availableTokens:1,configuredTokens:1,deniedLast7d:0,activeTokensLast7d:0,topTables:[]}});
+    const fetch=stubAgentsEndpoints([agent]),normal=fetch.getMockImplementation()!;let release!:()=>void;const delayed=new Promise<void>(r=>release=r);
+    fetch.mockImplementation(async(input,init)=>{
+      if(String(input).startsWith("/api/admin/agents/statistics"))await delayed;
+      const response=await normal(input,init);
+      if(String(input).includes("projection=summary")){const body=await response.json();body.data.agents[0].credentialSummary.available=0;return new Response(JSON.stringify(body));}
+      return response;
+    });
+    const rendering=renderAgentList();const row=await screen.findByTestId("agent-active-tokens-expired");expect(row).toHaveTextContent("无可用 Token");
+    release();await rendering;expect(screen.getByTestId("agent-active-tokens-expired")).toHaveTextContent("无可用 Token");expect(row).toHaveTextContent("配置 1");
+  });
+  it("P1-66 shows a role declaration conflict instead of labeling it legacy ACL",async()=>{
+    stubAgentsEndpoints([makeAgent({id:"conflict",role:undefined,roles:[],roleResolutionError:"role_resolution_failed:role_and_roles",declaredRole:"a",declaredRoles:["b"]})]);
+    await renderAgentList();expect(screen.getByTestId("agent-role-line-conflict")).toHaveTextContent("角色声明冲突");expect(screen.getByTestId("agent-role-line-conflict")).not.toHaveTextContent("旧 ACL");
+  });
+  it("P1-58 SC-08: a successful statistics envelope with unavailable metrics offers retry", async () => {
+    const fetchMock = stubAgentsEndpoints([makeAgent({ id: "unavailable" })]);
+    const normal = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      const response = await normal(input, init);
+      if (!String(input).startsWith("/api/admin/agents/statistics")) return response;
+      const body = await response.json();
+      body.data.summary.metricsState = "unavailable";
+      for (const row of body.data.agents) row.stats = { ...row.stats, metricsState: "unavailable", usageCallsLast7d: null };
+      return new Response(JSON.stringify(body));
+    });
+    await renderAgentList();
+    expect(screen.getByTestId("agent-statistics-error")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-statistics-retry")).toBeEnabled();
+  });
+
+  it("P1-58 SC-08: statistics-only failure keeps the searchable roster and detail path usable without fake zeros", async () => {
+    const fetchMock = stubAgentsEndpoints([makeAgent({ id: "still_usable", name: "仍可使用" })]);
+    const normal = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      if (String(input).startsWith("/api/admin/agents/statistics")) {
+        return new Response(JSON.stringify({ ok: false, error: { code: "AUDIT_UNAVAILABLE", message: "统计暂不可用" } }), { status: 500 });
+      }
+      return normal(input, init);
+    });
+    await renderAgentList();
+    expect(screen.getByTestId("agent-statistics-error")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("—");
+    fireEvent.change(screen.getByPlaceholderText("搜索显示名或用户 ID"), { target: { value: "still_usable" } });
+    const row = within(screen.getByTestId("agent-list-table")).getByText("仍可使用");
+    expect(row).toHaveAttribute("href","/admin/agents?object=agent&agentId=still_usable");
+    fireEvent.click(within(row.closest("tr")!).getByRole("link",{name:"编辑"}));
+    expect(await screen.findByTestId("agent-detail")).toBeInTheDocument();
+  });
 
   /**
    * Spec 195 §7 / SI-13 — a background refresh failure keeps the current
@@ -1025,6 +1124,15 @@ describe("AgentList", () => {
     // clicking it restores the list
     fireEvent.click(screen.getByTestId("clear-filters-btn-empty"));
     await waitFor(() => expect(screen.getByTestId("agent-row-a1")).toBeInTheDocument());
+  });
+
+  it("keeps the selected statistics window when opening a name drawer", async () => {
+    stubAgentsEndpoints([makeAgent({id:"zhangsan",name:"Test"})]);
+    await renderAgentList("/admin/agents?range=7d");
+    const link=await screen.findByTestId("agent-name-link-zhangsan");
+    const url=new URL(link.getAttribute("href")!,"http://localhost");
+    expect(url.searchParams.get("range")).toBe("7d");
+    expect(url.searchParams.get("agentId")).toBe("zhangsan");
   });
 
   it("agent name cell is a link to object detail search", async () => {

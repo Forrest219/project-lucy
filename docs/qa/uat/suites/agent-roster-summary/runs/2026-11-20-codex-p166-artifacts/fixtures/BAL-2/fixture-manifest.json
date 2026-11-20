@@ -1,0 +1,1690 @@
+{
+  "profile": "BAL",
+  "copies": 2,
+  "width": "H",
+  "t0": "2026-11-20T04:49:45.118Z",
+  "agents": 142,
+  "formalRoles": 94,
+  "connections": 18,
+  "manifestSources": 1448,
+  "enabledSources": 1440,
+  "capabilities": 30480,
+  "auditRows": 2000000,
+  "windowRows": 400000,
+  "calibration": "Six data-plane tools require at least 334 sources for a 2000-capability subject; actual 724/720 per replica exceed the approved source lower bounds.",
+  "configDigest": "593c4f7fe8aca0bf5477c3eb029b3039ed1d0927c4408eff84ba81ace3bffd6d",
+  "perAgent": [
+    {
+      "id": "ars_00_a00",
+      "roles": [
+        "ars_00_r00"
+      ],
+      "capabilities": 2100,
+      "sources": 350,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b8e492b4b92a88f908b3c70b9c993ae9e7756aba3165e214bf38aafd6a5b04cd"
+    },
+    {
+      "id": "ars_00_a01",
+      "roles": [
+        "ars_00_r02"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "92ee5f845547d412449a7ef5358c8b6b29dc125660cbc95e7f235de95436132b"
+    },
+    {
+      "id": "ars_00_a02",
+      "roles": [
+        "ars_00_r03"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "1ce481f87d3f4ceb767044730f34c585abe8d585e81a021f16c9bae08b084676"
+    },
+    {
+      "id": "ars_00_a03",
+      "roles": [
+        "ars_00_r04"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e6a1c636cb82e7cb2d9a483e656ffb0b1c319cc3020ccfa121f98393e1968444"
+    },
+    {
+      "id": "ars_00_a04",
+      "roles": [
+        "ars_00_r05"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f943a6f14ebbadf8c2926265d576cb989580285c971731ff4fb84e7890e8911a"
+    },
+    {
+      "id": "ars_00_a05",
+      "roles": [
+        "ars_00_r06"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "37408873469c2250732ed9a984490e8d56e2aac2ac358f30fb43654f5c2125d7"
+    },
+    {
+      "id": "ars_00_a06",
+      "roles": [
+        "ars_00_r07"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "ed239c434c5ca0475c846eab75349e05d28a67551c62fb2cb4458652aa2e474f"
+    },
+    {
+      "id": "ars_00_a07",
+      "roles": [
+        "ars_00_r08"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b838168bd1328544c0c71b68616dd26952b789c30a2c19c629cf54811c595e23"
+    },
+    {
+      "id": "ars_00_a08",
+      "roles": [
+        "ars_00_r09"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e8cad60cc2ca07f992397bc8950516a3e56da1bd8328f68af72597fb265dca1a"
+    },
+    {
+      "id": "ars_00_a09",
+      "roles": [
+        "ars_00_r10"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f3624679e21fc9782cdb55181dc5b63064fa49650d9b74dc7e9ac976cc7fc5d7"
+    },
+    {
+      "id": "ars_00_a10",
+      "roles": [
+        "ars_00_r11"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "60aac595fec71bc49d985c20de4bcad09950840c592422e12e4fa1fdead8ef90"
+    },
+    {
+      "id": "ars_00_a11",
+      "roles": [
+        "ars_00_r12"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "6b452b7c18d94d88ae5a137cfd86c60463fcbb38f8660add7627d55452cbb2a5"
+    },
+    {
+      "id": "ars_00_a12",
+      "roles": [
+        "ars_00_r13"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "ef9fd0bca08e514ea1e7fd0f3e997d77e119700bd840a24575fb331b3bef98d7"
+    },
+    {
+      "id": "ars_00_a13",
+      "roles": [
+        "ars_00_r14"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b3d940adca36e05d7fa1037651e94c3847194af1a836a55d59245b7ebdcce965"
+    },
+    {
+      "id": "ars_00_a14",
+      "roles": [
+        "ars_00_r15"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "475533fe7ffa07ccd1190ba57994cc8d7b061a15caae4e9e79e885206c1ac643"
+    },
+    {
+      "id": "ars_00_a15",
+      "roles": [
+        "ars_00_r16"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f56e56df2e87a17f64ec27f4327da0e271affd87ac3b365267525c83f3d996ab"
+    },
+    {
+      "id": "ars_00_a16",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r17"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "69d4d89fa3ae25dacd2f157cf458cde8bd2439e8204e2100de33589e29bf31a4"
+    },
+    {
+      "id": "ars_00_a17",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r18"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "353965f1557628b5a0c440ff4c71dff8dd3af99dd962ac3dc563969c027c3298"
+    },
+    {
+      "id": "ars_00_a18",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r19"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "68f37afca91a5c67832dfbe3698917e72abe89a7ee0d63d6d110da7f5531cab8"
+    },
+    {
+      "id": "ars_00_a19",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r20"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b0a6a3f561a3bfef3ab038a57872567b26b1a2efca763f3f9a220548554c94b5"
+    },
+    {
+      "id": "ars_00_a20",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r21"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "70febadf2bd4fdbc716ed04b3971e1b54dfaff09391573a71b81392c9902677c"
+    },
+    {
+      "id": "ars_00_a21",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r22"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "59b0c8bcaec26c46bdc2f309701b6be2f948ebc8b908c0bd7728a7d5ccbe92fc"
+    },
+    {
+      "id": "ars_00_a22",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r23"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5865247e94e2c391008859e7a2d1f8ec06755dbf8d852acf27867a1532b69ba8"
+    },
+    {
+      "id": "ars_00_a23",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r24"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "565003fbe14256ae3fa99bf40e836b317799a276f1febee925315a18da0a79a2"
+    },
+    {
+      "id": "ars_00_a24",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r25"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "99052dbf5114af6787ca2dd590a106ca009e652f3e29abd46fa0a09b4125d321"
+    },
+    {
+      "id": "ars_00_a25",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r26"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "79a0bcf08938688bea8d2b27441f5e6527f2a4d9b6276ca851f85ff715e9edda"
+    },
+    {
+      "id": "ars_00_a26",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r27"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "310786da8419982ad31348681d2d5c9515118df7dc8b88f14dfc73539a966945"
+    },
+    {
+      "id": "ars_00_a27",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r28"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "30520d0ebea3f2ba700a5952aeb8a211c405f0d895018d2298418d2587dca006"
+    },
+    {
+      "id": "ars_00_a28",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r29"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "7fc844693fe62a3834ea9d2cda58b9b88c8ba1f0ae12ccc452d94a2a553785c3"
+    },
+    {
+      "id": "ars_00_a29",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r30"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5261d778f565a5da823a2d32eb2ccd5f3ee6a56f479762dd69e1c1853c645ba8"
+    },
+    {
+      "id": "ars_00_a30",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r31"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f4a17ae2b1363d29e762788a2bde5148cef95f5ae589d6e4a9eb4dbf874db5a3"
+    },
+    {
+      "id": "ars_00_a31",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r32"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "6d1efd2c98b8af4375916c5106ece865d802e2cb4e810293384be30cd56e2349"
+    },
+    {
+      "id": "ars_00_a32",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r33"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "13e8cb26d3cad0ebf83a239e63809ac7237227e4217ea46bd06c93017d43766c"
+    },
+    {
+      "id": "ars_00_a33",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r34"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e76aa03dc099cb8c71f2ead86ce92fcf3eca6c8666bc7120043e1264b2f5754f"
+    },
+    {
+      "id": "ars_00_a34",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r35"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5516dc13f64d08864af1d1990f079ccf637197215a5be73ba54f9e77c2073810"
+    },
+    {
+      "id": "ars_00_a35",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r36"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "73122707f275ba4de2929ce67d2128f9434be9d662d0a213bc34056c4e570140"
+    },
+    {
+      "id": "ars_00_a36",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r37"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5b47d58693125fdca1635f504a50d296d9c24a12fe6ea4a94d9923c96dc66ca0"
+    },
+    {
+      "id": "ars_00_a37",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r38"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "95f5acbb34359620dbfb2390a760d1fe93c1d184020dd59707a46036ea2da442"
+    },
+    {
+      "id": "ars_00_a38",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r39"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "004fc21937e4d70b750579d5b381ece757637bffb03ff9add9bef6dc62a65e23"
+    },
+    {
+      "id": "ars_00_a39",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r40"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "9086cd51b7eab13f09db6d902dd3bdc2b211f17c2a2da9aadea126eee75696c1"
+    },
+    {
+      "id": "ars_00_a40",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r41"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "631d2da54d3dbe00345ae8dbb29c399f9f194c6e5d229b70098d5349c7c648a1"
+    },
+    {
+      "id": "ars_00_a41",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r42"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "bced2dfb438339923c1e69dc28bd9c4068ea4c2ff3de1f572f3a0d81792dbdeb"
+    },
+    {
+      "id": "ars_00_a42",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r43"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e03927ff267271b85586e5055d56af6ca5a3e84def7294ed3b422683a3db9a7b"
+    },
+    {
+      "id": "ars_00_a43",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r44"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "4fff1ca664ba1faa645288888381964e0f5bfcddff2a29b1cfb1ca9a9ecbd8e9"
+    },
+    {
+      "id": "ars_00_a44",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r45"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "4288d498fb4b1f6f29f322fd5afb8ebb8d31656275106048e037e4afe69b031e"
+    },
+    {
+      "id": "ars_00_a45",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r46"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "292fc937ccdfd20af0be8f7203b30c0157e33a8ff4806a5e59e09f8fd0b992b6"
+    },
+    {
+      "id": "ars_00_a46",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r17"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "69d4d89fa3ae25dacd2f157cf458cde8bd2439e8204e2100de33589e29bf31a4"
+    },
+    {
+      "id": "ars_00_a47",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r18"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "353965f1557628b5a0c440ff4c71dff8dd3af99dd962ac3dc563969c027c3298"
+    },
+    {
+      "id": "ars_00_a48",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r19"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "68f37afca91a5c67832dfbe3698917e72abe89a7ee0d63d6d110da7f5531cab8"
+    },
+    {
+      "id": "ars_00_a49",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r20"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b0a6a3f561a3bfef3ab038a57872567b26b1a2efca763f3f9a220548554c94b5"
+    },
+    {
+      "id": "ars_00_a50",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r21"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "70febadf2bd4fdbc716ed04b3971e1b54dfaff09391573a71b81392c9902677c"
+    },
+    {
+      "id": "ars_00_a51",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r22"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "59b0c8bcaec26c46bdc2f309701b6be2f948ebc8b908c0bd7728a7d5ccbe92fc"
+    },
+    {
+      "id": "ars_00_a52",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r23"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5865247e94e2c391008859e7a2d1f8ec06755dbf8d852acf27867a1532b69ba8"
+    },
+    {
+      "id": "ars_00_a53",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r24"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "565003fbe14256ae3fa99bf40e836b317799a276f1febee925315a18da0a79a2"
+    },
+    {
+      "id": "ars_00_a54",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r25"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "99052dbf5114af6787ca2dd590a106ca009e652f3e29abd46fa0a09b4125d321"
+    },
+    {
+      "id": "ars_00_a55",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r26"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "79a0bcf08938688bea8d2b27441f5e6527f2a4d9b6276ca851f85ff715e9edda"
+    },
+    {
+      "id": "ars_00_a56",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r27"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "310786da8419982ad31348681d2d5c9515118df7dc8b88f14dfc73539a966945"
+    },
+    {
+      "id": "ars_00_a57",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r28"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "30520d0ebea3f2ba700a5952aeb8a211c405f0d895018d2298418d2587dca006"
+    },
+    {
+      "id": "ars_00_a58",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r29"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "7fc844693fe62a3834ea9d2cda58b9b88c8ba1f0ae12ccc452d94a2a553785c3"
+    },
+    {
+      "id": "ars_00_a59",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r30"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5261d778f565a5da823a2d32eb2ccd5f3ee6a56f479762dd69e1c1853c645ba8"
+    },
+    {
+      "id": "ars_00_a60",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r31"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f4a17ae2b1363d29e762788a2bde5148cef95f5ae589d6e4a9eb4dbf874db5a3"
+    },
+    {
+      "id": "ars_00_a61",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r32"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "6d1efd2c98b8af4375916c5106ece865d802e2cb4e810293384be30cd56e2349"
+    },
+    {
+      "id": "ars_00_a62",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r33"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "13e8cb26d3cad0ebf83a239e63809ac7237227e4217ea46bd06c93017d43766c"
+    },
+    {
+      "id": "ars_00_a63",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r34"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e76aa03dc099cb8c71f2ead86ce92fcf3eca6c8666bc7120043e1264b2f5754f"
+    },
+    {
+      "id": "ars_00_a64",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r35"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5516dc13f64d08864af1d1990f079ccf637197215a5be73ba54f9e77c2073810"
+    },
+    {
+      "id": "ars_00_a65",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r36"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "73122707f275ba4de2929ce67d2128f9434be9d662d0a213bc34056c4e570140"
+    },
+    {
+      "id": "ars_00_a66",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r37"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5b47d58693125fdca1635f504a50d296d9c24a12fe6ea4a94d9923c96dc66ca0"
+    },
+    {
+      "id": "ars_00_a67",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r38"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "95f5acbb34359620dbfb2390a760d1fe93c1d184020dd59707a46036ea2da442"
+    },
+    {
+      "id": "ars_00_a68",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r39"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "004fc21937e4d70b750579d5b381ece757637bffb03ff9add9bef6dc62a65e23"
+    },
+    {
+      "id": "ars_00_a69",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r40"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "9086cd51b7eab13f09db6d902dd3bdc2b211f17c2a2da9aadea126eee75696c1"
+    },
+    {
+      "id": "ars_00_a70",
+      "roles": [
+        "ars_00_r01",
+        "ars_00_r41"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "631d2da54d3dbe00345ae8dbb29c399f9f194c6e5d229b70098d5349c7c648a1"
+    },
+    {
+      "id": "ars_01_a00",
+      "roles": [
+        "ars_01_r00"
+      ],
+      "capabilities": 2100,
+      "sources": 350,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b8e492b4b92a88f908b3c70b9c993ae9e7756aba3165e214bf38aafd6a5b04cd"
+    },
+    {
+      "id": "ars_01_a01",
+      "roles": [
+        "ars_01_r02"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "92ee5f845547d412449a7ef5358c8b6b29dc125660cbc95e7f235de95436132b"
+    },
+    {
+      "id": "ars_01_a02",
+      "roles": [
+        "ars_01_r03"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "1ce481f87d3f4ceb767044730f34c585abe8d585e81a021f16c9bae08b084676"
+    },
+    {
+      "id": "ars_01_a03",
+      "roles": [
+        "ars_01_r04"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e6a1c636cb82e7cb2d9a483e656ffb0b1c319cc3020ccfa121f98393e1968444"
+    },
+    {
+      "id": "ars_01_a04",
+      "roles": [
+        "ars_01_r05"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f943a6f14ebbadf8c2926265d576cb989580285c971731ff4fb84e7890e8911a"
+    },
+    {
+      "id": "ars_01_a05",
+      "roles": [
+        "ars_01_r06"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "37408873469c2250732ed9a984490e8d56e2aac2ac358f30fb43654f5c2125d7"
+    },
+    {
+      "id": "ars_01_a06",
+      "roles": [
+        "ars_01_r07"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "ed239c434c5ca0475c846eab75349e05d28a67551c62fb2cb4458652aa2e474f"
+    },
+    {
+      "id": "ars_01_a07",
+      "roles": [
+        "ars_01_r08"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b838168bd1328544c0c71b68616dd26952b789c30a2c19c629cf54811c595e23"
+    },
+    {
+      "id": "ars_01_a08",
+      "roles": [
+        "ars_01_r09"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e8cad60cc2ca07f992397bc8950516a3e56da1bd8328f68af72597fb265dca1a"
+    },
+    {
+      "id": "ars_01_a09",
+      "roles": [
+        "ars_01_r10"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f3624679e21fc9782cdb55181dc5b63064fa49650d9b74dc7e9ac976cc7fc5d7"
+    },
+    {
+      "id": "ars_01_a10",
+      "roles": [
+        "ars_01_r11"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "60aac595fec71bc49d985c20de4bcad09950840c592422e12e4fa1fdead8ef90"
+    },
+    {
+      "id": "ars_01_a11",
+      "roles": [
+        "ars_01_r12"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "6b452b7c18d94d88ae5a137cfd86c60463fcbb38f8660add7627d55452cbb2a5"
+    },
+    {
+      "id": "ars_01_a12",
+      "roles": [
+        "ars_01_r13"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "ef9fd0bca08e514ea1e7fd0f3e997d77e119700bd840a24575fb331b3bef98d7"
+    },
+    {
+      "id": "ars_01_a13",
+      "roles": [
+        "ars_01_r14"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b3d940adca36e05d7fa1037651e94c3847194af1a836a55d59245b7ebdcce965"
+    },
+    {
+      "id": "ars_01_a14",
+      "roles": [
+        "ars_01_r15"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "475533fe7ffa07ccd1190ba57994cc8d7b061a15caae4e9e79e885206c1ac643"
+    },
+    {
+      "id": "ars_01_a15",
+      "roles": [
+        "ars_01_r16"
+      ],
+      "capabilities": 216,
+      "sources": 36,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f56e56df2e87a17f64ec27f4327da0e271affd87ac3b365267525c83f3d996ab"
+    },
+    {
+      "id": "ars_01_a16",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r17"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "26f69e537edc8b87e14365f313d15c7e2682138508fa590ff8fb525fe585a667"
+    },
+    {
+      "id": "ars_01_a17",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r18"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "92835613eadca6b0ea34b2e6b1b2fefc81780ec7f3769f95a3064e3e873850d9"
+    },
+    {
+      "id": "ars_01_a18",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r19"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "72c4045226802f94ba032fa5edf54ac2e166d6b4fc306003804842ffb69e9280"
+    },
+    {
+      "id": "ars_01_a19",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r20"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "2420fb9dd5e71c2d290131080ee916f788da9285ffe8759f816872d320403926"
+    },
+    {
+      "id": "ars_01_a20",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r21"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b6a1976bd658154c5fc15951a8797122ba2058d09454abbc416e92e21fb40d8a"
+    },
+    {
+      "id": "ars_01_a21",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r22"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "bd069ec0c308d86edbc04228083007d3b0166dfa6520513a94c7e9f8b600389c"
+    },
+    {
+      "id": "ars_01_a22",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r23"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f6515acceaeb8231ae8710fc4aa8153f9ec599522780eaea770aecba2968917d"
+    },
+    {
+      "id": "ars_01_a23",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r24"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "6c541cae6a9eb51d057d952a083015e4731cc2d4a319d1002a6a3ba2c099d999"
+    },
+    {
+      "id": "ars_01_a24",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r25"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "0ad0bf1fca3b5c025d99ab623e7947865efd7be316d3f86fb6eb0e8d62aaecae"
+    },
+    {
+      "id": "ars_01_a25",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r26"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "db093a4f074ca16fc03aced74d5b93199f5f310238f9dd78490363ee47910343"
+    },
+    {
+      "id": "ars_01_a26",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r27"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "1b0ac4e880d950b3c88bfb4fb57717bf356fdcba83a886b6577ae2439129e690"
+    },
+    {
+      "id": "ars_01_a27",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r28"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "1cfebd12b7911c11d8bb6d74207c24d5ffdbffa9a7f74056ea1b2863b311af51"
+    },
+    {
+      "id": "ars_01_a28",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r29"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "de0ac170ec37abc4e10db60c67a62a28e2902c79a8770d54aab2433f0698b15a"
+    },
+    {
+      "id": "ars_01_a29",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r30"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5ef6390e1f2fdf61a0778b77985bcffa0a6d7724105f4ee62c915c254f65fac4"
+    },
+    {
+      "id": "ars_01_a30",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r31"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "c3c0ee1baa45d9983ca0acb3e7bfc890deda76db7f5b40cef7ffefa1995136af"
+    },
+    {
+      "id": "ars_01_a31",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r32"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e562e98616cec8c62ebf3cf3e153e0ede1adb8fa66251232b539780fd71f036c"
+    },
+    {
+      "id": "ars_01_a32",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r33"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "3560b924416bf38900865644b233bf1c9fe0fd932f69d01c883747ff8137eb8c"
+    },
+    {
+      "id": "ars_01_a33",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r34"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "404706e5ab73d2e0f0af07c8293bd0a931548c7ac4e0f40dc726025d1e073a5d"
+    },
+    {
+      "id": "ars_01_a34",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r35"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f2d843c05b588301782b590d1c71ba61c1a6e2c5c5edc60a4a833ec884b6e6b5"
+    },
+    {
+      "id": "ars_01_a35",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r36"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "0a14bf32f7f57cb1f750e14284d9b353b2adee6136e36e0549a8174730ffbd39"
+    },
+    {
+      "id": "ars_01_a36",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r37"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "9438eca9dae1b260d01ade3f7b63fedef7f3b4e2e89c31428c9fd417517e35ce"
+    },
+    {
+      "id": "ars_01_a37",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r38"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "650cb43167511013c21d2db4de3c8f77eb5bafc7bbfb5e3a7899f3aebe7e4f21"
+    },
+    {
+      "id": "ars_01_a38",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r39"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "ccd5cc808b7ac5990e2019968d8594940e72f4c90607e41766565b634e565fb4"
+    },
+    {
+      "id": "ars_01_a39",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r40"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "2c9262e0fb52152408bbff890163ae8537ca2588747c8aa0f8c97ce9de12d6d7"
+    },
+    {
+      "id": "ars_01_a40",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r41"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "a25237ea9877cc1a7f2b21b89163c800888ea47bda57034c5d69b149e6490a2b"
+    },
+    {
+      "id": "ars_01_a41",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r42"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e4c8eef8c9a4420afc5a503ea673eca8ef299badec3fb4ef50abd8d0bc8a1467"
+    },
+    {
+      "id": "ars_01_a42",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r43"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "130428b9914de5775f45436321ebd499bf78516b847216c84f1aff09ef00b6bb"
+    },
+    {
+      "id": "ars_01_a43",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r44"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "dab7f3e61e509da3a8bfedd4a8560da6f595176143fe648b7757b7c302bc3f95"
+    },
+    {
+      "id": "ars_01_a44",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r45"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "283a233d92275c520cacab5654e74eb4cf4f7f0efa114eebf069129ecd743ebd"
+    },
+    {
+      "id": "ars_01_a45",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r46"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "3ab02dd8954a543b84232cf0303d34feeee45beafd6af4a242fd0ec9253e2377"
+    },
+    {
+      "id": "ars_01_a46",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r17"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "26f69e537edc8b87e14365f313d15c7e2682138508fa590ff8fb525fe585a667"
+    },
+    {
+      "id": "ars_01_a47",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r18"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "92835613eadca6b0ea34b2e6b1b2fefc81780ec7f3769f95a3064e3e873850d9"
+    },
+    {
+      "id": "ars_01_a48",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r19"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "72c4045226802f94ba032fa5edf54ac2e166d6b4fc306003804842ffb69e9280"
+    },
+    {
+      "id": "ars_01_a49",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r20"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "2420fb9dd5e71c2d290131080ee916f788da9285ffe8759f816872d320403926"
+    },
+    {
+      "id": "ars_01_a50",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r21"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "b6a1976bd658154c5fc15951a8797122ba2058d09454abbc416e92e21fb40d8a"
+    },
+    {
+      "id": "ars_01_a51",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r22"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "bd069ec0c308d86edbc04228083007d3b0166dfa6520513a94c7e9f8b600389c"
+    },
+    {
+      "id": "ars_01_a52",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r23"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f6515acceaeb8231ae8710fc4aa8153f9ec599522780eaea770aecba2968917d"
+    },
+    {
+      "id": "ars_01_a53",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r24"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "6c541cae6a9eb51d057d952a083015e4731cc2d4a319d1002a6a3ba2c099d999"
+    },
+    {
+      "id": "ars_01_a54",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r25"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "0ad0bf1fca3b5c025d99ab623e7947865efd7be316d3f86fb6eb0e8d62aaecae"
+    },
+    {
+      "id": "ars_01_a55",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r26"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "db093a4f074ca16fc03aced74d5b93199f5f310238f9dd78490363ee47910343"
+    },
+    {
+      "id": "ars_01_a56",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r27"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "1b0ac4e880d950b3c88bfb4fb57717bf356fdcba83a886b6577ae2439129e690"
+    },
+    {
+      "id": "ars_01_a57",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r28"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "1cfebd12b7911c11d8bb6d74207c24d5ffdbffa9a7f74056ea1b2863b311af51"
+    },
+    {
+      "id": "ars_01_a58",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r29"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "de0ac170ec37abc4e10db60c67a62a28e2902c79a8770d54aab2433f0698b15a"
+    },
+    {
+      "id": "ars_01_a59",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r30"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "5ef6390e1f2fdf61a0778b77985bcffa0a6d7724105f4ee62c915c254f65fac4"
+    },
+    {
+      "id": "ars_01_a60",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r31"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "c3c0ee1baa45d9983ca0acb3e7bfc890deda76db7f5b40cef7ffefa1995136af"
+    },
+    {
+      "id": "ars_01_a61",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r32"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "e562e98616cec8c62ebf3cf3e153e0ede1adb8fa66251232b539780fd71f036c"
+    },
+    {
+      "id": "ars_01_a62",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r33"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "3560b924416bf38900865644b233bf1c9fe0fd932f69d01c883747ff8137eb8c"
+    },
+    {
+      "id": "ars_01_a63",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r34"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "404706e5ab73d2e0f0af07c8293bd0a931548c7ac4e0f40dc726025d1e073a5d"
+    },
+    {
+      "id": "ars_01_a64",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r35"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "f2d843c05b588301782b590d1c71ba61c1a6e2c5c5edc60a4a833ec884b6e6b5"
+    },
+    {
+      "id": "ars_01_a65",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r36"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "0a14bf32f7f57cb1f750e14284d9b353b2adee6136e36e0549a8174730ffbd39"
+    },
+    {
+      "id": "ars_01_a66",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r37"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "9438eca9dae1b260d01ade3f7b63fedef7f3b4e2e89c31428c9fd417517e35ce"
+    },
+    {
+      "id": "ars_01_a67",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r38"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "650cb43167511013c21d2db4de3c8f77eb5bafc7bbfb5e3a7899f3aebe7e4f21"
+    },
+    {
+      "id": "ars_01_a68",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r39"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "ccd5cc808b7ac5990e2019968d8594940e72f4c90607e41766565b634e565fb4"
+    },
+    {
+      "id": "ars_01_a69",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r40"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "2c9262e0fb52152408bbff890163ae8537ca2588747c8aa0f8c97ce9de12d6d7"
+    },
+    {
+      "id": "ars_01_a70",
+      "roles": [
+        "ars_01_r01",
+        "ars_01_r41"
+      ],
+      "capabilities": 180,
+      "sources": 30,
+      "connections": 9,
+      "tools": 6,
+      "normalizedFingerprint": "a25237ea9877cc1a7f2b21b89163c800888ea47bda57034c5d69b149e6490a2b"
+    }
+  ]
+}

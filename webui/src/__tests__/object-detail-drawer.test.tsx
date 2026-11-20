@@ -6,6 +6,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ObjectDetailDrawer } from "../components/ObjectDetailDrawer";
 import type { AuditLogEntry, SourceSummary } from "../lib/types";
+import {adminAgentDrawerQueryOptions} from "../lib/displayQueryOptions";
 
 function renderAt(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -95,13 +96,13 @@ function stubDrawerFetch() {
     if (url === "/api/sources") {
       return new Response(JSON.stringify({ ok: true, data: { tables: [tableFixture] } }));
     }
-    if (url === "/api/admin/agents") {
+    if (url === "/api/admin/agents/zhangsan?range=7d") {
       return new Response(
         JSON.stringify({
           ok: true,
           data: {
-            agents: [
-              {
+            version: "v1",
+            agent: {
                 id: "zhangsan",
                 name: "张三",
                 enabled: true,
@@ -111,7 +112,6 @@ function stubDrawerFetch() {
                 configUpdatedAt: "2026-06-15T00:00:00.000Z",
                 stats: drawerStats ?? { callsLast7d: 1, deniedLast7d: 0, topTables: [] }
               }
-            ]
           }
         })
       );
@@ -189,6 +189,21 @@ function drawerValue(body: HTMLElement, label: string): string {
 }
 
 describe("ObjectDetailDrawer", () => {
+  it("does not retain a cached Agent after a verified AGENT_NOT_FOUND response",async()=>{
+    const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+    client.setQueryData(adminAgentDrawerQueryOptions("zhangsan").queryKey,{version:"v1",agent:{id:"zhangsan",name:"已删除的旧数据",enabled:true,tokens:[]}});
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({ok:false,error:{code:"AGENT_NOT_FOUND",message:"未找到该 Agent"}}),{status:404})));
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/admin/agents?object=agent&agentId=zhangsan"]}><ObjectDetailDrawer/></MemoryRouter></QueryClientProvider>);
+    expect(await screen.findByTestId("object-detail-agent-not-found")).toBeInTheDocument();expect(screen.queryByTestId("object-detail-agent-body")).not.toBeInTheDocument();
+  });
+  it("detects a summary injected into the detail cache instead of treating it as a complete Agent", async () => {
+    const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+    client.setQueryData(adminAgentDrawerQueryOptions("zhangsan").queryKey,{version:"v1",agent:{id:"zhangsan",name:"摘要",enabled:true,credentialSummary:{configured:1,available:1}}});
+    vi.stubGlobal("fetch",vi.fn(()=>new Promise(()=>{})));
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/admin/agents?object=agent&agentId=zhangsan"]}><ObjectDetailDrawer/></MemoryRouter></QueryClientProvider>);
+    expect(await screen.findByTestId("object-detail-agent-error")).toHaveTextContent("Agent 详情数据不完整");
+    expect(screen.queryByTestId("object-detail-agent-body")).not.toBeInTheDocument();
+  });
   it("opens a table drawer with translation defense for code-like identifiers", async () => {
     stubDrawerFetch();
     renderAt("/?object=table&conn=mysql-aliyun&schema=dataforai&table=superstore_orders");
@@ -227,13 +242,34 @@ describe("ObjectDetailDrawer", () => {
   });
 
   it("renders an agent drawer with the role / token summary", async () => {
-    stubDrawerFetch();
+    const requests=stubDrawerFetch();
     renderAt("/?object=agent&agentId=zhangsan");
 
     const body = await screen.findByTestId("object-detail-agent-body");
     expect(body).toHaveTextContent("张三");
     expect(body).toHaveTextContent("analyst");
     expect(body).toHaveTextContent("启用");
+    expect(requests.mock.calls.map(([url])=>String(url))).toEqual(["/api/admin/agents/zhangsan?range=7d"]);
+  });
+
+  it.each([403,503,404])("keeps an Agent detail failure recoverable (%s)", async status => {
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({ok:false,error:{code:status===404?"AGENT_NOT_FOUND":status===403?"FORBIDDEN":"BACKEND_FAILURE",message:"详情暂时无法读取"}}),{status})));
+    renderAt("/admin/agents?object=agent&agentId=zhangsan");
+    const error=await screen.findByTestId(status===404?"object-detail-agent-not-found":"object-detail-agent-error");
+    expect(error).toBeInTheDocument(); expect(screen.getByTestId("object-detail-close")).toBeInTheDocument();
+    if(status!==404) expect(screen.getByRole("button",{name:"重试"})).toBeInTheDocument();
+  });
+
+  it("cancels an opened Agent request on close and rejects malformed success data", async () => {
+    let signal:AbortSignal|undefined;
+    vi.stubGlobal("fetch",vi.fn((_url,init)=>{signal=init?.signal;return new Promise(()=>{});}));
+    const view=renderAtWithLocation("/admin/agents?object=agent&agentId=zhangsan");
+    await waitFor(()=>expect(signal).toBeTruthy());
+    fireEvent.click(screen.getByTestId("object-detail-close"));
+    await waitFor(()=>expect(signal?.aborted).toBe(true)); view.unmount();
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({ok:true,data:{version:"v1",agent:{id:"someone-else",tokens:[]}}}))));
+    renderAt("/admin/agents?object=agent&agentId=zhangsan");
+    expect(await screen.findByTestId("object-detail-agent-error")).toHaveTextContent("Agent 详情数据不完整");
   });
 
   it("renders a role drawer from the unwrapped Role detail API payload", async () => {

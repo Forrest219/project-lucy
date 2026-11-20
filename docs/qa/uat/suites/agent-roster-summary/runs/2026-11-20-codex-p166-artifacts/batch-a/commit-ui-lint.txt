@@ -1,0 +1,16 @@
+
+> webui@1.0.0 lint:terminology
+> node scripts/lint-terminology.mjs
+
+Terminology lint passed (1175 files scanned).
+
+> webui@1.0.0 lint:copy-surfaces
+> node scripts/lint-copy-surfaces.mjs
+
+Copy surfaces lint passed (13 files, 15 call sites registered).
+
+> webui@1.0.0 lint:button-feedback
+> node scripts/lint-button-feedback.mjs
+
+button-feedback baseline: 16 download trigger(s), 4 raw fetch() site(s), 8 writeAccessYaml() call(s)
+PASSED: button-feedback gate

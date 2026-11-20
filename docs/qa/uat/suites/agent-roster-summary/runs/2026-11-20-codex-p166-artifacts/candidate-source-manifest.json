@@ -1,0 +1,12 @@
+{
+  "Dockerfile": "aa2566622eda0c53eeae77d05e30b6ce93fabe71b61325add42725f0ec4f3642",
+  "webui/server/display-snapshot.ts": "c119144eb496a575568ca690053e4ee24f3b4a6e116e02feaedd1e474eed8c9a",
+  "webui/server/admin/openapi-document.ts": "44707065f19971afff229251d5f520c28e82b52b710aaef2bfd8ebfa8e718aaa",
+  "webui/server/admin/agents.ts": "ff86c409c958cfb59a11a286ac0640a2e8e275157705d6b11c1362ced756b07d",
+  "webui/src/components/ObjectDetailDrawer.tsx": "94ba5863c58249de052378c34ef06dc0d1abae08086a27a60b59df8e01b1ad18",
+  "webui/src/lib/types.ts": "ce5741b6fe7317bf55f6eef238cb10bf6a886d54577c945bf8400d4a4e58ba34",
+  "webui/src/lib/displayQueryOptions.ts": "513706880b0d7b625df56454d3b6c49a8cc16d8d7c0113b18f7c0d2b37dbf456",
+  "webui/src/lib/agentRosterSummary.ts": "1e16ea9fea44a83179a90d7283cdfef4d5addd8bdb376d3237490d0f1a32df54",
+  "webui/src/pages/admin/AgentList.tsx": "8435005dfd2121d8cb6676a7de837a96174c50f38dadab35a82443443f5bbc25",
+  "webui/src/pages/admin/AgentDetail.tsx": "a9112dec555d72fa9b747c1a090a347220d0a59ebb0eb7f33af8fd61de543f99"
+}

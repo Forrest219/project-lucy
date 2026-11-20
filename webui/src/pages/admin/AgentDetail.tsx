@@ -8,7 +8,7 @@ import { RenewTokenDialog } from "../../components/admin/RenewTokenDialog";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
-import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
+import { apiGet, apiPatch, apiDelete, ApiError, userFacingApiErrorMessage } from "../../lib/apiClient";
 import { copyTextWithToast } from "../../lib/clipboard";
 import type {
   AccessWriteAck,
@@ -402,7 +402,7 @@ export function AgentDetail() {
     );
   }
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["admin", "agent", userId],
     queryFn: () => apiGet<AgentDetailResponse>(`/api/admin/agents/${userId}`)
   });
@@ -869,8 +869,17 @@ export function AgentDetail() {
     return validateConstraintsForm(rows, grants.groups);
   }
 
-  if (isLoading) return <div className="pl-notice">加载中…</div>;
-  if (error || !agent) return <div className="pl-notice">加载失败：{error ? (error as Error).message : "Agent 不存在"}</div>;
+  if (isLoading) return <div className="pl-notice" role="status" data-testid="agent-detail-read-loading">加载中…</div>;
+  if (error || !agent) {
+    const notFound = error instanceof ApiError && error.httpStatus === 404 && error.code === "AGENT_NOT_FOUND";
+    return <section className="pl-notice" role="alert" data-testid={notFound ? "agent-detail-not-found" : "agent-detail-read-error"}>
+      <p className="notranslate" translate="no">{notFound ? "未找到该 Agent" : error ? userFacingApiErrorMessage(error) : "Agent 详情数据不完整，请重试。"}</p>
+      <div className="mt-3 flex gap-2">
+        <Link className="pl-btn pl-btn--secondary" to="/admin/agents">返回 <span className="notranslate" translate="no">Agent</span></Link>
+        {!notFound && <button type="button" className="pl-btn pl-btn--secondary" disabled={isFetching} onClick={() => void refetch()}>重试</button>}
+      </div>
+    </section>;
+  }
 
   const formalRoles = formalRoleOptions;
   const extraRoleIds = [

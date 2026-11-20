@@ -165,6 +165,8 @@ describe("admin OpenAPI discoverability", () => {
     const doc = res.json() as OpenApiDocument;
     expect(doc.openapi.startsWith("3.0.")).toBe(true);
     expect(doc.info.version).toBe(resolveLucyVersion());
+    expect(doc.paths["/api/admin/agents"].get.parameters?.map(p=>p.name)).toEqual(["view","projection","range"]);
+    expect(doc.paths["/api/admin/agents"].get.description).toContain("默认及 view=roster 保留完整");
     const found = listedOperations(doc);
     const expected = [...D2].sort(([aMethod, aUrl], [bMethod, bUrl]) =>
       aUrl === bUrl ? aMethod.localeCompare(bMethod) : aUrl.localeCompare(bUrl)

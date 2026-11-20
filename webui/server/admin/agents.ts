@@ -90,6 +90,7 @@ import {
   createDisplayRequestBudget,
   DisplaySnapshotBusyError,
   getDisplaySnapshot,
+  evictDisplaySnapshotSlot,
   registerDisplayPrewarmer,
   type DisplayRequestBudget
 } from "../display-snapshot.js";
@@ -1300,28 +1301,83 @@ function permissionPreviewFromBatch(batch: PermissionBatch, userId: string): Age
  * overrides) and C (connections, enabled tables). An ordinary semantic
  * overlay only feeds D, so it must not invalidate the Agent list.
  */
-async function agentPermissionSection(
-  projectRoot: string,
-  users: YamlUser[],
-  raw: string,
-  version: string,
-  budget?: DisplayRequestBudget
-): Promise<AgentPermissionSection> {
-  const snapshot = await getDisplaySnapshot("agent-permissions", AGENT_PERMISSION_SCOPES, async () => {
+type AgentPermissionSummary = {
+  state: "ok" | "unavailable";
+  sourceCount: number | null; connectionCount: number | null; toolCount: number | null;
+  capabilityCount: number | null; snapshotHash: string | null; sourceMapVersion: string | null;
+};
+type AgentPermissionSidecar = {
+  schemaVersion: 1;
+  summaries: Record<string, { permissionSummary: AgentPermissionSummary; permissionWarnings: string[] }>;
+  permissionsState: AgentPermissionSection["permissionsState"];
+  policyInputs: DisplayPolicyInputs | null;
+};
+const projectionCounters = { builds: 0, fullParses: 0, sidecarParses: 0 };
+export const agentRosterProjectionDiagnostics = {
+  read: () => ({ ...projectionCounters }),
+  reset: () => { projectionCounters.builds = 0; projectionCounters.fullParses = 0; projectionCounters.sidecarParses = 0; }
+};
+function permissionSummaryFromBatch(batch: PermissionBatch, userId: string): AgentPermissionSidecar["summaries"][string] {
+  const resolved = batch.results.get(userId);
+  if (!resolved?.ok) return {
+    permissionSummary: { state: "unavailable", sourceCount: null, connectionCount: null, toolCount: null,
+      capabilityCount: null, snapshotHash: null, sourceMapVersion: null },
+    permissionWarnings: [resolved && !resolved.ok ? resolved.reason : batch.problem ?? "permissions_unavailable"]
+  };
+  const p = resolved.permissions;
+  return { permissionSummary: { state: "ok", sourceCount: p.sources.length, connectionCount: p.connections.length,
+    toolCount: p.tools.length, capabilityCount: p.capabilities.length, snapshotHash: p.snapshotHash, sourceMapVersion: p.sourceMapVersion },
+    permissionWarnings: [] };
+}
+async function readAgentPermissionSlot(projectRoot: string, users: YamlUser[], raw: string, version: string, budget?: DisplayRequestBudget) {
+  return getDisplaySnapshot("agent-permissions", AGENT_PERMISSION_SCOPES, async () => {
     const accessSnapshot = await readAccessSnapshot(projectRoot, raw, version);
     const userIds = users.map((user) => user.id);
     const batch = await resolvePermissionBatch(accessSnapshot, userIds);
     const section: CachedAgentPermissionSection = {
       previews: Object.fromEntries(userIds.map((id) => [id, permissionPreviewFromBatch(batch, id)])),
-      permissionsState: agentPermissionsState(users, batch),
-      policyInputs: batch.policyInputs
+      permissionsState: agentPermissionsState(users, batch), policyInputs: batch.policyInputs
     };
-    return JSON.stringify(section);
+    const sidecar: AgentPermissionSidecar = {
+      schemaVersion: 1, summaries: Object.fromEntries(userIds.map((id) => [id, permissionSummaryFromBatch(batch, id)])),
+      permissionsState: section.permissionsState, policyInputs: section.policyInputs
+    };
+    projectionCounters.builds += 1;
+    return { payload: JSON.stringify(section), sidecar: JSON.stringify(sidecar) };
   }, { extraKey: version, budget });
-  return {
-    ...JSON.parse(snapshot.payload) as CachedAgentPermissionSection,
-    snapshotVersion: snapshot.version
-  };
+}
+async function agentPermissionSection(projectRoot: string, users: YamlUser[], raw: string, version: string, budget?: DisplayRequestBudget): Promise<AgentPermissionSection> {
+  const slot = await readAgentPermissionSlot(projectRoot, users, raw, version, budget);
+  projectionCounters.fullParses += 1;
+  return { ...JSON.parse(slot.payload) as CachedAgentPermissionSection, snapshotVersion: slot.version };
+}
+async function agentPermissionSummarySection(projectRoot: string, users: YamlUser[], raw: string, version: string, budget?: DisplayRequestBudget) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const slot = await readAgentPermissionSlot(projectRoot, users, raw, version, budget);
+    try {
+      projectionCounters.sidecarParses += 1;
+      const small = JSON.parse(slot.sidecar ?? "null") as AgentPermissionSidecar | null;
+      if (small?.schemaVersion !== 1 || !small.summaries || Array.isArray(small.summaries)
+        || Object.keys(small).some(k=>!["schemaVersion","summaries","permissionsState","policyInputs"].includes(k))
+        || Object.keys(small.summaries).length !== users.length || !["ok", "partial", "unavailable"].includes(small.permissionsState)
+        || !Object.hasOwn(small, "policyInputs")
+        || (small.policyInputs !== null && ["accessConfigDigest","sourceMapVersion","enabledTablesDigest","toolClassificationVersion"].some(k=>typeof (small.policyInputs as unknown as Record<string,unknown>)?.[k]!=="string"))
+        || users.some((u) => {
+          const row=small.summaries[u.id],p=row?.permissionSummary;
+          if(!p || Object.keys(row).some(k=>!["permissionSummary","permissionWarnings"].includes(k))
+            || Object.keys(p).some(k=>!["state","sourceCount","connectionCount","toolCount","capabilityCount","snapshotHash","sourceMapVersion"].includes(k))
+            || !Array.isArray(row.permissionWarnings) || row.permissionWarnings.some(w=>typeof w!=="string")) return true;
+          const counts=[p.sourceCount,p.connectionCount,p.toolCount,p.capabilityCount];
+          return p.state==="ok" ? counts.some(n=>!Number.isSafeInteger(n)||Number(n)<0) || typeof p.snapshotHash!=="string" || typeof p.sourceMapVersion!=="string"
+            : p.state!=="unavailable" || [...counts,p.snapshotHash,p.sourceMapVersion].some(v=>v!==null);
+        })) throw new Error("invalid projection");
+      return { ...small, snapshotVersion: slot.version };
+    } catch {
+      if (attempt === 1) break;
+      evictDisplaySnapshotSlot("agent-permissions", slot.incarnation);
+    }
+  }
+  throw new DisplaySnapshotBusyError("reconcile_failed");
 }
 
 registerDisplayPrewarmer("agent-permissions", async () => {
@@ -1561,7 +1617,7 @@ function agentStatisticsDisplayKey(input: {
   ].join("|");
 }
 
-function agentListSnapshotVersion(permissionSection: AgentPermissionSection): string {
+function agentListSnapshotVersion(permissionSection: Pick<AgentPermissionSection, "policyInputs" | "snapshotVersion">): string {
   const runtimeConsistency = runtimeConsistencyForInputs(permissionSection.policyInputs);
   return createHash("sha256").update(`${permissionSection.snapshotVersion}:${runtimeConsistency}`).digest("hex").slice(0, 16);
 }
@@ -1596,6 +1652,24 @@ async function buildAgentRoster(projectRoot: string, budget?: DisplayRequestBudg
   };
 }
 
+async function buildAgentRosterSummary(projectRoot: string, budget?: DisplayRequestBudget) {
+  const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
+  const section = await timeAsync("permissions", () => agentPermissionSummarySection(projectRoot, config.users, raw, version, budget));
+  const timelines = await getAgentConfigTimelineMap(config.users.map((u) => u.id));
+  const now = Date.now();
+  const agents = config.users.map((user) => ({
+    id: user.id, name: user.name, note: user.note, enabled: user.enabled !== false,
+    ...agentRoleFields(user), createdAt: timelines.get(user.id)?.createdAt, configUpdatedAt: timelines.get(user.id)?.configUpdatedAt,
+    legacyWildcard: Boolean(user.allow?.tables?.includes("*") || user.allow?.tools?.includes("*")),
+    credentialSummary: { state: "ok" as const, configured: user.tokens.length, available: availableTokenCount(user, now), evaluatedAt: new Date(now).toISOString() },
+    permissionSummary: section.summaries[user.id].permissionSummary,
+    permissionWarnings: section.summaries[user.id].permissionWarnings
+  }));
+  return { ok: true as const, data: { agents, version, meta: { projection: "summary" as const, projectionVersion: 1,
+    snapshotVersion: agentListSnapshotVersion(section), generatedAt: new Date(now).toISOString(),
+    permissionsState: section.permissionsState, runtimeConsistency: runtimeConsistencyForInputs(section.policyInputs) } } };
+}
+
 async function readAgentStatisticsDisplay(
   projectRoot: string,
   range: AgentStatsRange,
@@ -1604,7 +1678,7 @@ async function readAgentStatisticsDisplay(
   budget?: DisplayRequestBudget
 ) {
   const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
-  const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version, budget));
+  const permissionSection = await timeAsync("permissions", () => agentPermissionSummarySection(projectRoot, config.users, raw, version, budget));
   const snapshotVersion = agentListSnapshotVersion(permissionSection);
   const key = agentStatisticsDisplayKey({
     projectRoot,
@@ -1704,13 +1778,18 @@ async function readAgentStatisticsDisplay(
 
 export function registerAgentRoutes(app: FastifyInstance) {
   // GET /api/admin/agents
-  app.get<{ Querystring: { range?: string; view?: string } }>("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
+  app.get<{ Querystring: { range?: string; view?: string; projection?: unknown } }>("/api/admin/agents", async (request, reply) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
+    if (Object.keys(request.query).some(k=>k.startsWith("projection[")) ||
+      (request.query.projection !== undefined && (request.query.projection !== "summary" || request.query.view !== "roster"))) {
+      return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "请选择有效的 Agent 名册读取方式。" } });
+    }
     if (request.query.view === "roster") {
       const budget = createDisplayRequestBudget();
       for (;;) {
         const accessGeneration = generationKey(["P", "C"]);
-        const listing = await buildAgentRoster(projectRoot, budget);
+        const listing = request.query.projection === "summary"
+          ? await buildAgentRosterSummary(projectRoot, budget) : await buildAgentRoster(projectRoot, budget);
         if (generationKey(["P", "C"]) === accessGeneration && !hasPendingDisplayWrite(["P", "C"])) return listing;
         if (budget.attemptsLeft <= 0) break;
       }

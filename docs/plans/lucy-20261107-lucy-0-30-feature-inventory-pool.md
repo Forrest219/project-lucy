@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v1.99 / 2026-11-20 |
+| 版本 / 日期 | v2.04 / 2026-11-20 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**；**P2-2 对标对象已修正、D17 首页形态已裁决、D19／D20 已纳入、D21 MD 标配已登记（2026-11-19，见 v1.54／v1.56／v1.57 行）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码  **P1-57两处功能阻塞已修复；委托人已延期G6正式完整导出，本轮客户功能测试排除此项，可按限定范围进行。原完整范围FAIL证据保留。** |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -15,9 +15,12 @@
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | 合并候选复验 | 2026-11-20 | P1-60／P1-64同一30ec4ae0完整验收，功能终审收口；SC-05／10预算持久化锁竞争修复纳入原P1-60；整包有P1-58／59合同缺口及核心可用性修复版本差集，不批准用户更新；[最终评审](../reviews/2026-11-20-p160-p164-combined-final-review.md)；不入新增核心分母；不提交／推送／发布。 |
+| v1.98 | 2026-11-20 | 入池 P1-66／REQ-030-087：Agent 名册摘要投影与单对象详情按需读取；承接 109 现场 71 Agent／13,815 capability／4.83 MB 探查。委托人仅授权优化方案、Spec／Plan 和保留权限展开规模的 Docker 浏览器验证设计；未授权实现或执行 UAT。 |
 | v1.97 | 2026-11-20 | P1-64 SC-09类型49→0；413＋29回归及最终候选Docker／前台浏览器全套PASS；类型缺口关闭，进入最终评审；不外推整包更新放行。 |
 | v1.95 | 2026-11-20 | P1-64／REQ-030-085 R1–R3整改、169＋5回归与Docker／真实前台浏览器复验完成；测试台R0／01–12 PASS；SC-09全库49条基线诊断未关闭，≠ 功能合同收口／可上线。 |
-| v1.99 | 2026-11-20 | P1-65／REQ-030-086 按委托人授权完成四项验证缺口整改：真实前台浏览器／遗漏子例、严格 MCP、清理及状态一致性；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md) 51 项 PASS，153 份角色检查／306 条工具断言，最终零残留；重新确认功能合同收口；不 commit／push；≠ 可上线。 |
+| v2.04 | 2026-11-20 | P1-66 batch A: user-approved phased closure and local commit; BA-01-07 PASS WITH GAP; original full-matrix FAIL retained; batch B paused; no push or release. |
+| v2.00 | 2026-11-20 | P1-66／REQ-030-087：委托人确认 Spec／Plan v0.2 定稿，授权 T1–T7 开发与 Docker 前台浏览器验收，完整覆盖兼容／按需详情／BAL、SKEW 六组；执行中；不提交、推送或发布。 |
+| v1.99 | 2026-11-20 | P1-66／REQ-030-087 严格过程评审修订至 v0.2-draft：同槽 sidecar 与统计版本配对、整旅程轻读、legacy 三模式、详情失效／取消、凭据数防旧统计覆盖、BAL／SKEW 保宽度复制和实时时钟测程。8 项设计发现已修订；终稿未确权、开发未授权、UAT NOT RUN。 |
 | v1.96 | 2026-11-20 | P1-65／REQ-030-086 GAP 补跑后 Docker UAT＝PASS；功能合同已收口；关闭 GAP-UAT-P1-65；≠ 可上线。 |
 | v1.80 | 2026-11-20 | P1-58／59 demo Docker F58-smoke／F59-smoke＝SMOKE_PASS WITH GAP（roster／statistics／5s cache／对象协议＋operationId→committed）；测试台 INDEX／suite／跑次已登记。完整 F58／F59／R／浏览器／2×／5× 造数仍 NOT RUN；≠ 功能收口；≠ 可上线。 |
 | v1.91 | 2026-11-20 | P1-60／REQ-030-081 T1–T5 已实现并 commit（Wave A–D；vitest 109 PASS；demo 冒烟隐藏 begin＋`begin_not_available`）；测试台 NOT RUN；T6／R 另授；≠ 功能合同收口；≠ 可上线。 |
@@ -294,6 +297,7 @@
 
 | 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 核心分母 | 跟进状态 | Spec／Plan |
 |---|---|---|---|---|---|---|---|
+| P1-66 | P1（性能差集；建议） | Agent 名册摘要投影与单对象详情按需读取 | REQ-030-087 | P1-58 续作／治理读路径／兼容 | 否 | v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 | [Spec](../specs/lucy-20261120-agent-roster-summary-projection-spec.md) · [Plan](lucy-20261120-agent-roster-summary-projection-plan.md) · [UAT](../qa/uat/suites/agent-roster-summary/suite.md) |
 | P1-64 | P1（事故修复） | 同连接跨 Schema 短名冲突与保存运行时确认修复 | REQ-030-085 | 扫描生成／Manifest 上传／Source Map 编译与保存 ack | 否 | v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 | [Spec](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) · [Plan](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) · [UAT](../qa/uat/suites/source-shortname-conflict/suite.md) |
 | P1-65 | P1（事故修复） | Wiki 覆盖上传采用 YAML 授权声明（差异／损坏须显式选择） | REQ-030-086 | Spec 193 §5 增量；治理主路径 | 否 | v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md) · [Plan](lucy-20261120-wiki-upload-acl-adoption-plan.md) · [UAT](../qa/uat/suites/wiki-upload-acl-adoption/suite.md) |
 | P1-61 | P1（第一批；建议） | 存活／就绪探针纯内存响应与诊断隔离 | REQ-030-082 | P1-21／46 续作；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) · [Plan](lucy-20261119-memory-probe-diagnostics-isolation-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |

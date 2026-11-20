@@ -1,0 +1,7 @@
+, runRolesAgentPublishWindow
+runRolesAgentPublishWindow("agent_save", projectRoot, reply, async (reply) => {
+const commitAgentPatch = async (reply: FastifyReply) => {
+runRolesAgentPublishWindow("agent_save", projectRoot, reply, commitAgentPatch)
+return commitAgentPatch(reply);
+const executeDelete = async (reply: FastifyReply) => {
+return dryRun ? executeDelete(reply) : runRolesAgentPublishWindow("agent_save", projectRoot, reply, executeDelete);

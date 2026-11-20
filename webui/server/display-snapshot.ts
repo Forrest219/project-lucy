@@ -96,7 +96,7 @@ export class DisplaySnapshotBusyError extends Error {
   }
 }
 
-type Slot = { key: string; payload: string; sidecar?: string; version: string; builtAt: number };
+type Slot = { key: string; payload: string; sidecar?: string; version: string; builtAt: number; incarnation: symbol };
 type Entry = { current?: Slot; inflight: Map<string, Promise<Slot>>; failure?: { key: string; until: number; error: unknown } };
 
 const entries = new Map<string, Entry>();
@@ -106,12 +106,22 @@ const busyByReason = new Map<DisplayBusyReason, number>();
 /** Spec 195 §7 — request correlation for the diagnostics (no payload, no secrets). */
 let lastRequest: { name: string; scopes: DisplayScope[]; attempts: number; reason?: DisplayBusyReason } | null = null;
 
-export type DisplaySnapshotResult = { payload: string; sidecar?: string; version: string; cache: "hit" | "miss" };
+export type DisplaySnapshotResult = { payload: string; sidecar?: string; version: string; cache: "hit" | "miss"; incarnation: symbol };
 /**
  * A build returns the serialized payload, optionally with a small serialized
  * sidecar (e.g. compile inputs) the handler evaluates per response.
  */
 export type DisplayBuild = (version: string) => Promise<string | { payload: string; sidecar: string }>;
+
+/** Compare the slot instance, not its key-derived version (same-key rebuilds keep that version). */
+export function evictDisplaySnapshotSlot(name: string, incarnation: symbol): boolean {
+  const entry = entries.get(name);
+  if (!entry?.current || entry.current.incarnation !== incarnation) return false;
+  entry.current = undefined;
+  entry.failure = undefined;
+  return true;
+}
+
 
 /**
  * Spec 195 §6 — one request budget: at most three attempts in total and one
@@ -155,9 +165,10 @@ async function buildSlot(key: string, build: DisplayBuild): Promise<Slot> {
   try {
     const version = versionOf(key);
     const built = await build(version);
+    const incarnation = Symbol("display-slot");
     return typeof built === "string"
-      ? { key, payload: built, version, builtAt: Date.now() }
-      : { key, payload: built.payload, sidecar: built.sidecar, version, builtAt: Date.now() };
+      ? { key, payload: built, version, builtAt: Date.now(), incarnation }
+      : { key, payload: built.payload, sidecar: built.sidecar, version, builtAt: Date.now(), incarnation };
   } finally {
     inflightBuilds -= 1;
   }
@@ -647,7 +658,7 @@ export async function getDisplaySnapshot(
       stats.hits += 1;
       countEntryPerf("displayHits");
       markDisplayCache("hit");
-      return { payload: entry.current.payload, sidecar: entry.current.sidecar, version: entry.current.version, cache: "hit" };
+      return { payload: entry.current.payload, sidecar: entry.current.sidecar, version: entry.current.version, cache: "hit", incarnation: entry.current.incarnation };
     }
     if (entry.failure && entry.failure.key === key && Date.now() < entry.failure.until) {
       throw entry.failure.error;
@@ -695,7 +706,7 @@ export async function getDisplaySnapshot(
       stats.misses += 1;
       countEntryPerf("displayMisses");
       markDisplayCache("miss");
-      return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "miss" };
+      return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "miss", incarnation: slot.incarnation };
     }
     reason = "generation_changed";
   }

@@ -1,0 +1,1722 @@
+{
+  "fixture": "BAL-1",
+  "candidate": "a",
+  "startedAt": "2026-11-20T06:50:51.981Z",
+  "failures": [],
+  "samples": [
+    {
+      "kind": "roster",
+      "n": 0,
+      "at": "2026-11-20T06:50:58.075Z",
+      "status": 200,
+      "ms": 160.71291699999983,
+      "ttfbMs": 103.66562500000055,
+      "downloadMs": 57.04729199999929,
+      "serverTiming": "access;dur=50.3, permissions;dur=21.1, total;dur=94.9, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 1,
+      "at": "2026-11-20T06:50:58.273Z",
+      "status": 200,
+      "ms": 178.27554099999998,
+      "ttfbMs": 119.29150000000027,
+      "downloadMs": 58.984040999999706,
+      "serverTiming": "access;dur=55.4, permissions;dur=21.8, total;dur=110.7, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 2,
+      "at": "2026-11-20T06:50:58.443Z",
+      "status": 200,
+      "ms": 148.1405420000001,
+      "ttfbMs": 108.33820900000046,
+      "downloadMs": 39.802332999999635,
+      "serverTiming": "access;dur=50.8, permissions;dur=21.1, total;dur=97.5, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 3,
+      "at": "2026-11-20T06:50:58.647Z",
+      "status": 200,
+      "ms": 185.68475000000035,
+      "ttfbMs": 136.81112500000017,
+      "downloadMs": 48.873625000000175,
+      "serverTiming": "access;dur=59.6, permissions;dur=33.3, total;dur=123.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 4,
+      "at": "2026-11-20T06:50:58.820Z",
+      "status": 200,
+      "ms": 156.82679199999984,
+      "ttfbMs": 119.7915839999996,
+      "downloadMs": 37.03520800000024,
+      "serverTiming": "access;dur=50.1, permissions;dur=21.7, total;dur=105.7, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 5,
+      "at": "2026-11-20T06:50:59.024Z",
+      "status": 200,
+      "ms": 182.27599999999984,
+      "ttfbMs": 130.03687499999978,
+      "downloadMs": 52.23912500000006,
+      "serverTiming": "access;dur=56.0, permissions;dur=26.9, total;dur=107.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 6,
+      "at": "2026-11-20T06:50:59.223Z",
+      "status": 200,
+      "ms": 181.41762500000004,
+      "ttfbMs": 132.40804200000002,
+      "downloadMs": 49.00958300000002,
+      "serverTiming": "access;dur=62.0, permissions;dur=29.0, total;dur=122.1, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 7,
+      "at": "2026-11-20T06:50:59.384Z",
+      "status": 200,
+      "ms": 144.12962499999958,
+      "ttfbMs": 96.25929199999973,
+      "downloadMs": 47.870332999999846,
+      "serverTiming": "access;dur=50.3, permissions;dur=20.8, total;dur=88.7, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 8,
+      "at": "2026-11-20T06:50:59.536Z",
+      "status": 200,
+      "ms": 135.26925000000028,
+      "ttfbMs": 96.21887500000048,
+      "downloadMs": 39.0503749999998,
+      "serverTiming": "access;dur=47.6, permissions;dur=21.2, total;dur=87.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 9,
+      "at": "2026-11-20T06:50:59.700Z",
+      "status": 200,
+      "ms": 147.6780830000007,
+      "ttfbMs": 97.7787500000004,
+      "downloadMs": 49.8993330000003,
+      "serverTiming": "access;dur=46.0, permissions;dur=19.0, total;dur=90.8, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 10,
+      "at": "2026-11-20T06:50:59.924Z",
+      "status": 200,
+      "ms": 206.55595799999992,
+      "ttfbMs": 137.60450000000037,
+      "downloadMs": 68.95145799999955,
+      "serverTiming": "access;dur=66.1, permissions;dur=27.4, total;dur=125.8, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 11,
+      "at": "2026-11-20T06:51:00.099Z",
+      "status": 200,
+      "ms": 158.6057920000003,
+      "ttfbMs": 119.89812499999971,
+      "downloadMs": 38.70766700000058,
+      "serverTiming": "access;dur=65.5, permissions;dur=22.0, total;dur=109.8, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 12,
+      "at": "2026-11-20T06:51:00.296Z",
+      "status": 200,
+      "ms": 179.87279200000012,
+      "ttfbMs": 114.22304199999962,
+      "downloadMs": 65.6497500000005,
+      "serverTiming": "access;dur=55.8, permissions;dur=23.0, total;dur=103.1, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 13,
+      "at": "2026-11-20T06:51:00.586Z",
+      "status": 200,
+      "ms": 266.40625,
+      "ttfbMs": 204.06975000000057,
+      "downloadMs": 62.33649999999943,
+      "serverTiming": "access;dur=94.3, permissions;dur=45.6, total;dur=189.1, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 14,
+      "at": "2026-11-20T06:51:00.977Z",
+      "status": 200,
+      "ms": 370.84195799999907,
+      "ttfbMs": 249.0608749999992,
+      "downloadMs": 121.78108299999985,
+      "serverTiming": "access;dur=110.2, permissions;dur=30.9, total;dur=204.3, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 15,
+      "at": "2026-11-20T06:51:01.392Z",
+      "status": 200,
+      "ms": 395.4489159999994,
+      "ttfbMs": 320.5701250000002,
+      "downloadMs": 74.87879099999918,
+      "serverTiming": "access;dur=113.8, permissions;dur=41.7, total;dur=299.0, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 16,
+      "at": "2026-11-20T06:51:01.740Z",
+      "status": 200,
+      "ms": 326.7654999999995,
+      "ttfbMs": 231.95970800000032,
+      "downloadMs": 94.8057919999992,
+      "serverTiming": "access;dur=106.6, permissions;dur=47.8, total;dur=193.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 17,
+      "at": "2026-11-20T06:51:02.136Z",
+      "status": 200,
+      "ms": 372.26695800000016,
+      "ttfbMs": 213.6672920000001,
+      "downloadMs": 158.59966600000007,
+      "serverTiming": "access;dur=101.7, permissions;dur=53.5, total;dur=189.3, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 18,
+      "at": "2026-11-20T06:51:02.501Z",
+      "status": 200,
+      "ms": 332.6426670000001,
+      "ttfbMs": 229.13170899999932,
+      "downloadMs": 103.51095800000076,
+      "serverTiming": "access;dur=114.3, permissions;dur=31.6, total;dur=201.9, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 19,
+      "at": "2026-11-20T06:51:02.900Z",
+      "status": 200,
+      "ms": 380.9618750000009,
+      "ttfbMs": 242.73837500000081,
+      "downloadMs": 138.22350000000006,
+      "serverTiming": "access;dur=91.7, permissions;dur=38.0, total;dur=202.9, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 20,
+      "at": "2026-11-20T06:51:03.359Z",
+      "status": 200,
+      "ms": 418.90445799999907,
+      "ttfbMs": 229.23629099999926,
+      "downloadMs": 189.6681669999998,
+      "serverTiming": "access;dur=83.8, permissions;dur=34.4, total;dur=192.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 21,
+      "at": "2026-11-20T06:51:03.826Z",
+      "status": 200,
+      "ms": 439.8089579999996,
+      "ttfbMs": 302.84829199999876,
+      "downloadMs": 136.96066600000086,
+      "serverTiming": "access;dur=144.7, permissions;dur=52.0, total;dur=270.6, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 22,
+      "at": "2026-11-20T06:51:04.175Z",
+      "status": 200,
+      "ms": 303.9864580000012,
+      "ttfbMs": 227.62137500000063,
+      "downloadMs": 76.3650830000006,
+      "serverTiming": "access;dur=114.4, permissions;dur=40.6, total;dur=203.2, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 23,
+      "at": "2026-11-20T06:51:04.591Z",
+      "status": 200,
+      "ms": 384.0354160000006,
+      "ttfbMs": 320.4769159999996,
+      "downloadMs": 63.558500000001004,
+      "serverTiming": "access;dur=155.9, permissions;dur=49.2, total;dur=293.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 24,
+      "at": "2026-11-20T06:51:04.928Z",
+      "status": 200,
+      "ms": 310.44229200000154,
+      "ttfbMs": 220.89287500000137,
+      "downloadMs": 89.54941700000018,
+      "serverTiming": "access;dur=93.3, permissions;dur=27.6, total;dur=188.1, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 25,
+      "at": "2026-11-20T06:51:05.207Z",
+      "status": 200,
+      "ms": 249.0686659999992,
+      "ttfbMs": 173.90124999999898,
+      "downloadMs": 75.16741600000023,
+      "serverTiming": "access;dur=96.9, permissions;dur=27.9, total;dur=162.3, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 26,
+      "at": "2026-11-20T06:51:05.425Z",
+      "status": 200,
+      "ms": 192.29020800000035,
+      "ttfbMs": 126.62766600000032,
+      "downloadMs": 65.66254200000003,
+      "serverTiming": "access;dur=58.5, permissions;dur=29.4, total;dur=114.8, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 27,
+      "at": "2026-11-20T06:51:05.692Z",
+      "status": 200,
+      "ms": 236.46908299999996,
+      "ttfbMs": 179.7364579999994,
+      "downloadMs": 56.73262500000055,
+      "serverTiming": "access;dur=91.0, permissions;dur=25.6, total;dur=165.8, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 28,
+      "at": "2026-11-20T06:51:06.086Z",
+      "status": 200,
+      "ms": 368.426958,
+      "ttfbMs": 289.5262500000008,
+      "downloadMs": 78.90070799999921,
+      "serverTiming": "access;dur=141.3, permissions;dur=49.6, total;dur=271.6, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "roster",
+      "n": 29,
+      "at": "2026-11-20T06:51:06.324Z",
+      "status": 200,
+      "ms": 206.9797499999986,
+      "ttfbMs": 157.25220799999988,
+      "downloadMs": 49.72754199999872,
+      "serverTiming": "access;dur=72.6, permissions;dur=29.3, total;dur=144.6, cache;desc=hit, builds;desc=0",
+      "bytes": 8420953
+    },
+    {
+      "kind": "full",
+      "n": 0,
+      "at": "2026-11-20T06:51:08.026Z",
+      "status": 200,
+      "ms": 1657.1785419999997,
+      "ttfbMs": 1284.972167,
+      "downloadMs": 372.20637499999975,
+      "serverTiming": "access;dur=89.9, permissions;dur=28.4, stats;dur=877.4, total;dur=1211.0, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 1,
+      "at": "2026-11-20T06:51:12.071Z",
+      "status": 200,
+      "ms": 3999.2575419999994,
+      "ttfbMs": 3056.194542000001,
+      "downloadMs": 943.0629999999983,
+      "serverTiming": "access;dur=296.5, permissions;dur=157.9, stats;dur=1975.4, total;dur=2853.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 2,
+      "at": "2026-11-20T06:51:14.853Z",
+      "status": 200,
+      "ms": 2752.3798749999987,
+      "ttfbMs": 2566.351416999998,
+      "downloadMs": 186.02845800000068,
+      "serverTiming": "access;dur=571.1, permissions;dur=168.0, stats;dur=1477.1, total;dur=2417.3, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 3,
+      "at": "2026-11-20T06:51:15.713Z",
+      "status": 200,
+      "ms": 832.3920410000028,
+      "ttfbMs": 761.6292080000021,
+      "downloadMs": 70.76283300000068,
+      "serverTiming": "access;dur=141.8, permissions;dur=51.7, stats;dur=464.6, total;dur=735.2, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 4,
+      "at": "2026-11-20T06:51:16.705Z",
+      "status": 200,
+      "ms": 954.0149999999994,
+      "ttfbMs": 851.0934579999994,
+      "downloadMs": 102.92154200000004,
+      "serverTiming": "access;dur=193.0, permissions;dur=102.7, stats;dur=454.3, total;dur=830.3, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 5,
+      "at": "2026-11-20T06:51:17.288Z",
+      "status": 200,
+      "ms": 553.6597909999982,
+      "ttfbMs": 517.7623749999984,
+      "downloadMs": 35.897415999999794,
+      "serverTiming": "access;dur=75.8, permissions;dur=44.2, stats;dur=321.9, total;dur=491.3, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 6,
+      "at": "2026-11-20T06:51:18.002Z",
+      "status": 200,
+      "ms": 692.1937500000022,
+      "ttfbMs": 631.1711660000001,
+      "downloadMs": 61.0225840000021,
+      "serverTiming": "access;dur=73.5, permissions;dur=23.5, stats;dur=426.4, total;dur=605.2, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 7,
+      "at": "2026-11-20T06:51:18.680Z",
+      "status": 200,
+      "ms": 649.6316250000018,
+      "ttfbMs": 583.166250000002,
+      "downloadMs": 66.46537499999977,
+      "serverTiming": "access;dur=93.9, permissions;dur=39.8, stats;dur=375.3, total;dur=570.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 8,
+      "at": "2026-11-20T06:51:19.607Z",
+      "status": 200,
+      "ms": 904.3262089999989,
+      "ttfbMs": 850.1297919999997,
+      "downloadMs": 54.1964169999992,
+      "serverTiming": "access;dur=83.0, permissions;dur=78.6, stats;dur=554.5, total;dur=821.8, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 9,
+      "at": "2026-11-20T06:51:20.296Z",
+      "status": 200,
+      "ms": 663.6073749999996,
+      "ttfbMs": 606.6910419999986,
+      "downloadMs": 56.91633300000103,
+      "serverTiming": "access;dur=117.7, permissions;dur=33.1, stats;dur=387.1, total;dur=590.7, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 10,
+      "at": "2026-11-20T06:51:20.748Z",
+      "status": 200,
+      "ms": 430.32379199999923,
+      "ttfbMs": 384.55916699999943,
+      "downloadMs": 45.764624999999796,
+      "serverTiming": "access;dur=63.0, permissions;dur=40.1, stats;dur=252.4, total;dur=374.1, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 11,
+      "at": "2026-11-20T06:51:21.266Z",
+      "status": 200,
+      "ms": 493.4210000000021,
+      "ttfbMs": 422.56683300000077,
+      "downloadMs": 70.85416700000133,
+      "serverTiming": "access;dur=62.7, permissions;dur=20.6, stats;dur=300.8, total;dur=411.5, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 12,
+      "at": "2026-11-20T06:51:21.857Z",
+      "status": 200,
+      "ms": 572.1308329999993,
+      "ttfbMs": 508.7504579999986,
+      "downloadMs": 63.38037500000064,
+      "serverTiming": "access;dur=98.1, permissions;dur=28.6, stats;dur=325.2, total;dur=494.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 13,
+      "at": "2026-11-20T06:51:22.335Z",
+      "status": 200,
+      "ms": 458.1540410000016,
+      "ttfbMs": 388.9816659999997,
+      "downloadMs": 69.17237500000192,
+      "serverTiming": "access;dur=54.8, permissions;dur=24.2, stats;dur=270.8, total;dur=380.3, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 14,
+      "at": "2026-11-20T06:51:22.847Z",
+      "status": 200,
+      "ms": 492.440499999997,
+      "ttfbMs": 421.51524999999674,
+      "downloadMs": 70.92525000000023,
+      "serverTiming": "access;dur=66.0, permissions;dur=25.4, stats;dur=291.5, total;dur=409.2, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 15,
+      "at": "2026-11-20T06:51:23.282Z",
+      "status": 200,
+      "ms": 406.5471660000003,
+      "ttfbMs": 374.82437500000015,
+      "downloadMs": 31.722791000000143,
+      "serverTiming": "access;dur=58.7, permissions;dur=21.5, stats;dur=263.3, total;dur=365.1, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 16,
+      "at": "2026-11-20T06:51:23.730Z",
+      "status": 200,
+      "ms": 430.0517499999987,
+      "ttfbMs": 378.30362500000047,
+      "downloadMs": 51.748124999998254,
+      "serverTiming": "access;dur=52.8, permissions;dur=32.7, stats;dur=268.5, total;dur=371.8, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 17,
+      "at": "2026-11-20T06:51:24.118Z",
+      "status": 200,
+      "ms": 369.4668750000019,
+      "ttfbMs": 331.364708000001,
+      "downloadMs": 38.10216700000092,
+      "serverTiming": "access;dur=48.2, permissions;dur=20.1, stats;dur=238.1, total;dur=323.3, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 18,
+      "at": "2026-11-20T06:51:24.540Z",
+      "status": 200,
+      "ms": 404.05391600000075,
+      "ttfbMs": 354.5070830000004,
+      "downloadMs": 49.54683300000033,
+      "serverTiming": "access;dur=45.2, permissions;dur=20.1, stats;dur=265.6, total;dur=347.0, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 19,
+      "at": "2026-11-20T06:51:24.936Z",
+      "status": 200,
+      "ms": 377.7328750000015,
+      "ttfbMs": 338.77787499999977,
+      "downloadMs": 38.955000000001746,
+      "serverTiming": "access;dur=45.2, permissions;dur=20.6, stats;dur=248.0, total;dur=331.7, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 20,
+      "at": "2026-11-20T06:51:25.328Z",
+      "status": 200,
+      "ms": 373.2797920000012,
+      "ttfbMs": 331.1552079999965,
+      "downloadMs": 42.12458400000469,
+      "serverTiming": "access;dur=44.4, permissions;dur=19.9, stats;dur=241.2, total;dur=323.0, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 21,
+      "at": "2026-11-20T06:51:25.871Z",
+      "status": 200,
+      "ms": 526.8231250000026,
+      "ttfbMs": 494.09150000000227,
+      "downloadMs": 32.73162500000035,
+      "serverTiming": "access;dur=45.7, permissions;dur=20.6, stats;dur=400.5, total;dur=486.7, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 22,
+      "at": "2026-11-20T06:51:26.259Z",
+      "status": 200,
+      "ms": 371.46629199999734,
+      "ttfbMs": 332.3187079999989,
+      "downloadMs": 39.14758399999846,
+      "serverTiming": "access;dur=45.7, permissions;dur=18.8, stats;dur=241.6, total;dur=325.1, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 23,
+      "at": "2026-11-20T06:51:26.642Z",
+      "status": 200,
+      "ms": 361.25762499999837,
+      "ttfbMs": 326.0837920000049,
+      "downloadMs": 35.173832999993465,
+      "serverTiming": "access;dur=44.9, permissions;dur=19.6, stats;dur=236.3, total;dur=318.2, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 24,
+      "at": "2026-11-20T06:51:27.074Z",
+      "status": 200,
+      "ms": 414.05370799999946,
+      "ttfbMs": 354.55516600000556,
+      "downloadMs": 59.498541999993904,
+      "serverTiming": "access;dur=48.5, permissions;dur=21.9, stats;dur=250.1, total;dur=337.7, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 25,
+      "at": "2026-11-20T06:51:27.551Z",
+      "status": 200,
+      "ms": 459.9697920000035,
+      "ttfbMs": 404.130333000001,
+      "downloadMs": 55.839459000002535,
+      "serverTiming": "access;dur=54.4, permissions;dur=22.4, stats;dur=294.7, total;dur=395.7, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 26,
+      "at": "2026-11-20T06:51:27.998Z",
+      "status": 200,
+      "ms": 425.4892919999984,
+      "ttfbMs": 389.8947079999998,
+      "downloadMs": 35.59458399999858,
+      "serverTiming": "access;dur=57.1, permissions;dur=23.4, stats;dur=283.1, total;dur=381.1, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 27,
+      "at": "2026-11-20T06:51:28.461Z",
+      "status": 200,
+      "ms": 446.9768750000003,
+      "ttfbMs": 396.59545799999614,
+      "downloadMs": 50.38141700000415,
+      "serverTiming": "access;dur=59.4, permissions;dur=20.8, stats;dur=289.4, total;dur=388.7, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 28,
+      "at": "2026-11-20T06:51:28.852Z",
+      "status": 200,
+      "ms": 374.911709,
+      "ttfbMs": 336.3107919999966,
+      "downloadMs": 38.60091700000339,
+      "serverTiming": "access;dur=45.7, permissions;dur=20.0, stats;dur=243.0, total;dur=328.4, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "full",
+      "n": 29,
+      "at": "2026-11-20T06:51:29.263Z",
+      "status": 200,
+      "ms": 391.1883749999979,
+      "ttfbMs": 353.01812499999505,
+      "downloadMs": 38.17025000000285,
+      "serverTiming": "access;dur=46.5, permissions;dur=20.6, stats;dur=256.2, total;dur=345.3, cache;desc=hit, builds;desc=0",
+      "bytes": 8475843
+    },
+    {
+      "kind": "statistics",
+      "n": 0,
+      "at": "2026-11-20T06:51:29.900Z",
+      "status": 200,
+      "ms": 636.5685420000009,
+      "ttfbMs": 635.9608339999977,
+      "downloadMs": 0.6077080000031856,
+      "serverTiming": "access;dur=45.8, permissions;dur=20.7, stats;dur=565.8, total;dur=633.6, cache;desc=miss, builds;desc=0",
+      "bytes": 38711
+    },
+    {
+      "kind": "statistics",
+      "n": 1,
+      "at": "2026-11-20T06:51:29.967Z",
+      "status": 200,
+      "ms": 66.31437499999447,
+      "ttfbMs": 66.23545799999556,
+      "downloadMs": 0.07891699999890989,
+      "serverTiming": "access;dur=43.6, permissions;dur=20.1, total;dur=64.7, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 2,
+      "at": "2026-11-20T06:51:30.037Z",
+      "status": 200,
+      "ms": 69.12804200000392,
+      "ttfbMs": 68.96329200000037,
+      "downloadMs": 0.16475000000355067,
+      "serverTiming": "access;dur=45.3, permissions;dur=19.6, total;dur=65.9, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 3,
+      "at": "2026-11-20T06:51:30.109Z",
+      "status": 200,
+      "ms": 68.67404199999874,
+      "ttfbMs": 67.72145900000032,
+      "downloadMs": 0.9525829999984126,
+      "serverTiming": "access;dur=44.8, permissions;dur=20.1, total;dur=65.8, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 4,
+      "at": "2026-11-20T06:51:30.201Z",
+      "status": 200,
+      "ms": 90.60954099999799,
+      "ttfbMs": 90.46983300000284,
+      "downloadMs": 0.13970799999515293,
+      "serverTiming": "access;dur=53.3, permissions;dur=34.6, total;dur=88.9, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 5,
+      "at": "2026-11-20T06:51:30.281Z",
+      "status": 200,
+      "ms": 79.92608299999847,
+      "ttfbMs": 79.86208299999998,
+      "downloadMs": 0.0639999999984866,
+      "serverTiming": "access;dur=46.3, permissions;dur=20.2, total;dur=67.6, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 6,
+      "at": "2026-11-20T06:51:30.353Z",
+      "status": 200,
+      "ms": 70.75891599999886,
+      "ttfbMs": 70.67637499999546,
+      "downloadMs": 0.08254100000340259,
+      "serverTiming": "access;dur=46.7, permissions;dur=20.5, total;dur=68.5, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 7,
+      "at": "2026-11-20T06:51:30.426Z",
+      "status": 200,
+      "ms": 72.92362499999581,
+      "ttfbMs": 72.83574999999837,
+      "downloadMs": 0.08787499999743886,
+      "serverTiming": "access;dur=49.7, permissions;dur=20.7, total;dur=71.5, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 8,
+      "at": "2026-11-20T06:51:30.494Z",
+      "status": 200,
+      "ms": 67.42841699999553,
+      "ttfbMs": 67.28887499999837,
+      "downloadMs": 0.13954199999716366,
+      "serverTiming": "access;dur=43.6, permissions;dur=20.2, total;dur=64.9, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 9,
+      "at": "2026-11-20T06:51:30.565Z",
+      "status": 200,
+      "ms": 69.63245900000038,
+      "ttfbMs": 69.52408400000422,
+      "downloadMs": 0.1083749999961583,
+      "serverTiming": "access;dur=46.4, permissions;dur=20.4, total;dur=67.8, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 10,
+      "at": "2026-11-20T06:51:30.644Z",
+      "status": 200,
+      "ms": 78.19933400000446,
+      "ttfbMs": 78.07979200000409,
+      "downloadMs": 0.11954200000036508,
+      "serverTiming": "access;dur=51.7, permissions;dur=23.0, total;dur=75.6, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 11,
+      "at": "2026-11-20T06:51:30.725Z",
+      "status": 200,
+      "ms": 80.56824999999662,
+      "ttfbMs": 80.45324999999866,
+      "downloadMs": 0.11499999999796273,
+      "serverTiming": "access;dur=52.5, permissions;dur=25.2, total;dur=78.8, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 12,
+      "at": "2026-11-20T06:51:30.801Z",
+      "status": 200,
+      "ms": 75.31766700000298,
+      "ttfbMs": 75.19112500000483,
+      "downloadMs": 0.1265419999981532,
+      "serverTiming": "access;dur=50.4, permissions;dur=21.6, total;dur=72.9, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 13,
+      "at": "2026-11-20T06:51:30.877Z",
+      "status": 200,
+      "ms": 75.09312499999942,
+      "ttfbMs": 75.03670799999963,
+      "downloadMs": 0.056416999999783,
+      "serverTiming": "access;dur=52.5, permissions;dur=20.1, total;dur=73.5, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 14,
+      "at": "2026-11-20T06:51:30.955Z",
+      "status": 200,
+      "ms": 77.19254200000432,
+      "ttfbMs": 77.1296250000014,
+      "downloadMs": 0.06291700000292622,
+      "serverTiming": "access;dur=51.9, permissions;dur=21.6, total;dur=74.6, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 15,
+      "at": "2026-11-20T06:51:31.028Z",
+      "status": 200,
+      "ms": 72.17575000000215,
+      "ttfbMs": 71.91649999999936,
+      "downloadMs": 0.25925000000279397,
+      "serverTiming": "access;dur=49.5, permissions;dur=19.9, total;dur=70.3, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 16,
+      "at": "2026-11-20T06:51:31.113Z",
+      "status": 200,
+      "ms": 81.54191599999467,
+      "ttfbMs": 81.42387499999313,
+      "downloadMs": 0.11804100000153994,
+      "serverTiming": "access;dur=46.9, permissions;dur=31.8, total;dur=79.8, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 17,
+      "at": "2026-11-20T06:51:31.184Z",
+      "status": 200,
+      "ms": 69.78212500000518,
+      "ttfbMs": 69.6507500000007,
+      "downloadMs": 0.131375000004482,
+      "serverTiming": "access;dur=46.6, permissions;dur=19.1, total;dur=66.6, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 18,
+      "at": "2026-11-20T06:51:31.262Z",
+      "status": 200,
+      "ms": 77.58620800000062,
+      "ttfbMs": 77.42012499999691,
+      "downloadMs": 0.16608300000370946,
+      "serverTiming": "access;dur=48.5, permissions;dur=20.4, total;dur=75.3, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 19,
+      "at": "2026-11-20T06:51:31.337Z",
+      "status": 200,
+      "ms": 73.86683300000004,
+      "ttfbMs": 73.78616699999839,
+      "downloadMs": 0.08066600000165636,
+      "serverTiming": "access;dur=49.8, permissions;dur=21.5, total;dur=72.2, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 20,
+      "at": "2026-11-20T06:51:31.405Z",
+      "status": 200,
+      "ms": 67.42183300000033,
+      "ttfbMs": 67.3035000000018,
+      "downloadMs": 0.11833299999852898,
+      "serverTiming": "access;dur=43.8, permissions;dur=19.2, total;dur=65.7, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 21,
+      "at": "2026-11-20T06:51:31.474Z",
+      "status": 200,
+      "ms": 66.89904099999694,
+      "ttfbMs": 66.78345799999806,
+      "downloadMs": 0.11558299999887822,
+      "serverTiming": "access;dur=44.3, permissions;dur=19.8, total;dur=65.1, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 22,
+      "at": "2026-11-20T06:51:31.542Z",
+      "status": 200,
+      "ms": 67.6944169999988,
+      "ttfbMs": 67.58458400000382,
+      "downloadMs": 0.10983299999497831,
+      "serverTiming": "access;dur=45.5, permissions;dur=19.6, total;dur=66.0, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 23,
+      "at": "2026-11-20T06:51:31.612Z",
+      "status": 200,
+      "ms": 68.49745900000562,
+      "ttfbMs": 68.43708400000469,
+      "downloadMs": 0.06037500000093132,
+      "serverTiming": "access;dur=44.9, permissions;dur=20.8, total;dur=66.7, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 24,
+      "at": "2026-11-20T06:51:31.681Z",
+      "status": 200,
+      "ms": 69.11129200000141,
+      "ttfbMs": 68.99929200000042,
+      "downloadMs": 0.11200000000098953,
+      "serverTiming": "access;dur=46.9, permissions;dur=19.5, total;dur=67.4, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 25,
+      "at": "2026-11-20T06:51:31.755Z",
+      "status": 200,
+      "ms": 73.0370000000039,
+      "ttfbMs": 72.93462500000169,
+      "downloadMs": 0.10237500000221189,
+      "serverTiming": "access;dur=46.9, permissions;dur=23.1, total;dur=71.0, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 26,
+      "at": "2026-11-20T06:51:31.837Z",
+      "status": 200,
+      "ms": 81.07049999999435,
+      "ttfbMs": 80.99341699999786,
+      "downloadMs": 0.07708299999649171,
+      "serverTiming": "access;dur=56.5, permissions;dur=20.6, total;dur=78.1, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 27,
+      "at": "2026-11-20T06:51:31.909Z",
+      "status": 200,
+      "ms": 71.1593339999963,
+      "ttfbMs": 71.10141699999804,
+      "downloadMs": 0.0579169999982696,
+      "serverTiming": "access;dur=47.3, permissions;dur=20.6, total;dur=68.8, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 28,
+      "at": "2026-11-20T06:51:31.986Z",
+      "status": 200,
+      "ms": 76.86129100000107,
+      "ttfbMs": 76.77370800000062,
+      "downloadMs": 0.08758300000044983,
+      "serverTiming": "access;dur=46.3, permissions;dur=28.4, total;dur=75.6, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "statistics",
+      "n": 29,
+      "at": "2026-11-20T06:51:32.068Z",
+      "status": 200,
+      "ms": 81.49504200000229,
+      "ttfbMs": 81.44233299999905,
+      "downloadMs": 0.052709000003233086,
+      "serverTiming": "access;dur=46.0, permissions;dur=21.5, total;dur=69.5, cache;desc=hit, builds;desc=0",
+      "bytes": 38710
+    },
+    {
+      "kind": "detail",
+      "n": 0,
+      "at": "2026-11-20T06:51:32.270Z",
+      "status": 200,
+      "ms": 200.87429200000042,
+      "ttfbMs": 199.21708300000319,
+      "downloadMs": 1.6572089999972377,
+      "serverTiming": "total;dur=196.4, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 1,
+      "at": "2026-11-20T06:51:32.463Z",
+      "status": 200,
+      "ms": 190.16441699999996,
+      "ttfbMs": 189.03475000000617,
+      "downloadMs": 1.1296669999937876,
+      "serverTiming": "total;dur=187.1, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 2,
+      "at": "2026-11-20T06:51:32.652Z",
+      "status": 200,
+      "ms": 186.33566699999938,
+      "ttfbMs": 185.10916700000234,
+      "downloadMs": 1.2264999999970314,
+      "serverTiming": "total;dur=182.4, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 3,
+      "at": "2026-11-20T06:51:32.850Z",
+      "status": 200,
+      "ms": 193.205375000005,
+      "ttfbMs": 191.3822500000024,
+      "downloadMs": 1.8231250000026193,
+      "serverTiming": "total;dur=189.3, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 4,
+      "at": "2026-11-20T06:51:33.052Z",
+      "status": 200,
+      "ms": 198.25941699999385,
+      "ttfbMs": 197.1050419999956,
+      "downloadMs": 1.1543749999982538,
+      "serverTiming": "total;dur=195.1, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 5,
+      "at": "2026-11-20T06:51:33.309Z",
+      "status": 200,
+      "ms": 254.52729199999885,
+      "ttfbMs": 249.49283399999695,
+      "downloadMs": 5.034458000001905,
+      "serverTiming": "total;dur=247.2, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 6,
+      "at": "2026-11-20T06:51:33.693Z",
+      "status": 200,
+      "ms": 382.0764169999966,
+      "ttfbMs": 378.9559169999993,
+      "downloadMs": 3.1204999999972642,
+      "serverTiming": "total;dur=373.2, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 7,
+      "at": "2026-11-20T06:51:34.320Z",
+      "status": 200,
+      "ms": 623.3506249999991,
+      "ttfbMs": 608.208040999998,
+      "downloadMs": 15.14258400000108,
+      "serverTiming": "total;dur=596.0, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 8,
+      "at": "2026-11-20T06:51:34.888Z",
+      "status": 200,
+      "ms": 564.5285829999993,
+      "ttfbMs": 527.7826669999995,
+      "downloadMs": 36.74591599999985,
+      "serverTiming": "total;dur=518.7, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 9,
+      "at": "2026-11-20T06:51:35.868Z",
+      "status": 200,
+      "ms": 977.7545000000027,
+      "ttfbMs": 940.8514159999977,
+      "downloadMs": 36.90308400000504,
+      "serverTiming": "total;dur=914.1, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 10,
+      "at": "2026-11-20T06:51:36.477Z",
+      "status": 200,
+      "ms": 605.8903749999954,
+      "ttfbMs": 597.5768749999988,
+      "downloadMs": 8.313499999996566,
+      "serverTiming": "total;dur=593.6, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 11,
+      "at": "2026-11-20T06:51:36.803Z",
+      "status": 200,
+      "ms": 323.827959000002,
+      "ttfbMs": 318.9175000000032,
+      "downloadMs": 4.910458999998809,
+      "serverTiming": "total;dur=315.9, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 12,
+      "at": "2026-11-20T06:51:37.126Z",
+      "status": 200,
+      "ms": 319.8314590000009,
+      "ttfbMs": 307.31516700000066,
+      "downloadMs": 12.516292000000249,
+      "serverTiming": "total;dur=304.2, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 13,
+      "at": "2026-11-20T06:51:37.439Z",
+      "status": 200,
+      "ms": 311.96250000000146,
+      "ttfbMs": 305.37574999999924,
+      "downloadMs": 6.586750000002212,
+      "serverTiming": "total;dur=296.1, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 14,
+      "at": "2026-11-20T06:51:37.881Z",
+      "status": 200,
+      "ms": 440.3221249999988,
+      "ttfbMs": 433.7731669999994,
+      "downloadMs": 6.548957999999402,
+      "serverTiming": "total;dur=422.7, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 15,
+      "at": "2026-11-20T06:51:38.212Z",
+      "status": 200,
+      "ms": 328.5812500000029,
+      "ttfbMs": 323.7824580000015,
+      "downloadMs": 4.798792000001413,
+      "serverTiming": "total;dur=319.7, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 16,
+      "at": "2026-11-20T06:51:38.482Z",
+      "status": 200,
+      "ms": 266.6113340000011,
+      "ttfbMs": 263.7554170000003,
+      "downloadMs": 2.8559170000007725,
+      "serverTiming": "total;dur=261.0, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 17,
+      "at": "2026-11-20T06:51:38.699Z",
+      "status": 200,
+      "ms": 214.58804199999577,
+      "ttfbMs": 211.96220899999753,
+      "downloadMs": 2.625832999998238,
+      "serverTiming": "total;dur=208.6, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 18,
+      "at": "2026-11-20T06:51:38.916Z",
+      "status": 200,
+      "ms": 215.50020900000527,
+      "ttfbMs": 213.62233400000696,
+      "downloadMs": 1.877874999998312,
+      "serverTiming": "total;dur=211.7, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 19,
+      "at": "2026-11-20T06:51:39.174Z",
+      "status": 200,
+      "ms": 255.14670800000022,
+      "ttfbMs": 252.12108299999818,
+      "downloadMs": 3.0256250000020373,
+      "serverTiming": "total;dur=249.8, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 20,
+      "at": "2026-11-20T06:51:39.454Z",
+      "status": 200,
+      "ms": 278.49741599999834,
+      "ttfbMs": 272.4632500000007,
+      "downloadMs": 6.03416599999764,
+      "serverTiming": "total;dur=270.0, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 21,
+      "at": "2026-11-20T06:51:39.820Z",
+      "status": 200,
+      "ms": 363.56183299999975,
+      "ttfbMs": 361.950582999998,
+      "downloadMs": 1.6112500000017462,
+      "serverTiming": "total;dur=358.2, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 22,
+      "at": "2026-11-20T06:51:40.023Z",
+      "status": 200,
+      "ms": 201.95175000000017,
+      "ttfbMs": 200.54958299999998,
+      "downloadMs": 1.4021670000001905,
+      "serverTiming": "total;dur=198.4, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 23,
+      "at": "2026-11-20T06:51:40.226Z",
+      "status": 200,
+      "ms": 201.94216600000073,
+      "ttfbMs": 200.68995800000266,
+      "downloadMs": 1.2522079999980633,
+      "serverTiming": "total;dur=198.9, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 24,
+      "at": "2026-11-20T06:51:40.420Z",
+      "status": 200,
+      "ms": 192.7887499999997,
+      "ttfbMs": 191.25325000000157,
+      "downloadMs": 1.5354999999981374,
+      "serverTiming": "total;dur=189.4, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 25,
+      "at": "2026-11-20T06:51:40.615Z",
+      "status": 200,
+      "ms": 193.28220800000418,
+      "ttfbMs": 192.1024580000012,
+      "downloadMs": 1.1797500000029686,
+      "serverTiming": "total;dur=190.3, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 26,
+      "at": "2026-11-20T06:51:40.821Z",
+      "status": 200,
+      "ms": 204.3949580000044,
+      "ttfbMs": 202.81120799999917,
+      "downloadMs": 1.5837500000052387,
+      "serverTiming": "total;dur=201.0, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 27,
+      "at": "2026-11-20T06:51:41.024Z",
+      "status": 200,
+      "ms": 202.04429199999868,
+      "ttfbMs": 200.58708299999853,
+      "downloadMs": 1.457209000000148,
+      "serverTiming": "total;dur=198.5, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 28,
+      "at": "2026-11-20T06:51:41.257Z",
+      "status": 200,
+      "ms": 231.3539579999997,
+      "ttfbMs": 221.624791000002,
+      "downloadMs": 9.729166999997688,
+      "serverTiming": "total;dur=219.6, builds;desc=0",
+      "bytes": 576870
+    },
+    {
+      "kind": "detail",
+      "n": 29,
+      "at": "2026-11-20T06:51:41.468Z",
+      "status": 200,
+      "ms": 209.84037499999977,
+      "ttfbMs": 196.31562499999563,
+      "downloadMs": 13.524750000004133,
+      "serverTiming": "total;dur=190.2, builds;desc=0",
+      "bytes": 576870
+    }
+  ],
+  "oracle": {
+    "identityDigest": "a1479c8a0b026850cc5875081e0cfa2b7d0afc9058452a569bf370aa2dd9dd20",
+    "agents": 71,
+    "capabilities": 15240,
+    "permissionCompactBytes": 8340463,
+    "rosterBodyBytes": 8420953,
+    "max": 2100,
+    "configDigest": "569085bfc3848f6fa7cb9507a3428a47dbba37e627324bfa7dc95eb393dd8014",
+    "audit": {
+      "shape": {
+        "rows": 1000000,
+        "minId": 1,
+        "maxId": 1000000,
+        "minTs": "2026-10-11T04:49:45.118Z",
+        "maxTs": "2026-11-18T04:49:45.118Z",
+        "protocolRows": 100000,
+        "deniedRows": 52632
+      },
+      "window": {
+        "start": "2026-10-21T06:50:52.652Z",
+        "end": "2026-11-20T06:50:52.652Z",
+        "idCeiling": 1000000,
+        "rows": 200000,
+        "businessRows": 180000,
+        "protocolRows": 20000,
+        "activeAgents": 71,
+        "activeCredentials": 213
+      },
+      "sourceAssociationErrors": 0,
+      "credentialAssociationErrors": 0,
+      "syntheticCredentialCount": 213
+    },
+    "widest": "ars_00_a00"
+  },
+  "diagnostics": {
+    "startup": {
+      "counters": null,
+      "startup": {
+        "policyMs": 37188.474226,
+        "catalogScanMs": 110.34008300000278,
+        "listenMs": 166.01379199999792,
+        "displayReadyMs": 91841.33691700001
+      },
+      "snapshots": {
+        "verified": true,
+        "reconcilerRunning": true,
+        "reconcilerError": null,
+        "inflightBuilds": 0,
+        "fileIoInFlight": 0,
+        "fileIoPeak": 2,
+        "entries": [
+          {
+            "name": "agent-permissions",
+            "hasCurrent": true,
+            "inflight": 0,
+            "owner": false,
+            "attached": false
+          },
+          {
+            "name": "role-list",
+            "hasCurrent": true,
+            "inflight": 0,
+            "owner": false,
+            "attached": false
+          },
+          {
+            "name": "sources",
+            "hasCurrent": true,
+            "inflight": 0,
+            "owner": false,
+            "attached": false
+          }
+        ],
+        "scopeHealth": {
+          "D": {
+            "metadataCompletedAt": 1795157451840,
+            "digestCompletedAt": 1795157449326
+          },
+          "P": {
+            "metadataCompletedAt": 1795157451840,
+            "digestCompletedAt": 1795157449326
+          },
+          "C": {
+            "metadataCompletedAt": 1795157451840,
+            "digestCompletedAt": 1795157449326
+          },
+          "L": {
+            "metadataCompletedAt": 1795157451840,
+            "digestCompletedAt": 1795157449326
+          }
+        },
+        "scopeAges": {
+          "D": {
+            "metadataAgeMs": 204,
+            "digestAgeMs": 2718,
+            "metadataError": null,
+            "digestError": null
+          },
+          "P": {
+            "metadataAgeMs": 204,
+            "digestAgeMs": 2718,
+            "metadataError": null,
+            "digestError": null
+          },
+          "C": {
+            "metadataAgeMs": 204,
+            "digestAgeMs": 2718,
+            "metadataError": null,
+            "digestError": null
+          },
+          "L": {
+            "metadataAgeMs": 204,
+            "digestAgeMs": 2718,
+            "metadataError": null,
+            "digestError": null
+          }
+        },
+        "watchedFiles": 24,
+        "busyByReason": {},
+        "lastRequest": {
+          "name": "agent-permissions",
+          "scopes": [
+            "P",
+            "C"
+          ],
+          "attempts": 1
+        },
+        "builds": 9,
+        "hits": 383,
+        "misses": 9,
+        "busy": 0
+      }
+    },
+    "resourcesStartup": {
+      "memoryCurrentBytes": 459030528,
+      "memoryPeakBytes": 1397620736,
+      "kernelCounters": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "usage_usec": 595942791,
+        "user_usec": 542491425,
+        "system_usec": 53451365,
+        "nice_usec": 0,
+        "nr_periods": 5845,
+        "nr_throttled": 416,
+        "throttled_usec": 41035447,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      }
+    },
+    "resourcesEnd": {
+      "memoryCurrentBytes": 978259968,
+      "memoryPeakBytes": 1397620736,
+      "kernelCounters": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "usage_usec": 646158860,
+        "user_usec": 584461494,
+        "system_usec": 61697366,
+        "nice_usec": 0,
+        "nr_periods": 6339,
+        "nr_throttled": 444,
+        "throttled_usec": 43425829,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      }
+    }
+  },
+  "instance": {
+    "name": "lucy-p166-a",
+    "id": "a8eb5a4f7d1e937def10c7c24f3dc7850ca4edb2d8cbf07f9e1918f605f4d8a1",
+    "image": "project-lucy:p166-baseline-20261120",
+    "port": 59165,
+    "base": "http://127.0.0.1:59165",
+    "fixture": "BAL-1",
+    "health": {
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "lucyVersion": "0.30.0",
+        "gitSha": "f78200a84a4b111e44477215ed5c2722eebff75e",
+        "gitDirty": true,
+        "bundledKtxVersion": "0.16.0",
+        "ktxRuntime": {
+          "ready": true,
+          "status": "ready",
+          "detail": "status: ready"
+        },
+        "policy": {
+          "policyVersion": "35e9fcea197afe177cb865c296c6bf873607eaf35e71aa2fcc4adda4fc2154ba",
+          "degradedGlobal": false,
+          "degradedAgents": [],
+          "healthy": true
+        },
+        "execution": {
+          "status": "unknown",
+          "lastCheckedAt": "2026-11-20T06:33:23.931Z",
+          "unknownConnections": [
+            "ars_00_c0",
+            "ars_00_c1",
+            "ars_00_c2",
+            "ars_00_c3",
+            "ars_00_c4",
+            "ars_00_c5",
+            "ars_00_c6",
+            "ars_00_c7",
+            "ars_00_c8",
+            "lucy-ops"
+          ],
+          "activation": "unknown",
+          "reload": {
+            "state": "idle"
+          },
+          "verification": {
+            "state": "unverified"
+          }
+        },
+        "dataQaInstructions": {
+          "source": "missing",
+          "length": 0,
+          "lastError": null,
+          "loadedAt": null
+        },
+        "contentLayout": {
+          "contentRoot": "/data/lucy/config",
+          "contentRootSource": "env",
+          "authoring": {
+            "semanticLayer": "/data/lucy/config/semantic-layer",
+            "wiki": "/data/lucy/config/wiki",
+            "evals": "/data/lucy/config/evals",
+            "skills": "/data/lucy/config/skills"
+          },
+          "mirror": {
+            "semanticLayer": "/data/lucy/semantic-layer",
+            "wiki": "/data/lucy/wiki",
+            "evals": "/data/lucy/evals",
+            "skills": "/data/lucy/skills"
+          },
+          "mirrorActive": true,
+          "drift": [],
+          "driftTruncated": false
+        },
+        "eventLoop": {
+          "p99Ms": 126.026,
+          "maxMs": 195.428,
+          "windowSeconds": 60
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T06:33:23.941Z",
+        "ageMs": 1924,
+        "freshness": "fresh"
+      }
+    },
+    "resources": {
+      "Binds": null,
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "lucy-p166-20261120",
+      "PortBindings": {
+        "5174/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "59165"
+          }
+        ],
+        "7879/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "59175"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "no",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": [],
+      "DnsSearch": [],
+      "ExtraHosts": null,
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 4294967296,
+      "NanoCpus": 2000000000,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": [],
+      "BlkioDeviceReadBps": [],
+      "BlkioDeviceWriteBps": [],
+      "BlkioDeviceReadIOps": [],
+      "BlkioDeviceWriteIOps": [],
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": [],
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 8589934592,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": [],
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "Mounts": [
+        {
+          "Type": "volume",
+          "Source": "lucy-p166-data-a",
+          "Target": "/data/lucy"
+        },
+        {
+          "Type": "bind",
+          "Source": "/host_mnt/Users/zhangxingchen/Projects/project-lucy/inbox/p166-implementation-20261120/uat-entrypoint.sh",
+          "Target": "/app/scripts/runtime/docker-entrypoint.sh",
+          "ReadOnly": true
+        },
+        {
+          "Type": "bind",
+          "Source": "/host_mnt/Users/zhangxingchen/Projects/project-lucy/scripts/uat/agent-roster-summary-server.mts",
+          "Target": "/app/scripts/uat/agent-roster-summary-server.mts",
+          "ReadOnly": true
+        }
+      ],
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    }
+  },
+  "p95": {
+    "roster": 418.90445799999907,
+    "full": 2752.3798749999987,
+    "statistics": 90.60954099999799,
+    "detail": 623.3506249999991
+  }
+}
