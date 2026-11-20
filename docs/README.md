@@ -41,6 +41,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261120-user-journey-performance-gate-spec.md](specs/lucy-20261120-user-journey-performance-gate-spec.md) | P1-67／REQ-030-088；v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan 设计；终稿未确权；开发未授权；测试台未建；不入核心分母；≠ 功能收口；≠ 可上线。 配对 [Plan](plans/lucy-20261120-user-journey-performance-gate-plan.md)。 |
 | [specs/lucy-20261120-agent-roster-summary-projection-spec.md](specs/lucy-20261120-agent-roster-summary-projection-spec.md) | P1-66／REQ-030-087；v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 配对 [Plan](plans/lucy-20261120-agent-roster-summary-projection-plan.md)；[UAT](qa/uat/suites/agent-roster-summary/suite.md)。 |
 | [specs/lucy-20261120-wiki-upload-acl-adoption-spec.md](specs/lucy-20261120-wiki-upload-acl-adoption-spec.md) | P1-65／REQ-030-086；v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 [本轮收口复核](reviews/2026-11-20-wiki-upload-acl-adoption-closure-recheck.md)。 |
 | [specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md](specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) | P1-64／REQ-030-085；v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 配对 [Plan](plans/lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) |
