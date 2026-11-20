@@ -1,3 +1,4 @@
+import { useRolesAgentDraftGuard } from "../../lib/useRolesAgentDraftGuard";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -573,6 +574,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   const [compareCurrentDraft, setCompareCurrentDraft] = useState<RolePermissionDraft | null>(null);
   const [compareDraftMatchesCurrent, setCompareDraftMatchesCurrent] = useState(false);
   const writeInflightOperationIdRef = useRef<string | null>(null);
+  const writeActionRef = useRef<"save" | "delete">("save");
+  const draftBaselineRef = useRef<{ roleId: string; version?: string; baseObjectVersion?: string } | null>(null);
   /** Spec 194 §4.2 — 空可授予工具的页内提示（只在保存失败后出现）。 */
   const [toolGrantError, setToolGrantError] = useState<string | null>(null);
   const toolGrantAlertRef = useRef<HTMLParagraphElement | null>(null);
@@ -611,6 +614,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       || pendingOperation !== null;
     if (preserveDraft) return;
     const initialized = initializeDraft(detail, mode);
+    draftBaselineRef.current = { roleId, version: detail?.version, baseObjectVersion: detail?.baseObjectVersion };
     setBaseline(initialized.baseline);
     setDraft(initialized.draft);
     setRejectedTools(initialized.rejectedTools);
@@ -699,6 +703,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     || rejectedTools.length > 0
     || rolePermissionDraftHash(draft) !== rolePermissionDraftHash(baseline);
   const isReadOnlyTemplate = mode === "edit" && detail?.source === "template";
+  useRolesAgentDraftGuard(!isReadOnlyTemplate && (dirty || Boolean(pendingOperation)), Boolean(pendingOperation));
 
   function clearWriteRecovery() {
     setWriteRecoveryError(null);
@@ -718,7 +723,9 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setPendingOperation({ operationId: inflight, checking: false, status });
         if (status.outcome === "committed") {
           const ack = accessWriteAckFromCommittedStatus(status);
-          if (ack && finishSave(ack, "Role 已保存", roleId)) clearWriteRecovery();
+          if (writeActionRef.current === "delete") {
+            void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] }); navigate("/admin/roles"); clearWriteRecovery();
+          } else if (ack && finishSave(ack, "Role 已保存", status.objectId ?? roleId)) clearWriteRecovery();
         }
       });
       writeInflightOperationIdRef.current = null;
@@ -763,7 +770,9 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     setPendingOperation({ operationId: pendingOperation.operationId, checking: false, status });
     if (status.outcome === "committed") {
       const ack = accessWriteAckFromCommittedStatus(status);
-      if (ack && finishSave(ack, "Role 已保存", roleId)) clearWriteRecovery();
+      if (writeActionRef.current === "delete") {
+            void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] }); navigate("/admin/roles"); clearWriteRecovery();
+          } else if (ack && finishSave(ack, "Role 已保存", status.objectId ?? roleId)) clearWriteRecovery();
     }
   }
 
@@ -779,10 +788,11 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       patch: { description, allow },
       rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined
     };
-    if (racsObjectProtocolAvailable(detail, mode)) {
-      body.baseObjectVersion = detail!.baseObjectVersion;
-    } else if (vars.version) {
-      body.version = vars.version;
+    const basis = draftBaselineRef.current?.roleId === roleId ? draftBaselineRef.current : detail;
+    if (mode === "edit" && basis?.baseObjectVersion) {
+      body.baseObjectVersion = basis.baseObjectVersion;
+    } else if (basis?.version || vars.version) {
+      body.version = basis?.version ?? vars.version;
     }
     return body;
   }
@@ -802,13 +812,21 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     return true;
   }
 
+  function creationWriteBody(dryRun: boolean, body: Record<string, unknown>) {
+    if (dryRun || !review?.racs) return body;
+    const operationId = newRolesAgentOperationId();
+    writeInflightOperationIdRef.current = operationId;
+    writeActionRef.current = review.kind === "delete" ? "delete" : "save";
+    return buildRacsWriteBody(review.racs, operationId, body);
+  }
+
   const createMutation = useMutation({
     mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary; rowPolicyConfirmation?: RowPolicyPreviewConfirmation | null }) =>
-      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>("/api/admin/roles", { dryRun: vars.dryRun, roleId: vars.roleId, role: vars.payload, rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined }),
+      apiPost<DryRunPreview | AccessWriteAck>("/api/admin/roles", creationWriteBody(vars.dryRun, { dryRun: vars.dryRun, roleId: vars.roleId, role: vars.payload, rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined })),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
-        const preview = data as { diff: string; proposedYaml: string };
-        setReview({ kind: "create", draftHash: vars.draftHash, payload: vars.payload, roleId: vars.roleId, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
+        const preview = data as DryRunPreview;
+        setReview({ kind: "create", racs: extractRacsPreviewBinding(preview), draftHash: vars.draftHash, payload: vars.payload, roleId: vars.roleId, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
       } else finishSave(data as AccessWriteAck, "Role 已创建", vars.roleId);
     },
     onError: (error: Error) => handleClassifiedWriteError(error),
@@ -816,11 +834,11 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const copyMutation = useMutation({
     mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary; rowPolicyConfirmation?: RowPolicyPreviewConfirmation | null }) =>
-      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}/copy`, { dryRun: vars.dryRun, newRoleId: vars.roleId, role: vars.payload, rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined }),
+      apiPost<DryRunPreview | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}/copy`, creationWriteBody(vars.dryRun, { dryRun: vars.dryRun, newRoleId: vars.roleId, role: vars.payload, rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined })),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
-        const preview = data as { diff: string; proposedYaml: string };
-        setReview({ kind: "copy", draftHash: vars.draftHash, payload: vars.payload, roleId: vars.roleId, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
+        const preview = data as DryRunPreview;
+        setReview({ kind: "copy", racs: extractRacsPreviewBinding(preview), draftHash: vars.draftHash, payload: vars.payload, roleId: vars.roleId, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
       } else finishSave(data as AccessWriteAck, `Role '${vars.roleId}' 已复制`, vars.roleId);
     },
     onError: (error: Error) => handleClassifiedWriteError(error),
@@ -839,6 +857,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     }) => {
       let body = patchDryRunBody(vars);
       if (!vars.dryRun && vars.racs && vars.operationId) {
+        writeActionRef.current = "save";
         body = buildRacsWriteBody(vars.racs, vars.operationId, body);
       }
       return apiPatch<DryRunPreview | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, body);
@@ -864,16 +883,16 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const deleteMutation = useMutation({
     mutationFn: (vars: { dryRun: boolean; version?: string; rowPolicyConfirmation?: RowPolicyPreviewConfirmation }) =>
-      apiDelete<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, {
+      apiDelete<DryRunPreview | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, creationWriteBody(vars.dryRun, {
         dryRun: vars.dryRun,
         version: vars.version,
         rowPolicyConfirmation: vars.rowPolicyConfirmation
-      }),
+      })),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
-        const preview = data as { diff: string; proposedYaml: string; version?: string };
+        const preview = data as DryRunPreview;
         const empty: RolePermissionDraft = { roleId: draft.roleId, description: "", scope: { mode: "names", tables: [] }, tools: [] };
-        setReview({ kind: "delete", draftHash: rolePermissionDraftHash(draft), version: preview.version ?? vars.version, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: derivePermissionImpact(draft, empty, [], detail?.users ?? []) });
+        setReview({ kind: "delete", racs: extractRacsPreviewBinding(preview), draftHash: rolePermissionDraftHash(draft), version: preview.version ?? vars.version, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: derivePermissionImpact(draft, empty, [], detail?.users ?? []) });
       } else if (toastAccessWriteAck(data as AccessWriteAck, `Role '${roleId}' 已删除`)) {
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
@@ -1007,6 +1026,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   function discardChanges() {
     const initialized = initializeDraft(detail, mode);
+    draftBaselineRef.current = { roleId, version: detail?.version, baseObjectVersion: detail?.baseObjectVersion };
     setBaseline(initialized.baseline);
     setDraft(initialized.draft);
     setRejectedTools(initialized.rejectedTools);
@@ -1083,9 +1103,16 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         }
         onDismiss={clearWriteRecovery}
         onRepreview={() => {
-          clearWriteRecovery();
-          setReview(null);
-          requestSave();
+          void (async () => {
+            if (mode === "edit") {
+              const fresh = await apiGet<RoleDetailType>(`/api/admin/roles/${encodeURIComponent(roleId)}`);
+              draftBaselineRef.current = { roleId, version: fresh.version, baseObjectVersion: fresh.baseObjectVersion };
+              queryClient.setQueryData(["admin", "role", roleId], fresh);
+            }
+            clearWriteRecovery();
+            setReview(null);
+            requestSave();
+          })().catch(handleClassifiedWriteError);
         }}
         onRefreshCurrent={() => void refreshCurrentValueForCompare()}
         onRecheckStatus={() => void recheckPendingOperation()}

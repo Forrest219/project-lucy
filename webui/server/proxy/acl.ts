@@ -2584,6 +2584,39 @@ export async function compileRoleForAdmin(
   };
 }
 
+/** P1-59: fresh, target-scoped compiler inputs, never a display-cache version.
+ * Use the compiler's own template expansion and selector predicate. In particular,
+ * a new matching source or enabled membership changes this closure, whereas an
+ * unrelated source outside an explicit selector does not invalidate a preview.
+ */
+export async function roleCompileInputClosureForAdmin(roleId: string, context: AdminPermissionContext): Promise<unknown> {
+  const role = context.config.roles?.[roleId];
+  const model = normalizePermissionModelVersion(role);
+  const expansion = expandTemplateSelectorsForCompile(
+    roleId, role?.allow?.tableSelectors ?? [], rowPolicyTemplateCatalogOf(context.config),
+    model.ok ? model.version : 2
+  );
+  const declared = configList(role?.allow?.connections, [], { normalize: true });
+  const catalogBound = role?.allow?.source_scope === "catalog_bound";
+  const connections = catalogBound
+    ? resolveCatalogConnections(roleId, declared, context.enabledTables)
+    : { ok: true as const, connections: declared };
+  const entries = [...context.sourceMap.forward.values()].filter((entry) =>
+    catalogBound
+      ? connections.ok && connections.connections.includes(entry.connectionId)
+      : expansion.ok && expansion.selectors.some((selector) => selectorMatches(selector, entry))
+  ).map((entry) => ({ ...entry, enabled: isInEnabledTableRange(entry, context.enabledTables) }))
+    .sort((a, b) => canonicalSourceKeyDisplay({ ...a, physicalTable: a.physicalTable }).localeCompare(
+      canonicalSourceKeyDisplay({ ...b, physicalTable: b.physicalTable })
+    ));
+  return {
+    classification: context.toolClassificationVersion,
+    sourceCompileError: context.sourceMap.compileError ?? null,
+    connections, entries,
+    compiled: await compileRoleForAdmin(roleId, context)
+  };
+}
+
 /** Spec 174 §3.3 — the compile inputs a display permission result was derived from. */
 export type DisplayPolicyInputs = Pick<
   AdminPermissionContext,

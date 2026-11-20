@@ -118,6 +118,7 @@ export function publishLockOwnedBy(
 
 export class PublishCoordinatorBusyError extends Error {
   readonly code = "PUBLISH_COORDINATOR_BUSY";
+  readonly statusCode = 503;
 
   constructor(readonly holder: PublishLockHolder | null, readonly requestedKind: PublishEntryKind) {
     super(formatPublishWindowBusy(holder, requestedKind));

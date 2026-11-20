@@ -3,11 +3,11 @@
  *
  * Authority: docs/specs/lucy-20261119-roles-agent-concurrent-edit-spec.md §3–§4
  *
- * `compileInputsDigest` is supplied by the caller (or the route's dryRun body). This module
- * does not claim to read the full compile-input closure automatically.
+ * Routes read fresh compiler inputs on preview and commit. Client digests
+ * are diagnostics only, never authoritative inputs to a save.
  */
 import { sha256Hex, stableJson } from "../config-digest.js";
-import type { AccessGovernanceGateDecision } from "../access-governance-gate.js";
+import { evaluateGovernanceOverride, type AccessGovernanceOverrideRequest, type AccessGovernanceGateDecision } from "../access-governance-gate.js";
 import { expandRowPolicyTemplatesInConfig, type AccessConfigWithTemplates } from "./row-policy-templates.js";
 import type { YamlAccessConfig, YamlRole, YamlUser } from "./access-config.js";
 import {
@@ -20,9 +20,17 @@ import {
   type RacsObjectKind,
   type RacsReceipt
 } from "./access-write-status.js";
+import { racsIdempotencyKey, parseRacsReceiptFromSummary } from "./access-write-status.js";
 import { getAuditDb } from "./audit.js";
 import { computeCandidateConfigDigest } from "./access-object-version.js";
-import type { TrustedActor } from "../security/request-actor.js";
+import { trustedActorFromRequest, type TrustedActor } from "../security/request-actor.js";
+import { buildAdminPermissionContext, roleCompileInputClosureForAdmin, resolveRoleIds } from "../proxy/acl.js";
+import { parseAccessConfigText } from "../proxy/identity.js";
+import { stringify } from "yaml";
+import { requireWebuiAuthHook } from "../auth/guard.js";
+import { readAccessRecoveryState } from "../access-recovery.js";
+import type { FastifyReply, FastifyRequest } from "fastify";
+import { withPublishCoordinator, type PublishEntryKind } from "../publish-coordinator.js";
 import {
   ACCESS_OBJECT_VERSION_VOCABULARY,
   type BaseObjectVersion,
@@ -169,8 +177,207 @@ export function governanceFactsFromGate(gate: AccessGovernanceGateDecision): Gov
     decision: gate.decision,
     riskLevel,
     requiresConfirmation: gate.decision === "override_required",
+    sensitiveSourceKeys: gate.findings.map((finding) => `${finding.tier}:${finding.code}`).sort(),
     rawCallCount: gate.findings?.length ?? 0
   };
+}
+
+export async function readRolesAgentCompileInputsDigest(
+  kind: "role" | "agent", objectId: string, config: YamlAccessConfig,
+  before?: { role?: YamlRole; user?: YamlUser }
+): Promise<string> {
+  const context = await buildAdminPermissionContext(parseAccessConfigText(stringify(config)));
+  const subject = config.users.find((user) => user.id === objectId);
+  const resolved = subject ? resolveRoleIds(subject) : undefined;
+  const previousRoles = before?.user ? resolveRoleIds(before.user) : undefined;
+  const ids = kind === "role" ? [objectId] : [...new Set([
+    ...(resolved?.ok ? resolved.roleIds : []), ...(previousRoles?.ok ? previousRoles.roleIds : [])
+  ])];
+  const roles = await Promise.all([...ids].sort().map(async (id) => ({
+    id, inputs: await roleCompileInputClosureForAdmin(id, context)
+  })));
+  const previousRole = kind === "role" && before?.role
+    ? await roleCompileInputClosureForAdmin(objectId, { ...context,
+        config: parseAccessConfigText(stringify({ ...config, roles: { ...config.roles, [objectId]: before.role } })) })
+    : undefined;
+  return sha256Hex(stableJson({ roles, previousRole,
+    // Legacy inline grants cannot prove a narrower compiler closure.
+    ...(kind === "agent" && (subject?.allow || before?.user?.allow) ? {
+      legacySourceMap: context.sourceMapVersion, legacyEnabled: context.enabledTablesDigest
+    } : {}), classification: context.toolClassificationVersion
+  }));
+}
+
+/** Request-start authentication is not the publish-window authentication. */
+export async function recheckRolesAgentWriteAccess(
+  request: FastifyRequest, reply: FastifyReply, projectRoot: string
+): Promise<boolean> {
+  await requireWebuiAuthHook(request, reply);
+  if (reply.sent) return false;
+  if ((await readAccessRecoveryState(projectRoot)).required) {
+    await reply.status(503).send({ ok: false, error: {
+      code: "ACCESS_RECOVERY_REQUIRED", message: "访问控制配置处于待恢复状态，请先完成恢复核验后重试。"
+    } });
+    return false;
+  }
+  return true;
+}
+
+/** Buffer an explicit reply until the durable write AND lock release complete.
+ * Fastify's real reply is thenable: sending it inside the coordinator lets the
+ * next HTTP request race the coordinator's finally/unlink. Only this request's
+ * facade is buffered; headers and status remain normal Fastify operations.
+ */
+export async function runRolesAgentPublishWindow<T>(
+  kind: PublishEntryKind, projectRoot: string, reply: FastifyReply,
+  fn: (deferredReply: FastifyReply) => Promise<T>
+): Promise<T | FastifyReply> {
+  let pending: { payload: unknown } | undefined;
+  const facade: FastifyReply = new Proxy(reply, {
+    get(target, property) {
+      if (property === "then") return undefined;
+      if (property === "sent") return Boolean(pending) || target.sent;
+      if (property === "send") return (payload: unknown) => { pending = { payload }; return facade; };
+      const value = Reflect.get(target, property, target);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        const result = value.apply(target, args);
+        return result === target ? facade : result;
+      };
+    }
+  });
+  let result: T;
+  try { result = await withPublishCoordinator(kind, () => fn(facade), { projectRoot }); }
+  catch (error) {
+    if ((error as { code?: string }).code !== "PUBLISH_COORDINATOR_BUSY") throw error;
+    return reply.status(503).send({ ok: false, error: { code: "PUBLISH_COORDINATOR_BUSY",
+      message: "有变更正在保存，请稍后重试。" } });
+  }
+  return pending ? reply.send(pending.payload) : result;
+}
+
+/** New writes claim the window before expensive compilation. Recorded operations
+ * keep their existing read-only replay path even while another writer is busy. */
+const responseAfterPublish = Symbol("roles-agent-response-after-publish");
+export function rolesAgentResponseAfterPublish<T>(fn: (reply: FastifyReply) => Promise<T>) {
+  return { [responseAfterPublish]: fn };
+}
+export async function runRolesAgentMutationRequest<T>(
+  kind: PublishEntryKind, projectRoot: string, request: FastifyRequest, reply: FastifyReply,
+  dryRun: boolean, fn: (deferredReply: FastifyReply) => Promise<T>
+): Promise<unknown> {
+  const finish = (value: unknown) => value && typeof value === "object" && responseAfterPublish in value
+    ? (value as ReturnType<typeof rolesAgentResponseAfterPublish>)[responseAfterPublish](reply) : value;
+  const fields = request.body as AccessWriteProtocolFields | undefined;
+  if (!dryRun && fields?.baseObjectVersion && typeof fields.operationId === "string" && isValidClientOperationId(fields.operationId.trim())) {
+    const recorded = (await getAuditDb()).prepare("SELECT 1 FROM config_change_log WHERE idempotency_key=? LIMIT 1")
+      .get(racsIdempotencyKey(fields.operationId));
+    if (recorded) return finish(await fn(reply));
+  }
+  if (dryRun) return finish(await fn(reply));
+  const result = await runRolesAgentPublishWindow(kind, projectRoot, reply, async (deferred) => {
+    if (!(await recheckRolesAgentWriteAccess(request, deferred, projectRoot))) return;
+    return fn(deferred);
+  });
+  return finish(result);
+}
+
+export function rolesAgentRequestDigest(fields: AccessWriteProtocolFields & { patch?: unknown }): string {
+  return sha256Hex(stableJson({ baseObjectVersion: fields.baseObjectVersion,
+    previewToken: fields.previewToken, patch: digestNormalizedPatch(fields.patch ?? {}) }));
+}
+
+/** Creation/copy/deletion use the same preview, receipt and confirmation contract. */
+export async function prepareRolesAgentMutation(input: {
+  request: FastifyRequest; reply: FastifyReply; kind: RacsObjectKind; objectId: string;
+  action: "create" | "delete"; dryRun: boolean; config: YamlAccessConfig;
+  candidate: YamlAccessConfig; gate: AccessGovernanceGateDecision;
+  fields: AccessWriteProtocolFields; value?: unknown; copySourceId?: string;
+}): Promise<{ preview: Record<string, string>; audit: { idempotencyKey?: string; racsReceipt?: RacsReceipt } } | null> {
+  const { kind, objectId, fields, config, candidate, request, reply } = input;
+  if (!input.dryRun && (input.gate.decision === "block" || (input.gate.decision === "override_required"
+      && !evaluateGovernanceOverride((request.body as { override?: AccessGovernanceOverrideRequest })?.override, input.gate).ok))) {
+    await reply.status(409).send({ ok: false, error: { code: "GOVERNANCE_GATE_BLOCKED", message: "当前权限影响已变化，请重新预览并确认。" } }); return null;
+  }
+  if (!input.dryRun && !fields.baseObjectVersion) return { preview: {}, audit: {} }; // legacy
+  const baseline = input.action === "create" ? baseObjectVersionForAbsence(kind, objectId)
+    : kind === "role" ? readRoleBaseObjectVersion(config, objectId) : readAgentBaseObjectVersion(config, objectId);
+  if (!baseline) throw new AccessObjectTargetChangedError();
+  const mode = resolveAccessWriteVersionMode({ ...fields, ...(fields.baseObjectVersion ? {} : { version: undefined }),
+    baseObjectVersion: fields.baseObjectVersion ?? serializeBaseObjectVersion(baseline) });
+  if (mode.mode !== "object") throw new MixedVersionProtocolError();
+  if (input.action === "create") {
+    if (kind === "role") assertRoleCreateAbsenceBaseline(config, objectId, mode.baseObjectVersion);
+    else assertAgentCreateAbsenceBaseline(config, objectId, mode.baseObjectVersion);
+  } else if (kind === "role") assertRoleObjectBaseline(config, objectId, mode.baseObjectVersion);
+  else assertAgentObjectBaseline(config, objectId, mode.baseObjectVersion);
+  const patch = { action: input.action, value: input.value ?? null, copySourceId: input.copySourceId ?? null };
+  const bindingConfig = input.action === "create" ? candidate : config;
+  const compileInputsDigest = await readRolesAgentCompileInputsDigest(kind, objectId, bindingConfig);
+  const binding = computeRoleAgentPreviewBinding({ kind, objectId, baseObjectVersion: mode.baseObjectVersion,
+    config: bindingConfig, patch, compileInputsDigest, gate: input.gate, actor: trustedActorFromRequest(request),
+    absence: input.action === "create", copySourceObjectVersion: input.copySourceId
+      ? readRoleBaseObjectVersion(config, input.copySourceId) : undefined
+  });
+  const preview = { baseObjectVersion: serializeBaseObjectVersion(mode.baseObjectVersion),
+    previewToken: binding.previewToken, compileInputsDigest };
+  if (input.dryRun) return { preview, audit: {} };
+  assertPreviewTokenMatches(fields.previewToken, binding.previewEffectDigest);
+  const operation = resolveRolesAgentRacsOperation(mode, fields.operationId);
+  if (operation.kind !== "racs") {
+    if (operation.kind === "reject") await reply.status(operation.status).send({ ok: false, error: operation });
+    return null;
+  }
+  const receipt = buildRolesAgentRacsReceipt({ actor: trustedActorFromRequest(request), objectKind: kind, objectId,
+    previewEffectDigest: binding.previewEffectDigest, baseObjectVersionSerialized: preview.baseObjectVersion,
+    candidateConfig: candidate, requestDigest: rolesAgentRequestDigest({ ...fields, patch }) });
+  const claim = await evaluateRolesAgentRacsIdempotencyClaim(operation.operationId, receipt);
+  if (claim.kind === "reject") {
+    const error = mapRacsIdempotencyRejectToHttp(claim.code);
+    await reply.status(error.status).send({ ok: false, error }); return null;
+  }
+  if (claim.kind === "replay") {
+    const { respondRacsIdempotencyReplay } = await import("./access-config.js");
+    const replay = await respondRacsIdempotencyReplay(claim.auditId, { operationId: operation.operationId });
+    await reply.status(replay.statusCode).send(replay.body); return null;
+  }
+  return { preview, audit: { idempotencyKey: claim.idempotencyKey, racsReceipt: receipt } };
+}
+
+/** Existing operations are resolved before comparing today's object baseline. */
+export async function replayRecordedRolesAgentWrite(
+  request: FastifyRequest, reply: FastifyReply, mode: AccessWriteVersionMode,
+  kind: RacsObjectKind, objectId: string,
+  fields: AccessWriteProtocolFields & { patch?: unknown }
+): Promise<boolean> {
+  const operation = resolveRolesAgentRacsOperation(mode, fields.operationId);
+  if (operation.kind === "legacy") return false;
+  if (operation.kind === "reject") {
+    await reply.status(operation.status).send({ ok: false, error: operation });
+    return true;
+  }
+  const db = await getAuditDb();
+  const row = db.prepare("SELECT id, new_summary FROM config_change_log WHERE idempotency_key = ? LIMIT 1")
+    .get(racsIdempotencyKey(operation.operationId)) as { id: number; new_summary: string | null } | undefined;
+  if (!row) return false;
+  let summary: unknown;
+  try { summary = JSON.parse(row.new_summary ?? "null"); } catch { summary = null; }
+  const receipt = parseRacsReceiptFromSummary(summary);
+  const actor = trustedActorFromRequest(request);
+  const code = !receipt ? "idempotency_receipt_missing"
+    : receipt.submitterAccountUid !== actor.accountUid || receipt.submitterActorId !== actor.actorId
+      ? "idempotency_actor_mismatch"
+      : receipt.objectKind !== kind || receipt.objectId !== objectId || receipt.requestDigest !== rolesAgentRequestDigest(fields)
+        ? "idempotency_payload_mismatch" : undefined;
+  if (code) {
+    const mapped = mapRacsIdempotencyRejectToHttp(code);
+    await reply.status(mapped.status).send({ ok: false, error: mapped });
+  } else {
+    const { respondRacsIdempotencyReplay } = await import("./access-config.js");
+    const replay = await respondRacsIdempotencyReplay(row.id, { operationId: operation.operationId });
+    await reply.status(replay.statusCode).send(replay.body);
+  }
+  return true;
 }
 
 export interface RoleAgentPreviewBindingInput {
@@ -181,6 +388,7 @@ export interface RoleAgentPreviewBindingInput {
   patch: unknown;
   compileInputsDigest: string;
   gate: AccessGovernanceGateDecision;
+  actor?: Pick<TrustedActor, "accountUid" | "actorId" | "role">;
   /** Create / copy-from-absent metadata (DEP-11). */
   copySourceObjectVersion?: BaseObjectVersion | null;
   absence?: boolean;
@@ -219,7 +427,9 @@ export function computeRoleAgentPreviewBinding(input: RoleAgentPreviewBindingInp
   const previewDependenciesDigest = computePreviewDependenciesDigest(depInput);
   const previewEffectDigest = computePreviewEffectDigest({
     baseObjectVersion: input.baseObjectVersion,
-    normalizedPatchDigest: patchDigest,
+    normalizedPatchDigest: input.actor ? sha256Hex(stableJson({ patchDigest, actor: {
+      accountUid: input.actor.accountUid, actorId: input.actor.actorId, role: input.actor.role
+    } })) : patchDigest,
     previewDependenciesDigest,
     governanceFacts: governanceFactsFromGate(input.gate)
   });
@@ -350,7 +560,7 @@ export function resolveRolesAgentRacsOperation(
 ): RolesAgentRacsOperationResolution {
   if (versionMode.mode !== "object") return { kind: "legacy" };
   const trimmed = operationId?.trim();
-  if (!trimmed) return { kind: "legacy" };
+  if (!trimmed) return { kind: "reject", status: 400, code: "OPERATION_ID_REQUIRED", message: "请重新预览并确认保存，以生成本次保存的请求编号。" };
   if (!isValidClientOperationId(trimmed)) {
     const mapped = mapRacsIdempotencyRejectToHttp("operation_id_invalid");
     return { kind: "reject", ...mapped };
@@ -394,14 +604,20 @@ export function buildRolesAgentRacsReceipt(input: {
   previewEffectDigest: string;
   baseObjectVersionSerialized: string;
   candidateConfig: YamlAccessConfig;
+  requestDigest?: string;
 }): RacsReceipt {
   return buildRacsReceipt({
     submitterAccountUid: input.actor.accountUid,
     submitterActorId: input.actor.actorId,
     objectKind: input.objectKind,
     objectId: input.objectId,
-    requestDigest: input.previewEffectDigest.toLowerCase(),
+    requestDigest: input.requestDigest ?? input.previewEffectDigest.toLowerCase(),
     baseObjectVersion: input.baseObjectVersionSerialized,
+    committedObjectVersion: serializeBaseObjectVersion(
+      (input.objectKind === "role" ? readRoleBaseObjectVersion(input.candidateConfig, input.objectId)
+        : readAgentBaseObjectVersion(input.candidateConfig, input.objectId))
+      ?? baseObjectVersionForAbsence(input.objectKind, input.objectId)
+    ),
     candidateConfigDigest: computeCandidateConfigDigest(input.candidateConfig).toLowerCase()
   });
 }

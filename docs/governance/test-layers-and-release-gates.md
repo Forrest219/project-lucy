@@ -28,6 +28,8 @@ Lucy 的测试分三层，不能互相替代：
 
 ## 2. Current Commands
 
+P1-58／59 首批入口：`RACS_WEB=http://127.0.0.1:<port> RACS_CONTAINER=lucy-racs-<name> RACS_SECRET_DIR=/private/tmp/<private-dir> node scripts/uat/racs-browser-functional.mjs inbox/p1-58-59-finalization-20261120/<run>`（真实前台Chrome）；夹具 `npx tsx scripts/uat/racs-fixture.mts <out> <1|2|5>`；候选／实例 `python3 scripts/uat/racs-candidate.py <name>`／`python3 scripts/uat/racs-instance.py <name> <fixture> <image> <port>`。`roles-agent-concurrency-scale.mts`与`racs-functional.mts`保留完整模块／事务入口，完整长测按委托人决议延期，未完成不得主张PASS。仅隔离本机，凭据不入库；无新增CI或发布入口。
+
 | Command | Layer | Purpose |
 |---|---|---|
 | `python3 scripts/uat/core-availability-1883-soak.py --image IMG --out DIR [--seconds 7200] [--cycle-seconds 300]` | uat（具名本机隔离Docker，人工执行） | R-CAV-FDE-1883局部持续运行：1883真实物理表／Manifest／启用表，正式短名上传／保存／KTX重载与20万合成审计维护；至少2小时，探针／合法HTTP／纯MCP／原生CPU及/proc观测；真实I/O控制窗分列，不签完整R-CAV或客户结论。 |

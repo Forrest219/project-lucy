@@ -1001,11 +1001,11 @@ describe("DELETE /api/admin/roles/:roleId", () => {
           }
         }
       })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     const res = await request(app.server)
       .delete("/api/admin/roles/delete_me")
       .send({ dryRun: false })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     expect(res.body.data.written).toBe(true);
     const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     expect(yaml).not.toContain("delete_me");

@@ -55,6 +55,8 @@ export interface YamlToken {
 }
 
 export interface YamlUser {
+  /** Server-generated lifetime marker; never accepted from an Agent patch. */
+  object_generation?: string;
   id: string;
   name: string;
   note?: string;

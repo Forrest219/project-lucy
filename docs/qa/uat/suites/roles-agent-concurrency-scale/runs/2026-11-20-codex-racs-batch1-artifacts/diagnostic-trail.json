@@ -1,0 +1,72 @@
+[
+  {
+    "run": "browser-batch1",
+    "verdict": "FAIL",
+    "failure": "TimeoutError: locator.waitFor: Timeout 18000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('agent-statistics-error') to be visible\u001b[22m\n",
+    "passedChecks": 17,
+    "reportSha256": "76e2208dcdedda027dc62ec6cecd33f941bfd59b13daf1c096ea79e20a204b7f"
+  },
+  {
+    "run": "browser-batch1-final",
+    "verdict": "FAIL",
+    "failure": "TypeError: Cannot read properties of undefined (reading 'baseObjectVersion')",
+    "passedChecks": 24,
+    "reportSha256": "64a790648b2996163b0d9b74bebf3cf9c38cc80eb53238818268497a0292d566"
+  },
+  {
+    "run": "browser-batch1-final2",
+    "verdict": "FAIL",
+    "failure": "Error: page.evaluate: TypeError: r.status is not a function\n    at eval (eval at evaluate (:311:30), <anonymous>:1:219)\n    at async <anonymous>:337:30",
+    "passedChecks": 24,
+    "reportSha256": "4b06c2d7e535284de594faa327aa4afe2d2ec9383ca1bf60411db9632c52db43"
+  },
+  {
+    "run": "browser-batch1-v2",
+    "verdict": "FAIL",
+    "failure": "Error: F59-E16-E19-agent-unknown-no-replay: {\"dropped\":1}",
+    "passedChecks": 32,
+    "reportSha256": "a1eab73f533121c202517087a58fba8079a32d2027344998ffa29f0517deb8f0"
+  },
+  {
+    "run": "browser-batch1-v2-write",
+    "verdict": "FAIL",
+    "failure": "TimeoutError: locator.fill: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('textbox', { name: '备注', exact: true })\u001b[22m\n",
+    "passedChecks": 24,
+    "reportSha256": "38c342b61323f9db0ed8954a10a9b175bb954486a94c7a65cf2099928413a152"
+  },
+  {
+    "run": "browser-batch1-v2-write-final",
+    "verdict": "FAIL",
+    "failure": "Error: B1-role-delete-busy: {}",
+    "passedChecks": 35,
+    "reportSha256": "02221980d0497fe083cec3b9d3ce7b21970b04b42eb24d110ee424bca0f91085"
+  },
+  {
+    "run": "browser-batch1-writes",
+    "verdict": "FAIL",
+    "failure": "TimeoutError: locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '保存权限配置', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"pl-btn pl-btn--primary\">保存权限配置</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is not stable\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"\" data-title=\"\">Role 已创建 · policyVersion=563115aa8925…</div> from <section tabindex=\"-1\" aria-live=\"polite\" aria-atomic=\"false\" aria-relevant=\"additions text\" aria-label=\"Notifications alt+T\">…</section> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"\" data-title=\"\">Role 已创建 · policyVersion=563115aa8925…</div> from <section tabindex=\"-1\" aria-live=\"polite\" aria-atomic=\"false\" aria-relevant=\"additions text\" aria-label=\"Notifications alt+T\">…</section> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    23 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div class=\"\" data-title=\"\">Role 已创建 · policyVersion=563115aa8925…</div> from <section tabindex=\"-1\" aria-live=\"polite\" aria-atomic=\"false\" aria-relevant=\"additions text\" aria-label=\"Notifications alt+T\">…</section> subtree intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "passedChecks": 14,
+    "reportSha256": "89cf0445fdc54085c5ac272884b759a9ac5e770bf8368cd1af806aad0d386615"
+  },
+  {
+    "run": "browser-batch1-writes2",
+    "verdict": "FAIL",
+    "failure": "TimeoutError: locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('access-write-refresh-current')\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"pl-btn pl-btn--ghost text-sm\" data-testid=\"access-write-refresh-current\">读取最新值</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" class=\"pl-drawer-overlay\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" class=\"pl-drawer-overlay\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    23 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" class=\"pl-drawer-overlay\"></div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "passedChecks": 18,
+    "reportSha256": "75119783f12d14da716bde453251669ae8be10892a72918a2910b09d6d39ee16"
+  },
+  {
+    "run": "browser-batch1-writes3",
+    "verdict": "FAIL",
+    "failure": "Error: F59-E16-E19-agent-unknown-no-replay: {\"dropped\":1}",
+    "passedChecks": 22,
+    "reportSha256": "3c53b3e09d1db858502503120f42d0fa30617eec58b8fa9e17163806de97e568"
+  },
+  {
+    "run": "browser-batch1-writes4",
+    "verdict": "FAIL",
+    "failure": "TimeoutError: locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('access-write-recovery-panel') to be visible\u001b[22m\n",
+    "passedChecks": 22,
+    "reportSha256": "4a3847231cb7bf911d4460568984bc310372552446f74e753befca7528c0d67c"
+  }
+]

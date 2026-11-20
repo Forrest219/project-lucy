@@ -1,0 +1,19 @@
+{
+  "parent": "6cf930f8b0ca61df1302cebfb23586020137218c",
+  "tests": {
+    "files": 10,
+    "passed": 244,
+    "logSha256": "49f511087e6ef7c382aa100d15de26228a8970f6fa47f7e4865e9c894c2a5731"
+  },
+  "typecheck": {
+    "verdict": "PASS",
+    "logSha256": "7b8beb6533b78ce33c5ebc37fdd8632c2b05dda530c713d66069577668c1bac6"
+  },
+  "foregroundBrowser": {
+    "checks": 52,
+    "verdict": "PASS",
+    "mode": "all"
+  },
+  "runtimeSourceHashes": "all scoped webui files exactly match integrated candidate manifest",
+  "note": "The P1-66 change is already committed in the parent; this process commits only its own increment. No full F58/F59 or load acceptance claim."
+}

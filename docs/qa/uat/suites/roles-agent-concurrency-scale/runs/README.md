@@ -1,5 +1,7 @@
 # 跑次证据
 
-当前没有执行跑次，测试台结果为 NOT RUN。
+最近：[2026-11-20首批实现与证据归档](2026-11-20-codex-racs-batch1.md)。既有smoke、B-floor、浏览器与其他规模诊断记录继续保留，各自只证明其实际覆盖。
 
-执行后按 `YYYY-MM-DD-<agent>-racs.md` 新增记录，使用上级 suite 的证据槽和全局 `templates/run-record.md`；不要把本说明当成一次跑次，不预填 PASS。正式判定只更新 `docs/qa/uat/INDEX.md`。
+正式判定见[UAT INDEX](../../../INDEX.md)。完整F58／F59、2×／5×与剩余矩阵按委托人决议延期第二批，未计PASS；R NOT RUN。
+
+执行后按`YYYY-MM-DD-<agent>-racs.md`登记，候选与原始证据必须可复查；不得用旧候选PASS替换新候选验收。

@@ -7,7 +7,7 @@
 | 总账 / REQ | P1-58／REQ-030-079；P1-59／REQ-030-080 |
 | 目标 | 以基准、2×、5× 的数据／并发／到达速率，验证列表响应、统计正确、多会话编辑、冲突恢复及纯 MCP 共存 |
 | 环境 | 独立本机 Docker compose fixture，单 Lucy 进程／单副本；真实 WebUI、API、SQLite、MCP 与反向代理 |
-| 当前执行状态 | **SMOKE_PASS**＋**B-floor PASS WITH GAP**＋**F58-browser-timing PASS WITH GAP**（2026-11-20 前台：~223 roles／82 agents，primaryReady 亚秒）＋ kimi stress 补充。完整 F58／F59／R／E 全矩阵／2×／5× 仍 NOT RUN。最近：[browser-timing](runs/2026-11-20-cursor-roles-agents-browser-timing.md)、[b-floor](runs/2026-11-20-cursor-f58-f59-b-floor.md)、[kimi-stress](runs/2026-11-20-kimi-scale-stress.md)、[smoke](runs/2026-11-19-cursor-f58-f59-smoke.md) |
+| 当前执行状态 | 首批B1＝PASS WITH GAP，归档跑次见[2026-11-20首批记录](runs/2026-11-20-codex-racs-batch1.md)；完整F58／F59、2×／5×及剩余矩阵按委托人决议延期第二批，未计PASS；R NOT RUN；既有跑次保留，不移算新候选。 |
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md)（倍率、资源、时序与阈值唯一真源） |
 | runs | [runs/](runs/) |
@@ -18,12 +18,16 @@
 ## 边界与判定
 
 - 遵守 [CONVENTIONS](../../CONVENTIONS.md)：全真、无 CR 冒充；真实服务端与自造业务数据，不伪造成功体或权限结果。
-- 本轮只授权文档设计。首次执行前需明确测试执行及隔离 fixture 授权；运行代码和 runner 开发另行授权。
+- 委托人2026-11-20已授权实现与隔离验证，随后明确暂停长测、分批收敛并commit本进程。本轮仅归档B1；完整F58／F59及规模／剩余故障矩阵延期第二批，不自动续跑。
 - 所有测试从隔离卷启动，禁止对 lucyadm.matrixback.com 或其他生产域名施压。客户环境只读证据缺失不阻断本机功能合同，但不能宣称已证明现网倍率。
 - 按下列分层矩阵选择 F58／F59／R，不能只写不带选择器的 PASS。R 的必做仍为 UAT-RACS-R0、01–16，全部倍率和身份模式保留；17 是经校准“当前用户 2～5 倍”主张的必要条件，资料未取得时 BLOCKED。
 - F58／F59 只是各自功能合同的验收证据，不代表共享 suite 全部通过。INDEX 分列功能子集、R 组合发布与当前倍率覆盖；R 未跑时全套仍 NOT RUN。R 全部本机必做通过而 17 缺失，最多 PASS WITH GAP，并写明只证明设计下限；不能用缺口口径豁免任何 R 必做。
 - 故障注入窗口的预期 502／503、409、BUSY 单列；正常窗口的 5xx／未知结果／丢写不能从分母剔除。注入错误被准确显示只证明失败路径，恢复后还必须真实完成读取与合法保存。
 - 纯 MCP 无 WebUI 身份必须可走原有合法读路径；不因新增展示缓存、冲突协议要求宿主 attestation 或管理员登录。
+
+## 首批B1（2026-11-20分批决议）
+
+B1只覆盖正式首批跑次实际执行的查看／新建／编辑／删除、冲突与恢复主路径及必要回归。原F58／F59映射、SC、E矩阵及性能预算保持，下表完整模块选择器延期第二批；B1通过不能换写完整F58／F59 PASS。
 
 ## 验收分层矩阵
 

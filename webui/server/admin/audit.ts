@@ -641,6 +641,11 @@ export async function getAuditDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
     CREATE INDEX IF NOT EXISTS idx_al_ts ON access_log(ts);
+    -- P1-58 D7: covering reads avoid random table lookups across large windows.
+    -- Built by the existing audit warmup before HTTP listening, never on first UI read.
+    CREATE INDEX IF NOT EXISTS idx_al_agent_window_cover
+      ON access_log(user_id, ts, token_hash_prefix, tool, outcome, eval_mark, args_summary, tables, client_ip);
+    CREATE INDEX IF NOT EXISTS idx_al_ts_token ON access_log(ts, token_hash_prefix);
     CREATE INDEX IF NOT EXISTS idx_al_lucy_turn_id ON access_log(lucy_turn_id);
     CREATE INDEX IF NOT EXISTS idx_ital_access_log ON inferred_turn_access_logs(access_log_id);
   `);

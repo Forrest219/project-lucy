@@ -29,6 +29,7 @@ export type RacsReceipt = Readonly<{
   requestDigest: string;
   /** Serialized base object version at preview time. */
   baseObjectVersion: string;
+  committedObjectVersion?: string;
   /** Whole-configuration candidate digest at commit time (hex). */
   candidateConfigDigest: string;
   terminal?: Readonly<{
@@ -89,6 +90,7 @@ export function buildRacsReceipt(input: {
   objectId: string;
   requestDigest: string;
   baseObjectVersion: string;
+  committedObjectVersion?: string;
   candidateConfigDigest: string;
   terminal?: RacsReceipt["terminal"];
 }): RacsReceipt {
@@ -100,6 +102,7 @@ export function buildRacsReceipt(input: {
     objectId: input.objectId,
     requestDigest: input.requestDigest,
     baseObjectVersion: input.baseObjectVersion,
+    ...(input.committedObjectVersion ? { committedObjectVersion: input.committedObjectVersion } : {}),
     candidateConfigDigest: input.candidateConfigDigest,
     ...(input.terminal ? { terminal: input.terminal } : {})
   };
@@ -176,6 +179,7 @@ export function parseRacsReceiptFromSummary(summary: unknown): RacsReceipt | nul
     objectId,
     requestDigest,
     baseObjectVersion,
+    ...(typeof record.committedObjectVersion === "string" ? { committedObjectVersion: record.committedObjectVersion } : {}),
     candidateConfigDigest,
     ...(terminal ? { terminal } : {})
   };
@@ -216,7 +220,7 @@ function mapRowToOutcome(row: ConfigAuditRow, receipt: RacsReceipt | null): Acce
     objectKind: receipt.objectKind,
     objectId: receipt.objectId,
     requestDigest: receipt.requestDigest,
-    committedObjectVersion: receipt.baseObjectVersion,
+    committedObjectVersion: receipt.committedObjectVersion,
     committedConfigDigest: receipt.candidateConfigDigest
   };
   if (row.write_status === "pending") {
@@ -228,7 +232,7 @@ function mapRowToOutcome(row: ConfigAuditRow, receipt: RacsReceipt | null): Acce
   }
   if (row.write_status === "committed") {
     const terminal = receipt.terminal;
-    if (!terminal || terminal.writeStatus !== "committed" || !terminal.runtimeAck) {
+    if (!terminal || terminal.writeStatus !== "committed" || !terminal.runtimeAck || !receipt.committedObjectVersion) {
       return {
         ...base,
         ...common,
@@ -289,9 +293,10 @@ export function canViewAccessWriteStatus(
     ) {
       return true;
     }
-    if (receipt.submitterActorId === viewer.actorId) return true;
+    return false;
   }
-  return rowActorId === viewer.actorId;
+  // Without an immutable submitting identity, a reused display id proves nothing.
+  return false;
 }
 
 export function evaluateRacsIdempotencyClaim(

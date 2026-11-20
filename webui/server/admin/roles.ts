@@ -1,4 +1,5 @@
-import type { FastifyInstance } from "fastify";
+import { prepareRolesAgentMutation, runRolesAgentMutationRequest, runRolesAgentPublishWindow, readRolesAgentCompileInputsDigest, recheckRolesAgentWriteAccess, replayRecordedRolesAgentWrite, rolesAgentRequestDigest } from "./access-roles-agent-concurrent-edit.js";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { randomUUID } from "node:crypto";
 import { timeAsync, withRequestTiming } from "../entry-performance-timing.js";
 import { resolveProjectRoot } from "../project.js";
@@ -1189,6 +1190,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
   app.post<{
     Body: {
       dryRun?: boolean;
+      baseObjectVersion?: string; previewToken?: string; operationId?: string;
       override?: AccessGovernanceOverrideRequest;
       roleId?: string;
       role?: unknown;
@@ -1202,6 +1204,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
     };
   }>("/api/admin/roles", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
+    const projectRoot = await resolveProjectRoot();
+    const executeRequest = async (reply: FastifyReply) => {
     const { roleId, role } = request.body ?? {};
     if (typeof roleId !== "string" || !roleId.trim()) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "roleId is required" } });
@@ -1210,7 +1214,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (!validated.ok) {
       return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
     }
-    const projectRoot = await resolveProjectRoot();
+    if (!dryRun && request.body?.baseObjectVersion && await replayRecordedRolesAgentWrite(request, reply,
+      resolveAccessWriteVersionMode(request.body), "role", roleId,
+      { ...request.body, patch: { action: "create", value: validated.value, copySourceId: null } })) return;
     const { config, raw } = await readAccessYaml(projectRoot);
     if (config.roles?.[roleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${roleId}' already exists` } });
@@ -1258,7 +1264,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings } };
+      const protocol = await prepareRolesAgentMutation({ request, reply, kind: "role", objectId: roleId, action: "create", dryRun: true,
+        config, candidate: newConfig, gate, fields: request.body ?? {}, value: validated.value });
+      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings, ...protocol?.preview } };
     }
 
     if (gate.decision === "block") {
@@ -1302,7 +1310,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
       operationId
     );
     // ── the create runs INSIDE the shared publish window (spec §14.2.2) ─────
-    return runInAccessPublishWindow("role_policy_save", projectRoot, async () => {
+    return runRolesAgentPublishWindow("role_policy_save", projectRoot, reply, async (reply) => {
+      if (!(await recheckRolesAgentWriteAccess(request, reply, projectRoot))) return;
       // 0) Spec §14.2.2 — the recovery gate comes first: an unresolved recovery
       //    fails the write closed before any candidate is rebuilt.
       const recovery = await accessRecoveryRejection(projectRoot);
@@ -1354,8 +1363,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
         operationId
       );
 
+      const freshGuard = await guardRoleIdForCreate(roleId, request.body?.acknowledgeContextReferences === true);
+      if (freshGuard) return reply.status(freshGuard.status).send({ ok: false, error: freshGuard });
+      const freshGate = evaluateAccessGovernanceGate(await buildRoleGateInput({ targetKind: "role", targetId: roleId, newRole: validated.value }));
+      if (roleCarriesOpsGrant(validated.value) && !(await requireOwnerForOps(request, reply))) return;
+      const protocol = await prepareRolesAgentMutation({ request, reply, kind: "role", objectId: roleId, action: "create", dryRun: false,
+        config: freshConfig, candidate: freshConfigWithRole, gate: freshGate, fields: request.body ?? {}, value: validated.value });
+      if (!protocol) return;
       const writeResult = await writeAccessYaml(projectRoot, freshConfigWithRole, {
       enabled: true,
+      idempotencyKey: protocol.audit.idempotencyKey,
       changeType: freshAttribution ? "row_policy_update" : "role_create",
       operation: freshAttribution ? "row_policy.update" : undefined,
       targetId: roleId,
@@ -1373,6 +1390,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
           : {})
       },
       newSummary: {
+        ...(protocol.audit.racsReceipt ? { racsReceipt: protocol.audit.racsReceipt } : {}),
         roleIds: Object.keys(freshConfigWithRole.roles ?? {}),
         description: validated.value.description,
         ...(freshAttribution
@@ -1423,6 +1441,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
       });
       return reply.status(response.statusCode).send(response.body);
     });
+    };
+    return runRolesAgentMutationRequest("role_policy_save", projectRoot, request, reply, dryRun, executeRequest);
   });
 
   // PATCH /api/admin/roles/:roleId — edit yaml role
@@ -1447,6 +1467,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
   }>("/api/admin/roles/:roleId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const projectRoot = await resolveProjectRoot();
+    const executeRequest = async (reply: FastifyReply) => {
     let versionMode;
     try {
       versionMode = resolveAccessWriteVersionMode(request.body ?? {});
@@ -1457,7 +1478,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       }
       throw error;
     }
-    const compileInputsDigest = resolveCompileInputsDigest(request.body?.compileInputsDigest);
+    if (!dryRun && await replayRecordedRolesAgentWrite(request, reply, versionMode, "role", request.params.roleId, request.body ?? {})) return;
     const { raw, version: currentVersion } = await readAccessYamlVersion(projectRoot);
     if (versionMode.mode === "legacy" && request.body?.version && request.body.version !== currentVersion) {
       return reply.status(409).send({ ok: false, error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" } });
@@ -1466,6 +1487,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (!config.users) config.users = [];
     const existing = config.roles?.[request.params.roleId];
     if (!existing || !existing.allow) {
+      if (versionMode.mode === "object") return reply.status(409).send({ ok: false, error: { code: "OBJECT_TARGET_CHANGED", message: "目标角色已删除或变化，请保留草稿并读取最新状态。" } });
       // template role is read-only
       if (ROLE_TEMPLATES[request.params.roleId]) {
         return reply.status(400).send({ ok: false, error: { code: "TEMPLATE_ROLE_READONLY", message: "template roles are read-only" } });
@@ -1560,6 +1582,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
     });
     const gate = evaluateAccessGovernanceGate(gateInput);
 
+    const compileInputsDigest = versionMode.mode === "object"
+      ? await readRolesAgentCompileInputsDigest("role", request.params.roleId, newConfig, { role: existing }) : "";
+
     const racsPreview =
       versionMode.mode === "object"
         ? computeRoleAgentPreviewBinding({
@@ -1569,6 +1594,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
             config: newConfig,
             patch: request.body?.patch ?? {},
             compileInputsDigest,
+            actor: trustedActorFromRequest(request),
             gate
           })
         : undefined;
@@ -1639,7 +1665,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
     // preview and the confirmation comparison, the intent, the write, the
     // runtime swap, the terminal audit and the failure recovery. The submission
     // re-check may NOT be moved outside of it.
-    return runInAccessPublishWindow("role_policy_save", projectRoot, async () => {
+    return runRolesAgentPublishWindow("role_policy_save", projectRoot, reply, async (reply) => {
+      if (!(await recheckRolesAgentWriteAccess(request, reply, projectRoot))) return;
       // 0) Spec §14.2.2 — the recovery gate comes first: an unresolved recovery
       //    fails the write closed before any candidate is rebuilt.
       const recovery = await accessRecoveryRejection(projectRoot);
@@ -1719,6 +1746,13 @@ export function registerRoleRoutes(app: FastifyInstance) {
       }
 
       const freshConfigWithRole = mergeConfigWithRole(freshConfig, request.params.roleId, freshValidated.value);
+      const freshGate = evaluateAccessGovernanceGate(await buildRoleGateInput({
+        targetKind: "role", targetId: request.params.roleId, oldRole: freshExisting, newRole: freshValidated.value
+      }));
+      if (freshGate.decision === "block" || (freshGate.decision === "override_required" && !evaluateGovernanceOverride(request.body?.override, freshGate).ok)) {
+        return reply.status(409).send({ ok: false, error: { code: "GOVERNANCE_GATE_BLOCKED", message: "当前权限影响已变化，请重新预览并确认。", detail: { gate: freshGate } } });
+      }
+      if ((roleCarriesOpsGrant(freshExisting) || roleCarriesOpsGrant(freshValidated.value)) && !(await requireOwnerForOps(request, reply))) return;
       let publishPreviewEffectDigest: string | undefined;
       if (versionMode.mode === "object") {
         try {
@@ -1728,8 +1762,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
             baseObjectVersion: versionMode.baseObjectVersion,
             config: freshConfigWithRole,
             patch: request.body?.patch ?? {},
-            compileInputsDigest,
-            gate
+            compileInputsDigest: await readRolesAgentCompileInputsDigest("role", request.params.roleId, freshConfigWithRole, { role: freshExisting }),
+            actor: trustedActorFromRequest(request),
+            gate: freshGate
           });
           assertPreviewTokenMatches(request.body?.previewToken, freshBinding.previewEffectDigest);
           publishPreviewEffectDigest = freshBinding.previewEffectDigest;
@@ -1798,6 +1833,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
           objectId: request.params.roleId,
           previewEffectDigest: publishPreviewEffectDigest,
           baseObjectVersionSerialized: serializeBaseObjectVersion(objectBase),
+          requestDigest: rolesAgentRequestDigest(request.body ?? {}),
           candidateConfig: freshConfigWithRole
         });
         const claim = await evaluateRolesAgentRacsIdempotencyClaim(racsOp.operationId, receipt);
@@ -1879,6 +1915,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
       });
       return reply.status(response.statusCode).send(response.body);
     });
+    };
+    return runRolesAgentMutationRequest("role_policy_save", projectRoot, request, reply, dryRun, executeRequest);
   });
 
   // DELETE /api/admin/roles/:roleId — delete yaml role, blocked if in use
@@ -1886,6 +1924,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     Params: { roleId: string };
     Body?: {
       dryRun?: boolean;
+      baseObjectVersion?: string; previewToken?: string; operationId?: string;
       version?: string;
       override?: AccessGovernanceOverrideRequest;
       /** Spec §14.2.1 — required when the Role being deleted carries a row policy. */
@@ -1896,11 +1935,17 @@ export function registerRoleRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const dryRun = request.body?.dryRun !== false;
       const projectRoot = await resolveProjectRoot();
+      const executeDelete = async (reply: FastifyReply) => {
+      if (!dryRun && !(await recheckRolesAgentWriteAccess(request, reply, projectRoot))) return;
+      if (!dryRun && request.body?.baseObjectVersion && await replayRecordedRolesAgentWrite(request, reply,
+        resolveAccessWriteVersionMode(request.body), "role", request.params.roleId,
+        { ...request.body, patch: { action: "delete", value: null, copySourceId: null } })) return;
       const { config, raw, version } = await readAccessYaml(projectRoot);
       if (request.body?.version && request.body.version !== version) {
         return reply.status(409).send({ ok: false, error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" } });
       }
       if (!config.roles?.[request.params.roleId] || !config.roles[request.params.roleId].allow) {
+        if (request.body?.baseObjectVersion) return reply.status(409).send({ ok: false, error: { code: "OBJECT_TARGET_CHANGED", message: "目标角色已删除或变化，请保留草稿并读取最新状态。" } });
         if (ROLE_TEMPLATES[request.params.roleId]) {
           return reply.status(400).send({ ok: false, error: { code: "TEMPLATE_ROLE_READONLY", message: "template roles are read-only" } });
         }
@@ -1987,7 +2032,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
       const gate = evaluateAccessGovernanceGate(gateInput);
 
       if (dryRun) {
-        return { ok: true, data: { diff, proposedYaml, version, gate } };
+        const protocol = await prepareRolesAgentMutation({ request, reply, kind: "role", objectId: request.params.roleId, action: "delete", dryRun: true,
+          config, candidate: newConfig, gate, fields: request.body ?? {} });
+        return { ok: true, data: { diff, proposedYaml, version, gate, ...protocol?.preview } };
       }
 
       if (gate.decision === "block") {
@@ -2020,6 +2067,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
         await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       }
 
+      const protocol = await prepareRolesAgentMutation({ request, reply, kind: "role", objectId: request.params.roleId, action: "delete", dryRun: false,
+        config, candidate: newConfig, gate, fields: request.body ?? {} });
+      if (!protocol) return;
       // Spec §4.3: retire the id durably BEFORE the config write; a failed write leaves the
       // stricter state (id retired), never a reusable id.
       const retireStore = await getSecurityStore();
@@ -2032,10 +2082,11 @@ export function registerRoleRoutes(app: FastifyInstance) {
       }
       const writeResult = await writeAccessYaml(projectRoot, newConfig, {
         enabled: true,
+        idempotencyKey: protocol.audit.idempotencyKey,
         changeType: "role_delete",
         targetId: request.params.roleId,
         oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
-        newSummary: { roleIds: Object.keys(newConfig.roles ?? {}) },
+        newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), ...(protocol.audit.racsReceipt ? { racsReceipt: protocol.audit.racsReceipt } : {}) },
         diff,
         ...auditActorFields(trustedActorFromRequest(request)),
         source: "admin_roles_api"
@@ -2049,6 +2100,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
         gate
       });
       return reply.status(response.statusCode).send(response.body);
+      };
+      return dryRun ? executeDelete(reply) : runRolesAgentPublishWindow("role_policy_save", projectRoot, reply, executeDelete);
     }
   );
 
@@ -2057,6 +2110,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     Params: { roleId: string };
     Body: {
       dryRun?: boolean;
+      baseObjectVersion?: string; previewToken?: string; operationId?: string;
       override?: AccessGovernanceOverrideRequest;
       newRoleId?: string;
       description?: string;
@@ -2071,11 +2125,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
     };
   }>("/api/admin/roles/:roleId/copy", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
+    const projectRoot = await resolveProjectRoot();
+    const executeRequest = async (reply: FastifyReply) => {
     const { newRoleId, description, role } = request.body ?? {};
     if (typeof newRoleId !== "string" || !newRoleId.trim()) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "newRoleId is required" } });
     }
-    const projectRoot = await resolveProjectRoot();
     const { config, raw } = await readAccessYaml(projectRoot);
     const source = findRole(config, request.params.roleId);
     if (!source) {
@@ -2091,6 +2146,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (!validated.ok) {
       return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
     }
+    if (!dryRun && request.body?.baseObjectVersion && await replayRecordedRolesAgentWrite(request, reply,
+      resolveAccessWriteVersionMode(request.body), "role", newRoleId,
+      { ...request.body, patch: { action: "create", value: validated.value, copySourceId: request.params.roleId } })) return;
     if (config.roles?.[newRoleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${newRoleId}' already exists` } });
     }
@@ -2130,7 +2188,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings } };
+      const protocol = await prepareRolesAgentMutation({ request, reply, kind: "role", objectId: newRoleId, action: "create", dryRun: true,
+        config, candidate: newConfig, gate, fields: request.body ?? {}, value: validated.value, copySourceId: request.params.roleId });
+      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings, ...protocol?.preview } };
     }
 
     if (gate.decision === "block") {
@@ -2164,7 +2224,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
     }
 
     // ── the copy runs INSIDE the shared publish window (spec §14.2.2) ────────
-    return runInAccessPublishWindow("role_policy_save", projectRoot, async () => {
+    return runRolesAgentPublishWindow("role_policy_save", projectRoot, reply, async (reply) => {
+      if (!(await recheckRolesAgentWriteAccess(request, reply, projectRoot))) return;
       // 0) Spec §14.2.2 — the recovery gate comes first: an unresolved recovery
       //    fails the write closed before any candidate is rebuilt.
       const recovery = await accessRecoveryRejection(projectRoot);
@@ -2209,12 +2270,22 @@ export function registerRoleRoutes(app: FastifyInstance) {
       };
       const freshDiff = makeDiff(fresh.raw, (await import("yaml")).stringify(freshConfigWithRole, { lineWidth: 0 }));
 
+      const freshGuard = await guardRoleIdForCreate(newRoleId, request.body?.acknowledgeContextReferences === true);
+      if (freshGuard) return reply.status(freshGuard.status).send({ ok: false, error: freshGuard });
+      const freshSource = findRole(freshConfig, request.params.roleId);
+      if (!freshSource) return reply.status(409).send({ ok: false, error: { code: "OBJECT_TARGET_CHANGED", message: "复制源已删除，请重新选择。" } });
+      if (roleCarriesOpsGrant(validated.value) && !(await requireOwnerForOps(request, reply))) return;
+      const freshGate = evaluateAccessGovernanceGate(await buildRoleGateInput({ targetKind: "role", targetId: newRoleId, oldRole: freshSource.role, newRole: validated.value }));
+      const protocol = await prepareRolesAgentMutation({ request, reply, kind: "role", objectId: newRoleId, action: "create", dryRun: false,
+        config: freshConfig, candidate: freshConfigWithRole, gate: freshGate, fields: request.body ?? {}, value: validated.value, copySourceId: request.params.roleId });
+      if (!protocol) return;
       const writeResult = await writeAccessYaml(projectRoot, freshConfigWithRole, {
       enabled: true,
+      idempotencyKey: protocol.audit.idempotencyKey,
       changeType: "role_create",
       targetId: newRoleId,
       oldSummary: { roleIds: Object.keys(freshConfig.roles ?? {}), sourceRoleId: request.params.roleId },
-      newSummary: { roleIds: Object.keys(freshConfigWithRole.roles ?? {}), sourceRoleId: request.params.roleId },
+      newSummary: { roleIds: Object.keys(freshConfigWithRole.roles ?? {}), sourceRoleId: request.params.roleId, ...(protocol.audit.racsReceipt ? { racsReceipt: protocol.audit.racsReceipt } : {}) },
       diff: freshDiff,
       ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
@@ -2248,6 +2319,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
       });
       return reply.status(response.statusCode).send(response.body);
     });
+    };
+    return runRolesAgentMutationRequest("role_policy_save", projectRoot, request, reply, dryRun, executeRequest);
   });
 }
 
