@@ -526,3 +526,44 @@ describe("SC-09 (D6) — D2 call 后后续 query 正常到达上游", () => {
     });
   });
 });
+
+
+describe("P1-60 final-review regressions", () => {
+  it("R-03 fallback instructions retain continue but remove hidden begin", async () => {
+    await writeContent("webui/config/data-qa-instructions.md", "# fallback\n## 可选问询上报（锦上添花）\n\n- call `lucy_begin_question`\n- question and intentSummary\n\n## 预算\n- `lucy_continue_question` remains visible\n");
+    await withProxyInactive(async (port, mods) => {
+      const spy = vi.spyOn(mods.acl, "lucyCatalog").mockRejectedValue(new Error("catalog-unavailable"));
+      try {
+        const instructions = await getInitializeInstructions(port);
+        expect(instructions).not.toContain("lucy_begin_question");
+        expect(instructions).toContain("lucy_continue_question");
+      } finally { spy.mockRestore(); }
+    });
+  });
+  it.each(["", "   "])("R-04 inactive missing intent %j returns D2 before business validation", async (intent) => {
+    await withProxyInactive(async (port) => {
+      const result = await callBegin(port, intent);
+      expect(result.isError).toBe(true);
+      expect(result.data?.reason).toBe("begin_not_available");
+      expect(testState.writeConversationTurnMock).not.toHaveBeenCalled();
+      const query = await callQuery(port);
+      expect(query.isError).toBe(false);
+    });
+  });
+  it("R-03 classification exceptions keep begin hidden and continue visible", async () => {
+    await withProxyInactive(async (port, mods) => {
+      const spy = vi.spyOn(mods.registry, "classifyCaliberParticipation").mockRejectedValue(new Error("classification-read-failed"));
+      try {
+        const tools = await listTools(port);
+        expect(tools).not.toContain("lucy_begin_question");
+        expect(tools).toContain("lucy_continue_question");
+        expect(await getInitializeInstructions(port)).not.toContain("lucy_begin_question");
+        const forced = await callBegin(port);
+        expect(forced.isError).toBe(true);
+        expect(forced.data?.reason).toBe("caliber_binding_unresolved");
+        expect(testState.writeConversationTurnMock).not.toHaveBeenCalled();
+      } finally { spy.mockRestore(); }
+      expect((await callQuery(port)).isError).toBe(false);
+    });
+  });
+});

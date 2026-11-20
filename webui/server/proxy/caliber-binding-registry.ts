@@ -231,16 +231,67 @@ async function credentialPath(): Promise<string> {
   return path.join(dir, ".caliber-binding", CREDENTIAL_FILE);
 }
 
-async function readCredential(): Promise<RegistryCredential | null> {
-  const file = await credentialPath();
+interface ParticipationProof {
+  kind: "inactive" | "published" | "unknown";
+  credential: RegistryCredential | null;
+  credentialInvalid?: boolean;
+  digest?: string;
+}
+
+/** Read authoring status and existing commit evidence without compiling any source map. */
+async function readParticipationProof(): Promise<ParticipationProof> {
+  let credential: RegistryCredential | null = null;
   try {
-    const raw = await readFile(file, "utf8");
-    const parsed = JSON.parse(raw) as RegistryCredential;
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
-  } catch {
-    return null;
+    const parsed = JSON.parse(await readFile(await credentialPath(), "utf8")) as RegistryCredential;
+    const valid = parsed && (parsed.phase === "committed" || parsed.phase === "prepared")
+      && Number.isSafeInteger(parsed.generation) && parsed.generation >= 0
+      && Number.isSafeInteger(parsed.fileCount) && parsed.fileCount >= 0
+      && typeof parsed.digest === "string" && /^[a-f0-9]{64}$/.test(parsed.digest)
+      && typeof parsed.sourceMapVersion === "string" && Array.isArray(parsed.receipts)
+      && parsed.receipts.length > 0 && parsed.receipts.every((receipt) => receipt
+        && typeof receipt.consumer === "string" && receipt.consumer.length > 0
+        && receipt.digest === parsed.digest && receipt.fileCount === parsed.fileCount);
+    if (!valid) return { kind: "unknown", credential: null, credentialInvalid: true };
+    credential = parsed;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      return { kind: "unknown", credential: null, credentialInvalid: true };
+    }
+    // Losing evidence from a previously loaded registry is not first use.
+    if (state.credential || (state.current?.bindings.size ?? 0) > 0) {
+      return { kind: "unknown", credential: null, credentialInvalid: true };
+    }
   }
+  if (credential?.phase === "prepared") return { kind: "unknown", credential };
+  let entries: string[];
+  const dir = await caliberBindingsDir();
+  try { entries = (await readdir(dir)).filter((name) => /\.ya?ml$/i.test(name)).sort(); }
+  catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") return { kind: "unknown", credential };
+    entries = [];
+  }
+  if (entries.length > SCAN_FILE_LIMIT) return { kind: "unknown", credential };
+  const parts: string[] = [];
+  let published = false;
+  for (const name of entries) {
+    try {
+      const raw = await readFile(path.join(dir, name), "utf8");
+      const parsed = parse(raw) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)
+        || (parsed.status !== "draft" && parsed.status !== "published")) {
+        return { kind: "unknown", credential };
+      }
+      published ||= parsed.status === "published";
+      parts.push(`${name}:${createHash("sha256").update(raw).digest("hex")}`);
+    } catch { return { kind: "unknown", credential }; }
+  }
+  const digest = createHash("sha256").update(parts.join("\n")).digest("hex");
+  if (published) return { kind: "published", credential, digest };
+  if (!credential) return { kind: "inactive", credential: null, digest };
+  const legacyEmpty = credential.fileCount === 0 && ["", "[]"].some((empty) =>
+    credential.digest === createHash("sha256").update(empty).digest("hex"));
+  const committedDrafts = credential.fileCount === entries.length && credential.digest === digest;
+  return { kind: legacyEmpty || committedDrafts ? "inactive" : "unknown", credential, digest };
 }
 
 async function writeCredential(credential: RegistryCredential): Promise<void> {
@@ -360,6 +411,13 @@ export async function loadCaliberBindingCandidate(): Promise<RegistryCandidate> 
       };
     }
     return { ok: false, reason: "content_read_failed", detail: code ?? "unknown" };
+  }
+
+  if (entries.length === 0) {
+    return { ok: true, registry: {
+      bindings: new Map(), digest: createHash("sha256").update("[]").digest("hex"),
+      sourceMapVersion: "", fileCount: 0, loadedAt: Date.now(), receipts: []
+    } };
   }
 
   if (entries.length > SCAN_FILE_LIMIT) {
@@ -580,8 +638,23 @@ export async function recoverCaliberBindingRegistry(): Promise<{
   generation: number | null;
   reason: string | null;
 }> {
-  const credential = await readCredential();
+  const proof = await readParticipationProof();
+  const credential = proof.credential;
   state.credential = credential;
+  if (proof.credentialInvalid) {
+    state.current = null;
+    state.syncPending = true;
+    return { usable: false, generation: null, reason: "credential_unreadable" };
+  }
+  // Existing committed zero/draft evidence needs no source dependency recovery.
+  if (credential && proof.kind === "inactive") {
+    state.current = { generation: credential.generation, bindings: new Map(),
+      digest: credential.digest, sourceMapVersion: credential.sourceMapVersion,
+      fileCount: credential.fileCount, loadedAt: Date.now(), receipts: credential.receipts };
+    state.syncPending = false;
+    state.terminalRecorded = true;
+    return { usable: true, generation: credential.generation, reason: null };
+  }
 
   if (!credential) {
     const candidate = await loadCaliberBindingCandidate();
@@ -731,54 +804,16 @@ export type CaliberParticipation = "inactive" | "active" | "unknown";
 export async function classifyCaliberParticipation(options?: {
   scopeKey?: string;
 }): Promise<CaliberParticipation> {
-  const credential = currentRegistryCredential();
+  const proof = await readParticipationProof();
+  if (proof.kind === "inactive") return classifyL0L1(options?.scopeKey);
+  if (proof.kind === "unknown") return "unknown";
+  const credential = proof.credential;
   const registry = currentCaliberBindingRegistry();
-  const syncPending = registrySyncPending();
-
-  // ── 全局分类 ──────────────────────────────────────────────────────────────
-
-  if (credential !== null) {
-    if (credential.phase !== "committed") {
-      // prepared 凭据 → unknown（Spec §3.1 "prepared 凭据"）。
-      return "unknown";
-    }
-    if (syncPending || registry === null) {
-      // committed 但同步未决（内容漂移、source map 漂移、提交失败）→ unknown。
-      return "unknown";
-    }
-    // committed + 注册表已加载。
-    if (registry.bindings.size > 0) {
-      // 至少一条已发布绑定 → active。
-      return "active";
-    }
-    // committed + 0 条已发布绑定（包含 fileCount=0 旧空注册表与全 draft 情形）→ inactive。
-    // 再做 scope 级 L0/L1 判定。
-    return classifyL0L1(options?.scopeKey);
-  }
-
-  // 无凭据分支：
-  // 若 recoverCaliberBindingRegistry() 已确认空目录（registry 非 null, fileCount=0,
-  // !syncPending），直接按 inactive 处理（无需重扫）。
-  if (registry !== null && registry.fileCount === 0 && !syncPending) {
-    return classifyL0L1(options?.scopeKey);
-  }
-
-  // 否则重扫目录，区分「全 draft / 无文件 → inactive」与「有 published → unknown」。
-  const candidate = await loadCaliberBindingCandidate();
-  if (!candidate.ok) {
-    // 读取失败或 source map 编译失败 → unknown（"读取失败"）。
-    return "unknown";
-  }
-  if (candidate.registry.fileCount === 0) {
-    // 无业务绑定文件 → inactive。
-    return classifyL0L1(options?.scopeKey);
-  }
-  if (candidate.registry.bindings.size === 0) {
-    // 文件全部可解析为 draft（无 published 绑定）→ inactive。
-    return classifyL0L1(options?.scopeKey);
-  }
-  // 无凭据但存在 published 文件 → unknown（Spec §3.1 "无凭据但存在 published"）。
-  return "unknown";
+  if (!credential || credential.phase !== "committed" || registrySyncPending()
+    || !registry || registry.bindings.size === 0
+    || registry.generation !== credential.generation
+    || registry.digest !== credential.digest || proof.digest !== credential.digest) return "unknown";
+  return "active";
 }
 
 /**
@@ -795,7 +830,7 @@ async function classifyL0L1(scopeKey: string | undefined): Promise<CaliberPartic
 
   const session = await readBindingSession(scopeKey);
 
-  if (session.state === "never_begun" || session.state === "begun_no_hit") {
+  if (session.state === "never_begun" || session.state === "begun_no_hit" || session.optionalPreparing === true) {
     return "inactive"; // L0
   }
 

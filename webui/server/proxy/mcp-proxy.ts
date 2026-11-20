@@ -1448,7 +1448,7 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
 
 /**
  * P1-60 (Spec §3 D1–D2): inactive / unknown 下从 visibleTools 移除 lucy_begin_question。
- * fail-open：分类读取失败时保留现有可见性，不影响 tools/list 正常响应。
+ * 分类读取失败按 unknown 隐藏 begin；其余工具与 continue 保持。
  */
 async function shouldHideBeginQuestion(identity: Identity, sessionId: string | null | undefined): Promise<boolean> {
   try {
@@ -1457,7 +1457,7 @@ async function shouldHideBeginQuestion(identity: Identity, sessionId: string | n
     const participation = await classifyCaliberParticipation({ scopeKey });
     return participation !== "active";
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -2088,7 +2088,12 @@ async function buildRoleAwareInstructions(identity: Identity, sessionId?: string
 }
 
 async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: SpanHandle | undefined, sessionId?: string | null): Promise<string | undefined> {
-  const fallback = await loadDataQaInstructions();
+  const hideBegin = await shouldHideBeginQuestion(identity, sessionId);
+  const rawFallback = await loadDataQaInstructions();
+  const fallback = hideBegin && rawFallback
+    ? rawFallback.replace(/## 可选问询上报[^\n]*\n[\s\S]*?(?=\n## |$)/u, "")
+      .replaceAll("lucy_begin_question", "问询声明")
+    : rawFallback;
   try {
     const catalogSpan = currentTrace()?.start("catalog_resolve", buildSpan);
     const catalog = await lucyCatalog(identity);
@@ -2107,7 +2112,7 @@ async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: 
     if (catalog.connections.length === 0 && catalog.sources.length === 0 && accessibleSkills.length === 0) return fallback;
     const visibleTools = new Set(await allowedToolNames(identity));
     // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
-    if (await shouldHideBeginQuestion(identity, sessionId)) visibleTools.delete("lucy_begin_question");
+    if (hideBegin) visibleTools.delete("lucy_begin_question");
     const catalogTool = visibleTools.has("lucy_catalog")
       ? "`lucy_catalog`"
       : visibleTools.has("kx_catalog")
@@ -6002,6 +6007,52 @@ async function buildDenialRepairPayload(
       return;
     }
     if (toolName === "lucy_begin_question") {
+      // P1-60 §D2: inactive → begin_not_available，在生成 ID／写 turn／预算／BindingSession 前返回。
+      {
+        const beginScopeKey = bindingScopeKey(
+          budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          requestMeta.lucySessionId
+        );
+        let caliberParticipation: "inactive" | "active" | "unknown";
+        try { caliberParticipation = await classifyCaliberParticipation({ scopeKey: beginScopeKey }); }
+        catch { caliberParticipation = "unknown"; }
+        if (caliberParticipation !== "active") {
+          const reason = caliberParticipation === "inactive" ? "begin_not_available" : "caliber_binding_unresolved";
+          const message = caliberParticipation === "inactive"
+            ? "当前未启用问询上报，可直接按现有权限查询。"
+            : "本次问询的口径绑定状态不可信，本次开题未提交。";
+          const responseBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            result: {
+              isError: true,
+              content: [{ type: "text", text: message }],
+              data: { reason, trace: traceId }
+            }
+          });
+          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          res.end(responseBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            argsSummary,
+            outcome: "denied",
+            decisionReason: reason,
+            errorDetail: reason,
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(responseBody),
+            requestId,
+            ...requestMeta,
+            ...(await auditMeta(identity, "allowed")),
+          });
+          return;
+        }
+        // unknown → 既有治理 unresolved 链，不套用 D2（Spec §3.1）。
+        // active → 既有 begin 路径不变。
+      }
+
       const args = (toolArgs as Record<string, unknown> | undefined) ?? {};
       const intentSummary = typeof args.intentSummary === "string" ? args.intentSummary.trim() : "";
       if (!intentSummary) {
@@ -6043,45 +6094,6 @@ async function buildDenialRepairPayload(
         return;
       }
 
-      // P1-60 §D2: inactive → begin_not_available，在生成 ID／写 turn／预算／BindingSession 前返回。
-      {
-        const beginScopeKey = bindingScopeKey(
-          budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
-          requestMeta.lucySessionId
-        );
-        const caliberParticipation = await classifyCaliberParticipation({ scopeKey: beginScopeKey });
-        if (caliberParticipation === "inactive") {
-          const responseBody = JSON.stringify({
-            jsonrpc: "2.0",
-            id: requestId,
-            result: {
-              isError: true,
-              content: [{ type: "text", text: "当前未启用问询上报，可直接按现有权限查询。" }],
-              data: { reason: "begin_not_available", trace: traceId }
-            }
-          });
-          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
-          res.end(responseBody);
-          recordRequestAudit({
-            ts: new Date().toISOString(),
-            userId: identity.userId,
-            client: identity.client,
-            tool: toolName,
-            argsSummary,
-            outcome: "denied",
-            decisionReason: "begin_not_available",
-            errorDetail: "begin_not_available",
-            durationMs: Date.now() - start,
-            responseBytes: Buffer.byteLength(responseBody),
-            requestId,
-            ...requestMeta,
-            ...(await auditMeta(identity, "allowed")),
-          });
-          return;
-        }
-        // unknown → 既有治理 unresolved 链，不套用 D2（Spec §3.1）。
-        // active → 既有 begin 路径不变。
-      }
 
       const turnId = `lucy_${randomUUID()}`;
       const storePreview = storeQuestionPreviewEnabled();

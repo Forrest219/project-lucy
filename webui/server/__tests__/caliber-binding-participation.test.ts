@@ -439,3 +439,43 @@ describe("不传 scopeKey 时仅依据全局注册表状态", () => {
     expect(result).toBe("inactive");
   });
 });
+
+
+describe("P1-60 final-review zero-state regressions", () => {
+  it("R-01 proven optional preparing does not reject the query gate", async () => {
+    await setupGlobalInactive();
+    const scope = makeScope();
+    await beginBindingSessionPreparation(scope, {turnId:"legacy-optional",registryGeneration:0,bindingId:null,boundKey:null,caliberSnapshot:null});
+    expect(await classifyCaliberParticipation({scopeKey:scope})).toBe("inactive");
+    const {checkCaliberBindingGate}=await import("../proxy/caliber-binding");
+    const gate=await checkCaliberBindingGate({identity:{} as never,identityKey:"test_user|hash",sessionId:"session-part-test",toolName:"lucy_query",args:{}});
+    expect(gate.kind).toBe("allow");
+  });
+  it("R-01 optional preparing over a prior bound snapshot must stay unknown", async () => {
+    await setupGlobalInactive();const scope=makeScope();
+    await commitBindingSession(scope,{turnId:"old-bound",registryGeneration:1,bindingId:"asset_count",boundKey:FAKE_BOUND_KEY,caliberSnapshot:FAKE_CALIBER});
+    await beginBindingSessionPreparation(scope,{turnId:"optional-over-bound",registryGeneration:1,bindingId:null,boundKey:null,caliberSnapshot:null});
+    expect(await classifyCaliberParticipation({scopeKey:scope})).toBe("unknown");
+  });
+  it("R-02 committed empty credential remains inactive after recovery", async () => {
+    await commitCurrentBindings();
+    const {recoverCaliberBindingRegistry}=await import("../proxy/caliber-binding-registry");
+    resetCaliberBindingRegistryForTests();
+    expect((await recoverCaliberBindingRegistry()).usable).toBe(true);
+    expect(await classifyCaliberParticipation()).toBe("inactive");
+  });
+  it("R-02 draft-only classification does not require valid unpublished business fields", async () => {
+    await writeContent("caliber-bindings/draft.yaml","status: draft\ntriggers: invalid-draft-field\n");
+    expect(await classifyCaliberParticipation()).toBe("inactive");
+  });
+  it("R-02 corrupt credential is not silently certified as no history", async () => {
+    await writeContent("caliber-bindings/.caliber-binding/active-generation.json","{invalid");
+    expect(await classifyCaliberParticipation()).toBe("unknown");
+  });
+  it("R-02 new published content after empty recovery is not a cached inactive", async () => {
+    const {recoverCaliberBindingRegistry}=await import("../proxy/caliber-binding-registry");
+    await recoverCaliberBindingRegistry();
+    await writeContent("caliber-bindings/asset_count.yaml",PUBLISHED_BINDING_YAML);
+    expect(await classifyCaliberParticipation()).toBe("unknown");
+  });
+});

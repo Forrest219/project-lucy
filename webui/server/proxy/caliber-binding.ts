@@ -28,6 +28,7 @@ import {
   normalizeCaliberText
 } from "./caliber-binding-text.js";
 import {
+  classifyCaliberParticipation,
   caliberBindingRegistryStatus,
   currentCaliberBindingRegistry,
   recoverCaliberBindingRegistry,
@@ -640,7 +641,11 @@ export async function checkCaliberBindingGate(input: {
     return { kind: "allow" };
   }
   if (state === "lost_or_conflict") {
-    // 禁止当 null 放行。
+    // L0 proof does not clear state and is usable only with globally trusted zero evidence.
+    if (session.optionalPreparing && await classifyCaliberParticipation({ scopeKey }) === "inactive") {
+      return { kind: "allow" };
+    }
+    // Real or uncertain strong history must remain fail-closed.
     return {
       kind: "deny",
       denial: denial(CALIBER_BINDING_UNRESOLVED, "本次问询的口径绑定状态不可信")

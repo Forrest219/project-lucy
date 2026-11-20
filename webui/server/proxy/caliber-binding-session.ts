@@ -78,6 +78,8 @@ interface StoredSessionFile {
    * `lost_or_conflict` —— **不得**当成「从未开题」放行。
    */
   corrupt?: boolean;
+  /** Read-only proof; never persisted as a new session format. */
+  historyComplete?: boolean;
 }
 
 const STATE_DIR_REL = path.join(".ktx-ui", "caliber-binding");
@@ -124,7 +126,10 @@ async function readStoredSession(base: string, scopeKey: string): Promise<Stored
     return {
       scopeKey,
       current: parsed.current ?? null,
-      previousCommitted: parsed.previousCommitted ?? null
+      previousCommitted: parsed.previousCommitted ?? null,
+      historyComplete: parsed.scopeKey === scopeKey
+        && Object.prototype.hasOwnProperty.call(parsed, "current")
+        && Object.prototype.hasOwnProperty.call(parsed, "previousCommitted")
     };
   } catch {
     return { scopeKey, current: null, previousCommitted: null, corrupt: true };
@@ -171,7 +176,7 @@ function deepCopyBoundKey(key: CanonicalSourceKey): CanonicalSourceKey {
  */
 export async function readBindingSession(
   scopeKey: string
-): Promise<{ state: BindingSessionState; record: BindingSessionRecord | null }> {
+): Promise<{ state: BindingSessionState; record: BindingSessionRecord | null; optionalPreparing?: boolean }> {
   const base = await stateDir();
   const stored = await readStoredSession(base, scopeKey);
   if (!stored) return { state: "never_begun", record: null };
@@ -188,7 +193,15 @@ export async function readBindingSession(
     return classifyRecord(previous);
   }
   if (current.commitPhase !== "committed") {
-    return { state: "lost_or_conflict", record: current };
+    const noBinding = (record: BindingSessionRecord) => record.bindingId === null
+      && record.boundKey === null && record.caliberSnapshot === null
+      && Number.isSafeInteger(record.generation) && record.generation > 0;
+    const previous = stored.previousCommitted;
+    const optionalPreparing = stored.historyComplete === true
+      && current.commitPhase === "preparing" && noBinding(current)
+      && (previous === null || (previous.commitPhase === "committed" && noBinding(previous)));
+    // Only a globally proven inactive caller may use this read-only L0 proof.
+    return { state: "lost_or_conflict", record: current, optionalPreparing };
   }
   return classifyRecord(current);
 }
