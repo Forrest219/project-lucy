@@ -592,3 +592,26 @@ describe("SC-10 actual registry call counters", () => {
     });
   });
 });
+
+describe("R-01 complete proxy chain for legacy L0", () => {
+  it("allows a real query through both caliber and source ambiguity gates", async () => {
+    await withProxyInactive(async (port, mods) => {
+      const candidate = await mods.registry.loadCaliberBindingCandidate();
+      if (!candidate.ok) throw new Error(candidate.reason);
+      expect((await mods.registry.commitCaliberBindingRegistry(candidate, {
+        releaseId: "legacy-l0", attemptId: "legacy-l0"
+      })).ok).toBe(true);
+      const scope = mods.session.bindingScopeKey(`${USER_ID}|${tokenHash(TOKEN).slice(0, 19)}`, SESSION_ID);
+      await mods.session.beginBindingSessionPreparation(scope, {
+        turnId: "old-optional", registryGeneration: 1,
+        bindingId: null, boundKey: null, caliberSnapshot: null
+      });
+      expect((await callBegin(port)).data?.reason).toBe("begin_not_available");
+      const result = await callQuery(port);
+      expect(result.status).toBe(200);
+      expect(result.isError).toBe(false);
+      expect(result.upstreamHitsAfter).toBeGreaterThan(result.upstreamHitsBefore);
+      expect((await mods.session.readBindingSession(scope)).optionalPreparing).toBe(true);
+    });
+  });
+});

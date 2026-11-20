@@ -19,6 +19,7 @@ import {
   type EffectiveSource
 } from "./acl.js";
 import { normalizeCaliberText } from "./caliber-binding-text.js";
+import { classifyCaliberParticipation } from "./caliber-binding-registry.js";
 import {
   bindingScopeKey,
   readBindingSession,
@@ -802,7 +803,14 @@ export async function checkSourceAmbiguityGate(
 ): Promise<SourceAmbiguityGateOutcome> {
   const bindingScope = bindingScopeKey(input.identityKey, input.sessionId);
   const session = await readBindingSession(bindingScope);
-  const state = session.state;
+  let state = session.state;
+
+  // A proven optional legacy preparation must follow the ordinary never-begun
+  // ambiguity path too. Do not bypass source checks or clear persisted history.
+  if (state === "lost_or_conflict" && session.optionalPreparing
+    && await classifyCaliberParticipation({ scopeKey: bindingScope }) === "inactive") {
+    state = "never_begun";
+  }
 
   if (state === "lost_or_conflict") {
     return {
@@ -825,9 +833,9 @@ export async function checkSourceAmbiguityGate(
     };
   }
   const journey = journeyRead.journey;
-  const generation =
-    session.record?.generation
-    ?? (state === "never_begun" ? NEVER_BEGUN_GENERATION_SENTINEL : journey.generation);
+  const generation = state === "never_begun"
+    ? NEVER_BEGUN_GENERATION_SENTINEL
+    : session.record?.generation ?? journey.generation;
 
   const sources =
     input.matchableSources
