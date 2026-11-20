@@ -6,6 +6,7 @@
 
 | Suite | 总账 ID | 路径 | 必做环境 | 最近跑次 | 结果 |
 |---|---|---|---|---|---|
+| `UAT-SUITE-STORAGE-READINESS` | P1-71／REQ-030-092 | [suites/storage-readiness](suites/storage-readiness/suite.md) | 未来另行授权的隔离 Docker＋合成数据＋真实 SQLite／PostgreSQL；本次不执行 | 尚无 | **NOT RUN**（仅用例设计；开发／演练未授权；不升级、不操作客户实例） |
 | `UAT-SUITE-OPS-STEP` | P1-68／REQ-030-089 | [suites/ops-step](suites/ops-step/suite.md) | 本机 demo Docker；IT 路径看容器标准输出；Lucy 运维路径前台浏览器 1920×1080 | 尚无 | **NOT RUN**。v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan／UAT 设计；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | `UAT-SUITE-AGENT-ROSTER-SUMMARY` | P1-66／REQ-030-087 | [suites/agent-roster-summary](suites/agent-roster-summary/suite.md) | 隔离 Docker 原生专用卷＋真实 MySQL；前台 Chrome；BAL／SKEW × B109／W2／W5 | [2026-11-20 执行记录](suites/agent-roster-summary/runs/2026-11-20-codex-p166-docker.md) | **PASS WITH GAP（仅F66-A）**：本批BA-01–07收口，最小Docker／前台／MCP通过；[批次A记录](suites/agent-roster-summary/runs/2026-11-20-codex-p166-batch-a.md)。原F66完整矩阵FAIL保留，冷／首访／扩展规模暂停；≠ 可上线 |
 | `UAT-SUITE-CORE-AVAILABILITY` | P1-61／P1-62／P1-63／P1-69／P1-70；REQ-030-082／REQ-030-083／REQ-030-084／REQ-030-090／REQ-030-091 | [suites/core-availability](suites/core-availability/suite.md) | 本机隔离Docker／合成MySQL；非WebUI与客户交付 | [r6正式30分钟](suites/core-availability/runs/2026-11-20-codex-followup-r6-1800.md)；[旧合入复测](suites/core-availability/runs/2026-11-20-codex-availability-merge-recheck.md) | **r6独立严格FAIL／证据VALID**：1800秒／12周期，业务、性能、32精确重载拒绝恢复及完整审计通过；在线审计进度1超时＋2漏采保留。生产者PASS WITH GAP与历史FAIL原样保留；P169／170定向矩阵分别登记，完整UAT／发布未签。 |
