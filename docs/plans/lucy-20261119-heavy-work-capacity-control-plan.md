@@ -10,8 +10,8 @@
 |---|---|
 | 文档类型 / 版本 | 实施 Plan / v0.1-draft |
 | 功能编号 | P1-62／REQ-030-083 |
-| 状态 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
-| 授权边界 | 仅文档；实施、测试执行器、运行配置、Docker/UAT另行授权；不恢复D7延期、不改已有问数限流 |
+| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
+| 授权边界 | 委托人授权按本 Plan Task 1–3 实施运行代码与 Vitest／API 文档；不恢复 D7 延期、不改已有问数限流；Task 4（真实 Docker F62／runner）仍须另行测试执行授权；禁止提交／推送／发布／客户升级 |
 | 验收 | [Spec](../specs/lucy-20261119-heavy-work-capacity-control-spec.md) SC-01–10；[测试台](../qa/uat/suites/core-availability/suite.md) F62 |
 
 ## 目标

@@ -10,8 +10,8 @@
 |---|---|
 | 文档类型 / 版本 | 实施 Plan / v0.1-draft |
 | 功能编号 | P1-61／REQ-030-082 |
-| 状态 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
-| 授权边界 | 仅核对和文档；以下任务均未执行，运行代码/配置/测试脚本/构建/UAT/发布均须另行授权 |
+| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
+| 授权边界 | 委托人授权按本 Plan Task 1–3 实施运行代码与 Vitest／API 文档；Task 4（真实 Docker F61／runner）仍须另行测试执行授权；禁止提交／推送／发布／客户升级 |
 | 验收 | [Spec](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) SC-01–09；[测试台](../qa/uat/suites/core-availability/suite.md) F61 |
 
 ## 目标

@@ -6,7 +6,7 @@
 | Document type | Product / Architecture Spec |
 | Version | **v0.3（写路径自动尝试重载）** |
 | Written date | 2026-10-26 |
-| Revised | 2026-10-27（依 `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md` 8 项批准条件修订）；**2026-11-10**（写路径在 `ktx.yaml` 写入后自动尝试重载；成功不再标 pending；失败仍留待确认重试）；**2026-11-13**（AC-12 `--container` 本机验收通过） |
+| Revised | 2026-10-27（依 `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md` 8 项批准条件修订）；**2026-11-10**（写路径在 `ktx.yaml` 写入后自动尝试重载；成功不再标 pending；失败仍留待确认重试）；**2026-11-13**（AC-12 `--container` 本机验收通过）；**2026-11-20**（P1-63／REQ-030-084：整实例 TERM／INT **先**通知 Lucy DRAINING 有界排空，**再**走既有 supervisor／KTX 清理；§4.2.3／§4.4 具名顺序修订；执行层单独 reload 不触发本协议） |
 | Scope | WebUI 写 ktx.yaml 后的执行层生效、KTX daemon 进程编排、MCP Runtime 状态面与 UI 提示 |
 | 前置 | `docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md`（分层模型与 stale 分类） |
 | 排查记录 | `inbox/2026-10-26-ktx-config-restart-only-investigation.md`（过程性材料，未入版本库） |
@@ -143,8 +143,8 @@ entrypoint (PID 1, bash)
 |---|---|---|
 | 1 | 父 shell 等待谁 | 父 shell 等待 `SUPERVISOR_PID` 与 `LUCY_PID`；**不再**等待 `KTX_PID` |
 | 2 | KTX PID 归属 | KTX 是 supervisor 的子进程。supervisor 负责其生命周期；**当前 KTX PID 写入 `.ktx-ui/ktx.pid`** 供诊断，不作为父子关系依据 |
-| 3 | 信号转发顺序 | 收到 TERM/INT 时，父 shell **先**向 supervisor 发 TERM，supervisor **再**向 KTX 子进程发 TERM 并等待其退出；父 shell 等待两者都结束后再退出 |
-| 4 | supervisor 死但 KTX 活 | supervisor 退出前必须清理其 KTX 子进程；若 supervisor 被 SIGKILL（不可捕获），父 shell 的退出清理以**进程组**兜底（见 §4.4） |
+| 3 | 信号转发顺序 | 收到**整实例** TERM/INT 时，父 shell **先**经本实例内部确认通道通知 Lucy 进入 `DRAINING` 并等待有界排空（默认 ≤20s；此间**不得**提前停 KTX，以便已受理依赖查询可完成）；排空归零或截止并记录剩余状态后，再向 supervisor 发 TERM，supervisor **再**向 KTX 子进程发 TERM 并等待其退出；随后孤儿清理与 Lucy 收尾。重复 TERM/INT/EXIT 并入同一关停过程。**执行层单独 reload 不得触发本整实例 drain。**（P1-63／REQ-030-084；取代「先停 supervisor／KTX、后停 Lucy」的旧整实例顺序） |
+| 4 | supervisor 死但 KTX 活 | supervisor 退出前必须清理其 KTX 子进程；若 supervisor 被 SIGKILL（不可捕获），父 shell 的退出清理以**进程组**兜底（见 §4.4）。整实例排空阶段尚未进入依赖清理前，不得借本条提前杀 KTX |
 | 5 | 首次启动失败 | KTX 首次拉起失败**不阻止** WebUI 启动（保持现状语义：现状 `wait_for_port` 失败会 `exit 1`）。**决策：保持现状**——首次启动失败即容器启动失败，避免带病运行。实现须保持这一点 |
 | 6 | KTX 自发退出 | 触发 supervisor 的**有限退避重启**；超过上限（§4.3）后 supervisor 退出，父 shell 据此让容器退出 |
 | 7 | 退避上限 | 连续失败 N 次（默认 5）后放弃；退避间隔 1s→2s→4s→8s→16s（上限 16s） |
@@ -185,12 +185,17 @@ entrypoint (PID 1, bash)
 
 ### 4.4 优雅退出与遗留进程
 
-- 父 shell 的 `trap` 链（`docker-entrypoint.sh:435-436`）扩展为：TERM/INT ⇒
-  `kill -TERM $SUPERVISOR_PID` ⇒ 等 supervisor 清理 KTX ⇒ `kill -TERM $LUCY_PID` ⇒ 退出。
+- 父 shell 的整实例 `trap` 链（`docker-entrypoint.sh` 的 `shutdown`）为：TERM/INT/EXIT ⇒
+  **先**通知 Lucy 排空（内部信号／`.ktx-ui` 确认文件，无凭据、无公开 HTTP 关停端点）⇒
+  等待 Lucy `DRAINING` 确认与有界排空（默认 ≤20s；取消通知与剩余状态记录含在此预算内）⇒
+  `kill -TERM $SUPERVISOR_PID` ⇒ 等 supervisor 清理 KTX（默认 10s）⇒
+  孤儿 KTX 清理（≤5s）⇒ Lucy 关闭与其余收尾（剩余预算，合计整实例退出 ≤40s）⇒ 退出。
+  外部 stop／grace 须 ≥45s 才承诺完整预算（标准 Docker demo 显式 `stop_grace_period: 45s`）。
+- **不再**把「先停 supervisor／KTX、再停 Lucy」当作现行整实例顺序；该旧顺序仅作历史对照，现值以本段与 P1-63 Spec 为准。
 - **进程组兜底**：entrypoint 以 `setsid`（若可用）启动 supervisor，使 supervisor + KTX
-  处于独立进程组；父 shell 退出前对该进程组发 TERM，避免 supervisor 被 SIGKILL 时遗留 KTX。
+  处于独立进程组；父 shell 在**依赖清理阶段**对该进程组发 TERM，避免 supervisor 被 SIGKILL 时遗留 KTX。
   `setsid` 不可用时降级为「父 shell 显式 kill KTX_PID（从 pid 文件读）」。
-- **验收必须包含**（审阅明确要求）：真实 SIGTERM、子进程退出、端口未就绪、**无遗留进程**。
+- **验收必须包含**（审阅明确要求）：真实 SIGTERM、子进程退出、端口未就绪、**无遗留进程**；以及 P1-63 的 drain-first 顺序与退出码／supervisor 异常清理合同不回退。
 
 ### 4.5 bash 3.2 约束
 

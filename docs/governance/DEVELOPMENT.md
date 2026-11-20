@@ -73,13 +73,23 @@
 
 ## 验证策略：浏览器测试约束
 
-正常开发任务默认不需要做浏览器测试。只有在用户、当前任务说明或已批准计划明确要求浏览器测试、端到端浏览器验证、截图验证、Playwright/Cypress 浏览器运行，或交付标准本身以浏览器行为验证为准时，才执行浏览器测试。
+### WebUI 变更／WebUI UAT（强制）
+
+凡触及 **WebUI 用户可见面**（页面、路由、列表／表单／抽屉、导航、Toast、复制／下载反馈、名册／统计展示等）的开发验证或测试台主张，**不得只验后端 HTTP／API**。必须同时具备：
+
+1. **真实浏览器**（前台可视会话；禁止仅后台标签／无焦点页冒充合同计时）。
+2. **即时计时**：至少记录导航→关键内容可见（或合同中的 `primaryReady`／等价里程碑）的端到端时延；与同场景 API 耗时分列，**不得**用 API p95 代替页面体感。
+3. 证据进 Plan「浏览器验证」、UAT `runs/` 或约定的 reviews／ui-ux 槽；INDEX／Spec 状态句不得把「仅 API smoke／HTTP 压测」写成 WebUI 已验。
+
+只跑 `/api/...`、vitest、CR 或脚本造数压测而声称「Roles／Agent 页／WebUI 已通过」视为**严重验证缺口**，测试台最多 `PASS WITH GAP`／`BLOCKED`（须写明缺浏览器＋计时），不得记整套 WebUI PASS，更不得功能收口。细则与判定见 [`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md)「WebUI：浏览器＋计时强制」。
+
+### 非 WebUI 任务（默认）
+
+纯 MCP／后端／脚本／镜像／无用户可见面的任务，默认不强制浏览器测试；仅当用户、任务说明、已批准 Plan 或交付标准明确要求时才做。
 
 Lucy 项目默认不做移动窄屏测试。除非用户、当前任务说明或已批准计划明确要求移动端、窄屏、响应式断点验证，不要主动执行 mobile viewport、narrow viewport 或 mobile emulation 相关测试。
 
-现有 E2E 套件与 release gate 文档仍作为“被明确要求执行浏览器/E2E 验证时”的测试事实源；它们不改变普通开发任务的默认验证范围。
-
-交互合同门禁不改变这个默认。浏览器默认不变。没触发的任务仍然默认不做浏览器测试。触发的 Plan 必须把这一次写进「浏览器验证」。
+现有 E2E 套件与 release gate 仍是浏览器／E2E 执行时的事实源。触发交互合同的 Plan 必须把当次浏览器验证（含计时）写入「浏览器验证」；WebUI 变更即使未触发交互合同四段式，仍适用上一节强制条款。
 
 ## 部署拓扑与并发一致性边界
 
@@ -325,6 +335,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 | 15 | **端到端三台账**：需求台＝总账；开发台＝Spec 头部状态；测试台＝`docs/qa/uat/INDEX.md`。主张 UAT／客户场景复现必须挂测试台；勾连与缺口见 [`e2e-ledger.md`](e2e-ledger.md)；可选 `node scripts/uat/check-e2e-ledger.mjs` | 本文件「端到端三台账」 | `scripts/uat/check-e2e-ledger.mjs`（文件／Suite 存在性） |
 | 16 | **主路径可用性优先**：新功能／门禁不得把最终用户主路径变成无逃生不可用；Spec／UAT 须同时覆盖「约束生效」与「合法用户仍可用」（含纯 MCP 部署实况）。只验「拦住」不得收口 | 本文件「第一性原理：主路径可用性优先」 | 无（评审／出门人工；错题举一反三） |
 | 17 | **新功能 Spec 必含「受影响画像」小节**：4 画像（问数方／治理方／运维方／管理层）逐行判定 `↑`／`＝`／`↓`，写明变更前后体验与**可核对依据**；判 `↓` 必须写补偿路径并挂验收编号，否则不得收口。事实源与模板见 [`user-personas.md`](user-personas.md) | 本文件「Review 要求」＋ [`user-personas.md`](user-personas.md) §4／§5 | 无（评审／出门人工；`lint:spec-docs` 的 `persona-impact` 规则属第二阶段，**未实现**） |
+| 18 | **WebUI 验证强制浏览器＋计时**：触及 WebUI 用户可见面时，开发验证与测试台不得只验后端 HTTP；须真实前台浏览器＋导航／primaryReady（或等价）计时，并与 API 耗时分列。仅 API smoke 不得记 WebUI PASS／收口 | 本文件「验证策略：浏览器测试约束」＋ [`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md) | 无（评审／UAT 出门人工） |
 
 ### 交互合同
 
@@ -332,7 +343,8 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 - 唯一能让 lint 取消 grandfather 的状态短语是「开发授权已获得」。其他说法不取消跳过，也不构成通过本门禁。
 - 请求开发授权时，六问只适用于触发且没有有效豁免的 Spec。只有这些 Spec 才确认 Q1–Q6 全为「通过」。有效豁免不写六问，授权人只核对豁免两行。这一步不是 lint。
 - grandfather 文件若要在授权前就接受检查，作者写标记行；否则等状态口令出现。发版走查仍是后置兜底。
-- 浏览器默认不变。没触发的任务仍然默认不做浏览器测试。触发的 Plan 必须把这一次写进「浏览器验证」。
+- **WebUI 变更**：无论是否触发交互合同，验证都必须含真实浏览器＋即时计时（见「验证策略：浏览器测试约束」）；触发的 Plan 还须把当次写入「浏览器验证」。
+- **非 WebUI** 且未触发交互合同：默认不做浏览器测试。
 - 触发且没有有效豁免时，合同里的每条路由有一份元素清单。列是编号、路由、元素、区域、期望。当次结果只写在浏览器证据里，并且恰好覆盖清单编号。新发现先补进行，再记结果。清单不写 DOM、`class=` 和间距像素。没有这份合同的旧页面，不在本轮补清单。
 
 ### 索引登记的判据（避免误判）
@@ -418,7 +430,7 @@ WebUI 的 UI/UX 约束分散在下表几处；**各自只有一份正文**，本
 | UI 交互合同 | [交互合同门禁 Spec](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md) | 见该 Spec |
 | 发版前界面检查 | [`docs/runbooks/webui-release-ux-checklist.md`](../runbooks/webui-release-ux-checklist.md) · [发版 UX 评审 Spec](../specs/lucy-20261030-webui-release-ux-review-spec.md) | `release-ux-invariants.test.ts` |
 | 页面级问题与验收事实 | [`docs/ui-ux-feedback/README.md`](../ui-ux-feedback/README.md) | 无 |
-| 浏览器测试默认边界 | 本文件「验证策略：浏览器测试约束」 | 无 |
+| 浏览器测试边界（WebUI 强制含计时；非 WebUI 默认不测） | 本文件「验证策略：浏览器测试约束」 | 无 |
 
 强约束如下：
 

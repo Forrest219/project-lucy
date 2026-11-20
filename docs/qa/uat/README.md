@@ -33,6 +33,7 @@ docs/qa/uat/
 
 | Suite ID | 总账 | 主题 |
 |---|---|---|
+| `UAT-SUITE-WIKI-UPLOAD-ACL-ADOPTION` | P1-65 | Wiki 覆盖上传 YAML 授权采用（v0.2 定稿；终稿已确权 ≠ UAT PASS；历史基线 FAIL，改后全部 NOT RUN） |
 | `UAT-SUITE-BEGIN-ZERO-BINDING` | P1-60 | 零绑定 N／B／D 单一矩阵，G1–G6／D6 轮次、正式发布控制、RC1 既有客户端及画像任务补偿（v0.2-draft，NOT RUN） |
 | `UAT-SUITE-ROLES-AGENT-CONCURRENCY-SCALE` | P1-58／P1-59 | 角色权限与 Agent 单维／组合 2×、5× 负载，冲突恢复与纯 MCP 共存 |
 | `UAT-SUITE-SOURCE-AMBIGUITY` | P0-3 | 表级歧义门闩（拦得住） |
@@ -58,7 +59,7 @@ docs/qa/uat/
 
 ## 第一性原则
 
-见 [`CONVENTIONS.md`](CONVENTIONS.md)「第一性原则」：**全真用例；禁止 CR 冒充 UAT；做不到全真须向委托人独立授权后才能降级。**
+见 [`CONVENTIONS.md`](CONVENTIONS.md)「第一性原则」：**全真用例；禁止 CR 冒充 UAT；做不到全真须向委托人独立授权后才能降级；WebUI 面必须浏览器＋计时，禁止只验后端 HTTP 主张页面已通过。**
 
 ## 交叉验证（Claude／其他 Agent）
 

@@ -1,6 +1,14 @@
 import type Database from "better-sqlite3";
 import { INFERRED_TURN_REBUILD_LOOKBACK_HOURS } from "../proxy/audit.js";
+import {
+  HEAVY_BACKGROUND_RETRY_MS,
+  submitHeavyWork,
+  WorkloadCapacityBusyError
+} from "../runtime/heavy-work-capacity.js";
 import { yieldToEventLoop } from "./yield-slices.js";
+
+/** Singleton key for the background rebuild pump (at most one waiting/running ticket). */
+const AUDIT_REBUILD_PUMP_KEY = "audit_rebuild_background_pump";
 
 /** P1-39: 轮询每页读取的新行数；每页之间让出事件循环。 */
 export const INFERRED_POLL_PAGE = 2000;
@@ -73,6 +81,8 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
   let running: Promise<void> | null = null;
   let rerun = false;
   let timer: NodeJS.Timeout | undefined;
+  /** P1-62: after capacity reject, do not re-admit the pump until this time. */
+  let pumpRetryAt = 0;
 
   const status = (): InferredRebuildStatus => ({
     complete: dirty.size === 0 && running === null,
@@ -152,29 +162,61 @@ export function createInferredTurnMaintainer(deps: MaintainerDeps): InferredTurn
 
   const passOnce = async (): Promise<void> => {
     const userIds = [...dirty].sort();
-    for (const userId of userIds) {
-      const due = retryAt.get(userId) ?? 0;
-      if (due > now()) continue;
-      const token = epoch.get(userId) ?? 0;
-      try {
-        await deps.rebuild(userId);
-        if ((epoch.get(userId) ?? 0) === token) {
-          dirty.delete(userId);
-          epoch.delete(userId);
-          retryAt.delete(userId);
-          failures.delete(userId);
-          lastCompletedAt = new Date(now()).toISOString();
+    if (userIds.length === 0) return;
+    if (now() < pumpRetryAt) return;
+
+    try {
+      await submitHeavyWork({
+        class: "audit_rebuild",
+        identity: "__background_pump__",
+        singletonKey: AUDIT_REBUILD_PUMP_KEY,
+        run: (ctx) => {
+          // One pump ticket covers the dirty-user pass; nested rebuilds inherit it.
+          // rebuildInferredTurns awaits worker jobs, so result settlement ≈ resources closed.
+          const result = (async () => {
+            for (const userId of userIds) {
+              if (ctx.signal.aborted) break;
+              const due = retryAt.get(userId) ?? 0;
+              if (due > now()) continue;
+              if (!dirty.has(userId)) continue;
+              const token = epoch.get(userId) ?? 0;
+              try {
+                await deps.rebuild(userId);
+                if ((epoch.get(userId) ?? 0) === token) {
+                  dirty.delete(userId);
+                  epoch.delete(userId);
+                  retryAt.delete(userId);
+                  failures.delete(userId);
+                  lastCompletedAt = new Date(now()).toISOString();
+                }
+              } catch {
+                const attempt = (failures.get(userId) ?? 0) + 1;
+                failures.set(userId, attempt);
+                retryAt.set(userId, now() + Math.min(60_000, 500 * 2 ** attempt));
+              }
+              await new Promise<void>((resolve) => {
+                setImmediate(resolve);
+                // Vitest fake timers swallow setImmediate and would stall server ready.
+                if (process.env.VITEST === "true") queueMicrotask(resolve);
+              });
+            }
+          })();
+          const settle = () =>
+            result.then(
+              () => undefined,
+              () => undefined
+            );
+          ctx.registerSettle(settle);
+          return { result, actuallySettledAndResourcesClosed: settle };
         }
-      } catch {
-        const attempt = (failures.get(userId) ?? 0) + 1;
-        failures.set(userId, attempt);
-        retryAt.set(userId, now() + Math.min(60_000, 500 * 2 ** attempt));
-      }
-      await new Promise<void>((resolve) => {
-        setImmediate(resolve);
-        // Vitest fake timers swallow setImmediate and would stall server ready.
-        if (process.env.VITEST === "true") queueMicrotask(resolve);
       });
+    } catch (error) {
+      if (error instanceof WorkloadCapacityBusyError) {
+        // Dirty users stay in the set; retry admit after ≥5s (Spec P1-62).
+        pumpRetryAt = now() + HEAVY_BACKGROUND_RETRY_MS;
+        return;
+      }
+      throw error;
     }
   };
 

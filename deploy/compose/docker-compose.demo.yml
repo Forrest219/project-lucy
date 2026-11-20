@@ -70,6 +70,8 @@ services:
   lucy:
     build: *lucy-build
     image: project-lucy:demo
+    # P1-63 — whole-instance drain budget ≤40s; grace must be ≥45s.
+    stop_grace_period: 45s
     environment:
       KTX_PROJECT_ROOT: /data/lucy
       LUCY_TEMPLATE_ROOT: /app/examples/docker-demo/project-template

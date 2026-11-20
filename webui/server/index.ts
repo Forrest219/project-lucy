@@ -50,6 +50,8 @@ import { previewSchemaStructure, SchemaStructureError } from "./schema-structure
 import { readSchemaTableRejection } from "../shared/schema-table-rejection.js";
 import { SCHEMA_REQUEST_TIMEOUT_MS } from "./schema-read-deadline.js";
 import { CALL_BUDGET_MS, parseRequestedTables } from "./schema-structure-batch";
+import { withHeavyWorkPermit } from "./runtime/heavy-work-capacity.js";
+import { hashSessionJti } from "./security/store.js";
 import {
   addSchema,
   createConnection,
@@ -211,7 +213,7 @@ import { buildAdminOpenApiDocument } from "./admin/openapi-document.js";
 import { registerOidcRoutes } from "./auth/oidc-routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { actorIdFromRequest, requireWebuiAuthHook } from "./auth/guard.js";
-import { auditActorFields, trustedActorFromRequest } from "./security/request-actor.js";
+import { ActorUnresolvedError, auditActorFields, trustedActorFromRequest } from "./security/request-actor.js";
 import { assertStartupPolicy, resolveCookieSecure } from "./auth/deployment-mode.js";
 import { reconcileBootstrapOnStartup } from "./auth/bootstrap.js";
 import { closeSecurityStore, getSecurityStore } from "./security/instance.js";
@@ -233,6 +235,23 @@ import { bindInferredTurnMaintainer, createInferredTurnMaintainer, isInferredMai
 import { INFERRED_TURN_REBUILD_LOOKBACK_HOURS, rebuildInferredTurns } from "./proxy/audit.js";
 import { eventLoopDelaySnapshot } from "./runtime/event-loop-delay.js";
 import { isWebuiReady, markWebuiWarmupComplete } from "./runtime/readiness.js";
+import {
+  configureProcessDrainIpc,
+  drainIpcPathsForProject,
+  getProcessLifecyclePhase,
+  installProcessDrainSignalHandlers,
+  SERVICE_DRAINING,
+  SERVICE_DRAINING_MESSAGE,
+  startWatchingParentDrainRequest,
+  tryAdmitBusinessWork,
+  type AdmitTicket
+} from "./runtime/process-drain.js";
+import {
+  bindDiagnosticSnapshotService,
+  DiagnosticSnapshotService,
+  type DiagnosticData,
+  type DiagnosticsMeta
+} from "./runtime/diagnostic-snapshot.js";
 import { recoverProjectionCursor } from "./security/recovery.js";
 import { recordProjectionStatus } from "./proxy/audit-write-health.js";
 import { registerWebSecurity } from "./web-security.js";
@@ -531,6 +550,33 @@ async function ktxDigestSnapshot(projectRoot: string): Promise<string> {
   return readKtxYamlDigest(projectRoot).catch(() => "");
 }
 
+/**
+ * P1-64／REQ-030-085 D9 — narrow Policy ack for the two ktx.yaml write paths
+ * (connection create + enabled-tables). Source Map compile failure must not
+ * report policyRuntimeAck/runtimeAck=true. Does not change evaluateRuntimeAck
+ * used by Access writes (D10).
+ */
+function ackKtxWritePolicyRuntime(status: {
+  policyVersion: string;
+  degradedGlobal: boolean;
+  issues: Array<{ reason?: string }>;
+}): {
+  policyRuntimeAck: boolean;
+  runtimeAck: boolean;
+  policyRuntimeIssues: Array<{ reason?: string }>;
+} {
+  const sourceMapFailed = status.issues.some((issue) =>
+    (issue.reason ?? "").startsWith("source_map_compile_failed:")
+  );
+  const policyRuntimeAck =
+    status.policyVersion !== "" && !status.degradedGlobal && !sourceMapFailed;
+  return {
+    policyRuntimeAck,
+    runtimeAck: policyRuntimeAck,
+    policyRuntimeIssues: status.issues
+  };
+}
+
 async function executionAckForConnection(connectionId: string): Promise<{
   executionRuntimeAck: boolean;
   executionRuntimeStatus: "unknown" | "ok" | "stale" | "unavailable" | "error";
@@ -730,10 +776,14 @@ async function readContentLayoutCached(refresh: boolean): Promise<ContentLayoutS
   }
 }
 
-async function dependencyStatus(refresh: boolean) {
+/**
+ * Full diagnostic collect for the P1-61 background snapshot.
+ * May perform file / subprocess / network I/O — never call from probe handlers.
+ */
+async function collectDependencyDiagnostics(_signal: AbortSignal): Promise<DiagnosticData> {
   const policy = getPolicyRuntimeStatus();
-  const contentLayout = await readContentLayoutCached(refresh);
-  const ktxRuntime = refresh ? await readKtxRuntimeStatusCached() : peekKtxRuntimeStatus();
+  const contentLayout = await readContentLayoutCached(true);
+  const ktxRuntime = await readKtxRuntimeStatusCached();
   const cachedProbe = peekExecutionProbe();
   const mcpRuntime = await readMcpRuntimeStatus(async () => cachedProbe ?? {
     status: "reachable" as const,
@@ -771,6 +821,68 @@ async function dependencyStatus(refresh: boolean) {
   };
 }
 
+/**
+ * Memory-only unknown placeholder when no successful snapshot exists yet.
+ * Uses peeks / env / already-cached process identity — no diagnostic I/O.
+ */
+function unknownDiagnosticData(processIdentity: {
+  lucyVersion: string;
+  gitSha: string;
+  gitDirty: boolean;
+  bundledKtxVersion: string;
+}): DiagnosticData {
+  const policy = getPolicyRuntimeStatus();
+  const policyHealthy = isPolicyRuntimeHealthy(policy);
+  const ktxRuntime = peekKtxRuntimeStatus();
+  const probe = peekExecutionProbe();
+  const execution = probe
+    ? {
+        status: probe.status === "reachable" ? ("unknown" as const) : probe.status,
+        lastCheckedAt: probe.checkedAt,
+        ...(probe.error ? { lastError: probe.error } : {})
+      }
+    : { status: "unknown" as const, lastCheckedAt: "1970-01-01T00:00:00.000Z" };
+  const executionHardFailure = ["stale", "unavailable", "error"].includes(execution.status);
+  const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
+  return {
+    // Never forge healthy solely because diagnostics are unknown: when ktx is
+    // uncached and execution unverified, status stays degraded.
+    status: healthy ? "ok" : "degraded",
+    ...(resolveCookieSecure().insecureTestProfile ? { insecureTestProfile: true } : {}),
+    lucyVersion: processIdentity.lucyVersion,
+    gitSha: processIdentity.gitSha,
+    gitDirty: processIdentity.gitDirty,
+    bundledKtxVersion: processIdentity.bundledKtxVersion,
+    ktxRuntime: {
+      ready: ktxRuntime.ready,
+      status: ktxRuntime.status,
+      ...(ktxRuntime.detail ? { detail: ktxRuntime.detail } : {})
+    },
+    policy: {
+      policyVersion: policy.policyVersion,
+      degradedGlobal: policy.degradedGlobal,
+      degradedAgents: policy.degradedAgents,
+      healthy: policyHealthy
+    },
+    execution,
+    dataQaInstructions: getDataQaInstructionsStatus()
+  };
+}
+
+function probeDataFromMemory(
+  processIdentity: {
+    lucyVersion: string;
+    gitSha: string;
+    gitDirty: boolean;
+    bundledKtxVersion: string;
+  },
+  snapshot: { readPublished: () => { data: DiagnosticData | null; diagnostics: DiagnosticsMeta } }
+): { data: DiagnosticData; diagnostics: DiagnosticsMeta } {
+  const published = snapshot.readPublished();
+  const data = published.data ?? unknownDiagnosticData(processIdentity);
+  return { data, diagnostics: published.diagnostics };
+}
+
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
@@ -788,6 +900,17 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 export function buildServer() {
   assertStartupPolicy(); // invalid mode, Chart-mode override or insecure customer cookie refuses to start
   const app = Fastify({ logger: true });
+  // Capture process identity once at server build so probe handlers never read VERSION/git.
+  const processIdentity = {
+    lucyVersion: resolveLucyVersion(),
+    ...loadRuntimeRevision(),
+    bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown"
+  };
+  // P1-61 — background diagnostic snapshot; probe routes only read memory.
+  const diagnosticSnapshot = new DiagnosticSnapshotService({
+    collect: collectDependencyDiagnostics
+  });
+  bindDiagnosticSnapshotService(diagnosticSnapshot);
   let inferredMaintainer: ReturnType<typeof createInferredTurnMaintainer> | null = null;
   app.addHook("onReady", async () => {
     if (inferredMaintainer) return;
@@ -808,10 +931,17 @@ export function buildServer() {
     const listening = new Promise<void>((resolve) => { app.server.once("listening", () => resolve()); });
     await inferredMaintainer.start({ awaitInitial: underTest, after: underTest ? undefined : listening });
   });
+  app.addHook("onReady", async () => {
+    diagnosticSnapshot.start();
+  });
   app.addHook("onClose", async () => {
     inferredMaintainer?.stop();
     bindInferredTurnMaintainer(null);
     inferredMaintainer = null;
+  });
+  app.addHook("onClose", async () => {
+    await diagnosticSnapshot.close();
+    bindDiagnosticSnapshotService(null);
   });
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
@@ -824,6 +954,8 @@ export function buildServer() {
     if (!scopes.includes("L")) return;
     probeScheduler.invalidateGeneration();
     clearLiveCatalogCache();
+    // P1-61 — project/config generation change must discard late diagnostic publishes.
+    diagnosticSnapshot.bumpGeneration();
   });
   // Spec 174 §3.2 — display snapshots are only served while a reconciler verifies them.
   let stopOwnReconciler: () => void = () => undefined;
@@ -884,6 +1016,37 @@ export function buildServer() {
     stopProbeInvalidation();
     probeScheduler.close();
   });
+  // P1-63 — shared Web admit barrier before auth (probes are not business in-flight).
+  app.addHook("onRequest", async (request, reply) => {
+    const pathOnly = (request.url.split("?")[0] ?? request.url).split("#")[0] ?? "";
+    if (
+      pathOnly === "/api/livez" ||
+      pathOnly === "/api/readyz" ||
+      pathOnly === "/api/health" ||
+      !pathOnly.startsWith("/api/")
+    ) {
+      return;
+    }
+    const admitted = tryAdmitBusinessWork();
+    if (!admitted.ok) {
+      return reply.status(503).send({
+        ok: false,
+        error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE }
+      });
+    }
+    const ticket = admitted.ticket;
+    (request as FastifyRequest & { lucyDrainTicket?: AdmitTicket }).lucyDrainTicket = ticket;
+    // Default retire on response finish. Adapters may replace settle via
+    // registerSettle before the first await; bare client disconnect does not retire.
+    let retired = false;
+    const retire = () => {
+      if (retired) return;
+      retired = true;
+      void ticket.retireWhenSettled();
+    };
+    reply.raw.on("finish", retire);
+  });
+
   app.addHook("onRequest", requireWebuiAuthHook);
 
   app.setErrorHandler((error: SupportedError, request, reply) => {
@@ -929,21 +1092,34 @@ export function buildServer() {
     reply.status(statusCode).send(payload);
   });
 
+  // P1-61 — probe handlers read only in-memory lifecycle + published diagnostics.
+  // P1-63 — probes are not business in-flight; DRAINING → readyz 503; livez 200
+  // while listening; health keeps diagnostic semantics.
   app.get("/api/livez", async () => ({ ok: true }));
 
   app.get("/api/readyz", async (_request, reply) => {
-    const data = await dependencyStatus(false);
+    const { data, diagnostics } = probeDataFromMemory(processIdentity, diagnosticSnapshot);
     if (!isWebuiReady()) {
       reply.code(503);
-      return { ok: false, reason: "warming_up", data };
+      const phase = getProcessLifecyclePhase();
+      const reason =
+        phase === "DRAINING" || phase === "STOPPING" || phase === "STOPPED" ? "draining" : "warming_up";
+      return { ok: false, reason, data, diagnostics };
     }
-    return { ok: true, data };
+    return { ok: true, data, diagnostics };
   });
 
-  app.get("/api/health", async () => ({
-    ok: true,
-    data: { ...(await dependencyStatus(true)), eventLoop: eventLoopDelaySnapshot() }
-  }));
+  app.get("/api/health", async () => {
+    const { data, diagnostics } = probeDataFromMemory(processIdentity, diagnosticSnapshot);
+    return {
+      ok: true,
+      data: { ...data, eventLoop: eventLoopDelaySnapshot() },
+      diagnostics
+    };
+  });
+
+  // Test seam: same instance the probe routes close over (avoids ESM dual-bind flakes).
+  (app as { diagnosticSnapshot?: DiagnosticSnapshotService }).diagnosticSnapshot = diagnosticSnapshot;
 
   app.get("/api/project", async () => {
     const projectRoot = await resolveProjectRoot();
@@ -1767,11 +1943,14 @@ export function buildServer() {
 
       let policyVersion = "";
       let policyRuntimeAck = false;
+      let policyRuntimeIssues: Array<{ reason?: string }> = [];
       try {
         const { commitEffectivePolicy } = await import("./proxy/acl.js");
         const status = await commitEffectivePolicy();
         policyVersion = status.policyVersion;
-        policyRuntimeAck = status.policyVersion !== "" && !status.degradedGlobal;
+        const ack = ackKtxWritePolicyRuntime(status);
+        policyRuntimeAck = ack.policyRuntimeAck;
+        policyRuntimeIssues = ack.policyRuntimeIssues;
       } catch (error) {
         console.error("[connection-create] policy runtime commit failed", error);
       }
@@ -1784,6 +1963,7 @@ export function buildServer() {
           ...result,
           policyVersion,
           policyRuntimeAck,
+          policyRuntimeIssues,
           catalogRuntimeAck,
           ...executionAck,
           executionRuntimePending,
@@ -1874,7 +2054,6 @@ export function buildServer() {
     Params: { connId: string };
     Body: { schema?: string; tables?: string[] };
   }>("/api/connections/:connId/schema-structure", async (request) => {
-    const projectRoot = await resolveProjectRoot();
     const schema = request.body?.schema;
     if (typeof schema !== "string" || !schema.trim()) {
       throw enabledTableError("BAD_REQUEST", "schema is required");
@@ -1882,30 +2061,57 @@ export function buildServer() {
     const parsed = parseRequestedTables(request.body?.tables);
     if (!parsed.ok) throw enabledTableError("BAD_REQUEST", parsed.message);
     const { tables } = parsed;
-    try {
-      const data = await previewSchemaStructure(projectRoot, request.params.connId, schema, {
-        requestTimeoutMs: SCHEMA_REQUEST_TIMEOUT_MS,
-        ...(tables ? { tables, callBudgetMs: CALL_BUDGET_MS } : {})
-      });
-      return { ok: true, data };
-    } catch (err) {
-      if (err instanceof SchemaStructureError) {
-        console.error("[schema-structure] preview API failed", {
-          connectionId: request.params.connId,
-          schema,
-          code: err.code,
-          message: err.message,
-          detail: err.detail ?? null
-        });
-        throw enabledTableError(err.code, err.message, err.detail);
+    // P1-62: capacity before project/DB/channel open; queue wait counts into CALL_BUDGET_MS.
+    const moduleStartedAt = Date.now();
+    const callBudgetMs = tables ? CALL_BUDGET_MS : SCHEMA_REQUEST_TIMEOUT_MS;
+    return withHeavyWorkPermit({
+      class: "schema_discovery",
+      identity: trustedActorFromRequest(request).actorId,
+      deadlineMs: Math.max(0, callBudgetMs - (Date.now() - moduleStartedAt)),
+      revalidate: async () => {
+        const ctx = request.lucyAdmin;
+        if (ctx?.authMode === "open") return;
+        if (!ctx?.admin) throw new ActorUnresolvedError();
+        if (!ctx.session) return;
+        const store = await getSecurityStore();
+        if (!store.ok) {
+          throw Object.assign(new Error("认证状态暂不可用，请稍后重试或联系部署人员"), {
+            code: "AUTH_STATE_UNAVAILABLE",
+            statusCode: 503
+          });
+        }
+        const validation = store.value.validateSession(hashSessionJti(ctx.session.jti));
+        if (!validation.ok || !validation.value.valid) throw new ActorUnresolvedError();
+      },
+      run: async () => {
+        const remainingBudget = Math.max(0, callBudgetMs - (Date.now() - moduleStartedAt));
+        const projectRoot = await resolveProjectRoot();
+        try {
+          const data = await previewSchemaStructure(projectRoot, request.params.connId, schema, {
+            requestTimeoutMs: SCHEMA_REQUEST_TIMEOUT_MS,
+            ...(tables ? { tables, callBudgetMs: remainingBudget } : {})
+          });
+          return { ok: true, data };
+        } catch (err) {
+          if (err instanceof SchemaStructureError) {
+            console.error("[schema-structure] preview API failed", {
+              connectionId: request.params.connId,
+              schema,
+              code: err.code,
+              message: err.message,
+              detail: err.detail ?? null
+            });
+            throw enabledTableError(err.code, err.message, err.detail);
+          }
+          console.error("[schema-structure] preview API unexpected failure", {
+            connectionId: request.params.connId,
+            schema,
+            detail: err instanceof Error ? err.message : String(err)
+          });
+          throw err;
+        }
       }
-      console.error("[schema-structure] preview API unexpected failure", {
-        connectionId: request.params.connId,
-        schema,
-        detail: err instanceof Error ? err.message : String(err)
-      });
-      throw err;
-    }
+    });
   });
 
   app.get<{
@@ -2018,18 +2224,23 @@ export function buildServer() {
     }
 
     // Spec 131 / P1-1: catalog_bound capabilities depend on enabled_tables — recompile now.
+    // P1-64 D9 — also fail Policy ack when Source Map compile issues are present.
     let policyVersion = "";
     let policyRuntimeAck = false;
+    let policyRuntimeIssues: Array<{ reason?: string }> = [];
     try {
       const { commitEffectivePolicy } = await import("./proxy/acl.js");
       const status = await commitEffectivePolicy();
       policyVersion = status.policyVersion;
-      policyRuntimeAck = status.policyVersion !== "" && !status.degradedGlobal;
+      const ack = ackKtxWritePolicyRuntime(status);
+      policyRuntimeAck = ack.policyRuntimeAck;
+      policyRuntimeIssues = ack.policyRuntimeIssues;
       if (!policyRuntimeAck) {
         console.error("[enabled-tables] ktx.yaml written but policy runtime not acknowledged", {
           connId,
           policyVersion: status.policyVersion,
-          degradedGlobal: status.degradedGlobal
+          degradedGlobal: status.degradedGlobal,
+          policyRuntimeIssues
         });
       }
     } catch (err) {
@@ -2051,6 +2262,7 @@ export function buildServer() {
         warnings,
         policyVersion,
         policyRuntimeAck,
+        policyRuntimeIssues,
         catalogRuntimeAck,
         ...executionAck,
         executionRuntimePending,
@@ -3387,6 +3599,19 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   // bound.  Moving this call here closes the startup window where readyz could
   // return 200 while the MCP port was still not yet listening.
   markWebuiWarmupComplete();
+
+  // P1-63 — whole-instance drain IPC + signals (parent entrypoint owns shutdown).
+  try {
+    const projectRoot = await resolveProjectRoot();
+    configureProcessDrainIpc(drainIpcPathsForProject(projectRoot));
+    startWatchingParentDrainRequest();
+  } catch (error) {
+    console.warn("[process-drain] IPC configure skipped:", error instanceof Error ? error.message : error);
+  }
+  if (process.env.VITEST !== "true") {
+    installProcessDrainSignalHandlers();
+  }
+
   console.log(`Lucy WebUI listening on http://${host}:${port}`);
   console.log(`MCP proxy listening on http://${proxyHost}:${proxyPort}/mcp`);
   return {

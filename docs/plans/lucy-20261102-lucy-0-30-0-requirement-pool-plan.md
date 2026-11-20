@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 候选需求池。**不是**功能 Spec，**不授权**实现 |
-| 版本 / 日期 | v0.109 / 2026-11-20 |
+| 版本 / 日期 | v0.120 / 2026-11-20 |
 | 状态 | **已开线**。跟进主表＝[功能清单池／执行总账 SOT](lucy-20261107-lucy-0-30-feature-inventory-pool.md)（v1.24）。**REQ-030-062**／P1-41 访问关系图桑基还原：D0＝C，终稿确权，开发授权已获得（不含线上升级），功能已实现并提交；测试台 Docker 种子容器全真 PASS WITH GAP、线上 07 BLOCKED。**REQ-030-061**／P1-40 明文 HTTP 复制按钮假成功：已授权修复并落工作树，测试台改前 FAIL → 改后 PASS WITH GAP（未提交）。**REQ-030-060**／P1-39 客户 K8s 升级 event loop／readyz 事故已入池，**根因已定位**（本机受控限速复现：`211f2d64` 推断问询维护器启动 `scanFull` 同步全索引扫描，慢盘＋冷缓存下超 10s `onReady` 超时致 0.30 启动崩溃；0.25.0／r1 无此维护器；已起草 Spec／Plan／测试台 `UAT-SUITE-COLD-START-SLOW-DISK`，终稿未确权，开发未授权）。**REQ-030-042**／P1-21 重读路径与探针减负功能合同已收口（2026-11-13；SC-14 p99 门槛 400ms）。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做；可选 LOOP-05 BLOCKED）。**REQ-030-041**／P1-20 外部目录单表读字段开发授权已获得、实现已落地（2026-11-13；客户 live 未验）。**REQ-030-040**／P1-19 已落地。**REQ-030-036…039** 差集补录（**不入核心分母**）。**可信证据未开工项不进本池**——见 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)。其余 P0／P1 现值同清单池。本条不表示可上线  **P1-57的G6正式完整导出已由委托人D7延期，本轮客户功能测试排除此项，可按限定范围进行；原FAIL保留。** |
 | 授权边界 | **只登记、不实现**。条目进入实施前须：需求澄清 → 独立 Spec → Plan → 开发授权；本池自身不构成其中任一步。**P0 立项 ≠ 开发授权**；**入池 ≠ 立项** |
 | 验收 | 本池自身的验收＝条目结构完整（ID／标题／来源／优先级／状态齐备）＋ 来源可追。**不构成任何功能验收** |
@@ -11,7 +11,10 @@
 | 核心方向 | [Lucy 0.30 升级核心方向](lucy-20261107-lucy-0-30-core-direction.md)（v0.5）：辅线＝现有 UX；**主线＝存量用户每日可信交互，加上行级隔离** |
 | 功能清单池 | [lucy-20261107-lucy-0-30-feature-inventory-pool](lucy-20261107-lucy-0-30-feature-inventory-pool.md)——**本产品线执行总账（SOT）**（见 DEVELOPMENT）；REQ 与之双向可追 |
 | 维护规则 | 只追加条目；开工前须另立 Spec／Plan 并获授权。不得把本文件当作默认可实施依据。优先级／立项状态与功能清单池对齐。**事故修复／旁路落地也须有 REQ＋总账行** |
-| 最新变更 | v0.109（2026-11-20）：P1-60／REQ-030-081 复审修订 Spec／Plan v0.5-draft、UAT v0.3-draft；OQ-1／OQ-2 文档方案闭合，参与代次复用 committed registry generation，预算＋有效归属同事务并补 C1／C2 恢复；OQ-3 数值待采样前冻结。终稿未确权、开发未授权；13 项全部 NOT RUN，≠ 可上线。 |
+| 最新变更 | v0.120（2026-11-20）：P1-60／REQ-030-081 T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟）；测试台 NOT RUN；T6／R 另授；≠ 功能合同收口；≠ 可上线。 |
+| 前次变更 | v0.116（2026-11-20）：P1-60／REQ-030-081 终稿确权＋开发授权 T1–T5；T6／commit 另授；实现进行中；测试台 NOT RUN；≠ 功能合同收口；≠ 可上线。 |
+| 前次变更 | v0.114（2026-11-20）：P1-60／REQ-030-081 按新定位复审收缩为 N＋隐藏面＋D2 无副作用；Spec／Plan v0.7-draft、UAT v0.5-draft；复用现有参与事实，未来 B／D／事务／C1／C2 移出本条；预算／ACL／continue 保持。终稿未确权、开发未授权；测试台 NOT RUN；≠ 可上线。 |
+| 前次变更 | v0.109（2026-11-20）：P1-60／REQ-030-081 复审修订 Spec／Plan v0.5-draft、UAT v0.3-draft；OQ-1／OQ-2 文档方案闭合，参与代次复用 committed registry generation，预算＋有效归属同事务并补 C1／C2 恢复；OQ-3 数值待采样前冻结。终稿未确权、开发未授权；13 项全部 NOT RUN，≠ 可上线。 |
 | 前次变更 | v0.108（2026-11-20）：REQ-030-085／P1-64 修复 Spec／Plan v0.1-draft 与改后 R0／01–09 用例落盘；终稿未确权、开发未授权，测试台保留 FAIL，改后复测 NOT RUN。 |
 | 前次变更记录 | v0.107（2026-11-19）：新增REQ-030-082／083／084，对应P1-61／62／63，仅文档草案；去重核对见核心可用性评审；终稿未确权、开发未授权、测试台NOT RUN。 |
 | 前次变更记录 | v0.106（2026-11-19）：P1-60／REQ-030-081 按评审决议修订 Spec／Plan v0.4-draft、UAT v0.2-draft：保留 D6 新问询轮次，补 G1–G6、N／B／D 单一矩阵、画像任务补偿、RC1 与正式控制入口。待复审、未确权、开发未授权；13 项全部 NOT RUN，≠ 可上线。 |
@@ -47,7 +50,7 @@
 | REQ-030-084 | 进程关停准入关闭与在途请求排空 | 已有清理先停 KTX，尚无全进程在途排空承诺；修订须与 Spec 191 同次评审 | P2（清单 P1-63；建议第三批） | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
 | REQ-030-079 | 角色权限与 Agent 列表读取响应、展示复用与统计减负 | 高频卡顿只读探查；历史日志聚合与角色上下文重复构建 | P1（清单 P1-58；第一批） | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F58／浏览器）；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | REQ-030-080 | 角色权限与 Agent 多人编辑的对象级冲突与草稿恢复 | 共用配置版本造成无关对象冲突；多人同账号与独立账号场景 | P1（清单 P1-59；第二批） | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F59／浏览器）；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
-| REQ-030-081 | begin 价值重评与零绑定 MCP 问数不受影响 | 2026-11-19 MCP 故障只读排查；委托人不认可 v0.1，要求零绑定不得因 begin 降低正常问答体验 | P0（清单 P1-60；P0-1 修复） | v0.5-draft。复审闭合 OQ-1／OQ-2 文档方案；OQ-3 数值容差待采样前冻结；终稿未确权；开发未授权；测试台 NOT RUN；不入新增核心分母；≠ 可上线。 |
+| REQ-030-081 | begin 价值重评与零绑定 MCP 问数不受影响 | 2026-11-19 MCP 故障只读排查；2026-11-20 批准隐藏 begin；同日终稿确权＋T1–T5 开发授权 | P0（清单 P1-60；P0-1 修复） | **v0.7；终稿已确权；T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟：tools/list 无 begin＋直调 begin_not_available）**；预算／ACL 待商议且本条不改；测试台 NOT RUN；T6／R 另授；不入新增核心分母；≠ 功能合同收口；≠ 可上线。 |
 
 正文与双向回链见本文末 REQ-030-079／080；现行跟进 SOT 仍为执行总账。
 
@@ -1336,13 +1339,13 @@ P1-40 同类排查证明：界面成功反馈与动作真实结果不一致是�
 ## REQ-030-081：begin 价值重评与零绑定 MCP 问数不受影响
 
 - 总账：[P1-60](lucy-20261107-lucy-0-30-feature-inventory-pool.md)，P0 主路径修复；沿用 P0-1 核心分母，不重复计数。
-- 来源：11-19 只读排查与委托人零绑定不受影响要求；v0.1 未获认可，v0.2 重评、v0.3 起草、v0.4 按评审决议修订后，本批复审闭合参与载体与有效事务方案并升为 v0.5-draft。
-- 本修复 [Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md)／[Plan](lucy-20261119-webui-publish-caliber-registry-repair-plan.md)；父 P0-1 及审计／预算合同现值不静默改写，冲突条款确权后同步。
-- 跟进状态：v0.5-draft。复审闭合 OQ-1／OQ-2 文档方案；OQ-3 数值容差待采样前冻结；终稿未确权；开发未授权；测试台 NOT RUN；不入新增核心分母；≠ 可上线。
-- 评审：[决议](../reviews/2026-11-19-begin-zero-binding-review-decisions.md)；F-01–07 修订落点见 Spec §9；OQ-1／02 文档方案已闭合，实现与真实恢复仍未验证。
-- 验收：F 对应 SC-01–12；独立 [UAT-SUITE-BEGIN-ZERO-BINDING](../qa/uat/suites/begin-zero-binding/suite.md) 的 R0／01–12 全部必做，以 fixtures M01–M10 的 N／B／D 比较，G1 未记录与 G2／G5 仅记录分别断言，真实既有 RC1 与画像补偿任务必验，begin 与 query 分别断言；尚无跑次。有绑定全生命周期另段，首次启用／撤销防绕过仍必验。
-- 复盘：[测试漏检与独立跟进不足](../lessons/2026-11-19-begin-zero-binding-test-gap.md)：11-15 已记录 unresolved，不声称历史从未发现；线上各次内部原因仍未知。
-- 授权边界：本轮只写文档与台账，不改代码、配置或执行器，不发布、reindex、重启、构建或执行 UAT。
+- 来源：11-19 只读排查与委托人零绑定不受影响要求；v0.1 未获认可 → v0.5 事务方案 → v0.6 批准 inactive 隐藏 begin → **v0.7 按新定位收缩为 N＋隐藏面**（预算／ACL 待商议且不改）。
+- 本修复 [Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md)／[Plan](lucy-20261119-webui-publish-caliber-registry-repair-plan.md)；父 P0-1 及审计／预算／ACL 合同本条不借隐藏 begin 改写（OQ-4）。
+- 跟进状态：**v0.7；终稿已确权；T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟：tools/list 无 begin＋直调 begin_not_available）**；预算／ACL 待商议且本条不改；测试台 NOT RUN；T6／R 另授；不入新增核心分母；≠ 功能合同收口；≠ 可上线。
+- 评审：[决议](../reviews/2026-11-19-begin-zero-binding-review-decisions.md)；[隐藏 begin 决议](../reviews/2026-11-20-begin-hide-decision.md)；F-01–07 与 H-01–05 见 Spec §9。
+- 验收：F＝SC-01–12（T5）；[UAT](../qa/uat/suites/begin-zero-binding/suite.md) R0／01–12＝T6 另授；编排 [任务包](../../inbox/20261120-1037-p1-60-multi-agent-dev-pack.md)。
+- 复盘：[测试漏检](../lessons/2026-11-19-begin-zero-binding-test-gap.md)。
+- 授权边界：**T1–T5 已授权**；禁止 commit／push／T6 Docker／R／INDEX PASS（除非另授）；不得关预算、改 ACL、隐藏 continue。
 
 
 ## REQ-030-085：同连接跨 Schema 短名冲突与保存运行时确认修复

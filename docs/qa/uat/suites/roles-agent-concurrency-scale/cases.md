@@ -1,8 +1,18 @@
 # Cases — 角色权限与 Agent 并发及规模
 
-所有规模、时序、资源和阈值以 [fixtures](fixtures.md) 为准，本文件不另复制数值。文档v1.0定稿，每个用例写明F58／F59／R选择器、基线／候选、档位、身份模式、样本数与失败；本次全部NOT RUN。编号前缀UAT-RACS只用于本套件。
+所有规模、时序、资源和预算以 [fixtures](fixtures.md) 为准，本文件不另复制数值。文档v1.0定稿，每个用例写明F58／F59／R选择器、基线／候选、档位、身份模式、样本数与失败。编号前缀UAT-RACS只用于本套件。
 
 默认全文的联合J2／J5、系统采样和长稳态属于R；F58／F59按 [suite 分层矩阵](suite.md#验收分层矩阵) 仅执行指定模块子场景，其真实接口／事务证据可以用于功能SC。不得用F58或F59完成代替R整体PASS，也不得因R未跑阻止已具备全部SC证据的模块单独收口。
+
+## 选择器与证据边界（执行登记）
+
+| 选择器 | 覆盖 | 不算 |
+|---|---|---|
+| **F58-smoke／F59-smoke** | R0 登录／健康；RACS-01 字段分区切片；RACS-07×25；RACS-08 缓存；RACS-09 成交；RACS-10 同对象冲突一对；可选 RACS-12（需 MCP Token）。**现行口径＝API-only**，判定句须写明，**不得**主张名册页／primaryReady／WebUI 已通过（见 CONVENTIONS「WebUI：浏览器＋计时强制」） | 完整 01–16、2×／5× 造数、前台浏览器 E＋计时、审计历史、R 组合 |
+| **F58-stress／F59-stress** | 超／近设计地板造数 + 开放式读压 + 突发；若含页面主张须前台浏览器＋计时，否则标 API-only／GAP | 完整 F58／F59／R；不以 stress 冒充必做全绿 |
+| **F58／F59／R** | suite 分层矩阵对应必做全集 | — |
+
+跑次判定必须带选择器；`SMOKE_PASS`／stress `PASS WITH GAP` ≠ 完整 F58／F59／R PASS。凭据只记仓库外路径或 env 名，禁止写入密码／token 正文（见 [CONVENTIONS](../../CONVENTIONS.md)）。
 
 ## UAT-RACS-R0 — 身份、环境、基线与夹具有效性（必做）
 

@@ -6,8 +6,8 @@
 | 日期 / 产品线 | 2026-11-19 / 0.30.0 |
 | 功能编号 / 优先级 | P1-61／REQ-030-082；建议 P1 第一批；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
-| 授权边界 | 只授权核对、Spec／Plan 与登记；禁止改运行代码、配置、runner、构建、执行 UAT 或上线 |
+| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
+| 授权边界 | 委托人授权按本合同实施运行代码、配套 Vitest、API 文档同步；禁止提交／推送／发布／客户升级；禁止执行真实 UAT／压测／Docker 故障演练（须另行授权） |
 | 需求 / 计划 | [总账](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261119-memory-probe-diagnostics-isolation-plan.md) |
 | 测试台 | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md)，F61；无跑次 |
 

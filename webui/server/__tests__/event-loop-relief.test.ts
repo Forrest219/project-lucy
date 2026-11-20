@@ -310,6 +310,10 @@ describe("SC-11 readyz and SC-12 health cache", () => {
     resetKtxRuntimeSpawnCountForTests();
     const app = buildServer();
     await app.ready();
+    // P1-61: stop background collect and clear publish so readyz uses memory peeks.
+    const diag = (app as { diagnosticSnapshot?: { close(): Promise<void>; resetPublishedForTests(): void } }).diagnosticSnapshot;
+    await diag?.close();
+    diag?.resetPublishedForTests();
     const before = ktxRuntimeSpawnCount();
     const cold = await app.inject({ method: "GET", url: "/api/readyz" });
     expect(cold.statusCode).toBe(503);
@@ -324,20 +328,26 @@ describe("SC-11 readyz and SC-12 health cache", () => {
     await app.close();
   });
 
-  it("spawns ktx at most once across 20 health reads", async () => {
+  it("does not spawn ktx on the health request path (background collect may have spawned once)", async () => {
     const { resetKtxRuntimeCacheForTests, resetKtxRuntimeSpawnCountForTests, ktxRuntimeSpawnCount } = await import("../ktx-runtime.js");
     resetKtxRuntimeCacheForTests();
     resetKtxRuntimeSpawnCountForTests();
     const { buildServer } = await import("../index.js");
     const app = buildServer();
     await app.ready();
+    // Let any startup collect finish, then sample — further health GETs must not spawn.
+    const diag = (app as { diagnosticSnapshot?: { waitUntilIdle(): Promise<void> } }).diagnosticSnapshot;
+    await diag?.waitUntilIdle();
     const before = ktxRuntimeSpawnCount();
     for (let i = 0; i < 20; i += 1) {
       const response = await app.inject({ method: "GET", url: "/api/health" });
       expect(response.statusCode).toBe(200);
       expect(response.json().data.eventLoop).toMatchObject({ windowSeconds: 60 });
+      expect(response.json().diagnostics).toMatchObject({
+        freshness: expect.stringMatching(/^(unknown|fresh|stale)$/)
+      });
     }
-    expect(ktxRuntimeSpawnCount() - before).toBeLessThanOrEqual(1);
+    expect(ktxRuntimeSpawnCount() - before).toBe(0);
     await app.close();
   });
 });

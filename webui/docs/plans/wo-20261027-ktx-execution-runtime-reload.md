@@ -57,7 +57,7 @@ G-1..G-5 已全部通过，可作为开工依据记录。
   - 退避 1→2→4→8→16s，上限 5 次 ⇒ FAILED（supervisor 退出 ⇒ 容器退出）。
   - 消费请求后：杀旧实例 → 拉新实例 → 等端口 ⇒ 写回执（`succeeded`/`failed` + `actualDigest`）。
 - 启动段改造（现 `:421-429`）：`supervise_ktx &` + `SUPERVISOR_PID=$!`。
-- 退出段改造（现 `:435-441`）：TERM/INT ⇒ 先 TERM supervisor（其内部再 TERM KTX）⇒ 等清理 ⇒
+- 退出段改造（历史实现曾为：TERM/INT ⇒ 先 TERM supervisor ⇒ 等清理 ⇒；**2026-11-20 P1-63 已具名修订**：整实例先通知 Lucy DRAINING 有界排空，再走 supervisor／KTX 清理，见 Spec 191 §4.2.3／§4.4 现值）：
   TERM LUCY ⇒ `shutdown`。进程组兜底见 Spec §4.4。
 
 **约束**：bash 3.2（无 `readarray`/`mapfile`/负数下标）；`wait_for_port` 沿用现有实现。

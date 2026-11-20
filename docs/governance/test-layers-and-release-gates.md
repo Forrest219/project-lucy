@@ -81,6 +81,8 @@ Lucy 的测试分三层，不能互相替代：
 | `npm --prefix webui run perf:release-baseline -- --tier ci-small --output inbox/perf-baselines/<run>` | release perf（REQ-030-034） | WebUI Roles API＋source-map 计数＋MCP initialize／tools/list／wiki_search＋相对 D6；CI 小夹具。夹具分档见 [`docs/runbooks/release-perf-baseline-fixture-tiers.md`](../runbooks/release-perf-baseline-fixture-tiers.md)。本条通过不表示可上线 |
 | `npm --prefix webui run perf:release-baseline -- --tier release-medium --output inbox/perf-baselines/<run> [--previous <report.json>]` | release perf（发版） | 发版中档夹具＋相对上版；无上版记 `baseline-seed`。正式副本见 `formal-seed` |
 | `npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>` | release perf（正式种子） | 将通过报告晋升到 `inbox/perf-baselines/formal/<ver>-<sha>/` 并更新 `formal/LATEST`（SC-10） |
+| `cd webui && npx vitest run server/__tests__/memory-probe-diagnostics.test.ts server/__tests__/heavy-work-capacity.test.ts server/__tests__/process-drain.test.ts` | unit／component（P1-61／62／63，本机） | 核心可用性三组：探针零请求 I/O 与诊断快照、重任务容量许可生命周期、进程关停准入屏障。只证明单元／组件合同；**不代替**测试台 `UAT-SUITE-CORE-AVAILABILITY`（F61／F62／F63／R-CAV），不进 PR 专用新 job（已由 `cd webui && npm test` 覆盖）。通过 ≠ UAT PASS ≠ 可上线 |
+| `node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs` | platform／runtime（P1-63，本机） | entrypoint drain-first 顺序、退出码、预算常量、demo `stop_grace_period≥45s` 渲染核对与无凭据 IPC。不进 PR 专用新 job；真实 Docker TERM／孤儿演练须另行授权。通过 ≠ UAT PASS ≠ 可上线 |
 
 ### 2.1 Local Node / Native Addon Baseline
 
@@ -284,7 +286,7 @@ Recommended CI jobs:
 
 | Job | Commands |
 |---|---|
-| spec-and-unit | `npm run lint:spec`; `npm run lint:spec-docs`; `npm run lint:url-driven-input`; `cd webui && npm test` |
+| spec-and-unit | `npm run lint:spec`; `npm run lint:spec-docs`; `npm run lint:url-driven-input`; `cd webui && npm test`（含 P1-61／62／63 的 `memory-probe-diagnostics`／`heavy-work-capacity`／`process-drain` Vitest；entrypoint drain 顺序另用本机 `node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs`，不另开 CI job） |
 | security-baseline | `npm run security:baseline` |
 | docker-smoke | `npm run smoke:p0:docker`（含 delivery-isolation 双镜像 denylist） |
 | delivery-isolation | `npm run smoke:p0:delivery-isolation`（Lucy 硬门禁；亦由 `smoke:p0` 调用） |

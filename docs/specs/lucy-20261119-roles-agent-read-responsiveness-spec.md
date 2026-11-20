@@ -6,7 +6,7 @@
 | 日期 / 目标版本 | 2026-11-19 / 0.30.0 |
 | 功能编号 / 优先级 | P1-58／REQ-030-079；P1，第一批 |
 | 台账号 | 无；挂 0.30 产品线执行总账 |
-| 状态 | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE；demo Docker 已跑 F58-smoke（roster／statistics／cache）＝SMOKE_PASS WITH GAP；完整 F58／浏览器／2×／5× 仍 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
+| 状态 | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE；2026-11-20 重建后 demo：F58-smoke＝SMOKE_PASS；fixtures B-floor（20 roles／100 agents／2 rps）读路径 p95 ≤58 ms＝PASS WITH GAP；既有超 5× stress 补充仍有效；完整 F58／浏览器／2×／5×／审计历史仍 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | 授权来源 | 委托人 2026-11-19 明示「授权开启执行」；范围见 inbox/20261119-2235-roles-agent-parallel-dev-tasks.md；不含 docker 重建与 F58／F59／R 执行 |
 | 需求与总账 | [执行总账 P1-58](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[需求池 REQ-030-079](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) |
 | 实施计划 | [配对 Plan](../plans/lucy-20261119-roles-agent-read-responsiveness-plan.md) |

@@ -5,6 +5,7 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot, readConnections } from "../project.js";
 import { loadContentPaths } from "../paths.js";
+import { normalizeSourceRef } from "../source-name-registry.js";
 import {
   enrichCatalogSources,
   type CatalogSourceEntry
@@ -466,8 +467,9 @@ export async function getSourceMapDiagnostics(options: { fresh?: boolean } = {})
   };
 }
 
+/** Reuse connection-scoped sourceName normalize helper (P1-64); denial flow unchanged. */
 function normalizeRef(value: string): string {
-  return value.trim().replace(/[`"']/g, "").toLowerCase();
+  return normalizeSourceRef(value);
 }
 
 /**

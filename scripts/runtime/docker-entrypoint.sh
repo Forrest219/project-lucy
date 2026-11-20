@@ -115,6 +115,15 @@ KTX_RELOAD_REQUEST_FILE="${KTX_UI_DIR}/ktx-reload.request"
 KTX_RELOAD_RESULT_FILE="${KTX_UI_DIR}/ktx-reload.result"
 KTX_RELOAD_CAPABILITY_FILE="${KTX_UI_DIR}/ktx-reload.capability"
 KTX_READY_FILE="${KTX_UI_DIR}/ktx-ready"
+# P1-63 — whole-instance drain IPC (no credentials). Parent owns shutdown.
+LUCY_DRAIN_REQUEST_FILE="${KTX_UI_DIR}/lucy-process-drain.request"
+LUCY_DRAIN_ACK_FILE="${KTX_UI_DIR}/lucy-process-drain.ack"
+# Budgets: drain ≤20s, supervisor/KTX 10s, orphan ≤5s, wrap-up 5s, total ≤40s.
+# External stop grace must be ≥45s (demo compose stop_grace_period: 45s).
+LUCY_DRAIN_BUDGET_S="${LUCY_DRAIN_BUDGET_S:-20}"
+LUCY_DRAIN_ACK_WAIT_S="${LUCY_DRAIN_ACK_WAIT_S:-5}"
+LUCY_ORPHAN_CLEANUP_BUDGET_S="${LUCY_ORPHAN_CLEANUP_BUDGET_S:-5}"
+LUCY_WRAP_UP_BUDGET_S="${LUCY_WRAP_UP_BUDGET_S:-5}"
 KTX_RELOAD_PROTOCOL="lucy-ktx-reload/1"
 # Poll interval is 0.2s, so 25 ticks ≈ 5s between capability heartbeats.
 KTX_RELOAD_HEARTBEAT_TICKS="${LUCY_KTX_RELOAD_HEARTBEAT_TICKS:-25}"
@@ -775,10 +784,10 @@ ktx_kill_leftover_daemon() {
   return 0
 }
 
-# Spec 191 §4.4 — graceful shutdown.
-# The supervisor is stopped first: it forwards TERM to the KTX daemon and reaps
-# it. Only then is Lucy stopped. The leftover sweep is the belt-and-braces path
-# for the case where the supervisor itself was SIGKILLed.
+# Spec 191 §4.4 / P1-63 — graceful shutdown (drain-first).
+# Whole-instance TERM/INT: notify Lucy DRAINING and wait for bounded drain while
+# KTX stays up; then stop supervisor/KTX with the original cleanup; then wrap up.
+# Duplicate TERM/INT/EXIT join the same shutdown via LUCY_SHUTDOWN_STARTED.
 # Wait until the supervisor reports a ready daemon, so the WebUI still starts
 # only after the KTX upstream is listening (the pre-Spec 191 ordering).
 wait_for_ktx_ready() {
@@ -792,15 +801,112 @@ wait_for_ktx_ready() {
   return 1
 }
 
+# Validate custom stop timeout against the whole-instance budget (no silent shrink).
+lucy_validate_stop_timeout_budget() {
+  local stop_s="${KTX_RELOAD_STOP_TIMEOUT_S:-10}"
+  local drain_s="${LUCY_DRAIN_BUDGET_S:-20}"
+  local orphan_s="${LUCY_ORPHAN_CLEANUP_BUDGET_S:-5}"
+  local wrap_s="${LUCY_WRAP_UP_BUDGET_S:-5}"
+  local total=$((drain_s + stop_s + orphan_s + wrap_s))
+  if [[ "${total}" -gt 40 ]]; then
+    echo "[lucy] warning: stop/drain budget conflict: drain=${drain_s}s stop=${stop_s}s orphan=${orphan_s}s wrap=${wrap_s}s total=${total}s > 40s" >&2
+  fi
+  if [[ "${stop_s}" -gt 10 ]]; then
+    echo "[lucy] warning: KTX_RELOAD_STOP_TIMEOUT_S=${stop_s} exceeds default 10s; total exit budget may miss ≤40s" >&2
+  fi
+  return 0
+}
+
+# Notify Lucy to drain and wait for DRAINING ack + process exit (KTX still alive).
+lucy_request_and_wait_drain() {
+  local waited=0
+  local ack_waited=0
+  local drain_s="${LUCY_DRAIN_BUDGET_S:-20}"
+  local ack_s="${LUCY_DRAIN_ACK_WAIT_S:-5}"
+
+  if [[ -z "${LUCY_PID:-}" ]]; then
+    return 0
+  fi
+  if ! kill -0 "${LUCY_PID}" >/dev/null 2>&1; then
+    wait "${LUCY_PID}" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  mkdir -p "${KTX_UI_DIR}" >/dev/null 2>&1 || true
+  rm -f "${LUCY_DRAIN_ACK_FILE}" >/dev/null 2>&1 || true
+  # Request file carries no credentials — phase marker only.
+  printf 'phase=DRAIN\n' > "${LUCY_DRAIN_REQUEST_FILE}" 2>/dev/null || true
+  # Signal Lucy as a second confirmable channel within this instance.
+  kill -TERM "${LUCY_PID}" >/dev/null 2>&1 || true
+
+  echo "[lucy] drain: begin pid=${LUCY_PID} budget=${drain_s}s" >&2
+
+  # Handoff window: external TERM → DRAINING ack. Work admitted in this window
+  # is counted by Lucy; parent must not treat signal send time as barrier close.
+  while [[ "${ack_waited}" -lt $((ack_s * 5)) ]]; do
+    if [[ -f "${LUCY_DRAIN_ACK_FILE}" ]]; then
+      echo "[lucy] drain: ack received" >&2
+      break
+    fi
+    if ! kill -0 "${LUCY_PID}" >/dev/null 2>&1; then
+      wait "${LUCY_PID}" >/dev/null 2>&1 || true
+      echo "[lucy] drain: lucy exited before ack" >&2
+      return 0
+    fi
+    ack_waited=$((ack_waited + 1))
+    sleep 0.2
+  done
+
+  # Wait for Lucy to finish drain and exit while KTX remains up (≤ drain budget).
+  while [[ "${waited}" -lt $((drain_s * 5)) ]]; do
+    if ! kill -0 "${LUCY_PID}" >/dev/null 2>&1; then
+      wait "${LUCY_PID}" >/dev/null 2>&1 || true
+      echo "[lucy] drain: lucy settled exit" >&2
+      return 0
+    fi
+    waited=$((waited + 1))
+    sleep 0.2
+  done
+
+  echo "[lucy] drain: deadline reached; forcing lucy exit" >&2
+  kill -TERM "${LUCY_PID}" >/dev/null 2>&1 || true
+  wait_for_child_exit "${LUCY_PID}" "${LUCY_WRAP_UP_BUDGET_S:-5}"
+  return 0
+}
+
+LUCY_SHUTDOWN_STARTED=0
+
 shutdown() {
   local status="${1:-0}"
+  # Duplicate TERM/INT/EXIT join the same process (idempotent).
+  if [[ "${LUCY_SHUTDOWN_STARTED}" -ne 0 ]]; then
+    return 0
+  fi
+  LUCY_SHUTDOWN_STARTED=1
   trap - TERM INT EXIT
+
+  lucy_validate_stop_timeout_budget
+
+  # 1) Drain Lucy first (KTX stays alive for in-flight dependency work).
+  lucy_request_and_wait_drain
+
+  # 2) Original supervisor → KTX cleanup (default 10s).
   if [[ -n "${SUPERVISOR_PID:-}" ]]; then
+    echo "[lucy] drain: stopping supervisor pid=${SUPERVISOR_PID}" >&2
     kill -TERM "${SUPERVISOR_PID}" >/dev/null 2>&1 || true
     wait_for_child_exit "${SUPERVISOR_PID}" "${KTX_RELOAD_STOP_TIMEOUT_S}"
   fi
+
+  # 3) Orphan KTX sweep (≤5s bound via existing loop + kill).
   ktx_kill_leftover_daemon
-  if [[ -n "${LUCY_PID:-}" ]]; then kill "${LUCY_PID}" >/dev/null 2>&1 || true; fi
+
+  # 4) Remaining Lucy wrap-up if still alive.
+  if [[ -n "${LUCY_PID:-}" ]] && kill -0 "${LUCY_PID}" >/dev/null 2>&1; then
+    kill -TERM "${LUCY_PID}" >/dev/null 2>&1 || true
+    wait_for_child_exit "${LUCY_PID}" "${LUCY_WRAP_UP_BUDGET_S:-5}"
+  fi
+
+  rm -f "${LUCY_DRAIN_REQUEST_FILE}" "${LUCY_DRAIN_ACK_FILE}" >/dev/null 2>&1 || true
   wait >/dev/null 2>&1 || true
   exit "${status}"
 }
@@ -869,6 +975,7 @@ echo "[lucy] project root: ${PROJECT_ROOT}"
 # previous run so a stale receipt can never be read as this boot's answer.
 rm -f "${KTX_RELOAD_CAPABILITY_FILE}" "${KTX_RELOAD_RESULT_FILE}" \
   "${KTX_RELOAD_REQUEST_FILE}" "${KTX_SUPERVISOR_PID_FILE}" "${KTX_READY_FILE}" \
+  "${LUCY_DRAIN_REQUEST_FILE}" "${LUCY_DRAIN_ACK_FILE}" \
   >/dev/null 2>&1 || true
 
 supervise_ktx &

@@ -21,7 +21,9 @@ import { inferredRebuildStatus } from "./inferred-turn-maintainer.js";
 import { selectInquiryPackCallRows } from "./audit-inquiry-pack-rows.js";
 import { mapSlicesYielding, yieldToEventLoop } from "./yield-slices.js";
 import { formatAuditLocalTimestamp as formatAuditLocalTimestampIn } from "./audit-local-timestamp.js";
-import { trustedActorFromRequest } from "../security/request-actor.js";
+import { ActorUnresolvedError, trustedActorFromRequest } from "../security/request-actor.js";
+import { hashSessionJti } from "../security/store.js";
+import { withHeavyWorkPermit } from "../runtime/heavy-work-capacity.js";
 import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
 import { getAuditSqliteStatus, rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
 import {
@@ -3205,6 +3207,44 @@ async function waitForProjectionCatchUp(
   }
 }
 
+/** P1-62: re-check session before a queued export starts (waiting revoke / epoch). */
+async function revalidateHeavyExportRequest(request: { lucyAdmin?: { authMode?: string; admin?: unknown; session?: { jti: string } | null } }): Promise<void> {
+  const ctx = request.lucyAdmin;
+  if (ctx?.authMode === "open") return;
+  if (!ctx?.admin) throw new ActorUnresolvedError();
+  if (!ctx.session) return;
+  const store = await getSecurityStore();
+  if (!store.ok) {
+    throw Object.assign(new Error("认证状态暂不可用，请稍后重试或联系部署人员"), {
+      code: "AUTH_STATE_UNAVAILABLE",
+      statusCode: 503
+    });
+  }
+  const validation = store.value.validateSession(hashSessionJti(ctx.session.jti));
+  if (!validation.ok) {
+    throw Object.assign(new Error("认证状态暂不可用，请稍后重试或联系部署人员"), {
+      code: "AUTH_STATE_UNAVAILABLE",
+      statusCode: 503
+    });
+  }
+  if (!validation.value.valid) throw new ActorUnresolvedError();
+}
+
+/** P1-62: acquire audit_export permit before DB open / CSV / zip build. */
+function runAuditExportHeavy<T>(
+  request: Parameters<typeof trustedActorFromRequest>[0],
+  run: () => Promise<T>,
+  options: { deadlineMs?: number } = {}
+): Promise<T> {
+  return withHeavyWorkPermit({
+    class: "audit_export",
+    identity: trustedActorFromRequest(request).actorId,
+    deadlineMs: options.deadlineMs,
+    revalidate: () => revalidateHeavyExportRequest(request),
+    run
+  });
+}
+
 export function registerAuditRoutes(app: FastifyInstance) {
   app.get<{
     Querystring: {
@@ -3859,44 +3899,47 @@ export function registerAuditRoutes(app: FastifyInstance) {
   app.get<{
     Querystring: AccessLogFilterQuery & { bom?: string; cursor?: string; limit?: string };
   }>("/api/admin/audit/export", async (request, reply) => {
-    const q = request.query;
-    const database = await getAuditDb();
-    const resolved = resolveCallIdentityQuery(database, q);
-    const { conditions, params } = buildAccessLogFilter(resolved);
+    return runAuditExportHeavy(request, async () => {
+      const q = request.query;
+      const database = await getAuditDb();
+      const resolved = resolveCallIdentityQuery(database, q);
+      const { conditions, params } = buildAccessLogFilter(resolved);
 
-    // SC-18 — page size defaults to 10,000; `cursor` resumes after the last
-    // row of the previous page so the second page can read row 10,001.
-    const pageSize = Math.min(Math.max(parseInt(q.limit ?? "", 10) || auditExportMaxRows(), 1), auditExportMaxRows());
-    const resumed = applyAuditExportCursor(conditions, params, decodeAuditExportCursor(q.cursor));
-    const where = resumed.conditions.length > 0 ? `WHERE ${resumed.conditions.join(" AND ")}` : "";
-    // Fetch one extra row to learn whether a next page exists without
-    // dropping the overflow.
-    const fetched = database
-      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @pageSizePlusOne`)
-      .all({ ...resumed.params, pageSizePlusOne: pageSize + 1 }) as QueryRow[];
-    const hasMore = fetched.length > pageSize;
-    const rows = await presentCallRowsYielding(database, hasMore ? fetched.slice(0, pageSize) : fetched);
-    const last = fetched[pageSize - 1] ?? fetched[fetched.length - 1];
-    const nextCursor = hasMore && last
-      ? encodeAuditExportCursor({ ts: last.ts, id: last.id })
-      : undefined;
+      // SC-18 — page size defaults to 10,000; `cursor` resumes after the last
+      // row of the previous page so the second page can read row 10,001.
+      const pageSize = Math.min(Math.max(parseInt(q.limit ?? "", 10) || auditExportMaxRows(), 1), auditExportMaxRows());
+      const resumed = applyAuditExportCursor(conditions, params, decodeAuditExportCursor(q.cursor));
+      const where = resumed.conditions.length > 0 ? `WHERE ${resumed.conditions.join(" AND ")}` : "";
+      // Fetch one extra row to learn whether a next page exists without
+      // dropping the overflow.
+      const fetched = database
+        .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @pageSizePlusOne`)
+        .all({ ...resumed.params, pageSizePlusOne: pageSize + 1 }) as QueryRow[];
+      const hasMore = fetched.length > pageSize;
+      const rows = await presentCallRowsYielding(database, hasMore ? fetched.slice(0, pageSize) : fetched);
+      const last = fetched[pageSize - 1] ?? fetched[fetched.length - 1];
+      const nextCursor = hasMore && last
+        ? encodeAuditExportCursor({ ts: last.ts, id: last.id })
+        : undefined;
 
-    const body = await renderAccessLogCsvYielding(rows);
-    const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
-    reply.header("Content-Type", "text/csv; charset=utf-8");
-    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("calls", "csv")}"`);
-    reply.header("Cache-Control", "private, no-store");
-    // The resume cursor rides in headers so a plain CSV download can be paged
-    // without switching client.
-    reply.header("X-Lucy-Export-Row-Count", String(rows.length));
-    if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
-    return reply.send(withBom);
+      const body = await renderAccessLogCsvYielding(rows);
+      const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
+      reply.header("Content-Type", "text/csv; charset=utf-8");
+      reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("calls", "csv")}"`);
+      reply.header("Cache-Control", "private, no-store");
+      // The resume cursor rides in headers so a plain CSV download can be paged
+      // without switching client.
+      reply.header("X-Lucy-Export-Row-Count", String(rows.length));
+      if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
+      return reply.send(withBom);
+    });
   });
 
   // GET /api/admin/audit/export-pack — 审计证据包 zip (Spec 137 / 162 §8)
   app.get<{
     Querystring: AccessLogFilterQuery & { cursor?: string };
   }>("/api/admin/audit/export-pack", async (request, reply) => {
+    return runAuditExportHeavy(request, async () => {
     const q = request.query;
     const database = await getAuditDb();
     const resolved = resolveCallIdentityQuery(database, q);
@@ -4134,6 +4177,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     reply.header("Cache-Control", "private, no-store");
     if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
     return reply.send(zip);
+    });
   });
 
   // POST /api/admin/audit/args-summary/scrub — Spec 137
@@ -4181,50 +4225,54 @@ export function registerAuditRoutes(app: FastifyInstance) {
   app.get<{
     Querystring: TurnFilterQuery;
   }>("/api/admin/audit/turns/export", async (request, reply) => {
-    const q = request.query;
-    const database = await getAuditDb();
-    const result = await listAuditTurnEntries(database, q, { paginate: false });
-    await yieldToEventLoop();
-    const body = await renderTurnCsvYielding(result.entries);
-    const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
-    reply.header("Content-Type", "text/csv; charset=utf-8");
-    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("turns", "csv")}"`);
-    reply.header("Cache-Control", "private, no-store");
-    return reply.send(withBom);
+    return runAuditExportHeavy(request, async () => {
+      const q = request.query;
+      const database = await getAuditDb();
+      const result = await listAuditTurnEntries(database, q, { paginate: false });
+      await yieldToEventLoop();
+      const body = await renderTurnCsvYielding(result.entries);
+      const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
+      reply.header("Content-Type", "text/csv; charset=utf-8");
+      reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("turns", "csv")}"`);
+      reply.header("Cache-Control", "private, no-store");
+      return reply.send(withBom);
+    });
   });
 
   // GET /api/admin/audit/export-inquiry-pack — 问询 CSV 与调用 CSV 同一次查询 (Spec 172)
   app.get<{
     Querystring: TurnFilterQuery;
   }>("/api/admin/audit/export-inquiry-pack", async (request, reply) => {
-    const q = request.query;
-    const database = await getAuditDb();
-    const turns = await listAuditTurnEntries(database, q, { paginate: false });
-    await yieldToEventLoop(); // do not chain the turn listing and the call query into one block
-    const turnIds = turns.entries.map((entry) => entry.id);
-    const callFilter: AccessLogFilterQuery = {
-      user: q.user,
-      since: q.since,
-      until: q.until,
-      outcome: q.outcome,
-      tableSearch: q.tableSearch,
-      includeProtocol: "true"
-    };
-    const { conditions, params } = buildAccessLogFilter(callFilter, { applyAccessGrade: false });
-    // Set-based selection (P1-32 / F-1): the inquiry ids are joined once, not expanded into IN lists.
-    const selected = selectInquiryPackCallRows(database, { conditions, params }, turnIds) as unknown as QueryRow[];
-    await yieldToEventLoop();
-    const callRows = await presentCallRowsYielding(database, selected);
-    const turnsCsv = Buffer.from(`\uFEFF${await renderTurnCsvYielding(turns.entries)}`, "utf8");
-    const callsCsv = Buffer.from(`\uFEFF${await renderAccessLogCsvYielding(callRows)}`, "utf8");
-    const zip = buildStoredZip([
-      { name: "turns.csv", data: turnsCsv },
-      { name: "calls.csv", data: callsCsv }
-    ]);
-    reply.header("Content-Type", "application/zip");
-    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("inquiry-pack", "csv").replace(/\.csv$/, ".zip")}"`);
-    reply.header("Cache-Control", "private, no-store");
-    return reply.send(zip);
+    return runAuditExportHeavy(request, async () => {
+      const q = request.query;
+      const database = await getAuditDb();
+      const turns = await listAuditTurnEntries(database, q, { paginate: false });
+      await yieldToEventLoop(); // do not chain the turn listing and the call query into one block
+      const turnIds = turns.entries.map((entry) => entry.id);
+      const callFilter: AccessLogFilterQuery = {
+        user: q.user,
+        since: q.since,
+        until: q.until,
+        outcome: q.outcome,
+        tableSearch: q.tableSearch,
+        includeProtocol: "true"
+      };
+      const { conditions, params } = buildAccessLogFilter(callFilter, { applyAccessGrade: false });
+      // Set-based selection (P1-32 / F-1): the inquiry ids are joined once, not expanded into IN lists.
+      const selected = selectInquiryPackCallRows(database, { conditions, params }, turnIds) as unknown as QueryRow[];
+      await yieldToEventLoop();
+      const callRows = await presentCallRowsYielding(database, selected);
+      const turnsCsv = Buffer.from(`\uFEFF${await renderTurnCsvYielding(turns.entries)}`, "utf8");
+      const callsCsv = Buffer.from(`\uFEFF${await renderAccessLogCsvYielding(callRows)}`, "utf8");
+      const zip = buildStoredZip([
+        { name: "turns.csv", data: turnsCsv },
+        { name: "calls.csv", data: callsCsv }
+      ]);
+      reply.header("Content-Type", "application/zip");
+      reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("inquiry-pack", "csv").replace(/\.csv$/, ".zip")}"`);
+      reply.header("Cache-Control", "private, no-store");
+      return reply.send(zip);
+    });
   });
 
   // GET /api/admin/audit/turns/:turnId — single turn detail (inferred or reported).
@@ -4781,69 +4829,74 @@ export function registerAuditRoutes(app: FastifyInstance) {
       };
     }
 
-    // N26-6: T3 starts BEFORE capturing S and reading projection (B21 start order).
+    // N26-6 / P1-62: T3 starts at request arrival so capacity wait counts into the deadline.
     const catchUpStartedAt = Date.now();
-    const store = await getSecurityStore();
-    if (!store.ok) {
-      reply.code(503);
-      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
-    }
-    // B19 / E-2：`S` 的唯一正确来源是账本已提交上界。
-    const upperSeq = store.value.maxEventSeq();
-    if (!upperSeq.ok) {
-      reply.code(503);
-      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
-    }
-
-    const database = await getAuditDb();
-    // B21：自捕获 S 那一刻起算，等待重试不重置。
     const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
-    // N26: waitForProjectionCatchUp returns { caughtUp, lag } relative to S.
-    const catchUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
+    return runAuditExportHeavy(
+      request,
+      async () => {
+        const store = await getSecurityStore();
+        if (!store.ok) {
+          reply.code(503);
+          return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
+        }
+        // B19 / E-2：`S` 的唯一正确来源是账本已提交上界。
+        const upperSeq = store.value.maxEventSeq();
+        if (!upperSeq.ok) {
+          reply.code(503);
+          return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
+        }
 
-    try {
-      const result = await performExportV2({
-        mode,
-        confirmDiagnostic: query.confirmDiagnostic === "true",
-        fixedFilter: {
-          from: query.from,
-          until: query.until,
-          userId: query.userId
-        },
-        fixedZone: "UTC",
-        projectionLag: catchUp.lag,
-        auditStoreAvailable: true,
-        securityStoreAvailable: true,
-        backupOk: true,
-        snapshotDb: database,
-        sourceDb: database,
-        classificationVersion: CLASSIFICATION_VERSION_V2P5,
-        digestVersion: DIGEST_VERSION_V2P5,
-        ledgerUpperSeq: upperSeq.value,
-        catchUpStartedAt,
-        catchUpDeadlineMs: deadlineMs,
-        provenance: {
-          exportedBy: query.exportedBy ?? null,
-          exportReason: query.exportReason ?? null,
-          exportApprovalRef: query.exportApprovalRef ?? null
-        },
-        prevExportId: query.prevExportId ?? null
-      });
-      if (mode === "complete" && !catchUp.caughtUp) {
-        reply.code(409);
-        return {
-          ok: false,
-          error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
-        };
-      }
-      reply.header("content-type", "text/csv; charset=utf-8");
-      reply.header("x-lucy-audit-upper-seq", String(result.upperSeq));
-      return result.csv;
-    } catch (err) {
-      const message = String((err as Error).message ?? err);
-      reply.code(409);
-      return { ok: false, error: { code: "EXPORT_FAILED", message } };
-    }
+        const database = await getAuditDb();
+        // N26: waitForProjectionCatchUp returns { caughtUp, lag } relative to S.
+        const catchUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
+
+        try {
+          const result = await performExportV2({
+            mode,
+            confirmDiagnostic: query.confirmDiagnostic === "true",
+            fixedFilter: {
+              from: query.from,
+              until: query.until,
+              userId: query.userId
+            },
+            fixedZone: "UTC",
+            projectionLag: catchUp.lag,
+            auditStoreAvailable: true,
+            securityStoreAvailable: true,
+            backupOk: true,
+            snapshotDb: database,
+            sourceDb: database,
+            classificationVersion: CLASSIFICATION_VERSION_V2P5,
+            digestVersion: DIGEST_VERSION_V2P5,
+            ledgerUpperSeq: upperSeq.value,
+            catchUpStartedAt,
+            catchUpDeadlineMs: deadlineMs,
+            provenance: {
+              exportedBy: query.exportedBy ?? null,
+              exportReason: query.exportReason ?? null,
+              exportApprovalRef: query.exportApprovalRef ?? null
+            },
+            prevExportId: query.prevExportId ?? null
+          });
+          if (mode === "complete" && !catchUp.caughtUp) {
+            reply.code(409);
+            return {
+              ok: false,
+              error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
+            };
+          }
+          reply.header("content-type", "text/csv; charset=utf-8");
+          reply.header("x-lucy-audit-upper-seq", String(result.upperSeq));
+          return result.csv;
+        } catch (err) {
+          const message = String((err as Error).message ?? err);
+          reply.code(409);
+          return { ok: false, error: { code: "EXPORT_FAILED", message } };
+        }
+      },
+      { deadlineMs: Math.max(0, deadlineMs - (Date.now() - catchUpStartedAt)) }
+    );
   });
 
   app.get<{
@@ -4869,63 +4922,69 @@ export function registerAuditRoutes(app: FastifyInstance) {
       };
     }
 
-    // N26-6: T3 starts BEFORE capturing S and reading projection (B21 start order).
+    // N26-6 / P1-62: T3 starts at request arrival so capacity wait counts into the deadline.
     const catchUpStartedAt = Date.now();
-    const store = await getSecurityStore();
-    if (!store.ok) {
-      reply.code(503);
-      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
-    }
-    const upperSeq = store.value.maxEventSeq();
-    if (!upperSeq.ok) {
-      reply.code(503);
-      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
-    }
-
-    const database = await getAuditDb();
-    // N26: waitForProjectionCatchUp returns { caughtUp, lag } relative to S.
     const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
-    const catchUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
+    return runAuditExportHeavy(
+      request,
+      async () => {
+        const store = await getSecurityStore();
+        if (!store.ok) {
+          reply.code(503);
+          return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
+        }
+        const upperSeq = store.value.maxEventSeq();
+        if (!upperSeq.ok) {
+          reply.code(503);
+          return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
+        }
 
-    try {
-      const pack = await buildExportPackV2({
-        mode,
-        confirmDiagnostic: query.confirmDiagnostic === "true",
-        fixedFilter: { from: query.from, until: query.until, userId: query.userId },
-        fixedZone: "UTC",
-        projectionLag: catchUp.lag,
-        auditStoreAvailable: true,
-        securityStoreAvailable: true,
-        backupOk: true,
-        snapshotDb: database,
-        sourceDb: database,
-        classificationVersion: CLASSIFICATION_VERSION_V2P5,
-        digestVersion: DIGEST_VERSION_V2P5,
-        ledgerUpperSeq: upperSeq.value,
-        catchUpStartedAt,
-        catchUpDeadlineMs: deadlineMs,
-        provenance: {
-          exportedBy: query.exportedBy ?? null,
-          exportReason: query.exportReason ?? null,
-          exportApprovalRef: query.exportApprovalRef ?? null
-        },
-        prevExportId: query.prevExportId ?? null
-      });
-      if (mode === "complete" && !catchUp.caughtUp) {
-        reply.code(409);
-        return {
-          ok: false,
-          error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
-        };
-      }
-      reply.header("content-type", "application/zip");
-      reply.header("x-lucy-audit-upper-seq", String(pack.manifest.ledgerUpperSeq));
-      return reply.send(pack.zip);
-    } catch (err) {
-      const message = String((err as Error).message ?? err);
-      reply.code(409);
-      return { ok: false, error: { code: "EXPORT_FAILED", message } };
-    }
+        const database = await getAuditDb();
+        // N26: waitForProjectionCatchUp returns { caughtUp, lag } relative to S.
+        const catchUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
+
+        try {
+          const pack = await buildExportPackV2({
+            mode,
+            confirmDiagnostic: query.confirmDiagnostic === "true",
+            fixedFilter: { from: query.from, until: query.until, userId: query.userId },
+            fixedZone: "UTC",
+            projectionLag: catchUp.lag,
+            auditStoreAvailable: true,
+            securityStoreAvailable: true,
+            backupOk: true,
+            snapshotDb: database,
+            sourceDb: database,
+            classificationVersion: CLASSIFICATION_VERSION_V2P5,
+            digestVersion: DIGEST_VERSION_V2P5,
+            ledgerUpperSeq: upperSeq.value,
+            catchUpStartedAt,
+            catchUpDeadlineMs: deadlineMs,
+            provenance: {
+              exportedBy: query.exportedBy ?? null,
+              exportReason: query.exportReason ?? null,
+              exportApprovalRef: query.exportApprovalRef ?? null
+            },
+            prevExportId: query.prevExportId ?? null
+          });
+          if (mode === "complete" && !catchUp.caughtUp) {
+            reply.code(409);
+            return {
+              ok: false,
+              error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
+            };
+          }
+          reply.header("content-type", "application/zip");
+          reply.header("x-lucy-audit-upper-seq", String(pack.manifest.ledgerUpperSeq));
+          return reply.send(pack.zip);
+        } catch (err) {
+          const message = String((err as Error).message ?? err);
+          reply.code(409);
+          return { ok: false, error: { code: "EXPORT_FAILED", message } };
+        }
+      },
+      { deadlineMs: Math.max(0, deadlineMs - (Date.now() - catchUpStartedAt)) }
+    );
   });
 }
 

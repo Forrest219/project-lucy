@@ -7,10 +7,10 @@
 | 总账 / REQ | P1-58／REQ-030-079；P1-59／REQ-030-080 |
 | 目标 | 以基准、2×、5× 的数据／并发／到达速率，验证列表响应、统计正确、多会话编辑、冲突恢复及纯 MCP 共存 |
 | 环境 | 独立本机 Docker compose fixture，单 Lucy 进程／单副本；真实 WebUI、API、SQLite、MCP 与反向代理 |
-| 当前执行状态 | **SMOKE_PASS WITH GAP**（2026-11-19 F58-smoke／F59-smoke）；完整 F58／F59／R／浏览器／2×／5× 造数仍 NOT RUN。最近跑次见 [runs/2026-11-19-cursor-f58-f59-smoke.md](runs/2026-11-19-cursor-f58-f59-smoke.md) |
+| 当前执行状态 | **SMOKE_PASS**＋**B-floor PASS WITH GAP**＋**F58-browser-timing PASS WITH GAP**（2026-11-20 前台：~223 roles／82 agents，primaryReady 亚秒）＋ kimi stress 补充。完整 F58／F59／R／E 全矩阵／2×／5× 仍 NOT RUN。最近：[browser-timing](runs/2026-11-20-cursor-roles-agents-browser-timing.md)、[b-floor](runs/2026-11-20-cursor-f58-f59-b-floor.md)、[kimi-stress](runs/2026-11-20-kimi-scale-stress.md)、[smoke](runs/2026-11-19-cursor-f58-f59-smoke.md) |
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md)（倍率、资源、时序与阈值唯一真源） |
-| runs | [runs/](runs/)；当前无跑次 |
+| runs | [runs/](runs/) |
 | 功能合同 | [读取响应 Spec](../../../../specs/lucy-20261119-roles-agent-read-responsiveness-spec.md)；[并发编辑 Spec](../../../../specs/lucy-20261119-roles-agent-concurrent-edit-spec.md) |
 | 实施计划 | [读取 Plan](../../../../plans/lucy-20261119-roles-agent-read-responsiveness-plan.md)；[并发 Plan](../../../../plans/lucy-20261119-roles-agent-concurrent-edit-plan.md) |
 | 发布取证回链 | 沿用 P1-13 [发版性能基线](../../../../specs/lucy-20261113-release-perf-baseline-gate-spec.md)，不改旧套件 PASS，不替代整包发布取证 |

@@ -63,9 +63,13 @@ KTX 是 Lucy 引用的上游依赖。本仓库只使用 KTX 提供的 CLI、接�
 
 ## 浏览器测试约束
 
-正式治理见 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 的“验证策略：浏览器测试约束”。
+正式治理见 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 的「验证策略：浏览器测试约束」；测试台细则见 [`docs/qa/uat/CONVENTIONS.md`](docs/qa/uat/CONVENTIONS.md)「WebUI：浏览器＋计时强制」。
 
-简要规则：正常开发任务默认不需要做浏览器测试；Lucy 项目默认不需要做移动窄屏测试。只有在用户、当前任务说明或已批准计划明确要求浏览器测试 / 移动窄屏验证时，才执行对应测试。
+简要规则：
+
+- **WebUI 用户可见面**：开发验证与 UAT **必须**真实前台浏览器＋即时计时（与 API 耗时分列）；禁止只验后端 HTTP 却主张页面／WebUI 已通过。
+- **非 WebUI**（纯 MCP／后端／脚本等）：默认不强制浏览器测试。
+- Lucy 默认不做移动窄屏测试；除非用户、任务说明或已批准计划明确要求。
 
 ## 全系统术语规范
 
