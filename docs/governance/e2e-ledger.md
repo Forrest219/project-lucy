@@ -29,10 +29,10 @@
 
 | 清单 ID | REQ | 开发台 Spec | 测试台 Suite | 最近 UAT | 备注 |
 |---|---|---|---|---|---|
+| P1-66 | REQ-030-087 | [名册摘要 Spec](../specs/lucy-20261120-agent-roster-summary-projection-spec.md) · [Plan](../plans/lucy-20261120-agent-roster-summary-projection-plan.md) | [UAT-SUITE-AGENT-ROSTER-SUMMARY](../qa/uat/suites/agent-roster-summary/suite.md) | PASS WITH GAP（F66-A）；原F66 FAIL保留 | v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 GAP-UAT-P1-66；不改变 P1-58／59 现值。 |
 | P1-61 | REQ-030-082 | [存活／就绪探针纯内存响应与诊断隔离](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md) | [修复局部PASS WITH GAP](../qa/uat/suites/core-availability/runs/2026-11-20-codex-availability-merge-recheck.md) | CAV-01真实停止与两轮自动恢复通过；F61完整矩阵未完成；前次FAIL保留；R-CAV归P1-13，NOT RUN；GAP-UAT-P1-61保持打开。 |
 | P1-62 | REQ-030-083 | [重任务跨模块容量控制与许可生命周期](../specs/lucy-20261119-heavy-work-capacity-control-spec.md) | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md) | [局部PASS WITH GAP：仅导出](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro.md) | F62完整矩阵未完成；实现已落地，本次局部执行已授权；R-CAV归P1-13，NOT RUN；GAP-UAT-P1-62保持打开。 |
 | P1-63 | REQ-030-084 | [进程关停准入关闭与在途请求排空](../specs/lucy-20261119-process-drain-lifecycle-spec.md) | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md) | [修复局部PASS WITH GAP](../qa/uat/suites/core-availability/runs/2026-11-20-codex-availability-merge-recheck.md) | CAV-02 MCP登记与实际Node PID等待修复；三轮TERM／同卷恢复通过；完整矩阵未完成；前次FAIL保留；R-CAV NOT RUN；GAP-UAT-P1-63保持打开。 |
-| P1-66 | REQ-030-087 | [名册摘要 Spec](../specs/lucy-20261120-agent-roster-summary-projection-spec.md) · [Plan](../plans/lucy-20261120-agent-roster-summary-projection-plan.md) | [UAT-SUITE-AGENT-ROSTER-SUMMARY](../qa/uat/suites/agent-roster-summary/suite.md) | PASS WITH GAP（F66-A）；原F66 FAIL保留 | v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 GAP-UAT-P1-66；不改变 P1-58／59 现值。 |
 | P1-64 | REQ-030-085 | [短名唯一性与保存 ack Spec](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) · [Plan](../plans/lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) | [UAT-SUITE-SOURCE-SHORTNAME-CONFLICT](../qa/uat/suites/source-shortname-conflict/suite.md) | [合并最终候选复验](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-combined-final.md)；判定见INDEX | v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 GAP-UAT-P1-64已关闭，SC-09通过。 |
 | P1-65 | REQ-030-086 | [Wiki 覆盖上传 YAML 授权采用 Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md) · [Plan](../plans/lucy-20261120-wiki-upload-acl-adoption-plan.md) | [UAT-SUITE-WIKI-UPLOAD-ACL-ADOPTION](../qa/uat/suites/wiki-upload-acl-adoption/suite.md) | [本轮收口复核 PASS](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md)；历史基线 FAIL 保留 | v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 GAP-UAT-P1-65 已经本轮真实补跑关闭。 |
 | P1-60 | REQ-030-081 | [零绑定begin Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md) · [Plan](../plans/lucy-20261119-webui-publish-caliber-registry-repair-plan.md) | [UAT-SUITE-BEGIN-ZERO-BINDING](../qa/uat/suites/begin-zero-binding/suite.md) | [合并候选完整R](../qa/uat/suites/begin-zero-binding/runs/2026-11-20-codex-combined-final.md)；判定见INDEX | v0.9；功能合同已收口（SC-01–12通过，P1-60／P1-64同一冻结候选完整复验）；预算持久化锁竞争修复纳入；本轮增量已提交；未推送／发布；不入新增核心分母；本条收口不表示可上线。 |
@@ -97,9 +97,9 @@
 
 | GAP | 归属 | 当前缺口 / 关闭条件 |
 |---|---|---|
-| GAP-UAT-P1-61 | P1-61／REQ-030-082 | 仅设计、F61未执行；取得执行授权并完成对应全部SC和真实跑次后复核，不能以旧模块PASS关闭。 |
-| GAP-UAT-P1-62 | P1-62／REQ-030-083 | 仅设计、F62未执行；取得执行授权并完成对应全部SC和真实跑次后复核，不能以旧模块PASS关闭。 |
-| GAP-UAT-P1-63 | P1-63／REQ-030-084 | 仅设计、F63未执行；取得执行授权并完成对应全部SC和真实跑次后复核，不能以旧模块PASS关闭。 |
+| GAP-UAT-P1-61 | P1-61／REQ-030-082 | CAV-01已修复，SC-08及真实回收／两轮自动恢复局部通过；真实撤权、代次、全字段与reader计数等完整矩阵补齐后复核。 |
+| GAP-UAT-P1-62 | P1-62／REQ-030-083 | 仅真实导出入口局部实测，三类别容量／80提交／实际许可终结等完整矩阵待补；不得以局部通过关闭。 |
+| GAP-UAT-P1-63 | P1-63／REQ-030-084 | CAV-02已修复，三轮10秒真实查询TERM及同卷恢复通过；100轮准入竞争、长SSE、>20秒、未知写回执等完整矩阵仍待补。 |
 
 R-CAV由同候选测试执行者在组合主张前消费，挂P1-13；P1-52客户升级和P1-53／54真实题库边界不变。不将本轮静态核对作为客户503根因证据。
 
@@ -107,9 +107,9 @@ R-CAV由同候选测试执行者在组合主张前消费，挂P1-13；P1-52客�
 
 | ID | 缺口 | 建议动作 | 优先级 |
 |---|---|---|---|
-| GAP-UAT-P1-65 | **本轮整改关闭**（2026-11-20）：前台浏览器／遗漏子例、严格 MCP、夹具清理及状态一致性均通过；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md) | 最终零残留，51 个独立验收 ID PASS；不替代发布取证／可上线 | — |
 | GAP-UAT-P1-66 | P1-66 batch A BA-01-07 CLOSED; original F66 cold/first-navigation failures retained; full scale/WIDTH/write-fault matrix deferred | Next batch requires user restart, compiler design review and unchanged-budget evidence; not a blocker of accepted batch A | P1 |
 | GAP-UAT-P1-64 | **已关闭**：SC-09类型0错误；本轮与P1-60同一冻结候选完整短名及前台浏览器复验通过 | [合并最终跑次](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-combined-final.md)；782项Vitest＋29项概念模块回归；整包独立评审 | P1 |
+| GAP-UAT-P1-65 | **本轮整改关闭**（2026-11-20）：前台浏览器／遗漏子例、严格 MCP、夹具清理及状态一致性均通过；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md) | 最终零残留，51 个独立验收 ID PASS；不替代发布取证／可上线 | — |
 | GAP-UAT-P1-60 | **已关闭（2026-11-20）**：30ec4ae0完整R／预算可用性／真实RC1完成，功能合同终审收口 | [最终跑次](../qa/uat/suites/begin-zero-binding/runs/2026-11-20-codex-combined-final.md)；原始失败保留；整包仍须核对P1-58／59及P1-61／62／63的版本与合同缺口 | P0 |
 | GAP-UAT-P1-58 | 首批实现归档；完整F58、固定窗口历史增长、B／2×／5×三轮预算及当前流量校准仍未完成 | 按2026-11-20委托人决议延期第二批；不计PASS，不自动续跑；首批证据见测试台 | P1 |
 | GAP-UAT-P1-59 | 首批实现归档；完整F59双身份百对授权冲突、全部DEP及剩余写入／runtime ack故障矩阵仍未完成 | 按2026-11-20委托人决议延期第二批；不计PASS，不自动续跑；首批证据见测试台 | P1 |
@@ -185,7 +185,8 @@ node scripts/uat/check-e2e-ledger.mjs
 |---|---|
 | 2026-11-20 | P1-60／P1-64同一30ec4ae0完整验收并功能收口；预算持久化锁竞争修复归原SC-05／10。整包因P1-58／59合同缺口及核心可用性修复版本未对齐而不放行，[最终评审](../reviews/2026-11-20-p160-p164-combined-final-review.md)；不入新增核心分母；不提交／推送／发布。 |
 | 2026-11-20 | P1-65 四项验证缺口授权整改后复核 PASS；51 项／153 份角色检查／306 条工具断言，前台浏览器与遗漏子例补齐、最终零残留；重新确认功能合同收口，关闭 GAP-UAT-P1-65；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md)；不 commit／push；≠ 可上线。 |
-| 2026-11-20 | **P1-65 gap-fill＝PASS；功能合同已收口；GAP-UAT-P1-65 关闭**；≠ 可上线。 |
+| 2026-11-20 | **P1-65 改后 Docker UAT＝PASS WITH GAP**：verify 跑次已挂；GAP-UAT-P1-65 收窄为子例穷尽；≠ 可上线。 |
+| 2026-11-20 | **P1-65 实现完成待 UAT**：WebUI 声明规范键差异门禁、显式保留／采用／重设与「待选择」摘要，聚焦 vitest 161 PASS；新增 GAP-UAT-P1-65。改后 Docker UAT NOT RUN；≠ UAT PASS；≠ 可上线 |
 | 2026-11-20 | **P1-64 修复方案草案（仅文档）**：配对 Spec／Plan v0.1-draft 与改后 R0／01–09 已挂既有 Suite；新增 GAP-UAT-P1-64。终稿未确权、开发未授权；最近跑次 FAIL 保留，改后复测 NOT RUN。≠ UAT PASS；≠ 可上线 |
 | 2026-11-19 | **P1-57 D7延期裁决**：用户“这个可以先不修，未来再修”；G6正式完整导出基线缺口延期且仍开放，原完整范围实测FAIL不改。本次客户功能测试排除此项，可按其余已验证范围进行；没有新运行验证或D6实现。 |
 | 2026-11-19 | **P1-57授权执行复验完成**：R1／R2修复、G7–G9测程差集纠正；完整夹具默认三轮、真实SIGKILL与完整HTTP滚动通过。最新修复模式FAIL＝G6新实例正式导出409；D6回设计未授权，不能交客户测试。 |
@@ -251,6 +252,8 @@ node scripts/uat/check-e2e-ledger.mjs
 | 2026-11-13 | 首立：三台指针、勾连表、兜底队列、基准线追评；挂 P1-15／P1-16 |
 
 R-CAV-FDE-1883：[具名补验与收敛](../qa/uat/suites/core-availability/runs/2026-11-20-codex-fde-1883-soak.md)局部FAIL；委托人约1h止测，实跑59分45秒，12次提交重载／8次完整恢复。冻结候选未含后续18b63d01预算修复，优先同候选整合验证；第一／三批原目标修复判定保留。2h／1883表后置I/O／审计最终闭包仍GAP，完整R-CAV未完成，不新增功能或代签客户根因。
+
+后续执行入口：[三问题整改与同候选验证Plan](../plans/lucy-20261120-core-availability-followup-plan.md)，基线f98deeb9；此计划不改变前次测试FAIL／GAP或各功能Spec现值。新增热重载语义先补合同，不以TERM证据代签。
 
 2026-11-20分期：本次只合入既有可用性修复并复验；[后续Plan](../plans/lucy-20261120-core-availability-followup-plan.md)明确下次开发，不在本次执行。原1883表补验FAIL及未覆盖项保留。
 

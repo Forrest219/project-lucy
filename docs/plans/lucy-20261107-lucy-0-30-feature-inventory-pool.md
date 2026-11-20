@@ -17,13 +17,17 @@
 | P1-58／59分批归档 | 2026-11-20 | 委托人批准暂停长测、分批收敛并commit本进程；本轮实现与必要验证归档，完整功能合同不冒充收口。完整F58／F59、2×／5×及剩余故障矩阵延期第二批，均未计PASS；R未执行；不发布不上线；现值见两Spec与测试台正式首批跑次。 |
 | P1-58 D7授权 | 2026-11-20 | 委托人明确“授权纳入两条索引”：既有access_log覆盖索引及监听前初始化迁移纳入P1-58；不新增表／列、不改KTX，预算不变；重冻候选并执行完整F58／F59与前台浏览器UAT，全部出口通过后再收口；不发布上线。具体决策见读取Spec／Plan D7。 |
 | 合并候选复验 | 2026-11-20 | P1-60／P1-64同一30ec4ae0完整验收，功能终审收口；SC-05／10预算持久化锁竞争修复纳入原P1-60；整包有P1-58／59合同缺口及核心可用性修复版本差集，不批准用户更新；[最终评审](../reviews/2026-11-20-p160-p164-combined-final-review.md)；不入新增核心分母；不提交／推送／发布。 |
+| v2.01 | 2026-11-20 | P1-60／REQ-030-081原四项复核通过，77e2ad84／245项回归；完整R12 PASS／1 FAIL，RC1实际4／100；预算按委托人裁决另行处理；未推送／发布，不作用户更新批准。 |
+| v2.04 | 2026-11-20 | P1-66 batch A: user-approved phased closure and local commit; BA-01-07 PASS WITH GAP; original full-matrix FAIL retained; batch B paused; no push or release. |
+| v2.00 | 2026-11-20 | P1-66／REQ-030-087：委托人确认 Spec／Plan v0.2 定稿，授权 T1–T7 开发与 Docker 前台浏览器验收，完整覆盖兼容／按需详情／BAL、SKEW 六组；执行中；不提交、推送或发布。 |
+| v1.99 | 2026-11-20 | P1-65／REQ-030-086 按委托人授权完成四项验证缺口整改：真实前台浏览器／遗漏子例、严格 MCP、清理及状态一致性；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md) 51 项 PASS，153 份角色检查／306 条工具断言，最终零残留；重新确认功能合同收口；不 commit／push；≠ 可上线。 |
+| v1.99 | 2026-11-20 | P1-66／REQ-030-087 严格过程评审修订至 v0.2-draft：同槽 sidecar 与统计版本配对、整旅程轻读、legacy 三模式、详情失效／取消、凭据数防旧统计覆盖、BAL／SKEW 保宽度复制和实时时钟测程。8 项设计发现已修订；终稿未确权、开发未授权、UAT NOT RUN。 |
 | v1.98 | 2026-11-20 | 入池 P1-66／REQ-030-087：Agent 名册摘要投影与单对象详情按需读取；承接 109 现场 71 Agent／13,815 capability／4.83 MB 探查。委托人仅授权优化方案、Spec／Plan 和保留权限展开规模的 Docker 浏览器验证设计；未授权实现或执行 UAT。 |
 | v1.97 | 2026-11-20 | P1-64 SC-09类型49→0；413＋29回归及最终候选Docker／前台浏览器全套PASS；类型缺口关闭，进入最终评审；不外推整包更新放行。 |
 | v1.95 | 2026-11-20 | P1-64／REQ-030-085 R1–R3整改、169＋5回归与Docker／真实前台浏览器复验完成；测试台R0／01–12 PASS；SC-09全库49条基线诊断未关闭，≠ 功能合同收口／可上线。 |
-| v2.04 | 2026-11-20 | P1-66 batch A: user-approved phased closure and local commit; BA-01-07 PASS WITH GAP; original full-matrix FAIL retained; batch B paused; no push or release. |
-| v2.00 | 2026-11-20 | P1-66／REQ-030-087：委托人确认 Spec／Plan v0.2 定稿，授权 T1–T7 开发与 Docker 前台浏览器验收，完整覆盖兼容／按需详情／BAL、SKEW 六组；执行中；不提交、推送或发布。 |
-| v1.99 | 2026-11-20 | P1-66／REQ-030-087 严格过程评审修订至 v0.2-draft：同槽 sidecar 与统计版本配对、整旅程轻读、legacy 三模式、详情失效／取消、凭据数防旧统计覆盖、BAL／SKEW 保宽度复制和实时时钟测程。8 项设计发现已修订；终稿未确权、开发未授权、UAT NOT RUN。 |
 | v1.96 | 2026-11-20 | P1-65／REQ-030-086 GAP 补跑后 Docker UAT＝PASS；功能合同已收口；关闭 GAP-UAT-P1-65；≠ 可上线。 |
+| v1.94 | 2026-11-20 | P1-65／REQ-030-086 实现完成＋改后 Docker UAT＝PASS WITH GAP；关闭改后 NOT RUN；GAP-UAT-P1-65 收窄为子例穷尽缺口；≠ 可上线。 |
+| v1.92 | 2026-11-20 | P1-65／REQ-030-086 Wiki 覆盖上传 YAML 授权采用：终稿已确权；委托人授权开发实现＋改后 UAT 执行；WebUI 实现完成待 UAT（聚焦 vitest 161 PASS）；Docker 浏览器／MCP 改后 UAT NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
 | v1.80 | 2026-11-20 | P1-58／59 demo Docker F58-smoke／F59-smoke＝SMOKE_PASS WITH GAP（roster／statistics／5s cache／对象协议＋operationId→committed）；测试台 INDEX／suite／跑次已登记。完整 F58／F59／R／浏览器／2×／5× 造数仍 NOT RUN；≠ 功能收口；≠ 可上线。 |
 | v1.91 | 2026-11-20 | P1-60／REQ-030-081 T1–T5 已实现并 commit（Wave A–D；vitest 109 PASS；demo 冒烟隐藏 begin＋`begin_not_available`）；测试台 NOT RUN；T6／R 另授；≠ 功能合同收口；≠ 可上线。 |
 | v1.89 | 2026-11-20 | P1-60／REQ-030-081：委托人「确认 spec 可定稿」＝终稿确权；「安排多 agent 并行任务进行落地」＝开发授权 Plan T1–T5；T6 Docker／R／commit／push 另授；实现进行中；测试台 NOT RUN；≠ 功能合同收口；≠ 可上线。 |
@@ -799,6 +803,12 @@ P1-60完整R补记：N性能采样的预算持久化SQLITE_BUSY已在独立真SQ
 2026-11-20委托人后续批准：本进程已完成修复、回归及取证可作阶段性本地commit；不含push、发布或客户变更，未完成矩阵仍保留GAP。 提交范围归属既有P1-61／62／63及R-CAV-FDE-1883，不纳入角色／Agent等其他进程改动。先提交已完成部分，再制定三问题后续Plan；不把阶段提交视为整包更新放行。
 
 阶段提交范围／基线对照及未完成出口见[本进程提交复核](../reviews/2026-11-20-core-availability-checkpoint-review.md)；该记录不替代原Spec现值或整包放行。
+
+### 核心可用性三问题后续工作包（2026-11-20）
+
+委托人批准先提交本进程已完成部分，再制定下一步计划。阶段基线为codex/readyz-drain-checkpoint-20261120上的f98deeb9（继承18b63d01预算／短名修复，叠加本进程诊断真实取消、MCP排空及测试证据）。原共享工作区不切分支，不夹带其他进程改动，不push／发布／改客户环境。
+
+后续按[实施与验收Plan](lucy-20261120-core-availability-followup-plan.md)处理：预算既有修复同候选复验→剩余主线程热点／同步等待→配置热重载在途与恢复合同→1883表组合验收。复用P1-60／64、P1-61／62／63、P1-47／13与展示快照隔离；本工程工作包不新增产品能力或SC，不改各Spec现值。若热重载保护超出现行合同，先补对应REQ／Spec并完成范围确权，再动运行代码；不以工程Plan替代功能合同。当前只制定计划，未启动后续运行整改或新长跑。
 
 ### 0.30合入与后续计划分期（2026-11-20）
 

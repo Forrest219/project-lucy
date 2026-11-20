@@ -3,10 +3,10 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 候选需求池。**不是**功能 Spec，**不授权**实现 |
-| 版本 / 日期 | v0.129 / 2026-11-20 |
 | P1-66 开发授权 | v0.125（2026-11-20）：委托人确认 v0.2 定稿，授权按 Plan 开发及 Docker 浏览器完整验收；不提交、推送或发布。 |
 | P1-66 严格评审 | v0.124（2026-11-20）：严格过程评审修订至 v0.2-draft，8 项设计问题已修订；未确权、开发未授权、UAT NOT RUN。 |
 | P1-66 本轮变更 | v0.123（2026-11-20）：新增 REQ-030-087／P1-66，授权优化方案、Spec／Plan、保留现场权限展开规模的 Docker 浏览器验证设计；不授权实现或执行。 |
+| 版本 / 日期 | v0.129 / 2026-11-20 |
 | 状态 | **已开线**。跟进主表＝[功能清单池／执行总账 SOT](lucy-20261107-lucy-0-30-feature-inventory-pool.md)（v1.24）。**REQ-030-062**／P1-41 访问关系图桑基还原：D0＝C，终稿确权，开发授权已获得（不含线上升级），功能已实现并提交；测试台 Docker 种子容器全真 PASS WITH GAP、线上 07 BLOCKED。**REQ-030-061**／P1-40 明文 HTTP 复制按钮假成功：已授权修复并落工作树，测试台改前 FAIL → 改后 PASS WITH GAP（未提交）。**REQ-030-060**／P1-39 客户 K8s 升级 event loop／readyz 事故已入池，**根因已定位**（本机受控限速复现：`211f2d64` 推断问询维护器启动 `scanFull` 同步全索引扫描，慢盘＋冷缓存下超 10s `onReady` 超时致 0.30 启动崩溃；0.25.0／r1 无此维护器；已起草 Spec／Plan／测试台 `UAT-SUITE-COLD-START-SLOW-DISK`，终稿未确权，开发未授权）。**REQ-030-042**／P1-21 重读路径与探针减负功能合同已收口（2026-11-13；SC-14 p99 门槛 400ms）。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做；可选 LOOP-05 BLOCKED）。**REQ-030-041**／P1-20 外部目录单表读字段开发授权已获得、实现已落地（2026-11-13；客户 live 未验）。**REQ-030-040**／P1-19 已落地。**REQ-030-036…039** 差集补录（**不入核心分母**）。**可信证据未开工项不进本池**——见 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)。其余 P0／P1 现值同清单池。本条不表示可上线  **P1-57的G6正式完整导出已由委托人D7延期，本轮客户功能测试排除此项，可按限定范围进行；原FAIL保留。** |
 | 授权边界 | **只登记、不实现**。条目进入实施前须：需求澄清 → 独立 Spec → Plan → 开发授权；本池自身不构成其中任一步。**P0 立项 ≠ 开发授权**；**入池 ≠ 立项** |
 | 验收 | 本池自身的验收＝条目结构完整（ID／标题／来源／优先级／状态齐备）＋ 来源可追。**不构成任何功能验收** |
@@ -14,6 +14,7 @@
 | 核心方向 | [Lucy 0.30 升级核心方向](lucy-20261107-lucy-0-30-core-direction.md)（v0.5）：辅线＝现有 UX；**主线＝存量用户每日可信交互，加上行级隔离** |
 | 功能清单池 | [lucy-20261107-lucy-0-30-feature-inventory-pool](lucy-20261107-lucy-0-30-feature-inventory-pool.md)——**本产品线执行总账（SOT）**（见 DEVELOPMENT）；REQ 与之双向可追 |
 | 维护规则 | 只追加条目；开工前须另立 Spec／Plan 并获授权。不得把本文件当作默认可实施依据。优先级／立项状态与功能清单池对齐。**事故修复／旁路落地也须有 REQ＋总账行** |
+| 本次P1-60复审 | v0.126（2026-11-20）：原四项与77e2ad84完整R取证；12 PASS／预算项FAIL；RC1实际4／100；预算另行处理，未推送／发布，不作用户更新批准。 |
 | P1-64 本轮变更 | v0.121（2026-11-20）：R1–R3整改、169＋5回归与Docker／真实前台浏览器复验完成；测试台R0／01–12 PASS；SC-09全库49条基线诊断未关闭，≠ 功能合同收口／可上线。 |
 | P1-64 SC-09变更 | v0.122（2026-11-20）：49→0，SC-09通过；413＋29回归及最终候选Docker／前台浏览器PASS；不外推整包更新放行。 |
 | 最新变更 | v0.120（2026-11-20）：P1-60／REQ-030-081 T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟）；测试台 NOT RUN；T6／R 另授；≠ 功能合同收口；≠ 可上线。 |
@@ -46,7 +47,10 @@
 
 ## 条目索引
 
+| 新增 REQ | 标题 | 来源 | 优先级 | 状态 |
+|---|---|---|---|---|
 | REQ-030-087 | Agent 名册摘要投影与单对象详情按需读取 | 2026-11-20 委托人要求；109 探查：71 Agent／13,815 capability／4.83 MB | P1（清单 P1-66；性能差集） | v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 |
+
 新增需求（2026-11-19；先入执行总账，再起草正文）：
 
 | REQ | 需求 | 来源 | 优先级 | 跟进状态 |
@@ -1365,6 +1369,15 @@ P1-40 同类排查证明：界面成功反馈与动作真实结果不一致是�
 - 验收：SC-01–10均通过；[最终候选跑次](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-combined-final.md) R0／01–12与前台浏览器PASS；SC-09全库0错误、782项Vitest及29项概念模块回归PASS。
 - 授权边界：本轮续授49条类型修复与回归、隔离Docker／浏览器验收、台账同步与最终评审；已执行，本进程提交已另授；不含推送／发布。
 
+## REQ-030-086：Wiki 覆盖上传采用 YAML 授权声明
+
+- 总账：[P1-65](lucy-20261107-lucy-0-30-feature-inventory-pool.md)，不入核心分母。
+- 合同：[Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md)；实施：[Plan](lucy-20261120-wiki-upload-acl-adoption-plan.md)；测试台：[UAT-SUITE-WIKI-UPLOAD-ACL-ADOPTION](../qa/uat/suites/wiki-upload-acl-adoption/suite.md)（历史基线 FAIL 保留）。
+
+- 跟进状态：v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。
+
+- 本轮整改（v0.124，2026-11-20）：四项验证缺口已实测关闭；SC-01–14／51 个独立验收 ID PASS，153 份角色检查／306 条工具断言，最终零残留；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md)；UAT 执行结束时未 commit／push；委托人后续已授权 commit 本任务，不 push。
+
 ## REQ-030-082：存活／就绪探针纯内存响应与诊断隔离
 
 - 总账：[P1-61](lucy-20261107-lucy-0-30-feature-inventory-pool.md)，不入核心分母；优先级与先后顺序为草案建议。
@@ -1386,15 +1399,6 @@ P1-40 同类排查证明：界面成功反馈与动作真实结果不一致是�
 - 合同：[Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md)；实施：[Plan](lucy-20261119-process-drain-lifecycle-plan.md)；测试台：[UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md) F63。
 - 现值：v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。
 
-## REQ-030-086：Wiki 覆盖上传采用 YAML 授权声明
-
-- 总账：[P1-65](lucy-20261107-lucy-0-30-feature-inventory-pool.md)，不入核心分母。
-- 合同：[Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md)；实施：[Plan](lucy-20261120-wiki-upload-acl-adoption-plan.md)；测试台：[UAT-SUITE-WIKI-UPLOAD-ACL-ADOPTION](../qa/uat/suites/wiki-upload-acl-adoption/suite.md)（历史基线 FAIL 保留）。
-
-- 跟进状态：v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。
-
-- 本轮整改（v0.124，2026-11-20）：四项验证缺口已实测关闭；SC-01–14／51 个独立验收 ID PASS，153 份角色检查／306 条工具断言，最终零残留；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md)；UAT 执行结束时未 commit／push；委托人后续已授权 commit 本任务，不 push。
-
 ## REQ-030-087：Agent 名册摘要投影与单对象详情按需读取
 
 - 来源：2026-11-20 委托人明确要求纳入总账并先出方案、Spec／Plan；[109 探查](../../inbox/lag-109-codex-20261120/findings.md)核实 71 Agent 返回 4,833,709 B，完整权限约占 98.08%，展开 13,815 条 capability。
@@ -1403,3 +1407,7 @@ P1-40 同类排查证明：界面成功反馈与动作真实结果不一致是�
 - 文档：[Spec](../specs/lucy-20261120-agent-roster-summary-projection-spec.md) · [Plan](lucy-20261120-agent-roster-summary-projection-plan.md) · [UAT-SUITE-AGENT-ROSTER-SUMMARY](../qa/uat/suites/agent-roster-summary/suite.md)。
 - 状态：v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。
 - 授权边界：委托人已批准本批实现、最小Docker验证与本进程commit；完整矩阵及编译器后续优化暂停；不推送／发布，不升级109。
+
+### 核心可用性既有REQ后续执行关联（2026-11-20）
+
+既有REQ-030-081／082／083／084／085及REQ-030-068／034由[三问题后续工作包](lucy-20261120-core-availability-followup-plan.md)串联。该包承接已批准阶段提交和下一步计划，不改变上述功能现值；预算已修复项不重复立项。热重载新增语义若超出现行合同，实施前另行补REQ／Spec及SOT，不旁路编码。

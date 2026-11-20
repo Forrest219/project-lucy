@@ -80,6 +80,8 @@
 
 收敛结果：1883–1884启用表、12次真实提交／重载、8次完整恢复；预算相关503、HTTP超时与观测开销单列。候选未含后续18b63d01已登记预算修复，优先整合同候选而不重复立项。1883表后置FIFO、原2h和最终审计闭包GAP保留；前次第一／三批目标修复证据不改写，完整矩阵未完成。
 
+阶段修复已在独立codex分支f98deeb9留作检查点；[后续Plan](../../../../plans/lucy-20261120-core-availability-followup-plan.md)串联预算既有修复复验、同步热点及热重载合同差集。当前最新测试判定保持局部FAIL，不把阶段commit或新计划记成组合PASS。
+
 ## 0.30本轮合入复测
 
 [整合候选复测](runs/2026-11-20-codex-availability-merge-recheck.md)局部PASS WITH GAP；同一最终镜像复验真实诊断执行上界、120秒探针、两轮仅恢复路径自动fresh，以及正常／故障三轮真实MCP查询TERM和原卷恢复。原1883表FAIL及完整矩阵GAP保留。[后续Plan](../../../../plans/lucy-20261120-core-availability-followup-plan.md)明确下次开发，本次不实施新热点／热重载整改。
