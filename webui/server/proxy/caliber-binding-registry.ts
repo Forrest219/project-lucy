@@ -30,6 +30,7 @@ import {
   type CanonicalSourceKey
 } from "./acl.js";
 import { normalizeCaliberFieldKeyForSource, validateCaliberTrigger } from "./caliber-binding-text.js";
+import { readBindingSession } from "./caliber-binding-session.js";
 import type { BoundCaliber } from "./caliber-binding-session.js";
 
 export { CALIBER_BINDINGS_DIR_NAME };
@@ -695,4 +696,121 @@ export function resetCaliberBindingRegistryForTests(): void {
 export async function clearCaliberBindingCredential(): Promise<void> {
   const file = await credentialPath();
   await rm(file, { force: true });
+}
+
+// ─── P1-60 (REQ-030-081) §3.1 参与分类 ─────────────────────────────────────
+
+/**
+ * 参与分类结果（Spec §3.1）。
+ *
+ * - `inactive`：可信 committed 空注册表，或无凭据且无业务绑定文件／全部作者文件
+ *   可解析为 draft；当前 scope 无应保留的强制旅程。
+ * - `active`：现有可信注册表含至少一条已发布绑定，或 scope 有 committed 强制快照。
+ * - `unknown`：prepared／损坏凭据、内容不一致、无凭据但存在 published／状态不可读
+ *   文件、读取失败，或 scope 强制快照不确定。
+ */
+export type CaliberParticipation = "inactive" | "active" | "unknown";
+
+/**
+ * Spec §3.1 参与分类。
+ *
+ * 复用现有凭据（`currentRegistryCredential`）、当前注册表（`currentCaliberBindingRegistry`）
+ * 和 BindingSession（`readBindingSession`），不新增 schema 或持久状态。
+ *
+ * @param options.scopeKey  `bindingScopeKey(identityKey, sessionId)` —— 用于 L0/L1 边界判定。
+ *   省略时不做 scope 级检查（全局视角，仅根据注册表状态分类）。
+ *
+ * L0：全局可信 inactive + scope 无强制旅程（`never_begun`／`begun_no_hit`）→ `inactive`。
+ * L1：全局可信 inactive + scope 有 committed `begun_bound` 快照 → `active`（强制快照优先）。
+ *     scope `lost_or_conflict` 或历史不完整 → `unknown`。
+ *
+ * 注意：`syncPending=true`、`usable=false` 和 source map 恢复失败不继承为 inactive 的
+ * 新 begin／query 门禁（Spec §3.1 注），故分类直接检查凭据与注册表内容，而非仅
+ * 读取 `registrySyncPending()` 的值。
+ */
+export async function classifyCaliberParticipation(options?: {
+  scopeKey?: string;
+}): Promise<CaliberParticipation> {
+  const credential = currentRegistryCredential();
+  const registry = currentCaliberBindingRegistry();
+  const syncPending = registrySyncPending();
+
+  // ── 全局分类 ──────────────────────────────────────────────────────────────
+
+  if (credential !== null) {
+    if (credential.phase !== "committed") {
+      // prepared 凭据 → unknown（Spec §3.1 "prepared 凭据"）。
+      return "unknown";
+    }
+    if (syncPending || registry === null) {
+      // committed 但同步未决（内容漂移、source map 漂移、提交失败）→ unknown。
+      return "unknown";
+    }
+    // committed + 注册表已加载。
+    if (registry.bindings.size > 0) {
+      // 至少一条已发布绑定 → active。
+      return "active";
+    }
+    // committed + 0 条已发布绑定（包含 fileCount=0 旧空注册表与全 draft 情形）→ inactive。
+    // 再做 scope 级 L0/L1 判定。
+    return classifyL0L1(options?.scopeKey);
+  }
+
+  // 无凭据分支：
+  // 若 recoverCaliberBindingRegistry() 已确认空目录（registry 非 null, fileCount=0,
+  // !syncPending），直接按 inactive 处理（无需重扫）。
+  if (registry !== null && registry.fileCount === 0 && !syncPending) {
+    return classifyL0L1(options?.scopeKey);
+  }
+
+  // 否则重扫目录，区分「全 draft / 无文件 → inactive」与「有 published → unknown」。
+  const candidate = await loadCaliberBindingCandidate();
+  if (!candidate.ok) {
+    // 读取失败或 source map 编译失败 → unknown（"读取失败"）。
+    return "unknown";
+  }
+  if (candidate.registry.fileCount === 0) {
+    // 无业务绑定文件 → inactive。
+    return classifyL0L1(options?.scopeKey);
+  }
+  if (candidate.registry.bindings.size === 0) {
+    // 文件全部可解析为 draft（无 published 绑定）→ inactive。
+    return classifyL0L1(options?.scopeKey);
+  }
+  // 无凭据但存在 published 文件 → unknown（Spec §3.1 "无凭据但存在 published"）。
+  return "unknown";
+}
+
+/**
+ * L0/L1 scope 边界判定（Spec §3.1 注）。
+ *
+ * 仅在全局分类已为 inactive 时调用。
+ * - 无 scopeKey                      → inactive（L0 全局视角）
+ * - `never_begun` / `begun_no_hit`   → inactive（L0）
+ * - `begun_bound` committed 且指针完整 → active（L1 强制快照优先）
+ * - 其他（`lost_or_conflict`、`begun_bound` 但不完整）→ unknown（L1 不确定）
+ */
+async function classifyL0L1(scopeKey: string | undefined): Promise<CaliberParticipation> {
+  if (!scopeKey) return "inactive";
+
+  const session = await readBindingSession(scopeKey);
+
+  if (session.state === "never_begun" || session.state === "begun_no_hit") {
+    return "inactive"; // L0
+  }
+
+  if (
+    session.state === "begun_bound" &&
+    session.record?.commitPhase === "committed" &&
+    session.record.bindingId !== null &&
+    session.record.boundKey !== null &&
+    session.record.caliberSnapshot !== null
+  ) {
+    // L1：scope 有 committed 强制快照 → active（旧 bound 会话即使全局撤销到零，
+    // query 仍按旅程快照执行；隐藏 begin 在此 scope 下不合适）。
+    return "active";
+  }
+
+  // lost_or_conflict 或 begun_bound 但记录不完整 → L1 unknown。
+  return "unknown";
 }

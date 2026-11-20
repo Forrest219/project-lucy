@@ -161,6 +161,7 @@ import {
   restorePriorBindingSession,
 } from "./caliber-binding-session.js";
 import {
+  classifyCaliberParticipation,
   currentCaliberBindingRegistry,
   registrySyncPending,
   verifyCurrentBindingContentAndDependencies,
@@ -1445,6 +1446,21 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
   return builders;
 }
 
+/**
+ * P1-60 (Spec §3 D1–D2): inactive / unknown 下从 visibleTools 移除 lucy_begin_question。
+ * fail-open：分类读取失败时保留现有可见性，不影响 tools/list 正常响应。
+ */
+async function shouldHideBeginQuestion(identity: Identity, sessionId: string | null | undefined): Promise<boolean> {
+  try {
+    const identityKey = budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? "");
+    const scopeKey = sessionId ? bindingScopeKey(identityKey, sessionId) : undefined;
+    const participation = await classifyCaliberParticipation({ scopeKey });
+    return participation !== "active";
+  } catch {
+    return false;
+  }
+}
+
 function numericLimit(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return LUCY_QUERY_DEFAULT_LIMIT;
   return Math.min(LUCY_QUERY_MAX_LIMIT, Math.max(1, Math.floor(value)));
@@ -2058,11 +2074,11 @@ export function formatVisibleScopeSourceLine(source: {
   return `- ${source.connectionId}.${source.schema}.${source.sourceName} -> ${source.table}`;
 }
 
-async function buildRoleAwareInstructions(identity: Identity): Promise<string | undefined> {
+async function buildRoleAwareInstructions(identity: Identity, sessionId?: string | null): Promise<string | undefined> {
   // P1-37 U1 取证：握手阶段计时（P1-36 的 instructions_build 及其下 catalog_resolve / skills_load）。
   const buildSpan = currentTrace()?.start("instructions_build");
   try {
-    const text = await buildRoleAwareInstructionsUntimed(identity, buildSpan);
+    const text = await buildRoleAwareInstructionsUntimed(identity, buildSpan, sessionId);
     buildSpan?.end({ status: "ok", reasonCode: "allowed", attrs: { cache_hit: false, bytes: text ? Buffer.byteLength(text) : 0 } });
     return text;
   } catch (err) {
@@ -2071,7 +2087,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
   }
 }
 
-async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: SpanHandle | undefined): Promise<string | undefined> {
+async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: SpanHandle | undefined, sessionId?: string | null): Promise<string | undefined> {
   const fallback = await loadDataQaInstructions();
   try {
     const catalogSpan = currentTrace()?.start("catalog_resolve", buildSpan);
@@ -2090,6 +2106,8 @@ async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: 
 
     if (catalog.connections.length === 0 && catalog.sources.length === 0 && accessibleSkills.length === 0) return fallback;
     const visibleTools = new Set(await allowedToolNames(identity));
+    // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
+    if (await shouldHideBeginQuestion(identity, sessionId)) visibleTools.delete("lucy_begin_question");
     const catalogTool = visibleTools.has("lucy_catalog")
       ? "`lucy_catalog`"
       : visibleTools.has("kx_catalog")
@@ -4023,8 +4041,10 @@ function localInitializePayload(requestId: string | number, instructions: string
   };
 }
 
-async function localToolsListPayload(identity: Identity, requestId: string | number): Promise<Record<string, unknown>> {
+async function localToolsListPayload(identity: Identity, requestId: string | number, sessionId?: string | null): Promise<Record<string, unknown>> {
   const visibleTools = new Set(await allowedToolNames(identity));
+  // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
+  if (await shouldHideBeginQuestion(identity, sessionId)) visibleTools.delete("lucy_begin_question");
   const tools = localToolBuilders()
     .filter((local) => visibleTools.has(local.name))
     .map((local) => local.build());
@@ -4041,7 +4061,8 @@ async function writeToolsListResponse(
   upstreamBody: string,
   res: ServerResponse,
   requestId: string | number,
-  session: UpstreamSessionState | undefined
+  session: UpstreamSessionState | undefined,
+  sessionId?: string | null
 ): Promise<{
   filterFailed: boolean;
   errorDetail?: string;
@@ -4086,6 +4107,8 @@ async function writeToolsListResponse(
     };
   }
   const visibleTools = new Set(await allowedToolNames(identity));
+  // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
+  if (await shouldHideBeginQuestion(identity, sessionId)) visibleTools.delete("lucy_begin_question");
   let body = originalBody;
   let filterFailed = false;
   let errorDetail: string | undefined;
@@ -4139,11 +4162,12 @@ async function writeInitializeResponse(
   upstream: IncomingMessage,
   upstreamBody: string,
   res: ServerResponse,
-  requestId: string | number
+  requestId: string | number,
+  sessionId?: string | null
 ): Promise<{ injectionFailed: boolean; errorDetail?: string; responseBytes: number }> {
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
-  const instructions = await buildRoleAwareInstructions(identity);
+  const instructions = await buildRoleAwareInstructions(identity, sessionId);
   const isSse = contentType.includes("text/event-stream");
 
   let body = originalBody;
@@ -6019,6 +6043,46 @@ async function buildDenialRepairPayload(
         return;
       }
 
+      // P1-60 §D2: inactive → begin_not_available，在生成 ID／写 turn／预算／BindingSession 前返回。
+      {
+        const beginScopeKey = bindingScopeKey(
+          budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          requestMeta.lucySessionId
+        );
+        const caliberParticipation = await classifyCaliberParticipation({ scopeKey: beginScopeKey });
+        if (caliberParticipation === "inactive") {
+          const responseBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            result: {
+              isError: true,
+              content: [{ type: "text", text: "当前未启用问询上报，可直接按现有权限查询。" }],
+              data: { reason: "begin_not_available", trace: traceId }
+            }
+          });
+          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          res.end(responseBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            argsSummary,
+            outcome: "denied",
+            decisionReason: "begin_not_available",
+            errorDetail: "begin_not_available",
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(responseBody),
+            requestId,
+            ...requestMeta,
+            ...(await auditMeta(identity, "allowed")),
+          });
+          return;
+        }
+        // unknown → 既有治理 unresolved 链，不套用 D2（Spec §3.1）。
+        // active → 既有 begin 路径不变。
+      }
+
       const turnId = `lucy_${randomUUID()}`;
       const storePreview = storeQuestionPreviewEnabled();
       const rawQuestion = typeof args.question === "string" ? args.question : undefined;
@@ -7103,7 +7167,7 @@ async function buildDenialRepairPayload(
       // The client gets a 200 but KTX holds no session, so anything cached for
       // this Token is stale; drop it and let the next data call re-handshake.
       clearUpstreamSession(upstreamSessionOwner(identity));
-      const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity) : undefined;
+      const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity, requestMeta.lucySessionId) : undefined;
       currentTrace()?.mark("local_handler", { status: "ok", attrs: { handler: "initialize_fallback" } });
       const payload = localInitializePayload(requestId, instructions);
       const responseBody = JSON.stringify(payload);
@@ -7150,7 +7214,7 @@ async function buildDenialRepairPayload(
         });
         return;
       }
-      const payload = await localToolsListPayload(identity, requestId);
+      const payload = await localToolsListPayload(identity, requestId, requestMeta.lucySessionId);
       const responseBody = JSON.stringify(payload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -7254,7 +7318,7 @@ async function buildDenialRepairPayload(
   }
 
   if (rpcMethod === "initialize" && instructionsInjectionEnabled()) {
-    const initResult = await writeInitializeResponse(identity, upstream, upstreamBody, res, requestId);
+    const initResult = await writeInitializeResponse(identity, upstream, upstreamBody, res, requestId, requestMeta.lucySessionId);
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -7279,7 +7343,7 @@ async function buildDenialRepairPayload(
   }
 
   if (rpcMethod === "tools/list") {
-    const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId, upstreamSession);
+    const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId, upstreamSession, requestMeta.lucySessionId);
     // Spec 178 / T1 — compile failure short-circuits inside writeToolsListResponse
     // (HTTP 403 + JSON-RPC -32003 already on the wire). Audit must record the
     // denial with the full machine reason and the structured diagnostic;
