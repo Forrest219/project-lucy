@@ -2,8 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 测试执行计划 / v0.1-draft（**待委托人审批；审批前不执行**） |
+| 文档类型 / 版本 | 测试执行计划 / v1.0（2026-11-20 委托人批准执行，审批点 A/B/C/D 全按推荐） |
 | 日期 | 2026-11-20 |
+| 状态 / 授权边界 | v1.0 已执行（Batch 1–3 跑完＝PASS WITH GAP）。授权范围：本机 demo Docker 只读测量与真实 API 造数清理；不含生产施压、不含运行代码改动、不含 P1-66 等修复实现。 |
+| 验收 | 三批跑次文件＋风险矩阵汇总（batch3）＋环境逐批 verify 还原；套件判定 PASS WITH GAP 见 INDEX。 |
 | 关联 | `UAT-SUITE-ROLES-AGENT-CONCURRENCY-SCALE` 已验证方法（roles/agents 三档：stress 463 行前台 p95=184 ms、DOM ~26.6 nodes/行线性）；复核发现 R-1/R-2/R-3 |
 | 产出归属 | 测试台证据；不改运行代码；不新立性能合同 |
 
@@ -65,9 +67,25 @@
 3. 套件目录（suite/cases/fixtures，若审批点 A 选新建）
 4. INDEX／e2e-ledger 镜像 + lint 通过
 
-## 9. 审批点
+## 开工前置
+
+- 委托人批准本计划（2026-11-20 已批准，四点全按推荐）；demo Docker 栈 healthy；仓库外凭据可用；系统 Chrome 可前台启动。
+- 造数与测量全部单会话串行、写间隔 ≥500 ms（R-2 纪律）；每批测后按 fixtures §7 清理并 verify。
+
+## 9. 审批点（已批复：A 新建套件／B T1 六页／C 允许真实流程造数／D 顺手清理遗留 fixture）
 
 - **A 套件形态**：新建 `UAT-SUITE-PAGE-DOM-SCALE`（推荐） vs 散挂既有套件
 - **B 范围**：T1 六页（推荐） vs T1+T2 一次做全 vs 仅 T1 前三页
 - **C 造数授权**：允许在 demo 为 publish/eval/whitelist 造数（真实流程）vs 仅观测现状
 - **D 遗留 fixture**：顺手清理 `uat_racs_br_*`/`br2_*` vs 转具名保留
+
+## 验收
+
+- 三批跑次文件（batch1/2/3）登记进 `UAT-SUITE-PAGE-DOM-SCALE/runs/`，原始 JSON 落 inbox；
+- T1 六页 4 PASS／2 BLOCKED 各有证据与清理 verify；T2 冒烟全过线；风险矩阵回答委托问题；
+- `lint:e2e-ledger` 与 `lint:spec-docs` 通过；共享 demo 环境逐批还原（roles/agents/启用表/YAML/token verify）。
+
+## 完成定义
+
+- 套件 INDEX 行镜像最新判定；GAP（2 页 BLOCKED、R-5）写明跟进建议；
+- 探针与造数脚本可复用复跑；后续由 P1-67 用户旅程性能门禁把本套件方法学纳入常态看守。

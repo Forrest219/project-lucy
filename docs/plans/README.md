@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261120-page-dom-scale-assessment-plan.md](lucy-20261120-page-dom-scale-assessment-plan.md) | PDS 横向评估已执行（Batch 1–3 PASS WITH GAP）：T1 六页 4 PASS／2 BLOCKED，T2 冒烟全过线；套件与探针已登记测试台。 |
 | [lucy-20261120-user-journey-performance-gate-plan.md](lucy-20261120-user-journey-performance-gate-plan.md) | P1-67／REQ-030-088；v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan 设计；终稿未确权；开发未授权；测试台未建；不入核心分母；≠ 功能收口；≠ 可上线。 配对 [Spec](../specs/lucy-20261120-user-journey-performance-gate-spec.md)。 |
 | [lucy-20261120-agent-roster-summary-projection-plan.md](lucy-20261120-agent-roster-summary-projection-plan.md) | P1-66／REQ-030-087；v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 |
 | [lucy-20261120-core-availability-followup-plan.md](lucy-20261120-core-availability-followup-plan.md) | 下次开发：本轮只合入既有可用性修复并复验；不执行Task0–4。预算组合／热点／热重载及约1h组合保留后续计划，不改变现有FAIL／GAP。 |
