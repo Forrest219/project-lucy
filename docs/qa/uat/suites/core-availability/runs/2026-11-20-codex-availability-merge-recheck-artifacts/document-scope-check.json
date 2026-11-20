@@ -1,0 +1,7 @@
+{
+  "ownedViolations": 0,
+  "globalBaselineViolations": 5,
+  "newReportLocalLinks": 7,
+  "newSourceDocsWhitespace": "PASS",
+  "runtimeUnchangedAfterDocker": true
+}

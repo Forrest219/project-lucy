@@ -803,3 +803,5 @@ P1-60完整R补记：N性能采样的预算持久化SQLITE_BUSY已在独立真SQ
 ### 0.30合入与后续计划分期（2026-11-20）
 
 委托人批准本次已完成修复合入lucy-v0.30并复跑现有测试；[后续Plan](lucy-20261120-core-availability-followup-plan.md)放下次开发，本轮不执行Task0–4。保留现有预算／短名修复，整合诊断实际取消及MCP／Node PID排空；只纳入已完成范围，不带入其他任务暂存。不push／发布／改客户环境，验证通过也不代签完整F61／F62／F63或客户根因。
+
+本次合入复验记录：[0.30既有修复复测](../qa/uat/suites/core-availability/runs/2026-11-20-codex-availability-merge-recheck.md)，源码d978f4df、镜像8baa62dc；44项Vitest／32项Node／类型0错，实际I/O恢复与三轮TERM均局部PASS WITH GAP；不签完整矩阵或用户更新。后续开发继续延期。

@@ -1,0 +1,18 @@
+
+> project-lucy-eval@0.30.0 lint:spec
+> node scripts/lint-spec.mjs
+
+[spec-lint] PASS route-status
+  routes and status table are aligned for first-batch modules
+[spec-lint] PASS api-spec
+  195 registered REST routes are documented
+[spec-lint] PASS skill-dependency
+  1 skill files have resolvable dependencies
+[spec-lint] WARN eval-schema-version
+  evals/chatbi_intl/eval/chatbi_intl-eval-cases.yaml: metadata.paired_quiz missing
+[spec-lint] PASS eval-schema-version
+  3 eval files are readable with safety_contract and valid quiz links
+[spec-lint] WARN access-role-policy
+  webui/config/access.yaml: role demo_readonly has no permission_model_version (migration window)
+[spec-lint] PASS access-role-policy
+  access role policy has no blocking errors

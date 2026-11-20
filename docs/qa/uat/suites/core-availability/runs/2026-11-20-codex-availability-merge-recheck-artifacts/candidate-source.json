@@ -1,0 +1,22 @@
+{
+  "sourceCommit": "d978f4df50224ce3e462a11d1f52636a28725b34",
+  "containsParents": [
+    "fae8a66556f4a6133b922c17443b1c1d7fd64ff4",
+    "5b61d06ec134bc840e7f46065a93d9aea2ceeddc"
+  ],
+  "scope": "all committed backend source; static WebUI from pinned dependency image, no UI/release claim",
+  "baseImage": "project-lucy:uat-readyz-deps-c1cd67a0",
+  "sourceHashes": {
+    "webui/server/index.ts": "cdf7c64a474cbece3804c83860e41594d390d3ce59419bb205c0ba3a6d509203",
+    "webui/server/proxy/audit.ts": "b0542ac1f663640bb99ff8cbc6948c99a66a866dd14fe6b7bc32d228d2e3197d",
+    "webui/server/mcp-runtime-state.ts": "63808a1778cc62b1dd4bfcdaf06cef3b9182f0f500271ffe3977672dfaa3a572",
+    "webui/server/proxy/mcp-proxy.ts": "73e128dd3f88ec763af4be1cfc7067922b5797fd0342a29c28bcf5580850296d",
+    "webui/server/runtime/diagnostic-snapshot.ts": "f018d1e1006afeba031e7d78510657bf682e2e0d8e408b6688319009abac2f06",
+    "webui/server/runtime/diagnostic-collector.ts": "f4cb59fee068b3ea4f8c34c70c5587e8280c0b7de2a42c9c9f1f39857df97803",
+    "webui/server/runtime/diagnostic-collector-worker.ts": "e93bf211a2a1edc950f27d37eaabee2f9bc637b4eaac3d4096f1b96e0eaa7df8",
+    "webui/server/runtime/mcp-process-work.ts": "b9c5e11a02a3e390c8b7de3cf6a506a4a4bc940c6a5f0948cdee8d76a6b79879",
+    "webui/server/runtime/process-drain.ts": "c50d28a9cccf43eb72020003e063c67e6fb1e2f7066043b9e231a3f55c11467d",
+    "scripts/runtime/docker-entrypoint.sh": "08c7dc71c427d4e24ed85e98f57d4d4e0836ab94b74d761b25f5a07bd8549b19"
+  },
+  "followupImplementation": false
+}

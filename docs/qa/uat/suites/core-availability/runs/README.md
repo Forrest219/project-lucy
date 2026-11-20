@@ -1,5 +1,7 @@
 # Core Availability 跑次
 
+- [2026-11-20 Codex — 0.30合入候选修复复测](2026-11-20-codex-availability-merge-recheck.md)：局部PASS WITH GAP；120秒I/O、两轮自动恢复、三轮真实查询TERM／原卷恢复；原1883表FAIL保留，后续开发延期。
+
 - [2026-11-20 Codex — FDE 1883 表持续运行补验与收敛](2026-11-20-codex-fde-1883-soak.md)：局部FAIL；用户59分45秒收敛，12次提交重载／8次完整恢复；预算503与采样因素分列，2h／后置I/O及最终审计闭包仍GAP。
 
 - [2026-11-20 Codex — 诊断真实停止与MCP排空修复](2026-11-20-codex-readyz-diagnostic-repair.md)：目标缺口局部PASS WITH GAP；完整F61／F63未完成，R-CAV NOT RUN。
