@@ -14,6 +14,11 @@ export type ExecutionRuntimeObservation = {
 
 const observations = new Map<string, ExecutionRuntimeObservation>();
 
+/** Memory-only handoff to the isolated diagnostic reader; never used for authorization. */
+export function snapshotExecutionRuntimeObservations(): ExecutionRuntimeObservation[] {
+  return [...observations.values()].map((observation) => ({ ...observation }));
+}
+
 export async function readKtxYamlDigest(projectRoot: string): Promise<string> {
   const contents = await readFile(path.join(projectRoot, "ktx.yaml"));
   return createHash("sha256").update(contents).digest("hex");

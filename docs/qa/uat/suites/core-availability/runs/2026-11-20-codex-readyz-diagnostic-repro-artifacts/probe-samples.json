@@ -1,0 +1,2042 @@
+[
+  {
+    "at": "2026-11-20T04:19:37.738Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 34.132125
+  },
+  {
+    "at": "2026-11-20T04:19:37.740Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 12.708165999999999,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 4550,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:38.707Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.5240000000001146
+  },
+  {
+    "at": "2026-11-20T04:19:38.708Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.9867910000000393,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 5523,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:39.714Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 6.6568749999999
+  },
+  {
+    "at": "2026-11-20T04:19:39.715Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 6.397083000000066,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 6530,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:40.711Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.5594999999998436
+  },
+  {
+    "at": "2026-11-20T04:19:40.711Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.1816249999997126,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 7527,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:41.712Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.5145830000001297
+  },
+  {
+    "at": "2026-11-20T04:19:41.713Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.2084169999998267,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 8527,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:42.711Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.2056249999996
+  },
+  {
+    "at": "2026-11-20T04:19:42.711Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.212166000000252,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 9527,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:43.720Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 6.278457999999773
+  },
+  {
+    "at": "2026-11-20T04:19:43.721Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 6.924583999999413,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 10535,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:44.715Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.553874999999607
+  },
+  {
+    "at": "2026-11-20T04:19:44.715Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.7099159999997937,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 11531,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:45.717Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.416041999999834
+  },
+  {
+    "at": "2026-11-20T04:19:45.717Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.852332999999817,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 12533,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:46.726Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.778333999998722
+  },
+  {
+    "at": "2026-11-20T04:19:46.726Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 5.3414170000014565,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 13541,
+      "freshness": "fresh"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:47.738Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 12.428249999999025
+  },
+  {
+    "at": "2026-11-20T04:19:47.738Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 9.861915999999837,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 14552,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:48.729Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.3526249999995343
+  },
+  {
+    "at": "2026-11-20T04:19:48.729Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.208708000000115,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 15545,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:49.729Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.5236249999998108
+  },
+  {
+    "at": "2026-11-20T04:19:49.729Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.6315410000006523,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 16545,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:50.731Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.8444159999999101
+  },
+  {
+    "at": "2026-11-20T04:19:50.731Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.8472920000003796,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 17547,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:51.729Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.4874579999996058
+  },
+  {
+    "at": "2026-11-20T04:19:51.730Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.1995000000006257,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 18545,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:52.731Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.049582999999984
+  },
+  {
+    "at": "2026-11-20T04:19:52.731Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.6597920000003796,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 19546,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:53.733Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.5488749999985885
+  },
+  {
+    "at": "2026-11-20T04:19:53.733Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.840250000001106,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 20549,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:54.734Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.59375
+  },
+  {
+    "at": "2026-11-20T04:19:54.734Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.454708000001119,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 21549,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:55.733Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.9503750000003492
+  },
+  {
+    "at": "2026-11-20T04:19:55.734Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.895291000000725,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 22549,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:56.732Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.120374999998603
+  },
+  {
+    "at": "2026-11-20T04:19:56.732Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.2499170000010054,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 23548,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:57.733Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.3993330000012065
+  },
+  {
+    "at": "2026-11-20T04:19:57.733Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.5865000000012515,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 24549,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:58.738Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.443707999998878
+  },
+  {
+    "at": "2026-11-20T04:19:58.741Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 5.411084000003029,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 25554,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:19:59.738Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.8583750000034343
+  },
+  {
+    "at": "2026-11-20T04:19:59.738Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.7097910000011325,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 26554,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:00.738Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.5197499999994761
+  },
+  {
+    "at": "2026-11-20T04:20:00.739Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.2905419999988226,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 27554,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:01.740Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.674332999999024
+  },
+  {
+    "at": "2026-11-20T04:20:01.742Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 6.334042000002228,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 28557,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:02.739Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.1572090000008757
+  },
+  {
+    "at": "2026-11-20T04:20:02.739Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.9587090000022727,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 29555,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:03.745Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.843333000000712
+  },
+  {
+    "at": "2026-11-20T04:20:03.746Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 6.3035410000011325,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 30562,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:04.741Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.7531660000022384
+  },
+  {
+    "at": "2026-11-20T04:20:04.741Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.8042499999974098,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 31557,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:05.773Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 26.593833999999333
+  },
+  {
+    "at": "2026-11-20T04:20:05.778Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 31.229499999997643,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 32585,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:06.751Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.4444579999981215
+  },
+  {
+    "at": "2026-11-20T04:20:06.751Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.883458000000246,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 33566,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:07.751Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.9642080000012356
+  },
+  {
+    "at": "2026-11-20T04:20:07.752Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.5237080000006245,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 34567,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:08.753Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.597374999997555
+  },
+  {
+    "at": "2026-11-20T04:20:08.753Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 5.533333999999741,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 35569,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:09.749Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.3340000000025611
+  },
+  {
+    "at": "2026-11-20T04:20:09.749Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.3844590000007884,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 36565,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:10.751Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.3178750000006403
+  },
+  {
+    "at": "2026-11-20T04:20:10.751Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.9996250000040163,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 37567,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:11.751Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.123041999999259
+  },
+  {
+    "at": "2026-11-20T04:20:11.751Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.813540999995894,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 38567,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:12.749Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.837666999999783
+  },
+  {
+    "at": "2026-11-20T04:20:12.749Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.7684579999986454,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 39565,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:13.751Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.9260829999984708
+  },
+  {
+    "at": "2026-11-20T04:20:13.751Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.8561249999984284,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 40567,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:14.751Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.138250000003609
+  },
+  {
+    "at": "2026-11-20T04:20:14.751Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.9867080000040005,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 41567,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:15.753Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.283166000001074
+  },
+  {
+    "at": "2026-11-20T04:20:15.755Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 5.536957999996957,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 42568,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:16.751Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.270416999999725
+  },
+  {
+    "at": "2026-11-20T04:20:16.751Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.1442909999968833,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 43567,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:17.751Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.8100829999966663
+  },
+  {
+    "at": "2026-11-20T04:20:17.752Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.8307090000016615,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 44568,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:18.752Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.623874999997497
+  },
+  {
+    "at": "2026-11-20T04:20:18.754Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.110915999997815,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 45568,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:19.767Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 13.499167000001762
+  },
+  {
+    "at": "2026-11-20T04:20:19.768Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 11.568167000004905,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 46581,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:20.756Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.360625000001164
+  },
+  {
+    "at": "2026-11-20T04:20:20.756Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.1445420000018203,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 47572,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:21.757Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.2854579999984708
+  },
+  {
+    "at": "2026-11-20T04:20:21.758Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.056040999996185,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 48573,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:22.759Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.160707999995793
+  },
+  {
+    "at": "2026-11-20T04:20:22.759Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.457916999999725,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 49575,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:23.756Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.9704580000034184
+  },
+  {
+    "at": "2026-11-20T04:20:23.757Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.5303750000020955,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 50572,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:24.756Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.859541999998328
+  },
+  {
+    "at": "2026-11-20T04:20:24.757Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.4530830000003334,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 51572,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:25.760Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.807250000005297
+  },
+  {
+    "at": "2026-11-20T04:20:25.762Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 5.725624999999127,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 52576,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:26.762Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.1680840000044554
+  },
+  {
+    "at": "2026-11-20T04:20:26.765Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 7.030750000005355,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 53577,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:27.759Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.955667000001995
+  },
+  {
+    "at": "2026-11-20T04:20:27.760Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.325458999999682,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 54574,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:28.763Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 6.727209000004223
+  },
+  {
+    "at": "2026-11-20T04:20:28.764Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 6.004249999998137,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 55577,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:29.762Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.176542000001064
+  },
+  {
+    "at": "2026-11-20T04:20:29.766Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 7.8660410000011325,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 56580,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:30.781Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 22.20445800000016
+  },
+  {
+    "at": "2026-11-20T04:20:30.783Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 20.649833000003127,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 57597,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:31.762Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.5194160000028205
+  },
+  {
+    "at": "2026-11-20T04:20:31.764Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.762457999997423,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 58578,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:32.770Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 6.983375000003434
+  },
+  {
+    "at": "2026-11-20T04:20:32.771Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 7.114916999998968,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 59583,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:33.767Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.2357499999998254
+  },
+  {
+    "at": "2026-11-20T04:20:33.768Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.245291999999608,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 60582,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:34.776Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 9.053082999998878
+  },
+  {
+    "at": "2026-11-20T04:20:34.778Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 5.379416000003403,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 61592,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:35.776Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 8.996833999997762
+  },
+  {
+    "at": "2026-11-20T04:20:35.777Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 8.680542000001878,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 62591,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:36.775Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 8.266042000002926
+  },
+  {
+    "at": "2026-11-20T04:20:36.777Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 7.130125000003318,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 63592,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:37.774Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.965917000001355
+  },
+  {
+    "at": "2026-11-20T04:20:37.775Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.828042000001005,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 64588,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:38.774Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.233458000002429
+  },
+  {
+    "at": "2026-11-20T04:20:38.774Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.74920800000109,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 65588,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:39.777Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 7.433166999995592
+  },
+  {
+    "at": "2026-11-20T04:20:39.779Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 8.765291000003344,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 66591,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:40.772Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.096750000004249
+  },
+  {
+    "at": "2026-11-20T04:20:40.773Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.673833000000741,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 67587,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:41.783Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 11.843916999998328
+  },
+  {
+    "at": "2026-11-20T04:20:41.787Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 13.464665999999852,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 68600,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:42.795Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 20.09954199999629
+  },
+  {
+    "at": "2026-11-20T04:20:42.796Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 12.91716599999927,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 69610,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:43.782Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 7.701750000007451
+  },
+  {
+    "at": "2026-11-20T04:20:43.784Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 7.7971249999973224,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 70597,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:44.779Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.584957999992184
+  },
+  {
+    "at": "2026-11-20T04:20:44.782Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 7.736416999992798,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 71595,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:45.779Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.222917000006419
+  },
+  {
+    "at": "2026-11-20T04:20:45.779Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.7862909999967087,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 72593,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:46.780Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.710458000001381
+  },
+  {
+    "at": "2026-11-20T04:20:46.781Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.381500000003143,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 73595,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:47.778Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.104249999989406
+  },
+  {
+    "at": "2026-11-20T04:20:47.778Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.0516670000070008,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 74593,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:48.779Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.525041999993846
+  },
+  {
+    "at": "2026-11-20T04:20:48.779Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.499708000003011,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 75594,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:49.781Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.4774580000084825
+  },
+  {
+    "at": "2026-11-20T04:20:49.781Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.5866250000108266,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 76596,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:50.783Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.87537500000326
+  },
+  {
+    "at": "2026-11-20T04:20:50.785Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 7.717291000008117,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 77599,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:51.779Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.5467910000006668
+  },
+  {
+    "at": "2026-11-20T04:20:51.779Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.6647920000104932,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 78594,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:52.780Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.9860829999961425
+  },
+  {
+    "at": "2026-11-20T04:20:52.780Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.057457999995677,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 79595,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:53.782Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.283957999999984
+  },
+  {
+    "at": "2026-11-20T04:20:53.782Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.9329579999903217,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 80597,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:54.782Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.104749999998603
+  },
+  {
+    "at": "2026-11-20T04:20:54.782Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.1714170000050217,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 81597,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:55.781Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.8058749999909196
+  },
+  {
+    "at": "2026-11-20T04:20:55.781Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 1.846917000002577,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 82595,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:56.783Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.5577079999929992
+  },
+  {
+    "at": "2026-11-20T04:20:56.783Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.2785000000003492,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 83597,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:57.784Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.6749159999890253
+  },
+  {
+    "at": "2026-11-20T04:20:57.784Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.342124999995576,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 84599,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:58.792Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 10.718332999997074
+  },
+  {
+    "at": "2026-11-20T04:20:58.801Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 17.11587499998859,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 85612,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:20:59.786Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.1309580000088317
+  },
+  {
+    "at": "2026-11-20T04:20:59.787Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.1797499999956926,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 86601,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:00.788Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.115084000004572
+  },
+  {
+    "at": "2026-11-20T04:21:00.789Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.162041000003228,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 87603,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:01.801Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 11.753207999994629
+  },
+  {
+    "at": "2026-11-20T04:21:01.802Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 7.441749999998137,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 88616,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:02.797Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 7.284666999999899
+  },
+  {
+    "at": "2026-11-20T04:21:02.799Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 7.422582999992301,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 89612,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:03.792Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.9810419999994338
+  },
+  {
+    "at": "2026-11-20T04:21:03.793Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.165999999997439,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 90607,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:04.793Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.3222079999977723
+  },
+  {
+    "at": "2026-11-20T04:21:04.794Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.2136670000036247,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 91608,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:05.827Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 28.73554100000183
+  },
+  {
+    "at": "2026-11-20T04:21:05.830Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 27.941833000004408,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 92643,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:06.805Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.9678750000020955
+  },
+  {
+    "at": "2026-11-20T04:21:06.805Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 5.50387500000943,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 93620,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:07.803Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.438834000000497
+  },
+  {
+    "at": "2026-11-20T04:21:07.804Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.7762910000019474,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 94618,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:08.804Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.103917000000365
+  },
+  {
+    "at": "2026-11-20T04:21:08.804Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.540500000002794,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 95618,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:09.811Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 8.917042000000947
+  },
+  {
+    "at": "2026-11-20T04:21:09.812Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 6.79641699999047,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 96626,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:10.810Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 7.3254999999917345
+  },
+  {
+    "at": "2026-11-20T04:21:10.811Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 5.7760830000042915,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 97625,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:11.814Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 9.523208999991766
+  },
+  {
+    "at": "2026-11-20T04:21:11.814Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 9.470499999995809,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 98624,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:12.828Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 24.722249999991618
+  },
+  {
+    "at": "2026-11-20T04:21:12.830Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 21.412374999999884,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 99642,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:13.836Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 31.19237499999872
+  },
+  {
+    "at": "2026-11-20T04:21:13.839Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 29.593124999999418,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 100651,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:14.874Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 64.81124999999884
+  },
+  {
+    "at": "2026-11-20T04:21:14.883Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 72.79604099999415,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 101687,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:15.815Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.813834000000497
+  },
+  {
+    "at": "2026-11-20T04:21:15.815Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.54541700000118,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 102628,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:16.861Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 45.611917000001995
+  },
+  {
+    "at": "2026-11-20T04:21:16.864Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 44.583582999999635,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 103670,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:17.829Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 12.403957999995328
+  },
+  {
+    "at": "2026-11-20T04:21:17.830Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 11.113207999995211,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 104644,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:18.822Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.343791000006604
+  },
+  {
+    "at": "2026-11-20T04:21:18.823Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.951958000005106,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 105637,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:19.822Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.128083000003244
+  },
+  {
+    "at": "2026-11-20T04:21:19.822Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.9939999999915017,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 106636,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:20.821Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.357665999996243
+  },
+  {
+    "at": "2026-11-20T04:21:20.823Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.371792000005371,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 107635,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:21.894Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 53.35287499999686
+  },
+  {
+    "at": "2026-11-20T04:21:21.918Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 66.17658300000767,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 108697,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:22.844Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.001625000004424
+  },
+  {
+    "at": "2026-11-20T04:21:22.846Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.235625000001164,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 109659,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:23.878Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 36.53391700000793
+  },
+  {
+    "at": "2026-11-20T04:21:23.879Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 34.182583000001614,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 110690,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:24.851Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 3.948208000001614
+  },
+  {
+    "at": "2026-11-20T04:21:24.852Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.176666999992449,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 111666,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:25.866Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 18.623166000004858
+  },
+  {
+    "at": "2026-11-20T04:21:25.867Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 17.775874999992084,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 112676,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:26.853Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.9146250000048894
+  },
+  {
+    "at": "2026-11-20T04:21:26.854Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.603125000008731,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 113668,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:27.853Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.3642499999987194
+  },
+  {
+    "at": "2026-11-20T04:21:27.854Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.975583999999799,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 114668,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:28.853Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.2632080000039423
+  },
+  {
+    "at": "2026-11-20T04:21:28.853Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.637624999988475,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 115667,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:29.854Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.9726250000094296
+  },
+  {
+    "at": "2026-11-20T04:21:29.854Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.0106249999953434,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 116668,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:30.856Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.942500000004657
+  },
+  {
+    "at": "2026-11-20T04:21:30.857Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.294666999994661,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 117670,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:31.856Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 2.7154169999994338
+  },
+  {
+    "at": "2026-11-20T04:21:31.856Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 2.6715839999960735,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 118670,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:32.855Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 1.9702919999981532
+  },
+  {
+    "at": "2026-11-20T04:21:32.856Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 3.073333000007551,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 119669,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:33.857Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 4.422833000004175
+  },
+  {
+    "at": "2026-11-20T04:21:33.858Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 4.680375000010827,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 120671,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:34.958Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 90.9608339999977
+  },
+  {
+    "at": "2026-11-20T04:21:34.966Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 57.07458299999416,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 121773,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:35.873Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 5.492083000004641
+  },
+  {
+    "at": "2026-11-20T04:21:35.874Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 5.307167000006302,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 122688,
+      "freshness": "stale"
+    }
+  },
+  {
+    "at": "2026-11-20T04:21:36.914Z",
+    "path": "/api/livez",
+    "status": 200,
+    "ms": 43.16125000000466
+  },
+  {
+    "at": "2026-11-20T04:21:36.918Z",
+    "path": "/api/readyz",
+    "status": 200,
+    "ms": 39.17179200000828,
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:19:33.184Z",
+      "ageMs": 123716,
+      "freshness": "stale"
+    }
+  }
+]

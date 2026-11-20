@@ -1,0 +1,359 @@
+--- a/webui/server/index.ts
++++ b/webui/server/index.ts
+@@ -177,14 +177,14 @@
+ import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
+ import {
+   peekExecutionProbe,
+-  readMcpRuntimeStatus,
+   registerMcpRuntimeRoutes,
+   runMcpRuntimeCanary,
+   startExecutionProbeRefresh,
+   stopExecutionProbeRefresh
+ } from "./admin/mcp-runtime.js";
+ import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
+-import { readKtxYamlDigest } from "./mcp-runtime-state.js";
++import { readKtxYamlDigest, snapshotExecutionRuntimeObservations } from "./mcp-runtime-state.js";
++import { collectDiagnosticIo } from "./runtime/diagnostic-collector.js";
+ import { reloadKtxMcpAfterConfigWrite } from "./ktx-mcp-reload.js";
+ 
+ async function settleExecutionRuntime(
+@@ -761,42 +761,25 @@
+ let contentLayoutCache: { at: number; value: ContentLayoutStatus | null } | null = null;
+ const CONTENT_LAYOUT_TTL_MS = 30_000;
+ 
+-async function readContentLayoutCached(refresh: boolean): Promise<ContentLayoutStatus | null> {
+-  const fresh = contentLayoutCache !== null && Date.now() - contentLayoutCache.at < CONTENT_LAYOUT_TTL_MS;
+-  if (contentLayoutCache && (fresh || !refresh)) return contentLayoutCache.value;
+-  if (!refresh) return null;
+-  try {
+-    const projectRoot = await resolveProjectRoot();
+-    const contentPaths = await resolveContentPaths(projectRoot);
+-    const value = await collectContentLayout(projectRoot, contentPaths);
+-    contentLayoutCache = { at: Date.now(), value };
+-    return value;
+-  } catch {
+-    return contentLayoutCache?.value ?? null;
+-  }
+-}
+-
+ /**
+  * Full diagnostic collect for the P1-61 background snapshot.
+  * May perform file / subprocess / network I/O — never call from probe handlers.
+  */
+-async function collectDependencyDiagnostics(_signal: AbortSignal): Promise<DiagnosticData> {
++async function collectDependencyDiagnostics(signal: AbortSignal): Promise<DiagnosticData> {
+   const policy = getPolicyRuntimeStatus();
+-  const contentLayout = await readContentLayoutCached(true);
+-  const ktxRuntime = await readKtxRuntimeStatusCached();
+-  const cachedProbe = peekExecutionProbe();
+-  const mcpRuntime = await readMcpRuntimeStatus(async () => cachedProbe ?? {
+-    status: "reachable" as const,
+-    checkedAt: new Date().toISOString()
+-  }).catch((error) => ({
+-    execution: {
+-      status: "error" as const,
+-      lastCheckedAt: new Date().toISOString(),
+-      lastError: error instanceof Error ? error.message : String(error)
+-    }
+-  }));
++  const reusedLayout = contentLayoutCache?.value && Date.now() - contentLayoutCache.at < CONTENT_LAYOUT_TTL_MS
++    ? contentLayoutCache.value : undefined;
++  const io = await collectDiagnosticIo(signal, {
++    probe: peekExecutionProbe(),
++    observations: snapshotExecutionRuntimeObservations(),
++    ktxRuntime: peekKtxRuntimeStatus(),
++    ...(reusedLayout ? { contentLayout: reusedLayout } : {})
++  });
++  const { ktxRuntime } = io;
++  const contentLayout = io.contentLayout ?? contentLayoutCache?.value;
++  if (io.contentLayout && !reusedLayout) contentLayoutCache = { at: Date.now(), value: io.contentLayout };
+   const policyHealthy = isPolicyRuntimeHealthy(policy);
+-  const executionHardFailure = ["stale", "unavailable", "error"].includes(mcpRuntime.execution.status);
++  const executionHardFailure = ["stale", "unavailable", "error"].includes(io.execution.status);
+   const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
+   return {
+     status: healthy ? "ok" : "degraded",
+@@ -815,7 +798,7 @@
+       degradedAgents: policy.degradedAgents,
+       healthy: policyHealthy
+     },
+-    execution: mcpRuntime.execution,
++    execution: io.execution,
+     dataQaInstructions: getDataQaInstructionsStatus(),
+     ...(contentLayout ? { contentLayout } : {})
+   };
+--- a/webui/server/mcp-runtime-state.ts
++++ b/webui/server/mcp-runtime-state.ts
+@@ -13,6 +13,11 @@
+ };
+ 
+ const observations = new Map<string, ExecutionRuntimeObservation>();
++
++/** Memory-only handoff to the isolated diagnostic reader; never used for authorization. */
++export function snapshotExecutionRuntimeObservations(): ExecutionRuntimeObservation[] {
++  return [...observations.values()].map((observation) => ({ ...observation }));
++}
+ 
+ export async function readKtxYamlDigest(projectRoot: string): Promise<string> {
+   const contents = await readFile(path.join(projectRoot, "ktx.yaml"));
+--- a/webui/server/proxy/mcp-proxy.ts
++++ b/webui/server/proxy/mcp-proxy.ts
+@@ -1,6 +1,8 @@
+ import { createHash, randomUUID } from "node:crypto";
+ import { readFile, stat } from "node:fs/promises";
+ import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type ServerResponse } from "node:http";
++import { admitMcpProcessWork, trackMcpUpstreamWork } from "../runtime/mcp-process-work.js";
++import { getProcessLifecyclePhase, SERVICE_DRAINING, SERVICE_DRAINING_MESSAGE } from "../runtime/process-drain.js";
+ import path from "node:path";
+ import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
+ import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
+@@ -386,6 +388,7 @@
+       { hostname: target.host, port: target.port, path: url, method, headers },
+       resolve
+     );
++    trackMcpUpstreamWork(upstream);
+     // Spec 162 §6.2 / SC-13：把在途请求句柄交给调用方，客户端断开时可以取消上游。
+     onRequest?.(upstream);
+     upstream.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
+@@ -8019,6 +8022,16 @@
+   void runStartupRecoveryScan();
+ 
+   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
++    // Atomic SERVING check + ticket precedes every async admission/dispatch step.
++    // GET is an idle transport subscription, not an accepted business RPC.
++    const work = req.method === "GET" ? null : admitMcpProcessWork(res);
++    const phase = getProcessLifecyclePhase();
++    if ((work && !work.ok) || phase === "DRAINING" || phase === "STOPPING" || phase === "STOPPED") {
++      res.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" });
++      res.end(JSON.stringify({ ok: false, error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE } }));
++      return;
++    }
++    const handle = async () => {
+     try {
+       // 宿主 attested 确认：非 tools/call，先于 MCP 准入信封校验。
+       if (await handleSourceAmbiguityHostConfirm(req, res)) return;
+@@ -8112,6 +8125,9 @@
+         res.end(JSON.stringify({ error: "Proxy error", detail }));
+       }
+     }
++    };
++    if (work?.ok) await work.run(handle);
++    else await handle();
+   });
+ 
+   return { server, host, port };
+--- a/webui/server/runtime/diagnostic-snapshot.ts
++++ b/webui/server/runtime/diagnostic-snapshot.ts
+@@ -63,6 +63,7 @@
+   private lastStartMono = Number.NEGATIVE_INFINITY;
+   private timer: NodeJS.Timeout | null = null;
+   private closed = false;
++  private collectorAbort: AbortController | null = null;
+   private closeWaiters: Array<() => void> = [];
+ 
+   constructor(options: DiagnosticSnapshotOptions) {
+@@ -155,6 +156,7 @@
+       return;
+     }
+     this.closed = true;
++    this.collectorAbort?.abort();
+     if (this.timer) {
+       clearInterval(this.timer);
+       this.timer = null;
+@@ -189,6 +191,7 @@
+     this.inFlight = true;
+     const generation = this.generation;
+     const controller = new AbortController();
++    this.collectorAbort = controller;
+     let timedOut = false;
+     const deadlineTimer = setTimeout(() => {
+       timedOut = true;
+@@ -222,6 +225,7 @@
+       clearTimeout(deadlineTimer);
+       // Permit released only after the real collect promise settled.
+       this.inFlight = false;
++      this.collectorAbort = null;
+       this.collectorPromise = null;
+     }
+   }
+--- a/webui/server/runtime/diagnostic-collector.ts
++++ b/webui/server/runtime/diagnostic-collector.ts
+@@ -0,0 +1,59 @@
++import { fork } from "node:child_process";
++import { fileURLToPath } from "node:url";
++import type { ContentLayoutStatus } from "../content-layout.js";
++import type { KtxRuntimeStatus } from "../ktx-runtime.js";
++import type { ExecutionProbeResult, readMcpRuntimeStatus } from "../admin/mcp-runtime.js";
++import type { ExecutionRuntimeObservation } from "../mcp-runtime-state.js";
++
++export type DiagnosticCollectorInput = {
++  probe?: ExecutionProbeResult;
++  observations: ExecutionRuntimeObservation[];
++  ktxRuntime: KtxRuntimeStatus;
++  contentLayout?: ContentLayoutStatus;
++};
++
++export type DiagnosticCollectorResult = {
++  contentLayout?: ContentLayoutStatus;
++  ktxRuntime: KtxRuntimeStatus;
++  execution: Awaited<ReturnType<typeof readMcpRuntimeStatus>>["execution"];
++};
++
++/** The permit's Promise settles on child close, never merely on abort/message. */
++export function collectDiagnosticIo(signal: AbortSignal, input: DiagnosticCollectorInput): Promise<DiagnosticCollectorResult> {
++  signal.throwIfAborted();
++  return new Promise((resolve, reject) => {
++    const child = fork(fileURLToPath(new URL("./diagnostic-collector-worker.ts", import.meta.url)), [], {
++      execArgv: ["--import", import.meta.resolve("tsx")],
++      detached: process.platform !== "win32",
++      stdio: ["ignore", "ignore", "ignore", "ipc"]
++    });
++    let result: DiagnosticCollectorResult | undefined;
++    let failed = false;
++    let aborted = false;
++    const stop = () => {
++      aborted = true;
++      // Kill the private process group too: no orphaned CLI descendants.
++      if (child.pid && process.platform !== "win32") {
++        try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
++      } else child.kill("SIGKILL");
++    };
++    signal.addEventListener("abort", stop, { once: true });
++    child.on("error", () => { failed = true; stop(); });
++    child.on("message", (message: unknown) => {
++      const record = message as { ok?: boolean; data?: DiagnosticCollectorResult; stage?: string };
++      if (record.stage) console.info(`[diagnostic-collector] stage=${record.stage} pid=${child.pid}`);
++      else if (record.ok && record.data) result = record.data;
++      else failed = true;
++    });
++    child.once("close", (code, terminationSignal) => {
++      signal.removeEventListener("abort", stop);
++      console.info(`[diagnostic-collector] closed pid=${child.pid} aborted=${aborted} code=${code} signal=${terminationSignal}`);
++      if (aborted || signal.aborted) reject(new Error("diagnostic collection aborted after process exit"));
++      else if (failed || code !== 0 || !result) reject(new Error("diagnostic collection failed"));
++      else resolve(result);
++    });
++    // A parent crash/disconnect is also terminal for this detached reader.
++    child.send(input, (error) => { if (error) { failed = true; stop(); } });
++    if (signal.aborted) stop();
++  });
++}
+--- a/webui/server/runtime/diagnostic-collector-worker.ts
++++ b/webui/server/runtime/diagnostic-collector-worker.ts
+@@ -0,0 +1,27 @@
++/** Read-only diagnostics in an OS process that the owner can actually terminate. */
++import { readMcpRuntimeStatus } from "../admin/mcp-runtime.js";
++import { collectContentLayout } from "../content-layout.js";
++import { recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
++import { resolveContentPaths } from "../paths.js";
++import { resolveProjectRoot } from "../project.js";
++import type { DiagnosticCollectorInput, DiagnosticCollectorResult } from "./diagnostic-collector.js";
++
++process.once("disconnect", () => process.exit(1));
++process.once("message", async (input: DiagnosticCollectorInput) => {
++  try {
++    for (const observation of input.observations) recordExecutionRuntimeObservation(observation);
++    process.send?.({ stage: "reading" });
++    const projectRoot = await resolveProjectRoot();
++    const contentLayout = input.contentLayout ?? await collectContentLayout(projectRoot, await resolveContentPaths(projectRoot)).catch(() => undefined);
++    // The existing bounded runtime refresh owns CLI checks; do not duplicate
++    // it in each short-lived reader, nor invent readiness before it completes.
++    const ktxRuntime = input.ktxRuntime;
++    const mcp = await readMcpRuntimeStatus(async () => input.probe ?? {
++      status: "reachable", checkedAt: new Date().toISOString()
++    });
++    const data: DiagnosticCollectorResult = { contentLayout, ktxRuntime, execution: mcp.execution };
++    process.send?.({ ok: true, data }, () => process.exit(0));
++  } catch {
++    process.send?.({ ok: false }, () => process.exit(1));
++  }
++});
+--- a/webui/server/runtime/mcp-process-work.ts
++++ b/webui/server/runtime/mcp-process-work.ts
+@@ -0,0 +1,47 @@
++import { AsyncLocalStorage } from "node:async_hooks";
++import type { ClientRequest, ServerResponse } from "node:http";
++import { tryAdmitBusinessWork } from "./process-drain.js";
++
++/** Real upstream handles belong to the accepted RPC, not the client socket. */
++const activeWork = new AsyncLocalStorage<Set<Promise<void>>>();
++
++export function trackMcpUpstreamWork(request: ClientRequest): void {
++  const work = activeWork.getStore();
++  if (!work) return; // An idle GET/SSE is not a business RPC.
++  const closed = new Promise<void>((resolve) => request.once("close", resolve));
++  work.add(closed);
++  void closed.then(() => work.delete(closed));
++}
++
++/** Call synchronously before admission's first await. */
++export function admitMcpProcessWork(res: ServerResponse) {
++  const admitted = tryAdmitBusinessWork();
++  if (!admitted.ok) return admitted;
++  const work = new Set<Promise<void>>();
++  let finish!: () => void;
++  const settled = new Promise<void>((resolve) => { finish = resolve; });
++  admitted.ticket.registerSettle(() => settled);
++  const responseSettled = new Promise<void>((resolve) => {
++    const done = () => {
++      res.off("finish", done);
++      res.off("close", done);
++      resolve();
++    };
++    res.once("finish", done);
++    res.once("close", done);
++  });
++  return {
++    ok: true as const,
++    run: async (handler: () => Promise<void>) => {
++      try {
++        await activeWork.run(work, handler);
++      } finally {
++        // A post-start exception / client close cannot retire accepted upstream work.
++        while (work.size > 0) await Promise.all([...work]);
++        await responseSettled; // Includes the asynchronous durable response gate.
++        finish();
++        await admitted.ticket.retireWhenSettled();
++      }
++    }
++  };
++}
+--- a/scripts/runtime/docker-entrypoint.sh
++++ b/scripts/runtime/docker-entrypoint.sh
+@@ -995,7 +995,9 @@
+ fi
+ 
+ cd "${WEBUI_ROOT}"
+-npm run start &
++# Own the actual server PID. npm/tsx launchers may exit on TERM while their
++# Node child is still draining, which would stop KTX before its RPC settles.
++node --import tsx server/index.ts &
+ LUCY_PID="$!"
+ 
+ wait -n "${SUPERVISOR_PID}" "${LUCY_PID}"
+--- a/webui/server/runtime/process-drain.ts
++++ b/webui/server/runtime/process-drain.ts
+@@ -299,6 +299,7 @@
+     }
+ 
+     await this.writeDrainAck();
++    console.info(`[process-drain] draining pid=${process.pid} inFlight=${this.inFlight.size}`);
+     // Stop new heavy scheduling; waiting not-started items settle without executing.
+     // Dirty/recovery facts remain with their owners (e.g. inferred-turn dirty set).
+     try {
+@@ -329,6 +330,7 @@
+     }
+ 
+     if (hasRemaining()) {
++      console.warn(`[process-drain] deadline pid=${process.pid} inFlight=${this.inFlight.size}`);
+       try {
+         getHeavyWorkCapacity().requestCancelRunningForProcessDrain();
+       } catch {
+@@ -345,6 +347,7 @@
+       // Late retire after STOPPING is ignored for phase (still deletes map entry).
+     }
+ 
++    console.info(`[process-drain] settled pid=${process.pid} inFlight=${this.inFlight.size}`);
+     this.phase = "STOPPING";
+     // Parent stops supervisor/KTX after ack+drain; Lucy then wraps up.
+     this.phase = "STOPPED";

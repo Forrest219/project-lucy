@@ -30,6 +30,8 @@ Lucy 的测试分三层，不能互相替代：
 
 | Command | Layer | Purpose |
 |---|---|---|
+| `python3 scripts/uat/core-availability-1883-soak.py --image IMG --out DIR [--seconds 7200] [--cycle-seconds 300]` | uat（具名本机隔离Docker，人工执行） | R-CAV-FDE-1883局部持续运行：1883真实物理表／Manifest／启用表，正式短名上传／保存／KTX重载与20万合成审计维护；至少2小时，探针／合法HTTP／纯MCP／原生CPU及/proc观测；真实I/O控制窗分列，不签完整R-CAV或客户结论。 |
+| `python3 scripts/uat/readyz-diagnostic-repro.py --baseline-image IMG --candidate-image IMG --out DIR [--seconds 120] [--verify-repair 或 --assess-only [--no-fault]]` | uat（本机隔离Docker；需具名执行授权，不进PR CI） | 默认复现旧版真实FIFO等待；`--verify-repair`验证5秒实际进程回收、120秒探针与两轮仅恢复路径的自动fresh；`--assess-only`验证真实导出／MySQL在途查询TERM／原卷恢复，`--no-fault`为诊断正常对照。仅局部，不覆盖完整F61/F62/F63。runner不在执行时改产品源码，原Spec承接授权修复；不改客户环境，不签发布结论。 |
 | `npm run smoke:fast` | platform + tier 0 fast smoke | 快速静态规范、元数据契约、WebUI L1 及轻量握手（≤45s，PR 阻塞门禁） |
 | `npm run smoke:full` | aggregate + tier 1 full smoke | 全量多数据源容器、License、Token 资产、发布回归、监控审计与 Agent E2E 就绪门禁 |
 | `npm run lint:spec` | platform | spec drift checks for routes/API/skills/evals/access roles |
@@ -288,7 +290,9 @@ Recommended CI jobs:
 
 | Job | Commands |
 |---|---|
-| spec-and-unit | `npm run lint:spec`; `npm run lint:spec-docs`; `npm run lint:url-driven-input`; `cd webui && npm test`（含 P1-61／62／63 的 `memory-probe-diagnostics`／`heavy-work-capacity`／`process-drain` Vitest；entrypoint drain 顺序另用本机 `node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs`，不另开 CI job） |
+| readyz-diagnostic-repro（人工，当前无CI job） | 上述Python命令；仅在委托人授权的隔离本机执行；不能签署整套F61/F62/F63或发布PASS |
+| core-availability-1883-soak（人工，当前无CI job） | 上述7200秒Python入口；仅同次授权的具名资源与合成数据，性能采样开销单列；不签整套UAT或发布PASS |
+| spec-and-unit | `npm run lint:spec`; `npm run lint:spec-docs`; `npm run lint:url-driven-input`; `cd webui && npm test`（含 P1-61／62／63 的 `memory-probe-diagnostics`／`diagnostic-collector-process`／`mcp-proxy-execution-stale`／`heavy-work-capacity`／`process-drain` Vitest；entrypoint实际PID及drain顺序另用本机 `node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs`，不另开 CI job） |
 | security-baseline | `npm run security:baseline` |
 | docker-smoke | `npm run smoke:p0:docker`（含 delivery-isolation 双镜像 denylist） |
 | delivery-isolation | `npm run smoke:p0:delivery-isolation`（Lucy 硬门禁；亦由 `smoke:p0` 调用） |

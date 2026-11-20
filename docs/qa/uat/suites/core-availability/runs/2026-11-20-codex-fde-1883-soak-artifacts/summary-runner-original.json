@@ -1,0 +1,11 @@
+{
+  "startedAt": "2026-11-20T05:30:48.683285+00:00",
+  "runnerSha256": "91c7343952ac7a60babd2dbfc47da1fb61bdd801406f235c99e95cadb5913070",
+  "baseHelperSha256": "18d35306116483f38e82156eb47ca3dfb89deedb74e5a3d7832744b6a5c59d33",
+  "secondsRequired": 7200,
+  "status": "FAIL",
+  "soakStartedAt": "2026-11-20T05:33:19.956335+00:00",
+  "mainPid": "5971",
+  "error": "test explicitly interrupted; retain failed qualification evidence",
+  "finishedAt": "2026-11-20T06:34:27.433458+00:00"
+}

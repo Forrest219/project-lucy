@@ -1,0 +1,18 @@
+{
+  "time": 1795148501.822109,
+  "file": {
+    "kind": "regular",
+    "inode": 546061
+  },
+  "processes": [
+    {
+      "pid": "329",
+      "blockedThreads": [
+        {
+          "tid": "339",
+          "wchan": "pipe_read"
+        }
+      ]
+    }
+  ]
+}

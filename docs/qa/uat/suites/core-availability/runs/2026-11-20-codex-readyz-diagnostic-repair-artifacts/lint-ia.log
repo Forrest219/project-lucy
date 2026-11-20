@@ -1,0 +1,5 @@
+
+> project-lucy-eval@0.30.0 lint:ia-boundary
+> node webui/scripts/lint-ia-boundary.mjs
+
+IA boundary lint passed.

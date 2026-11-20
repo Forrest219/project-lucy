@@ -995,7 +995,9 @@ if ! wait_for_ktx_ready; then
 fi
 
 cd "${WEBUI_ROOT}"
-npm run start &
+# Own the actual server PID. npm/tsx launchers may exit on TERM while their
+# Node child is still draining, which would stop KTX before its RPC settles.
+node --import tsx server/index.ts &
 LUCY_PID="$!"
 
 wait -n "${SUPERVISOR_PID}" "${LUCY_PID}"

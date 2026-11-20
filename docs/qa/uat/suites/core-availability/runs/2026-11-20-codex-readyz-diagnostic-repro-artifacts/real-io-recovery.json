@@ -1,0 +1,536 @@
+[
+  {
+    "httpStatus": 200,
+    "elapsedMs": 6.308,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "insecureTestProfile": true,
+        "lucyVersion": "0.30.0",
+        "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+        "gitDirty": true,
+        "bundledKtxVersion": "0.16.0",
+        "ktxRuntime": {
+          "ready": true,
+          "status": "ready",
+          "detail": "status: ready"
+        },
+        "policy": {
+          "policyVersion": "fde455bf2511914d0eb0b585757de0da28502f9fdb7115b369893abaa9a6b944",
+          "degradedGlobal": false,
+          "degradedAgents": [],
+          "healthy": true
+        },
+        "execution": {
+          "status": "unknown",
+          "lastCheckedAt": "2026-11-20T04:19:32.857Z",
+          "unknownConnections": [
+            "lucy-ops",
+            "uat-mysql"
+          ],
+          "activation": "unknown",
+          "reload": {
+            "state": "idle"
+          },
+          "verification": {
+            "state": "unverified"
+          }
+        },
+        "dataQaInstructions": {
+          "source": "missing",
+          "length": 0,
+          "lastError": null,
+          "loadedAt": null
+        },
+        "contentLayout": {
+          "contentRoot": "/data/lucy/config",
+          "contentRootSource": "env",
+          "authoring": {
+            "semanticLayer": "/data/lucy/config/semantic-layer",
+            "wiki": "/data/lucy/config/wiki",
+            "evals": "/data/lucy/config/evals",
+            "skills": "/data/lucy/config/skills"
+          },
+          "mirror": {
+            "semanticLayer": "/data/lucy/semantic-layer",
+            "wiki": "/data/lucy/wiki",
+            "evals": "/data/lucy/evals",
+            "skills": "/data/lucy/skills"
+          },
+          "mirrorActive": true,
+          "drift": [],
+          "driftTruncated": false
+        },
+        "eventLoop": {
+          "p99Ms": 31.85,
+          "maxMs": 95.289,
+          "windowSeconds": 60
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:19:33.184Z",
+        "ageMs": 164221,
+        "freshness": "stale"
+      }
+    }
+  },
+  {
+    "httpStatus": 200,
+    "elapsedMs": 4.323,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "insecureTestProfile": true,
+        "lucyVersion": "0.30.0",
+        "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+        "gitDirty": true,
+        "bundledKtxVersion": "0.16.0",
+        "ktxRuntime": {
+          "ready": true,
+          "status": "ready",
+          "detail": "status: ready"
+        },
+        "policy": {
+          "policyVersion": "fde455bf2511914d0eb0b585757de0da28502f9fdb7115b369893abaa9a6b944",
+          "degradedGlobal": false,
+          "degradedAgents": [],
+          "healthy": true
+        },
+        "execution": {
+          "status": "unknown",
+          "lastCheckedAt": "2026-11-20T04:19:32.857Z",
+          "unknownConnections": [
+            "lucy-ops",
+            "uat-mysql"
+          ],
+          "activation": "unknown",
+          "reload": {
+            "state": "idle"
+          },
+          "verification": {
+            "state": "unverified"
+          }
+        },
+        "dataQaInstructions": {
+          "source": "missing",
+          "length": 0,
+          "lastError": null,
+          "loadedAt": null
+        },
+        "contentLayout": {
+          "contentRoot": "/data/lucy/config",
+          "contentRootSource": "env",
+          "authoring": {
+            "semanticLayer": "/data/lucy/config/semantic-layer",
+            "wiki": "/data/lucy/config/wiki",
+            "evals": "/data/lucy/config/evals",
+            "skills": "/data/lucy/config/skills"
+          },
+          "mirror": {
+            "semanticLayer": "/data/lucy/semantic-layer",
+            "wiki": "/data/lucy/wiki",
+            "evals": "/data/lucy/evals",
+            "skills": "/data/lucy/skills"
+          },
+          "mirrorActive": true,
+          "drift": [],
+          "driftTruncated": false
+        },
+        "eventLoop": {
+          "p99Ms": 31.85,
+          "maxMs": 95.289,
+          "windowSeconds": 60
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:19:33.184Z",
+        "ageMs": 165232,
+        "freshness": "stale"
+      }
+    }
+  },
+  {
+    "httpStatus": 200,
+    "elapsedMs": 7.892,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "insecureTestProfile": true,
+        "lucyVersion": "0.30.0",
+        "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+        "gitDirty": true,
+        "bundledKtxVersion": "0.16.0",
+        "ktxRuntime": {
+          "ready": true,
+          "status": "ready",
+          "detail": "status: ready"
+        },
+        "policy": {
+          "policyVersion": "fde455bf2511914d0eb0b585757de0da28502f9fdb7115b369893abaa9a6b944",
+          "degradedGlobal": false,
+          "degradedAgents": [],
+          "healthy": true
+        },
+        "execution": {
+          "status": "unknown",
+          "lastCheckedAt": "2026-11-20T04:19:32.857Z",
+          "unknownConnections": [
+            "lucy-ops",
+            "uat-mysql"
+          ],
+          "activation": "unknown",
+          "reload": {
+            "state": "idle"
+          },
+          "verification": {
+            "state": "unverified"
+          }
+        },
+        "dataQaInstructions": {
+          "source": "missing",
+          "length": 0,
+          "lastError": null,
+          "loadedAt": null
+        },
+        "contentLayout": {
+          "contentRoot": "/data/lucy/config",
+          "contentRootSource": "env",
+          "authoring": {
+            "semanticLayer": "/data/lucy/config/semantic-layer",
+            "wiki": "/data/lucy/config/wiki",
+            "evals": "/data/lucy/config/evals",
+            "skills": "/data/lucy/config/skills"
+          },
+          "mirror": {
+            "semanticLayer": "/data/lucy/semantic-layer",
+            "wiki": "/data/lucy/wiki",
+            "evals": "/data/lucy/evals",
+            "skills": "/data/lucy/skills"
+          },
+          "mirrorActive": true,
+          "drift": [],
+          "driftTruncated": false
+        },
+        "eventLoop": {
+          "p99Ms": 31.85,
+          "maxMs": 95.289,
+          "windowSeconds": 60
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:19:33.184Z",
+        "ageMs": 166244,
+        "freshness": "stale"
+      }
+    }
+  },
+  {
+    "httpStatus": 200,
+    "elapsedMs": 4.792,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "insecureTestProfile": true,
+        "lucyVersion": "0.30.0",
+        "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+        "gitDirty": true,
+        "bundledKtxVersion": "0.16.0",
+        "ktxRuntime": {
+          "ready": true,
+          "status": "ready",
+          "detail": "status: ready"
+        },
+        "policy": {
+          "policyVersion": "fde455bf2511914d0eb0b585757de0da28502f9fdb7115b369893abaa9a6b944",
+          "degradedGlobal": false,
+          "degradedAgents": [],
+          "healthy": true
+        },
+        "execution": {
+          "status": "unknown",
+          "lastCheckedAt": "2026-11-20T04:19:32.857Z",
+          "unknownConnections": [
+            "lucy-ops",
+            "uat-mysql"
+          ],
+          "activation": "unknown",
+          "reload": {
+            "state": "idle"
+          },
+          "verification": {
+            "state": "unverified"
+          }
+        },
+        "dataQaInstructions": {
+          "source": "missing",
+          "length": 0,
+          "lastError": null,
+          "loadedAt": null
+        },
+        "contentLayout": {
+          "contentRoot": "/data/lucy/config",
+          "contentRootSource": "env",
+          "authoring": {
+            "semanticLayer": "/data/lucy/config/semantic-layer",
+            "wiki": "/data/lucy/config/wiki",
+            "evals": "/data/lucy/config/evals",
+            "skills": "/data/lucy/config/skills"
+          },
+          "mirror": {
+            "semanticLayer": "/data/lucy/semantic-layer",
+            "wiki": "/data/lucy/wiki",
+            "evals": "/data/lucy/evals",
+            "skills": "/data/lucy/skills"
+          },
+          "mirrorActive": true,
+          "drift": [],
+          "driftTruncated": false
+        },
+        "eventLoop": {
+          "p99Ms": 31.85,
+          "maxMs": 95.289,
+          "windowSeconds": 60
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:19:33.184Z",
+        "ageMs": 167253,
+        "freshness": "stale"
+      }
+    }
+  },
+  {
+    "httpStatus": 200,
+    "elapsedMs": 8.475,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "insecureTestProfile": true,
+        "lucyVersion": "0.30.0",
+        "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+        "gitDirty": true,
+        "bundledKtxVersion": "0.16.0",
+        "ktxRuntime": {
+          "ready": true,
+          "status": "ready",
+          "detail": "status: ready"
+        },
+        "policy": {
+          "policyVersion": "fde455bf2511914d0eb0b585757de0da28502f9fdb7115b369893abaa9a6b944",
+          "degradedGlobal": false,
+          "degradedAgents": [],
+          "healthy": true
+        },
+        "execution": {
+          "status": "unknown",
+          "lastCheckedAt": "2026-11-20T04:19:32.857Z",
+          "unknownConnections": [
+            "lucy-ops",
+            "uat-mysql"
+          ],
+          "activation": "unknown",
+          "reload": {
+            "state": "idle"
+          },
+          "verification": {
+            "state": "unverified"
+          }
+        },
+        "dataQaInstructions": {
+          "source": "missing",
+          "length": 0,
+          "lastError": null,
+          "loadedAt": null
+        },
+        "contentLayout": {
+          "contentRoot": "/data/lucy/config",
+          "contentRootSource": "env",
+          "authoring": {
+            "semanticLayer": "/data/lucy/config/semantic-layer",
+            "wiki": "/data/lucy/config/wiki",
+            "evals": "/data/lucy/config/evals",
+            "skills": "/data/lucy/config/skills"
+          },
+          "mirror": {
+            "semanticLayer": "/data/lucy/semantic-layer",
+            "wiki": "/data/lucy/wiki",
+            "evals": "/data/lucy/evals",
+            "skills": "/data/lucy/skills"
+          },
+          "mirrorActive": true,
+          "drift": [],
+          "driftTruncated": false
+        },
+        "eventLoop": {
+          "p99Ms": 31.85,
+          "maxMs": 95.289,
+          "windowSeconds": 60
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:19:33.184Z",
+        "ageMs": 168263,
+        "freshness": "stale"
+      }
+    }
+  },
+  {
+    "httpStatus": 200,
+    "elapsedMs": 3.347,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "insecureTestProfile": true,
+        "lucyVersion": "0.30.0",
+        "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+        "gitDirty": true,
+        "bundledKtxVersion": "0.16.0",
+        "ktxRuntime": {
+          "ready": true,
+          "status": "ready",
+          "detail": "status: ready"
+        },
+        "policy": {
+          "policyVersion": "fde455bf2511914d0eb0b585757de0da28502f9fdb7115b369893abaa9a6b944",
+          "degradedGlobal": false,
+          "degradedAgents": [],
+          "healthy": true
+        },
+        "execution": {
+          "status": "unknown",
+          "lastCheckedAt": "2026-11-20T04:19:32.857Z",
+          "unknownConnections": [
+            "lucy-ops",
+            "uat-mysql"
+          ],
+          "activation": "unknown",
+          "reload": {
+            "state": "idle"
+          },
+          "verification": {
+            "state": "unverified"
+          }
+        },
+        "dataQaInstructions": {
+          "source": "missing",
+          "length": 0,
+          "lastError": null,
+          "loadedAt": null
+        },
+        "contentLayout": {
+          "contentRoot": "/data/lucy/config",
+          "contentRootSource": "env",
+          "authoring": {
+            "semanticLayer": "/data/lucy/config/semantic-layer",
+            "wiki": "/data/lucy/config/wiki",
+            "evals": "/data/lucy/config/evals",
+            "skills": "/data/lucy/config/skills"
+          },
+          "mirror": {
+            "semanticLayer": "/data/lucy/semantic-layer",
+            "wiki": "/data/lucy/wiki",
+            "evals": "/data/lucy/evals",
+            "skills": "/data/lucy/skills"
+          },
+          "mirrorActive": true,
+          "drift": [],
+          "driftTruncated": false
+        },
+        "eventLoop": {
+          "p99Ms": 31.85,
+          "maxMs": 95.289,
+          "windowSeconds": 60
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:19:33.184Z",
+        "ageMs": 169269,
+        "freshness": "stale"
+      }
+    }
+  },
+  {
+    "httpStatus": 200,
+    "elapsedMs": 3.685,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "insecureTestProfile": true,
+        "lucyVersion": "0.30.0",
+        "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+        "gitDirty": true,
+        "bundledKtxVersion": "0.16.0",
+        "ktxRuntime": {
+          "ready": true,
+          "status": "ready",
+          "detail": "status: ready"
+        },
+        "policy": {
+          "policyVersion": "fde455bf2511914d0eb0b585757de0da28502f9fdb7115b369893abaa9a6b944",
+          "degradedGlobal": false,
+          "degradedAgents": [],
+          "healthy": true
+        },
+        "execution": {
+          "status": "unknown",
+          "lastCheckedAt": "2026-11-20T04:22:17.898Z",
+          "loadedConnectionIds": [
+            "uat-mysql"
+          ],
+          "unknownConnections": [
+            "lucy-ops"
+          ],
+          "activation": "unknown",
+          "reload": {
+            "state": "idle"
+          },
+          "verification": {
+            "state": "unverified"
+          }
+        },
+        "dataQaInstructions": {
+          "source": "mirror",
+          "length": 4680,
+          "lastError": "ENOENT: no such file or directory, open '/data/lucy/webui/config/data-qa-instructions.md'",
+          "loadedAt": "2026-11-20T04:19:33.770Z"
+        },
+        "contentLayout": {
+          "contentRoot": "/data/lucy/config",
+          "contentRootSource": "env",
+          "authoring": {
+            "semanticLayer": "/data/lucy/config/semantic-layer",
+            "wiki": "/data/lucy/config/wiki",
+            "evals": "/data/lucy/config/evals",
+            "skills": "/data/lucy/config/skills"
+          },
+          "mirror": {
+            "semanticLayer": "/data/lucy/semantic-layer",
+            "wiki": "/data/lucy/wiki",
+            "evals": "/data/lucy/evals",
+            "skills": "/data/lucy/skills"
+          },
+          "mirrorActive": true,
+          "drift": [],
+          "driftTruncated": false
+        },
+        "eventLoop": {
+          "p99Ms": 31.85,
+          "maxMs": 95.289,
+          "windowSeconds": 60
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:22:22.722Z",
+        "ageMs": 740,
+        "freshness": "fresh"
+      }
+    }
+  }
+]
