@@ -1,0 +1,51 @@
+{
+  "method": "independent small raw JSON read only; no SQL/decode rerun; MySQL timestamp recorded as fixture UTC",
+  "rows": [
+    {
+      "case": "normal",
+      "rpcId": 2,
+      "mysqlUtc": "2026-11-20T12:40:31.690233+00:00",
+      "dispatchAt": "2026-11-20T12:40:24.625968+00:00",
+      "terminalAt": "2026-11-20T12:40:31.769956+00:00",
+      "withinExactOriginalRpcInterval": true,
+      "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100) as ktx_query_result limit 100"
+    },
+    {
+      "case": "deadline",
+      "rpcId": 5,
+      "mysqlUtc": "2026-11-20T12:42:44.464997+00:00",
+      "dispatchAt": "2026-11-20T12:42:40.491520+00:00",
+      "terminalAt": "2026-11-20T12:42:44.644335+00:00",
+      "withinExactOriginalRpcInterval": true,
+      "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100) as ktx_query_result limit 100"
+    },
+    {
+      "case": "revoke",
+      "rpcId": 5,
+      "mysqlUtc": "2026-11-20T12:51:03.584306+00:00",
+      "dispatchAt": "2026-11-20T12:51:00.360434+00:00",
+      "terminalAt": "2026-11-20T12:51:03.601489+00:00",
+      "withinExactOriginalRpcInterval": true,
+      "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders WHERE (uat_begin_zero_orders.tenant = 'NORTH') LIMIT 100) as ktx_query_result limit 100"
+    },
+    {
+      "case": "failure",
+      "rpcId": 5,
+      "mysqlUtc": "2026-11-20T13:09:57.687193+00:00",
+      "dispatchAt": "2026-11-20T13:09:53.680877+00:00",
+      "terminalAt": "2026-11-20T13:09:57.699105+00:00",
+      "withinExactOriginalRpcInterval": true,
+      "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100) as ktx_query_result limit 100"
+    },
+    {
+      "case": "term",
+      "rpcId": 5,
+      "mysqlUtc": "2026-11-20T13:14:05.845110+00:00",
+      "dispatchAt": "2026-11-20T13:14:01.575300+00:00",
+      "terminalAt": "2026-11-20T13:14:05.919246+00:00",
+      "withinExactOriginalRpcInterval": true,
+      "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100) as ktx_query_result limit 100"
+    }
+  ],
+  "allValid": true
+}

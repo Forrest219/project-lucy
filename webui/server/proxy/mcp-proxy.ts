@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type ServerResponse } from "node:http";
-import { admitMcpProcessWork, trackMcpUpstreamWork } from "../runtime/mcp-process-work.js";
+import { admitMcpProcessWork, mcpReloadAdmissionError, trackMcpResponseCommit, trackMcpUpstreamWork } from "../runtime/mcp-process-work.js";
 import { getProcessLifecyclePhase, SERVICE_DRAINING, SERVICE_DRAINING_MESSAGE } from "../runtime/process-drain.js";
 import path from "node:path";
 import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
@@ -53,7 +53,8 @@ import { loadAllSkillsFresh, getSkillByUri, getSkillByName } from "../skills/loa
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
-import { semanticReadHintsFromArgs, semanticRecoveryReadBlock } from "../semantic-recovery-journal.js";
+import { semanticReadHintsFromArgs, semanticRecoveryReadState, type SemanticRecoveryReadBlock } from "../semantic-recovery-journal.js";
+import { matchedActivePublishWriteStages } from "../publish-coordinator.js";
 // L25-16 — 控制面工具由代理**本地**服务，绝不转发给 KTX。
 // 工具名单与描述来自 `ops/control-plane.ts`（单一事实源）。
 import { isControlPlaneTool } from "../ops/control-plane.js";
@@ -127,6 +128,8 @@ import {
   QUESTION_BUDGET_ABS_EXEC_MS,
   QUESTION_BUDGET_MAX_BUSY_MS,
   QUESTION_BUDGET_MAX_CALLS,
+  QUESTION_BUDGET_MAX_WALL_MS,
+  questionBudgetWallMode,
   installBudgetPersistence,
   type BudgetPersistence,
   type NextStep,
@@ -140,9 +143,11 @@ import {
   type RepairTargetEvidence,
   isBudgetUnavailable,
   type BudgetSnapshot,
+  type BudgetTicket,
+  type BudgetState,
 } from "./question-experience.js";
 import { bindQuestionBudgetSettlement } from "./question-budget-lifecycle.js";
-import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
+import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadAmbiguityCatalogFromDir, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
 import {
   lookupReportTemplate,
   resolveCertifiedRoute,
@@ -2299,19 +2304,156 @@ const OPS_NO_EFFECT_DENIAL_CODES = new Set<string>([
   "ops_claim_failed"
 ]);
 
+type SemanticReadWaitContext = {
+  ingressId: string;
+  ingressMonoMs: number;
+  fixedInitialWaitDeadlineMonoMs: number;
+  waitDeadlineMonoMs: number;
+  budgetDeadlineMonoMs?: number;
+  signal: AbortSignal;
+  waited: boolean;
+  budgetCurrent?: () => boolean;
+  close(): void;
+};
+
+function createSemanticReadWaitContext(
+  req: IncomingMessage, res: ServerResponse, ingressId: string
+): SemanticReadWaitContext {
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  const ingressMonoMs = questionBudget.monoNow();
+  const context: SemanticReadWaitContext = {
+    ingressId, ingressMonoMs, fixedInitialWaitDeadlineMonoMs: ingressMonoMs + 20_000,
+    waitDeadlineMonoMs: ingressMonoMs + 20_000,
+    signal: controller.signal, waited: false,
+    close() {
+      req.off("aborted", cancel); res.off("close", cancel); req.socket?.off("timeout", cancel);
+    }
+  };
+  req.once("aborted", cancel); res.once("close", cancel); req.socket?.on("timeout", cancel);
+  // req.close/destroyed also describe a normally consumed request body.
+  if (req.aborted || res.destroyed || res.writableEnded) cancel();
+  return context;
+}
+
+function tightenSemanticReadBudget(
+  context: SemanticReadWaitContext, ticket: BudgetTicket, state: BudgetState | null,
+  mode = questionBudgetWallMode(), wallNow = Date.now(), monoNow = questionBudget.monoNow()
+): void {
+  context.budgetDeadlineMonoMs = Math.min(context.budgetDeadlineMonoMs ?? Infinity,
+    ticket.startMonoMs + QUESTION_BUDGET_ABS_EXEC_MS);
+  if (mode === "elapsed" && state) {
+    context.budgetDeadlineMonoMs = Math.min(context.budgetDeadlineMonoMs,
+      monoNow + Math.max(0, state.startedAt + QUESTION_BUDGET_MAX_WALL_MS - wallNow));
+  }
+  context.waitDeadlineMonoMs = Math.min(context.waitDeadlineMonoMs, context.budgetDeadlineMonoMs);
+  const matches = (value: BudgetState | null) => Boolean(value && !value.processUnavailable
+    && !value.commitUnverified && (value.round ?? 0) === ticket.round && (value.windowId ?? 0) === ticket.windowId);
+  const initialValid = matches(state);
+  context.budgetCurrent = () => initialValid && !ticket.settled
+    && matches(questionBudget.snapshotScope(ticket.scopeKey));
+}
+
+async function awaitSemanticReadRecovery(
+  projectRoot: string, hints: readonly string[], context: SemanticReadWaitContext, rpcId: string | number
+): Promise<SemanticRecoveryReadBlock | null> {
+  const initial = await semanticRecoveryReadState(projectRoot, hints);
+  if (!initial.block) return null;
+  const interrupted = (): string | null => {
+    if (context.signal.aborted) return "cancelled";
+    if (["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase())) return "term";
+    if (currentBarrierHandle() && !currentBarrierHandle()!.isCurrent()) return "authorization_revoked";
+    if (questionBudget.monoNow() >= context.waitDeadlineMonoMs || context.budgetCurrent?.() === false) return "timeout";
+    return null;
+  };
+  const stages = matchedActivePublishWriteStages(projectRoot, initial.journals);
+  if (!stages) {
+    // The filesystem snapshot may precede the owner's real completion while
+    // this continuation follows it. This does not grant unknown owners any
+    // waiting eligibility: only a fresh authoritative guard can reopen reads.
+    if (interrupted()) return initial.block;
+    const current = await semanticRecoveryReadState(projectRoot, hints);
+    if (interrupted()) return initial.block;
+    if (!current.block) context.waited = true; // Revalidate the content transition.
+    return current.block;
+  }
+  context.waited = true;
+  const emit = (event: string, endOutcome?: string) => console.info("[lucy-semantic-write]", JSON.stringify({
+    event, ingressOperationId: context.ingressId, rpcId,
+    owners: stages.map((stage) => ({ holderOperationId: stage.holder.operationId, journalId: stage.journalId, releaseId: stage.releaseId })),
+    ingressMonoMs: context.ingressMonoMs,
+    fixedInitialWaitDeadlineMonoMs: context.fixedInitialWaitDeadlineMonoMs,
+    waitDeadlineMonoMs: context.waitDeadlineMonoMs, atMs: Date.now(), monoMs: questionBudget.monoNow(),
+    ...(endOutcome ? { endOutcome } : {})
+  }));
+  emit("read_wait_begin");
+  let outcomes: string[] | undefined;
+  void Promise.all(stages.map((stage) => stage.settled)).then((value) => { outcomes = value; });
+  for (;;) {
+    const cause = interrupted();
+    if (cause) { emit("read_wait_end", cause); return initial.block; }
+    if (outcomes) {
+      if (outcomes.some((outcome) => outcome !== "files_saved")) {
+        emit("read_wait_end", "blocked"); return initial.block;
+      }
+      const checked = await semanticRecoveryReadState(projectRoot, hints);
+      const lateCause = interrupted();
+      emit("read_wait_end", lateCause ?? (checked.block ? "blocked" : "owner_settled"));
+      return lateCause ? initial.block : checked.block;
+    }
+    if (stages.some((stage) => !stage.isCurrent())) {
+      emit("read_wait_end", "blocked"); return initial.block;
+    }
+    // Bounded asynchronous cancellation/TERM observation; never owns the writer.
+    await new Promise<void>((resolve) => setTimeout(resolve,
+      Math.max(1, Math.min(20, context.waitDeadlineMonoMs - questionBudget.monoNow()))));
+  }
+}
+
 async function readSemanticRecoveryDenial(
-  toolArgs: unknown
+  toolArgs: unknown, context?: SemanticReadWaitContext, rpcId: string | number = "",
+  revalidate?: () => Promise<{ code: string; message: string } | null>
 ): Promise<{ code: string; message: string } | null> {
+  const priorityDenial = (): { code: string; message: string } | null => {
+    if (currentBarrierHandle() && !currentBarrierHandle()!.isCurrent()) {
+      return { code: "authorization_revoked", message: "Access denied: authorization_revoked" };
+    }
+    if (["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase())) {
+      return { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE };
+    }
+    return null;
+  };
   try {
     const projectRoot = await resolveProjectRoot();
-    return await semanticRecoveryReadBlock(projectRoot, semanticReadHintsFromArgs(toolArgs));
-  } catch {
+    const hints = semanticReadHintsFromArgs(toolArgs);
+    const block = context ? await awaitSemanticReadRecovery(projectRoot, hints, context, rpcId)
+      : (await semanticRecoveryReadState(projectRoot, hints)).block;
+    // A normal semantic wait cannot mask a higher-priority irreversible drain
+    // or a committed revocation. The existing response barrier owns the 403.
+    const priority = priorityDenial();
+    if (priority) return priority;
+    if (block || !context?.waited) return block;
+    const validated = revalidate ? await revalidate() : null;
+    return priorityDenial() ?? validated;
+  } catch (error) {
+    const priority = priorityDenial();
+    if (priority) return priority;
+    if (error instanceof AuthorizationRevokedError) {
+      return { code: "authorization_revoked", message: "Access denied: authorization_revoked" };
+    }
     return {
       code: "semantic_recovery_unreadable",
       message: "语义恢复日志无法读取，涉及资产的读取和查询已关闭。"
     };
   }
 }
+
+/** Private component seams; no route or product API is added. */
+export const __semanticReadWaitTest = {
+  createContext: createSemanticReadWaitContext,
+  tightenBudget: tightenSemanticReadBudget,
+  awaitRecovery: awaitSemanticReadRecovery
+};
 
 function jsonRpcToolResult(requestId: string | number, text: string, options: { isError?: boolean } = {}): string {
   return JSON.stringify({
@@ -4222,14 +4364,14 @@ async function writeInitializeResponse(
   return { injectionFailed, errorDetail, responseBytes };
 }
 
-async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
+async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest, readWait: SemanticReadWaitContext): Promise<void> {
   const trace = new TraceRecorder({ traceId: `trace_${randomUUID()}` });
   const traceContext = new TraceRequestContext(trace);
   const evidence = resolveClientIpEvidence(req);
   traceContext.ipSource = evidence.ipSource;
   traceContext.trustedSource = evidence.trustedSource;
   traceContext.instrumentResponse(res);
-  await runWithTrace(traceContext, () => handlePostTraced(req, res, admitted, trace, traceContext));
+  await runWithTrace(traceContext, () => handlePostTraced(req, res, admitted, trace, traceContext, readWait));
 }
 
 async function handlePostTraced(
@@ -4237,7 +4379,8 @@ async function handlePostTraced(
   res: ServerResponse,
   admitted: AdmittedRequest,
   trace: TraceRecorder,
-  traceContext: TraceRequestContext
+  traceContext: TraceRequestContext,
+  readWait: SemanticReadWaitContext
 ): Promise<void> {
   const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
   const explicitTurnId = normalizeHeader(req.headers["x-lucy-turn-id"]);
@@ -4282,9 +4425,15 @@ async function handlePostTraced(
   let cancelUpstreamOnCapture = false;
   const captureUpstreamRequest = (request: ClientRequest): void => {
     upstreamRequestHandle = request;
-    if (!cancelUpstreamOnCapture || request.destroyed) return;
+    const stopping = ["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase());
+    const originalBudgetExpired = (readWait.budgetDeadlineMonoMs !== undefined
+      && questionBudget.monoNow() >= readWait.budgetDeadlineMonoMs) || readWait.budgetCurrent?.() === false;
+    if (request.destroyed || (!cancelUpstreamOnCapture && !readWait.signal.aborted && !stopping && !originalBudgetExpired)) return;
     try {
-      request.destroy(new Error("client_disconnected"));
+      // forwardToUpstream invokes this synchronously BEFORE end(body). A
+      // completed 20s wait eligibility is never an execution-wide timeout.
+      request.destroy(new Error(stopping ? "service_draining"
+        : originalBudgetExpired ? "absolute_execution_deadline" : "client_disconnected"));
     } catch {
       // 句柄已经结束。
     }
@@ -4294,6 +4443,56 @@ async function handlePostTraced(
   const noteBudgetSettlement = (facts: Record<string, unknown>): void => {
     const previous = (argsSummary?.budgetSettlement ?? {}) as Record<string, unknown>;
     argsSummary = { ...(argsSummary ?? {}), budgetSettlement: { ...previous, ...facts } };
+  };
+
+  const revalidateSemanticRead = async (): Promise<{ code: string; message: string } | null> => {
+    if (readWait.signal.aborted || ["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase())) {
+      return { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE };
+    }
+    const barrier = currentBarrierHandle();
+    if (barrier && !barrier.isCurrent()) throw new AuthorizationRevokedError();
+    if (!toolName) return { code: "tool_forbidden", message: "Access denied: tool_forbidden" };
+    const original = deepCopyJson(argsBeforeRewrite ?? toolArgs);
+    const current = await aclCheck(identity, toolName, original);
+    if (!current.allowed) return { code: current.reason ?? "denied", message: `Access denied: ${current.reason ?? "denied"}` };
+    let next = toolName === "lucy_query" ? applyLucyQueryForcedFilters(original, current.forcedFilters) : original;
+    if (queryGuardrailsEnabled() && (toolName === "lucy_query" || toolName === "lucy_read_source")) {
+      const resolved = await effectivePermissions(identity);
+      const readable = new Set<string>();
+      if (resolved.ok) {
+        if (resolved.permissions.tables.includes("*")) readable.add("*");
+        for (const source of resolved.permissions.sources) {
+          if (source.sourceName) readable.add(source.sourceName);
+          if (source.table) readable.add(source.table);
+          if (source.connectionId && source.sourceName) readable.add(`${source.connectionId}.${source.sourceName}`);
+        }
+      }
+      // P1-70: the observed writer changed this directory. The ordinary 60s
+      // published-catalog cache cannot prove the post-wait semantic generation.
+      // Bypass it only here; other requests retain their existing cache policy.
+      const contentPaths = await loadContentPaths();
+      const projectRoot = await resolveProjectRoot();
+      const catalog = await loadAmbiguityCatalogFromDir(path.resolve(projectRoot, contentPaths.semanticLayer));
+      const guard = applyLucyCallGuard({ toolName, args: next,
+        readableSourceNames: resolved.ok ? readable : null, catalog });
+      if (guard.action === "stop") return { code: guard.reason, message: guard.repair };
+      next = guard.args;
+    }
+    if (barrier && !barrier.isCurrent()) throw new AuthorizationRevokedError();
+    if (readWait.signal.aborted || ["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase())
+      || readWait.budgetCurrent?.() === false) {
+      return { code: "semantic_recovery_required", message: "本次等待已结束，请在维护完成后重试原问题。" };
+    }
+    toolArgs = next;
+    if (toolName === "lucy_query") {
+      forcedFiltersForAv = current.forcedFilters;
+      scopeIntersectionEmpty = isScopeIntersectionEmpty(original, current.forcedFilters);
+    }
+    const params = parsedRpc?.params as Record<string, unknown> | undefined;
+    if (params) params.arguments = next;
+    argsSummary = summarizeArgsForAudit(toolName,
+      next && typeof next === "object" && !Array.isArray(next) ? next as Record<string, unknown> : {});
+    return null;
   };
 
   try {
@@ -5716,6 +5915,7 @@ async function buildDenialRepairPayload(
       }
       if (budgetDecision.ticket) {
         const ticket = budgetDecision.ticket;
+        tightenSemanticReadBudget(readWait, ticket, questionBudget.snapshotScope(ticket.scopeKey));
         // Spec 162 §6.2 / SC-13：res.close 只取消上游。结算等上游 close（取消确认），
         // 或绝对执行时限。断开本身不清定时器，也不按断开时刻少计。
         bindQuestionBudgetSettlement({
@@ -5828,13 +6028,12 @@ async function buildDenialRepairPayload(
           recordAuditEntry: recordRequestAudit
         });
         if (hiveHandled) return;
-        const block = await readSemanticRecoveryDenial(toolArgs);
+        const block = await readSemanticRecoveryDenial(toolArgs, readWait, requestId, revalidateSemanticRead);
         if (block) {
-          const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
-            code: block.code,
-            message: block.message
-          }), { isError: true });
-          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          const responseBody = block.code === SERVICE_DRAINING
+            ? JSON.stringify({ ok: false, error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE } })
+            : jsonRpcToolResult(requestId, JSON.stringify({ code: block.code, message: block.message }), { isError: true });
+          res.writeHead(block.code === SERVICE_DRAINING ? 503 : 200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
           res.end(responseBody);
           recordRequestAudit({
             ts: new Date().toISOString(),
@@ -6986,13 +7185,12 @@ async function buildDenialRepairPayload(
     rpcMethod === "tools/call"
     && (toolName === "lucy_query" || toolName === "lucy_read_source" || toolName === "lucy_explain_query")
   ) {
-    const block = await readSemanticRecoveryDenial(toolArgs);
+    const block = await readSemanticRecoveryDenial(toolArgs, readWait, requestId, revalidateSemanticRead);
     if (block) {
-      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
-        code: block.code,
-        message: block.message
-      }), { isError: true });
-      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      const responseBody = block.code === SERVICE_DRAINING
+        ? JSON.stringify({ ok: false, error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE } })
+        : jsonRpcToolResult(requestId, JSON.stringify({ code: block.code, message: block.message }), { isError: true });
+      res.writeHead(block.code === SERVICE_DRAINING ? 503 : 200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
       recordRequestAudit({
         ts: new Date().toISOString(),
@@ -7256,9 +7454,12 @@ async function buildDenialRepairPayload(
       return;
     }
     if (rpcMethod === "tools/call") {
-      const reason = upstreamFailureReason(err);
-      const responseBody = JSON.stringify(rpcErrorResponse(requestId, "KTX upstream unavailable", reason));
-      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      const draining = readWait.waited && ["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase());
+      const reason = draining ? SERVICE_DRAINING : upstreamFailureReason(err);
+      const responseBody = draining
+        ? JSON.stringify({ ok: false, error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE } })
+        : JSON.stringify(rpcErrorResponse(requestId, "KTX upstream unavailable", upstreamFailureReason(err)));
+      res.writeHead(draining ? 503 : 200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
 
       let sourceRefs: SourceRef[] = [];
@@ -7278,6 +7479,7 @@ async function buildDenialRepairPayload(
         argsSummary,
         ...queryMeta,
         outcome: "error",
+        ...(draining ? { decisionReason: SERVICE_DRAINING } : {}),
         errorDetail: `${reason}:${err instanceof Error ? err.message : String(err)}`,
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
@@ -8028,9 +8230,21 @@ export function buildProxy(options: BuildProxyOptions = {}) {
     const phase = getProcessLifecyclePhase();
     if ((work && !work.ok) || phase === "DRAINING" || phase === "STOPPING" || phase === "STOPPED") {
       res.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" });
-      res.end(JSON.stringify({ ok: false, error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE } }));
+      const denied = work && !work.ok ? work.error : null;
+      res.end(JSON.stringify({ ok: false, error: {
+        code: denied?.code ?? SERVICE_DRAINING, message: denied?.message ?? SERVICE_DRAINING_MESSAGE,
+        ...(denied && "requestId" in denied ? { requestId: denied.requestId, deadlineAt: denied.deadlineAt, rejectedAt: denied.rejectedAt } : {})
+      } }));
       return;
     }
+    const idleReloadError = req.method === "GET" ? mcpReloadAdmissionError() : null;
+    if (idleReloadError) {
+      res.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" });
+      res.end(JSON.stringify({ ok: false, error: { code: idleReloadError.code, message: idleReloadError.message,
+        requestId: idleReloadError.requestId, deadlineAt: idleReloadError.deadlineAt, rejectedAt: idleReloadError.rejectedAt } }));
+      return;
+    }
+    const readWait = createSemanticReadWaitContext(req, res, "");
     const handle = async () => {
     try {
       // 宿主 attested 确认：非 tools/call，先于 MCP 准入信封校验。
@@ -8043,6 +8257,7 @@ export function buildProxy(options: BuildProxyOptions = {}) {
       // 入口身份在**准入之前**分配：operation_id / attempt_id / ingress_event_id
       // 同时分配（D3）。被拒绝的请求也有 attempt_id，只是 execution=not_executed。
       const ingress = allocateIngressIdentity({ endpointId: "mcp-http", operationPrefix: "mcp" });
+      readWait.ingressId = ingress.operationId;
       const admitted = await admitMcpRequest(req, res, ADMISSION_AUDIT, {
         skillsPassthroughEnabled,
         readBody,
@@ -8105,6 +8320,7 @@ export function buildProxy(options: BuildProxyOptions = {}) {
         requestId: shape.requestId,
         isCurrent: () => barrier.isCurrent(),
         config: options.responseCommit,
+        onWorkRegistered: trackMcpResponseCommit,
         onSettled: options.onOperationSettled
       });
       if (!gated) return;
@@ -8112,7 +8328,7 @@ export function buildProxy(options: BuildProxyOptions = {}) {
         if (admitted.route === "skills") {
           await handleSkillsPassthrough(req, res, admitted);
         } else if (req.method === "POST") {
-          await handlePost(req, res, admitted);
+          await handlePost(req, res, admitted, readWait);
         } else {
           await handlePassthrough(req, res, admitted);
         }
@@ -8126,8 +8342,10 @@ export function buildProxy(options: BuildProxyOptions = {}) {
       }
     }
     };
-    if (work?.ok) await work.run(handle);
-    else await handle();
+    try {
+      if (work?.ok) await work.run(handle);
+      else await handle();
+    } finally { readWait.close(); }
   });
 
   return { server, host, port };

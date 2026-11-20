@@ -400,6 +400,14 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | API Staging 接入准入（一期 · **计划支持**，暂不开发） | `docs/specs/api-staging-admission-spec.md` |
 | Spec 审计与整改 | `inbox/spec-audit-2026-06-21.md`、`inbox/spec-remediation-plan-2026-06-21.md` |
 
+### 热重载在途保护增量（P1-69）
+
+[Spec](../specs/lucy-20261120-runtime-reload-drain-spec.md) · [Plan](../plans/lucy-20261120-runtime-reload-drain-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md)。v0.1。Codex CLI终稿确权通过；开发授权已获得；实现已落地，组件与真实shell回归通过；候选6本机Docker排空／拒绝／恢复及直接CLI定向已验证，完整F69矩阵仍有缺口；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。
+
+### P1-70／REQ-030-091：正常语义写入期间MCP读取有界等待
+
+v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得；功能合同收口（本机自动化与真实Docker）；远端CI未执行；30分钟组合结果独立登记；不入核心分母；≠ 整套UAT PASS；≠ 可上线。 [Spec](../specs/lucy-20261120-semantic-read-write-settle-spec.md) · [Plan](../plans/lucy-20261120-semantic-read-write-settle-plan.md) · [测试台](../qa/uat/INDEX.md)。现行D3拒绝真实在写资产的义务保留，新增真实活跃owner有界等待须先终稿确权。
+
 ## 10. 当前整改优先级
 
 1. ✅ 2026-06-22 P0-1 Admin Role-First 已闭环；访问权限升级见 `docs/access-control/design-upgrade.md` v1.1.2 与 `docs/access-control/plans/wo-202608-59-access-control-p0.md`。

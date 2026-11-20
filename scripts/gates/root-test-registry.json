@@ -24,6 +24,46 @@
       "reason": "Fails at 3d1a01a1 (T08a.2 perf-baseline script smoke). Pre-existing failure outside dcb08cf0; it needs its own review, not a CI-restoration change."
     },
     {
+      "path": "scripts/concepts/__tests__/model.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/concepts/__tests__/model.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "FDE remediation 20261119: registering previously untracked root test (concepts model)."
+    },
+    {
+      "path": "scripts/concepts/__tests__/sc-gaps.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/concepts/__tests__/sc-gaps.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "FDE remediation 20261119: registering previously untracked root test (concepts sc-gaps)."
+    },
+    {
+      "path": "scripts/concepts/__tests__/scan.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/concepts/__tests__/scan.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "FDE remediation 20261119: registering previously untracked root test (concepts scan)."
+    },
+    {
+      "path": "scripts/concepts/__tests__/store.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/concepts/__tests__/store.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "FDE remediation 20261119: registering previously untracked root test (concepts store)."
+    },
+    {
       "path": "scripts/deploy/probe-customer-auth-state.test.mjs",
       "runner": "node --test",
       "environment": "customer-instance",
@@ -374,6 +414,26 @@
       "reason": null
     },
     {
+      "path": "scripts/e2e/__tests__/rds-dataplane-gates.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/rds-dataplane-gates.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/rds-dataplane-policy.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/rds-dataplane-policy.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
       "path": "scripts/e2e/__tests__/real-browser-source-guard.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",
@@ -424,36 +484,6 @@
       "reason": null
     },
     {
-      "path": "scripts/e2e/__tests__/rds-dataplane-gates.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/e2e/__tests__/rds-dataplane-gates.test.mjs",
-      "gate": "k8s-static",
-      "gateCommand": "npm run test:e2e-harness",
-      "reason": null
-    },
-    {
-      "path": "scripts/e2e/__tests__/rds-dataplane-policy.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/e2e/__tests__/rds-dataplane-policy.test.mjs",
-      "gate": "k8s-static",
-      "gateCommand": "npm run test:e2e-harness",
-      "reason": null
-    },
-    {
-      "path": "scripts/e2e/__tests__/run-security-sec11-dataplane.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/e2e/__tests__/run-security-sec11-dataplane.test.mjs",
-      "gate": "k8s-static",
-      "gateCommand": "npm run test:e2e-harness",
-      "reason": null
-    },
-    {
       "path": "scripts/e2e/__tests__/row-policy-readonly-gold.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",
@@ -479,6 +509,16 @@
       "environment": "deterministic",
       "sideEffects": "writes only under a temporary directory",
       "command": "node --test scripts/e2e/__tests__/run-security-observer-wiring.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/run-security-sec11-dataplane.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/run-security-sec11-dataplane.test.mjs",
       "gate": "k8s-static",
       "gateCommand": "npm run test:e2e-harness",
       "reason": null
@@ -904,11 +944,31 @@
       "reason": null
     },
     {
+      "path": "scripts/runtime/ktx-reload-deadline.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "spawns and terminates only task-owned local shell children under a temporary directory",
+      "command": "node --test scripts/runtime/ktx-reload-deadline.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run smoke:p0:docker-entrypoint:test",
+      "reason": null
+    },
+    {
       "path": "scripts/runtime/patch-ktx-notion-client-cjs.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",
       "sideEffects": "writes only under a temporary directory",
       "command": "node --test scripts/runtime/patch-ktx-notion-client-cjs.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/runtime/process-drain.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads entrypoint/compose and runs only local shell fixtures under temporary directories",
+      "command": "node --test scripts/runtime/process-drain.test.mjs",
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
@@ -952,16 +1012,6 @@
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
-    },
-    {
-      "path": "scripts/smoke/lucy-runtime-build-context.test.mjs",
-      "runner": "node --test",
-      "environment": "docker",
-      "sideEffects": "drives a real docker build in a temporary context and reads the Docker daemon",
-      "command": "node --test scripts/smoke/lucy-runtime-build-context.test.mjs",
-      "gate": null,
-      "gateCommand": null,
-      "reason": "The daily contract job provides no Docker daemon, and this test runs a real `docker build` to prove the customer image build context is really trimmed. It belongs to the docker-smoke layer (wired into the docker-smoke CI job), not to the daily contract layer."
     },
     {
       "path": "scripts/smoke/lucy-r1-doris-smoke.test.mjs",
@@ -1032,6 +1082,26 @@
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
+    },
+    {
+      "path": "scripts/smoke/lucy-runtime-build-context.test.mjs",
+      "runner": "node --test",
+      "environment": "docker",
+      "sideEffects": "drives a real docker build in a temporary context and reads the Docker daemon",
+      "command": "node --test scripts/smoke/lucy-runtime-build-context.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "The daily contract job provides no Docker daemon, and this test runs a real `docker build` to prove the customer image build context is really trimmed. It belongs to the docker-smoke layer (wired into the docker-smoke CI job), not to the daily contract layer."
+    },
+    {
+      "path": "scripts/smoke/mcp-client-config-guard.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/smoke/mcp-client-config-guard.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "FDE remediation 20261119: registering previously untracked root test (mcp-client-config-guard)."
     },
     {
       "path": "scripts/smoke/p1-agent-e2e-local-hermes.test.mjs",
@@ -1124,11 +1194,51 @@
       "reason": "Needs the webui native addon (better-sqlite3) built for the running Node. The daily contract job installs the root dependencies only; the webui entry point (webui npm run verify:test) stays the owner of this check."
     },
     {
+      "path": "scripts/uat/agent-roster-summary-oracle.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "pure synthetic in-memory oracle assertions; no Docker, network or runtime data",
+      "command": "node --test scripts/uat/agent-roster-summary-oracle.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/large-schema-ingestion-ls24.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/uat/large-schema-ingestion-ls24.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "FDE remediation 20261119 P1-34 LS-24: UAT runner judgment function (extracted, testable). Not in workflow-contracts gate (needs webui build context)."
+    },
+    {
+      "path": "scripts/uat/lib/mcp-ux-metrics.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/uat/lib/mcp-ux-metrics.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "FDE remediation 20261119: registering previously untracked root test (mcp-ux-metrics)."
+    },
+    {
       "path": "scripts/uat/mcp-session-regression.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",
       "sideEffects": "writes only under a temporary directory",
       "command": "node --test scripts/uat/mcp-session-regression.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/wiki-mcp-assertions.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "pure synthetic MCP assertion tests; no network or runtime data",
+      "command": "node --test scripts/uat/wiki-mcp-assertions.test.mjs",
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
@@ -1152,76 +1262,6 @@
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
-    },
-    {
-      "path": "scripts/concepts/__tests__/model.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/concepts/__tests__/model.test.mjs",
-      "gate": null,
-      "gateCommand": null,
-      "reason": "FDE remediation 20261119: registering previously untracked root test (concepts model)."
-    },
-    {
-      "path": "scripts/concepts/__tests__/sc-gaps.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/concepts/__tests__/sc-gaps.test.mjs",
-      "gate": null,
-      "gateCommand": null,
-      "reason": "FDE remediation 20261119: registering previously untracked root test (concepts sc-gaps)."
-    },
-    {
-      "path": "scripts/concepts/__tests__/scan.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/concepts/__tests__/scan.test.mjs",
-      "gate": null,
-      "gateCommand": null,
-      "reason": "FDE remediation 20261119: registering previously untracked root test (concepts scan)."
-    },
-    {
-      "path": "scripts/concepts/__tests__/store.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/concepts/__tests__/store.test.mjs",
-      "gate": null,
-      "gateCommand": null,
-      "reason": "FDE remediation 20261119: registering previously untracked root test (concepts store)."
-    },
-    {
-      "path": "scripts/smoke/mcp-client-config-guard.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/smoke/mcp-client-config-guard.test.mjs",
-      "gate": null,
-      "gateCommand": null,
-      "reason": "FDE remediation 20261119: registering previously untracked root test (mcp-client-config-guard)."
-    },
-    {
-      "path": "scripts/uat/lib/mcp-ux-metrics.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/uat/lib/mcp-ux-metrics.test.mjs",
-      "gate": null,
-      "gateCommand": null,
-      "reason": "FDE remediation 20261119: registering previously untracked root test (mcp-ux-metrics)."
-    },
-    {
-      "path": "scripts/uat/large-schema-ingestion-ls24.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/uat/large-schema-ingestion-ls24.test.mjs",
-      "gate": null,
-      "gateCommand": null,
-      "reason": "FDE remediation 20261119 P1-34 LS-24: UAT runner judgment function (extracted, testable). Not in workflow-contracts gate (needs webui build context)."
     }
   ]
 }

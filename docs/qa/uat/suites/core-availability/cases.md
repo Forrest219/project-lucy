@@ -75,3 +75,67 @@ R-CAV为新补充剧本，P1-13负责人在候选验证计划中具名选择并�
 ## R-CAV-FDE-1883收敛映射（2026-11-20）
 
 [正式跑次](runs/2026-11-20-codex-fde-1883-soak.md)按用户59分45秒止测：1883-01局部PASS WITH GAP（规模／合法入口，原2h及速率缺口）；02 FAIL（12次提交重载、8次完整恢复、4次预算503）；03 PASS WITH GAP（真实维护重叠，最终全量核验超时）；04 FAIL（业务503／HTTP超时及长尾，采样影响分列）；05 NOT RUN（用户收敛取消后置控制）。完整矩阵不改PASS，后续18b63d01预算修复未在本候选，不重复打回其独立验收。
+
+
+## F69：配置热重载在途保护与统一截止
+
+P1-69／REQ-030-090：[功能合同](../../../../specs/lucy-20261120-runtime-reload-drain-spec.md)。当前NOT RUN；不改既有F61／F62／F63及R-CAV结论。
+
+# CA-03：功能SC与真实验收矩阵
+
+状态：设计完成，全部新SC **NOT RUN**；基线7dded5478a05e256aa23d33567b49beb3820ec3b。SC编号属于拟议新功能合同，须M正式登记后才能消费；FUP-04／05只作工程包汇总。默认Docker单实例／纯MCP合法Token，无WebUI Cookie／person／宿主attestation。
+
+| 编号 | 反例／约束生效 | 合法用户／恢复证明 | 必须证据／归属 |
+|---|---|---|---|
+| SC-01 | 屏障关闭与新RPC并发≥100次，无屏障后的新upstream受理；业务不自动重放 | 屏障前真实10秒查询在授权仍有效条件下只执行一次且结果4／100 | 组件竞态＋真实HTTP/MCP／MySQL sleep已受理标记；原P1-63登记基础不替代本条 |
+| SC-02 | 活跃RPC客户端断开、handler启动后抛错、durable response gate未结束时不能提前退票 | 实际upstream与response gate结束后才允许stop；闲置GET/SSE不阻止切换 | 真实句柄／HTTP流回归＋KTX stop时间线，组件测试补边角 |
+| SC-03 | 切换新RPC明确HTTP503 EXECUTION_RUNTIME_RELOADING且无数据执行／预算消耗；不设置假恢复时刻 | 同一合法Token无需WebUI可重新initialize→tools/list→原只读问题4／100；吊销者仍拒绝 | 原始MCP回执／预算前后事实／唯一执行计数；所有拒绝保留失败分母 |
+| SC-04 | 超过20秒仍有真实RPC：stop请求与KTX PID变化均为0，不能用全局HTTP计数自等 | 旧查询按原合同终结；配置未加载保持stale；原owner可随后显式重载并恢复 | 有限>20秒真实任务、实际PID／通道未发、caller失败＋工作终态分列；不延长查询预算 |
+| SC-05 | 总60秒从入口计，直接链排队／前置／drain／stop+端口／start／verify均消费同deadline；各段无重置 | 正常10秒任务＋正常start/verify可完成，轻载probe原预算不退化 | 短override组件截止＋真实默认上界测量；实际子进程close/exit证明；caller超时不能当owner停止 |
+| SC-06 | 截止后未消费请求不能迟到stop/start；已消费未真实结束不得释放slot／屏障或再发第二次 | 原requestId真实终态确认后有界撤自己的屏障，原身份恢复；旧回执不得完成新请求 | supervisor真实过期请求、late receipt／busy状态／启动计数；同digest与不同digest均覆盖 |
+| SC-07 | 收紧／吊销发生于drain、upstream或response阶段，旧权威代次不能放行 | 未受收紧影响的合法身份仍可恢复原问题；被吊销身份始终拒绝 | 原authorization sequence／response barrier回归＋真实MCP两身份对照 |
+| SC-08 | 在drain、stop/start、verify阶段与TERM竞争，TERM后无新reload、无重开SERVING | 原P1-63 drain-first、20／40／45秒预算和重启原卷恢复仍成立 | 实际TERM、Node/KTX PID、退出码及新RPC拒绝；≥3类阶段交错；TERM旧跑次不能代签 |
+| SC-09 | 存储不可用、启动失败、核验失败、磁盘digest变化都不伪报current／success、不回滚已保存配置 | 修复路径后同一合法身份重新连接成交；未知写结果按既有回执处理，禁止自动重放 | 进程事实／requestedActualCurrent digest／配置核验分列，原P1-64 ack语义回归 |
+| SC-10 | 手动相同digest仍发真实重载；自动重载不能凭无关旧证据吞请求；并发均使用原single-flight | 有效自动写保存与显式重载后新短名读取及普通查询正确；12轮正式周期另归FUP-01 | 自动与手动、同／不同digest、旧会话失效后同身份新会话的真实回执 |
+| SC-11 | 无supervisor时自动CLI兜底有相同排空／deadline；显式API仍unsupported且无副作用；能力存在但失败不绕到CLI | 直接模式正常短在途、新准入拒绝和同身份恢复通过 | 直接CLI真实process／HTTP测试＋supervisor Docker对照；TCP成功不能代替配置证据 |
+| SC-12 | 所有失败／拒绝／超时／截尾及真实执行中状态有完整记录；组件绿不可冒充真实跑次 | 每个↓补偿都有相同身份／相同问题恢复证据，原FAIL保留 | run记录、原始JSONL、hash、镜像／工具身份、SC逐项判定；未跑标NOT RUN |
+
+## 建议复用的组件回归
+
+在隔离工作树执行：
+
+```sh
+cd webui
+npx vitest run --maxWorkers=1 server/__tests__/ktx-mcp-reload.test.ts server/__tests__/mcp-runtime-reload.test.ts server/__tests__/source-shortname-runtime-ack.test.ts server/__tests__/mcp-proxy-execution-stale.test.ts server/__tests__/process-drain.test.ts
+```
+
+按实现增补MCP-specific barrier／实settle与deadline反例，放既有测试文件或经M允许新增`server/__tests__/mcp-reload-inflight.test.ts`，不批量重写无关测试。
+
+```sh
+node --test scripts/runtime/docker-entrypoint.test.mjs
+npm --prefix webui run typecheck
+```
+
+supervisor截止／过期请求测试应使用真实shell＋可控stub child证明实际终止和无迟到重启；这仍是进程合同组件证据，不能充真实KTX Docker UAT。
+
+## 真实Docker最小跑次序列
+
+1. 正常在途10秒＋自动启用表保存：等数据库实际sleep受理后发保存，原RPC只执行一次、结果正确；保存有真实PID变化／回执和配置核验。
+2. 同样在途＋显式手动重载；再发同digest手动重载，必须有独立requestId／实际重启。
+3. >20秒实际在途＋重载：排空失败且不停止KTX；原查询依原预算真实终结，之后显式重载成功。
+4. 切换窗新纯MCP请求返回结构化503，然后同一Token新会话重试原合法问题；保留拒绝次数与耗时。
+5. 吊销身份／缩权与reload交错：旧权限不成交；未受影响身份仍恢复。
+6. 真实存储／配置失败、KTX启动失败与核验失败分别留caller结果和actual owner终态；修复后同进程／同卷恢复。
+7. 三阶段TERM竞争：排空、启动、核验。证明不会用reload finally重新开放，随后同卷启动原任务恢复。
+8. 直接模式真实进程合同对照，supervisor过期请求／迟到回执另测。所有镜像与运行代码hash匹配同候选。
+
+1883表3600秒12完整周期、固定到达吞吐／探针重档、审计完整闭包及诊断FIFO只恢复路径归CA-08／FUP-01–06；该组合跑次不是单条功能合同全部出口的替代品。
+
+## 浏览器触发判据
+
+若本实现仅新增MCP服务器503与内部生命周期、页面／保存反馈完全未改，不强制浏览器。若修改TableWhitelist、CreateConnectionDrawer、Toast、错误交互或新的reload状态可见字段，必须真实前台浏览器＋导航/primaryReady和保存动作即时计时，与API耗时分列；缺失就不能签相应用户可见面PASS。移动窄屏不在本轮范围。
+
+
+## F70：正常语义写入有界等待（NOT RUN）
+
+[Spec](../../../../specs/lucy-20261120-semantic-read-write-settle-spec.md) SC-01–08：真实写／镜像阶段等待与首次执行；固定20秒及原剩余截止；孤儿／失败关闭和同身份恢复；files_saved阶段准确性；ACL／代次复核；TERM／断连／reload无自等；后继owner不延长；1883表短校准后30分钟12周期。用真实文件/WAL、实际owner和实际SQL／预算／审计核对；组件绿不代签Docker或完整矩阵。

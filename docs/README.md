@@ -327,3 +327,17 @@
 | [prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md](prompts/lucy-20261101-agent-admin-high-priv-copy-ux-reviewer-prompt.md) | Agent 管理台高权限呈现的审阅者交付提示词 |
 
 - [UAT：Wiki／Skill 真读真用＋ACL（P1-30）](design/design-2026-11-15-uat-context-content-wiki-skill.md)
+
+
+## 热重载在途保护（2026-11-20）
+
+| 文档 | 现值 |
+|---|---|
+| [热重载在途保护 Spec](specs/lucy-20261120-runtime-reload-drain-spec.md) | P1-69／REQ-030-090；v0.1。Codex CLI终稿确权通过；开发授权已获得；实现已落地，组件与真实shell回归通过；候选6本机Docker排空／拒绝／恢复及直接CLI定向已验证，完整F69矩阵仍有缺口；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
+
+
+## 正常语义写入与并发查询（2026-11-20）
+
+| 文档 | 现值 |
+|---|---|
+| [语义写入期间读取等待 Spec](specs/lucy-20261120-semantic-read-write-settle-spec.md) | P1-70／REQ-030-091；v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得；功能合同收口（本机自动化与真实Docker）；远端CI未执行；30分钟组合结果独立登记；不入核心分母；≠ 整套UAT PASS；≠ 可上线。 |

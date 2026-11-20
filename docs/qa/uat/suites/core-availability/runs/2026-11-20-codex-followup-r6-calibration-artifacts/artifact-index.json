@@ -1,0 +1,59 @@
+{
+  "scope": "Exact small metadata copies plus full raw archives migrated by M; original summaries/status unchanged",
+  "copied": [
+    {
+      "file": "summary.json",
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r6-contract/summary.json",
+      "bytes": 49247,
+      "sha256": "e3fc70e1b7805818c54a8cce1299363b24348480d8d128dbc8f08b8dc111f8d0",
+      "exactBytes": true
+    },
+    {
+      "file": "source-freeze.json",
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r6-contract/source-freeze.json",
+      "bytes": 456,
+      "sha256": "b806eea3ae297dba4b1856724578b77653c517430fc45511cacad03dcd27d06a",
+      "exactBytes": true
+    },
+    {
+      "file": "audit-evidence.json",
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r6-contract/audit-evidence.json",
+      "bytes": 631,
+      "sha256": "9479b40eec212dc5563a6c6737279006249f0df0fe95b3745f268eeee24addc7",
+      "exactBytes": true
+    },
+    {
+      "file": "independent-review.json",
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/09-review/calibration-r6-independent.json",
+      "bytes": 56672,
+      "sha256": "65e689898d490823c7a06a12be3126927dd591f7a1e152813a2b62bca14dd1a9",
+      "exactBytes": true
+    },
+    {
+      "file": "independent-review.log",
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/09-review/calibration-r6-independent.log",
+      "bytes": 152,
+      "sha256": "90be2cb83d12891747bf6a3b0fd4cfbdbb5b42b58d020d016c254b69396d4634",
+      "exactBytes": true
+    }
+  ],
+  "largeRawAndSqlCopied": true,
+  "fullEvidenceMigration": "Completed by M: full raw-evidence.tar.gz archived; r6 also retains audit-evidence.sqlite.gz. This metadata update did not read or rehash large archives.",
+  "originalRawSource": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r6-contract",
+  "archivedEvidence": [
+    {
+      "file": "raw-evidence.tar.gz",
+      "bytes": 1657388,
+      "sha256": "1e78658511478b540081c0b067f914e10a0e9657def77f55011e10712a90cb91",
+      "archivedBy": "M",
+      "hashProvenance": "Existing M-generated files.sha256; no archive payload read/rehashed by this text update"
+    },
+    {
+      "file": "audit-evidence.sqlite.gz",
+      "bytes": 79533330,
+      "sha256": "e2378d2b420dec546937ab20e77748336253a2f3ac67605da205aa2079df0227",
+      "archivedBy": "M",
+      "hashProvenance": "Existing M-generated files.sha256; no archive payload read/rehashed by this text update"
+    }
+  ]
+}

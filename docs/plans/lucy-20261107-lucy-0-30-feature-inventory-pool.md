@@ -305,6 +305,8 @@
 
 | 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 核心分母 | 跟进状态 | Spec／Plan |
 |---|---|---|---|---|---|---|---|
+| P1-69 | P1（可用性差集） | MCP执行层热重载在途保护与统一截止 | REQ-030-090 | 热重载生命周期／Spec191增量 | 否 | v0.1。Codex CLI终稿确权通过；开发授权已获得；实现已落地，组件与真实shell回归通过；候选6本机Docker排空／拒绝／恢复及直接CLI定向已验证，完整F69矩阵仍有缺口；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 | [Spec](../specs/lucy-20261120-runtime-reload-drain-spec.md) · [Plan](lucy-20261120-runtime-reload-drain-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
+| P1-70 | P1（可用性差集） | 正常语义写入期间MCP读取有界等待 | REQ-030-091 | 语义发布／恢复屏障增量 | 否 | v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得；功能合同收口（本机自动化与真实Docker）；远端CI未执行；30分钟组合结果独立登记；不入核心分母；≠ 整套UAT PASS；≠ 可上线。 | [Spec](../specs/lucy-20261120-semantic-read-write-settle-spec.md) · [Plan](lucy-20261120-semantic-read-write-settle-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-68 | P1（运行观察；建议） | 运维步骤账（Lucy 运维与 IT 运维） | REQ-030-089 | 运行观察／步骤可定位 | 否 | v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan／UAT 设计；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 | [Spec](../specs/lucy-20261120-ops-step-journal-spec.md) · [Plan](lucy-20261120-ops-step-journal-plan.md) · [UAT](../qa/uat/suites/ops-step/suite.md) |
 | P1-66 | P1（性能差集；建议） | Agent 名册摘要投影与单对象详情按需读取 | REQ-030-087 | P1-58 续作／治理读路径／兼容 | 否 | v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 | [Spec](../specs/lucy-20261120-agent-roster-summary-projection-spec.md) · [Plan](lucy-20261120-agent-roster-summary-projection-plan.md) · [UAT](../qa/uat/suites/agent-roster-summary/suite.md) |
 | P1-67 | P1（测试基建；建议） | 用户旅程性能门禁（API／WebUI 交互／MCP 问询） | REQ-030-088 | 系统性能测试／CI 门禁／部署对账 | 否 | v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan 设计；终稿未确权；开发未授权；测试台未建；不入核心分母；≠ 功能收口；≠ 可上线。 | [Spec](../specs/lucy-20261120-user-journey-performance-gate-spec.md) · [Plan](lucy-20261120-user-journey-performance-gate-plan.md) |
@@ -819,3 +821,19 @@ P1-60完整R补记：N性能采样的预算持久化SQLITE_BUSY已在独立真SQ
 委托人批准本次已完成修复合入lucy-v0.30并复跑现有测试；[后续Plan](lucy-20261120-core-availability-followup-plan.md)放下次开发，本轮不执行Task0–4。保留现有预算／短名修复，整合诊断实际取消及MCP／Node PID排空；只纳入已完成范围，不带入其他任务暂存。不push／发布／改客户环境，验证通过也不代签完整F61／F62／F63或客户根因。
 
 本次合入复验记录：[0.30既有修复复测](../qa/uat/suites/core-availability/runs/2026-11-20-codex-availability-merge-recheck.md)，源码d978f4df、镜像8baa62dc；44项Vitest／32项Node／类型0错，实际I/O恢复与三轮TERM均局部PASS WITH GAP；不签完整矩阵或用户更新。后续开发继续延期。
+
+
+### 核心可用性后续工作包开工（2026-11-20）
+
+委托人本轮明确“批准执行”已审阅的[多agent任务单](lucy-20261120-core-availability-followup-plan.md)，解除上节历史延期。复用既有REQ／P1合同，先冻结7dded547基线、工具整改、预算复验与重载合同差集；热点只按确证反例实施，新增热重载语义先入REQ／SOT并终稿确权。执行中不借局部证据签整套UAT，不commit／push／发布／改客户环境。
+
+核心可用性工程接线差集：本轮给新增deadline回归接入既有入口时，root-test-registry门禁发现原7dded547已漏登process-drain、agent-roster-summary-oracle、wiki-mcp-assertions三个已跟踪测试，原基线失败日志保留。本轮仅补其deterministic注册并复用既有workflow-contracts命令，不改这些测试或对应产品实现，不扩大P1-66暂停范围／P1-67性能门禁范围，不新增CI job。
+
+本轮发现时差集（历史；当时待合同／授权，后续授权与现值见下方P1-70）：[候选4短校准](../qa/uat/suites/core-availability/runs/2026-11-20-codex-followup-r4-calibration.md)独立证据VALID但严格FAIL。7次热重载拒绝和同身份恢复闭包已证；另1次正常Manifest写入期间查询触发现行D3的semantic_recovery_required，未豁免。若增加真实活跃发布所有者的有界等待读语义，须按后续Plan CA-03式流程明确预算、TERM／ACL／无业务重放及孤儿日志仍关闭的合同，再获该增量开发授权；不把已批准热重载保护或纯热点优化视为该新增语义的授权。正式30分钟尚未执行，其他已批准独立矩阵继续。
+
+
+上述语义写入差集已获委托人本轮明示“批准补充合同并修复”，正式落P1-70／REQ-030-091；该条Spec头部是现值事实源，先终稿确权再实施。原有P1-69与其他已收口功能不倒退，旧FAIL保持。
+
+CA-01验证工具差集：真实D4-start夹具在产品启动故障注入之前，因MySQL临时初始化socket的ping误判最终数据库就绪而失败，原FAIL保留；隔离v4以同一原绝对就绪预算内的TCP只读SELECT1验证后，从头实测启动失败／恢复通过。主控据此扩工具白名单至共享`verify-begin-zero-binding.py`原DB就绪轮询，最小改为最终TCP实际查询就绪，保留原截止、不重放CREATE或业务SQL，不修改产品逻辑。旧候选／旧driver与FAIL均不回写，新候选冻结独立helper hash。
+
+CA-01正确性判定器差集：独立审计发现原query oracle对返回数值排序后比4／100，不能区分列值倒置；已读真实原始样本列名与值均正确，不能据此把它们改判为产品失败。最终工具须按headers／命名键绑定order_count与amount_sum，共享夹具与soak口径一致；独立09审计器另行实现以保留独立性。新增倒置、错／缺／重复列与额外值负例，保留原各版本和报告，不扩大性能／正确性阈值或新增产品功能。

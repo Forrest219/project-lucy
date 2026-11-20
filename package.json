@@ -64,7 +64,7 @@
     "gate:k8s-upgrade": "bash scripts/gates/k8s-upgrade-gate.sh",
     "gate:k8s-release": "bash scripts/gates/k8s-release-gate.sh",
     "gate:k8s-acceptance": "bash scripts/gates/k8s-acceptance.sh",
-    "smoke:p0:docker-entrypoint:test": "node --test scripts/runtime/docker-entrypoint.test.mjs",
+    "smoke:p0:docker-entrypoint:test": "node --test scripts/runtime/docker-entrypoint.test.mjs scripts/runtime/ktx-reload-deadline.test.mjs",
     "smoke:p0:docker-healthcheck:test": "node --test scripts/runtime/docker-healthcheck.test.mjs",
     "smoke:p0:access-template:test": "node --test scripts/smoke/access-template-question-tool.test.mjs",
     "test:k8s-delivery-package": "node --test scripts/gates/build-k8s-delivery-package.test.mjs",

@@ -6,8 +6,8 @@
 | 总账 / REQ | P1-61／REQ-030-082；P1-62／REQ-030-083；P1-63／REQ-030-084 |
 | 功能合同 | [轻探针](../../../../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) · [重任务容量](../../../../specs/lucy-20261119-heavy-work-capacity-control-spec.md) · [关停排空](../../../../specs/lucy-20261119-process-drain-lifecycle-spec.md) |
 | Plan | [P1-61](../../../../plans/lucy-20261119-memory-probe-diagnostics-isolation-plan.md) · [P1-62](../../../../plans/lucy-20261119-heavy-work-capacity-control-plan.md) · [P1-63](../../../../plans/lucy-20261119-process-drain-lifecycle-plan.md) |
-| 用例 / 夹具 / 跑次 | [cases](cases.md) · [fixtures](fixtures.md) · [最新修复跑次](runs/2026-11-20-codex-readyz-diagnostic-repair.md) · [首轮反例](runs/2026-11-20-codex-readyz-diagnostic-repro.md) |
-| 当前判定 | F61目标缺口局部PASS WITH GAP（真实停止／自动恢复）；F63目标缺口局部PASS WITH GAP（MCP登记／实际Node PID等待，三轮TERM）；F62仅导出局部PASS WITH GAP；完整矩阵未完成；R-CAV NOT RUN |
+| 用例 / 夹具 / 跑次 | [cases](cases.md) · [fixtures](fixtures.md) · [最新组合跑次](runs/2026-11-20-codex-followup-r6-1800.md) · [历史修复](runs/2026-11-20-codex-readyz-diagnostic-repair.md) · [首轮反例](runs/2026-11-20-codex-readyz-diagnostic-repro.md) |
+| 当前判定 | 最新r6组合独立严格FAIL／证据VALID（在线审计进度1超时＋2漏采）；业务、性能、32原身份恢复和完整审计闭包通过。旧F61／F63目标缺口、F62导出局部PASS WITH GAP保留；完整矩阵／R-CAV／发布未签 |
 
 ## 真实性与授权
 
@@ -84,4 +84,22 @@
 
 ## 0.30本轮合入复测
 
-[整合候选复测](runs/2026-11-20-codex-availability-merge-recheck.md)局部PASS WITH GAP；同一最终镜像复验真实诊断执行上界、120秒探针、两轮仅恢复路径自动fresh，以及正常／故障三轮真实MCP查询TERM和原卷恢复。原1883表FAIL及完整矩阵GAP保留。[后续Plan](../../../../plans/lucy-20261120-core-availability-followup-plan.md)明确下次开发，本次不实施新热点／热重载整改。
+[整合候选复测](runs/2026-11-20-codex-availability-merge-recheck.md)局部PASS WITH GAP；同一最终镜像复验真实诊断执行上界、120秒探针、两轮仅恢复路径自动fresh，以及正常／故障三轮真实MCP查询TERM和原卷恢复。原1883表FAIL及完整矩阵GAP保留。当时[后续Plan](../../../../plans/lucy-20261120-core-availability-followup-plan.md)曾安排下次开发；委托人随后批准本轮CA-00–09及P169／170增量，现以本页最新组合跑次和各Spec现值为准，不改写该历史局部结果。
+
+
+## 本轮同候选组合最新跑次
+
+[r6正式30分钟](runs/2026-11-20-codex-followup-r6-1800.md)：证据VALID／独立严格FAIL（诊断采集1超时＋2漏采）；生产者PASS WITH GAP保留。1800秒、12周期、360MCP（328成功＋32精确重载拒绝及原身份恢复）、三个探针与普通HTTP各1800正确、233481条完整审计闭包均可复核；不签完整组合PASS。另有[r5受控中止FAIL](runs/2026-11-20-codex-followup-r5-calibration.md)、[r6短校准PASS](runs/2026-11-20-codex-followup-r6-calibration.md)，均非正式长跑替代。
+
+## F69：热重载合同增量
+
+[候选4短校准](runs/2026-11-20-codex-followup-r4-calibration.md)独立证据VALID、严格组合FAIL：7次重载503均有同身份恢复／预算及唯一执行证明，另1次正常Manifest写入期间的semantic_recovery_required未豁免；该历史时点尚待明确D3与新增等待读行为的合同差集，当时正式30分钟未执行；其后已批准P1-70，现有结果见下方r6，不改写旧FAIL。
+
+[候选3短校准](runs/2026-11-20-codex-followup-r3-calibration.md)保持FAIL：7次明确重载拒绝缺少完整所有者／恢复证明，Python3.9无法解析Docker纳秒时间前缀导致采集丢弃。实际恢复未执行，不追补PASS。其他探针／HTTP／预算／审计闭合与清理局部通过；正式30分钟组合尚未通过。
+
+P1-69／REQ-030-090：[Spec](../../../../specs/lucy-20261120-runtime-reload-drain-spec.md) · [Plan](../../../../plans/lucy-20261120-runtime-reload-drain-plan.md)。v0.1。Codex CLI终稿确权通过；开发授权已获得；实现已落地，组件与真实shell回归通过；候选6本机Docker排空／拒绝／恢复及直接CLI定向已验证，完整F69矩阵仍有缺口；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 用例见cases的F69段；真实KTX、HTTP／MCP、10秒短在途、超20秒不stop、同身份恢复、授权收紧及TERM竞争必须分项，旧TERM跑次不得代签。
+
+
+## F70：正常语义写入期间MCP读取有界等待
+
+P1-70／REQ-030-091：[Spec](../../../../specs/lucy-20261120-semantic-read-write-settle-spec.md) · [Plan](../../../../plans/lucy-20261120-semantic-read-write-settle-plan.md)。v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得；功能合同收口（本机自动化与真实Docker）；远端CI未执行；30分钟组合结果独立登记；不入核心分母；≠ 整套UAT PASS；≠ 可上线。 原候选4 FAIL保留；只等待真实活跃写／镜像阶段，不等待publish最终态或reload，不自动重放业务，孤儿／损坏／失败日志仍关闭。

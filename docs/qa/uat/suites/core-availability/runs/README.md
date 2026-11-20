@@ -8,4 +8,12 @@
 
 - [2026-11-20 Codex — readyz真实I/O阻塞与恢复](2026-11-20-codex-readyz-diagnostic-repro.md)：F61局部FAIL、F62局部PASS WITH GAP、F63局部FAIL；完整矩阵未完成，R-CAV NOT RUN。
 
+- [2026-11-20 Codex — r3短校准](2026-11-20-codex-followup-r3-calibration.md)：FAIL，所有者及恢复取证不足。
+- [2026-11-20 Codex — r4短校准](2026-11-20-codex-followup-r4-calibration.md)：FAIL，发现正常语义写入期合法查询被拒绝，后立P1-70。
+- [2026-11-20 Codex — r5短校准](2026-11-20-codex-followup-r5-calibration.md)：FAIL，代码终审发现P2后中止后置取证，保留原记录。
+- [2026-11-20 Codex — r6短校准](2026-11-20-codex-followup-r6-calibration.md)：CALIBRATION PASS／独立VALID，非正式30分钟。
+- [2026-11-20 Codex — r6正式30分钟](2026-11-20-codex-followup-r6-1800.md)：独立严格FAIL／证据VALID，业务与性能及完整审计通过，诊断进度采集1超时＋2漏采保留。
+
+- [2026-11-20 Codex — r6同镜像定向](2026-11-20-codex-followup-r6-directed.md)：重载10／25与直接CLI局部通过；P170五项实测及独立SQL有效、局部功能收口；原夹具FAIL、范围外GAP及正式组合严格FAIL保留。
+
 按 `YYYY-MM-DD-<executor>-<selector>.md` 留存真实结果，记录选择器、候选/fixture身份、实际结果与原始证据；局部通过不代表整套PASS。

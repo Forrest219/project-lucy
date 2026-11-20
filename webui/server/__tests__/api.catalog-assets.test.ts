@@ -1136,3 +1136,192 @@ describe("A2 default content root (config/)", () => {
     await app.close();
   });
 });
+
+// P1-70 SC-04: the durable write phase ends before static reload/history/terminal.
+// These exercise the real upload, content mirror and recovery journal on disk.
+describe("P1-70 SC04 catalog upload durable phase", () => {
+  const payload = {
+    connectionId: "demo-mysql",
+    schema: "openclaw_db",
+    assetType: "schemaManifest" as const,
+    filename: "openclaw_db.yaml",
+    content: SAMPLE_MANIFEST
+  };
+
+  function deferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => { resolve = done; });
+    return { promise, resolve };
+  }
+
+  async function prepare() {
+    projectRoot = await makeProjectA2(baseYaml());
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    delete process.env.LUCY_CONTENT_ROOT;
+    process.env.LUCY_AUDIT_DB = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+  }
+
+  afterEach(() => {
+    vi.doUnmock("../catalog-reload");
+    vi.doUnmock("../content-mirror");
+    vi.doUnmock("../semantic-recovery-journal");
+    vi.doUnmock("../semantic-assets");
+    vi.doUnmock("node:fs/promises");
+  });
+
+  it("persists files_saved/open before deferred static reload, without claiming completed", async () => {
+    await prepare();
+    const entered = deferred();
+    const resume = deferred();
+    vi.doMock("../catalog-reload", async () => {
+      const actual = await vi.importActual<typeof import("../catalog-reload")>("../catalog-reload");
+      return { ...actual, reloadCatalog: async (...args: Parameters<typeof actual.reloadCatalog>) => {
+        entered.resolve();
+        await resume.promise;
+        return actual.reloadCatalog(...args);
+      } };
+    });
+    const { uploadCatalogAsset } = await import("../catalog-assets");
+    const journalApi = await import("../semantic-recovery-journal");
+    const pending = uploadCatalogAsset(projectRoot, payload);
+    try {
+      await entered.promise;
+      const journals = await journalApi.listOpenRecoveryJournals(projectRoot);
+      expect(journals).toHaveLength(1);
+      // Both actual surfaces must already contain the new bytes at this boundary.
+      for (const prefix of ["config/", ""]) {
+        expect(await readFile(path.join(projectRoot, prefix,
+          "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"), "utf8")).toBe(SAMPLE_MANIFEST);
+      }
+      expect(journals[0]?.phase).toBe("files_saved");
+      expect(journals[0]?.status).toBe("open");
+      expect(await journalApi.semanticRecoveryReadBlock(projectRoot, [])).toBeNull();
+      const { readSemanticAssetRelease } = await import("../semantic-assets");
+      const release = await readSemanticAssetRelease(projectRoot, journals[0]!.releaseId);
+      expect(release?.activationStatus).toBe("unconfirmed");
+    } finally {
+      resume.resolve();
+      await pending;
+    }
+  });
+
+  it("keeps files_saved/open while the actual upload history write is deferred", async () => {
+    await prepare();
+    const entered = deferred();
+    const resume = deferred();
+    vi.doMock("node:fs/promises", async () => {
+      const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+      return { ...actual, writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+        if (String(args[0]).endsWith("/catalog-asset-uploads.json")) {
+          entered.resolve();
+          await resume.promise;
+        }
+        return actual.writeFile(...args);
+      } };
+    });
+    const { uploadCatalogAsset } = await import("../catalog-assets");
+    const journalApi = await import("../semantic-recovery-journal");
+    const pending = uploadCatalogAsset(projectRoot, payload);
+    try {
+      await entered.promise;
+      const journals = await journalApi.listOpenRecoveryJournals(projectRoot);
+      expect(journals).toHaveLength(1);
+      expect(journals[0]?.phase).toBe("files_saved");
+      expect(journals[0]?.status).toBe("open");
+      expect(await journalApi.semanticRecoveryReadBlock(projectRoot, [])).toBeNull();
+    } finally {
+      resume.resolve();
+      await pending;
+    }
+  });
+
+  it.each(["mirror", "mirror-digest", "mark"] as const)(
+    "fails closed when %s fails before the saved phase is durable", async (fault) => {
+      await prepare();
+      const reload = vi.fn(async (...args: Parameters<typeof import("../catalog-reload").reloadCatalog>) => {
+        const actual = await vi.importActual<typeof import("../catalog-reload")>("../catalog-reload");
+        return actual.reloadCatalog(...args);
+      });
+      vi.doMock("../catalog-reload", async () => ({
+        ...await vi.importActual<typeof import("../catalog-reload")>("../catalog-reload"),
+        reloadCatalog: reload
+      }));
+      if (fault === "mark") {
+        vi.doMock("../semantic-recovery-journal", async () => ({
+          ...await vi.importActual<typeof import("../semantic-recovery-journal")>("../semantic-recovery-journal"),
+          markRecoveryJournalFilesSaved: async () => { throw new Error("SC04 mark persistence failure"); }
+        }));
+      } else {
+        vi.doMock("../content-mirror", async () => {
+          const actual = await vi.importActual<typeof import("../content-mirror")>("../content-mirror");
+          return { ...actual, syncContentToProjectRoot: async (...args: Parameters<typeof actual.syncContentToProjectRoot>) => {
+            const result = await actual.syncContentToProjectRoot(...args);
+            if (fault === "mirror") return { ...result, failed: 1 };
+            // A zero failure counter cannot substitute for checking actual mirror bytes.
+            await writeFile(path.join(projectRoot,
+              "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"), "tables: {}\n", "utf8");
+            return result;
+          } };
+        });
+      }
+      const { uploadCatalogAsset } = await import("../catalog-assets");
+      await expect(uploadCatalogAsset(projectRoot, payload)).rejects.toThrow();
+      expect(reload).not.toHaveBeenCalled();
+      const journalApi = await import("../semantic-recovery-journal");
+      const journals = await journalApi.listOpenRecoveryJournals(projectRoot);
+      expect(journals).toHaveLength(1);
+      expect(journals[0]?.phase).not.toBe("files_saved");
+      expect(journals[0]?.phase).not.toBe("completed");
+      expect(await journalApi.semanticRecoveryReadBlock(projectRoot, [])).not.toBeNull();
+    }
+  );
+
+  it.each(["reload", "append", "terminal"] as const)(
+    "preserves saved content and unconfirmed truth after %s failure and startup recovery", async (fault) => {
+      await prepare();
+      if (fault === "reload") {
+        vi.doMock("../catalog-reload", async () => ({
+          ...await vi.importActual<typeof import("../catalog-reload")>("../catalog-reload"),
+          reloadCatalog: async () => { throw new Error("SC04 static reload failure"); }
+        }));
+      } else if (fault === "append") {
+        vi.doMock("node:fs/promises", async () => {
+          const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+          return { ...actual, writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+            if (String(args[0]).endsWith("/catalog-asset-uploads.json")) {
+              throw new Error("SC04 upload history persistence failure");
+            }
+            return actual.writeFile(...args);
+          } };
+        });
+      } else {
+        vi.doMock("../semantic-assets", async () => ({
+          ...await vi.importActual<typeof import("../semantic-assets")>("../semantic-assets"),
+          closeContentBatch: async () => { throw new Error("SC04 terminal evidence failure"); }
+        }));
+      }
+      const { uploadCatalogAsset } = await import("../catalog-assets");
+      await expect(uploadCatalogAsset(projectRoot, payload)).rejects.toThrow(/SC04/);
+      const journalApi = await import("../semantic-recovery-journal");
+      const journals = await journalApi.listOpenRecoveryJournals(projectRoot);
+      expect(journals).toHaveLength(1);
+      expect(journals[0]?.phase).toBe("files_saved");
+      expect(journals[0]?.status).toBe("open");
+      const { readSemanticAssetRelease } = await import("../semantic-assets");
+      expect((await readSemanticAssetRelease(projectRoot, journals[0]!.releaseId))?.activationStatus)
+        .toBe("unconfirmed");
+      // Startup follows durable bytes/phase, not the previous process's Promise outcome.
+      const recovered = await journalApi.recoverPendingRecoveryJournals(projectRoot);
+      expect(recovered.recovered).toEqual([]);
+      expect(recovered.needsRepair).toEqual([]);
+      expect(recovered.activationPending).toEqual([journals[0]!.journalId]);
+      for (const prefix of ["config/", ""]) {
+        expect(await readFile(path.join(projectRoot, prefix,
+          "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"), "utf8")).toBe(SAMPLE_MANIFEST);
+      }
+      expect((await journalApi.readRecoveryJournal(projectRoot, journals[0]!.journalId))?.phase)
+        .toBe("activation_pending");
+    }
+  );
+
+});

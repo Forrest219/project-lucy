@@ -62,3 +62,9 @@
 本轮已获授权并按委托人约1h收敛，实跑59分45秒；[跑次](runs/2026-11-20-codex-fde-1883-soak.md)记录身份和校准失败。1884张真实物理表／Manifest，启用1883或1884张、每表3列4行，1882个Overlay；角色为V2显式物理表清单，配置使用正常块结构YAML。12个活跃合成MCP身份，不关闭预算或ACL；20万条约4KB合成历史审计、67历史用户，之后每轮补3000条，由默认维护器真实处理，不伪造complete或物化关联。此合成输入并非原R-CAV的20万次真实调用。
 
 自然窗原计划至少7200秒，现场失效间隔未知；本轮未跑满原计划，后置FIFO未执行，不能主张该控制通过。每300秒执行实际短名修改／保存／配置重载，观测计划与实际速率差；1Hz三探针、鉴权HTTP与计划每5秒MCP并发。2CPU／2GiB为沿用的实验档，并非已核实客户容器资源。原生inspector 100Hz与/proc约250ms采样，记录观测开销、Docker宿主其他任务噪声；不修改产品返回或全局文件系统缓存。后置60秒诊断FIFO窗只用于机制对照，与自然长跑分列。
+
+## F69局部热重载夹具补充（2026-11-20）
+
+沿现有隔离MySQL／原生卷／所需真实KTX使用自有合成数据，不读取客户连接或凭据。基础身份a聚合4／100、b受行策略限制2／30。慢查询通过自有视图仅在order_id=1触发一次真实SLEEP；须先观察MySQL User sleep，不能用固定sleep推定已受理。general_log的BLOB argument明确转UTF-8，原编码保留，实际SQL数独立于审计和RPC成功数。
+
+热重载owner使用真实requestId、deadlineAt、rejectedAt及实际acquire／release，KTX PID加startTicks识别进程；request文件事件用内核inotify观测。所有故障、SIGSTOP／端口占用／临时目录均仅针对本任务资源，有实际终态和有界清理；旧阶段日志不得代签新镜像。当前局部跑次见runs/2026-11-20-codex-followup-r2-reload.md；完整矩阵仍按合同与cases执行。

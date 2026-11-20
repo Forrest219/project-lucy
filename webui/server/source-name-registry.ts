@@ -66,10 +66,26 @@ function schemaManifestRelPath(connectionId: string, schema: string): string {
   return `${connectionId}/_schema/${schema}.yaml`;
 }
 
+// Only pure parse work is shared. Every caller still lists and reads the actual
+// files; no filesystem, permission, generation or registry identity is cached.
+// Keep strings instead of mutable table objects so each hit returns fresh data.
+// UTF-16 code units give a conservative bound on retained string storage; entry
+// count also bounds Map overhead. Larger valid inputs simply bypass this cache.
+const MANIFEST_PARSE_CACHE_ENTRIES = 8;
+const MANIFEST_PARSE_CACHE_BYTES = 2 * 1024 * 1024;
+const manifestParseCache = new Map<string, string>();
+let manifestParseCacheBytes = 0;
+
 function parseManifestTables(
   content: string,
   targetPath: string
 ): Record<string, { table: string }> {
+  const cached = manifestParseCache.get(content);
+  if (cached !== undefined) {
+    manifestParseCache.delete(content);
+    manifestParseCache.set(content, cached);
+    return JSON.parse(cached) as Record<string, { table: string }>;
+  }
   let parsed: unknown;
   try {
     parsed = parse(content);
@@ -97,6 +113,20 @@ function parseManifestTables(
     const table = (def as { table?: unknown }).table;
     if (typeof table !== "string" || !table.trim()) continue;
     tables[sourceName] = { table };
+  }
+  const serialized = JSON.stringify(tables);
+  const retainedBytes = (content.length + serialized.length) * 2;
+  if (Object.getPrototypeOf(tables) === Object.prototype
+    && retainedBytes <= MANIFEST_PARSE_CACHE_BYTES) {
+    while (manifestParseCache.size >= MANIFEST_PARSE_CACHE_ENTRIES
+      || manifestParseCacheBytes + retainedBytes > MANIFEST_PARSE_CACHE_BYTES) {
+      const oldest = manifestParseCache.entries().next().value;
+      if (!oldest) break;
+      manifestParseCache.delete(oldest[0]);
+      manifestParseCacheBytes -= (oldest[0].length + oldest[1].length) * 2;
+    }
+    manifestParseCache.set(content, serialized);
+    manifestParseCacheBytes += retainedBytes;
   }
   return tables;
 }

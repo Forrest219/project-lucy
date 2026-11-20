@@ -1,6 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExecFileException } from "node:child_process";
 import { reloadKtxMcpAfterConfigWrite, reloadKtxMcpExecutionRuntime } from "../ktx-mcp-reload";
+
+import { currentMcpReloadWindow, resetMcpReloadWorkForTests } from "../runtime/mcp-process-work.js";
+
+afterEach(() => { resetMcpReloadWorkForTests(); vi.unstubAllEnvs(); });
 
 const supervisor = vi.hoisted(() => ({
   reloadExecutionRuntime: vi.fn()
@@ -35,7 +39,8 @@ describe("reloadKtxMcpExecutionRuntime", () => {
     try {
       const result = await reloadKtxMcpExecutionRuntime("/tmp/lucy-project", {
         execFileImpl,
-        waitForReady: async () => true
+        waitForReady: async () => true,
+        verifyLoaded: async () => true
       });
 
       expect(result.status).toBe("reloaded");
@@ -67,7 +72,8 @@ describe("reloadKtxMcpExecutionRuntime", () => {
     try {
       const result = await reloadKtxMcpExecutionRuntime("/tmp/lucy-project", {
         execFileImpl,
-        waitForReady: async () => true
+        waitForReady: async () => true,
+        verifyLoaded: async () => true
       });
       expect(result.status).toBe("failed");
       expect(result.detail).toContain("not restarted");
@@ -98,7 +104,8 @@ describe("reloadKtxMcpExecutionRuntime", () => {
       // (write-path falls through here when capability is unsupported).
       const result = await reloadKtxMcpExecutionRuntime("/tmp/lucy-project", {
         execFileImpl,
-        waitForReady: async () => true
+        waitForReady: async () => true,
+        verifyLoaded: async () => true
       });
       expect(result.status).toBe("failed");
       expect(result.detail).toMatch(/already in use|not restarted/i);
@@ -125,11 +132,12 @@ describe("reloadKtxMcpExecutionRuntime", () => {
       const result = await reloadKtxMcpAfterConfigWrite("/tmp/lucy-project", "hive-jd");
       expect(result).toEqual({ status: "reloaded", detail: "执行层已重读 ktx.yaml" });
       expect(supervisor.reloadExecutionRuntime).toHaveBeenCalledTimes(1);
-      expect(supervisor.reloadExecutionRuntime).toHaveBeenCalledWith({
+      expect(supervisor.reloadExecutionRuntime).toHaveBeenCalledWith(expect.objectContaining({
         projectRoot: "/tmp/lucy-project",
         connectionId: "hive-jd",
-        reason: "ktx.yaml write"
-      });
+        reason: "ktx.yaml write",
+        deadlineAt: expect.any(Number)
+      }));
     } finally {
       if (previous === undefined) delete process.env.LUCY_KTX_MCP_RELOAD;
       else process.env.LUCY_KTX_MCP_RELOAD = previous;
@@ -147,11 +155,12 @@ describe("reloadKtxMcpExecutionRuntime", () => {
     try {
       const result = await reloadKtxMcpAfterConfigWrite("/tmp/lucy-project", "hive-jd");
       expect(result).toEqual({ status: "reloaded", detail: "执行层已重读 ktx.yaml" });
-      expect(supervisor.reloadExecutionRuntime).toHaveBeenCalledWith({
+      expect(supervisor.reloadExecutionRuntime).toHaveBeenCalledWith(expect.objectContaining({
         projectRoot: "/tmp/lucy-project",
         connectionId: "hive-jd",
-        reason: "ktx.yaml write"
-      });
+        reason: "ktx.yaml write",
+        deadlineAt: expect.any(Number)
+      }));
     } finally {
       if (previous === undefined) delete process.env.LUCY_KTX_MCP_RELOAD;
       else process.env.LUCY_KTX_MCP_RELOAD = previous;
@@ -224,6 +233,72 @@ describe("reloadKtxMcpExecutionRuntime", () => {
       if (previous === undefined) delete process.env.LUCY_KTX_MCP_RELOAD;
       else process.env.LUCY_KTX_MCP_RELOAD = previous;
     }
+  });
+
+  it("does not release the direct owner when only the caller deadline expires", async () => {
+    vi.stubEnv("LUCY_KTX_MCP_RELOAD", "1");
+    let settle!: (value: boolean) => void;
+    let entered!: () => void;
+    const reached = new Promise<void>((resolve) => { entered = resolve; });
+    const verification = new Promise<boolean>((resolve) => { settle = resolve; });
+    const execFileImpl = execFileMock((args) => ({ stdout: args.includes("stop") ? "stopped" : "daemon started" })) as never;
+    const pending = reloadKtxMcpExecutionRuntime("/tmp/direct-evidence", {
+      execFileImpl, timeoutMs: 100, waitForReady: async () => true,
+      verifyLoaded: async () => { entered(); return verification; }
+    });
+    await reached;
+    expect((await pending).status).toBe("failed");
+    expect(currentMcpReloadWindow()).not.toBeNull();
+    settle(true);
+    await vi.waitFor(() => expect(currentMcpReloadWindow()).toBeNull());
+    expect(execFileImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("includes queue wait in the direct deadline and never restarts a queued expired request", async () => {
+    vi.stubEnv("LUCY_KTX_MCP_RELOAD", "1");
+    let settle!: (value: boolean) => void;
+    let entered!: () => void;
+    const reached = new Promise<void>((resolve) => { entered = resolve; });
+    const verification = new Promise<boolean>((resolve) => { settle = resolve; });
+    const execFileImpl = execFileMock((args) => ({ stdout: args.includes("stop") ? "stopped" : "daemon started" })) as never;
+    const first = reloadKtxMcpExecutionRuntime("/tmp/direct-first", {
+      execFileImpl, timeoutMs: 1_000, waitForReady: async () => true,
+      verifyLoaded: async () => { entered(); return verification; }
+    });
+    await reached;
+    const second = reloadKtxMcpExecutionRuntime("/tmp/direct-expired", {
+      execFileImpl, timeoutMs: 25, waitForReady: async () => true, verifyLoaded: async () => true
+    });
+    expect((await second).status).toBe("failed");
+    settle(true); expect((await first).status).toBe("reloaded");
+    await vi.waitFor(() => expect(currentMcpReloadWindow()).toBeNull());
+    expect(execFileImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not equate TCP readiness to configuration verification", async () => {
+    vi.stubEnv("LUCY_KTX_MCP_RELOAD", "1");
+    const execFileImpl = execFileMock((args) => ({ stdout: args.includes("stop") ? "stopped" : "daemon started" })) as never;
+    const result = await reloadKtxMcpExecutionRuntime("/tmp/direct-no-proof", {
+      execFileImpl, waitForReady: async () => true, verifyLoaded: async () => false
+    });
+    expect(result.status).toBe("failed"); expect(result.detail).toContain("连接级");
+  });
+
+  it("shares the same 20-second startup stage between CLI start and readiness", async () => {
+    vi.stubEnv("LUCY_KTX_MCP_RELOAD", "1");
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-20T00:00:00Z"));
+    const execFileImpl = vi.fn((_cmd, args, _options, callback) => {
+      if ((args as string[]).includes("start")) vi.setSystemTime(Date.now() + 19_000);
+      callback(null, (args as string[]).includes("start") ? "daemon started" : "stopped", "");
+    }) as never;
+    try {
+      const result = await reloadKtxMcpExecutionRuntime("/tmp/direct-shared-start", {
+        execFileImpl,
+        waitForReady: async () => { vi.setSystemTime(Date.now() + 19_000); return true; },
+        verifyLoaded: async () => true
+      });
+      expect(result.status).toBe("failed");
+    } finally { vi.useRealTimers(); }
   });
 
   it("can be skipped with LUCY_KTX_MCP_RELOAD=0", async () => {

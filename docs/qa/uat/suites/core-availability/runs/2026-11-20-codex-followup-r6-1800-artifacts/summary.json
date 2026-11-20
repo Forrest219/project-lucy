@@ -1,0 +1,4404 @@
+{
+  "startedAt": "2026-11-20T11:18:29.613173+00:00",
+  "status": "PASS WITH GAP",
+  "mode": "formal",
+  "runnerSha256": "38a37d780aabb62d047e19484d9da97651fa233f5708bbcb04262733ac9095b4",
+  "baseSha256": "182c84359b2ca98f33c0e171e7bed00f8fdceb2f8af7ba4af4f11007e97eca2a",
+  "helperSha256": "291e09aa6cc9789f3e77dcd4dac2761deb293d525befded16ccb271d6be84d96",
+  "parameters": {
+    "image": "sha256:ae0eb26a73d9331f45e4276f9839c442f9c8ada0ff2701366c7c2b099b8f7a4f",
+    "out": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/08-soak/r6-1800",
+    "mode": "formal",
+    "contract_policy": "p1-69",
+    "contract_recovery_seconds": 300.0,
+    "contract_recovery_concurrency": 2,
+    "seconds": 1800.0,
+    "cycle_seconds": 150.0,
+    "mcp_concurrency": 12,
+    "mcp_timeout": 180.0,
+    "mutation_timeout": 180.0,
+    "drain_seconds": 190.0,
+    "collect_seconds": 90.0,
+    "audit_settle_seconds": 300.0,
+    "overall_seconds": 4210.0,
+    "cleanup_seconds": 90.0,
+    "audit_evidence_copy": true,
+    "io_control": true,
+    "io_seconds": 120.0,
+    "recovery_seconds": 30.0,
+    "profile_seconds": 0.0,
+    "seed_rows": 200000,
+    "cycle_seed_rows": 3000,
+    "stop_after": null,
+    "keep_resources": false
+  },
+  "scope": "FUP engineering combination only; not full F61/F62/F63/R-CAV or customer release",
+  "windows": [
+    {
+      "name": "natural",
+      "start": "2026-11-20T11:19:52.795332+00:00",
+      "plannedEnd": "2026-11-20T11:49:52.795332+00:00",
+      "cpuProfiler": false,
+      "end": "2026-11-20T11:49:52.795332+00:00"
+    },
+    {
+      "name": "explicit-contract-recovery",
+      "start": "2026-11-20T11:49:52.855644+00:00",
+      "naturalPerformanceWindow": false,
+      "end": "2026-11-20T11:51:18.503789+00:00"
+    },
+    {
+      "name": "diagnostic-fifo-control",
+      "start": "2026-11-20T11:51:18.503820+00:00",
+      "naturalPerformanceWindow": false,
+      "end": "2026-11-20T11:53:24.986490+00:00"
+    }
+  ],
+  "cpuProfilerInNaturalWindow": false,
+  "deadlinePolicy": "running deadline plus independent bounded cleanup grace",
+  "runningDeadlineMonotonic": 4210.080966041,
+  "cleanupGraceSeconds": 90.0,
+  "soakStartedAt": "2026-11-20T11:19:52.795332+00:00",
+  "naturalPlannedFinishedAt": "2026-11-20T11:49:52.795332+00:00",
+  "naturalStartedMonotonic": 83.266120666,
+  "naturalDeadlineMonotonic": 1883.266120666,
+  "mainPid": "5977",
+  "naturalObservedSeconds": 1800.0,
+  "soakFinishedAt": "2026-11-20T11:49:52.795332+00:00",
+  "workersAfterDrain": 0,
+  "drainFinishedAt": "2026-11-20T11:49:52.855375+00:00",
+  "contractRecovery": {
+    "candidates": 32,
+    "workersAlive": 0,
+    "deadlineMonotonic": 2183.492738166,
+    "finishedMonotonic": 1968.945949958
+  },
+  "ioControlFacts": {
+    "observedWorkers": [
+      "35649:6948403",
+      "35796:6949403",
+      "35978:6950403",
+      "36111:6951403",
+      "36244:6952403",
+      "36425:6953403",
+      "36560:6954403",
+      "36693:6955404",
+      "36870:6956404",
+      "37124:6958404"
+    ],
+    "blockedWitnesses": [
+      "35649:6948403",
+      "35796:6949403",
+      "35978:6950403",
+      "36111:6951403",
+      "36244:6952403",
+      "36425:6953403",
+      "36560:6954403",
+      "36693:6955404",
+      "36870:6956404",
+      "37124:6958404"
+    ],
+    "actualTerminated": [
+      "35649:6948403",
+      "35796:6949403",
+      "35978:6950403",
+      "36111:6951403",
+      "36244:6952403",
+      "36425:6953403",
+      "36560:6954403",
+      "36693:6955404",
+      "36870:6956404",
+      "37124:6958404"
+    ],
+    "maxDiagnosticInflight": 1,
+    "sameServerPid": true,
+    "oldFifoReleasedBeforeFresh": false
+  },
+  "ioControlPassed": true,
+  "auditClosure": {
+    "cutoff": "2026-10-21T11:18:29.613012+00:00",
+    "pageSize": 1000,
+    "complete": true,
+    "eligible": 233481,
+    "linked": 233481,
+    "uniqueLinked": 233481,
+    "missingTurns": 0,
+    "wrongUsers": 0,
+    "duplicates": 0,
+    "missingLinks": 0,
+    "orphanRawLinks": 0,
+    "orphanTurnLinks": 0,
+    "pendingUsers": 0,
+    "users": 79,
+    "pages": 234,
+    "maxId": 233481,
+    "raw": 233481,
+    "historyRows": 233000,
+    "historyUsers": 67,
+    "userWatermarks": [
+      {
+        "user": "uat-core1883-history-000",
+        "newest": 233297,
+        "state": {
+          "status": "complete",
+          "watermark": "233297"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-001",
+        "newest": 233298,
+        "state": {
+          "status": "complete",
+          "watermark": "233298"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-002",
+        "newest": 233299,
+        "state": {
+          "status": "complete",
+          "watermark": "233299"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-003",
+        "newest": 233300,
+        "state": {
+          "status": "complete",
+          "watermark": "233300"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-004",
+        "newest": 233301,
+        "state": {
+          "status": "complete",
+          "watermark": "233301"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-005",
+        "newest": 233302,
+        "state": {
+          "status": "complete",
+          "watermark": "233302"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-006",
+        "newest": 233303,
+        "state": {
+          "status": "complete",
+          "watermark": "233303"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-007",
+        "newest": 233304,
+        "state": {
+          "status": "complete",
+          "watermark": "233304"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-008",
+        "newest": 233305,
+        "state": {
+          "status": "complete",
+          "watermark": "233305"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-009",
+        "newest": 233306,
+        "state": {
+          "status": "complete",
+          "watermark": "233306"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-010",
+        "newest": 233307,
+        "state": {
+          "status": "complete",
+          "watermark": "233307"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-011",
+        "newest": 233308,
+        "state": {
+          "status": "complete",
+          "watermark": "233308"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-012",
+        "newest": 233309,
+        "state": {
+          "status": "complete",
+          "watermark": "233309"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-013",
+        "newest": 233310,
+        "state": {
+          "status": "complete",
+          "watermark": "233310"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-014",
+        "newest": 233311,
+        "state": {
+          "status": "complete",
+          "watermark": "233311"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-015",
+        "newest": 233312,
+        "state": {
+          "status": "complete",
+          "watermark": "233312"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-016",
+        "newest": 233313,
+        "state": {
+          "status": "complete",
+          "watermark": "233313"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-017",
+        "newest": 233314,
+        "state": {
+          "status": "complete",
+          "watermark": "233314"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-018",
+        "newest": 233315,
+        "state": {
+          "status": "complete",
+          "watermark": "233315"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-019",
+        "newest": 233316,
+        "state": {
+          "status": "complete",
+          "watermark": "233316"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-020",
+        "newest": 233317,
+        "state": {
+          "status": "complete",
+          "watermark": "233317"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-021",
+        "newest": 233318,
+        "state": {
+          "status": "complete",
+          "watermark": "233318"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-022",
+        "newest": 233319,
+        "state": {
+          "status": "complete",
+          "watermark": "233319"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-023",
+        "newest": 233320,
+        "state": {
+          "status": "complete",
+          "watermark": "233320"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-024",
+        "newest": 233321,
+        "state": {
+          "status": "complete",
+          "watermark": "233321"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-025",
+        "newest": 233322,
+        "state": {
+          "status": "complete",
+          "watermark": "233322"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-026",
+        "newest": 233323,
+        "state": {
+          "status": "complete",
+          "watermark": "233323"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-027",
+        "newest": 233324,
+        "state": {
+          "status": "complete",
+          "watermark": "233324"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-028",
+        "newest": 233325,
+        "state": {
+          "status": "complete",
+          "watermark": "233325"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-029",
+        "newest": 233326,
+        "state": {
+          "status": "complete",
+          "watermark": "233326"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-030",
+        "newest": 233327,
+        "state": {
+          "status": "complete",
+          "watermark": "233327"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-031",
+        "newest": 233328,
+        "state": {
+          "status": "complete",
+          "watermark": "233328"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-032",
+        "newest": 233329,
+        "state": {
+          "status": "complete",
+          "watermark": "233329"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-033",
+        "newest": 233330,
+        "state": {
+          "status": "complete",
+          "watermark": "233330"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-034",
+        "newest": 233331,
+        "state": {
+          "status": "complete",
+          "watermark": "233331"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-035",
+        "newest": 233332,
+        "state": {
+          "status": "complete",
+          "watermark": "233332"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-036",
+        "newest": 233333,
+        "state": {
+          "status": "complete",
+          "watermark": "233333"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-037",
+        "newest": 233334,
+        "state": {
+          "status": "complete",
+          "watermark": "233334"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-038",
+        "newest": 233335,
+        "state": {
+          "status": "complete",
+          "watermark": "233335"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-039",
+        "newest": 233336,
+        "state": {
+          "status": "complete",
+          "watermark": "233336"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-040",
+        "newest": 233337,
+        "state": {
+          "status": "complete",
+          "watermark": "233337"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-041",
+        "newest": 233338,
+        "state": {
+          "status": "complete",
+          "watermark": "233338"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-042",
+        "newest": 233339,
+        "state": {
+          "status": "complete",
+          "watermark": "233339"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-043",
+        "newest": 233340,
+        "state": {
+          "status": "complete",
+          "watermark": "233340"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-044",
+        "newest": 233341,
+        "state": {
+          "status": "complete",
+          "watermark": "233341"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-045",
+        "newest": 233342,
+        "state": {
+          "status": "complete",
+          "watermark": "233342"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-046",
+        "newest": 233343,
+        "state": {
+          "status": "complete",
+          "watermark": "233343"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-047",
+        "newest": 233344,
+        "state": {
+          "status": "complete",
+          "watermark": "233344"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-048",
+        "newest": 233345,
+        "state": {
+          "status": "complete",
+          "watermark": "233345"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-049",
+        "newest": 233346,
+        "state": {
+          "status": "complete",
+          "watermark": "233346"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-050",
+        "newest": 233347,
+        "state": {
+          "status": "complete",
+          "watermark": "233347"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-051",
+        "newest": 233348,
+        "state": {
+          "status": "complete",
+          "watermark": "233348"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-052",
+        "newest": 233282,
+        "state": {
+          "status": "complete",
+          "watermark": "233282"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-053",
+        "newest": 233283,
+        "state": {
+          "status": "complete",
+          "watermark": "233283"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-054",
+        "newest": 233284,
+        "state": {
+          "status": "complete",
+          "watermark": "233284"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-055",
+        "newest": 233285,
+        "state": {
+          "status": "complete",
+          "watermark": "233285"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-056",
+        "newest": 233286,
+        "state": {
+          "status": "complete",
+          "watermark": "233286"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-057",
+        "newest": 233287,
+        "state": {
+          "status": "complete",
+          "watermark": "233287"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-058",
+        "newest": 233288,
+        "state": {
+          "status": "complete",
+          "watermark": "233288"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-059",
+        "newest": 233289,
+        "state": {
+          "status": "complete",
+          "watermark": "233289"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-060",
+        "newest": 233290,
+        "state": {
+          "status": "complete",
+          "watermark": "233290"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-061",
+        "newest": 233291,
+        "state": {
+          "status": "complete",
+          "watermark": "233291"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-062",
+        "newest": 233292,
+        "state": {
+          "status": "complete",
+          "watermark": "233292"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-063",
+        "newest": 233293,
+        "state": {
+          "status": "complete",
+          "watermark": "233293"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-064",
+        "newest": 233294,
+        "state": {
+          "status": "complete",
+          "watermark": "233294"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-065",
+        "newest": 233295,
+        "state": {
+          "status": "complete",
+          "watermark": "233295"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-066",
+        "newest": 233296,
+        "state": {
+          "status": "complete",
+          "watermark": "233296"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_a",
+        "newest": 233481,
+        "state": {
+          "status": "complete",
+          "watermark": "233481"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent01",
+        "newest": 233369,
+        "state": {
+          "status": "complete",
+          "watermark": "233369"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent02",
+        "newest": 233445,
+        "state": {
+          "status": "complete",
+          "watermark": "233445"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent03",
+        "newest": 233463,
+        "state": {
+          "status": "complete",
+          "watermark": "233463"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent04",
+        "newest": 233462,
+        "state": {
+          "status": "complete",
+          "watermark": "233462"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent05",
+        "newest": 233469,
+        "state": {
+          "status": "complete",
+          "watermark": "233469"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent06",
+        "newest": 233374,
+        "state": {
+          "status": "complete",
+          "watermark": "233374"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent07",
+        "newest": 233375,
+        "state": {
+          "status": "complete",
+          "watermark": "233375"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent08",
+        "newest": 233450,
+        "state": {
+          "status": "complete",
+          "watermark": "233450"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent09",
+        "newest": 233468,
+        "state": {
+          "status": "complete",
+          "watermark": "233468"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent10",
+        "newest": 233474,
+        "state": {
+          "status": "complete",
+          "watermark": "233474"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent11",
+        "newest": 233475,
+        "state": {
+          "status": "complete",
+          "watermark": "233475"
+        },
+        "valid": true
+      }
+    ],
+    "elapsedSeconds": 1.317
+  },
+  "expectedHistoryRows": 233000,
+  "auditFixtureScalePassed": true,
+  "auditEvidence": {
+    "source": "task-owned synthetic audit.sqlite; SQLite backup API",
+    "cutoff": "2026-10-21T11:18:29.613012+00:00",
+    "maxId": 233481,
+    "sqliteSha256": "77e4e0641a7db511a940197c7d102b6842a983286ece83254926ae4cf714bb8b",
+    "gzipSha256": "f7ff27d51fa7e74a9e6fffe1d966d7735b9330654943ddd6d1d6e02b9872fe0c",
+    "sqliteBytes": 2533433344,
+    "gzipBytes": 93300959,
+    "capturedAt": "2026-11-20T11:53:52.963814+00:00",
+    "elapsedSeconds": 17.997698217004654,
+    "deadlineSeconds": 89.99999775000015,
+    "path": "audit-evidence.sqlite.gz",
+    "copied": true,
+    "collectionElapsedSeconds": 18.59050570799991,
+    "collectionDeadlineSeconds": 90.0
+  },
+  "counts": {
+    "probe:/api/livez": {
+      "planned": 1800,
+      "dispatched": 1800,
+      "missed": 0,
+      "terminal": 1800,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 1800,
+      "failed": 0,
+      "naturalSucceeded": 1800,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "probe:/api/readyz": {
+      "planned": 1800,
+      "dispatched": 1800,
+      "missed": 0,
+      "terminal": 1800,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 1800,
+      "failed": 0,
+      "naturalSucceeded": 1800,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "probe:/api/health": {
+      "planned": 1800,
+      "dispatched": 1800,
+      "missed": 0,
+      "terminal": 1800,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 1800,
+      "failed": 0,
+      "naturalSucceeded": 1800,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "http": {
+      "planned": 1800,
+      "dispatched": 1800,
+      "missed": 0,
+      "terminal": 1800,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 1800,
+      "failed": 0,
+      "naturalSucceeded": 1800,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "mcp": {
+      "planned": 360,
+      "dispatched": 360,
+      "missed": 0,
+      "terminal": 360,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 328,
+      "failed": 32,
+      "naturalSucceeded": 328,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "audit-progress": {
+      "planned": 360,
+      "dispatched": 358,
+      "missed": 2,
+      "terminal": 358,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 357,
+      "failed": 1,
+      "naturalSucceeded": 357,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "mutation": {
+      "planned": 12,
+      "dispatched": 12,
+      "missed": 0,
+      "terminal": 12,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 12,
+      "failed": 0,
+      "naturalSucceeded": 12,
+      "censoredSucceeded": 0,
+      "conserved": true
+    }
+  },
+  "probeSummary": {
+    "/api/livez": {
+      "count": 1800,
+      "naturalTerminalCount": 1800,
+      "censoredNaturalCount": 0,
+      "non200": 0,
+      "p99Ms": 268.08712499996545,
+      "maxMs": 835.9998749999704
+    },
+    "/api/readyz": {
+      "count": 1800,
+      "naturalTerminalCount": 1800,
+      "censoredNaturalCount": 0,
+      "non200": 0,
+      "p99Ms": 270.2201250000371,
+      "maxMs": 839.5729160000087
+    },
+    "/api/health": {
+      "count": 1800,
+      "naturalTerminalCount": 1800,
+      "censoredNaturalCount": 0,
+      "non200": 0,
+      "p99Ms": 282.11525000006077,
+      "maxMs": 907.5543339999967
+    }
+  },
+  "latency": {
+    "http:all-terminal": {
+      "p50Ms": 24.507499999913307,
+      "p95Ms": 180.03687500004162,
+      "p99Ms": 798.3652499999607,
+      "maxMs": 1264.5730410000624,
+      "count": 1800
+    },
+    "http:natural-success": {
+      "p50Ms": 24.507499999913307,
+      "p95Ms": 180.03687500004162,
+      "p99Ms": 798.3652499999607,
+      "maxMs": 1264.5730410000624,
+      "count": 1800
+    },
+    "mcp:all-terminal": {
+      "p50Ms": 4266.515208000101,
+      "p95Ms": 11676.299374999999,
+      "p99Ms": 18299.43349999985,
+      "maxMs": 20127.64762500001,
+      "count": 360
+    },
+    "mcp:natural-success": {
+      "p50Ms": 4356.086459000153,
+      "p95Ms": 12297.881791999998,
+      "p99Ms": 18299.43349999985,
+      "maxMs": 20127.64762500001,
+      "count": 328
+    }
+  },
+  "eventErrors": [
+    {
+      "at": "2026-11-20T11:20:07.803162+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 3,
+      "requestId": "mcp-3",
+      "plannedMonotonic": 98.266120666,
+      "offsetSeconds": 15,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-3",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 7,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 3.682,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "5d6d572f-2b7c-4ec6-b775-31cac673e770",
+            "deadlineAt": 1795173663702,
+            "rejectedAt": 1795173607801
+          }
+        },
+        "rpcId": 7
+      },
+      "apiMs": 3.682,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 98.269189458,
+      "finishedMonotonic": 98.27372425,
+      "ms": 4.53487500000449,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:20:12.824416+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 4,
+      "requestId": "mcp-4",
+      "plannedMonotonic": 103.266120666,
+      "offsetSeconds": 20,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-4",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 8,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 26.624,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "5d6d572f-2b7c-4ec6-b775-31cac673e770",
+            "deadlineAt": 1795173663702,
+            "rejectedAt": 1795173612822
+          }
+        },
+        "rpcId": 8
+      },
+      "apiMs": 26.624,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 103.26737525,
+      "finishedMonotonic": 103.294901125,
+      "ms": 27.52599999999461,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:22:37.807504+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 33,
+      "requestId": "mcp-33",
+      "plannedMonotonic": 248.266120666,
+      "offsetSeconds": 165,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-33",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 41,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 1.935,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "a25df1db-6df1-41b7-9113-7963d316f438",
+            "deadlineAt": 1795173815398,
+            "rejectedAt": 1795173757806
+          }
+        },
+        "rpcId": 41
+      },
+      "apiMs": 1.935,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 248.269940416,
+      "finishedMonotonic": 248.275817375,
+      "ms": 5.876999999998134,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:22:42.832999+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 34,
+      "requestId": "mcp-34",
+      "plannedMonotonic": 253.266120666,
+      "offsetSeconds": 170,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-34",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 42,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 31.17,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "a25df1db-6df1-41b7-9113-7963d316f438",
+            "deadlineAt": 1795173815398,
+            "rejectedAt": 1795173762830
+          }
+        },
+        "rpcId": 42
+      },
+      "apiMs": 31.17,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 253.267961625,
+      "finishedMonotonic": 253.301233416,
+      "ms": 33.271833000014794,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:22:47.931603+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 35,
+      "requestId": "mcp-35",
+      "plannedMonotonic": 258.266120666,
+      "offsetSeconds": 175,
+      "status": 503,
+      "identity": "agent11",
+      "userId": "uat_zb_agent11",
+      "session": "independent-question-35",
+      "tokenHashPrefix": "sha256:a8bb60ff2b6d",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 43,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 127.095,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "a25df1db-6df1-41b7-9113-7963d316f438",
+            "deadlineAt": 1795173815398,
+            "rejectedAt": 1795173767930
+          }
+        },
+        "rpcId": 43
+      },
+      "apiMs": 127.095,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 258.268662291,
+      "finishedMonotonic": 258.399762708,
+      "ms": 131.10050000000228,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:25:07.824184+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 63,
+      "requestId": "mcp-63",
+      "plannedMonotonic": 398.266120666,
+      "offsetSeconds": 315,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-63",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 75,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 22.736,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f60d2627-4039-456b-a6d7-7b786f0493ef",
+            "deadlineAt": 1795173967533,
+            "rejectedAt": 1795173907821
+          }
+        },
+        "rpcId": 75
+      },
+      "apiMs": 22.736,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 398.266519625,
+      "finishedMonotonic": 398.29023625,
+      "ms": 23.716707999994924,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:25:12.820382+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 64,
+      "requestId": "mcp-64",
+      "plannedMonotonic": 403.266120666,
+      "offsetSeconds": 320,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-64",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 76,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 11.201,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f60d2627-4039-456b-a6d7-7b786f0493ef",
+            "deadlineAt": 1795173967533,
+            "rejectedAt": 1795173912819
+          }
+        },
+        "rpcId": 76
+      },
+      "apiMs": 11.201,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 403.271270708,
+      "finishedMonotonic": 403.286370875,
+      "ms": 15.10025000004589,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:25:17.820504+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 65,
+      "requestId": "mcp-65",
+      "plannedMonotonic": 408.266120666,
+      "offsetSeconds": 325,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-65",
+      "tokenHashPrefix": "sha256:dffe7b5034c6",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 77,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 12.029,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f60d2627-4039-456b-a6d7-7b786f0493ef",
+            "deadlineAt": 1795173967533,
+            "rejectedAt": 1795173917819
+          }
+        },
+        "rpcId": 77
+      },
+      "apiMs": 12.029,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 408.269333583,
+      "finishedMonotonic": 408.28641725,
+      "ms": 17.083708000029674,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:27:37.811636+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 93,
+      "requestId": "mcp-93",
+      "plannedMonotonic": 548.266120666,
+      "offsetSeconds": 465,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-93",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 109,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 3.541,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2d04de04-e158-47cb-a276-54dc2ec40e78",
+            "deadlineAt": 1795174114807,
+            "rejectedAt": 1795174057809
+          }
+        },
+        "rpcId": 109
+      },
+      "apiMs": 3.541,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 548.270571666,
+      "finishedMonotonic": 548.27544925,
+      "ms": 4.877666999959729,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:27:42.835617+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 94,
+      "requestId": "mcp-94",
+      "plannedMonotonic": 553.266120666,
+      "offsetSeconds": 470,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-94",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 110,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 18.435,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2d04de04-e158-47cb-a276-54dc2ec40e78",
+            "deadlineAt": 1795174114807,
+            "rejectedAt": 1795174062832
+          }
+        },
+        "rpcId": 110
+      },
+      "apiMs": 18.435,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 553.271404583,
+      "finishedMonotonic": 553.299354708,
+      "ms": 27.95016699997177,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:30:07.841022+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 123,
+      "requestId": "mcp-123",
+      "plannedMonotonic": 698.266120666,
+      "offsetSeconds": 615,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-123",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 143,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 29.931,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "6b9abe14-8f90-42f5-ab47-a42456e06365",
+            "deadlineAt": 1795174263570,
+            "rejectedAt": 1795174207839
+          }
+        },
+        "rpcId": 143
+      },
+      "apiMs": 29.931,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 698.267900125,
+      "finishedMonotonic": 698.3025855,
+      "ms": 34.68545800001266,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:30:12.818208+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 124,
+      "requestId": "mcp-124",
+      "plannedMonotonic": 703.266120666,
+      "offsetSeconds": 620,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-124",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 144,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 6.471,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "6b9abe14-8f90-42f5-ab47-a42456e06365",
+            "deadlineAt": 1795174263570,
+            "rejectedAt": 1795174212814
+          }
+        },
+        "rpcId": 144
+      },
+      "apiMs": 6.471,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 703.270437208,
+      "finishedMonotonic": 703.279698125,
+      "ms": 9.261000000037711,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:30:17.827045+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 125,
+      "requestId": "mcp-125",
+      "plannedMonotonic": 708.266120666,
+      "offsetSeconds": 625,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-125",
+      "tokenHashPrefix": "sha256:dffe7b5034c6",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 145,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 21.031,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "6b9abe14-8f90-42f5-ab47-a42456e06365",
+            "deadlineAt": 1795174263570,
+            "rejectedAt": 1795174217824
+          }
+        },
+        "rpcId": 145
+      },
+      "apiMs": 21.031,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 708.266270041,
+      "finishedMonotonic": 708.288457583,
+      "ms": 22.187625000015032,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:32:37.815318+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 153,
+      "requestId": "mcp-153",
+      "plannedMonotonic": 848.266120666,
+      "offsetSeconds": 765,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-153",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 177,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 4.252,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ad46b617-0b2e-41bf-a98b-443d7102f7d7",
+            "deadlineAt": 1795174412900,
+            "rejectedAt": 1795174357813
+          }
+        },
+        "rpcId": 177
+      },
+      "apiMs": 4.252,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 848.269844041,
+      "finishedMonotonic": 848.274631958,
+      "ms": 4.787999999962267,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:32:42.828434+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 154,
+      "requestId": "mcp-154",
+      "plannedMonotonic": 853.266120666,
+      "offsetSeconds": 770,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-154",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 178,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 7.093,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ad46b617-0b2e-41bf-a98b-443d7102f7d7",
+            "deadlineAt": 1795174412900,
+            "rejectedAt": 1795174362826
+          }
+        },
+        "rpcId": 178
+      },
+      "apiMs": 7.093,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 853.271150875,
+      "finishedMonotonic": 853.2876705,
+      "ms": 16.51970800003255,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:35:02.821077+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 182,
+      "requestId": "mcp-182",
+      "plannedMonotonic": 993.266120666,
+      "offsetSeconds": 910,
+      "status": 503,
+      "identity": "agent02",
+      "userId": "uat_zb_agent02",
+      "session": "independent-question-182",
+      "tokenHashPrefix": "sha256:f2ff83e178a2",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 210,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 6.753,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "8cb978d4-b3c9-470f-aab0-8a5200f08abb",
+            "deadlineAt": 1795174562772,
+            "rejectedAt": 1795174502815
+          }
+        },
+        "rpcId": 210
+      },
+      "apiMs": 6.753,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 993.269013125,
+      "finishedMonotonic": 993.278215916,
+      "ms": 9.202875000028143,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:35:07.831951+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 183,
+      "requestId": "mcp-183",
+      "plannedMonotonic": 998.266120666,
+      "offsetSeconds": 915,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-183",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 211,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 12.409,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "8cb978d4-b3c9-470f-aab0-8a5200f08abb",
+            "deadlineAt": 1795174562772,
+            "rejectedAt": 1795174507830
+          }
+        },
+        "rpcId": 211
+      },
+      "apiMs": 12.409,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 998.272167833,
+      "finishedMonotonic": 998.289015916,
+      "ms": 16.848125000024083,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:35:12.827910+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 184,
+      "requestId": "mcp-184",
+      "plannedMonotonic": 1003.266120666,
+      "offsetSeconds": 920,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-184",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 212,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 9.957,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "47c149d6-ff7d-41b0-b599-db2456a1ea0c",
+            "deadlineAt": 1795174571898,
+            "rejectedAt": 1795174512826
+          }
+        },
+        "rpcId": 212
+      },
+      "apiMs": 9.957,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1003.270512666,
+      "finishedMonotonic": 1003.284899541,
+      "ms": 14.386917000024368,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:37:37.826036+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 213,
+      "requestId": "mcp-213",
+      "plannedMonotonic": 1148.266120666,
+      "offsetSeconds": 1065,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-213",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 245,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 9.976,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "57a8f679-8f7e-4fba-8b5c-9b16d23b16b8",
+            "deadlineAt": 1795174713091,
+            "rejectedAt": 1795174657824
+          }
+        },
+        "rpcId": 245
+      },
+      "apiMs": 9.976,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1148.270164375,
+      "finishedMonotonic": 1148.280850583,
+      "ms": 10.686332999966908,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:37:42.885797+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 214,
+      "requestId": "mcp-214",
+      "plannedMonotonic": 1153.266120666,
+      "offsetSeconds": 1070,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-214",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 246,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 68.657,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "57a8f679-8f7e-4fba-8b5c-9b16d23b16b8",
+            "deadlineAt": 1795174713091,
+            "rejectedAt": 1795174662882
+          }
+        },
+        "rpcId": 246
+      },
+      "apiMs": 68.657,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1153.269160125,
+      "finishedMonotonic": 1153.340533708,
+      "ms": 71.3736659999995,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:37:47.816971+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 215,
+      "requestId": "mcp-215",
+      "plannedMonotonic": 1158.266120666,
+      "offsetSeconds": 1075,
+      "status": 503,
+      "identity": "agent11",
+      "userId": "uat_zb_agent11",
+      "session": "independent-question-215",
+      "tokenHashPrefix": "sha256:a8bb60ff2b6d",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 247,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 1.497,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "fe82873e-4a8f-45d5-9a24-363677d20bfa",
+            "deadlineAt": 1795174727334,
+            "rejectedAt": 1795174667815
+          }
+        },
+        "rpcId": 247
+      },
+      "apiMs": 1.497,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1158.269046458,
+      "finishedMonotonic": 1158.2716365,
+      "ms": 2.5901249998696585,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:37:54.867588+00:00",
+      "kind": "request-terminal",
+      "lane": "audit-progress",
+      "iteration": 214,
+      "requestId": "audit-progress-214",
+      "plannedMonotonic": 1153.266120666,
+      "offsetSeconds": 1070,
+      "ok": false,
+      "status": 0,
+      "error": "owned process deadline; actual owned group absent after bounded 2s cleanup grace",
+      "errorType": "TimeoutError",
+      "dispatchedMonotonic": 1153.269368916,
+      "finishedMonotonic": 1165.322133333,
+      "ms": 12052.764458999945,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:40:02.823128+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 242,
+      "requestId": "mcp-242",
+      "plannedMonotonic": 1293.266120666,
+      "offsetSeconds": 1210,
+      "status": 503,
+      "identity": "agent02",
+      "userId": "uat_zb_agent02",
+      "session": "independent-question-242",
+      "tokenHashPrefix": "sha256:f2ff83e178a2",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 278,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 1.969,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "9e253aab-5337-4303-a1fe-9110823ea993",
+            "deadlineAt": 1795174862557,
+            "rejectedAt": 1795174802821
+          }
+        },
+        "rpcId": 278
+      },
+      "apiMs": 1.969,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1293.268285291,
+      "finishedMonotonic": 1293.275770083,
+      "ms": 7.484834000024421,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:40:07.884931+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 243,
+      "requestId": "mcp-243",
+      "plannedMonotonic": 1298.266120666,
+      "offsetSeconds": 1215,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-243",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 279,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 60.017,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "9e253aab-5337-4303-a1fe-9110823ea993",
+            "deadlineAt": 1795174862557,
+            "rejectedAt": 1795174807882
+          }
+        },
+        "rpcId": 279
+      },
+      "apiMs": 60.017,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1298.271032708,
+      "finishedMonotonic": 1298.337496,
+      "ms": 66.46337500001209,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:42:32.837348+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 272,
+      "requestId": "mcp-272",
+      "plannedMonotonic": 1443.266120666,
+      "offsetSeconds": 1360,
+      "status": 503,
+      "identity": "agent08",
+      "userId": "uat_zb_agent08",
+      "session": "independent-question-272",
+      "tokenHashPrefix": "sha256:4e5a214a445e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 312,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 12.81,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f6195d6e-8734-418a-80c5-a3988ca5955d",
+            "deadlineAt": 1795175012425,
+            "rejectedAt": 1795174952836
+          }
+        },
+        "rpcId": 312
+      },
+      "apiMs": 12.81,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1443.271342916,
+      "finishedMonotonic": 1443.2877385,
+      "ms": 16.395624999859137,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:42:37.856113+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 273,
+      "requestId": "mcp-273",
+      "plannedMonotonic": 1448.266120666,
+      "offsetSeconds": 1365,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-273",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 313,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 33.524,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f6195d6e-8734-418a-80c5-a3988ca5955d",
+            "deadlineAt": 1795175012425,
+            "rejectedAt": 1795174957854
+          }
+        },
+        "rpcId": 313
+      },
+      "apiMs": 33.524,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1448.269701541,
+      "finishedMonotonic": 1448.306428875,
+      "ms": 36.72741700006554,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:42:42.823114+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 274,
+      "requestId": "mcp-274",
+      "plannedMonotonic": 1453.266120666,
+      "offsetSeconds": 1370,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-274",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 314,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 4.443,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "d8f41f08-930d-4360-828e-f35e37157e2c",
+            "deadlineAt": 1795175021614,
+            "rejectedAt": 1795174962820
+          }
+        },
+        "rpcId": 314
+      },
+      "apiMs": 4.443,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1453.266422416,
+      "finishedMonotonic": 1453.27335375,
+      "ms": 6.931417000032525,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:45:07.829758+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 303,
+      "requestId": "mcp-303",
+      "plannedMonotonic": 1598.266120666,
+      "offsetSeconds": 1515,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-303",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 347,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 3.732,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f2610612-07b4-4ddf-b325-62399d496880",
+            "deadlineAt": 1795175163605,
+            "rejectedAt": 1795175107828
+          }
+        },
+        "rpcId": 347
+      },
+      "apiMs": 3.732,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1598.272518916,
+      "finishedMonotonic": 1598.277824416,
+      "ms": 5.305541999859997,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:45:12.833775+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 304,
+      "requestId": "mcp-304",
+      "plannedMonotonic": 1603.266120666,
+      "offsetSeconds": 1520,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-304",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 348,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 6.433,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f2610612-07b4-4ddf-b325-62399d496880",
+            "deadlineAt": 1795175163605,
+            "rejectedAt": 1795175112832
+          }
+        },
+        "rpcId": 348
+      },
+      "apiMs": 6.433,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1603.269065541,
+      "finishedMonotonic": 1603.281765625,
+      "ms": 12.700250000079905,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:45:17.825843+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 305,
+      "requestId": "mcp-305",
+      "plannedMonotonic": 1608.266120666,
+      "offsetSeconds": 1525,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-305",
+      "tokenHashPrefix": "sha256:dffe7b5034c6",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 349,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 5.822,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "796b2806-e128-47fa-b049-00e03cbeb14d",
+            "deadlineAt": 1795175177618,
+            "rejectedAt": 1795175117822
+          }
+        },
+        "rpcId": 349
+      },
+      "apiMs": 5.822,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1608.266776833,
+      "finishedMonotonic": 1608.273760416,
+      "ms": 6.983624999975291,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:47:37.837475+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 333,
+      "requestId": "mcp-333",
+      "plannedMonotonic": 1748.266120666,
+      "offsetSeconds": 1665,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-333",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 381,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 2.363,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "5f9d0b2f-bcdb-4897-98f0-1f733c380914",
+            "deadlineAt": 1795175313444,
+            "rejectedAt": 1795175257830
+          }
+        },
+        "rpcId": 381
+      },
+      "apiMs": 2.363,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1748.268664791,
+      "finishedMonotonic": 1748.283290041,
+      "ms": 14.625416999933805,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:47:42.849364+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 334,
+      "requestId": "mcp-334",
+      "plannedMonotonic": 1753.266120666,
+      "offsetSeconds": 1670,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-334",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 382,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 25.9,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "5f9d0b2f-bcdb-4897-98f0-1f733c380914",
+            "deadlineAt": 1795175313444,
+            "rejectedAt": 1795175262847
+          }
+        },
+        "rpcId": 382
+      },
+      "apiMs": 25.9,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1753.267995416,
+      "finishedMonotonic": 1753.295103541,
+      "ms": 27.10816699982388,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:47:47.845737+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 335,
+      "requestId": "mcp-335",
+      "plannedMonotonic": 1758.266120666,
+      "offsetSeconds": 1675,
+      "status": 503,
+      "identity": "agent11",
+      "userId": "uat_zb_agent11",
+      "session": "independent-question-335",
+      "tokenHashPrefix": "sha256:a8bb60ff2b6d",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 383,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 17.448,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "0d0ff123-7031-46df-892c-d10981e33184",
+            "deadlineAt": 1795175326660,
+            "rejectedAt": 1795175267844
+          }
+        },
+        "rpcId": 383
+      },
+      "apiMs": 17.448,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1758.269149541,
+      "finishedMonotonic": 1758.2914025,
+      "ms": 22.25300000009156,
+      "censoredNatural": false
+    }
+  ],
+  "failurePolicy": "All failures retained. No text/window-based exemptions. Contract verdicts use the separately reviewed owner-bound policy seam.",
+  "contractFailureVerdicts": [
+    {
+      "requestId": "mcp-3",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "5d6d572f-2b7c-4ec6-b775-31cac673e770",
+      "originalRequestId": "mcp-3",
+      "recoveryRpcId": 416,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-4",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "5d6d572f-2b7c-4ec6-b775-31cac673e770",
+      "originalRequestId": "mcp-4",
+      "recoveryRpcId": 417,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-33",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "a25df1db-6df1-41b7-9113-7963d316f438",
+      "originalRequestId": "mcp-33",
+      "recoveryRpcId": 422,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-34",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "a25df1db-6df1-41b7-9113-7963d316f438",
+      "originalRequestId": "mcp-34",
+      "recoveryRpcId": 423,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-35",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "a25df1db-6df1-41b7-9113-7963d316f438",
+      "originalRequestId": "mcp-35",
+      "recoveryRpcId": 428,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-63",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "f60d2627-4039-456b-a6d7-7b786f0493ef",
+      "originalRequestId": "mcp-63",
+      "recoveryRpcId": 429,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-64",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "f60d2627-4039-456b-a6d7-7b786f0493ef",
+      "originalRequestId": "mcp-64",
+      "recoveryRpcId": 434,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-65",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "f60d2627-4039-456b-a6d7-7b786f0493ef",
+      "originalRequestId": "mcp-65",
+      "recoveryRpcId": 435,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-93",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "2d04de04-e158-47cb-a276-54dc2ec40e78",
+      "originalRequestId": "mcp-93",
+      "recoveryRpcId": 440,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-94",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "2d04de04-e158-47cb-a276-54dc2ec40e78",
+      "originalRequestId": "mcp-94",
+      "recoveryRpcId": 441,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-123",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "6b9abe14-8f90-42f5-ab47-a42456e06365",
+      "originalRequestId": "mcp-123",
+      "recoveryRpcId": 447,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-124",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "6b9abe14-8f90-42f5-ab47-a42456e06365",
+      "originalRequestId": "mcp-124",
+      "recoveryRpcId": 446,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-125",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "6b9abe14-8f90-42f5-ab47-a42456e06365",
+      "originalRequestId": "mcp-125",
+      "recoveryRpcId": 452,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-153",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "ad46b617-0b2e-41bf-a98b-443d7102f7d7",
+      "originalRequestId": "mcp-153",
+      "recoveryRpcId": 453,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-154",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "ad46b617-0b2e-41bf-a98b-443d7102f7d7",
+      "originalRequestId": "mcp-154",
+      "recoveryRpcId": 458,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-182",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "8cb978d4-b3c9-470f-aab0-8a5200f08abb",
+      "originalRequestId": "mcp-182",
+      "recoveryRpcId": 459,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-183",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "8cb978d4-b3c9-470f-aab0-8a5200f08abb",
+      "originalRequestId": "mcp-183",
+      "recoveryRpcId": 464,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-184",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "47c149d6-ff7d-41b0-b599-db2456a1ea0c",
+      "originalRequestId": "mcp-184",
+      "recoveryRpcId": 465,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-213",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "57a8f679-8f7e-4fba-8b5c-9b16d23b16b8",
+      "originalRequestId": "mcp-213",
+      "recoveryRpcId": 470,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-214",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "57a8f679-8f7e-4fba-8b5c-9b16d23b16b8",
+      "originalRequestId": "mcp-214",
+      "recoveryRpcId": 471,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-215",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "fe82873e-4a8f-45d5-9a24-363677d20bfa",
+      "originalRequestId": "mcp-215",
+      "recoveryRpcId": 476,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "audit-progress-214",
+      "lane": "audit-progress",
+      "expected": false,
+      "policy": "p1-69",
+      "reason": "owner/recovery/readonly-audit proof incomplete"
+    },
+    {
+      "requestId": "mcp-242",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "9e253aab-5337-4303-a1fe-9110823ea993",
+      "originalRequestId": "mcp-242",
+      "recoveryRpcId": 477,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-243",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "9e253aab-5337-4303-a1fe-9110823ea993",
+      "originalRequestId": "mcp-243",
+      "recoveryRpcId": 482,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-272",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "f6195d6e-8734-418a-80c5-a3988ca5955d",
+      "originalRequestId": "mcp-272",
+      "recoveryRpcId": 483,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-273",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "f6195d6e-8734-418a-80c5-a3988ca5955d",
+      "originalRequestId": "mcp-273",
+      "recoveryRpcId": 488,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-274",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "d8f41f08-930d-4360-828e-f35e37157e2c",
+      "originalRequestId": "mcp-274",
+      "recoveryRpcId": 489,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-303",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "f2610612-07b4-4ddf-b325-62399d496880",
+      "originalRequestId": "mcp-303",
+      "recoveryRpcId": 494,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-304",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "f2610612-07b4-4ddf-b325-62399d496880",
+      "originalRequestId": "mcp-304",
+      "recoveryRpcId": 495,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-305",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "796b2806-e128-47fa-b049-00e03cbeb14d",
+      "originalRequestId": "mcp-305",
+      "recoveryRpcId": 500,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-333",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "5f9d0b2f-bcdb-4897-98f0-1f733c380914",
+      "originalRequestId": "mcp-333",
+      "recoveryRpcId": 501,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-334",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "5f9d0b2f-bcdb-4897-98f0-1f733c380914",
+      "originalRequestId": "mcp-334",
+      "recoveryRpcId": 506,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    },
+    {
+      "requestId": "mcp-335",
+      "lane": "mcp",
+      "expected": true,
+      "policy": "p1-69",
+      "sc": "SC-03",
+      "ownerRequestId": "0d0ff123-7031-46df-892c-d10981e33184",
+      "originalRequestId": "mcp-335",
+      "recoveryRpcId": 507,
+      "reason": "exact owner closure + same-identity same-question explicit recovery + consistent readonly audit proof"
+    }
+  ],
+  "contractExpectedFailures": [
+    {
+      "at": "2026-11-20T11:20:07.803162+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 3,
+      "requestId": "mcp-3",
+      "plannedMonotonic": 98.266120666,
+      "offsetSeconds": 15,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-3",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 7,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 3.682,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "5d6d572f-2b7c-4ec6-b775-31cac673e770",
+            "deadlineAt": 1795173663702,
+            "rejectedAt": 1795173607801
+          }
+        },
+        "rpcId": 7
+      },
+      "apiMs": 3.682,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 98.269189458,
+      "finishedMonotonic": 98.27372425,
+      "ms": 4.53487500000449,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:20:12.824416+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 4,
+      "requestId": "mcp-4",
+      "plannedMonotonic": 103.266120666,
+      "offsetSeconds": 20,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-4",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 8,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 26.624,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "5d6d572f-2b7c-4ec6-b775-31cac673e770",
+            "deadlineAt": 1795173663702,
+            "rejectedAt": 1795173612822
+          }
+        },
+        "rpcId": 8
+      },
+      "apiMs": 26.624,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 103.26737525,
+      "finishedMonotonic": 103.294901125,
+      "ms": 27.52599999999461,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:22:37.807504+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 33,
+      "requestId": "mcp-33",
+      "plannedMonotonic": 248.266120666,
+      "offsetSeconds": 165,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-33",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 41,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 1.935,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "a25df1db-6df1-41b7-9113-7963d316f438",
+            "deadlineAt": 1795173815398,
+            "rejectedAt": 1795173757806
+          }
+        },
+        "rpcId": 41
+      },
+      "apiMs": 1.935,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 248.269940416,
+      "finishedMonotonic": 248.275817375,
+      "ms": 5.876999999998134,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:22:42.832999+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 34,
+      "requestId": "mcp-34",
+      "plannedMonotonic": 253.266120666,
+      "offsetSeconds": 170,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-34",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 42,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 31.17,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "a25df1db-6df1-41b7-9113-7963d316f438",
+            "deadlineAt": 1795173815398,
+            "rejectedAt": 1795173762830
+          }
+        },
+        "rpcId": 42
+      },
+      "apiMs": 31.17,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 253.267961625,
+      "finishedMonotonic": 253.301233416,
+      "ms": 33.271833000014794,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:22:47.931603+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 35,
+      "requestId": "mcp-35",
+      "plannedMonotonic": 258.266120666,
+      "offsetSeconds": 175,
+      "status": 503,
+      "identity": "agent11",
+      "userId": "uat_zb_agent11",
+      "session": "independent-question-35",
+      "tokenHashPrefix": "sha256:a8bb60ff2b6d",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 43,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 127.095,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "a25df1db-6df1-41b7-9113-7963d316f438",
+            "deadlineAt": 1795173815398,
+            "rejectedAt": 1795173767930
+          }
+        },
+        "rpcId": 43
+      },
+      "apiMs": 127.095,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 258.268662291,
+      "finishedMonotonic": 258.399762708,
+      "ms": 131.10050000000228,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:25:07.824184+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 63,
+      "requestId": "mcp-63",
+      "plannedMonotonic": 398.266120666,
+      "offsetSeconds": 315,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-63",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 75,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 22.736,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f60d2627-4039-456b-a6d7-7b786f0493ef",
+            "deadlineAt": 1795173967533,
+            "rejectedAt": 1795173907821
+          }
+        },
+        "rpcId": 75
+      },
+      "apiMs": 22.736,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 398.266519625,
+      "finishedMonotonic": 398.29023625,
+      "ms": 23.716707999994924,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:25:12.820382+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 64,
+      "requestId": "mcp-64",
+      "plannedMonotonic": 403.266120666,
+      "offsetSeconds": 320,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-64",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 76,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 11.201,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f60d2627-4039-456b-a6d7-7b786f0493ef",
+            "deadlineAt": 1795173967533,
+            "rejectedAt": 1795173912819
+          }
+        },
+        "rpcId": 76
+      },
+      "apiMs": 11.201,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 403.271270708,
+      "finishedMonotonic": 403.286370875,
+      "ms": 15.10025000004589,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:25:17.820504+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 65,
+      "requestId": "mcp-65",
+      "plannedMonotonic": 408.266120666,
+      "offsetSeconds": 325,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-65",
+      "tokenHashPrefix": "sha256:dffe7b5034c6",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 77,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 12.029,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f60d2627-4039-456b-a6d7-7b786f0493ef",
+            "deadlineAt": 1795173967533,
+            "rejectedAt": 1795173917819
+          }
+        },
+        "rpcId": 77
+      },
+      "apiMs": 12.029,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 408.269333583,
+      "finishedMonotonic": 408.28641725,
+      "ms": 17.083708000029674,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:27:37.811636+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 93,
+      "requestId": "mcp-93",
+      "plannedMonotonic": 548.266120666,
+      "offsetSeconds": 465,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-93",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 109,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 3.541,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2d04de04-e158-47cb-a276-54dc2ec40e78",
+            "deadlineAt": 1795174114807,
+            "rejectedAt": 1795174057809
+          }
+        },
+        "rpcId": 109
+      },
+      "apiMs": 3.541,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 548.270571666,
+      "finishedMonotonic": 548.27544925,
+      "ms": 4.877666999959729,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:27:42.835617+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 94,
+      "requestId": "mcp-94",
+      "plannedMonotonic": 553.266120666,
+      "offsetSeconds": 470,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-94",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 110,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 18.435,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2d04de04-e158-47cb-a276-54dc2ec40e78",
+            "deadlineAt": 1795174114807,
+            "rejectedAt": 1795174062832
+          }
+        },
+        "rpcId": 110
+      },
+      "apiMs": 18.435,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 553.271404583,
+      "finishedMonotonic": 553.299354708,
+      "ms": 27.95016699997177,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:30:07.841022+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 123,
+      "requestId": "mcp-123",
+      "plannedMonotonic": 698.266120666,
+      "offsetSeconds": 615,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-123",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 143,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 29.931,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "6b9abe14-8f90-42f5-ab47-a42456e06365",
+            "deadlineAt": 1795174263570,
+            "rejectedAt": 1795174207839
+          }
+        },
+        "rpcId": 143
+      },
+      "apiMs": 29.931,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 698.267900125,
+      "finishedMonotonic": 698.3025855,
+      "ms": 34.68545800001266,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:30:12.818208+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 124,
+      "requestId": "mcp-124",
+      "plannedMonotonic": 703.266120666,
+      "offsetSeconds": 620,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-124",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 144,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 6.471,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "6b9abe14-8f90-42f5-ab47-a42456e06365",
+            "deadlineAt": 1795174263570,
+            "rejectedAt": 1795174212814
+          }
+        },
+        "rpcId": 144
+      },
+      "apiMs": 6.471,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 703.270437208,
+      "finishedMonotonic": 703.279698125,
+      "ms": 9.261000000037711,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:30:17.827045+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 125,
+      "requestId": "mcp-125",
+      "plannedMonotonic": 708.266120666,
+      "offsetSeconds": 625,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-125",
+      "tokenHashPrefix": "sha256:dffe7b5034c6",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 145,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 21.031,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "6b9abe14-8f90-42f5-ab47-a42456e06365",
+            "deadlineAt": 1795174263570,
+            "rejectedAt": 1795174217824
+          }
+        },
+        "rpcId": 145
+      },
+      "apiMs": 21.031,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 708.266270041,
+      "finishedMonotonic": 708.288457583,
+      "ms": 22.187625000015032,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:32:37.815318+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 153,
+      "requestId": "mcp-153",
+      "plannedMonotonic": 848.266120666,
+      "offsetSeconds": 765,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-153",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 177,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 4.252,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ad46b617-0b2e-41bf-a98b-443d7102f7d7",
+            "deadlineAt": 1795174412900,
+            "rejectedAt": 1795174357813
+          }
+        },
+        "rpcId": 177
+      },
+      "apiMs": 4.252,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 848.269844041,
+      "finishedMonotonic": 848.274631958,
+      "ms": 4.787999999962267,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:32:42.828434+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 154,
+      "requestId": "mcp-154",
+      "plannedMonotonic": 853.266120666,
+      "offsetSeconds": 770,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-154",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 178,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 7.093,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ad46b617-0b2e-41bf-a98b-443d7102f7d7",
+            "deadlineAt": 1795174412900,
+            "rejectedAt": 1795174362826
+          }
+        },
+        "rpcId": 178
+      },
+      "apiMs": 7.093,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 853.271150875,
+      "finishedMonotonic": 853.2876705,
+      "ms": 16.51970800003255,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:35:02.821077+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 182,
+      "requestId": "mcp-182",
+      "plannedMonotonic": 993.266120666,
+      "offsetSeconds": 910,
+      "status": 503,
+      "identity": "agent02",
+      "userId": "uat_zb_agent02",
+      "session": "independent-question-182",
+      "tokenHashPrefix": "sha256:f2ff83e178a2",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 210,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 6.753,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "8cb978d4-b3c9-470f-aab0-8a5200f08abb",
+            "deadlineAt": 1795174562772,
+            "rejectedAt": 1795174502815
+          }
+        },
+        "rpcId": 210
+      },
+      "apiMs": 6.753,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 993.269013125,
+      "finishedMonotonic": 993.278215916,
+      "ms": 9.202875000028143,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:35:07.831951+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 183,
+      "requestId": "mcp-183",
+      "plannedMonotonic": 998.266120666,
+      "offsetSeconds": 915,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-183",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 211,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 12.409,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "8cb978d4-b3c9-470f-aab0-8a5200f08abb",
+            "deadlineAt": 1795174562772,
+            "rejectedAt": 1795174507830
+          }
+        },
+        "rpcId": 211
+      },
+      "apiMs": 12.409,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 998.272167833,
+      "finishedMonotonic": 998.289015916,
+      "ms": 16.848125000024083,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:35:12.827910+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 184,
+      "requestId": "mcp-184",
+      "plannedMonotonic": 1003.266120666,
+      "offsetSeconds": 920,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-184",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 212,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 9.957,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "47c149d6-ff7d-41b0-b599-db2456a1ea0c",
+            "deadlineAt": 1795174571898,
+            "rejectedAt": 1795174512826
+          }
+        },
+        "rpcId": 212
+      },
+      "apiMs": 9.957,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1003.270512666,
+      "finishedMonotonic": 1003.284899541,
+      "ms": 14.386917000024368,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:37:37.826036+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 213,
+      "requestId": "mcp-213",
+      "plannedMonotonic": 1148.266120666,
+      "offsetSeconds": 1065,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-213",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 245,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 9.976,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "57a8f679-8f7e-4fba-8b5c-9b16d23b16b8",
+            "deadlineAt": 1795174713091,
+            "rejectedAt": 1795174657824
+          }
+        },
+        "rpcId": 245
+      },
+      "apiMs": 9.976,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1148.270164375,
+      "finishedMonotonic": 1148.280850583,
+      "ms": 10.686332999966908,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:37:42.885797+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 214,
+      "requestId": "mcp-214",
+      "plannedMonotonic": 1153.266120666,
+      "offsetSeconds": 1070,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-214",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 246,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 68.657,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "57a8f679-8f7e-4fba-8b5c-9b16d23b16b8",
+            "deadlineAt": 1795174713091,
+            "rejectedAt": 1795174662882
+          }
+        },
+        "rpcId": 246
+      },
+      "apiMs": 68.657,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1153.269160125,
+      "finishedMonotonic": 1153.340533708,
+      "ms": 71.3736659999995,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:37:47.816971+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 215,
+      "requestId": "mcp-215",
+      "plannedMonotonic": 1158.266120666,
+      "offsetSeconds": 1075,
+      "status": 503,
+      "identity": "agent11",
+      "userId": "uat_zb_agent11",
+      "session": "independent-question-215",
+      "tokenHashPrefix": "sha256:a8bb60ff2b6d",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 247,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 1.497,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "fe82873e-4a8f-45d5-9a24-363677d20bfa",
+            "deadlineAt": 1795174727334,
+            "rejectedAt": 1795174667815
+          }
+        },
+        "rpcId": 247
+      },
+      "apiMs": 1.497,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1158.269046458,
+      "finishedMonotonic": 1158.2716365,
+      "ms": 2.5901249998696585,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:40:02.823128+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 242,
+      "requestId": "mcp-242",
+      "plannedMonotonic": 1293.266120666,
+      "offsetSeconds": 1210,
+      "status": 503,
+      "identity": "agent02",
+      "userId": "uat_zb_agent02",
+      "session": "independent-question-242",
+      "tokenHashPrefix": "sha256:f2ff83e178a2",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 278,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 1.969,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "9e253aab-5337-4303-a1fe-9110823ea993",
+            "deadlineAt": 1795174862557,
+            "rejectedAt": 1795174802821
+          }
+        },
+        "rpcId": 278
+      },
+      "apiMs": 1.969,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1293.268285291,
+      "finishedMonotonic": 1293.275770083,
+      "ms": 7.484834000024421,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:40:07.884931+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 243,
+      "requestId": "mcp-243",
+      "plannedMonotonic": 1298.266120666,
+      "offsetSeconds": 1215,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-243",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 279,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 60.017,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "9e253aab-5337-4303-a1fe-9110823ea993",
+            "deadlineAt": 1795174862557,
+            "rejectedAt": 1795174807882
+          }
+        },
+        "rpcId": 279
+      },
+      "apiMs": 60.017,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1298.271032708,
+      "finishedMonotonic": 1298.337496,
+      "ms": 66.46337500001209,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:42:32.837348+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 272,
+      "requestId": "mcp-272",
+      "plannedMonotonic": 1443.266120666,
+      "offsetSeconds": 1360,
+      "status": 503,
+      "identity": "agent08",
+      "userId": "uat_zb_agent08",
+      "session": "independent-question-272",
+      "tokenHashPrefix": "sha256:4e5a214a445e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 312,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 12.81,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f6195d6e-8734-418a-80c5-a3988ca5955d",
+            "deadlineAt": 1795175012425,
+            "rejectedAt": 1795174952836
+          }
+        },
+        "rpcId": 312
+      },
+      "apiMs": 12.81,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1443.271342916,
+      "finishedMonotonic": 1443.2877385,
+      "ms": 16.395624999859137,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:42:37.856113+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 273,
+      "requestId": "mcp-273",
+      "plannedMonotonic": 1448.266120666,
+      "offsetSeconds": 1365,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-273",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 313,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 33.524,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f6195d6e-8734-418a-80c5-a3988ca5955d",
+            "deadlineAt": 1795175012425,
+            "rejectedAt": 1795174957854
+          }
+        },
+        "rpcId": 313
+      },
+      "apiMs": 33.524,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1448.269701541,
+      "finishedMonotonic": 1448.306428875,
+      "ms": 36.72741700006554,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:42:42.823114+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 274,
+      "requestId": "mcp-274",
+      "plannedMonotonic": 1453.266120666,
+      "offsetSeconds": 1370,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-274",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 314,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 4.443,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "d8f41f08-930d-4360-828e-f35e37157e2c",
+            "deadlineAt": 1795175021614,
+            "rejectedAt": 1795174962820
+          }
+        },
+        "rpcId": 314
+      },
+      "apiMs": 4.443,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1453.266422416,
+      "finishedMonotonic": 1453.27335375,
+      "ms": 6.931417000032525,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:45:07.829758+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 303,
+      "requestId": "mcp-303",
+      "plannedMonotonic": 1598.266120666,
+      "offsetSeconds": 1515,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-303",
+      "tokenHashPrefix": "sha256:6f1dd18f7b5f",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 347,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 3.732,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f2610612-07b4-4ddf-b325-62399d496880",
+            "deadlineAt": 1795175163605,
+            "rejectedAt": 1795175107828
+          }
+        },
+        "rpcId": 347
+      },
+      "apiMs": 3.732,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1598.272518916,
+      "finishedMonotonic": 1598.277824416,
+      "ms": 5.305541999859997,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:45:12.833775+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 304,
+      "requestId": "mcp-304",
+      "plannedMonotonic": 1603.266120666,
+      "offsetSeconds": 1520,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-304",
+      "tokenHashPrefix": "sha256:185f2ec344db",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 348,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 6.433,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "f2610612-07b4-4ddf-b325-62399d496880",
+            "deadlineAt": 1795175163605,
+            "rejectedAt": 1795175112832
+          }
+        },
+        "rpcId": 348
+      },
+      "apiMs": 6.433,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1603.269065541,
+      "finishedMonotonic": 1603.281765625,
+      "ms": 12.700250000079905,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:45:17.825843+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 305,
+      "requestId": "mcp-305",
+      "plannedMonotonic": 1608.266120666,
+      "offsetSeconds": 1525,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-305",
+      "tokenHashPrefix": "sha256:dffe7b5034c6",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 349,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 5.822,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "796b2806-e128-47fa-b049-00e03cbeb14d",
+            "deadlineAt": 1795175177618,
+            "rejectedAt": 1795175117822
+          }
+        },
+        "rpcId": 349
+      },
+      "apiMs": 5.822,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1608.266776833,
+      "finishedMonotonic": 1608.273760416,
+      "ms": 6.983624999975291,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:47:37.837475+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 333,
+      "requestId": "mcp-333",
+      "plannedMonotonic": 1748.266120666,
+      "offsetSeconds": 1665,
+      "status": 503,
+      "identity": "agent09",
+      "userId": "uat_zb_agent09",
+      "session": "independent-question-333",
+      "tokenHashPrefix": "sha256:d2f83ecf2d6e",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 381,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 2.363,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "5f9d0b2f-bcdb-4897-98f0-1f733c380914",
+            "deadlineAt": 1795175313444,
+            "rejectedAt": 1795175257830
+          }
+        },
+        "rpcId": 381
+      },
+      "apiMs": 2.363,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1748.268664791,
+      "finishedMonotonic": 1748.283290041,
+      "ms": 14.625416999933805,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:47:42.849364+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 334,
+      "requestId": "mcp-334",
+      "plannedMonotonic": 1753.266120666,
+      "offsetSeconds": 1670,
+      "status": 503,
+      "identity": "agent10",
+      "userId": "uat_zb_agent10",
+      "session": "independent-question-334",
+      "tokenHashPrefix": "sha256:0aceb050715c",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 382,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 25.9,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "5f9d0b2f-bcdb-4897-98f0-1f733c380914",
+            "deadlineAt": 1795175313444,
+            "rejectedAt": 1795175262847
+          }
+        },
+        "rpcId": 382
+      },
+      "apiMs": 25.9,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1753.267995416,
+      "finishedMonotonic": 1753.295103541,
+      "ms": 27.10816699982388,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T11:47:47.845737+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 335,
+      "requestId": "mcp-335",
+      "plannedMonotonic": 1758.266120666,
+      "offsetSeconds": 1675,
+      "status": 503,
+      "identity": "agent11",
+      "userId": "uat_zb_agent11",
+      "session": "independent-question-335",
+      "tokenHashPrefix": "sha256:a8bb60ff2b6d",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 383,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 17.448,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "0d0ff123-7031-46df-892c-d10981e33184",
+            "deadlineAt": 1795175326660,
+            "rejectedAt": 1795175267844
+          }
+        },
+        "rpcId": 383
+      },
+      "apiMs": 17.448,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 1758.269149541,
+      "finishedMonotonic": 1758.2914025,
+      "ms": 22.25300000009156,
+      "censoredNatural": false
+    }
+  ],
+  "unexpectedErrors": [
+    {
+      "at": "2026-11-20T11:37:54.867588+00:00",
+      "kind": "request-terminal",
+      "lane": "audit-progress",
+      "iteration": 214,
+      "requestId": "audit-progress-214",
+      "plannedMonotonic": 1153.266120666,
+      "offsetSeconds": 1070,
+      "ok": false,
+      "status": 0,
+      "error": "owned process deadline; actual owned group absent after bounded 2s cleanup grace",
+      "errorType": "TimeoutError",
+      "dispatchedMonotonic": 1153.269368916,
+      "finishedMonotonic": 1165.322133333,
+      "ms": 12052.764458999945,
+      "censoredNatural": false
+    }
+  ],
+  "userVisibleFailureCount": 33,
+  "completedMutations": 12,
+  "budgetPassed": true,
+  "uncovered": [
+    "full F61 matrix",
+    "F62 three-category saturation",
+    "full F63 lifecycle",
+    "original high-tier R-CAV",
+    "customer root cause"
+  ],
+  "runningElapsedSeconds": 2126.891441167,
+  "runningDeadlineExceeded": false,
+  "cleanupStartedAt": "2026-11-20T11:53:56.532283+00:00",
+  "workersAtCleanup": 0,
+  "cleanup": {
+    "at": "2026-11-20T11:53:58.062748+00:00",
+    "resourcesAbsent": {
+      "lucy-core1883-f88596-app": true,
+      "lucy-core1883-f88596-db": true,
+      "lucy-core1883-f88596": true,
+      "lucy-core1883-f88596-data": true
+    },
+    "privateRemoved": true,
+    "errors": [],
+    "complete": true
+  },
+  "workersAfterCleanup": 0,
+  "cleanupElapsedSeconds": 1.5612556249998306,
+  "cleanupDeadlineExceeded": false,
+  "finishedAt": "2026-11-20T11:53:58.093565+00:00",
+  "totalElapsedSeconds": 2128.452727209,
+  "toolQualification": {
+    "status": "PASS",
+    "scope": "counter/termination/cleanup qualification only; product failures retained",
+    "countsConserved": true,
+    "controlledStop": false,
+    "productStatus": "PASS WITH GAP"
+  }
+}

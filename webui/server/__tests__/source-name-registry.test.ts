@@ -1,7 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { parse } from "yaml";
 import {
   allocateSourceNames,
   findSourceNameConflicts,
@@ -10,6 +11,11 @@ import {
   type ConnectionSourceRegistry,
   type SourceManifestEntry
 } from "../source-name-registry";
+
+vi.mock("yaml", async () => {
+  const actual = await vi.importActual<typeof import("yaml")>("yaml");
+  return { ...actual, parse: vi.fn(actual.parse) };
+});
 
 function emptyRegistry(connectionId = "hive-1"): ConnectionSourceRegistry {
   return { connectionId, manifests: [] };
@@ -192,6 +198,7 @@ describe("readConnectionSourceManifests", () => {
   afterEach(async () => {
     if (root) await rm(root, { recursive: true, force: true });
     root = undefined;
+    vi.clearAllMocks();
   });
 
   async function projectWithManifests(
@@ -240,5 +247,94 @@ describe("readConnectionSourceManifests", () => {
     await expect(readConnectionSourceManifests(projectRoot, "hive-1")).rejects.toThrow(
       /broken|parse|YAML|Manifest/i
     );
+  });
+
+  it("reuses an unchanged 1883-table parse while returning independently mutable snapshots", async () => {
+    const tables = Object.fromEntries(Array.from({ length: 1883 }, (_, index) => [
+      `reuse_${index}`, { table: `uat.physical_${index}`, columns: [{ name: "id", type: "number" }] }
+    ]));
+    const content = JSON.stringify({ tables, testMarker: "CA-05 unchanged 1883" });
+    const projectRoot = await projectWithManifests("hive-1", [{ schema: "uat", yaml: content }]);
+    const first = await readConnectionSourceManifests(projectRoot, "hive-1");
+    first.manifests[0]!.tables.reuse_0!.table = "mutated.by.caller";
+    delete first.manifests[0]!.tables.reuse_1;
+    const second = await readConnectionSourceManifests(projectRoot, "hive-1");
+    expect(second.manifests[0]!.tables.reuse_0!.table).toBe("uat.physical_0");
+    expect(second.manifests[0]!.tables.reuse_1!.table).toBe("uat.physical_1");
+    expect(Object.keys(second.manifests[0]!.tables)).toHaveLength(1883);
+    expect(vi.mocked(parse).mock.calls.filter(([text]) => text === content)).toHaveLength(1);
+  });
+
+  it("keeps connection and target paths separate when exact contents match", async () => {
+    const content = "# CA-05 cross-path\ntables:\n  shared:\n    table: uat.shared\n";
+    const projectRoot = await projectWithManifests("hive-1", [{ schema: "first", yaml: content }]);
+    const otherDir = path.join(projectRoot, "config/semantic-layer/hive-2/_schema");
+    await mkdir(otherDir, { recursive: true });
+    await writeFile(path.join(otherDir, "second.yaml"), content);
+    const first = await readConnectionSourceManifests(projectRoot, "hive-1");
+    const second = await readConnectionSourceManifests(projectRoot, "hive-2");
+    expect(first.connectionId).toBe("hive-1");
+    expect(first.manifests[0]!.targetPath).toBe("hive-1/_schema/first.yaml");
+    expect(second.connectionId).toBe("hive-2");
+    expect(second.manifests[0]!.targetPath).toBe("hive-2/_schema/second.yaml");
+    expect(vi.mocked(parse).mock.calls.filter(([text]) => text === content)).toHaveLength(1);
+  });
+
+  it("rereads same-size content changes even when filesystem timestamps are restored", async () => {
+    const oldContent = "# CA-05 same-size\ntables:\n  name:\n    table: uat.old\n";
+    const newContent = oldContent.replace("uat.old", "uat.new");
+    const projectRoot = await projectWithManifests("hive-1", [{ schema: "uat", yaml: oldContent }]);
+    const file = path.join(projectRoot, "config/semantic-layer/hive-1/_schema/uat.yaml");
+    const metadata = await stat(file);
+    await readConnectionSourceManifests(projectRoot, "hive-1");
+    await writeFile(file, newContent);
+    await utimes(file, metadata.atime, metadata.mtime);
+    const current = await readConnectionSourceManifests(projectRoot, "hive-1");
+    expect(current.manifests[0]!.tables.name!.table).toBe("uat.new");
+    expect(vi.mocked(parse).mock.calls.filter(([text]) => text === newContent)).toHaveLength(1);
+  });
+
+  it("does not let a previous successful parse hide a subsequent read failure", async () => {
+    const content = "# CA-05 read failure\ntables:\n  source:\n    table: uat.source\n";
+    const projectRoot = await projectWithManifests("hive-1", [{ schema: "uat", yaml: content }]);
+    const file = path.join(projectRoot, "config/semantic-layer/hive-1/_schema/uat.yaml");
+    await readConnectionSourceManifests(projectRoot, "hive-1");
+    await rm(file);
+    await mkdir(file);
+    await expect(readConnectionSourceManifests(projectRoot, "hive-1")).rejects.toThrow(/读取|Manifest/);
+  });
+
+  it("rejects changed invalid contents and recovers only after valid bytes return", async () => {
+    const content = "# CA-05 changed invalid\ntables:\n  source:\n    table: uat.source\n";
+    const projectRoot = await projectWithManifests("hive-1", [{ schema: "uat", yaml: content }]);
+    const file = path.join(projectRoot, "config/semantic-layer/hive-1/_schema/uat.yaml");
+    await readConnectionSourceManifests(projectRoot, "hive-1");
+    await writeFile(file, "tables: [ invalid yaml");
+    await expect(readConnectionSourceManifests(projectRoot, "hive-1")).rejects.toThrow(/uat|解析|Manifest/);
+    await writeFile(file, content);
+    expect((await readConnectionSourceManifests(projectRoot, "hive-1")).manifests[0]!.tables.source!.table).toBe("uat.source");
+  });
+
+  it("evicts older parse results rather than retaining every distinct manifest", async () => {
+    const first = "# CA-05 eviction first\ntables:\n  source:\n    table: uat.source\n";
+    const projectRoot = await projectWithManifests("hive-1", [{ schema: "uat", yaml: first }]);
+    const file = path.join(projectRoot, "config/semantic-layer/hive-1/_schema/uat.yaml");
+    await readConnectionSourceManifests(projectRoot, "hive-1");
+    for (let index = 0; index < 8; index += 1) {
+      await writeFile(file, `# CA-05 eviction ${index}\ntables:\n  source:\n    table: uat.source_${index}\n`);
+      await readConnectionSourceManifests(projectRoot, "hive-1");
+    }
+    await writeFile(file, first);
+    expect((await readConnectionSourceManifests(projectRoot, "hive-1")).manifests[0]!.tables.source!.table).toBe("uat.source");
+    expect(vi.mocked(parse).mock.calls.filter(([text]) => text === first)).toHaveLength(2);
+  });
+
+  it("accepts oversized valid manifests without retaining their parse results", async () => {
+    const content = `# ${"x".repeat(1024 * 1024)}\ntables:\n  source:\n    table: uat.source\n`;
+    const projectRoot = await projectWithManifests("hive-1", [{ schema: "uat", yaml: content }]);
+    for (let index = 0; index < 2; index += 1) {
+      expect((await readConnectionSourceManifests(projectRoot, "hive-1")).manifests[0]!.tables.source!.table).toBe("uat.source");
+    }
+    expect(vi.mocked(parse).mock.calls.filter(([text]) => text === content)).toHaveLength(2);
   });
 });

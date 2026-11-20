@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Isolated real Docker/MySQL/MCP verification for P1-60 (no production credentials)."""
 from __future__ import annotations
-import argparse, concurrent.futures, datetime, hashlib, http.cookiejar, json, math, os
+import argparse, concurrent.futures, datetime, decimal, hashlib, http.cookiejar, json, math, os
 import pathlib, random, re, secrets, shutil, sqlite3, subprocess, tempfile, time, urllib.error, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -19,6 +19,29 @@ def run(cmd, data=None, check=True, timeout=240):
     if check and r.returncode: raise RuntimeError('command failed '+str(cmd[:3])+': '+scrub(r.stderr[-1500:]))
     return r.stdout.strip()
 
+def wait_fixture_mysql_tcp_ready(database, deadline, clock=time.monotonic, pause=time.sleep, execute=subprocess.run):
+    """Fixture readiness only: retry a fixed TCP SELECT1, never initialization/business SQL."""
+    started=clock();attempts=[];ready=False
+    command=['docker','exec',database,'sh','-c','MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --protocol=TCP -h127.0.0.1 -uroot -N -B -e "SELECT 1"']
+    while clock()<deadline:
+        remaining=deadline-clock()
+        if remaining<=0:break
+        timeout=min(5,remaining)
+        try:
+            result=execute(command,capture_output=True,text=True,timeout=timeout)
+            receipt={'at':now(),'returnCode':result.returncode,'stdout':result.stdout.strip(),'stderr':scrub(result.stderr[-1000:]),'timeoutSeconds':timeout,'timedOut':False}
+            attempts.append(receipt)
+            if clock()<=deadline and result.returncode==0 and result.stdout.strip()=='1':
+                ready=True;break
+        except subprocess.TimeoutExpired:
+            attempts.append({'at':now(),'timedOut':True,'timeoutSeconds':timeout})
+        remaining=deadline-clock()
+        if remaining>0:pause(min(1,remaining))
+    return {'ready':ready,'check':'TCP127.0.0.1 SELECT1 before one fixture initialization',
+            'startedMonotonic':started,'deadlineMonotonic':deadline,'finishedMonotonic':clock(),
+            'elapsedSeconds':clock()-started,'attempts':attempts}
+
+
 def sha(s): return hashlib.sha256(s.encode()).hexdigest()
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def require(condition,message):
@@ -35,6 +58,50 @@ def inner(r):
 def successful(r):
     value=inner(r)
     return r['httpStatus']==200 and not r['body'].get('error') and not r['body'].get('result',{}).get('isError',False) and not (isinstance(value,dict) and value.get('reason') in ['question_budget_exhausted','question_budget_unavailable'])
+
+def verify_query_aggregate(data, expected, source=SOURCE):
+    """Bind the synthetic aggregate oracle to explicit requested measure names."""
+    require(isinstance(data,dict),'query result schema missing')
+    rows=data.get('rows') if 'rows' in data else data.get('data')
+    headers=data.get('headers')
+    if isinstance(rows,dict):
+        nested_headers=rows.get('headers')
+        require(headers is None or nested_headers is None or headers==nested_headers,
+                'query result headers conflict')
+        if nested_headers is not None:headers=nested_headers
+        rows=rows.get('rows')
+    require(isinstance(rows,list) and len(rows)==1,'query aggregate row missing')
+    def names(labels):
+        require(isinstance(labels,list) and len(labels)==len(expected),'query column schema mismatch')
+        normalized=[]
+        for label in labels:
+            require(isinstance(label,str),'query column label missing')
+            name=label[len(source)+1:] if label.startswith(source+'.') else label
+            require(name in expected,'query unknown measure label: '+repr(label))
+            normalized.append(name)
+        require(len(set(normalized))==len(normalized) and set(normalized)==set(expected),
+                'query duplicate or missing measure label')
+        return normalized
+    header_names=names(headers) if headers is not None else None
+    row=rows[0]
+    if isinstance(row,dict):
+        bound=dict(zip(names(list(row)),row.values()))
+    else:
+        require(isinstance(row,list) and header_names is not None and len(row)==len(header_names),
+                'query positional row requires matching headers')
+        bound=dict(zip(header_names,row))
+    for name,expected_value in expected.items():
+        value=bound[name]
+        require(not isinstance(value,bool) and isinstance(value,(int,float,str)),
+                'query nonnumeric measure: '+name)
+        if isinstance(value,str):
+            require(re.fullmatch(r'-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?',value) is not None,
+                    'query invalid numeric string: '+name)
+        try:actual=decimal.Decimal(str(value))
+        except decimal.InvalidOperation:raise AssertionError('query invalid numeric measure: '+name)
+        require(actual.is_finite() and actual==decimal.Decimal(str(expected_value)),
+                'query oracle mismatch for '+name+': '+repr(value)+' expected '+repr(expected_value))
+    return {'actualRow':row,'values':bound}
 
 class Rig:
     def __init__(self,image,out,label,variant='I0'):
@@ -83,15 +150,9 @@ class Rig:
         if not successful(r) and not save:self.save(name+'-failed-query',r)
         require(successful(r),name+' query failed: '+json.dumps(r,ensure_ascii=False)[:1500])
         data=inner(r)
-        # Column names may be rewritten by KTX; compare the actual single aggregate row.
-        rows=data.get('rows') or data.get('data') if isinstance(data,dict) else None
-        if isinstance(rows,dict):rows=rows.get('rows')
-        require(isinstance(rows,list) and len(rows)==1,name+' unexpected data '+repr(data)[:1200])
-        row=rows[0];values=list(row.values()) if isinstance(row,dict) else row
-        values=[float(x) for x in values if isinstance(x,(int,float)) or isinstance(x,str) and re.fullmatch(r'-?\d+(\.\d+)?',x)]
-        expected=[2,30] if who=='b' else [4,100]
-        if bound:expected=expected[:1]
-        require(sorted(values)==sorted(expected),name+' oracle mismatch '+repr(row)+' expected '+repr(expected))
+        expected={'order_count':2 if who=='b' else 4}
+        if not bound:expected['amount_sum']=30 if who=='b' else 100
+        verify_query_aggregate(data,expected)
         return r
     def hidden(self,name,who='a',session=None,force=True):
         init=self.call(name+'-init',method='initialize',who=who,session=session)
@@ -168,10 +229,10 @@ class Rig:
         boot,env=self.seed();run(['docker','volume','create',self.data_volume]);self.created.append('data')
         run(['docker','network','create',self.network]);self.created.append('network')
         run(['docker','run','-d','--name',self.db,'--network',self.network,'--env-file',env,'mysql:8.4']);self.created.append('db')
-        for _ in range(90):
-            if run(['docker','exec',self.db,'sh','-c','MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqladmin ping -uroot --silent'],check=False)=='mysqld is alive':break
-            time.sleep(1)
-        else:raise RuntimeError('mysql readiness timeout')
+        mysql_deadline=time.monotonic()+90
+        mysql_readiness=wait_fixture_mysql_tcp_ready(self.db,mysql_deadline)
+        self.save('mysql-tcp-readiness',mysql_readiness)
+        if not mysql_readiness['ready']:raise RuntimeError('mysql readiness timeout')
         self.sql("CREATE DATABASE uat; CREATE TABLE uat."+SOURCE+"(order_id INT PRIMARY KEY,tenant VARCHAR(20),amount INT); INSERT INTO uat."+SOURCE+" VALUES(1,'NORTH',10),(2,'NORTH',20),(3,'SOUTH',30),(4,'SOUTH',40); CREATE USER 'lucy'@'%' IDENTIFIED BY '"+self.dbpass+"'; GRANT SELECT,SHOW VIEW ON uat.* TO 'lucy'@'%';")
         oracle=self.sql('SELECT COUNT(DISTINCT order_id),SUM(amount) FROM uat.'+SOURCE+'; SELECT COUNT(DISTINCT order_id),SUM(amount) FROM uat.'+SOURCE+" WHERE tenant='NORTH';")
         self.save('oracle',{'sqlResult':oracle});require(oracle.splitlines()==['4\t100','2\t30'],'independent oracle failed')

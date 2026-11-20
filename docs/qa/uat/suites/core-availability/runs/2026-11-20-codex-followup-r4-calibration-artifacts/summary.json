@@ -1,0 +1,1841 @@
+{
+  "startedAt": "2026-11-20T09:49:42.247893+00:00",
+  "status": "FAIL",
+  "mode": "calibration",
+  "runnerSha256": "a9a94633a350c9060dbd3a4be43d8e3466268e732546f7f3fe79a5ef76766790",
+  "baseSha256": "182c84359b2ca98f33c0e171e7bed00f8fdceb2f8af7ba4af4f11007e97eca2a",
+  "helperSha256": "18d35306116483f38e82156eb47ca3dfb89deedb74e5a3d7832744b6a5c59d33",
+  "parameters": {
+    "image": "sha256:6c32cddd5bd8186b7c15d218dd5cef9d53b895a0eb54a40331d7a5f7ed99fdc2",
+    "out": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r4-contract",
+    "mode": "calibration",
+    "contract_policy": "p1-69",
+    "contract_recovery_seconds": 180,
+    "contract_recovery_concurrency": 2,
+    "seconds": 120.0,
+    "cycle_seconds": 60.0,
+    "mcp_concurrency": 12,
+    "mcp_timeout": 180,
+    "mutation_timeout": 180,
+    "drain_seconds": 190.0,
+    "collect_seconds": 90.0,
+    "audit_settle_seconds": 120.0,
+    "overall_seconds": 2140.0,
+    "cleanup_seconds": 90.0,
+    "audit_evidence_copy": true,
+    "io_control": true,
+    "io_seconds": 30.0,
+    "recovery_seconds": 30.0,
+    "profile_seconds": 0.0,
+    "seed_rows": 200000,
+    "cycle_seed_rows": 3000,
+    "stop_after": null,
+    "keep_resources": false
+  },
+  "scope": "FUP engineering combination only; not full F61/F62/F63/R-CAV or customer release",
+  "windows": [
+    {
+      "name": "natural",
+      "start": "2026-11-20T09:51:08.421433+00:00",
+      "plannedEnd": "2026-11-20T09:53:08.421433+00:00",
+      "cpuProfiler": false,
+      "end": "2026-11-20T09:53:08.421433+00:00"
+    },
+    {
+      "name": "explicit-contract-recovery",
+      "start": "2026-11-20T09:53:11.840834+00:00",
+      "naturalPerformanceWindow": false,
+      "end": "2026-11-20T09:53:45.712154+00:00"
+    },
+    {
+      "name": "diagnostic-fifo-control",
+      "start": "2026-11-20T09:53:45.712168+00:00",
+      "naturalPerformanceWindow": false,
+      "end": "2026-11-20T09:54:27.110259+00:00"
+    }
+  ],
+  "cpuProfilerInNaturalWindow": false,
+  "deadlinePolicy": "running deadline plus independent bounded cleanup grace",
+  "runningDeadlineMonotonic": 2140.073563916,
+  "cleanupGraceSeconds": 90.0,
+  "soakStartedAt": "2026-11-20T09:51:08.421433+00:00",
+  "naturalPlannedFinishedAt": "2026-11-20T09:53:08.421433+00:00",
+  "naturalStartedMonotonic": 86.250142875,
+  "naturalDeadlineMonotonic": 206.250142875,
+  "mainPid": "5977",
+  "naturalObservedSeconds": 120.0,
+  "soakFinishedAt": "2026-11-20T09:53:08.421433+00:00",
+  "workersAfterDrain": 0,
+  "drainFinishedAt": "2026-11-20T09:53:11.840386+00:00",
+  "contractRecovery": {
+    "candidates": 7,
+    "workersAlive": 0,
+    "deadlineMonotonic": 389.72235275,
+    "finishedMonotonic": 243.538371375
+  },
+  "ioControlFacts": {
+    "observedWorkers": [
+      "9363:6243391",
+      "9496:6244391"
+    ],
+    "blockedWitnesses": [
+      "9363:6243391",
+      "9496:6244391"
+    ],
+    "actualTerminated": [
+      "9363:6243391",
+      "9496:6244391"
+    ],
+    "maxDiagnosticInflight": 1,
+    "sameServerPid": true,
+    "oldFifoReleasedBeforeFresh": false
+  },
+  "ioControlPassed": true,
+  "auditClosure": {
+    "cutoff": "2026-10-21T09:49:42.247643+00:00",
+    "pageSize": 1000,
+    "complete": true,
+    "eligible": 203055,
+    "linked": 203055,
+    "uniqueLinked": 203055,
+    "missingTurns": 0,
+    "wrongUsers": 0,
+    "duplicates": 0,
+    "missingLinks": 0,
+    "orphanRawLinks": 0,
+    "orphanTurnLinks": 0,
+    "pendingUsers": 0,
+    "users": 79,
+    "pages": 204,
+    "maxId": 203055,
+    "raw": 203055,
+    "historyRows": 203000,
+    "historyUsers": 67,
+    "userWatermarks": [
+      {
+        "user": "uat-core1883-history-000",
+        "newest": 202963,
+        "state": {
+          "status": "complete",
+          "watermark": "202963"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-001",
+        "newest": 202964,
+        "state": {
+          "status": "complete",
+          "watermark": "202964"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-002",
+        "newest": 202965,
+        "state": {
+          "status": "complete",
+          "watermark": "202965"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-003",
+        "newest": 202966,
+        "state": {
+          "status": "complete",
+          "watermark": "202966"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-004",
+        "newest": 202967,
+        "state": {
+          "status": "complete",
+          "watermark": "202967"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-005",
+        "newest": 202968,
+        "state": {
+          "status": "complete",
+          "watermark": "202968"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-006",
+        "newest": 202969,
+        "state": {
+          "status": "complete",
+          "watermark": "202969"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-007",
+        "newest": 202970,
+        "state": {
+          "status": "complete",
+          "watermark": "202970"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-008",
+        "newest": 202971,
+        "state": {
+          "status": "complete",
+          "watermark": "202971"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-009",
+        "newest": 202972,
+        "state": {
+          "status": "complete",
+          "watermark": "202972"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-010",
+        "newest": 202973,
+        "state": {
+          "status": "complete",
+          "watermark": "202973"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-011",
+        "newest": 202974,
+        "state": {
+          "status": "complete",
+          "watermark": "202974"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-012",
+        "newest": 202975,
+        "state": {
+          "status": "complete",
+          "watermark": "202975"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-013",
+        "newest": 202976,
+        "state": {
+          "status": "complete",
+          "watermark": "202976"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-014",
+        "newest": 202977,
+        "state": {
+          "status": "complete",
+          "watermark": "202977"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-015",
+        "newest": 202978,
+        "state": {
+          "status": "complete",
+          "watermark": "202978"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-016",
+        "newest": 202979,
+        "state": {
+          "status": "complete",
+          "watermark": "202979"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-017",
+        "newest": 202980,
+        "state": {
+          "status": "complete",
+          "watermark": "202980"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-018",
+        "newest": 202981,
+        "state": {
+          "status": "complete",
+          "watermark": "202981"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-019",
+        "newest": 202982,
+        "state": {
+          "status": "complete",
+          "watermark": "202982"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-020",
+        "newest": 202983,
+        "state": {
+          "status": "complete",
+          "watermark": "202983"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-021",
+        "newest": 202984,
+        "state": {
+          "status": "complete",
+          "watermark": "202984"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-022",
+        "newest": 202985,
+        "state": {
+          "status": "complete",
+          "watermark": "202985"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-023",
+        "newest": 202986,
+        "state": {
+          "status": "complete",
+          "watermark": "202986"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-024",
+        "newest": 202987,
+        "state": {
+          "status": "complete",
+          "watermark": "202987"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-025",
+        "newest": 202988,
+        "state": {
+          "status": "complete",
+          "watermark": "202988"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-026",
+        "newest": 202989,
+        "state": {
+          "status": "complete",
+          "watermark": "202989"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-027",
+        "newest": 202990,
+        "state": {
+          "status": "complete",
+          "watermark": "202990"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-028",
+        "newest": 202991,
+        "state": {
+          "status": "complete",
+          "watermark": "202991"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-029",
+        "newest": 202992,
+        "state": {
+          "status": "complete",
+          "watermark": "202992"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-030",
+        "newest": 202993,
+        "state": {
+          "status": "complete",
+          "watermark": "202993"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-031",
+        "newest": 202994,
+        "state": {
+          "status": "complete",
+          "watermark": "202994"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-032",
+        "newest": 202995,
+        "state": {
+          "status": "complete",
+          "watermark": "202995"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-033",
+        "newest": 202996,
+        "state": {
+          "status": "complete",
+          "watermark": "202996"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-034",
+        "newest": 202997,
+        "state": {
+          "status": "complete",
+          "watermark": "202997"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-035",
+        "newest": 202998,
+        "state": {
+          "status": "complete",
+          "watermark": "202998"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-036",
+        "newest": 202999,
+        "state": {
+          "status": "complete",
+          "watermark": "202999"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-037",
+        "newest": 203000,
+        "state": {
+          "status": "complete",
+          "watermark": "203000"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-038",
+        "newest": 203001,
+        "state": {
+          "status": "complete",
+          "watermark": "203001"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-039",
+        "newest": 203002,
+        "state": {
+          "status": "complete",
+          "watermark": "203002"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-040",
+        "newest": 203003,
+        "state": {
+          "status": "complete",
+          "watermark": "203003"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-041",
+        "newest": 203004,
+        "state": {
+          "status": "complete",
+          "watermark": "203004"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-042",
+        "newest": 203005,
+        "state": {
+          "status": "complete",
+          "watermark": "203005"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-043",
+        "newest": 203006,
+        "state": {
+          "status": "complete",
+          "watermark": "203006"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-044",
+        "newest": 203007,
+        "state": {
+          "status": "complete",
+          "watermark": "203007"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-045",
+        "newest": 203008,
+        "state": {
+          "status": "complete",
+          "watermark": "203008"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-046",
+        "newest": 203009,
+        "state": {
+          "status": "complete",
+          "watermark": "203009"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-047",
+        "newest": 203010,
+        "state": {
+          "status": "complete",
+          "watermark": "203010"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-048",
+        "newest": 203011,
+        "state": {
+          "status": "complete",
+          "watermark": "203011"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-049",
+        "newest": 203012,
+        "state": {
+          "status": "complete",
+          "watermark": "203012"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-050",
+        "newest": 203013,
+        "state": {
+          "status": "complete",
+          "watermark": "203013"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-051",
+        "newest": 203014,
+        "state": {
+          "status": "complete",
+          "watermark": "203014"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-052",
+        "newest": 202948,
+        "state": {
+          "status": "complete",
+          "watermark": "202948"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-053",
+        "newest": 202949,
+        "state": {
+          "status": "complete",
+          "watermark": "202949"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-054",
+        "newest": 202950,
+        "state": {
+          "status": "complete",
+          "watermark": "202950"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-055",
+        "newest": 202951,
+        "state": {
+          "status": "complete",
+          "watermark": "202951"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-056",
+        "newest": 202952,
+        "state": {
+          "status": "complete",
+          "watermark": "202952"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-057",
+        "newest": 202953,
+        "state": {
+          "status": "complete",
+          "watermark": "202953"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-058",
+        "newest": 202954,
+        "state": {
+          "status": "complete",
+          "watermark": "202954"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-059",
+        "newest": 202955,
+        "state": {
+          "status": "complete",
+          "watermark": "202955"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-060",
+        "newest": 202956,
+        "state": {
+          "status": "complete",
+          "watermark": "202956"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-061",
+        "newest": 202957,
+        "state": {
+          "status": "complete",
+          "watermark": "202957"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-062",
+        "newest": 202958,
+        "state": {
+          "status": "complete",
+          "watermark": "202958"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-063",
+        "newest": 202959,
+        "state": {
+          "status": "complete",
+          "watermark": "202959"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-064",
+        "newest": 202960,
+        "state": {
+          "status": "complete",
+          "watermark": "202960"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-065",
+        "newest": 202961,
+        "state": {
+          "status": "complete",
+          "watermark": "202961"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat-core1883-history-066",
+        "newest": 202962,
+        "state": {
+          "status": "complete",
+          "watermark": "202962"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_a",
+        "newest": 203055,
+        "state": {
+          "status": "complete",
+          "watermark": "203055"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent01",
+        "newest": 203017,
+        "state": {
+          "status": "complete",
+          "watermark": "203017"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent02",
+        "newest": 203018,
+        "state": {
+          "status": "complete",
+          "watermark": "203018"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent03",
+        "newest": 203045,
+        "state": {
+          "status": "complete",
+          "watermark": "203045"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent04",
+        "newest": 203046,
+        "state": {
+          "status": "complete",
+          "watermark": "203046"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent05",
+        "newest": 203049,
+        "state": {
+          "status": "complete",
+          "watermark": "203049"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent06",
+        "newest": 203039,
+        "state": {
+          "status": "complete",
+          "watermark": "203039"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent07",
+        "newest": 203024,
+        "state": {
+          "status": "complete",
+          "watermark": "203024"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent08",
+        "newest": 203025,
+        "state": {
+          "status": "complete",
+          "watermark": "203025"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent09",
+        "newest": 203026,
+        "state": {
+          "status": "complete",
+          "watermark": "203026"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent10",
+        "newest": 203027,
+        "state": {
+          "status": "complete",
+          "watermark": "203027"
+        },
+        "valid": true
+      },
+      {
+        "user": "uat_zb_agent11",
+        "newest": 203028,
+        "state": {
+          "status": "complete",
+          "watermark": "203028"
+        },
+        "valid": true
+      }
+    ],
+    "elapsedSeconds": 2.344
+  },
+  "expectedHistoryRows": 203000,
+  "auditFixtureScalePassed": true,
+  "auditEvidence": {
+    "source": "task-owned synthetic audit.sqlite; SQLite backup API",
+    "cutoff": "2026-10-21T09:49:42.247643+00:00",
+    "maxId": 203055,
+    "sqliteSha256": "aee67419f007d9c06fc0dbf89707a257ff0be5853622cda75ebc2370c9f22730",
+    "gzipSha256": "00c4b1fd0136ead9775cb474626f1f649a4148363104df92ec81d399e59b02e1",
+    "sqliteBytes": 2205278208,
+    "gzipBytes": 79615583,
+    "capturedAt": "2026-11-20T09:54:50.818874+00:00",
+    "elapsedSeconds": 16.093663423998805,
+    "deadlineSeconds": 89.99999720800002,
+    "path": "audit-evidence.sqlite.gz",
+    "copied": true,
+    "collectionElapsedSeconds": 16.673483499999975,
+    "collectionDeadlineSeconds": 90.0
+  },
+  "contractAuditError": "unable to open database file",
+  "counts": {
+    "probe:/api/livez": {
+      "planned": 120,
+      "dispatched": 120,
+      "missed": 0,
+      "terminal": 120,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 120,
+      "failed": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "probe:/api/readyz": {
+      "planned": 120,
+      "dispatched": 120,
+      "missed": 0,
+      "terminal": 120,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 120,
+      "failed": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "probe:/api/health": {
+      "planned": 120,
+      "dispatched": 120,
+      "missed": 0,
+      "terminal": 120,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 120,
+      "failed": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "http": {
+      "planned": 120,
+      "dispatched": 120,
+      "missed": 0,
+      "terminal": 120,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 120,
+      "failed": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "mcp": {
+      "planned": 24,
+      "dispatched": 24,
+      "missed": 0,
+      "terminal": 24,
+      "inflight": 0,
+      "censored": 1,
+      "succeeded": 16,
+      "failed": 8,
+      "naturalSucceeded": 15,
+      "censoredSucceeded": 1,
+      "conserved": true
+    },
+    "audit-progress": {
+      "planned": 24,
+      "dispatched": 24,
+      "missed": 0,
+      "terminal": 24,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 24,
+      "failed": 0,
+      "naturalSucceeded": 24,
+      "censoredSucceeded": 0,
+      "conserved": true
+    },
+    "mutation": {
+      "planned": 2,
+      "dispatched": 2,
+      "missed": 0,
+      "terminal": 2,
+      "inflight": 0,
+      "censored": 0,
+      "succeeded": 2,
+      "failed": 0,
+      "naturalSucceeded": 2,
+      "censoredSucceeded": 0,
+      "conserved": true
+    }
+  },
+  "probeSummary": {
+    "/api/livez": {
+      "count": 120,
+      "naturalTerminalCount": 120,
+      "censoredNaturalCount": 0,
+      "non200": 0,
+      "p99Ms": 279.30054200001564,
+      "maxMs": 304.160875000008
+    },
+    "/api/readyz": {
+      "count": 120,
+      "naturalTerminalCount": 120,
+      "censoredNaturalCount": 0,
+      "non200": 0,
+      "p99Ms": 274.2196660000076,
+      "maxMs": 304.1699579999886
+    },
+    "/api/health": {
+      "count": 120,
+      "naturalTerminalCount": 120,
+      "censoredNaturalCount": 0,
+      "non200": 0,
+      "p99Ms": 348.7289590000131,
+      "maxMs": 686.1950830000012
+    }
+  },
+  "latency": {
+    "http:all-terminal": {
+      "p50Ms": 64.03595799997674,
+      "p95Ms": 749.4972499999903,
+      "p99Ms": 1090.9893330000102,
+      "maxMs": 1144.6142500000037,
+      "count": 120
+    },
+    "http:natural-success": {
+      "p50Ms": 64.03595799997674,
+      "p95Ms": 749.4972499999903,
+      "p99Ms": 1090.9893330000102,
+      "maxMs": 1144.6142500000037,
+      "count": 120
+    },
+    "mcp:all-terminal": {
+      "p50Ms": 7667.333750000012,
+      "p95Ms": 19336.877125,
+      "p99Ms": 22168.034082999995,
+      "maxMs": 22168.034082999995,
+      "count": 24
+    },
+    "mcp:natural-success": {
+      "p50Ms": 8962.174667,
+      "p95Ms": 22168.034082999995,
+      "p99Ms": 22168.034082999995,
+      "maxMs": 22168.034082999995,
+      "count": 15
+    }
+  },
+  "eventErrors": [
+    {
+      "at": "2026-11-20T09:51:23.446169+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 3,
+      "requestId": "mcp-3",
+      "plannedMonotonic": 101.250142875,
+      "offsetSeconds": 15,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-3",
+      "tokenHashPrefix": "sha256:693ef16957a8",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 7,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 16.071,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ed620a6a-c0c3-443b-8bed-609f21e7c0af",
+            "deadlineAt": 1795168339887,
+            "rejectedAt": 1795168283443
+          }
+        },
+        "rpcId": 7
+      },
+      "apiMs": 16.071,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 101.250573708,
+      "finishedMonotonic": 101.274651833,
+      "ms": 24.07820799999172,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:51:28.434586+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 4,
+      "requestId": "mcp-4",
+      "plannedMonotonic": 106.250142875,
+      "offsetSeconds": 20,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-4",
+      "tokenHashPrefix": "sha256:dc9331a80560",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 8,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 4.038,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ed620a6a-c0c3-443b-8bed-609f21e7c0af",
+            "deadlineAt": 1795168339887,
+            "rejectedAt": 1795168288432
+          }
+        },
+        "rpcId": 8
+      },
+      "apiMs": 4.038,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 106.252281083,
+      "finishedMonotonic": 106.262991916,
+      "ms": 10.710916999997266,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:51:33.429295+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 5,
+      "requestId": "mcp-5",
+      "plannedMonotonic": 111.250142875,
+      "offsetSeconds": 25,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-5",
+      "tokenHashPrefix": "sha256:0e4aed697f13",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 9,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 3.735,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ed620a6a-c0c3-443b-8bed-609f21e7c0af",
+            "deadlineAt": 1795168339887,
+            "rejectedAt": 1795168293426
+          }
+        },
+        "rpcId": 9
+      },
+      "apiMs": 3.735,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 111.252392666,
+      "finishedMonotonic": 111.2576255,
+      "ms": 5.232874999990145,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:51:38.437398+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 6,
+      "requestId": "mcp-6",
+      "plannedMonotonic": 116.250142875,
+      "offsetSeconds": 30,
+      "status": 503,
+      "identity": "agent06",
+      "userId": "uat_zb_agent06",
+      "session": "independent-question-6",
+      "tokenHashPrefix": "sha256:86ae43361858",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 10,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 7.143,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "e56dcef8-e821-4928-9f9b-9dbd449df893",
+            "deadlineAt": 1795168357451,
+            "rejectedAt": 1795168298435
+          }
+        },
+        "rpcId": 10
+      },
+      "apiMs": 7.143,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 116.253818083,
+      "finishedMonotonic": 116.265655125,
+      "ms": 11.83708300000319,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:52:10.784450+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 11,
+      "requestId": "mcp-11",
+      "plannedMonotonic": 141.250142875,
+      "offsetSeconds": 55,
+      "status": 200,
+      "identity": "agent11",
+      "userId": "uat_zb_agent11",
+      "session": "independent-question-11",
+      "tokenHashPrefix": "sha256:9973a7b73c08",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 19,
+      "machineReason": null,
+      "receipt": {
+        "httpStatus": 200,
+        "elapsedMs": 7350.654,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 19,
+          "result": {
+            "isError": true,
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"code\":\"semantic_recovery_required\",\"message\":\"该语义资产仍有未决恢复日志，恢复核验完成前不能读取或查询。\"}"
+              }
+            ]
+          }
+        },
+        "rpcId": 19
+      },
+      "apiMs": 7350.654,
+      "ok": false,
+      "error": "query rejected: None",
+      "dispatchedMonotonic": 141.257661166,
+      "finishedMonotonic": 148.612217708,
+      "ms": 7354.556666999997,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:52:23.458059+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 15,
+      "requestId": "mcp-15",
+      "plannedMonotonic": 161.250142875,
+      "offsetSeconds": 75,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-15",
+      "tokenHashPrefix": "sha256:693ef16957a8",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 23,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 30.216,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2850b777-af0b-4b75-a96b-01328d570720",
+            "deadlineAt": 1795168402556,
+            "rejectedAt": 1795168343455
+          }
+        },
+        "rpcId": 23
+      },
+      "apiMs": 30.216,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 161.253617916,
+      "finishedMonotonic": 161.285641833,
+      "ms": 32.0239590000142,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:52:28.436545+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 16,
+      "requestId": "mcp-16",
+      "plannedMonotonic": 166.250142875,
+      "offsetSeconds": 80,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-16",
+      "tokenHashPrefix": "sha256:dc9331a80560",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 24,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 10.028,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2850b777-af0b-4b75-a96b-01328d570720",
+            "deadlineAt": 1795168402556,
+            "rejectedAt": 1795168348432
+          }
+        },
+        "rpcId": 24
+      },
+      "apiMs": 10.028,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 166.251658291,
+      "finishedMonotonic": 166.264052833,
+      "ms": 12.394624999984671,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:52:33.498298+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 17,
+      "requestId": "mcp-17",
+      "plannedMonotonic": 171.250142875,
+      "offsetSeconds": 85,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-17",
+      "tokenHashPrefix": "sha256:0e4aed697f13",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 25,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 64.553,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2850b777-af0b-4b75-a96b-01328d570720",
+            "deadlineAt": 1795168402556,
+            "rejectedAt": 1795168353495
+          }
+        },
+        "rpcId": 25
+      },
+      "apiMs": 64.553,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 171.254324208,
+      "finishedMonotonic": 171.325729833,
+      "ms": 71.40570799998613,
+      "censoredNatural": false
+    }
+  ],
+  "failurePolicy": "All failures retained. No text/window-based exemptions. Contract verdicts use the separately reviewed owner-bound policy seam.",
+  "contractFailureVerdicts": [
+    {
+      "requestId": "mcp-3",
+      "lane": "mcp",
+      "expected": false,
+      "policy": "p1-69",
+      "reason": "owner/recovery/readonly-audit proof incomplete"
+    },
+    {
+      "requestId": "mcp-4",
+      "lane": "mcp",
+      "expected": false,
+      "policy": "p1-69",
+      "reason": "owner/recovery/readonly-audit proof incomplete"
+    },
+    {
+      "requestId": "mcp-5",
+      "lane": "mcp",
+      "expected": false,
+      "policy": "p1-69",
+      "reason": "owner/recovery/readonly-audit proof incomplete"
+    },
+    {
+      "requestId": "mcp-6",
+      "lane": "mcp",
+      "expected": false,
+      "policy": "p1-69",
+      "reason": "owner/recovery/readonly-audit proof incomplete"
+    },
+    {
+      "requestId": "mcp-11",
+      "lane": "mcp",
+      "expected": false,
+      "policy": "p1-69",
+      "reason": "owner/recovery/readonly-audit proof incomplete"
+    },
+    {
+      "requestId": "mcp-15",
+      "lane": "mcp",
+      "expected": false,
+      "policy": "p1-69",
+      "reason": "owner/recovery/readonly-audit proof incomplete"
+    },
+    {
+      "requestId": "mcp-16",
+      "lane": "mcp",
+      "expected": false,
+      "policy": "p1-69",
+      "reason": "owner/recovery/readonly-audit proof incomplete"
+    },
+    {
+      "requestId": "mcp-17",
+      "lane": "mcp",
+      "expected": false,
+      "policy": "p1-69",
+      "reason": "owner/recovery/readonly-audit proof incomplete"
+    }
+  ],
+  "contractExpectedFailures": [],
+  "unexpectedErrors": [
+    {
+      "at": "2026-11-20T09:51:23.446169+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 3,
+      "requestId": "mcp-3",
+      "plannedMonotonic": 101.250142875,
+      "offsetSeconds": 15,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-3",
+      "tokenHashPrefix": "sha256:693ef16957a8",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 7,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 16.071,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ed620a6a-c0c3-443b-8bed-609f21e7c0af",
+            "deadlineAt": 1795168339887,
+            "rejectedAt": 1795168283443
+          }
+        },
+        "rpcId": 7
+      },
+      "apiMs": 16.071,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 101.250573708,
+      "finishedMonotonic": 101.274651833,
+      "ms": 24.07820799999172,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:51:28.434586+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 4,
+      "requestId": "mcp-4",
+      "plannedMonotonic": 106.250142875,
+      "offsetSeconds": 20,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-4",
+      "tokenHashPrefix": "sha256:dc9331a80560",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 8,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 4.038,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ed620a6a-c0c3-443b-8bed-609f21e7c0af",
+            "deadlineAt": 1795168339887,
+            "rejectedAt": 1795168288432
+          }
+        },
+        "rpcId": 8
+      },
+      "apiMs": 4.038,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 106.252281083,
+      "finishedMonotonic": 106.262991916,
+      "ms": 10.710916999997266,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:51:33.429295+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 5,
+      "requestId": "mcp-5",
+      "plannedMonotonic": 111.250142875,
+      "offsetSeconds": 25,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-5",
+      "tokenHashPrefix": "sha256:0e4aed697f13",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 9,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 3.735,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "ed620a6a-c0c3-443b-8bed-609f21e7c0af",
+            "deadlineAt": 1795168339887,
+            "rejectedAt": 1795168293426
+          }
+        },
+        "rpcId": 9
+      },
+      "apiMs": 3.735,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 111.252392666,
+      "finishedMonotonic": 111.2576255,
+      "ms": 5.232874999990145,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:51:38.437398+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 6,
+      "requestId": "mcp-6",
+      "plannedMonotonic": 116.250142875,
+      "offsetSeconds": 30,
+      "status": 503,
+      "identity": "agent06",
+      "userId": "uat_zb_agent06",
+      "session": "independent-question-6",
+      "tokenHashPrefix": "sha256:86ae43361858",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 10,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 7.143,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "e56dcef8-e821-4928-9f9b-9dbd449df893",
+            "deadlineAt": 1795168357451,
+            "rejectedAt": 1795168298435
+          }
+        },
+        "rpcId": 10
+      },
+      "apiMs": 7.143,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 116.253818083,
+      "finishedMonotonic": 116.265655125,
+      "ms": 11.83708300000319,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:52:10.784450+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 11,
+      "requestId": "mcp-11",
+      "plannedMonotonic": 141.250142875,
+      "offsetSeconds": 55,
+      "status": 200,
+      "identity": "agent11",
+      "userId": "uat_zb_agent11",
+      "session": "independent-question-11",
+      "tokenHashPrefix": "sha256:9973a7b73c08",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 19,
+      "machineReason": null,
+      "receipt": {
+        "httpStatus": 200,
+        "elapsedMs": 7350.654,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 19,
+          "result": {
+            "isError": true,
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"code\":\"semantic_recovery_required\",\"message\":\"该语义资产仍有未决恢复日志，恢复核验完成前不能读取或查询。\"}"
+              }
+            ]
+          }
+        },
+        "rpcId": 19
+      },
+      "apiMs": 7350.654,
+      "ok": false,
+      "error": "query rejected: None",
+      "dispatchedMonotonic": 141.257661166,
+      "finishedMonotonic": 148.612217708,
+      "ms": 7354.556666999997,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:52:23.458059+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 15,
+      "requestId": "mcp-15",
+      "plannedMonotonic": 161.250142875,
+      "offsetSeconds": 75,
+      "status": 503,
+      "identity": "agent03",
+      "userId": "uat_zb_agent03",
+      "session": "independent-question-15",
+      "tokenHashPrefix": "sha256:693ef16957a8",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 23,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 30.216,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2850b777-af0b-4b75-a96b-01328d570720",
+            "deadlineAt": 1795168402556,
+            "rejectedAt": 1795168343455
+          }
+        },
+        "rpcId": 23
+      },
+      "apiMs": 30.216,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 161.253617916,
+      "finishedMonotonic": 161.285641833,
+      "ms": 32.0239590000142,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:52:28.436545+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 16,
+      "requestId": "mcp-16",
+      "plannedMonotonic": 166.250142875,
+      "offsetSeconds": 80,
+      "status": 503,
+      "identity": "agent04",
+      "userId": "uat_zb_agent04",
+      "session": "independent-question-16",
+      "tokenHashPrefix": "sha256:dc9331a80560",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 24,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 10.028,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2850b777-af0b-4b75-a96b-01328d570720",
+            "deadlineAt": 1795168402556,
+            "rejectedAt": 1795168348432
+          }
+        },
+        "rpcId": 24
+      },
+      "apiMs": 10.028,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 166.251658291,
+      "finishedMonotonic": 166.264052833,
+      "ms": 12.394624999984671,
+      "censoredNatural": false
+    },
+    {
+      "at": "2026-11-20T09:52:33.498298+00:00",
+      "kind": "request-terminal",
+      "lane": "mcp",
+      "iteration": 17,
+      "requestId": "mcp-17",
+      "plannedMonotonic": 171.250142875,
+      "offsetSeconds": 85,
+      "status": 503,
+      "identity": "agent05",
+      "userId": "uat_zb_agent05",
+      "session": "independent-question-17",
+      "tokenHashPrefix": "sha256:0e4aed697f13",
+      "queryArguments": {
+        "connectionId": "uat-mysql",
+        "measures": [
+          "uat_begin_zero_orders.order_count",
+          "uat_begin_zero_orders.amount_sum"
+        ]
+      },
+      "problemFingerprint": "388b71a5f992e27088beb1f279be737324f2fc2f9545a48758803ffb6f6420dd",
+      "rpcId": 25,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "receipt": {
+        "httpStatus": 503,
+        "elapsedMs": 64.553,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "2850b777-af0b-4b75-a96b-01328d570720",
+            "deadlineAt": 1795168402556,
+            "rejectedAt": 1795168353495
+          }
+        },
+        "rpcId": 25
+      },
+      "apiMs": 64.553,
+      "ok": false,
+      "error": "query rejected: EXECUTION_RUNTIME_RELOADING",
+      "dispatchedMonotonic": 171.254324208,
+      "finishedMonotonic": 171.325729833,
+      "ms": 71.40570799998613,
+      "censoredNatural": false
+    }
+  ],
+  "userVisibleFailureCount": 8,
+  "completedMutations": 2,
+  "budgetPassed": true,
+  "uncovered": [
+    "full F61 matrix",
+    "F62 three-category saturation",
+    "full F63 lifecycle",
+    "original high-tier R-CAV",
+    "customer root cause"
+  ],
+  "runningElapsedSeconds": 314.68256225,
+  "runningDeadlineExceeded": false,
+  "cleanupStartedAt": "2026-11-20T09:54:56.930848+00:00",
+  "workersAtCleanup": 0,
+  "cleanup": {
+    "at": "2026-11-20T09:54:58.748535+00:00",
+    "resourcesAbsent": {
+      "lucy-core1883-669642-app": true,
+      "lucy-core1883-669642-db": true,
+      "lucy-core1883-669642": true,
+      "lucy-core1883-669642-data": true
+    },
+    "privateRemoved": true,
+    "errors": [],
+    "complete": true
+  },
+  "workersAfterCleanup": 0,
+  "cleanupElapsedSeconds": 1.8201140829999645,
+  "cleanupDeadlineExceeded": false,
+  "finishedAt": "2026-11-20T09:54:58.750990+00:00",
+  "totalElapsedSeconds": 316.50268916699997,
+  "toolQualification": {
+    "status": "PASS",
+    "scope": "counter/termination/cleanup qualification only; product failures retained",
+    "countsConserved": true,
+    "controlledStop": false,
+    "productStatus": "FAIL"
+  }
+}

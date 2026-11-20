@@ -32,7 +32,8 @@ P1-58／59 首批入口：`RACS_WEB=http://127.0.0.1:<port> RACS_CONTAINER=lucy-
 
 | Command | Layer | Purpose |
 |---|---|---|
-| `python3 scripts/uat/core-availability-1883-soak.py --image IMG --out DIR [--seconds 7200] [--cycle-seconds 300]` | uat（具名本机隔离Docker，人工执行） | R-CAV-FDE-1883局部持续运行：1883真实物理表／Manifest／启用表，正式短名上传／保存／KTX重载与20万合成审计维护；至少2小时，探针／合法HTTP／纯MCP／原生CPU及/proc观测；真实I/O控制窗分列，不签完整R-CAV或客户结论。 |
+| `python3 scripts/uat/core-availability-1883-soak.py --image IMG --out DIR [--mode formal] [--seconds 1800] [--cycle-seconds 150] [--io-control]` | uat（具名本机隔离Docker，人工执行） | CA-01整改入口：正式至少1800秒／12完整周期（默认每150秒，保留旧3600／300参数）、1883三重规模、20万合成审计；三探针／HTTP固定1Hz，普通MCP合计每5秒到达、有界并发、计划／漏发／终态／截尾可重算；CPU采样默认关闭，`--profile-seconds`只用于另窗短诊断。`--mode calibration`允许短校准，`--stop-after`仅校准停止路径，不能签正式PASS。显式`--contract-policy p1-69 --audit-evidence-copy`按确权SC03取证而仍保留失败分母；`--overall-seconds`为运行截止，另有有界`--cleanup-seconds`。FIFO真实终态／仅恢复路径与完整审计闭包单列；不签完整F61／F62／F63／R-CAV或客户结论。 |
+| `python3 scripts/uat/core-availability-1883-soak.test.py` | local（验证工具回归） | 固定到达、有界并发、计数守恒、截止／真实本地进程回收、迟到探针全量分母、审计有效关联校验等工具反例；离线测试不代替Docker校准或产品UAT。 |
 | `python3 scripts/uat/readyz-diagnostic-repro.py --baseline-image IMG --candidate-image IMG --out DIR [--seconds 120] [--verify-repair 或 --assess-only [--no-fault]]` | uat（本机隔离Docker；需具名执行授权，不进PR CI） | 默认复现旧版真实FIFO等待；`--verify-repair`验证5秒实际进程回收、120秒探针与两轮仅恢复路径的自动fresh；`--assess-only`验证真实导出／MySQL在途查询TERM／原卷恢复，`--no-fault`为诊断正常对照。仅局部，不覆盖完整F61/F62/F63。runner不在执行时改产品源码，原Spec承接授权修复；不改客户环境，不签发布结论。 |
 | `npm run smoke:fast` | platform + tier 0 fast smoke | 快速静态规范、元数据契约、WebUI L1 及轻量握手（≤45s，PR 阻塞门禁） |
 | `npm run smoke:full` | aggregate + tier 1 full smoke | 全量多数据源容器、License、Token 资产、发布回归、监控审计与 Agent E2E 就绪门禁 |
@@ -88,7 +89,7 @@ P1-58／59 首批入口：`RACS_WEB=http://127.0.0.1:<port> RACS_CONTAINER=lucy-
 | `npm --prefix webui run perf:release-baseline -- --tier release-medium --output inbox/perf-baselines/<run> [--previous <report.json>]` | release perf（发版） | 发版中档夹具＋相对上版；无上版记 `baseline-seed`。正式副本见 `formal-seed` |
 | `npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>` | release perf（正式种子） | 将通过报告晋升到 `inbox/perf-baselines/formal/<ver>-<sha>/` 并更新 `formal/LATEST`（SC-10） |
 | `cd webui && npx vitest run server/__tests__/memory-probe-diagnostics.test.ts server/__tests__/heavy-work-capacity.test.ts server/__tests__/process-drain.test.ts` | unit／component（P1-61／62／63，本机） | 核心可用性三组：探针零请求 I/O 与诊断快照、重任务容量许可生命周期、进程关停准入屏障。只证明单元／组件合同；**不代替**测试台 `UAT-SUITE-CORE-AVAILABILITY`（F61／F62／F63／R-CAV），不进 PR 专用新 job（已由 `cd webui && npm test` 覆盖）。通过 ≠ UAT PASS ≠ 可上线 |
-| `node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs` | platform／runtime（P1-63，本机） | entrypoint drain-first 顺序、退出码、预算常量、demo `stop_grace_period≥45s` 渲染核对与无凭据 IPC。不进 PR 专用新 job；真实 Docker TERM／孤儿演练须另行授权。通过 ≠ UAT PASS ≠ 可上线 |
+| `node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs scripts/runtime/ktx-reload-deadline.test.mjs` | platform／runtime（P1-63／69，本机） | entrypoint drain-first、退出码、预算、实际PID等待，以及重载过期请求不迟到重启／实际子进程剩余截止。`smoke:p0:docker-entrypoint:test`复用现有入口追加新deadline文件，无新增CI job；真实Docker TERM／重载仍须具名执行。通过 ≠ UAT PASS ≠ 可上线 |
 
 ### 2.1 Local Node / Native Addon Baseline
 
@@ -293,7 +294,7 @@ Recommended CI jobs:
 | Job | Commands |
 |---|---|
 | readyz-diagnostic-repro（人工，当前无CI job） | 上述Python命令；仅在委托人授权的隔离本机执行；不能签署整套F61/F62/F63或发布PASS |
-| core-availability-1883-soak（人工，当前无CI job） | 上述7200秒Python入口；仅同次授权的具名资源与合成数据，性能采样开销单列；不签整套UAT或发布PASS |
+| core-availability-1883-soak（人工，当前无CI job） | 上述正式1800秒／12周期或显式calibration入口；仅同次授权的具名资源与合成数据，CPU短采样／真实I/O故障另窗、全部失败保留；不签整套UAT或发布PASS；离线工具回归仅local，无新增CI job |
 | spec-and-unit | `npm run lint:spec`; `npm run lint:spec-docs`; `npm run lint:url-driven-input`; `cd webui && npm test`（含 P1-61／62／63 的 `memory-probe-diagnostics`／`diagnostic-collector-process`／`mcp-proxy-execution-stale`／`heavy-work-capacity`／`process-drain` Vitest；entrypoint实际PID及drain顺序另用本机 `node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs`，不另开 CI job） |
 | security-baseline | `npm run security:baseline` |
 | docker-smoke | `npm run smoke:p0:docker`（含 delivery-isolation 双镜像 denylist） |

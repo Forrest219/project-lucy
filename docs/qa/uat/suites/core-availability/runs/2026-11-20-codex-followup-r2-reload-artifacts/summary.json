@@ -1,0 +1,842 @@
+{
+  "scope": "P1-69 SC-01/03/04 scoped real Docker default10s and25s in-flight; not full SC/UAT/production release",
+  "startedAt": "2026-11-20T09:03:24.003505+00:00",
+  "status": "SCOPED PASS WITH GAP",
+  "image": "project-lucy:core-followup-candidate-20261120-r2",
+  "driverSha256": "2f56ca4f9b8fa7b7a99edeebd02cc6f5b3822dd5539ea86115d1b24324223478",
+  "helperSha256": "182c84359b2ca98f33c0e171e7bed00f8fdceb2f8af7ba4af4f11007e97eca2a",
+  "budgets": {
+    "clientRpcSeconds": 180,
+    "reloadClientSeconds": 65,
+    "productDrainSeconds": 20,
+    "productReloadTotalSeconds": 60
+  },
+  "cases": {
+    "short10": {
+      "sleepSeconds": 10,
+      "expectedReloadSuccess": true,
+      "pidBefore": {
+        "at": 1795165431.7410297,
+        "ktxPid": "250",
+        "startTicks": "5941860",
+        "ktx-reload.request": {
+          "exists": false,
+          "sha256": null
+        },
+        "ktx-reload.result": {
+          "exists": false,
+          "sha256": null
+        }
+      },
+      "mysqlSleepWitness": {
+        "observed": true,
+        "at": "2026-11-20T09:03:52.381973+00:00",
+        "count": "1"
+      },
+      "owner": {
+        "event": "acquire",
+        "requestId": "9930dcaf-6767-446a-ad24-83f12ed3883b",
+        "deadlineAt": 1795165492403,
+        "acquiredAt": "2026-11-20T09:03:52.405Z",
+        "activeRpcCount": 1
+      },
+      "newRefusal": {
+        "httpStatus": 503,
+        "elapsedMs": 3.02,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "9930dcaf-6767-446a-ad24-83f12ed3883b",
+            "deadlineAt": 1795165492403,
+            "rejectedAt": 1795165432417
+          }
+        }
+      },
+      "refusedBudgetBefore": null,
+      "refusedBudgetAfter": null,
+      "refusedAuditRows": [],
+      "reloadResponse": {
+        "httpStatus": 200,
+        "elapsedMs": 11399.803,
+        "body": {
+          "ok": true,
+          "data": {
+            "requestId": "9930dcaf-6767-446a-ad24-83f12ed3883b",
+            "reloadStatus": "succeeded",
+            "configVerification": "verified",
+            "mcpReachable": "reachable",
+            "requestedDigest": "e19694ecef88ac37f256bda97e785233b76f994bd16427a069da27b820400955",
+            "actualDigest": "e19694ecef88ac37f256bda97e785233b76f994bd16427a069da27b820400955",
+            "detail": "执行层已加载 3 个连接",
+            "startedAt": "2026-11-20T09:03:52.403Z",
+            "finishedAt": "2026-11-20T09:04:03.796Z",
+            "durationMs": 11393
+          }
+        }
+      },
+      "pidAtReloadTerminal": {
+        "at": 1795165443.887124,
+        "ktxPid": "1002",
+        "startTicks": "5944713",
+        "ktx-reload.request": {
+          "exists": false,
+          "sha256": null
+        },
+        "ktx-reload.result": {
+          "exists": true,
+          "sha256": "da9833534872f99bcc55f55a059a75f0b10a8346ad3a2079cb9592a3247a34f1"
+        }
+      },
+      "oldQuery": {
+        "httpStatus": 200,
+        "elapsedMs": 10579.633,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"answer_verifiability\":{\"schema_version\":\"1\",\"sources\":[{\"connectionId\":\"uat-mysql\",\"schema\":\"uat\",\"sourceName\":\"uat_begin_zero_orders\",\"table\":\"uat.uat_begin_zero_orders\",\"display\":\"uat-mysql.uat.uat_begin_zero_orders\"}],\"caliber\":{\"measures\":[\"uat_begin_zero_orders.order_count\",\"uat_begin_zero_orders.amount_sum\"],\"dimensions\":[],\"segments\":[],\"orderBy\":[],\"userFilters\":[],\"systemConstraints\":[],\"caliberBinding\":{\"status\":\"none\"},\"omissions\":{}},\"cutoff\":{\"status\":\"not_checked\",\"note\":\"数据截止期未校验\"},\"carriers\":{\"structuredContent\":\"projected\"}},\"connectionId\":\"uat-mysql\",\"dialect\":\"mysql\",\"headers\":[\"order_count\",\"amount_sum\"],\"rows\":[[4,\"100\"]],\"totalRows\":1,\"sql\":\"SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100\"}"
+              }
+            ],
+            "structuredContent": {
+              "answer_verifiability": {
+                "schema_version": "1",
+                "sources": [
+                  {
+                    "connectionId": "uat-mysql",
+                    "schema": "uat",
+                    "sourceName": "uat_begin_zero_orders",
+                    "table": "uat.uat_begin_zero_orders",
+                    "display": "uat-mysql.uat.uat_begin_zero_orders"
+                  }
+                ],
+                "caliber": {
+                  "measures": [
+                    "uat_begin_zero_orders.order_count",
+                    "uat_begin_zero_orders.amount_sum"
+                  ],
+                  "dimensions": [],
+                  "segments": [],
+                  "orderBy": [],
+                  "userFilters": [],
+                  "systemConstraints": [],
+                  "caliberBinding": {
+                    "status": "none"
+                  },
+                  "omissions": {}
+                },
+                "cutoff": {
+                  "status": "not_checked",
+                  "note": "数据截止期未校验"
+                },
+                "carriers": {
+                  "structuredContent": "projected"
+                }
+              },
+              "connectionId": "uat-mysql",
+              "dialect": "mysql",
+              "headers": [
+                "order_count",
+                "amount_sum"
+              ],
+              "rows": [
+                [
+                  4,
+                  "100"
+                ]
+              ],
+              "totalRows": 1,
+              "sql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100"
+            },
+            "_meta": {
+              "lucy": {
+                "contract": "lucy-r1-controlled-data-service",
+                "tool": "lucy_query",
+                "upstreamTool": "sl_query",
+                "sources": [
+                  {
+                    "connectionId": "uat-mysql",
+                    "schema": "uat",
+                    "sourceName": "uat_begin_zero_orders",
+                    "physicalTable": "uat.uat_begin_zero_orders",
+                    "extractionMethod": "field_ref",
+                    "confidence": "high"
+                  }
+                ],
+                "guardrails": {
+                  "rawSqlAllowed": false,
+                  "writeOperationsAllowed": false,
+                  "defaultLimit": 100,
+                  "maxLimit": 1000,
+                  "maxConcurrentQueries": 4,
+                  "effectiveLimit": 100
+                },
+                "result": {
+                  "rowCount": 1,
+                  "columnCount": 2,
+                  "truncated": false
+                },
+                "provenance": {
+                  "connectionId": "uat-mysql",
+                  "sourceName": "uat_begin_zero_orders",
+                  "measures": [
+                    "uat_begin_zero_orders.order_count",
+                    "uat_begin_zero_orders.amount_sum"
+                  ],
+                  "dimensions": null,
+                  "filters": null,
+                  "segments": null,
+                  "orderBy": null,
+                  "sourceResolution": "acl_source_map",
+                  "freshness": {
+                    "status": "not_checked",
+                    "tool": "lucy_freshness",
+                    "note": "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+                  },
+                  "truncation": "unknown; upstream did not expose a truncated flag"
+                },
+                "answer_verifiability": {
+                  "schema_version": "1",
+                  "sources": [
+                    {
+                      "connectionId": "uat-mysql",
+                      "schema": "uat",
+                      "sourceName": "uat_begin_zero_orders",
+                      "table": "uat.uat_begin_zero_orders",
+                      "display": "uat-mysql.uat.uat_begin_zero_orders"
+                    }
+                  ],
+                  "caliber": {
+                    "measures": [
+                      "uat_begin_zero_orders.order_count",
+                      "uat_begin_zero_orders.amount_sum"
+                    ],
+                    "dimensions": [],
+                    "segments": [],
+                    "orderBy": [],
+                    "userFilters": [],
+                    "systemConstraints": [],
+                    "caliberBinding": {
+                      "status": "none"
+                    },
+                    "omissions": {}
+                  },
+                  "cutoff": {
+                    "status": "not_checked",
+                    "note": "数据截止期未校验"
+                  },
+                  "carriers": {
+                    "structuredContent": "projected"
+                  }
+                }
+              }
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 4
+        }
+      },
+      "sameTokenRecovery": {
+        "httpStatus": 200,
+        "elapsedMs": 525.815,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"answer_verifiability\":{\"schema_version\":\"1\",\"sources\":[{\"connectionId\":\"uat-mysql\",\"schema\":\"uat\",\"sourceName\":\"uat_begin_zero_orders\",\"table\":\"uat.uat_begin_zero_orders\",\"display\":\"uat-mysql.uat.uat_begin_zero_orders\"}],\"caliber\":{\"measures\":[\"uat_begin_zero_orders.order_count\",\"uat_begin_zero_orders.amount_sum\"],\"dimensions\":[],\"segments\":[],\"orderBy\":[],\"userFilters\":[],\"systemConstraints\":[],\"caliberBinding\":{\"status\":\"none\"},\"omissions\":{}},\"cutoff\":{\"status\":\"not_checked\",\"note\":\"数据截止期未校验\"},\"carriers\":{\"structuredContent\":\"projected\"}},\"connectionId\":\"uat-mysql\",\"dialect\":\"mysql\",\"headers\":[\"order_count\",\"amount_sum\"],\"rows\":[[4,\"100\"]],\"totalRows\":1,\"sql\":\"SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100\"}"
+              }
+            ],
+            "structuredContent": {
+              "answer_verifiability": {
+                "schema_version": "1",
+                "sources": [
+                  {
+                    "connectionId": "uat-mysql",
+                    "schema": "uat",
+                    "sourceName": "uat_begin_zero_orders",
+                    "table": "uat.uat_begin_zero_orders",
+                    "display": "uat-mysql.uat.uat_begin_zero_orders"
+                  }
+                ],
+                "caliber": {
+                  "measures": [
+                    "uat_begin_zero_orders.order_count",
+                    "uat_begin_zero_orders.amount_sum"
+                  ],
+                  "dimensions": [],
+                  "segments": [],
+                  "orderBy": [],
+                  "userFilters": [],
+                  "systemConstraints": [],
+                  "caliberBinding": {
+                    "status": "none"
+                  },
+                  "omissions": {}
+                },
+                "cutoff": {
+                  "status": "not_checked",
+                  "note": "数据截止期未校验"
+                },
+                "carriers": {
+                  "structuredContent": "projected"
+                }
+              },
+              "connectionId": "uat-mysql",
+              "dialect": "mysql",
+              "headers": [
+                "order_count",
+                "amount_sum"
+              ],
+              "rows": [
+                [
+                  4,
+                  "100"
+                ]
+              ],
+              "totalRows": 1,
+              "sql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100"
+            },
+            "_meta": {
+              "lucy": {
+                "contract": "lucy-r1-controlled-data-service",
+                "tool": "lucy_query",
+                "upstreamTool": "sl_query",
+                "sources": [
+                  {
+                    "connectionId": "uat-mysql",
+                    "schema": "uat",
+                    "sourceName": "uat_begin_zero_orders",
+                    "physicalTable": "uat.uat_begin_zero_orders",
+                    "extractionMethod": "field_ref",
+                    "confidence": "high"
+                  }
+                ],
+                "guardrails": {
+                  "rawSqlAllowed": false,
+                  "writeOperationsAllowed": false,
+                  "defaultLimit": 100,
+                  "maxLimit": 1000,
+                  "maxConcurrentQueries": 4,
+                  "effectiveLimit": 100
+                },
+                "result": {
+                  "rowCount": 1,
+                  "columnCount": 2,
+                  "truncated": false
+                },
+                "provenance": {
+                  "connectionId": "uat-mysql",
+                  "sourceName": "uat_begin_zero_orders",
+                  "measures": [
+                    "uat_begin_zero_orders.order_count",
+                    "uat_begin_zero_orders.amount_sum"
+                  ],
+                  "dimensions": null,
+                  "filters": null,
+                  "segments": null,
+                  "orderBy": null,
+                  "sourceResolution": "acl_source_map",
+                  "freshness": {
+                    "status": "not_checked",
+                    "tool": "lucy_freshness",
+                    "note": "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+                  },
+                  "truncation": "unknown; upstream did not expose a truncated flag"
+                },
+                "answer_verifiability": {
+                  "schema_version": "1",
+                  "sources": [
+                    {
+                      "connectionId": "uat-mysql",
+                      "schema": "uat",
+                      "sourceName": "uat_begin_zero_orders",
+                      "table": "uat.uat_begin_zero_orders",
+                      "display": "uat-mysql.uat.uat_begin_zero_orders"
+                    }
+                  ],
+                  "caliber": {
+                    "measures": [
+                      "uat_begin_zero_orders.order_count",
+                      "uat_begin_zero_orders.amount_sum"
+                    ],
+                    "dimensions": [],
+                    "segments": [],
+                    "orderBy": [],
+                    "userFilters": [],
+                    "systemConstraints": [],
+                    "caliberBinding": {
+                      "status": "none"
+                    },
+                    "omissions": {}
+                  },
+                  "cutoff": {
+                    "status": "not_checked",
+                    "note": "数据截止期未校验"
+                  },
+                  "carriers": {
+                    "structuredContent": "projected"
+                  }
+                }
+              }
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 8
+        }
+      },
+      "recoveredBudget": {
+        "scope_key": "bq:uat_zb_a|sha256:ebddc88af2d4:ca06-short10-new",
+        "started_at": 1795165443999,
+        "origin_started_at": 1795165443999,
+        "calls": 1,
+        "continuations": 0,
+        "attempts": 1,
+        "peak_concurrency": 1,
+        "current_concurrency": 0,
+        "updated_at": 1795165444519,
+        "busy_ms": 485.2856670000001,
+        "round": 0,
+        "turn_id": null,
+        "window_id": 0,
+        "pending_token": null,
+        "presented_token": null,
+        "archived_busy_json": "{}"
+      },
+      "finalQueryAudit": [
+        {
+          "id": 7,
+          "request_id": "8",
+          "outcome": "ok",
+          "generated_sql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100",
+          "user_id": "uat_zb_a",
+          "lucy_session_id": "ca06-short10-new"
+        }
+      ],
+      "verdict": "SCOPED PASS"
+    },
+    "long25": {
+      "sleepSeconds": 25,
+      "expectedReloadSuccess": false,
+      "pidBefore": {
+        "at": 1795165444.905166,
+        "ktxPid": "1002",
+        "startTicks": "5944713",
+        "ktx-reload.request": {
+          "exists": false,
+          "sha256": null
+        },
+        "ktx-reload.result": {
+          "exists": true,
+          "sha256": "da9833534872f99bcc55f55a059a75f0b10a8346ad3a2079cb9592a3247a34f1"
+        }
+      },
+      "mysqlSleepWitness": {
+        "observed": true,
+        "at": "2026-11-20T09:04:05.526543+00:00",
+        "count": "1"
+      },
+      "owner": {
+        "event": "acquire",
+        "requestId": "245be41e-a4f2-4969-bba5-d3edad1236c8",
+        "deadlineAt": 1795165505547,
+        "acquiredAt": "2026-11-20T09:04:05.548Z",
+        "activeRpcCount": 1
+      },
+      "newRefusal": {
+        "httpStatus": 503,
+        "elapsedMs": 1.608,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "EXECUTION_RUNTIME_RELOADING",
+            "message": "执行层正在重载，请在重载完成后重试。系统不会自动重试本次请求。",
+            "requestId": "245be41e-a4f2-4969-bba5-d3edad1236c8",
+            "deadlineAt": 1795165505547,
+            "rejectedAt": 1795165445559
+          }
+        }
+      },
+      "refusedBudgetBefore": null,
+      "refusedBudgetAfter": null,
+      "refusedAuditRows": [],
+      "reloadResponse": {
+        "httpStatus": 200,
+        "elapsedMs": 20010.459,
+        "body": {
+          "ok": true,
+          "data": {
+            "requestId": "245be41e-a4f2-4969-bba5-d3edad1236c8",
+            "reloadStatus": "failed",
+            "configVerification": "unverified",
+            "requestedDigest": "e19694ecef88ac37f256bda97e785233b76f994bd16427a069da27b820400955",
+            "detail": "执行层重载等待在途查询结束超时；未停止执行层，请待原查询结束后重试",
+            "startedAt": "2026-11-20T09:04:05.547Z",
+            "finishedAt": "2026-11-20T09:04:25.549Z",
+            "durationMs": 20002
+          }
+        }
+      },
+      "pidAtReloadTerminal": {
+        "at": 1795165465.611503,
+        "ktxPid": "1002",
+        "startTicks": "5944713",
+        "ktx-reload.request": {
+          "exists": false,
+          "sha256": null
+        },
+        "ktx-reload.result": {
+          "exists": true,
+          "sha256": "da9833534872f99bcc55f55a059a75f0b10a8346ad3a2079cb9592a3247a34f1"
+        }
+      },
+      "oldQuery": {
+        "httpStatus": 200,
+        "elapsedMs": 25452.107,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"answer_verifiability\":{\"schema_version\":\"1\",\"sources\":[{\"connectionId\":\"uat-mysql\",\"schema\":\"uat\",\"sourceName\":\"uat_begin_zero_orders\",\"table\":\"uat.uat_begin_zero_orders\",\"display\":\"uat-mysql.uat.uat_begin_zero_orders\"}],\"caliber\":{\"measures\":[\"uat_begin_zero_orders.order_count\",\"uat_begin_zero_orders.amount_sum\"],\"dimensions\":[],\"segments\":[],\"orderBy\":[],\"userFilters\":[],\"systemConstraints\":[],\"caliberBinding\":{\"status\":\"none\"},\"omissions\":{}},\"cutoff\":{\"status\":\"not_checked\",\"note\":\"数据截止期未校验\"},\"carriers\":{\"structuredContent\":\"projected\"}},\"connectionId\":\"uat-mysql\",\"dialect\":\"mysql\",\"headers\":[\"order_count\",\"amount_sum\"],\"rows\":[[4,\"100\"]],\"totalRows\":1,\"sql\":\"SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100\"}"
+              }
+            ],
+            "structuredContent": {
+              "answer_verifiability": {
+                "schema_version": "1",
+                "sources": [
+                  {
+                    "connectionId": "uat-mysql",
+                    "schema": "uat",
+                    "sourceName": "uat_begin_zero_orders",
+                    "table": "uat.uat_begin_zero_orders",
+                    "display": "uat-mysql.uat.uat_begin_zero_orders"
+                  }
+                ],
+                "caliber": {
+                  "measures": [
+                    "uat_begin_zero_orders.order_count",
+                    "uat_begin_zero_orders.amount_sum"
+                  ],
+                  "dimensions": [],
+                  "segments": [],
+                  "orderBy": [],
+                  "userFilters": [],
+                  "systemConstraints": [],
+                  "caliberBinding": {
+                    "status": "none"
+                  },
+                  "omissions": {}
+                },
+                "cutoff": {
+                  "status": "not_checked",
+                  "note": "数据截止期未校验"
+                },
+                "carriers": {
+                  "structuredContent": "projected"
+                }
+              },
+              "connectionId": "uat-mysql",
+              "dialect": "mysql",
+              "headers": [
+                "order_count",
+                "amount_sum"
+              ],
+              "rows": [
+                [
+                  4,
+                  "100"
+                ]
+              ],
+              "totalRows": 1,
+              "sql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100"
+            },
+            "_meta": {
+              "lucy": {
+                "contract": "lucy-r1-controlled-data-service",
+                "tool": "lucy_query",
+                "upstreamTool": "sl_query",
+                "sources": [
+                  {
+                    "connectionId": "uat-mysql",
+                    "schema": "uat",
+                    "sourceName": "uat_begin_zero_orders",
+                    "physicalTable": "uat.uat_begin_zero_orders",
+                    "extractionMethod": "field_ref",
+                    "confidence": "high"
+                  }
+                ],
+                "guardrails": {
+                  "rawSqlAllowed": false,
+                  "writeOperationsAllowed": false,
+                  "defaultLimit": 100,
+                  "maxLimit": 1000,
+                  "maxConcurrentQueries": 4,
+                  "effectiveLimit": 100
+                },
+                "result": {
+                  "rowCount": 1,
+                  "columnCount": 2,
+                  "truncated": false
+                },
+                "provenance": {
+                  "connectionId": "uat-mysql",
+                  "sourceName": "uat_begin_zero_orders",
+                  "measures": [
+                    "uat_begin_zero_orders.order_count",
+                    "uat_begin_zero_orders.amount_sum"
+                  ],
+                  "dimensions": null,
+                  "filters": null,
+                  "segments": null,
+                  "orderBy": null,
+                  "sourceResolution": "acl_source_map",
+                  "freshness": {
+                    "status": "not_checked",
+                    "tool": "lucy_freshness",
+                    "note": "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+                  },
+                  "truncation": "unknown; upstream did not expose a truncated flag"
+                },
+                "answer_verifiability": {
+                  "schema_version": "1",
+                  "sources": [
+                    {
+                      "connectionId": "uat-mysql",
+                      "schema": "uat",
+                      "sourceName": "uat_begin_zero_orders",
+                      "table": "uat.uat_begin_zero_orders",
+                      "display": "uat-mysql.uat.uat_begin_zero_orders"
+                    }
+                  ],
+                  "caliber": {
+                    "measures": [
+                      "uat_begin_zero_orders.order_count",
+                      "uat_begin_zero_orders.amount_sum"
+                    ],
+                    "dimensions": [],
+                    "segments": [],
+                    "orderBy": [],
+                    "userFilters": [],
+                    "systemConstraints": [],
+                    "caliberBinding": {
+                      "status": "none"
+                    },
+                    "omissions": {}
+                  },
+                  "cutoff": {
+                    "status": "not_checked",
+                    "note": "数据截止期未校验"
+                  },
+                  "carriers": {
+                    "structuredContent": "projected"
+                  }
+                }
+              }
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 9
+        }
+      },
+      "sameTokenRecovery": {
+        "httpStatus": 200,
+        "elapsedMs": 506.96,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"answer_verifiability\":{\"schema_version\":\"1\",\"sources\":[{\"connectionId\":\"uat-mysql\",\"schema\":\"uat\",\"sourceName\":\"uat_begin_zero_orders\",\"table\":\"uat.uat_begin_zero_orders\",\"display\":\"uat-mysql.uat.uat_begin_zero_orders\"}],\"caliber\":{\"measures\":[\"uat_begin_zero_orders.order_count\",\"uat_begin_zero_orders.amount_sum\"],\"dimensions\":[],\"segments\":[],\"orderBy\":[],\"userFilters\":[],\"systemConstraints\":[],\"caliberBinding\":{\"status\":\"none\"},\"omissions\":{}},\"cutoff\":{\"status\":\"not_checked\",\"note\":\"数据截止期未校验\"},\"carriers\":{\"structuredContent\":\"projected\"}},\"connectionId\":\"uat-mysql\",\"dialect\":\"mysql\",\"headers\":[\"order_count\",\"amount_sum\"],\"rows\":[[4,\"100\"]],\"totalRows\":1,\"sql\":\"SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100\"}"
+              }
+            ],
+            "structuredContent": {
+              "answer_verifiability": {
+                "schema_version": "1",
+                "sources": [
+                  {
+                    "connectionId": "uat-mysql",
+                    "schema": "uat",
+                    "sourceName": "uat_begin_zero_orders",
+                    "table": "uat.uat_begin_zero_orders",
+                    "display": "uat-mysql.uat.uat_begin_zero_orders"
+                  }
+                ],
+                "caliber": {
+                  "measures": [
+                    "uat_begin_zero_orders.order_count",
+                    "uat_begin_zero_orders.amount_sum"
+                  ],
+                  "dimensions": [],
+                  "segments": [],
+                  "orderBy": [],
+                  "userFilters": [],
+                  "systemConstraints": [],
+                  "caliberBinding": {
+                    "status": "none"
+                  },
+                  "omissions": {}
+                },
+                "cutoff": {
+                  "status": "not_checked",
+                  "note": "数据截止期未校验"
+                },
+                "carriers": {
+                  "structuredContent": "projected"
+                }
+              },
+              "connectionId": "uat-mysql",
+              "dialect": "mysql",
+              "headers": [
+                "order_count",
+                "amount_sum"
+              ],
+              "rows": [
+                [
+                  4,
+                  "100"
+                ]
+              ],
+              "totalRows": 1,
+              "sql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100"
+            },
+            "_meta": {
+              "lucy": {
+                "contract": "lucy-r1-controlled-data-service",
+                "tool": "lucy_query",
+                "upstreamTool": "sl_query",
+                "sources": [
+                  {
+                    "connectionId": "uat-mysql",
+                    "schema": "uat",
+                    "sourceName": "uat_begin_zero_orders",
+                    "physicalTable": "uat.uat_begin_zero_orders",
+                    "extractionMethod": "field_ref",
+                    "confidence": "high"
+                  }
+                ],
+                "guardrails": {
+                  "rawSqlAllowed": false,
+                  "writeOperationsAllowed": false,
+                  "defaultLimit": 100,
+                  "maxLimit": 1000,
+                  "maxConcurrentQueries": 4,
+                  "effectiveLimit": 100
+                },
+                "result": {
+                  "rowCount": 1,
+                  "columnCount": 2,
+                  "truncated": false
+                },
+                "provenance": {
+                  "connectionId": "uat-mysql",
+                  "sourceName": "uat_begin_zero_orders",
+                  "measures": [
+                    "uat_begin_zero_orders.order_count",
+                    "uat_begin_zero_orders.amount_sum"
+                  ],
+                  "dimensions": null,
+                  "filters": null,
+                  "segments": null,
+                  "orderBy": null,
+                  "sourceResolution": "acl_source_map",
+                  "freshness": {
+                    "status": "not_checked",
+                    "tool": "lucy_freshness",
+                    "note": "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+                  },
+                  "truncation": "unknown; upstream did not expose a truncated flag"
+                },
+                "answer_verifiability": {
+                  "schema_version": "1",
+                  "sources": [
+                    {
+                      "connectionId": "uat-mysql",
+                      "schema": "uat",
+                      "sourceName": "uat_begin_zero_orders",
+                      "table": "uat.uat_begin_zero_orders",
+                      "display": "uat-mysql.uat.uat_begin_zero_orders"
+                    }
+                  ],
+                  "caliber": {
+                    "measures": [
+                      "uat_begin_zero_orders.order_count",
+                      "uat_begin_zero_orders.amount_sum"
+                    ],
+                    "dimensions": [],
+                    "segments": [],
+                    "orderBy": [],
+                    "userFilters": [],
+                    "systemConstraints": [],
+                    "caliberBinding": {
+                      "status": "none"
+                    },
+                    "omissions": {}
+                  },
+                  "cutoff": {
+                    "status": "not_checked",
+                    "note": "数据截止期未校验"
+                  },
+                  "carriers": {
+                    "structuredContent": "projected"
+                  }
+                }
+              }
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 13
+        }
+      },
+      "recoveredBudget": {
+        "scope_key": "bq:uat_zb_a|sha256:ebddc88af2d4:ca06-long25-new",
+        "started_at": 1795165471861,
+        "origin_started_at": 1795165471861,
+        "calls": 1,
+        "continuations": 0,
+        "attempts": 1,
+        "peak_concurrency": 1,
+        "current_concurrency": 0,
+        "updated_at": 1795165472363,
+        "busy_ms": 465.6693749999977,
+        "round": 0,
+        "turn_id": null,
+        "window_id": 0,
+        "pending_token": null,
+        "presented_token": null,
+        "archived_busy_json": "{}"
+      },
+      "finalQueryAudit": [
+        {
+          "id": 11,
+          "request_id": "13",
+          "outcome": "ok",
+          "generated_sql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100",
+          "user_id": "uat_zb_a",
+          "lucy_session_id": "ca06-long25-new"
+        }
+      ],
+      "verdict": "SCOPED PASS"
+    }
+  },
+  "uncovered": [
+    "full SC01 race100",
+    "SC02 disconnect/durable response edge matrix",
+    "SC05/06 CLI/supervisor late-consumption/default deadline faults",
+    "SC07 authorization tightening/two identities",
+    "SC08 three TERM phase races",
+    "SC09 startup/storage/digest failures",
+    "full SC10/11 mode matrix",
+    "formal FUP hour"
+  ],
+  "cleanup": {
+    "rm -fv lucy-readyz-reload-docker-5b4e1f-app": true,
+    "rm -fv lucy-readyz-reload-docker-5b4e1f-db": true,
+    "network rm lucy-readyz-reload-docker-5b4e1f": true,
+    "volume rm lucy-readyz-reload-docker-5b4e1f-data": true,
+    "privateRemoved": true
+  },
+  "finishedAt": "2026-11-20T09:04:33.500425+00:00"
+}

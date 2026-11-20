@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/independent-final-sql/verify.py",
+    "--base",
+    "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver",
+    "--out",
+    "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/independent-final-sql/attempt-1"
+  ],
+  "sourceSha256": "1135260fc004302f198b6d1286824a8f1dccaba6e3947d011450506f62a2c5ed",
+  "startedAt": "2026-11-20T13:17:26.148436+00:00",
+  "status": "FINISHED",
+  "pid": 23504,
+  "exitCode": 0,
+  "elapsedSeconds": 0.138153125,
+  "finishedAt": "2026-11-20T13:17:26.286863+00:00",
+  "sourceUnchanged": true
+}

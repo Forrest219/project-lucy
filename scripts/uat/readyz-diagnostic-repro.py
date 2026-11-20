@@ -80,7 +80,9 @@ class Rig(fx.Rig):
         self.data_volume=self.tag+'-data'
 
     def request(self,base,route,method='GET',body=None,headers=None,timeout=15,admin=True):
-        return super().request(base,route,method,body,headers,min(timeout,15),admin)
+        # Respect the explicitly declared caller budget. A hidden 15s cap made
+        # reload/collection callers report a budget they never actually used.
+        return super().request(base,route,method,body,headers,timeout,admin)
 
     def exec(self, *args, data=None, timeout=60):
         return fx.run(['docker','exec','-i',self.app,*args],data,timeout=timeout)
@@ -132,8 +134,8 @@ s=target.stat();print(json.dumps({'time':time.time() if False else __import__('t
         http=self.api(name+'-project','/api/project',method='GET')
         return {'initialize':init['httpStatus'],'toolsList':tools['httpStatus'],'query':result['httpStatus'],'oracle':'count=4,sum=100','httpProject':http['httpStatus']}
 
-    def logs(self,name):
-        r=subprocess.run(['docker','logs','--timestamps',self.app],capture_output=True,text=True)
+    def logs(self,name,timeout=30):
+        r=subprocess.run(['docker','logs','--timestamps',self.app],capture_output=True,text=True,timeout=timeout)
         self.save(name,fx.scrub(r.stdout+r.stderr))
 
 def stats(samples):

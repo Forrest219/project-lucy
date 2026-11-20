@@ -1,0 +1,2234 @@
+{
+  "issues": [],
+  "naturalStartMonotonic": 86.250142875,
+  "naturalDeadlineMonotonic": 206.250142875,
+  "lanes": {
+    "probe:/api/livez": {
+      "planned": 120,
+      "dispatched": 120,
+      "missed": 0,
+      "terminal": 120,
+      "inflight": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 120,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 15.992541000002802,
+        "p95Ms": 225.448125000014,
+        "p99Ms": 279.30054200001564,
+        "maxMs": 304.160875000008
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 15.992541000002802,
+        "p95Ms": 225.448125000014,
+        "p99Ms": 279.30054200001564,
+        "maxMs": 304.160875000008
+      }
+    },
+    "probe:/api/readyz": {
+      "planned": 120,
+      "dispatched": 120,
+      "missed": 0,
+      "terminal": 120,
+      "inflight": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 120,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 14.803999999998041,
+        "p95Ms": 224.4482499999947,
+        "p99Ms": 274.2196660000076,
+        "maxMs": 304.1699579999886
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 14.803999999998041,
+        "p95Ms": 224.4482499999947,
+        "p99Ms": 274.2196660000076,
+        "maxMs": 304.1699579999886
+      }
+    },
+    "probe:/api/health": {
+      "planned": 120,
+      "dispatched": 120,
+      "missed": 0,
+      "terminal": 120,
+      "inflight": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 120,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 17.96125000001325,
+        "p95Ms": 227.2023749999903,
+        "p99Ms": 348.7289590000131,
+        "maxMs": 686.1950830000012
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 17.96125000001325,
+        "p95Ms": 227.2023749999903,
+        "p99Ms": 348.7289590000131,
+        "maxMs": 686.1950830000012
+      }
+    },
+    "http": {
+      "planned": 120,
+      "dispatched": 120,
+      "missed": 0,
+      "terminal": 120,
+      "inflight": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 120,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 64.03595799997674,
+        "p95Ms": 749.4972499999903,
+        "p99Ms": 1090.9893330000102,
+        "maxMs": 1144.6142500000037
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 64.03595799997674,
+        "p95Ms": 749.4972499999903,
+        "p99Ms": 1090.9893330000102,
+        "maxMs": 1144.6142500000037
+      }
+    },
+    "mcp": {
+      "planned": 24,
+      "dispatched": 24,
+      "missed": 0,
+      "terminal": 24,
+      "inflight": 0,
+      "naturalSucceeded": 15,
+      "censoredSucceeded": 1,
+      "failed": 8,
+      "censored": 1,
+      "settledSucceeded": 16,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 7667.333750000012,
+        "p95Ms": 19336.877125,
+        "p99Ms": 22168.034082999995,
+        "maxMs": 22168.034082999995
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 8962.174667,
+        "p95Ms": 22168.034082999995,
+        "p99Ms": 22168.034082999995,
+        "maxMs": 22168.034082999995
+      }
+    },
+    "audit-progress": {
+      "planned": 24,
+      "dispatched": 24,
+      "missed": 0,
+      "terminal": 24,
+      "inflight": 0,
+      "naturalSucceeded": 24,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 24,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 114.77241700001173,
+        "p95Ms": 207.36862500001507,
+        "p99Ms": 208.39575000002242,
+        "maxMs": 208.39575000002242
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 114.77241700001173,
+        "p95Ms": 207.36862500001507,
+        "p99Ms": 208.39575000002242,
+        "maxMs": 208.39575000002242
+      }
+    },
+    "mutation": {
+      "planned": 2,
+      "dispatched": 2,
+      "missed": 0,
+      "terminal": 2,
+      "inflight": 0,
+      "naturalSucceeded": 2,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 2,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 37624.96791700001,
+        "p95Ms": 39697.01304199998,
+        "p99Ms": 39697.01304199998,
+        "maxMs": 39697.01304199998
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 37624.96791700001,
+        "p95Ms": 39697.01304199998,
+        "p99Ms": 39697.01304199998,
+        "maxMs": 39697.01304199998
+      }
+    }
+  },
+  "queries": [
+    {
+      "requestId": "mcp-0",
+      "identity": "a",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 14811.182374999988
+    },
+    {
+      "requestId": "mcp-1",
+      "identity": "agent01",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 22168.034082999995
+    },
+    {
+      "requestId": "mcp-2",
+      "identity": "agent02",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 17192.29800000001
+    },
+    {
+      "requestId": "mcp-3",
+      "identity": "agent03",
+      "status": 503,
+      "declaredOk": false,
+      "oracleCorrect": false,
+      "actualRow": null,
+      "censored": false,
+      "ms": 24.07820799999172
+    },
+    {
+      "requestId": "mcp-4",
+      "identity": "agent04",
+      "status": 503,
+      "declaredOk": false,
+      "oracleCorrect": false,
+      "actualRow": null,
+      "censored": false,
+      "ms": 10.710916999997266
+    },
+    {
+      "requestId": "mcp-5",
+      "identity": "agent05",
+      "status": 503,
+      "declaredOk": false,
+      "oracleCorrect": false,
+      "actualRow": null,
+      "censored": false,
+      "ms": 5.232874999990145
+    },
+    {
+      "requestId": "mcp-6",
+      "identity": "agent06",
+      "status": 503,
+      "declaredOk": false,
+      "oracleCorrect": false,
+      "actualRow": null,
+      "censored": false,
+      "ms": 11.83708300000319
+    },
+    {
+      "requestId": "mcp-7",
+      "identity": "agent07",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 8526.423416999989
+    },
+    {
+      "requestId": "mcp-8",
+      "identity": "agent08",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 7667.333750000012
+    },
+    {
+      "requestId": "mcp-9",
+      "identity": "agent09",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 6622.826750000002
+    },
+    {
+      "requestId": "mcp-10",
+      "identity": "agent10",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 6775.458584000006
+    },
+    {
+      "requestId": "mcp-11",
+      "identity": "agent11",
+      "status": 200,
+      "declaredOk": false,
+      "oracleCorrect": false,
+      "actualRow": null,
+      "censored": false,
+      "ms": 7354.556666999997
+    },
+    {
+      "requestId": "mcp-12",
+      "identity": "a",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 9614.111791
+    },
+    {
+      "requestId": "mcp-13",
+      "identity": "agent01",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 19336.877125
+    },
+    {
+      "requestId": "mcp-14",
+      "identity": "agent02",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 15297.21537499998
+    },
+    {
+      "requestId": "mcp-15",
+      "identity": "agent03",
+      "status": 503,
+      "declaredOk": false,
+      "oracleCorrect": false,
+      "actualRow": null,
+      "censored": false,
+      "ms": 32.0239590000142
+    },
+    {
+      "requestId": "mcp-16",
+      "identity": "agent04",
+      "status": 503,
+      "declaredOk": false,
+      "oracleCorrect": false,
+      "actualRow": null,
+      "censored": false,
+      "ms": 12.394624999984671
+    },
+    {
+      "requestId": "mcp-17",
+      "identity": "agent05",
+      "status": 503,
+      "declaredOk": false,
+      "oracleCorrect": false,
+      "actualRow": null,
+      "censored": false,
+      "ms": 71.40570799998613
+    },
+    {
+      "requestId": "mcp-18",
+      "identity": "agent06",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 8962.174667
+    },
+    {
+      "requestId": "mcp-19",
+      "identity": "agent07",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 10127.370791000005
+    },
+    {
+      "requestId": "mcp-20",
+      "identity": "agent08",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 8600.173083000016
+    },
+    {
+      "requestId": "mcp-21",
+      "identity": "agent09",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 7504.1694579999785
+    },
+    {
+      "requestId": "mcp-22",
+      "identity": "agent10",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": false,
+      "ms": 8856.917041000002
+    },
+    {
+      "requestId": "mcp-23",
+      "identity": "agent11",
+      "status": 200,
+      "declaredOk": true,
+      "oracleCorrect": true,
+      "actualRow": [
+        4,
+        "100"
+      ],
+      "censored": true,
+      "ms": 8410.036958000006
+    }
+  ],
+  "httpPayloadChecks": [
+    {
+      "requestId": "http-0",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-1",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-2",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-3",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-4",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-5",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-6",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-7",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-8",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-9",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-10",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-11",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-12",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-13",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-14",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-15",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-16",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-17",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-18",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-19",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-20",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-21",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-22",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-23",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-24",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-25",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-26",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-27",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-28",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-29",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-30",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-31",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-32",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-33",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-34",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-35",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-36",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-37",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-38",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-39",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-40",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-41",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-42",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-43",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-44",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-45",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-46",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-47",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-48",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-49",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-50",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-51",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-52",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-53",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-54",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-55",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-56",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-57",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-58",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-59",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-60",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-61",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-62",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-63",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-64",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-65",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-66",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-67",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-68",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-69",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-70",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-71",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-72",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-73",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-74",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-75",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-76",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-77",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-78",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-79",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-80",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-81",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-82",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-83",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-84",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-85",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-86",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-87",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-88",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-89",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-90",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-91",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-92",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-93",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-94",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-95",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-96",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-97",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-98",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-99",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-100",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-101",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-102",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-103",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-104",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-105",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-106",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-107",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-108",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-109",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-110",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-111",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-112",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-113",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-114",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-115",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-116",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-117",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-118",
+      "payloadCorrect": true,
+      "censored": false
+    },
+    {
+      "requestId": "http-119",
+      "payloadCorrect": true,
+      "censored": false
+    }
+  ],
+  "failures": [
+    {
+      "requestId": "mcp-3",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 24.07820799999172,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-4",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 10.710916999997266,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-5",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 5.232874999990145,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-6",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 11.83708300000319,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-11",
+      "lane": "mcp",
+      "status": 200,
+      "machineReason": null,
+      "class": "unexpected-or-unclassified",
+      "ms": 7354.556666999997,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-15",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 32.0239590000142,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-16",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 12.394624999984671,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-17",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 71.40570799998613,
+      "censored": false
+    }
+  ],
+  "failureClasses": {
+    "reload-contract-rejection": 7,
+    "unexpected-or-unclassified": 1
+  },
+  "completedNaturalCycles": 2,
+  "auditEvidence": {
+    "manifest": {
+      "source": "task-owned synthetic audit.sqlite; SQLite backup API",
+      "cutoff": "2026-10-21T09:49:42.247643+00:00",
+      "maxId": 203055,
+      "sqliteSha256": "aee67419f007d9c06fc0dbf89707a257ff0be5853622cda75ebc2370c9f22730",
+      "gzipSha256": "00c4b1fd0136ead9775cb474626f1f649a4148363104df92ec81d399e59b02e1",
+      "sqliteBytes": 2205278208,
+      "gzipBytes": 79615583,
+      "capturedAt": "2026-11-20T09:54:50.818874+00:00",
+      "elapsedSeconds": 16.093663423998805,
+      "deadlineSeconds": 89.99999720800002,
+      "path": "audit-evidence.sqlite.gz",
+      "copied": true,
+      "collectionElapsedSeconds": 16.673483499999975,
+      "collectionDeadlineSeconds": 90.0
+    },
+    "issues": [],
+    "recomputed": {
+      "cutoff": "2026-10-21T09:49:42.247643+00:00",
+      "complete": true,
+      "eligible": 203055,
+      "linked": 203055,
+      "uniqueLinked": 203055,
+      "missingLinks": 0,
+      "duplicates": 0,
+      "wrongUsers": 0,
+      "missingTurns": 0,
+      "orphanRawLinks": 0,
+      "orphanTurnLinks": 0,
+      "pendingUsers": 0,
+      "users": 79,
+      "pages": 204,
+      "maxId": 203055,
+      "historyRows": 203000,
+      "historyUsers": 67,
+      "userWatermarks": [
+        {
+          "user": "uat-core1883-history-000",
+          "newest": 202963,
+          "status": "complete",
+          "watermark": "202963",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-001",
+          "newest": 202964,
+          "status": "complete",
+          "watermark": "202964",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-002",
+          "newest": 202965,
+          "status": "complete",
+          "watermark": "202965",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-003",
+          "newest": 202966,
+          "status": "complete",
+          "watermark": "202966",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-004",
+          "newest": 202967,
+          "status": "complete",
+          "watermark": "202967",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-005",
+          "newest": 202968,
+          "status": "complete",
+          "watermark": "202968",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-006",
+          "newest": 202969,
+          "status": "complete",
+          "watermark": "202969",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-007",
+          "newest": 202970,
+          "status": "complete",
+          "watermark": "202970",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-008",
+          "newest": 202971,
+          "status": "complete",
+          "watermark": "202971",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-009",
+          "newest": 202972,
+          "status": "complete",
+          "watermark": "202972",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-010",
+          "newest": 202973,
+          "status": "complete",
+          "watermark": "202973",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-011",
+          "newest": 202974,
+          "status": "complete",
+          "watermark": "202974",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-012",
+          "newest": 202975,
+          "status": "complete",
+          "watermark": "202975",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-013",
+          "newest": 202976,
+          "status": "complete",
+          "watermark": "202976",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-014",
+          "newest": 202977,
+          "status": "complete",
+          "watermark": "202977",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-015",
+          "newest": 202978,
+          "status": "complete",
+          "watermark": "202978",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-016",
+          "newest": 202979,
+          "status": "complete",
+          "watermark": "202979",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-017",
+          "newest": 202980,
+          "status": "complete",
+          "watermark": "202980",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-018",
+          "newest": 202981,
+          "status": "complete",
+          "watermark": "202981",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-019",
+          "newest": 202982,
+          "status": "complete",
+          "watermark": "202982",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-020",
+          "newest": 202983,
+          "status": "complete",
+          "watermark": "202983",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-021",
+          "newest": 202984,
+          "status": "complete",
+          "watermark": "202984",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-022",
+          "newest": 202985,
+          "status": "complete",
+          "watermark": "202985",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-023",
+          "newest": 202986,
+          "status": "complete",
+          "watermark": "202986",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-024",
+          "newest": 202987,
+          "status": "complete",
+          "watermark": "202987",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-025",
+          "newest": 202988,
+          "status": "complete",
+          "watermark": "202988",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-026",
+          "newest": 202989,
+          "status": "complete",
+          "watermark": "202989",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-027",
+          "newest": 202990,
+          "status": "complete",
+          "watermark": "202990",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-028",
+          "newest": 202991,
+          "status": "complete",
+          "watermark": "202991",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-029",
+          "newest": 202992,
+          "status": "complete",
+          "watermark": "202992",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-030",
+          "newest": 202993,
+          "status": "complete",
+          "watermark": "202993",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-031",
+          "newest": 202994,
+          "status": "complete",
+          "watermark": "202994",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-032",
+          "newest": 202995,
+          "status": "complete",
+          "watermark": "202995",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-033",
+          "newest": 202996,
+          "status": "complete",
+          "watermark": "202996",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-034",
+          "newest": 202997,
+          "status": "complete",
+          "watermark": "202997",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-035",
+          "newest": 202998,
+          "status": "complete",
+          "watermark": "202998",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-036",
+          "newest": 202999,
+          "status": "complete",
+          "watermark": "202999",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-037",
+          "newest": 203000,
+          "status": "complete",
+          "watermark": "203000",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-038",
+          "newest": 203001,
+          "status": "complete",
+          "watermark": "203001",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-039",
+          "newest": 203002,
+          "status": "complete",
+          "watermark": "203002",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-040",
+          "newest": 203003,
+          "status": "complete",
+          "watermark": "203003",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-041",
+          "newest": 203004,
+          "status": "complete",
+          "watermark": "203004",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-042",
+          "newest": 203005,
+          "status": "complete",
+          "watermark": "203005",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-043",
+          "newest": 203006,
+          "status": "complete",
+          "watermark": "203006",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-044",
+          "newest": 203007,
+          "status": "complete",
+          "watermark": "203007",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-045",
+          "newest": 203008,
+          "status": "complete",
+          "watermark": "203008",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-046",
+          "newest": 203009,
+          "status": "complete",
+          "watermark": "203009",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-047",
+          "newest": 203010,
+          "status": "complete",
+          "watermark": "203010",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-048",
+          "newest": 203011,
+          "status": "complete",
+          "watermark": "203011",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-049",
+          "newest": 203012,
+          "status": "complete",
+          "watermark": "203012",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-050",
+          "newest": 203013,
+          "status": "complete",
+          "watermark": "203013",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-051",
+          "newest": 203014,
+          "status": "complete",
+          "watermark": "203014",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-052",
+          "newest": 202948,
+          "status": "complete",
+          "watermark": "202948",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-053",
+          "newest": 202949,
+          "status": "complete",
+          "watermark": "202949",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-054",
+          "newest": 202950,
+          "status": "complete",
+          "watermark": "202950",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-055",
+          "newest": 202951,
+          "status": "complete",
+          "watermark": "202951",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-056",
+          "newest": 202952,
+          "status": "complete",
+          "watermark": "202952",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-057",
+          "newest": 202953,
+          "status": "complete",
+          "watermark": "202953",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-058",
+          "newest": 202954,
+          "status": "complete",
+          "watermark": "202954",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-059",
+          "newest": 202955,
+          "status": "complete",
+          "watermark": "202955",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-060",
+          "newest": 202956,
+          "status": "complete",
+          "watermark": "202956",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-061",
+          "newest": 202957,
+          "status": "complete",
+          "watermark": "202957",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-062",
+          "newest": 202958,
+          "status": "complete",
+          "watermark": "202958",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-063",
+          "newest": 202959,
+          "status": "complete",
+          "watermark": "202959",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-064",
+          "newest": 202960,
+          "status": "complete",
+          "watermark": "202960",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-065",
+          "newest": 202961,
+          "status": "complete",
+          "watermark": "202961",
+          "valid": true
+        },
+        {
+          "user": "uat-core1883-history-066",
+          "newest": 202962,
+          "status": "complete",
+          "watermark": "202962",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_a",
+          "newest": 203055,
+          "status": "complete",
+          "watermark": "203055",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent01",
+          "newest": 203017,
+          "status": "complete",
+          "watermark": "203017",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent02",
+          "newest": 203018,
+          "status": "complete",
+          "watermark": "203018",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent03",
+          "newest": 203045,
+          "status": "complete",
+          "watermark": "203045",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent04",
+          "newest": 203046,
+          "status": "complete",
+          "watermark": "203046",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent05",
+          "newest": 203049,
+          "status": "complete",
+          "watermark": "203049",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent06",
+          "newest": 203039,
+          "status": "complete",
+          "watermark": "203039",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent07",
+          "newest": 203024,
+          "status": "complete",
+          "watermark": "203024",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent08",
+          "newest": 203025,
+          "status": "complete",
+          "watermark": "203025",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent09",
+          "newest": 203026,
+          "status": "complete",
+          "watermark": "203026",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent10",
+          "newest": 203027,
+          "status": "complete",
+          "watermark": "203027",
+          "valid": true
+        },
+        {
+          "user": "uat_zb_agent11",
+          "newest": 203028,
+          "status": "complete",
+          "watermark": "203028",
+          "valid": true
+        }
+      ],
+      "elapsedSeconds": 1.096450833
+    },
+    "contractRejections": {
+      "ownerLogErrors": [],
+      "ownersObserved": 4,
+      "verdicts": [
+        {
+          "requestId": "mcp-3",
+          "machineReason": "EXECUTION_RUNTIME_RELOADING",
+          "expected": true,
+          "checks": {
+            "explicitlyEnabledApprovedMapping": true,
+            "exactStructured503ReloadCode": true,
+            "uniqueActualOwnerClosure": true,
+            "sameOwnerDeadline": true,
+            "ownerClosedWithin60Seconds": true,
+            "failureInsideRealOwnerWindow": true,
+            "oneExplicitRecoveryAttempt": true,
+            "sameOwnerRecovery": true,
+            "sameIdentityAndSession": true,
+            "sameOriginalProblem": true,
+            "recoveryOutsideNaturalThroughput": true,
+            "actualRecoveryOracle4And100": true,
+            "scopeIdentityBound": true,
+            "exactlyOneBudgetCallAndAttempt": true,
+            "onlyOneActualQueryRow": true,
+            "originalRefusalNeverExecuted": true,
+            "recoveryExecutionReceiptMatches": true,
+            "queryUniqueEffectiveAssociation": true
+          },
+          "reasons": [],
+          "ownerRequestId": "ed620a6a-c0c3-443b-8bed-609f21e7c0af",
+          "clientObserved": {
+            "dispatchedAt": "2026-11-20T09:51:23.422094+00:00",
+            "terminalAt": "2026-11-20T09:51:23.446169+00:00",
+            "rejectedAt": 1795168283443,
+            "clientTerminalAfterRelease": false
+          },
+          "ownerWindow": {
+            "acquiredAt": "2026-11-20T09:51:19.910Z",
+            "releasedAt": "2026-11-20T09:51:37.303Z",
+            "deadlineAt": 1795168339887
+          },
+          "recoveryRow": [
+            4,
+            "100"
+          ],
+          "auditQuery": {
+            "id": 203034,
+            "requestId": "40",
+            "scopeKey": "bq:uat_zb_agent03|sha256:693ef16957a8:independent-question-3",
+            "budget": {
+              "calls": 1,
+              "attempts": 1,
+              "current_concurrency": 0
+            }
+          }
+        },
+        {
+          "requestId": "mcp-4",
+          "machineReason": "EXECUTION_RUNTIME_RELOADING",
+          "expected": true,
+          "checks": {
+            "explicitlyEnabledApprovedMapping": true,
+            "exactStructured503ReloadCode": true,
+            "uniqueActualOwnerClosure": true,
+            "sameOwnerDeadline": true,
+            "ownerClosedWithin60Seconds": true,
+            "failureInsideRealOwnerWindow": true,
+            "oneExplicitRecoveryAttempt": true,
+            "sameOwnerRecovery": true,
+            "sameIdentityAndSession": true,
+            "sameOriginalProblem": true,
+            "recoveryOutsideNaturalThroughput": true,
+            "actualRecoveryOracle4And100": true,
+            "scopeIdentityBound": true,
+            "exactlyOneBudgetCallAndAttempt": true,
+            "onlyOneActualQueryRow": true,
+            "originalRefusalNeverExecuted": true,
+            "recoveryExecutionReceiptMatches": true,
+            "queryUniqueEffectiveAssociation": true
+          },
+          "reasons": [],
+          "ownerRequestId": "ed620a6a-c0c3-443b-8bed-609f21e7c0af",
+          "clientObserved": {
+            "dispatchedAt": "2026-11-20T09:51:28.423876+00:00",
+            "terminalAt": "2026-11-20T09:51:28.434586+00:00",
+            "rejectedAt": 1795168288432,
+            "clientTerminalAfterRelease": false
+          },
+          "ownerWindow": {
+            "acquiredAt": "2026-11-20T09:51:19.910Z",
+            "releasedAt": "2026-11-20T09:51:37.303Z",
+            "deadlineAt": 1795168339887
+          },
+          "recoveryRow": [
+            4,
+            "100"
+          ],
+          "auditQuery": {
+            "id": 203033,
+            "requestId": "41",
+            "scopeKey": "bq:uat_zb_agent04|sha256:dc9331a80560:independent-question-4",
+            "budget": {
+              "calls": 1,
+              "attempts": 1,
+              "current_concurrency": 0
+            }
+          }
+        },
+        {
+          "requestId": "mcp-5",
+          "machineReason": "EXECUTION_RUNTIME_RELOADING",
+          "expected": true,
+          "checks": {
+            "explicitlyEnabledApprovedMapping": true,
+            "exactStructured503ReloadCode": true,
+            "uniqueActualOwnerClosure": true,
+            "sameOwnerDeadline": true,
+            "ownerClosedWithin60Seconds": true,
+            "failureInsideRealOwnerWindow": true,
+            "oneExplicitRecoveryAttempt": true,
+            "sameOwnerRecovery": true,
+            "sameIdentityAndSession": true,
+            "sameOriginalProblem": true,
+            "recoveryOutsideNaturalThroughput": true,
+            "actualRecoveryOracle4And100": true,
+            "scopeIdentityBound": true,
+            "exactlyOneBudgetCallAndAttempt": true,
+            "onlyOneActualQueryRow": true,
+            "originalRefusalNeverExecuted": true,
+            "recoveryExecutionReceiptMatches": true,
+            "queryUniqueEffectiveAssociation": true
+          },
+          "reasons": [],
+          "ownerRequestId": "ed620a6a-c0c3-443b-8bed-609f21e7c0af",
+          "clientObserved": {
+            "dispatchedAt": "2026-11-20T09:51:33.424064+00:00",
+            "terminalAt": "2026-11-20T09:51:33.429295+00:00",
+            "rejectedAt": 1795168293426,
+            "clientTerminalAfterRelease": false
+          },
+          "ownerWindow": {
+            "acquiredAt": "2026-11-20T09:51:19.910Z",
+            "releasedAt": "2026-11-20T09:51:37.303Z",
+            "deadlineAt": 1795168339887
+          },
+          "recoveryRow": [
+            4,
+            "100"
+          ],
+          "auditQuery": {
+            "id": 203040,
+            "requestId": "46",
+            "scopeKey": "bq:uat_zb_agent05|sha256:0e4aed697f13:independent-question-5",
+            "budget": {
+              "calls": 1,
+              "attempts": 1,
+              "current_concurrency": 0
+            }
+          }
+        },
+        {
+          "requestId": "mcp-6",
+          "machineReason": "EXECUTION_RUNTIME_RELOADING",
+          "expected": true,
+          "checks": {
+            "explicitlyEnabledApprovedMapping": true,
+            "exactStructured503ReloadCode": true,
+            "uniqueActualOwnerClosure": true,
+            "sameOwnerDeadline": true,
+            "ownerClosedWithin60Seconds": true,
+            "failureInsideRealOwnerWindow": true,
+            "oneExplicitRecoveryAttempt": true,
+            "sameOwnerRecovery": true,
+            "sameIdentityAndSession": true,
+            "sameOriginalProblem": true,
+            "recoveryOutsideNaturalThroughput": true,
+            "actualRecoveryOracle4And100": true,
+            "scopeIdentityBound": true,
+            "exactlyOneBudgetCallAndAttempt": true,
+            "onlyOneActualQueryRow": true,
+            "originalRefusalNeverExecuted": true,
+            "recoveryExecutionReceiptMatches": true,
+            "queryUniqueEffectiveAssociation": true
+          },
+          "reasons": [],
+          "ownerRequestId": "e56dcef8-e821-4928-9f9b-9dbd449df893",
+          "clientObserved": {
+            "dispatchedAt": "2026-11-20T09:51:38.425561+00:00",
+            "terminalAt": "2026-11-20T09:51:38.437398+00:00",
+            "rejectedAt": 1795168298435,
+            "clientTerminalAfterRelease": false
+          },
+          "ownerWindow": {
+            "acquiredAt": "2026-11-20T09:51:37.468Z",
+            "releasedAt": "2026-11-20T09:51:39.017Z",
+            "deadlineAt": 1795168357451
+          },
+          "recoveryRow": [
+            4,
+            "100"
+          ],
+          "auditQuery": {
+            "id": 203039,
+            "requestId": "47",
+            "scopeKey": "bq:uat_zb_agent06|sha256:86ae43361858:independent-question-6",
+            "budget": {
+              "calls": 1,
+              "attempts": 1,
+              "current_concurrency": 0
+            }
+          }
+        },
+        {
+          "requestId": "mcp-11",
+          "machineReason": null,
+          "expected": false,
+          "checks": {
+            "explicitlyEnabledApprovedMapping": true,
+            "exactStructured503ReloadCode": false,
+            "uniqueActualOwnerClosure": false,
+            "oneExplicitRecoveryAttempt": false
+          },
+          "reasons": [
+            "exactStructured503ReloadCode",
+            "uniqueActualOwnerClosure",
+            "oneExplicitRecoveryAttempt"
+          ],
+          "ownerRequestId": null
+        },
+        {
+          "requestId": "mcp-15",
+          "machineReason": "EXECUTION_RUNTIME_RELOADING",
+          "expected": true,
+          "checks": {
+            "explicitlyEnabledApprovedMapping": true,
+            "exactStructured503ReloadCode": true,
+            "uniqueActualOwnerClosure": true,
+            "sameOwnerDeadline": true,
+            "ownerClosedWithin60Seconds": true,
+            "failureInsideRealOwnerWindow": true,
+            "oneExplicitRecoveryAttempt": true,
+            "sameOwnerRecovery": true,
+            "sameIdentityAndSession": true,
+            "sameOriginalProblem": true,
+            "recoveryOutsideNaturalThroughput": true,
+            "actualRecoveryOracle4And100": true,
+            "scopeIdentityBound": true,
+            "exactlyOneBudgetCallAndAttempt": true,
+            "onlyOneActualQueryRow": true,
+            "originalRefusalNeverExecuted": true,
+            "recoveryExecutionReceiptMatches": true,
+            "queryUniqueEffectiveAssociation": true
+          },
+          "reasons": [],
+          "ownerRequestId": "2850b777-af0b-4b75-a96b-01328d570720",
+          "clientObserved": {
+            "dispatchedAt": "2026-11-20T09:52:23.426033+00:00",
+            "terminalAt": "2026-11-20T09:52:23.458059+00:00",
+            "rejectedAt": 1795168343455,
+            "clientTerminalAfterRelease": false
+          },
+          "ownerWindow": {
+            "acquiredAt": "2026-11-20T09:52:22.580Z",
+            "releasedAt": "2026-11-20T09:52:35.322Z",
+            "deadlineAt": 1795168402556
+          },
+          "recoveryRow": [
+            4,
+            "100"
+          ],
+          "auditQuery": {
+            "id": 203045,
+            "requestId": "52",
+            "scopeKey": "bq:uat_zb_agent03|sha256:693ef16957a8:independent-question-15",
+            "budget": {
+              "calls": 1,
+              "attempts": 1,
+              "current_concurrency": 0
+            }
+          }
+        },
+        {
+          "requestId": "mcp-16",
+          "machineReason": "EXECUTION_RUNTIME_RELOADING",
+          "expected": true,
+          "checks": {
+            "explicitlyEnabledApprovedMapping": true,
+            "exactStructured503ReloadCode": true,
+            "uniqueActualOwnerClosure": true,
+            "sameOwnerDeadline": true,
+            "ownerClosedWithin60Seconds": true,
+            "failureInsideRealOwnerWindow": true,
+            "oneExplicitRecoveryAttempt": true,
+            "sameOwnerRecovery": true,
+            "sameIdentityAndSession": true,
+            "sameOriginalProblem": true,
+            "recoveryOutsideNaturalThroughput": true,
+            "actualRecoveryOracle4And100": true,
+            "scopeIdentityBound": true,
+            "exactlyOneBudgetCallAndAttempt": true,
+            "onlyOneActualQueryRow": true,
+            "originalRefusalNeverExecuted": true,
+            "recoveryExecutionReceiptMatches": true,
+            "queryUniqueEffectiveAssociation": true
+          },
+          "reasons": [],
+          "ownerRequestId": "2850b777-af0b-4b75-a96b-01328d570720",
+          "clientObserved": {
+            "dispatchedAt": "2026-11-20T09:52:28.424152+00:00",
+            "terminalAt": "2026-11-20T09:52:28.436545+00:00",
+            "rejectedAt": 1795168348432,
+            "clientTerminalAfterRelease": false
+          },
+          "ownerWindow": {
+            "acquiredAt": "2026-11-20T09:52:22.580Z",
+            "releasedAt": "2026-11-20T09:52:35.322Z",
+            "deadlineAt": 1795168402556
+          },
+          "recoveryRow": [
+            4,
+            "100"
+          ],
+          "auditQuery": {
+            "id": 203046,
+            "requestId": "53",
+            "scopeKey": "bq:uat_zb_agent04|sha256:dc9331a80560:independent-question-16",
+            "budget": {
+              "calls": 1,
+              "attempts": 1,
+              "current_concurrency": 0
+            }
+          }
+        },
+        {
+          "requestId": "mcp-17",
+          "machineReason": "EXECUTION_RUNTIME_RELOADING",
+          "expected": true,
+          "checks": {
+            "explicitlyEnabledApprovedMapping": true,
+            "exactStructured503ReloadCode": true,
+            "uniqueActualOwnerClosure": true,
+            "sameOwnerDeadline": true,
+            "ownerClosedWithin60Seconds": true,
+            "failureInsideRealOwnerWindow": true,
+            "oneExplicitRecoveryAttempt": true,
+            "sameOwnerRecovery": true,
+            "sameIdentityAndSession": true,
+            "sameOriginalProblem": true,
+            "recoveryOutsideNaturalThroughput": true,
+            "actualRecoveryOracle4And100": true,
+            "scopeIdentityBound": true,
+            "exactlyOneBudgetCallAndAttempt": true,
+            "onlyOneActualQueryRow": true,
+            "originalRefusalNeverExecuted": true,
+            "recoveryExecutionReceiptMatches": true,
+            "queryUniqueEffectiveAssociation": true
+          },
+          "reasons": [],
+          "ownerRequestId": "2850b777-af0b-4b75-a96b-01328d570720",
+          "clientObserved": {
+            "dispatchedAt": "2026-11-20T09:52:33.426892+00:00",
+            "terminalAt": "2026-11-20T09:52:33.498298+00:00",
+            "rejectedAt": 1795168353495,
+            "clientTerminalAfterRelease": false
+          },
+          "ownerWindow": {
+            "acquiredAt": "2026-11-20T09:52:22.580Z",
+            "releasedAt": "2026-11-20T09:52:35.322Z",
+            "deadlineAt": 1795168402556
+          },
+          "recoveryRow": [
+            4,
+            "100"
+          ],
+          "auditQuery": {
+            "id": 203049,
+            "requestId": "56",
+            "scopeKey": "bq:uat_zb_agent05|sha256:0e4aed697f13:independent-question-17",
+            "budget": {
+              "calls": 1,
+              "attempts": 1,
+              "current_concurrency": 0
+            }
+          }
+        }
+      ],
+      "expectedCount": 7,
+      "unresolvedCount": 1
+    },
+    "temporarySnapshotRemoved": true
+  },
+  "candidateImageId": "sha256:6c32cddd5bd8186b7c15d218dd5cef9d53b895a0eb54a40331d7a5f7ed99fdc2",
+  "evidenceHashes": {
+    "eventsSha256": "1db166a810a308fe7148cd37e2af0fdf2af498b2c321c8614884b7f0de24df3e",
+    "artifactSha256": "708f64947804182dfcda8ed702ac3c98007bb8315f3e634013f80222fcac654b",
+    "summarySha256": "9ed9d6f68efedcde93d16809e7122c0896430fbb69ff6734f23cadbca7f819e9",
+    "toolFreezeSha256": "9897b68d82eab14b5e5a69e1e7b3d811f9d36435e5f3cc6ccd3120d564238668",
+    "independentVerifierSha256": "edb5302db76c39b1edd727a061b240584105b4e9190b81acb41c1a78e9fba5d7"
+  },
+  "performanceBudget": {
+    "livezP99Ms": 279.30054200001564,
+    "livezMaxMs": 304.160875000008,
+    "readyzP99Ms": 274.2196660000076,
+    "passed": true
+  },
+  "integrityVerdict": "VALID",
+  "unexpectedFailures": [
+    {
+      "requestId": "mcp-11",
+      "lane": "mcp",
+      "status": 200,
+      "machineReason": null,
+      "class": "unexpected-or-unclassified",
+      "ms": 7354.556666999997,
+      "censored": false
+    }
+  ],
+  "expectedFailures": [
+    {
+      "requestId": "mcp-3",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 24.07820799999172,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-4",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 10.710916999997266,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-5",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 5.232874999990145,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-6",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 11.83708300000319,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-15",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 32.0239590000142,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-16",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 12.394624999984671,
+      "censored": false
+    },
+    {
+      "requestId": "mcp-17",
+      "lane": "mcp",
+      "status": 503,
+      "machineReason": "EXECUTION_RUNTIME_RELOADING",
+      "class": "reload-contract-rejection",
+      "ms": 71.40570799998613,
+      "censored": false
+    }
+  ],
+  "strictAcceptanceVerdict": "FAIL",
+  "limits": [
+    "Failure classification does not auto-exempt reload/capacity rejections; approved owner-bound SC mapping needs separate review",
+    "No customer/full F61/F62/F63/R-CAV conclusion;1800s evidence never claims an hour run",
+    "Source identity validated against supplied freezes and actual artifact; module SC and clean resource proof remain separate review"
+  ]
+}

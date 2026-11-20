@@ -1,0 +1,8 @@
+{
+  "integrity": "VALID",
+  "strictAcceptance": "CALIBRATION EVIDENCE VALID",
+  "issues": [],
+  "ordinaryQueries": 24,
+  "failures": 7,
+  "cycles": 2
+}

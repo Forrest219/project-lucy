@@ -274,7 +274,7 @@ entrypoint (PID 1, bash)
 
 ```text
 请求（Node → supervisor，单文件通道）
-  { requestId, requestedDigest, requestedAt }
+  { requestId, requestedDigest, requestedAt, deadlineAt }
 
 回执（supervisor → Node，同一 result 文件）
   { requestId, actualDigest, status, detail?, finishedAt }
@@ -315,11 +315,19 @@ async function reloadExecutionRuntime(input) {
   }
   // ③ 发请求（P2），置 inflight
   // ④ 等回执；超时后走 P7/P9
-  // ⑤ 无论成败都清 inflight、写状态、落审计
+  // ⑤ 写状态／审计；只有真实owner终态确认才撤自己的临时屏障和slot（P1-69）
 }
 ```
 
 ---
+
+### 6.4 2026-11-20具名增补：热重载排空与统一截止（P1-69／REQ-030-090）
+
+[热重载保护合同](../../docs/specs/lucy-20261120-runtime-reload-drain-spec.md)已由Codex CLI终审确权。热重载使用MCP专属真实settle集合与可逆准入屏障，不能调用整实例shutdown或等待包含当前保存HTTP的全局计数。短在途排空至多20秒；超时须在stop前失败，不杀旧查询。新RPC明确503 EXECUTION_RUNTIME_RELOADING，纯MCP同身份可在结束后重试原任务，无自动业务重放。既有未执行业务的上游会话握手恢复仍按§7边界，不扩展成已受理业务重放。
+
+原60秒回执超时上界改为从调用入口起的60秒共享总deadline，包含排队／前置、drain≤20秒、stop加端口释放≤10秒、start就绪≤20秒、verify≤10秒；每段截到剩余时间，不逐段重置。原requestId／digest通道新增deadlineAt（Unix epoch毫秒）；消费前后检查过期，未消费过期请求不得迟到重启。caller超时不等于真实owner结束，不能据此释放屏障／slot。TERM优先且finally不得重开SERVING；实际owner终态、配置核验与保存事实分列。直接自动CLI兜底沿相同约束，显式API无supervisor仍unsupported。
+
+私有capability的兼容增量`completedRequestId`只在supervisor实际stop／start或失败清理已经终结后，与idle／busy=false放进同一原子快照。Node只有精确匹配当前owner的终态receipt，或精确completedRequestId且通道确已不busy，才能撤销本方屏障；自身未消费请求可通过原子取消证明结束。请求文件消失、更新的idle心跳或其他请求终态均不能代替本owner终态。该字段不构成配置verified或授权current证据，原连接级核验与digest规则仍生效。
 
 ## 7. MCP 会话语义（v0.2 收敛，审阅条件⑤）
 

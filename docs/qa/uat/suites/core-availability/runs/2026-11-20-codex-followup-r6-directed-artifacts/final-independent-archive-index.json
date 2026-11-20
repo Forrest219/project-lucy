@@ -1,0 +1,41 @@
+{
+  "files": {
+    "independent-final-sql/stderr-1.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "independent-final-sql/raw-sql-temporal-binding.json": {
+      "bytes": 2761,
+      "sha256": "a8d6d327812f8943d2af30421bba840940f8057c99e234a5a4acec4c4dce14f2"
+    },
+    "independent-final-sql/stdout-1.log": {
+      "bytes": 416,
+      "sha256": "33ec003683964893c2474d6f5159182c56fe7d6fd6d65e7043858eb09fcfe0ef"
+    },
+    "independent-final-sql/README.md": {
+      "bytes": 2535,
+      "sha256": "bb5913cd59496ceb6a950745b91cd31e7ef359e90003ec6a39d550a2fa2c4aa2"
+    },
+    "independent-final-sql/artifact-manifest.json": {
+      "bytes": 966,
+      "sha256": "7c4dadec9249155fa40648f304cebdef3eabc4e599d6d845169afae4b864c672"
+    },
+    "independent-final-sql/actual-invocation-1.json": {
+      "bytes": 864,
+      "sha256": "df200e076af365119efbe2a2e33eea9d6a6fe2e81c4f940791e28612280368cc"
+    },
+    "independent-final-sql/outlet-review.md": {
+      "bytes": 6973,
+      "sha256": "001b00126492412b760ecbae5d038ad778c7ea068205503f915193d1813b09a4"
+    },
+    "independent-final-sql/verify.py": {
+      "bytes": 18088,
+      "sha256": "1135260fc004302f198b6d1286824a8f1dccaba6e3947d011450506f62a2c5ed"
+    },
+    "independent-final-sql/attempt-1/result.json": {
+      "bytes": 37411,
+      "sha256": "03c4cbeb9d3c268205755a52005ad0e15ec06ff403e520117f45edb2a98e1be3"
+    }
+  },
+  "note": "Final actual independent SQL exit0; earlier pending indexes are historical snapshots"
+}

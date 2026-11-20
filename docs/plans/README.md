@@ -8,7 +8,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | [lucy-20261120-ops-step-journal-plan.md](lucy-20261120-ops-step-journal-plan.md) | P1-68／REQ-030-089；v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan／UAT 设计；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 配对 [Spec](../specs/lucy-20261120-ops-step-journal-spec.md)。 |
 | [lucy-20261120-user-journey-performance-gate-plan.md](lucy-20261120-user-journey-performance-gate-plan.md) | P1-67／REQ-030-088；v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan 设计；终稿未确权；开发未授权；测试台未建；不入核心分母；≠ 功能收口；≠ 可上线。 配对 [Spec](../specs/lucy-20261120-user-journey-performance-gate-spec.md)。 |
 | [lucy-20261120-agent-roster-summary-projection-plan.md](lucy-20261120-agent-roster-summary-projection-plan.md) | P1-66／REQ-030-087；v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 |
-| [lucy-20261120-core-availability-followup-plan.md](lucy-20261120-core-availability-followup-plan.md) | 下次开发：本轮只合入既有可用性修复并复验；不执行Task0–4。预算组合／热点／热重载及约1h组合保留后续计划，不改变现有FAIL／GAP。 |
+| [lucy-20261120-core-availability-followup-plan.md](lucy-20261120-core-availability-followup-plan.md) | v0.2执行中：委托人批准执行CA-00–09多agent任务单；基线已冻结，工具／预算／重载合同执行；正式组合依最新指令30分钟／12周期；原FAIL／GAP保留。 |
 | [lucy-20261120-readyz-diagnostic-repro-uat-plan.md](lucy-20261120-readyz-diagnostic-repro-uat-plan.md) | P1-61／63缺口修复及本机Docker全真复测完成；真实停止／两轮自动恢复、三轮TERM／原卷恢复局部PASS WITH GAP；完整矩阵未完成；客户未改，未提交／发布。 |
 | [lucy-20261120-wiki-upload-acl-adoption-plan.md](lucy-20261120-wiki-upload-acl-adoption-plan.md) | P1-65／REQ-030-086；v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
 | [lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) | P1-64／REQ-030-085；v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 |
@@ -178,3 +178,17 @@ This directory stores repository-level implementation plans that are not scoped 
 e Lucy 202608 Enterprise Governance & Observability iteration across Admin, Trace / Evidence, Access Governance Gate, Security Eval, risk review candidates, and release readiness evidence |
 | `wo-202608-00-spec-branch-isolation.md` | Create a clean isolated branch/worktree for the frozen Lucy 202608 spec / plan / task documents |
 | `wo-202608-06-governance-review-release-evidence.md` | 202608-GOV-06 MiniMax Code handoff for risk review candidates and release readiness evidence package |
+
+
+## 热重载在途保护（2026-11-20）
+
+| 文档 | 现值 |
+|---|---|
+| [lucy-20261120-runtime-reload-drain-plan.md](lucy-20261120-runtime-reload-drain-plan.md) | v0.1。Codex CLI终稿确权通过；开发授权已获得；实现已落地，组件与真实shell回归通过；候选6本机Docker排空／拒绝／恢复及直接CLI定向已验证，完整F69矩阵仍有缺口；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
+
+
+## 正常语义写入与并发查询（2026-11-20）
+
+| 文档 | 现值 |
+|---|---|
+| [lucy-20261120-semantic-read-write-settle-plan.md](lucy-20261120-semantic-read-write-settle-plan.md) | v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得；功能合同收口（本机自动化与真实Docker）；远端CI未执行；30分钟组合结果独立登记；不入核心分母；≠ 整套UAT PASS；≠ 可上线。 |
