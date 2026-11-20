@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v1.80 / 2026-11-20 |
+| 版本 / 日期 | v1.96 / 2026-11-20 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**；**P2-2 对标对象已修正、D17 首页形态已裁决、D19／D20 已纳入、D21 MD 标配已登记（2026-11-19，见 v1.54／v1.56／v1.57 行）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码  **P1-57两处功能阻塞已修复；委托人已延期G6正式完整导出，本轮客户功能测试排除此项，可按限定范围进行。原完整范围FAIL证据保留。** |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,7 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v1.96 | 2026-11-20 | P1-65／REQ-030-086 GAP 补跑后 Docker UAT＝PASS；功能合同已收口；关闭 GAP-UAT-P1-65；≠ 可上线。 |
 | v1.80 | 2026-11-20 | P1-58／59 demo Docker F58-smoke／F59-smoke＝SMOKE_PASS WITH GAP（roster／statistics／5s cache／对象协议＋operationId→committed）；测试台 INDEX／suite／跑次已登记。完整 F58／F59／R／浏览器／2×／5× 造数仍 NOT RUN；≠ 功能收口；≠ 可上线。 |
 | v1.91 | 2026-11-20 | P1-60／REQ-030-081 T1–T5 已实现并 commit（Wave A–D；vitest 109 PASS；demo 冒烟隐藏 begin＋`begin_not_available`）；测试台 NOT RUN；T6／R 另授；≠ 功能合同收口；≠ 可上线。 |
 | v1.89 | 2026-11-20 | P1-60／REQ-030-081：委托人「确认 spec 可定稿」＝终稿确权；「安排多 agent 并行任务进行落地」＝开发授权 Plan T1–T5；T6 Docker／R／commit／push 另授；实现进行中；测试台 NOT RUN；≠ 功能合同收口；≠ 可上线。 |
@@ -290,6 +291,7 @@
 | 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 核心分母 | 跟进状态 | Spec／Plan |
 |---|---|---|---|---|---|---|---|
 | P1-64 | P1（事故修复） | 同连接跨 Schema 短名冲突与保存运行时确认修复 | REQ-030-085 | 扫描生成／Manifest 上传／Source Map 编译与保存 ack | 否 | v0.1-draft。仅修复方案与验收设计；终稿未确权；开发未授权；测试台最近跑次 FAIL（缺陷已复现），修复后复测 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) · [Plan](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) · [UAT](../qa/uat/suites/source-shortname-conflict/suite.md) |
+| P1-65 | P1（事故修复） | Wiki 覆盖上传采用 YAML 授权声明（差异／损坏须显式选择） | REQ-030-086 | Spec 193 §5 增量；治理主路径 | 否 | v0.2。终稿已确权；开发授权已获得；实现完成；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md) · [Plan](lucy-20261120-wiki-upload-acl-adoption-plan.md) · [UAT](../qa/uat/suites/wiki-upload-acl-adoption/suite.md) |
 | P1-61 | P1（第一批；建议） | 存活／就绪探针纯内存响应与诊断隔离 | REQ-030-082 | P1-21／46 续作；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) · [Plan](lucy-20261119-memory-probe-diagnostics-isolation-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-62 | P1（第二批；建议） | 重任务跨模块容量控制与许可生命周期 | REQ-030-083 | 复用局部队列；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-heavy-work-capacity-control-spec.md) · [Plan](lucy-20261119-heavy-work-capacity-control-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-63 | P2（第三批；建议） | 进程关停准入关闭与在途请求排空 | REQ-030-084 | Spec 191 生命周期增量；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md) · [Plan](lucy-20261119-process-drain-lifecycle-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |

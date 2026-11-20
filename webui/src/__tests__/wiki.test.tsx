@@ -1848,10 +1848,18 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     expect(within(dialog).getByTestId("wiki-upload-summary-title")).toHaveTextContent("Uploaded");
     expect(within(dialog).getByTestId("wiki-upload-warnings")).toHaveTextContent("replacement.md");
 
-    // SC-03: a replace upload always starts from the persisted authorization.
-    expect(within(dialog).getByTestId("wiki-upload-access-editor-source")).toHaveTextContent(
-      "保留现有授权"
+    // P1-65 D2: the file declares nothing while the document has roles — a
+    // declaration mismatch starts without a selection and cannot commit.
+    expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+      "待选择（尚未确定）"
     );
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-preserve"));
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-access-editor-source")).toHaveTextContent(
+        "保留现有授权"
+      );
+    });
     expect(within(dialog).getByTestId("wiki-upload-access-current")).toHaveTextContent(
       "analyst、finance_reader"
     );
@@ -2718,12 +2726,11 @@ describe("Business Wiki upload authorization (Spec 193 §5 / SC-01 – SC-05)", 
       );
     });
     expect(within(dialog).getByTestId("wiki-upload-access-uploaded")).toHaveTextContent("analyst");
+    // P1-65: the narrowing upload is never adopted nor preserved by default.
     expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
-      "analyst、finance_reader（保留现有授权）"
+      "待选择（尚未确定）"
     );
-    expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent(
-      "覆盖并保留授权"
-    );
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
 
     // The uploaded declaration is visible but not adopted until requested.
     fireEvent.click(within(dialog).getByTestId("wiki-upload-access-adopt"));
@@ -2735,6 +2742,348 @@ describe("Business Wiki upload authorization (Spec 193 §5 / SC-01 – SC-05)", 
     expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent(
       "覆盖并更新授权"
     );
+  });
+});
+
+/** P1-65 — replace-upload YAML ACL adoption (SC-01 – SC-13). */
+describe("Wiki replace upload declaration difference gate (P1-65 / REQ-030-086)", () => {
+  const REPLACE_KEY = "global/superstore-analysis-playbook.md";
+
+  /** The uploaded Markdown carrying one declaration. */
+  function markdownWith(acl: WikiAclState): string {
+    switch (acl.state) {
+      case "missing":
+        return "---\nsummary: Uploaded\n---\n# Replacement\n";
+      case "empty":
+        return "---\nallowed_roles: []\n---\n# Replacement\n";
+      case "all":
+        return "---\nallowed_roles: ['*']\n---\n# Replacement\n";
+      case "corrupt":
+        return "---\nallowed_roles: finance\n---\n# Replacement\n";
+      case "roles":
+        return `---\nallowed_roles: [${acl.roles.join(", ")}]\n---\n# Replacement\n`;
+    }
+  }
+
+  async function openReplace(current: WikiAclState, uploaded: WikiAclState) {
+    const pages = [
+      { ...WIKI_PAGES[0], access: accessEntry({ acl: current }) },
+      ...WIKI_PAGES.slice(1)
+    ];
+    const fetchMock = buildFetchMock(pages);
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki(`/wiki?key=${encodeURIComponent(REPLACE_KEY)}`);
+    fireEvent.click(await screen.findByTestId("wiki-upload-replace-button"));
+    const input = screen.getByTestId("wiki-upload-input") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [new File([markdownWith(uploaded)], "replacement.md", { type: "text/markdown" })]
+      }
+    });
+    const dialog = await screen.findByTestId("wiki-upload-preflight");
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-access-final")).toBeInTheDocument();
+    });
+    return { dialog, fetchMock };
+  }
+
+  function commitCalls(fetchMock: ReturnType<typeof buildFetchMock>) {
+    return fetchMock.mock.calls.filter((call) => call[0] === "/api/wiki/upload/commit");
+  }
+
+  function previewBodies(fetchMock: ReturnType<typeof buildFetchMock>) {
+    return fetchMock.mock.calls
+      .filter((call) => call[0] === "/api/wiki/upload/preview")
+      .map((call) => JSON.parse(String(call[1]?.body)));
+  }
+
+  const roles = (...ids: string[]): WikiAclState => ({ state: "roles", roles: ids });
+  const corrupt: WikiAclState = { state: "corrupt", detail: "allowed_roles 不是数组" };
+
+  const DIFFERENCE_MATRIX: Array<[string, WikiAclState, WikiAclState]> = [
+    ["M1 widen", roles("analyst"), roles("analyst", "finance_reader")],
+    ["M2 narrow", roles("analyst", "finance_reader"), roles("analyst")],
+    ["M3 role replace", roles("analyst"), roles("finance_reader")],
+    ["M4 all → roles", { state: "all" }, roles("analyst")],
+    ["M4b roles → all", roles("analyst"), { state: "all" }],
+    ["M5 roles → missing", roles("analyst"), { state: "missing" }],
+    ["M5b roles → empty", roles("analyst"), { state: "empty" }],
+    ["M5c missing → roles", { state: "missing" }, roles("analyst")],
+    ["M5d empty → roles", { state: "empty" }, roles("analyst")],
+    ["M6 missing → empty", { state: "missing" }, { state: "empty" }],
+    ["M7 empty → missing", { state: "empty" }, { state: "missing" }],
+    ["M8 uploaded corrupt, current roles", roles("analyst"), corrupt],
+    ["M8b uploaded corrupt, current missing", { state: "missing" }, corrupt],
+    ["M9 current corrupt, uploaded roles", corrupt, roles("analyst")],
+    ["M9b both corrupt", corrupt, corrupt]
+  ];
+
+  it.each(DIFFERENCE_MATRIX)(
+    "SC-01 %s: starts without a selection, commit disabled, no commit sent",
+    async (_label, current, uploaded) => {
+      const { dialog, fetchMock } = await openReplace(current, uploaded);
+
+      expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+        "待选择（尚未确定）"
+      );
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+      expect(within(dialog).getByTestId("wiki-upload-commit-reason")).toBeInTheDocument();
+      expect(within(dialog).getByTestId("wiki-upload-access-preserve")).toBeInTheDocument();
+      // The initial preview carries no selection: the server suggestion is not a choice.
+      expect(previewBodies(fetchMock)).toHaveLength(1);
+      expect(previewBodies(fetchMock)[0].access).toBeUndefined();
+
+      fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+      expect(commitCalls(fetchMock)).toHaveLength(0);
+    }
+  );
+
+  it("SC-06 keeps 未声明 and 显式 [] apart in the declaration summaries", async () => {
+    const { dialog } = await openReplace({ state: "missing" }, { state: "empty" });
+    expect(within(dialog).getByTestId("wiki-upload-access-current")).toHaveTextContent(
+      "未声明（无人可见）"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-access-uploaded")).toHaveTextContent(
+      "显式 []（无人可见）"
+    );
+  });
+
+  it("SC-12 a legal same-key declaration defaults to preserve_current (reordered/duplicated roles)", async () => {
+    const { dialog, fetchMock } = await openReplace(
+      roles("analyst", "finance_reader"),
+      roles("finance_reader", "analyst", "analyst")
+    );
+
+    expect(within(dialog).getByTestId("wiki-upload-access-editor-source")).toHaveTextContent(
+      "保留现有授权"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent("覆盖并保留授权");
+    expect(within(dialog).queryByTestId("wiki-upload-access-adopt")).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      expect(commitCalls(fetchMock)).toHaveLength(1);
+    });
+    const body = JSON.parse(String(commitCalls(fetchMock)[0][1]?.body));
+    expect(body.access).toEqual({ mode: "preserve_current" });
+  });
+
+  it("SC-13 a same-key missing declaration still needs the empty confirmation", async () => {
+    const { dialog } = await openReplace({ state: "missing" }, { state: "missing" });
+    expect(within(dialog).getByTestId("wiki-upload-access-editor-source")).toHaveTextContent(
+      "保留现有授权"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+    fireEvent.click(
+      within(dialog).getByRole("checkbox", { name: "我确认上传后 Agent 暂时无法访问" })
+    );
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+  });
+
+  it("SC-02 explicit preserve_current re-previews, binds the digest and commits", async () => {
+    const { dialog, fetchMock } = await openReplace(
+      roles("analyst"),
+      roles("analyst", "finance_reader")
+    );
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-preserve"));
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+        "analyst（保留现有授权）"
+      );
+    });
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+    expect(previewBodies(fetchMock).at(-1)?.access).toEqual({ mode: "preserve_current" });
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      expect(commitCalls(fetchMock)).toHaveLength(1);
+    });
+    const body = JSON.parse(String(commitCalls(fetchMock)[0][1]?.body));
+    expect(body.access).toEqual({ mode: "preserve_current" });
+    expect(body.preview_digest).toBe("digest-preserve_current");
+    expect(body.markdown).toContain("allowed_roles: [analyst, finance_reader]");
+  });
+
+  it("SC-03 explicit use_uploaded re-previews, binds the digest and commits", async () => {
+    const { dialog, fetchMock } = await openReplace(
+      roles("analyst", "finance_reader"),
+      roles("analyst")
+    );
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-adopt"));
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+        "analyst（来自上传文件）"
+      );
+    });
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+    expect(previewBodies(fetchMock).at(-1)?.access).toEqual({ mode: "use_uploaded" });
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      expect(commitCalls(fetchMock)).toHaveLength(1);
+    });
+    const body = JSON.parse(String(commitCalls(fetchMock)[0][1]?.body));
+    expect(body.access).toEqual({ mode: "use_uploaded" });
+    expect(body.preview_digest).toBe("digest-use_uploaded");
+  });
+
+  it("SC-11 explicit set differs from current and uploaded and never falls back", async () => {
+    const { dialog, fetchMock } = await openReplace(
+      roles("analyst"),
+      roles("analyst", "finance_reader")
+    );
+
+    const field = within(dialog).getByTestId("wiki-upload-access-editor-field");
+    fireEvent.click(within(field).getByLabelText("指定角色"));
+    fireEvent.click(await within(field).findByLabelText("finance_reader"));
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+        "finance_reader（重新设置）"
+      );
+    });
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      expect(commitCalls(fetchMock)).toHaveLength(1);
+    });
+    const body = JSON.parse(String(commitCalls(fetchMock)[0][1]?.body));
+    expect(body.access).toEqual({ mode: "set", allowed_roles: ["finance_reader"] });
+    expect(body.preview_digest).toBe("digest-finance_reader");
+  });
+
+  it("SC-10 uploaded corrupt cannot be adopted; replace may preserve the current declaration", async () => {
+    const { dialog, fetchMock } = await openReplace(roles("analyst"), corrupt);
+
+    expect(within(dialog).getByTestId("wiki-upload-access-corrupt")).toBeInTheDocument();
+    expect(within(dialog).queryByTestId("wiki-upload-access-adopt")).not.toBeInTheDocument();
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-preserve"));
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      expect(commitCalls(fetchMock)).toHaveLength(1);
+    });
+    expect(JSON.parse(String(commitCalls(fetchMock)[0][1]?.body)).access).toEqual({
+      mode: "preserve_current"
+    });
+  });
+
+  it("SC-10 uploaded corrupt: replace may explicitly re-set after ignoring the declaration", async () => {
+    const { dialog, fetchMock } = await openReplace(roles("analyst"), corrupt);
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-ignore-corrupt"));
+    await waitFor(() => {
+      expect(
+        within(dialog).queryByTestId("wiki-upload-access-corrupt")
+      ).not.toBeInTheDocument();
+    });
+    fireEvent.click(
+      within(dialog).getByRole("checkbox", { name: "我确认上传后 Agent 暂时无法访问" })
+    );
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      expect(commitCalls(fetchMock)).toHaveLength(1);
+    });
+    const body = JSON.parse(String(commitCalls(fetchMock)[0][1]?.body));
+    expect(body.access).toEqual({ mode: "set", allowed_roles: [] });
+    expect(body.confirmed_empty).toBe(true);
+  });
+
+  it("SC-10 current corrupt: explicit use_uploaded of a legal declaration repairs it", async () => {
+    const { dialog, fetchMock } = await openReplace(corrupt, roles("analyst"));
+
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-adopt"));
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      expect(commitCalls(fetchMock)).toHaveLength(1);
+    });
+    expect(JSON.parse(String(commitCalls(fetchMock)[0][1]?.body)).access).toEqual({
+      mode: "use_uploaded"
+    });
+  });
+
+  it("SC-10 both corrupt: no adopt action, preserve remains reachable", async () => {
+    const { dialog } = await openReplace(corrupt, corrupt);
+
+    expect(within(dialog).queryByTestId("wiki-upload-access-adopt")).not.toBeInTheDocument();
+    expect(within(dialog).getByTestId("wiki-upload-access-preserve")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+  });
+
+  it("SC-09 / SC-10 create: no preserve action; a legal upload starts from use_uploaded, corrupt must be re-set", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki");
+    fireEvent.click(await screen.findByTestId("wiki-upload-button"));
+    const input = screen.getByTestId("wiki-upload-input") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [
+          new File(["---\nallowed_roles: [analyst]\n---\n# New\n"], "new.md", {
+            type: "text/markdown"
+          })
+        ]
+      }
+    });
+    const dialog = await screen.findByTestId("wiki-upload-preflight");
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-access-editor-source")).toHaveTextContent(
+        "来自上传文件"
+      );
+    });
+    expect(within(dialog).queryByTestId("wiki-upload-access-preserve")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+  });
+
+  it("SC-14 a selection change discards the stale digest and re-previews before commit", async () => {
+    const { dialog, fetchMock } = await openReplace(
+      roles("analyst", "finance_reader"),
+      roles("analyst")
+    );
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-preserve"));
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-adopt"));
+    // The digest of the preserve preview must not stay usable for use_uploaded.
+    await waitFor(() => {
+      expect(previewBodies(fetchMock).at(-1)?.access).toEqual({ mode: "use_uploaded" });
+    });
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      expect(commitCalls(fetchMock)).toHaveLength(1);
+    });
+    const body = JSON.parse(String(commitCalls(fetchMock)[0][1]?.body));
+    expect(body.access).toEqual({ mode: "use_uploaded" });
+    expect(body.preview_digest).toBe("digest-use_uploaded");
   });
 });
 

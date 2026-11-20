@@ -12,8 +12,8 @@
 |---|---|
 | 文档类型 / 版本 | 实施 Plan / v0.2 |
 | 功能编号 | P1-65／REQ-030-086 |
-| 状态 | v0.2。终稿已确权（委托人 2026-11-20 明示本提示词确权；独立终审通过）；开发未授权；改后 UAT 未授权且 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 |
-| 授权边界 | 2026-11-20 委托人授权独立终审并通过后同步终稿确权；本轮仍仅文档；不改运行代码，不执行改后 UAT，不将 UAT 标为 PASS，不 commit／push；**终稿确权 ≠ 开发授权** |
+| 状态 | v0.2。终稿已确权；开发授权已获得；实现完成；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
+| 授权边界 | 2026-11-20 委托人授权开发实现＋改后 UAT；同日授权 GAP 补跑与功能合同收口判定；未授权 commit／push／可上线 |
 | 验收 | [Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md) SC-01–14；[UAT](../qa/uat/suites/wiki-upload-acl-adoption/cases.md) R0／01–12，含全部子例；[终审记录](../reviews/2026-11-20-wiki-upload-acl-adoption-review.md) |
 
 ## 目标
@@ -83,7 +83,7 @@ npx vitest run src/__tests__/wiki.test.tsx src/__tests__/wiki-access-components.
 - 路由：/wiki
 - 视口：1920×1080
 - 状态：E1、E2、E3、E4、E5、E6、E7
-- 证据：未执行
+- 证据：docs/reviews/2026-11-20-wiki-upload-acl-adoption-browser.md
 
 ## 验收
 
@@ -109,5 +109,7 @@ npx vitest run src/__tests__/wiki.test.tsx src/__tests__/wiki-access-components.
 
 ## 修订记录
 
-- v0.2（2026-11-20）：独立终审通过；委托人明示本提示词＝终稿确权；开发未授权。见终审记录。
+- v0.2（2026-11-20）：独立终审通过；委托人明示本提示词＝终稿确权。见终审记录。
+- v0.2-uat（2026-11-20）：改后 Docker UAT＝PASS WITH GAP。
+- v0.2-impl（2026-11-20）：开发授权已获得；Task 1–3 实现完成待 UAT（vitest 161 PASS）；Task 4 NOT RUN。
 - v0.2-review（2026-11-20）：按四项意见修订；SC-01–14 对齐 R0／01–12。历史基线 FAIL 保留。

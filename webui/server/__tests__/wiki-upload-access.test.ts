@@ -543,3 +543,56 @@ describe("Spec 193 §5.4 — the mode is never silently converted", () => {
     await expect(readFile(path.join(projectRoot, "wiki", "global", "missing.md"), "utf8")).rejects.toThrow();
   });
 });
+
+describe("P1-65 SC-04 / SC-05 — a replace with B≠W writes nothing on a wrong digest or missing selection", () => {
+  const WIDER = "---\nallowed_roles: [finance, ops]\n---\n# Replaced\n";
+
+  it("SC-04: the preserve_current digest cannot commit use_uploaded (zero change)", async () => {
+    const preserve = await previewWikiUpload(projectRoot, {
+      key: KEY,
+      markdown: WIDER,
+      mode: "replace",
+      access: { mode: "preserve_current" }
+    });
+    const before = await readWiki(projectRoot, KEY);
+
+    await expect(
+      commitWikiUpload(projectRoot, {
+        key: KEY,
+        markdown: WIDER,
+        mode: "replace",
+        access: { mode: "use_uploaded" },
+        expected_version: before.file_version,
+        preview_digest: preserve.access.preview_digest
+      })
+    ).rejects.toMatchObject({ code: "wiki_upload_preview_stale", statusCode: 409 });
+
+    expect(await readFile(pagePath(), "utf8")).toBe(ROLE_ROLES);
+    const after = await readWiki(projectRoot, KEY);
+    expect(after.file_version).toBe(before.file_version);
+    expect(after.acl).toEqual({ state: "roles", roles: ["finance"] });
+  });
+
+  it("SC-05: a replace commit without `access` is refused (zero change)", async () => {
+    const preview = await previewWikiUpload(projectRoot, {
+      key: KEY,
+      markdown: WIDER,
+      mode: "replace",
+      access: { mode: "use_uploaded" }
+    });
+    const before = await readWiki(projectRoot, KEY);
+
+    await expect(
+      commitWikiUpload(projectRoot, {
+        key: KEY,
+        markdown: WIDER,
+        mode: "replace",
+        expected_version: before.file_version,
+        preview_digest: preview.access.preview_digest
+      })
+    ).rejects.toMatchObject({ code: "wiki_upload_access_required", statusCode: 400 });
+
+    expect(await readFile(pagePath(), "utf8")).toBe(ROLE_ROLES);
+    expect((await readWiki(projectRoot, KEY)).file_version).toBe(before.file_version);
+  });
+});

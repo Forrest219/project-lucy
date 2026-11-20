@@ -6,8 +6,8 @@
 | 日期 / 产品线 | 2026-11-20 / 0.30.0 |
 | 功能编号 / 优先级 | P1-65／REQ-030-086；事故修复／治理主路径；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.2。终稿已确权（委托人 2026-11-20 明示本提示词确权；独立终审通过）；开发未授权；改后 UAT 未授权且 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 |
-| 授权边界 | 2026-11-20 委托人授权独立终审并通过后同步终稿确权；本轮仍仅文档；不改运行代码，不执行改后 UAT，不将 UAT 标为 PASS，不 commit／push；**终稿确权 ≠ 开发授权** |
+| 状态 | v0.2。终稿已确权；开发授权已获得；实现完成；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
+| 授权边界 | 2026-11-20 委托人授权开发实现＋改后 UAT；同日授权 GAP 补跑与功能合同收口判定；未授权 commit／push／可上线 |
 | 需求 / 计划 | [REQ-030-086](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [总账 P1-65](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261120-wiki-upload-acl-adoption-plan.md) |
 | 复现证据 / 测试台 | [Docker 基线](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-cursor-docker-baseline.md) · [UAT-SUITE-WIKI-UPLOAD-ACL-ADOPTION](../qa/uat/suites/wiki-upload-acl-adoption/suite.md) |
 | 相关合同 | [Spec 193 §5.2–5.4／§9.1](../../webui/docs/193-business-wiki-access-management-spec.md)（业务 Wiki 访问权限）；本条替代 §5.3 的差异态隐式可提交默认，不废除「覆盖上传不得静默采用上传声明」的安全前提，只补「差异可见＋显式选择＋可逃生」 |
@@ -111,7 +111,7 @@ onCommit():
 
 ## 4. 验收（SC）
 
-| ID | 要求 | 必做 UAT 映射（改后均 NOT RUN） |
+| ID | 要求 | 必做 UAT 映射（改后 gap-fill＝PASS） |
 |---|---|---|
 | SC-01 | 全部合法差异及 corrupt 初始均无可提交默认；含加宽、收窄、角色替换、all→roles、roles→missing／empty、missing↔empty、roles→all；未选择不得发出 commit | 07·M1–M9、10 |
 | SC-02 | 显式 `preserve_current` 成功；磁盘声明＝当前，正文按上传变更；UI 点击与预检披露另有证据 | 01、07·保留 |
@@ -128,7 +128,7 @@ onCommit():
 | SC-13 | missing／empty／all 的确认不可因新增显式选择而跳过；未确认零写入，确认后成功；确认随选择变更重置 | 09、12 |
 | SC-14 | 预检乱序、失败及 stale 恢复不得复用旧摘要提交；合法用户可重新预检／取消重开后成功完成上传 | 07·E2／E3、12 |
 
-交互设计评审为合同设计结论，不是浏览器执行结果；改后 E1–E7 均 NOT RUN。
+交互设计评审为合同设计结论；改后 E1–E7 与 07·M1–M9／保留／重设已由 gap-fill 浏览器证据覆盖。
 
 ## 交互合同
 
@@ -206,4 +206,7 @@ New terms: none. 复用「管理访问权限」「业务 Wiki」「上传预检�
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | v0.2 | 2026-11-20 | 独立终审通过；委托人明示本提示词＝终稿确权（免 Codex CLI）；开发未授权。见 [终审记录](../reviews/2026-11-20-wiki-upload-acl-adoption-review.md)。 |
+| v0.2-close | 2026-11-20 | GAP 补跑后 Docker UAT＝PASS；SC-01–14 证据齐；功能合同已收口；≠ 可上线。 |
+| v0.2-uat | 2026-11-20 | 改后 Docker UAT＝PASS WITH GAP；浏览器 E1–E7 抽样＋API R0／01–05／08／11 等；见测试台。 |
+| v0.2-impl | 2026-11-20 | 开发授权已获得；实现完成待 UAT：`wikiAclDeclarationKey`／`wikiUploadNeedsExplicitChoice`、`computeUploadSelection` 差异／corrupt 起算 null、预检显式保留／采用／重设与「待选择」摘要；聚焦 vitest 161 PASS；改后 UAT NOT RUN。 |
 | v0.2-review | 2026-11-20 | 按四项审阅意见补全差异矩阵与同键对照、损坏声明分支、逐例隔离／负控前提、UI 与 API 证据分工及 SC-01–14↔R0／01–12 映射；历史基线不重写。 |

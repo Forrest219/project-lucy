@@ -41,7 +41,8 @@ import {
   isWikiAccessConflict,
   matchesWikiAccessFilter,
   wikiAclIsCorrupt,
-  wikiAclIsEmpty
+  wikiAclIsEmpty,
+  wikiUploadNeedsExplicitChoice
 } from "../lib/wikiAccess";
 import type { WikiAccessFilter } from "../lib/wikiAccess";
 import type {
@@ -1336,19 +1337,24 @@ export function WikiEditor() {
    * The authorization selection an upload starts from.
    *
    * A new upload starts from the uploaded declaration (or an explicit empty
-   * selection when the file declares nothing). A replace upload ALWAYS
-   * starts from the persisted authorization — the uploaded declaration is
-   * never adopted silently. A corrupt uploaded declaration cannot be
-   * adopted at all: the owner has to re-set it explicitly.
+   * selection when the file declares nothing). A replace upload only defaults
+   * to the persisted authorization when both declarations are legal and share
+   * the same declaration key; any mismatch or corrupt declaration starts
+   * without a selection (P1-65 D1/D2) — the uploaded declaration is never
+   * adopted silently. A corrupt uploaded declaration cannot be adopted at
+   * all.
    */
   function computeUploadSelection(
     modeToPreview: WikiUploadMode,
     previewResult: WikiUploadPreview
   ): WikiUploadAccessSelection | null {
-    if (modeToPreview === "replace") {
-      return { mode: "preserve_current" };
-    }
     const uploaded = previewResult.access?.uploaded_acl ?? null;
+    if (modeToPreview === "replace") {
+      const current = previewResult.access?.current_acl ?? null;
+      return wikiUploadNeedsExplicitChoice("replace", current, uploaded)
+        ? null
+        : { mode: "preserve_current" };
+    }
     if (!uploaded || uploaded.state === "corrupt") {
       return null;
     }
@@ -1455,8 +1461,8 @@ export function WikiEditor() {
     setUploadAllConfirmed(false);
     setUploadCorruptAcknowledged(draft !== null);
     if (!draft) {
-      // A corrupt uploaded declaration blocks the commit until the owner
-      // explicitly re-sets the authorization.
+      // A declaration mismatch or corrupt declaration blocks the commit until
+      // the owner explicitly preserves, adopts a legal upload, or re-sets.
       return;
     }
     if (sameUploadSelection(draft, first.access?.suggested_selection ?? null)) {

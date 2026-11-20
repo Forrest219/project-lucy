@@ -4,14 +4,16 @@ import { WikiAccessEditor } from "./WikiAccessEditor";
 import type { WikiAccessSource } from "./WikiAccessEditor";
 import {
   wikiAclDisplayText,
-  wikiAclEquals,
+  wikiAclDeclarationKey,
   wikiAclIsEmpty,
   wikiAclRoleIds,
   wikiUploadAuthorizationChanged,
   wikiUploadCommitGuard,
   wikiUploadFinalAcl
 } from "../lib/wikiAccess";
-import type { WikiUploadAccessSelection, WikiUploadPreview } from "../lib/types";
+import type { WikiAclState, WikiUploadAccessSelection, WikiUploadPreview } from "../lib/types";
+
+type WikiUploadPreflightAcl = WikiAclState | null | undefined;
 
 export type WikiUploadPreflightProps = {
   open: boolean;
@@ -46,6 +48,13 @@ const SOURCE_LABELS: Record<WikiAccessSource, string> = {
   current: "保留现有授权",
   reset: "重新设置"
 };
+
+/** Declaration summary that keeps 未声明 and 显式 `[]` apart (both: nobody). */
+function declarationSummaryText(acl: WikiUploadPreflightAcl): string {
+  if (acl?.state === "missing") return "未声明（无人可见）";
+  if (acl?.state === "empty") return "显式 []（无人可见）";
+  return wikiAclDisplayText(acl);
+}
 
 function uploadWarningsForAcl(warnings: string[], allowedRoles: string[]): string[] {
   const visible = allowedRoles.includes("*") || allowedRoles.length > 0;
@@ -96,11 +105,13 @@ export function WikiUploadPreflight({
         ? wikiAclRoleIds(uploadedAcl)
         : (selection?.allowed_roles ?? []);
   const uploadedIsLegal = uploadedAcl !== null && uploadedAcl.state !== "corrupt";
+  // P1-65: the difference gate compares declaration keys (missing ≠ empty).
   const adoptAvailable =
     mode === "replace" &&
     uploadedIsLegal &&
     selection?.mode !== "use_uploaded" &&
-    !wikiAclEquals(uploadedAcl, currentAcl);
+    wikiAclDeclarationKey(uploadedAcl) !== wikiAclDeclarationKey(currentAcl);
+  const preserveAvailable = mode === "replace" && selection?.mode !== "preserve_current";
 
   const guard = wikiUploadCommitGuard({
     mode,
@@ -266,7 +277,7 @@ export function WikiUploadPreflight({
                     >
                       <dt className="pl-wiki-preflight-summary-label">当前授权</dt>
                       <dd className="pl-wiki-preflight-summary-value">
-                        {wikiAclDisplayText(currentAcl)}
+                        {declarationSummaryText(currentAcl)}
                       </dd>
                     </div>
                   ) : null}
@@ -276,7 +287,7 @@ export function WikiUploadPreflight({
                   >
                     <dt className="pl-wiki-preflight-summary-label">文件内声明</dt>
                     <dd className="pl-wiki-preflight-summary-value">
-                      {wikiAclDisplayText(uploadedAcl)}
+                      {declarationSummaryText(uploadedAcl)}
                     </dd>
                   </div>
                   <div
@@ -285,10 +296,27 @@ export function WikiUploadPreflight({
                   >
                     <dt className="pl-wiki-preflight-summary-label">最终将采用</dt>
                     <dd className="pl-wiki-preflight-summary-value">
-                      {wikiAclDisplayText(finalAcl)}（{SOURCE_LABELS[source]}）
+                      {selection === null
+                        ? "待选择（尚未确定）"
+                        : `${wikiAclDisplayText(finalAcl)}（${SOURCE_LABELS[source]}）`}
                     </dd>
                   </div>
                 </dl>
+                {mode === "replace" && selection === null ? (
+                  <p className="pl-notice" data-testid="wiki-upload-access-choice-required">
+                    默认不会采用上传文件内的授权。请选择保留现有授权、采用文件内授权或重新设置。
+                  </p>
+                ) : null}
+                {preserveAvailable ? (
+                  <button
+                    className="pl-btn pl-btn--secondary text-sm"
+                    data-testid="wiki-upload-access-preserve"
+                    onClick={() => onSelectionChange({ mode: "preserve_current" })}
+                    type="button"
+                  >
+                    保留现有授权
+                  </button>
+                ) : null}
                 {adoptAvailable ? (
                   <button
                     className="pl-btn pl-btn--secondary text-sm"

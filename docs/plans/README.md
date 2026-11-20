@@ -4,7 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
-| [lucy-20261120-wiki-upload-acl-adoption-plan.md](lucy-20261120-wiki-upload-acl-adoption-plan.md) | P1-65／REQ-030-086；v0.2。终稿已确权（委托人 2026-11-20 明示本提示词确权；独立终审通过）；开发未授权；改后 UAT 未授权且 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 |
+| [lucy-20261120-wiki-upload-acl-adoption-plan.md](lucy-20261120-wiki-upload-acl-adoption-plan.md) | P1-65／REQ-030-086；v0.2。终稿已确权；开发授权已获得；实现完成；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
 | [lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) | P1-64／REQ-030-085；v0.2。终稿已确权；开发授权已获得；Task 1–6 实现完成（聚焦 vitest 120／11 PASS；API 文档已同步）；Task 7 改后 Docker UAT 已执行（判定见测试台 INDEX）；不入核心分母；≠ 功能合同收口（实现 CR／提交推送须另行明示）；≠ 可上线。 |
 | [lucy-20261119-memory-probe-diagnostics-isolation-plan.md](lucy-20261119-memory-probe-diagnostics-isolation-plan.md) | P1-61／REQ-030-082；v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
 | [lucy-20261119-heavy-work-capacity-control-plan.md](lucy-20261119-heavy-work-capacity-control-plan.md) | P1-62／REQ-030-083；v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |

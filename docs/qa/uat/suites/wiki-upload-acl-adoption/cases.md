@@ -1,6 +1,6 @@
 # Cases — Wiki 覆盖上传 YAML 授权采用
 
-版本：v0.2（2026-11-20）。用例已定稿／终稿确权；**R0／01–12 的改后 verify 全部 NOT RUN**，不得据本文档修改 INDEX 为 PASS。
+版本：v0.2（2026-11-20）。用例已定稿／终稿确权；改后证据见 [gap-fill PASS](runs/2026-11-20-cursor-docker-gap-fill.md)（INDEX＝PASS）；历史基线 FAIL 保留。
 
 [改前基线](runs/2026-11-20-cursor-docker-baseline.md) 按当时 v0.1 的定义保留：01 FAIL、02–05 PASS、06–07 NOT RUN；没有 08–12 的历史执行证据。v0.2 将 01 收敛为 API 显式保留，原默认 UI 缺陷由 07 验；不得把历史 01 FAIL 重释为新 01 PASS。
 
@@ -14,7 +14,7 @@
 
 ## 必做用例
 
-| 编号 | 选择器 | 独立前置与操作 | 改后期望（当前 NOT RUN） | Spec |
+| 编号 | 选择器 | 独立前置与操作 | 改后期望（gap-fill＝PASS） | Spec |
 |---|---|---|---|---|
 | UAT-WUA-R0 | 必做／环境 | health／登录；记录 gitSha、工作树补丁标识、实际镜像 ID／digest、产品版本；核对 B／W／C 正式角色与隔离 Agent 的搜索／读取通道；准备独立 key | 环境及夹具可核对；凭据不入证据；纯 MCP Agent 无需 WebUI 账号或宿主 | 全部前置 |
 | UAT-WUA-01 | 必做／API 结果 | 当前 B、上传 W，B≠W；明确以 `preserve_current` preview，再携同选择、fresh version／digest commit；UI 点击另由 07·保留证明 | 正文变为本次上传内容，磁盘 ACL＝B；披露最终 B；执行 06·保留。此例不证明默认 UI 已修复 | SC-02／08 |
@@ -98,4 +98,4 @@ all 状态按既有全角色语义验通道有效的 Agent；不制造「所有�
 
 SC-01→07／10；SC-02→01／07；SC-03→02／07；SC-04→03；SC-05→04；SC-06→07；SC-07→05／10／12；SC-08→06 及各检查点；SC-09→09；SC-10→10；SC-11→08／07；SC-12→11；SC-13→09／11／12；SC-14→07／12。
 
-改后必须同候选完整 R0／01–12 **及全部子例**有真实证据，方可按实际结果主张完整范围通过。若另授降级，逐项记录 GAP、证据层级和限定范围，不得把缺证子例算 PASS。本轮只修文档，INDEX 保持历史基线 FAIL，改后 NOT RUN。清理按 fixtures，不 `down -v`。≠ 功能合同收口；≠ 可上线。
+改后同候选完整 R0／01–12 及全部子例已有真实证据（gap-fill）。清理按 fixtures，不 `down -v`。≠ 可上线。

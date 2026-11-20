@@ -228,6 +228,36 @@ export function wikiAclEquals(
   return leftRoles.length === rightRoles.length && leftRoles.every((role, index) => role === rightRoles[index]);
 }
 
+/**
+ * Declaration-level canonical key (P1-65 / Spec §2.1), identical in meaning to
+ * the server `canonicalAclKey`: `missing`, `empty` and `all` stay distinct,
+ * roles compare as a de-duplicated sorted set, a corrupt declaration carries
+ * its detail. Unlike `wikiAclEquals` this never treats missing as empty, so it
+ * is the only comparison the upload difference gate may use.
+ */
+export function wikiAclDeclarationKey(acl: WikiAclState | null | undefined): string {
+  if (!acl) return "missing";
+  if (acl.state === "roles") return `roles:${[...new Set(acl.roles)].sort().join(",")}`;
+  if (acl.state === "corrupt") return `corrupt:${acl.detail}`;
+  return acl.state;
+}
+
+/**
+ * `true` when an upload must start without a selection (P1-65 D2).
+ * replace: any corrupt declaration or any declaration-key mismatch.
+ * create: the uploaded declaration is absent or corrupt (it must be re-set).
+ */
+export function wikiUploadNeedsExplicitChoice(
+  mode: "create" | "replace",
+  current: WikiAclState | null | undefined,
+  uploaded: WikiAclState | null | undefined
+): boolean {
+  if (!uploaded || uploaded.state === "corrupt") return true;
+  if (mode === "create") return false;
+  if (!current || current.state === "corrupt") return true;
+  return wikiAclDeclarationKey(current) !== wikiAclDeclarationKey(uploaded);
+}
+
 /** The declared Role count of a state (`null` for all / corrupt). */
 export function wikiDeclaredRoleCount(acl: WikiAclState | null | undefined): number | null {
   if (!acl) return 0;
@@ -472,10 +502,15 @@ export function wikiUploadCommitGuard(params: {
     wikiUploadAuthorizationChanged(params.selection, params.currentAcl, params.uploadedAcl)
   );
   let reason: string | null = null;
-  if (params.corruptBlocked) {
+  if (params.corruptBlocked && params.mode === "create") {
     reason = "文件内可访问角色声明已损坏，请忽略该声明并重新设置后再上传。";
   } else if (!params.selection) {
-    reason = "尚未选择可访问角色。";
+    reason =
+      params.mode === "replace"
+        ? "上传声明与现有授权不一致或存在损坏声明，请先选择保留现有授权、采用文件内授权或重新设置。"
+        : "尚未选择可访问角色。";
+  } else if (params.selection.mode === "use_uploaded" && params.uploadedAcl?.state === "corrupt") {
+    reason = "文件内可访问角色声明已损坏，不能采用。";
   } else if (params.previewLoading) {
     reason = "上传预检进行中，请稍候。";
   } else if (params.previewError) {

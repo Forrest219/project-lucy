@@ -8,7 +8,19 @@ import { WikiAccessDrawer } from "../components/WikiAccessDrawer";
 import { WikiAccessEditor } from "../components/WikiAccessEditor";
 import { WikiAccessEffectList } from "../components/WikiAccessEffectList";
 import { WikiAccessStatusBadge, WikiAccessSummary } from "../components/WikiAccessSummary";
-import type { WikiAccessListEntry, WikiAccessRoleEffect } from "../lib/types";
+import { WikiUploadPreflight } from "../components/WikiUploadPreflight";
+import type { WikiUploadPreflightProps } from "../components/WikiUploadPreflight";
+import type {
+  WikiAccessListEntry,
+  WikiAccessRoleEffect,
+  WikiAclState,
+  WikiUploadPreview
+} from "../lib/types";
+import {
+  wikiAclDeclarationKey,
+  wikiUploadCommitGuard,
+  wikiUploadNeedsExplicitChoice
+} from "../lib/wikiAccess";
 
 const ROLES = ["analyst", "finance_reader"];
 
@@ -510,5 +522,159 @@ describe("WikiAccessDrawer (Spec 193 §6.2)", () => {
       expect(within(drawer).getByTestId("wiki-access-save")).not.toBeDisabled();
     });
     expect(within(drawer).getByLabelText("finance_reader")).toBeChecked();
+  });
+});
+
+describe("P1-65 declaration keys and explicit-choice gate", () => {
+  const roles = (...ids: string[]): WikiAclState => ({ state: "roles", roles: ids });
+  const corrupt = (detail = "bad"): WikiAclState => ({ state: "corrupt", detail });
+
+  it("wikiAclDeclarationKey mirrors the server canonical key semantics", () => {
+    expect(wikiAclDeclarationKey({ state: "missing" })).toBe("missing");
+    expect(wikiAclDeclarationKey({ state: "empty" })).toBe("empty");
+    expect(wikiAclDeclarationKey({ state: "all" })).toBe("all");
+    expect(wikiAclDeclarationKey(roles("b", "a"))).toBe("roles:a,b");
+    expect(wikiAclDeclarationKey(roles("a", "b", "a"))).toBe("roles:a,b");
+    expect(wikiAclDeclarationKey(corrupt("x"))).toBe("corrupt:x");
+    // missing, empty and all are three different declarations.
+    const keys = new Set(
+      ([{ state: "missing" }, { state: "empty" }, { state: "all" }] as WikiAclState[]).map(
+        wikiAclDeclarationKey
+      )
+    );
+    expect(keys.size).toBe(3);
+  });
+
+  it("wikiUploadNeedsExplicitChoice: replace requires a choice on any key mismatch or corrupt", () => {
+    expect(wikiUploadNeedsExplicitChoice("replace", roles("a"), roles("a", "b"))).toBe(true);
+    expect(wikiUploadNeedsExplicitChoice("replace", { state: "missing" }, { state: "empty" })).toBe(
+      true
+    );
+    expect(wikiUploadNeedsExplicitChoice("replace", roles("a"), corrupt())).toBe(true);
+    expect(wikiUploadNeedsExplicitChoice("replace", corrupt(), roles("a"))).toBe(true);
+    expect(wikiUploadNeedsExplicitChoice("replace", corrupt("x"), corrupt("x"))).toBe(true);
+    expect(wikiUploadNeedsExplicitChoice("replace", roles("b", "a"), roles("a", "b"))).toBe(false);
+    expect(wikiUploadNeedsExplicitChoice("replace", { state: "all" }, { state: "all" })).toBe(
+      false
+    );
+  });
+
+  it("wikiUploadNeedsExplicitChoice: create only needs a choice for a corrupt upload", () => {
+    expect(wikiUploadNeedsExplicitChoice("create", null, corrupt())).toBe(true);
+    expect(wikiUploadNeedsExplicitChoice("create", null, roles("a"))).toBe(false);
+    expect(wikiUploadNeedsExplicitChoice("create", null, { state: "empty" })).toBe(false);
+  });
+
+  const baseGuard = {
+    mode: "replace" as const,
+    currentAcl: roles("a") as WikiAclState,
+    uploadedAcl: roles("a", "b") as WikiAclState,
+    previewReady: true,
+    previewLoading: false,
+    previewError: null,
+    previewDigest: "digest",
+    roleReady: true,
+    emptyConfirmed: false,
+    allConfirmed: false,
+    corruptBlocked: false
+  };
+
+  it("commit guard blocks a replace without selection and adopting a corrupt upload", () => {
+    expect(wikiUploadCommitGuard({ ...baseGuard, selection: null }).blocked).toBe(true);
+    expect(
+      wikiUploadCommitGuard({
+        ...baseGuard,
+        selection: { mode: "use_uploaded" },
+        uploadedAcl: corrupt()
+      }).blocked
+    ).toBe(true);
+    expect(
+      wikiUploadCommitGuard({ ...baseGuard, selection: { mode: "preserve_current" } }).blocked
+    ).toBe(false);
+  });
+});
+
+describe("WikiUploadPreflight unselected replace (P1-65 D3)", () => {
+  const preview = {
+    key: "global/a.md",
+    filePath: "wiki/global/a.md",
+    diff: "@@\n+x\n",
+    proposedMarkdown: "x",
+    exists: true,
+    mode: "replace",
+    sourceFileName: "a.md",
+    targetKey: "global/a.md",
+    existingTitle: "A",
+    targetTitle: "A",
+    title: "A",
+    slRefs: [],
+    warnings: [],
+    currentFileVersion: "sha256:1",
+    access: {
+      current_acl: { state: "roles", roles: ["analyst"] },
+      uploaded_acl: { state: "roles", roles: ["analyst", "finance_reader"] },
+      final_acl: { state: "roles", roles: ["analyst"] },
+      suggested_selection: { mode: "preserve_current" },
+      direction: "neutral",
+      role_effects: [],
+      declared_role_count: 1,
+      declared_without_discover: 0,
+      declared_without_read: 0,
+      role_channel_version: "rcv",
+      preview_digest: "digest-suggested",
+      issues: []
+    }
+  } as unknown as WikiUploadPreview;
+
+  function props(overrides: Partial<WikiUploadPreflightProps> = {}): WikiUploadPreflightProps {
+    return {
+      open: true,
+      mode: "replace",
+      preview,
+      directories: [],
+      targetDirectory: "global",
+      error: null,
+      isLoading: false,
+      isCommitting: false,
+      onCancel: () => undefined,
+      onConfirm: vi.fn(),
+      onTargetDirectoryChange: () => undefined,
+      selection: null,
+      onSelectionChange: vi.fn(),
+      emptyConfirmed: false,
+      onEmptyConfirmedChange: () => undefined,
+      allConfirmed: false,
+      onAllConfirmedChange: () => undefined,
+      corruptBlocked: false,
+      onIgnoreCorrupt: () => undefined,
+      roleReady: true,
+      ...overrides
+    };
+  }
+
+  it("shows 待选择, never the server suggestion, and keeps commit disabled", async () => {
+    vi.stubGlobal("fetch", roleEndpoint("ready"));
+    const onConfirm = vi.fn();
+    renderWithClient(<WikiUploadPreflight {...props({ onConfirm })} />);
+
+    const final = await screen.findByTestId("wiki-upload-access-final");
+    expect(final).toHaveTextContent("待选择（尚未确定）");
+    expect(final).not.toHaveTextContent("保留现有授权");
+    const confirm = screen.getByTestId("wiki-upload-confirm");
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(screen.getByTestId("wiki-upload-access-choice-required")).toBeInTheDocument();
+  });
+
+  it("offers explicit preserve and legal adopt actions that emit the selection", async () => {
+    vi.stubGlobal("fetch", roleEndpoint("ready"));
+    const onSelectionChange = vi.fn();
+    renderWithClient(<WikiUploadPreflight {...props({ onSelectionChange })} />);
+
+    fireEvent.click(await screen.findByTestId("wiki-upload-access-preserve"));
+    expect(onSelectionChange).toHaveBeenLastCalledWith({ mode: "preserve_current" });
+    fireEvent.click(screen.getByTestId("wiki-upload-access-adopt"));
+    expect(onSelectionChange).toHaveBeenLastCalledWith({ mode: "use_uploaded" });
   });
 });

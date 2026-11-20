@@ -48,6 +48,7 @@
 | REQ-030-082 | 存活／就绪探针纯内存响应与诊断隔离 | 同构建 503 排查及探针读盘调用链核对；不预判现场根因 | P1（清单 P1-61；建议第一批） | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
 | REQ-030-083 | 重任务跨模块容量控制与许可生命周期 | 已有局部队列不能证明不同重任务并行时的总容量有界 | P1（清单 P1-62；建议第二批） | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
 | REQ-030-084 | 进程关停准入关闭与在途请求排空 | 已有清理先停 KTX，尚无全进程在途排空承诺；修订须与 Spec 191 同次评审 | P2（清单 P1-63；建议第三批） | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
+| REQ-030-086 | Wiki 覆盖上传采用 YAML 授权声明 | 2026-11-20 本机 demo Docker 复现：覆盖上传 `allowed_roles` 差异被默认 `preserve_current` 静默剥掉 | P1（清单 P1-65；事故修复） | 终稿已确权；开发授权已获得；实现完成；改后 Docker UAT＝PASS；功能合同已收口；不入核心分母；≠ 可上线。 |
 | REQ-030-079 | 角色权限与 Agent 列表读取响应、展示复用与统计减负 | 高频卡顿只读探查；历史日志聚合与角色上下文重复构建 | P1（清单 P1-58；第一批） | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F58／浏览器）；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | REQ-030-080 | 角色权限与 Agent 多人编辑的对象级冲突与草稿恢复 | 共用配置版本造成无关对象冲突；多人同账号与独立账号场景 | P1（清单 P1-59；第二批） | v1.0。终稿确权；委托人2026-11-19明示开发授权。Wave1–3 实现完成并经 code review APPROVE（待 F59／浏览器）；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | REQ-030-081 | begin 价值重评与零绑定 MCP 问数不受影响 | 2026-11-19 MCP 故障只读排查；2026-11-20 批准隐藏 begin；同日终稿确权＋T1–T5 开发授权 | P0（清单 P1-60；P0-1 修复） | **v0.7；终稿已确权；T1–T5 已实现并 commit（vitest 109 PASS；demo 冒烟：tools/list 无 begin＋直调 begin_not_available）**；预算／ACL 待商议且本条不改；测试台 NOT RUN；T6／R 另授；不入新增核心分母；≠ 功能合同收口；≠ 可上线。 |
@@ -1378,3 +1379,9 @@ P1-40 同类排查证明：界面成功反馈与动作真实结果不一致是�
 - 差集及去重：[核对报告](../reviews/2026-11-19-core-availability-gap-assessment.md)；不重复已实现的worker、恢复、局部探测队列和既有发布门禁，不预判本次现场503根因。
 - 合同：[Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md)；实施：[Plan](lucy-20261119-process-drain-lifecycle-plan.md)；测试台：[UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md) F63。
 - 现值：v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。
+
+## REQ-030-086：Wiki 覆盖上传采用 YAML 授权声明
+
+- 总账：[P1-65](lucy-20261107-lucy-0-30-feature-inventory-pool.md)，不入核心分母。
+- 合同：[Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md)；实施：[Plan](lucy-20261120-wiki-upload-acl-adoption-plan.md)；测试台：[UAT-SUITE-WIKI-UPLOAD-ACL-ADOPTION](../qa/uat/suites/wiki-upload-acl-adoption/suite.md)（历史基线 FAIL 保留）。
+- 现值：终稿已确权；开发授权已获得；实现完成待 UAT（webui 三文件 vitest 161 PASS）；改后 UAT 已授权执行、NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。
