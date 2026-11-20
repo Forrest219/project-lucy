@@ -43,6 +43,7 @@ class Rig:
         self.out.mkdir(parents=True,exist_ok=True)
         self.tag='lucy-zb-'+label+'-'+secrets.token_hex(3)
         self.app,self.db,self.network=self.tag+'-app',self.tag+'-db',self.tag
+        self.data_volume=self.tag+'-data'
         self.private=pathlib.Path(tempfile.mkdtemp(prefix=self.tag+'-'));os.chmod(self.private,0o700)
         self.project=self.private/'project';self.project.mkdir()
         self.boot,self.password,self.dbpass,self.rootpass=[secrets.token_urlsafe(28) for _ in range(4)]
@@ -79,6 +80,7 @@ class Rig:
     def query(self,name,who='a',session=None,bound=False,save=True):
         measures=[SOURCE+'.order_count'] if bound else [SOURCE+'.order_count',SOURCE+'.amount_sum']
         r=self.call(name,'lucy_query',{'connectionId':CONN,'measures':measures},who=who,session=session,save=save)
+        if not successful(r) and not save:self.save(name+'-failed-query',r)
         require(successful(r),name+' query failed: '+json.dumps(r,ensure_ascii=False)[:1500])
         data=inner(r)
         # Column names may be rewritten by KTX; compare the actual single aggregate row.
@@ -117,12 +119,20 @@ class Rig:
         script='import sqlite3,json,sys; c=sqlite3.connect("file:/data/lucy/.ktx-ui/audit.sqlite?mode=ro",uri=True);c.row_factory=sqlite3.Row;print(json.dumps([dict(r) for r in c.execute(sys.stdin.read())]))'
         return json.loads(run(['docker','exec','-i',self.app,'python3','-c',script],sql))
     def ready(self):
+        ports=[];last=None
         for _ in range(120):
             try:
-                r=self.request(self.web,'/api/health',timeout=2)
-                if r['httpStatus']==200 and r['body'].get('data',{}).get('ktxRuntime',{}).get('ready'):return r
-            except Exception:pass
+                # The empty host-port binding can be reassigned asynchronously by Docker.
+                web='http://'+run(['docker','port',self.app,'5174/tcp'])
+                mcp='http://'+run(['docker','port',self.app,'7879/tcp'])
+                if not ports or ports[-1]!={'web':web,'mcp':mcp}:ports.append({'web':web,'mcp':mcp})
+                self.web,self.mcp=web,mcp
+                last=self.request(self.web,'/api/health',timeout=2)
+                if last['httpStatus']==200 and last['body'].get('data',{}).get('ktxRuntime',{}).get('ready'):
+                    self.save('readiness-observation',{'ports':ports,'last':last});return last
+            except Exception as error:last={'error':str(error)}
             time.sleep(1)
+        self.save('readiness-observation',{'ports':ports,'last':last})
         raise RuntimeError('readiness timeout')
     def seed(self):
         for name in ['webui/config','config/semantic-layer/'+CONN+'/_schema','config/wiki','config/skills','config/evals']:(self.project/name).mkdir(parents=True,exist_ok=True)
@@ -149,13 +159,14 @@ class Rig:
         bindings=self.project/'config/caliber-bindings'
         if self.variant in ['I1','I2']:bindings.mkdir(parents=True,exist_ok=True)
         if self.variant=='I2':(bindings/'.caliber-binding').mkdir()
-        if self.variant=='I4':
-            bindings.mkdir(parents=True,exist_ok=True);(bindings/'draft.yaml').write_text('status: draft\ntriggers: invalid-unpublished-field\n')
+        if self.variant in ['I4','I4-valid']:
+            bindings.mkdir(parents=True,exist_ok=True);(bindings/'draft.yaml').write_text(json.dumps(self.binding('draft')) if self.variant=='I4-valid' else 'status: draft\ntriggers: invalid-unpublished-field\n')
         if self.variant in ['L1','U0']:
             bindings.mkdir(parents=True,exist_ok=True);(bindings/'bound.yaml').write_text(json.dumps(self.binding()))
         return boot,env
     def start(self):
-        boot,env=self.seed();run(['docker','network','create',self.network]);self.created.append('network')
+        boot,env=self.seed();run(['docker','volume','create',self.data_volume]);self.created.append('data')
+        run(['docker','network','create',self.network]);self.created.append('network')
         run(['docker','run','-d','--name',self.db,'--network',self.network,'--env-file',env,'mysql:8.4']);self.created.append('db')
         for _ in range(90):
             if run(['docker','exec',self.db,'sh','-c','MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqladmin ping -uroot --silent'],check=False)=='mysqld is alive':break
@@ -164,16 +175,26 @@ class Rig:
         self.sql("CREATE DATABASE uat; CREATE TABLE uat."+SOURCE+"(order_id INT PRIMARY KEY,tenant VARCHAR(20),amount INT); INSERT INTO uat."+SOURCE+" VALUES(1,'NORTH',10),(2,'NORTH',20),(3,'SOUTH',30),(4,'SOUTH',40); CREATE USER 'lucy'@'%' IDENTIFIED BY '"+self.dbpass+"'; GRANT SELECT,SHOW VIEW ON uat.* TO 'lucy'@'%';")
         oracle=self.sql('SELECT COUNT(DISTINCT order_id),SUM(amount) FROM uat.'+SOURCE+'; SELECT COUNT(DISTINCT order_id),SUM(amount) FROM uat.'+SOURCE+" WHERE tenant='NORTH';")
         self.save('oracle',{'sqlResult':oracle});require(oracle.splitlines()==['4\t100','2\t30'],'independent oracle failed')
-        run(['docker','run','--rm','--user','0','--entrypoint','/bin/sh','-v',str(self.project)+':/data/lucy','-v',str(boot)+':/bootstrap-token',self.image,'-c','chown -R 10001:10001 /data/lucy; chown 10001:10001 /bootstrap-token'])
-        if self.variant in ['I3','L0','L1','U0']:self.legacy(boot)
-        cmd=['docker','run','-d' ,'--name',self.app,'--network',self.network,'--cpus','2','--memory','2g','-p','127.0.0.1::5174','-p','127.0.0.1::7879','-v',str(self.project)+':/data/lucy','-v',str(boot)+':/run/secrets/bootstrap-token:ro']
+        run(['docker','run','--rm','--user','0','--entrypoint','/bin/sh','-v',self.data_volume+':/data/lucy','-v',str(self.project)+':/uat-seed:ro','-v',str(boot)+':/bootstrap-token',self.image,'-c','cp -a /uat-seed/. /data/lucy/; chown -R 10001:10001 /data/lucy; chown 10001:10001 /bootstrap-token'])
+        if self.variant in ['I3','L0']:self.legacy(boot)
+        cmd=['docker','run','-d' ,'--name',self.app,'--network',self.network,'--cpus','2','--memory','2g','-p','127.0.0.1::5174','-p','127.0.0.1::7879','-v',self.data_volume+':/data/lucy','-v',str(boot)+':/run/secrets/bootstrap-token:ro']
         for v in ['KTX_PROJECT_ROOT=/data/lucy','LUCY_CONTENT_ROOT=/data/lucy/config','LUCY_DISABLE_TEMPLATE_SYNC=1','LUCY_DEPLOYMENT_MODE=customer','LUCY_WEBUI_TEST_PROFILE=1','LUCY_WEBUI_COOKIE_SECURE=0','LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE=/run/secrets/bootstrap-token','LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=true','LUCY_QUESTION_BUDGET=on','POSTHOG_DISABLED=1']:cmd+=['-e',v]
+        diagnostic=os.environ.get('ZB_SQLITE_DIAGNOSTIC')
+        if diagnostic:cmd+=['-v',str(pathlib.Path(diagnostic).resolve())+':/uat-sqlite-observe.cjs:ro','-e','NODE_OPTIONS=--require=/uat-sqlite-observe.cjs']
         run(cmd+[self.image]);self.created.append('app')
         self.web='http://'+run(['docker','port',self.app,'5174/tcp']);self.mcp='http://'+run(['docker','port',self.app,'7879/tcp'])
-        health=self.ready();self.save('health',health)
+        health=self.ready()
+        if self.variant in ['L1','U0']:
+            # Establish the ordinary runtime-generated Ops assets first. The old
+            # strong credential must describe that real metadata, not a pre-start seed.
+            run(['docker','stop','-t','45',self.app])
+            self.legacy(boot)
+            run(['docker','start',self.app]);health=self.ready()
+            self.save('legacy-fixture-order',{'method':'candidate warm-up installs unchanged base Ops metadata; stopped app; original baseline production APIs commit genuine old strong state; candidate starts with unchanged metadata before tested restart','at':now()})
+        self.save('health',health)
         r=self.request(self.web,'/api/auth/bootstrap','POST',{'adminId':'uat_owner','displayName':'UAT Owner','password':self.password},{'x-lucy-bootstrap-token':self.boot});require(r['httpStatus']==200,'bootstrap failed')
         self.save('bootstrap',{'httpStatus':r['httpStatus'],'cookieIssued':bool(list(self.jar))})
-        self.save('artifact',{'image':run(['docker','image','inspect',self.image,'--format','{{.Id}} {{.Os}}/{{.Architecture}}']),'container':run(['docker','inspect',self.app,'--format','{{.Id}}']),'code':run(['docker','exec',self.app,'sha256sum',*['/app/'+p for p in CODE]]),'resources':{'cpus':2,'memory':'2g'},'webUrl':self.web,'mcpUrl':self.mcp+'/mcp','fixtureFingerprints':{str(p.relative_to(self.project)):hashlib.sha256(p.read_bytes()).hexdigest() for p in self.project.rglob('*') if p.is_file() and p.suffix in ['.yaml']},'startedAt':now()})
+        self.save('artifact',{'image':run(['docker','image','inspect',self.image,'--format','{{.Id}} {{.Os}}/{{.Architecture}}']),'container':run(['docker','inspect',self.app,'--format','{{.Id}}']),'code':run(['docker','exec',self.app,'sha256sum',*['/app/'+p for p in CODE]]),'resources':{'cpus':2,'memory':'2g','stateStorage':'Docker native named volume','mysqlStorage':'Docker native anonymous volume'},'webUrl':self.web,'mcpUrl':self.mcp+'/mcp','fixtureFingerprints':{str(p.relative_to(self.project)):hashlib.sha256(p.read_bytes()).hexdigest() for p in self.project.rglob('*') if p.is_file() and p.suffix in ['.yaml']},'startedAt':now()})
     def binding(self,status='published'):
         return {'bindingId':'uat_zero','title':'UAT count only','status':status,'triggers':['固定订单数'],'connectionId':CONN,'source':SOURCE,'caliber':{'measures':[SOURCE+'.order_count'],'dimensions':[],'segments':[],'filterFields':[],'requireMeasures':[SOURCE+'.order_count']}}
     def legacy(self,boot):
@@ -187,8 +208,8 @@ class Rig:
                 code+='await s.commitBindingSession(s.bindingScopeKey('+json.dumps(ident)+',"legacy"),'+json.dumps(fields)+');'
                 if self.variant=='U0':fields={**fields,'boundKey':None,'caliberSnapshot':None}
             code+='await s.beginBindingSessionPreparation(s.bindingScopeKey('+json.dumps(ident)+',"legacy"),'+json.dumps(fields)+');'
-        code+='console.log(JSON.stringify({legacyFixture:true,fileCount:c.registry.fileCount,phase:"committed",variant:'+json.dumps(self.variant)+'}));})()'
-        result=run(['docker','run','--rm','--network',self.network,'-v',str(self.project)+':/data/lucy','-e','KTX_PROJECT_ROOT=/data/lucy','-e','LUCY_CONTENT_ROOT=/data/lucy/config','--entrypoint','/app/webui/node_modules/.bin/tsx',baseline,'-e',code])
+        code+='console.log(JSON.stringify({legacyFixture:true,fileCount:c.registry.fileCount,sourceMapVersion:c.registry.sourceMapVersion,phase:"committed",variant:'+json.dumps(self.variant)+'}));})()'
+        result=run(['docker','run','--rm','--network',self.network,'-v',self.data_volume+':/data/lucy','-e','KTX_PROJECT_ROOT=/data/lucy','-e','LUCY_CONTENT_ROOT=/data/lucy/config','--entrypoint','/app/webui/node_modules/.bin/tsx',baseline,'-e',code])
         self.save('legacy-fixture-provenance',{'baselineImage':baseline,'variant':self.variant,'result':result,'method':'baseline production APIs offline before candidate starts; no fabricated commit bytes'})
     def activate_authoring(self,name,must_ack=True):
         # The serving ACL is a committed snapshot; editing author files alone is not activation.
@@ -233,6 +254,62 @@ class Rig:
         key='bq:uat_zb_a|'+('sha256:'+sha(self.tokens['a']))[:19]+':'+session
         rows=self.audit("SELECT * FROM question_budget_state WHERE scope_key="+repr(key))
         return rows[0] if rows else None
+    def compare_performance(self,baseline,candidate):
+        perf={'frozenAt':now(),'baselineImage':baseline.image,'candidateImage':candidate.image,'controlQualification':'image and source fingerprints recorded per rig; original failing baseline evidence retained','absoluteToleranceMs':250,'relativeTolerance':.5,'seed':60120,'warmups':10,'samplesPerRound':100,'rounds':[],'failures':[],'warmupFailures':[],'storage':'Docker native named volumes; independently fresh I0 in both groups','scope':'protocol N catalog/read_source/query; all 300 planned problems/group are attempted, no retry or dropped failures'}
+        self.save('r10-pre-sampling-contract',perf);rng=random.Random(60120)
+        def sample(current,name,label,warmup=False):
+            started=time.monotonic();failure=None
+            try:
+                catalog=current.call(name+'-catalog','lucy_catalog',{},session=name,save=False)
+                if not successful(catalog):current.save(name+'-failed-catalog',catalog)
+                require(successful(catalog),'perf catalog failed '+json.dumps(catalog,ensure_ascii=False)[:1200])
+                source=current.call(name+'-source','lucy_read_source',{'connectionId':CONN,'sourceName':SOURCE},session=name,save=False)
+                if not successful(source):current.save(name+'-failed-source',source)
+                require(successful(source),'perf source failed '+json.dumps(source,ensure_ascii=False)[:1200])
+                current.query(name+'-query',session=name,save=False)
+            except Exception as error:failure={'name':name,'group':label,'error':scrub(str(error))}
+            elapsed=round((time.monotonic()-started)*1000,3)
+            if failure:
+                failure['elapsedMs']=elapsed;perf['warmupFailures' if warmup else 'failures'].append(failure)
+            return elapsed
+        for round_id in range(3):
+            for label,current in [('baseline',baseline),('candidate',candidate)]:
+                for i in range(10):sample(current,'r10-warm-'+str(round_id)+'-'+str(i),label,True)
+            samples={'baseline':[],'candidate':[]};perf['currentRound']={'round':round_id+1,'samples':samples}
+            for i in range(100):
+                pair=[('baseline',baseline),('candidate',candidate)];rng.shuffle(pair)
+                for label,current in pair:
+                    samples[label].append(sample(current,'r10-'+str(round_id)+'-'+str(i),label))
+                    self.save('r10-partial-samples',perf)
+            base95=sorted(samples['baseline'])[94];cand95=sorted(samples['candidate'])[94]
+            failures=[f for f in perf['failures'] if f['name'].startswith('r10-'+str(round_id)+'-')]
+            perf['rounds'].append({'round':round_id+1,'baselineP95Ms':base95,'candidateP95Ms':cand95,'p95WithinTolerance':cand95<=base95+250 and cand95<=base95*1.5,'failureCounts':{label:sum(f['group']==label for f in failures) for label in samples},'samples':samples})
+            self.save('r10-performance',perf)
+        perf['problemDenominatorPerGroup']=300
+        perf['successes']={label:300-sum(f['group']==label for f in perf['failures']) for label in ['baseline','candidate']}
+        perf['status']='PASS' if not perf['failures'] and not perf['warmupFailures'] and all(r['p95WithinTolerance'] for r in perf['rounds']) else 'FAIL'
+        self.save('r10-performance',perf);return perf
+    def public_persona_tasks(self):
+        # Public read-only audit API, independent of the runner's private SQL oracle.
+        sessions=['persona-'+str(i) for i in range(6)]
+        for session in sessions[:5]:self.query(session,session=session)
+        incident=self.call('persona-incident','lucy_begin_question',{},session=sessions[5])
+        trace=incident['body'].get('result',{}).get('data',{}).get('trace')
+        require(bool(trace),'operator incident has no trace')
+        self.query('persona-after-incident',session=sessions[5]);time.sleep(.3)
+        rows=[]
+        for session in sessions:
+            data=self.api(session+'-public-audit','/api/admin/audit?sessionId='+session+'&includeAuthFailures=0&includeProtocol=1&limit=50',method='GET')['body']['data']
+            rows.extend(data['entries'])
+        refusal=[row for row in rows if row.get('traceId')==trace]
+        require(len(refusal)==1 and refusal[0]['tool']=='lucy_begin_question' and refusal[0]['outcome']=='denied','operator cannot locate incident via public audit trace')
+        queries=[row for row in rows if row['tool']=='lucy_query']
+        require(len(queries)==6 and all(row['outcome']=='ok' and row['userId']=='uat_zb_a' for row in queries),'public management query denominator mismatch')
+        require(any(row['lucySessionId']==refusal[0]['lucySessionId'] for row in queries),'same-identity/session recovery missing')
+        counts={mode:sum(row.get('turnAttributionMode','unassigned')==mode for row in queries) for mode in ['explicit','session_bound','identity_inferred','unassigned']}
+        require(sum(counts.values())==6 and counts['explicit']==0,'public management attribution denominator mismatch')
+        proof={'incidentTrace':trace,'incident':refusal,'successfulQueries':queries,'attributionCounts':counts,'explicitOriginalQuestionCoverage':0,'operatorTask':'located by actual returned trace in public read-only audit API; same user/session subsequent query ok; health/artifact fixes version','managementTask':'independently reconciled six successes with explicit/inferred/unassigned buckets via public read-only API; no original text claim; active control evidence in R07'}
+        self.save('persona-public-task-proof',proof);return proof
     def binding_state(self):
         code='import pathlib,hashlib,json;root=pathlib.Path("/data/lucy");ds=[root/".ktx-ui/caliber-binding",root/"config/caliber-bindings/.caliber-binding"];print(json.dumps({str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for d in ds if d.exists() for p in d.rglob("*") if p.is_file()}))'
         return json.loads(run(['docker','exec',self.app,'python3','-c',code]))
@@ -240,34 +317,57 @@ class Rig:
         code='import sqlite3,sys;c=sqlite3.connect("/data/lucy/.ktx-ui/audit.sqlite");c.executescript(sys.stdin.read());c.commit()'
         run(['docker','exec','-i',self.app,'python3','-c',code],sql)
     def restart(self):
+        tables=self.audit("SELECT name FROM sqlite_master WHERE type='table' AND name='question_budget_state'")
+        budget_before=self.audit('SELECT * FROM question_budget_state ORDER BY scope_key') if tables else []
+        for _ in range(20):
+            if not any(row.get('current_concurrency',0)>0 for row in budget_before):break
+            time.sleep(.1);budget_before=self.audit('SELECT * FROM question_budget_state ORDER BY scope_key')
+        require(not any(row.get('current_concurrency',0)>0 for row in budget_before),'budget not quiescent before restart observation')
+        bindings_before=self.binding_state()
         before=run(['docker','inspect',self.app,'--format','{{.State.StartedAt}}'])
-        run(['docker','restart','-t','45',self.app]);self.ready()
+        run(['docker','restart','-t','45',self.app])
+        # Docker may reassign randomly published host ports after a restart.
+        self.web='http://'+run(['docker','port',self.app,'5174/tcp'])
+        self.mcp='http://'+run(['docker','port',self.app,'7879/tcp'])
+        self.ready()
         after=run(['docker','inspect',self.app,'--format','{{.State.StartedAt}}'])
-        self.save('restart-evidence',{'before':before,'after':after,'at':now()});require(before!=after,'not a real process restart')
+        self.save('restart-evidence',{'before':before,'after':after,'at':now(),'webUrl':self.web,'mcpUrl':self.mcp});require(before!=after,'not a real process restart')
+        tables=self.audit("SELECT name FROM sqlite_master WHERE type='table' AND name='question_budget_state'")
+        budget_after=self.audit('SELECT * FROM question_budget_state ORDER BY scope_key') if tables else []
+        bindings_after=self.binding_state()
+        self.save('restart-persistence',{'budgetBefore':budget_before,'budgetAfter':budget_after,'bindingsBefore':bindings_before,'bindingsAfter':bindings_after})
+        require(budget_before==budget_after,'restart changed persisted budget state')
+        require(bindings_before==bindings_after,'restart changed existing binding history')
     def rollback_failed_legacy_begin(self):
         # Existing D11 rollback over a genuine previous committed snapshot, with the app stopped.
         ident='uat_zb_a|'+('sha256:'+sha(self.tokens['a']))[:19]
         run(['docker','stop','-t','45',self.app])
         code='(async()=>{const s=await import("/app/webui/server/proxy/caliber-binding-session.ts");await s.restorePriorBindingSession(s.bindingScopeKey('+json.dumps(ident)+',"legacy"));console.log("restored-previous-committed");})()'
-        result=run(['docker','run','--rm','-v',str(self.project)+':/data/lucy','-e','KTX_PROJECT_ROOT=/data/lucy','--entrypoint','/app/webui/node_modules/.bin/tsx',self.image,'-e',code])
-        run(['docker','start',self.app]);self.ready()
+        result=run(['docker','run','--rm','-v',self.data_volume+':/data/lucy','-e','KTX_PROJECT_ROOT=/data/lucy','--entrypoint','/app/webui/node_modules/.bin/tsx',self.image,'-e',code])
+        run(['docker','start',self.app])
+        self.web='http://'+run(['docker','port',self.app,'5174/tcp'])
+        self.mcp='http://'+run(['docker','port',self.app,'7879/tcp'])
+        self.ready()
         self.save('legacy-rollback',{'method':'existing D11 restorePriorBindingSession; stopped app, previous bound snapshot preserved','result':result,'at':now()})
     def close(self):
         self.save('events',self.events)
-        for name in [self.app,self.db]:run(['docker','rm','-f',name],check=False)
+        for name in [self.app,self.db]:run(['docker','rm','-fv',name],check=False)
         run(['docker','network','rm',self.network],check=False)
+        run(['docker','volume','rm',self.data_volume],check=False)
         shutil.rmtree(self.private,ignore_errors=True)
         remaining=run(['docker','ps','-a','--filter','name='+self.tag,'--format','{{.Names}}'])
         networks=run(['docker','network','ls','--filter','name=^'+self.network+'$','--format','{{.Name}}'])
-        clean={'at':now(),'privateRemoved':not self.private.exists(),'containersRemoved':not remaining,'networkRemoved':not networks}
-        self.save('cleanup',clean);require(all(clean[k] for k in ['privateRemoved','containersRemoved','networkRemoved']),'isolated cleanup incomplete')
+        volumes=run(['docker','volume','ls','--filter','name=^'+self.data_volume+'$','--format','{{.Name}}'])
+        clean={'at':now(),'volumeRemoved':not volumes,'privateRemoved':not self.private.exists(),'containersRemoved':not remaining,'networkRemoved':not networks}
+        self.save('cleanup',clean);require(all(clean[k] for k in ['privateRemoved','containersRemoved','networkRemoved','volumeRemoved']),'isolated cleanup incomplete')
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--image',required=True);p.add_argument('--out',required=True);p.add_argument('--smoke',action='store_true');p.add_argument('--baseline-image');p.add_argument('--skip-agent',action='store_true');p.add_argument('--qualify-late',action='store_true');args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--image',required=True);p.add_argument('--out',required=True);p.add_argument('--smoke',action='store_true');p.add_argument('--baseline-image');p.add_argument('--skip-agent',action='store_true');p.add_argument('--qualify-late',action='store_true');p.add_argument('--matrix-early',action='store_true');p.add_argument('--skip-performance',action='store_true');args=p.parse_args()
+    require(not args.skip_performance or args.qualify_late,'skip-performance requires a partial late selector')
     out=pathlib.Path(args.out);out.mkdir(parents=True,exist_ok=True)
     expected=['UAT-ZB-R0']+['UAT-ZB-%02d'%i for i in range(1,13)]
-    summary={'startedAt':now(),'image':args.image,'cases':{cid:{'status':'NOT RUN'} for cid in expected},'status':'RUNNING'}
+    summary={'startedAt':now(),'runnerSha256':hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),'image':args.image,'cases':{cid:{'status':'NOT RUN'} for cid in expected},'status':'RUNNING'}
     rigs=[]
     def save_summary():(out/'summary.json').write_text(scrub(json.dumps(summary,ensure_ascii=False,indent=2))+'\n')
     def mark(cid,detail=None):
@@ -298,7 +398,13 @@ def main():
                 draft=fresh('draft','I4')
                 for status in ['invalid-business-fields','valid-draft']:
                     if status=='valid-draft':draft.write('config/caliber-bindings/draft.yaml',json.dumps(draft.binding('draft')))
-                    draft.hidden('r04-'+status);draft.publish('r04-'+status);draft.hidden('r04-'+status+'-after')
+                    draft.hidden('r04-'+status)
+                    if status=='invalid-business-fields':
+                        pending=draft.api('r04-invalid-pending','/api/diff',method='GET')['body']['data']
+                        rejected=draft.api('r04-invalid-reindex','/api/semantic-assets/reindex',{'pendingDigest':pending['pendingDigest']},must=False)
+                        require(rejected['httpStatus']>=400 and 'caliber_binding_candidate_failed' in json.dumps(rejected),'invalid draft candidate was accepted')
+                        draft.hidden('r04-after-rejected-candidate')
+                    draft.publish('r04-'+status);draft.hidden('r04-'+status+'-after')
                 draft.close();rigs.remove(draft);mark('UAT-ZB-04')
                 # Fixed real 60-call limit, no budget bypass or threshold changes.
                 session='r05-budget';rig.query('r05-first',session=session);before=rig.snapshot(session)
@@ -310,6 +416,12 @@ def main():
                 stop=inner(stopped);require(stop.get('reason')=='question_budget_exhausted' and stop.get('continuable') is True,'budget/continue not reachable '+repr(stop))
                 cont=rig.call('r05-continue','lucy_continue_question',{'token':stop['continueToken']},session=session);require(successful(cont),'continue failed')
                 rig.query('r05-after-continue',session=session);require(rig.snapshot(session)['continuations']==1,'continuation credit incorrect');mark('UAT-ZB-05')
+            if args.matrix_early:
+                require(not args.qualify_late,'matrix-early cannot be combined with qualify-late')
+                rig.public_persona_tasks();mark('UAT-ZB-08',{'detail':'supplemental operator/management task via public read-only audit API'})
+                summary['status']='EARLY_MATRIX_PARTIAL'
+                print('Early matrix completed; remaining case evidence required',flush=True)
+                return 0
             rig.hidden('r06-north',who='b',session='r06-b')
             unauthorized=rig.call('r06-c-forced','lucy_begin_question',{},who='c');require(not successful(unauthorized),'ungranted begin allowed');rig.query('r06-c-query',who='c')
             rig.api('r06-revoke','/api/admin/agents/uat_zb_revoked/tokens/isolated-revoked',method='DELETE')
@@ -340,7 +452,16 @@ def main():
             denied=rig.call('r07-deviation','lucy_query',{'connectionId':CONN,'measures':[SOURCE+'.amount_sum']},session='r07-old');require('caliber_binding_violation' in json.dumps(denied),'bound deviation allowed')
             rig.write('config/caliber-bindings/bound.yaml',json.dumps(rig.binding('draft')));rig.reindex('r07-revoke')
             rig.hidden('r07-new',session='r07-new');rig.query('r07-old-allow',session='r07-old',bound=True)
-            denied=rig.call('r07-old-deviation','lucy_query',{'connectionId':CONN,'measures':[SOURCE+'.amount_sum']},session='r07-old');require('caliber_binding_violation' in json.dumps(denied),'old bound snapshot lost');mark('UAT-ZB-07')
+            denied=rig.call('r07-old-deviation','lucy_query',{'connectionId':CONN,'measures':[SOURCE+'.amount_sum']},session='r07-old');require('caliber_binding_violation' in json.dumps(denied),'old bound snapshot lost');delete_control=fresh('revoke-delete')
+            delete_control.write('config/caliber-bindings/bound.yaml',json.dumps(delete_control.binding()));delete_control.reindex('r07-delete-enable')
+            old_session='r07-delete-old'
+            require(successful(delete_control.call('r07-delete-begin','lucy_begin_question',{'intentSummary':'固定订单数','caliberBindingId':'uat_zero'},session=old_session)),'delete control begin failed')
+            delete_control.query('r07-delete-before',session=old_session,bound=True)
+            delete_control.remove('config/caliber-bindings/bound.yaml');delete_control.reindex('r07-delete-revoke')
+            delete_control.hidden('r07-delete-new',session='r07-delete-new');delete_control.query('r07-delete-old-allow',session=old_session,bound=True)
+            refused=delete_control.call('r07-delete-old-deviation','lucy_query',{'connectionId':CONN,'measures':[SOURCE+'.amount_sum']},session=old_session)
+            require('caliber_binding_violation' in json.dumps(refused),'delete revocation erased old snapshot')
+            delete_control.close();rigs.remove(delete_control);mark('UAT-ZB-07',{'revocationVariants':['draft','delete']})
             # Actual persisted audit and independently reconciled synthetic requests.
             for i in range(5):rig.query('r08-'+str(i),session='r08-'+str(i))
             rig.call('r08-forced','lucy_begin_question',{},session='r08-forced');rig.query('r08-after-forced',session='r08-forced');time.sleep(.4)
@@ -356,6 +477,17 @@ def main():
             mark('UAT-ZB-08')
             for tool,a in [('lucy_read_source',{'connectionId':CONN,'sourceName':SOURCE}),('lucy_explain_query',{'connectionId':CONN,'measures':[SOURCE+'.order_count']})]:
                 require(successful(rig.call('r09-'+tool,tool,a)),'other tool regression '+tool)
+            # No commit credential + published content is independently unknown.
+            published=fresh('uncommitted-published')
+            published.write('config/caliber-bindings/published.yaml',json.dumps(published.binding()))
+            unknown=published.call('r09-published-forced','lucy_begin_question',{},session='uncommitted')
+            require('caliber_binding_unresolved' in json.dumps(unknown) and 'begin_not_available' not in json.dumps(unknown),'uncommitted published content certified inactive')
+            listed=published.call('r09-published-tools',method='tools/list',session='uncommitted')
+            require('lucy_begin_question' not in [t['name'] for t in listed['body'].get('result',{}).get('tools',[])],'unknown published begin exposed')
+            # No historical strong session exists here; query follows the unchanged data gate.
+            published.query('r09-published-query',session='uncommitted')
+            published.remove('config/caliber-bindings/published.yaml');published.hidden('r09-published-restored')
+            published.close();rigs.remove(published)
             # Unknown content must never be certified empty.
             rig.write('config/caliber-bindings/unreadable.yaml','status: [broken')
             forced=rig.call('r09-unknown-forced','lucy_begin_question',{'intentSummary':'固定订单数'});require('caliber_binding_unresolved' in json.dumps(forced),'unknown incorrectly D2')
@@ -373,7 +505,7 @@ def main():
             require('duplicate_source_name' in compiler,'source-map fault not actually reproduced')
             forced=rig.call('r09-source-map-forced','lucy_begin_question',{},session='r09-source-map')
             require(forced['body'].get('result',{}).get('data',{}).get('reason')=='begin_not_available','source-map compilation changed local inactive D2')
-            baseline_failure=rig.call('r09-source-map-query','lucy_query',{'connectionId':CONN,'measures':[SOURCE+'.order_count']},session='r09-source-map')
+            baseline_failure=rig.query('r09-source-map-query',session='r09-source-map')
             rig.save('r09-source-map-separation',{'begin':forced,'queryBaseline':baseline_failure,'compiler':compiler,'servingPolicy':'last committed healthy ACL; authoring compiler failure proven in separate production process'})
             # Existing source-map ACL denial has priority over D2. Activate the fault and prove both tools deny.
             rig.activate_authoring('r09-fault-activate',must_ack=False)
@@ -382,38 +514,18 @@ def main():
                 require(not successful(denied) and 'source_map_compile_failed' in json.dumps(denied),'existing ACL compile denial bypassed '+tool)
             rig.remove('config/semantic-layer/'+CONN+'/_schema/unused_one.yaml');rig.remove('config/semantic-layer/'+CONN+'/_schema/unused_two.yaml');rig.activate_authoring('r09-fault-restore');rig.hidden('r09-source-map-recovered')
             mark('UAT-ZB-09')
-            if not args.baseline_image:raise RuntimeError('baseline image required for full performance UAT')
-            baseline=fresh('baseline',image=args.baseline_image)
-            perf_candidate=fresh('performance-candidate')
-            perf={'frozenAt':now(),'absoluteToleranceMs':250,'relativeTolerance':.5,'seed':60120,'warmups':10,'samplesPerRound':100,'rounds':[],'scope':'protocol N catalog/read_source/query, independently fresh I0 rigs in both groups (no fault injection history); real Agent separately in R12'}
-            rig.save('r10-pre-sampling-contract',perf)
-            rng=random.Random(60120)
-            def sample(current,name):
-                start=time.monotonic();session=name
-                require(successful(current.call(name+'-catalog','lucy_catalog',{},session=session,save=False)),'perf catalog failed')
-                source=current.call(name+'-source','lucy_read_source',{'connectionId':CONN,'sourceName':SOURCE},session=session,save=False)
-                if not successful(source):current.save(name+'-failed-source',source)
-                require(successful(source),'perf source failed: '+json.dumps(source,ensure_ascii=False)[:1200])
-                current.query(name+'-query',session=session,save=False)
-                return round((time.monotonic()-start)*1000,3)
-            for round_id in range(3):
-                for current in [baseline,perf_candidate]:
-                    for i in range(10):sample(current,'r10-warm-'+str(round_id)+'-'+str(i))
-                samples={'baseline':[],'candidate':[]}
-                perf['currentRound']={'round':round_id+1,'samples':samples}
-                for i in range(100):
-                    pair=[('baseline',baseline),('candidate',perf_candidate)];rng.shuffle(pair)
-                    for label,current in pair:
-                        samples[label].append(sample(current,'r10-'+str(round_id)+'-'+str(i)))
-                        rig.save('r10-partial-samples',perf)
-                base95=sorted(samples['baseline'])[94];cand95=sorted(samples['candidate'])[94]
-                perf['rounds'].append({'round':round_id+1,'baselineP95Ms':base95,'candidateP95Ms':cand95,'samples':samples})
-                rig.save('r10-performance',perf)
-                require(cand95<=base95+250 and cand95<=base95*1.5,'N p95 regression against frozen tolerance')
-            baseline.close();rigs.remove(baseline);perf_candidate.close();rigs.remove(perf_candidate);mark('UAT-ZB-10',{'rounds':[{k:v for k,v in r.items() if k!='samples'} for r in perf['rounds']]})
+            if not args.skip_performance:
+                if not args.baseline_image:raise RuntimeError('baseline image required for full performance UAT')
+                baseline=fresh('baseline',image=args.baseline_image)
+                perf_candidate=fresh('performance-candidate')
+                perf=rig.compare_performance(baseline,perf_candidate)
+                baseline.close();rigs.remove(baseline);perf_candidate.close();rigs.remove(perf_candidate)
+                require(perf['status']=='PASS','N performance/availability failed; all samples retained in r10-performance')
+                mark('UAT-ZB-10',{'rounds':[{k:v for k,v in r.items() if k!='samples'} for r in perf['rounds']]})
             # Real stop/start for all compatibility representations, not a smoke repair.
-            for variant in ['I0','I1','I2','I3','I4','L0','L1','U0']:
+            for variant in ['I0','I1','I2','I3','I4','I4-valid','L0','L1','U0']:
                 current=fresh('restart-'+variant.lower(),variant)
+                if variant not in ['L1','U0']:current.query('r11-budget-before-'+variant,session='r11-budget-'+variant)
                 current.restart()
                 if variant not in ['L1','U0']:current.hidden('r11-'+variant,session='legacy' if variant=='L0' else 'r11-'+variant)
                 else:
@@ -441,6 +553,8 @@ def main():
             if config.is_file():names=re.findall(r'^\[mcp_servers\.([^].]+)\]',config.read_text(),re.M)
             cmd=[str(cli),'exec','--json','--skip-git-repo-check','-C',str(client_dir),'-s','read-only']
             for name in names:cmd+=['-c','mcp_servers.'+name+'.enabled=false']
+            for approved_tool in ['lucy_catalog','lucy_read_source','lucy_query']:
+                cmd+=['-c','mcp_servers.zb_uat.tools.'+approved_tool+'.approval_mode="approve"']
             cmd+=['-c','mcp_servers.zb_uat.url='+json.dumps(rig.mcp+'/mcp'),'-c','mcp_servers.zb_uat.bearer_token_env_var="ZB_UAT_TOKEN"','--output-last-message',str(client_dir/'answer.txt'),'仅使用 zb_uat MCP 查询测试订单数和总金额。先确认可见 source，必须真实查数；不要使用 shell、文件或其他服务。遵守可见工具，不尝试隐藏工具；若收到 begin_not_available，直接继续查询。最终仅输出 JSON：{"order_count":实际值,"amount_sum":实际值}。']
             env=dict(os.environ);env['ZB_UAT_TOKEN']=rig.tokens['a']
             last_audit=rig.audit('SELECT COALESCE(MAX(id),0) AS id FROM access_log')[0]['id']
@@ -448,7 +562,7 @@ def main():
             rig.save('r12-client-trace',actual.stdout);rig.save('r12-client-stderr',actual.stderr)
             require(actual.returncode==0,'RC1 execution failed '+scrub(actual.stderr[-1000:]))
             answer=(client_dir/'answer.txt').read_text();rig.save('r12-final-answer',answer)
-            parsed=json.loads(answer.strip().removeprefix('```json').removesuffix('```').strip());require(float(parsed['order_count'])==4 and float(parsed['amount_sum'])==100,'RC1 final fact mismatch')
+            parsed=json.loads(answer.strip().removeprefix('```json').removesuffix('```').strip());require(parsed.get('order_count') is not None and parsed.get('amount_sum') is not None,'RC1 did not return numeric facts; inspect actual tool admission/execution trace');require(float(parsed['order_count'])==4 and float(parsed['amount_sum'])==100,'RC1 final fact mismatch')
             events=[json.loads(line) for line in actual.stdout.splitlines() if line.startswith('{')]
             calls=[event.get('item',{}) for event in events if event.get('type')=='item.completed' and event.get('item',{}).get('type')=='mcp_tool_call']
             actual_queries=[item for item in calls if item.get('server')=='zb_uat' and item.get('tool')=='lucy_query' and not item.get('error')]
@@ -464,12 +578,13 @@ def main():
             summary['status']='QUALIFICATION_PARTIAL' if args.qualify_late else 'PASS'
     except Exception as e:
         summary['status']='FAIL';summary['error']=scrub(str(e));print(scrub(str(e)),flush=True)
-        pending=[cid for cid in expected if not (args.qualify_late and cid in ['UAT-ZB-03','UAT-ZB-04','UAT-ZB-05'])]
+        pending=[cid for cid in expected if not (args.qualify_late and cid in ['UAT-ZB-03','UAT-ZB-04','UAT-ZB-05']) and not (args.skip_performance and cid=='UAT-ZB-10')]
         first=next((cid for cid in pending if summary['cases'][cid]['status']=='NOT RUN'),None)
         if first:summary['cases'][first]={'status':'FAIL','reason':scrub(str(e))}
         for failed_rig in rigs:
             if 'app' in failed_rig.created:
-                failed_rig.save('failure-container-log',run(['docker','logs','--tail','120',failed_rig.app],check=False))
+                captured=subprocess.run(['docker','logs','--tail','200',failed_rig.app],text=True,capture_output=True)
+                failed_rig.save('failure-container-log',captured.stdout+captured.stderr)
                 try:failed_rig.save('failure-budget-state',failed_rig.audit('SELECT * FROM question_budget_state ORDER BY updated_at DESC LIMIT 10'))
                 except Exception as capture_error:failed_rig.save('failure-budget-capture',str(capture_error))
     finally:
@@ -479,6 +594,6 @@ def main():
         if summary.get('cleanupErrors'):summary['status']='FAIL'
         summary['finishedAt']=now();save_summary()
     print(json.dumps({'status':summary['status'],'cases':summary['cases'],'out':str(out)},ensure_ascii=False),flush=True)
-    return 0 if summary['status'] in ['PASS','SMOKE_PASS','QUALIFICATION_PARTIAL'] else 1
+    return 0 if summary['status'] in ['PASS','SMOKE_PASS','QUALIFICATION_PARTIAL','EARLY_MATRIX_PARTIAL'] else 1
 
 if __name__=='__main__':raise SystemExit(main())
