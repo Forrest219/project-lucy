@@ -23,7 +23,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invalidateContentPathsCache } from "../paths";
 import { resetEffectivePolicyForTests } from "../proxy/acl";
 import {
@@ -477,5 +477,26 @@ describe("P1-60 final-review zero-state regressions", () => {
     await recoverCaliberBindingRegistry();
     await writeContent("caliber-bindings/asset_count.yaml",PUBLISHED_BINDING_YAML);
     expect(await classifyCaliberParticipation()).toBe("unknown");
+  });
+});
+
+
+describe("zero proof safety boundaries", () => {
+  it("an active registry does not hide an uncertain strong scope behind global active", async () => {
+    await writeContent("caliber-bindings/asset_count.yaml",PUBLISHED_BINDING_YAML);
+    await commitCurrentBindings();const scope=makeScope();
+    await beginBindingSessionPreparation(scope,{turnId:"strong-preparing",registryGeneration:1,bindingId:"asset_count",boundKey:FAKE_BOUND_KEY,caliberSnapshot:FAKE_CALIBER});
+    expect(await classifyCaliberParticipation({scopeKey:scope})).toBe("unknown");
+  });
+  it("inactive classification does not call the actual source-map loader", async () => {
+    await writeContent("caliber-bindings/draft.yaml","status: draft\n");
+    const acl=await import("../proxy/acl");const counter=vi.spyOn(acl,"loadSourceMapSnapshot");
+    try {
+      expect(await classifyCaliberParticipation()).toBe("inactive");
+      expect(counter).not.toHaveBeenCalled();
+      await writeContent("caliber-bindings/asset_count.yaml",PUBLISHED_BINDING_YAML);
+      await loadCaliberBindingCandidate();
+      expect(counter).toHaveBeenCalled(); // Positive control: this counts the real loader, not a fake return.
+    } finally {counter.mockRestore();}
   });
 });

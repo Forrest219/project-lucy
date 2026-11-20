@@ -813,6 +813,7 @@ export async function classifyCaliberParticipation(options?: {
     || !registry || registry.bindings.size === 0
     || registry.generation !== credential.generation
     || registry.digest !== credential.digest || proof.digest !== credential.digest) return "unknown";
+  if (options?.scopeKey && (await readBindingSession(options.scopeKey)).state === "lost_or_conflict") return "unknown";
   return "active";
 }
 
