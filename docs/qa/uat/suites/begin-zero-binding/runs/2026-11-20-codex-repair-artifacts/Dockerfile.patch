@@ -1,0 +1,15 @@
+FROM project-lucy:p1-60-base-c1cd67a0
+USER 0
+COPY --chown=10001:10001 webui/server/proxy/mcp-proxy.ts /app/webui/server/proxy/mcp-proxy.ts
+COPY --chown=10001:10001 webui/server/proxy/caliber-binding-registry.ts /app/webui/server/proxy/caliber-binding-registry.ts
+COPY --chown=10001:10001 webui/server/proxy/caliber-binding-session.ts /app/webui/server/proxy/caliber-binding-session.ts
+COPY --chown=10001:10001 webui/server/proxy/caliber-binding.ts /app/webui/server/proxy/caliber-binding.ts
+COPY --chown=10001:10001 webui/server/__tests__/begin-hide-inactive.test.ts /app/webui/server/__tests__/begin-hide-inactive.test.ts
+COPY --chown=10001:10001 webui/server/__tests__/caliber-binding-participation.test.ts /app/webui/server/__tests__/caliber-binding-participation.test.ts
+COPY --chown=10001:10001 webui/server/proxy/source-ambiguity-gate.ts /app/webui/server/proxy/source-ambiguity-gate.ts
+ARG LUCY_GIT_SHA
+ARG LUCY_GIT_DIRTY=0
+RUN node /app/scripts/release/lucy-build-revision.mjs && cd /app/webui && npm run build
+LABEL org.opencontainers.image.revision="77e2ad8425ae0e7a2918803e497da10636b14e5a"
+LABEL org.opencontainers.image.base.digest="sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218"
+USER 10001:10001

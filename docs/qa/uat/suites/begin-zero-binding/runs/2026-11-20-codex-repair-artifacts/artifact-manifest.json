@@ -1,0 +1,45 @@
+{
+  "capturedAt": "2026-11-20T04:37:56.398251+00:00",
+  "imageTag": "project-lucy:p1-60-77e2ad84-final",
+  "imageId": "sha256:a794f7e056c094f59f776bc0570658dd235eebd49c150676f8ac0ffeb2a69342",
+  "repoDigests": [
+    "project-lucy@sha256:a794f7e056c094f59f776bc0570658dd235eebd49c150676f8ac0ffeb2a69342"
+  ],
+  "platform": "linux/arm64",
+  "sourceCommit": "77e2ad8425ae0e7a2918803e497da10636b14e5a",
+  "gitDirty": true,
+  "runtimeHashes": {
+    "webui/server/proxy/mcp-proxy.ts": "b260cc653b04fd055405b2072684670d44cf49524dd037236aace0b8588f5fae",
+    "webui/server/proxy/caliber-binding-registry.ts": "b52e91ac7b98b6f5803ead716fca9a753414a8b4c431e328e33f0ef1001194f3",
+    "webui/server/proxy/caliber-binding-session.ts": "40ace28f21617e058cf10a0b358bd9c488049370209924251b4b2e19b5bd76e8",
+    "webui/server/proxy/caliber-binding.ts": "f78747f0c24bed3eca4565da769d63054a5b98d9acf97fe9ca50c7d82ae40023",
+    "webui/server/proxy/source-ambiguity-gate.ts": "9a666e93d4e57de5cdf16067e6e05083451222b3d163c862f6f121a747c779d6",
+    "webui/server/proxy/audit.ts": "4c65f06b1710c2f0088262960449d2edbf4f39f1fad039eaf1bafaa11e83f23d"
+  },
+  "expectedGitHashes": {
+    "webui/server/proxy/mcp-proxy.ts": "b260cc653b04fd055405b2072684670d44cf49524dd037236aace0b8588f5fae",
+    "webui/server/proxy/caliber-binding-registry.ts": "b52e91ac7b98b6f5803ead716fca9a753414a8b4c431e328e33f0ef1001194f3",
+    "webui/server/proxy/caliber-binding-session.ts": "40ace28f21617e058cf10a0b358bd9c488049370209924251b4b2e19b5bd76e8",
+    "webui/server/proxy/caliber-binding.ts": "f78747f0c24bed3eca4565da769d63054a5b98d9acf97fe9ca50c7d82ae40023",
+    "webui/server/proxy/source-ambiguity-gate.ts": "9a666e93d4e57de5cdf16067e6e05083451222b3d163c862f6f121a747c779d6",
+    "webui/server/proxy/audit.ts": "4c65f06b1710c2f0088262960449d2edbf4f39f1fad039eaf1bafaa11e83f23d"
+  },
+  "budgetWriterUnchangedFromOriginalBaseline": true,
+  "baselineImage": "sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218",
+  "baselineRuntimeHashes": {
+    "webui/server/proxy/mcp-proxy.ts": "b8c10b294ad41e88c71376caf6dac77de35cddea6bd1ee72c70789f4d7d02d57",
+    "webui/server/proxy/caliber-binding-registry.ts": "7ae3fe42e536df8fc26bc45ad3135498eb429769a5375a2f452e47f998bee9bc",
+    "webui/server/proxy/caliber-binding-session.ts": "b20986b5e2617af11a05bdc24b61f959544fd8cf0833281ab129f2cde1546b12",
+    "webui/server/proxy/caliber-binding.ts": "4ab92acb162f1165203c94536f88a4d7fff926edf431adbc6b2f3d7c213ade2b",
+    "webui/server/proxy/source-ambiguity-gate.ts": "553a328a06e1854cdfbb8e08a9ad8b06782513507bc0e334f1db55877da01ab3",
+    "webui/server/proxy/audit.ts": "4c65f06b1710c2f0088262960449d2edbf4f39f1fad039eaf1bafaa11e83f23d"
+  },
+  "runnerSha256": "12f671c3e1291430d14e60edd5ac7d4faad131856737b00b61a76eb10aa138bb",
+  "scope": "only original R-01–04; final R-01 includes source ambiguity adapter; existing Wiki base differences preserved; no budget WIP; no push/publish",
+  "buildMethod": "fixed local base + five runtime files and tests; frontend rebuilt; existing desktop-linux builder",
+  "testRunnerCommit": "60f7ab8cf47c17b2f08aeb09b10008ba2408f7e4",
+  "testRunnerSha256": "87a19772167fd0a1dfa167e79852c86f12c4a1e667cdbb2d552c2d1a1107450a",
+  "finalCases": "case-results.json",
+  "rawEvidenceArchive": "raw-evidence.tar.gz",
+  "rawEvidenceIndex": "raw-evidence-index.json"
+}

@@ -1,6 +1,6 @@
 # Cases — UAT-SUITE-BEGIN-ZERO-BINDING
 
-v0.5-draft，配对 Spec／Plan v0.7-draft。所有用例 NOT RUN，R0＋01–12 共 13 项全部必做。当前范围只有 N（不 begin）、隐藏面和既有安全／预算回归；不包含启用后 B／D、G1／G2／G5 或 C1／C2 begin 写入恢复。F 与 R 分开，不用 mock／源码序锁凑绿。
+v0.6，配对 Spec／Plan v0.8；执行授权已获得，逐例结果以 runs 为准。R0＋01–12 共 13 项全部必做。当前范围只有 N（不 begin）、隐藏面和既有安全／预算回归；不包含启用后 B／D、G1／G2／G5 或 C1／C2 begin 写入恢复。F 与 R 分开，不用 mock／源码序锁凑绿。
 
 | ID | 主题 | SC 映射 |
 |---|---|---|
@@ -127,7 +127,7 @@ v0.5-draft，配对 Spec／Plan v0.7-draft。所有用例 NOT RUN，R0＋01–12
 
 **步骤**：对无凭据 published／不可读候选及 U0／L1 发起 begin／query，确认分类不是 inactive，强制 call 走真实治理拒绝而非 D2。A0 验允许／偏离与不可见身份。I0 在 N 和 D2 后分别做 read_source／explain 最小允许及既有 ACL 拒绝向量；再比较无关 source map 故障下隐藏强制 call 与 N query 的结果。
 
-**期望**：unknown 不被认证为零；A0 允许成交、偏离／不可见拒绝；D2 不污染其他工具，字段／行规则按工具实际能力保持。source map 故障不改变 inactive 的 D2 无副作用拒绝；query 若独立受全局编译阻断则另归因，不冒称数据面已修复。
+**期望**：unknown 不被认证为零；A0 允许成交、偏离／不可见拒绝；D2 不污染其他工具，字段／行规则按工具实际能力保持。source map 作者编译故障经真实 compiler 证实，生效 ACL 仍健康时 inactive D2 保持无副作用；再激活故障快照，begin／query 均按既有授权优先级拒绝，不把该 ACL 拒绝计为 D2。解除故障并激活恢复后 N 成交；不冒称数据面编译故障已由本条修复。
 
 **证据／清理**：保存真实允许事实／元数据／诊断、拒绝未执行与强制历史；细粒度字段／行变体由 F 覆盖。解除故障，U0／L1 经合法恢复后允许口径成交。
 

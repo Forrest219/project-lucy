@@ -1,0 +1,18 @@
+{
+  "case": "UAT-ZB-12",
+  "runnerSha256": "87a19772167fd0a1dfa167e79852c86f12c4a1e667cdbb2d552c2d1a1107450a",
+  "status": "PASS",
+  "client": "Codex CLI 0.165.0",
+  "actualAnswer": {
+    "order_count": 4,
+    "amount_sum": 100
+  },
+  "hiddenBeginCallObserved": false,
+  "approvedTools": [
+    "lucy_catalog",
+    "lucy_read_source",
+    "lucy_query"
+  ],
+  "rawTrace": "77e2ad84-client/r12-client-trace.json inside raw-evidence.tar.gz",
+  "persistedAudit": "77e2ad84-client/r12-persisted-proof.json inside raw-evidence.tar.gz"
+}

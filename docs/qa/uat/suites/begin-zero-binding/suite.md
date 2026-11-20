@@ -3,14 +3,14 @@
 | 元数据 | 内容 |
 |---|---|
 | Suite ID | `UAT-SUITE-BEGIN-ZERO-BINDING` |
-| 版本 / 状态 | v0.5；配对 Spec／Plan v0.7 终稿＋T1–T5 开发授权；R／T6 另授；NOT RUN，尚无跑次 |
+| 版本 / 状态 | v0.6；配对Spec／Plan v0.8；原四项与完整R已执行；判定见INDEX／最终77e2ad84跑次 |
 | 总账 / 需求 | P1-60／REQ-030-081；P0 主路径修复 |
 | 合同 / 计划 | [Spec](../../../../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md)；[Plan](../../../../plans/lucy-20261119-webui-publish-caliber-registry-repair-plan.md) |
 | 目标 | 纯 MCP 在 inactive 下看不到／不调用 begin 即可问数；合法强制 call 无副作用且不挡 query；现行权限、预算、continue 和真实强制快照不变 |
 | 环境 | 隔离本机 Docker 单实例单副本；真实 Lucy／KTX／数据库／普通 MCP Token；R 含 RC1 真实 Agent |
 | 入口 | [cases.md](cases.md)；[fixtures.md](fixtures.md)；[runs/](runs/) |
-| 判定真源 | [INDEX](../../INDEX.md)，文档齐不等于通过；本轮未构建、未造数、未测试 |
-| 修订依据 | [首轮决议](../../../../reviews/2026-11-19-begin-zero-binding-review-decisions.md)、[隐藏决议](../../../../reviews/2026-11-20-begin-hide-decision.md)、[新定位复审](../../../../../inbox/20261120-kimi-begin-hidden-positioning-review.md)；Spec／Plan **v0.7 终稿＋T1–T5 授权**；T6 另授 |
+| 判定真源 | [INDEX](../../INDEX.md)，文档齐不等于通过；真实构建／造数／测试证据以正式跑次为准 |
+| 修订依据 | [首轮决议](../../../../reviews/2026-11-19-begin-zero-binding-review-decisions.md)、[隐藏决议](../../../../reviews/2026-11-20-begin-hide-decision.md)、[新定位复审](../../../../../inbox/20261120-kimi-begin-hidden-positioning-review.md)；Spec／Plan **v0.8；T1–T6 已授权**；不推送、不发布 |
 | 复盘 | [测试漏检](../../../../lessons/2026-11-19-begin-zero-binding-test-gap.md) |
 
 ## 选择器与范围
@@ -20,7 +20,7 @@
 | F | 模块功能合同 SC-01–12；非 UAT 局部自动化映射 | 真协议、本地实际状态、发布交错、局部恢复与函数调用计数；不以替身称全真查数 |
 | R | 本 suite 的 Docker／真实 Agent 组合旅程与系统恢复 | UAT-ZB-R0、01–12 全部必做；逐请求／响应与数据库 oracle；不以 F 绿代替 |
 
-R 在修复候选准备主张用户路径恢复时执行，负责人为候选 UAT 执行者。当前只获文档修订授权；F／R 均未运行。绑定正反例是防绕过必做项，不列为可选 Wave B。
+R 在修复候选准备主张用户路径恢复时执行，负责人为候选 UAT 执行者。当前已获修复、完整 R、Docker 重建与交付复审授权；F 与 R 分别记录。绑定正反例是防绕过必做项，不列为可选 Wave B。
 
 ## 总判定
 
@@ -36,4 +36,4 @@ R 在修复候选准备主张用户路径恢复时执行，负责人为候选 UA
 
 原始必要响应保存在正式跑次配套脱敏附件，临时大文件可放 inbox 但不能成为唯一证据。禁止 Token、Cookie、认证头、客户原文或配置密钥入库。范围以 [fixtures M01–M10](fixtures.md#统一路径与覆盖矩阵)为准；RC1 固定为修复前既有 Codex CLI 0.165.0，版本核对不是兼容运行证据。P3／P4 补偿任务见 ZB-08，未证成的下降保留。
 
-当前 runs 只有 README，无执行记录。
+完整跑次与历史失败在 runs 登记，INDEX 为判定真源。

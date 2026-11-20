@@ -1,0 +1,14 @@
+{
+  "stateMirrorFiles": 7,
+  "state": "v0.8；本次77e2ad84原四项修复复核通过（245项回归）；完整R实测FAIL（预算不可用，委托人明确另行处理）；Docker已重建；未推送／发布；不入新增核心分母；功能合同未收口；≠ 可交付用户更新。",
+  "brokenLinks": [],
+  "scopeDocBlocking": 0,
+  "globalDocGate": "FAIL: 23 shape violations in separate memory-probe/process-drain/page-dom Spec/Plan files; scoped P1-60 blocking=0",
+  "matrix": {
+    "required": 13,
+    "pass": 12,
+    "fail": 1,
+    "notRun": 0
+  },
+  "budgetChangeInArtifact": false
+}

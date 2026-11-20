@@ -1,0 +1,114 @@
+{
+  "status": "FAIL",
+  "image": "sha256:a794f7e056c094f59f776bc0570658dd235eebd49c150676f8ac0ffeb2a69342",
+  "source": "77e2ad8425ae0e7a2918803e497da10636b14e5a",
+  "passCount": 12,
+  "failCount": 1,
+  "notRunCount": 0,
+  "cases": {
+    "UAT-ZB-R0": {
+      "status": "PASS",
+      "detail": "real isolated Docker/MySQL; independent SQL oracle",
+      "source": "77e2ad84-early/summary.json"
+    },
+    "UAT-ZB-01": {
+      "status": "PASS",
+      "source": "77e2ad84-early/summary.json"
+    },
+    "UAT-ZB-02": {
+      "status": "PASS",
+      "source": "77e2ad84-early/summary.json"
+    },
+    "UAT-ZB-03": {
+      "status": "PASS",
+      "variants": [
+        "I0",
+        "I1",
+        "I2",
+        "I3"
+      ],
+      "stages": 3,
+      "sessionsPerStage": 2,
+      "source": "77e2ad84-early/summary.json"
+    },
+    "UAT-ZB-04": {
+      "status": "PASS",
+      "source": "77e2ad84-early/summary.json"
+    },
+    "UAT-ZB-05": {
+      "status": "PASS",
+      "source": "77e2ad84-early/summary.json"
+    },
+    "UAT-ZB-06": {
+      "status": "PASS",
+      "source": "77e2ad84-late/summary.json"
+    },
+    "UAT-ZB-07": {
+      "status": "PASS",
+      "revocationVariants": [
+        "draft",
+        "delete"
+      ],
+      "source": "77e2ad84-late/summary.json"
+    },
+    "UAT-ZB-08": {
+      "status": "PASS",
+      "source": "77e2ad84-late/summary.json"
+    },
+    "UAT-ZB-09": {
+      "status": "PASS",
+      "source": "77e2ad84-late/summary.json"
+    },
+    "UAT-ZB-10": {
+      "case": "UAT-ZB-10",
+      "runnerSha256": "12f671c3e1291430d14e60edd5ac7d4faad131856737b00b61a76eb10aa138bb",
+      "status": "FAIL",
+      "successes": {
+        "baseline": 293,
+        "candidate": 294
+      },
+      "denominatorPerGroup": 300,
+      "warmupFailures": 0,
+      "source": "77e2ad84-performance/case-result.json"
+    },
+    "UAT-ZB-11": {
+      "status": "PASS",
+      "sources": [
+        "77e2ad84-late/restart-*/restart-persistence.json",
+        "77e2ad84-strong-client/summary.json"
+      ],
+      "variants": [
+        "I0",
+        "I1",
+        "I2",
+        "I3",
+        "I4",
+        "I4-valid",
+        "L0",
+        "L1",
+        "U0",
+        "T0"
+      ],
+      "note": "I0–I4/L0 real query and persisted budget/history verified; L1/U0 active/unknown/recovery and T0 completed by genuine old-format state after base metadata warm-up; original invalid healthy-active fixture expectation retained separately"
+    },
+    "UAT-ZB-12": {
+      "case": "UAT-ZB-12",
+      "runnerSha256": "87a19772167fd0a1dfa167e79852c86f12c4a1e667cdbb2d552c2d1a1107450a",
+      "status": "PASS",
+      "client": "Codex CLI 0.165.0",
+      "actualAnswer": {
+        "order_count": 4,
+        "amount_sum": 100
+      },
+      "hiddenBeginCallObserved": false,
+      "approvedTools": [
+        "lucy_catalog",
+        "lucy_read_source",
+        "lucy_query"
+      ],
+      "source": "77e2ad84-client/case-result.json"
+    }
+  },
+  "scopeDecision": "only original R-01–04; budget issue handled separately; no budget writer change in tested artifact",
+  "finishedAt": "2026-11-20T04:51:56.621617+00:00"
+}

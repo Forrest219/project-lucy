@@ -1,0 +1,132 @@
+{
+  "frozenAt": "2026-11-20T04:37:40.172519+00:00",
+  "baselineImage": "project-lucy:p1-60-base-c1cd67a0",
+  "candidateImage": "project-lucy:p1-60-77e2ad84-final",
+  "controlQualification": "image and source fingerprints recorded per rig; original failing baseline evidence retained",
+  "absoluteToleranceMs": 250,
+  "relativeTolerance": 0.5,
+  "seed": 60120,
+  "warmups": 10,
+  "samplesPerRound": 100,
+  "failures": [
+    {
+      "name": "r10-0-19",
+      "group": "baseline",
+      "error": "perf source failed {\"httpStatus\": 503, \"elapsedMs\": 17.799, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 89, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 29.343
+    },
+    {
+      "name": "r10-0-55",
+      "group": "baseline",
+      "error": "perf source failed {\"httpStatus\": 503, \"elapsedMs\": 12.018, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 196, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 46.769
+    },
+    {
+      "name": "r10-1-29",
+      "group": "candidate",
+      "error": "perf source failed {\"httpStatus\": 503, \"elapsedMs\": 21.97, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 449, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 85.182
+    },
+    {
+      "name": "r10-1-35",
+      "group": "baseline",
+      "error": "perf source failed {\"httpStatus\": 503, \"elapsedMs\": 28.304, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 465, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 116.178
+    },
+    {
+      "name": "r10-1-35",
+      "group": "candidate",
+      "error": "perf source failed {\"httpStatus\": 503, \"elapsedMs\": 26.751, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 466, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 56.322
+    },
+    {
+      "name": "r10-1-36",
+      "group": "candidate",
+      "error": "perf source failed {\"httpStatus\": 503, \"elapsedMs\": 23.323, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 468, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 94.351
+    },
+    {
+      "name": "r10-1-63",
+      "group": "baseline",
+      "error": "perf source failed {\"httpStatus\": 503, \"elapsedMs\": 42.992, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 548, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 76.55
+    },
+    {
+      "name": "r10-1-87",
+      "group": "baseline",
+      "error": "r10-1-87-query query failed: {\"httpStatus\": 503, \"elapsedMs\": 52.913, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 620, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 106.503
+    },
+    {
+      "name": "r10-2-11",
+      "group": "baseline",
+      "error": "perf source failed {\"httpStatus\": 503, \"elapsedMs\": 20.625, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 721, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 49.021
+    },
+    {
+      "name": "r10-2-19",
+      "group": "candidate",
+      "error": "perf source failed {\"httpStatus\": 503, \"elapsedMs\": 14.316, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 746, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 29.937
+    },
+    {
+      "name": "r10-2-51",
+      "group": "candidate",
+      "error": "r10-2-51-query query failed: {\"httpStatus\": 503, \"elapsedMs\": 68.772, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 842, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 100.298
+    },
+    {
+      "name": "r10-2-55",
+      "group": "baseline",
+      "error": "r10-2-55-query query failed: {\"httpStatus\": 503, \"elapsedMs\": 44.896, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 853, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 73.057
+    },
+    {
+      "name": "r10-2-75",
+      "group": "candidate",
+      "error": "r10-2-75-query query failed: {\"httpStatus\": 503, \"elapsedMs\": 132.458, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 914, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "elapsedMs": 253.145
+    }
+  ],
+  "warmupFailures": [],
+  "storage": "Docker native named volumes; independently fresh I0 in both groups",
+  "scope": "protocol N catalog/read_source/query; all 300 planned problems/group are attempted, no retry or dropped failures",
+  "problemDenominatorPerGroup": 300,
+  "successes": {
+    "baseline": 293,
+    "candidate": 294
+  },
+  "status": "FAIL",
+  "rounds": [
+    {
+      "round": 1,
+      "baselineP95Ms": 1039.69,
+      "candidateP95Ms": 998.963,
+      "p95WithinTolerance": true,
+      "failureCounts": {
+        "baseline": 2,
+        "candidate": 0
+      }
+    },
+    {
+      "round": 2,
+      "baselineP95Ms": 1711.63,
+      "candidateP95Ms": 1666.045,
+      "p95WithinTolerance": true,
+      "failureCounts": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "round": 3,
+      "baselineP95Ms": 776.752,
+      "candidateP95Ms": 813.89,
+      "p95WithinTolerance": true,
+      "failureCounts": {
+        "baseline": 2,
+        "candidate": 3
+      }
+    }
+  ]
+}
