@@ -45,3 +45,10 @@
 ## 最终检查与证据保存
 
 本轮最终`lint:spec-docs`、`lint:spec`、`lint:terminology`、`lint:ia-boundary`、`check-e2e-ledger`及`git diff --check`实际全部exit0。沿用原1条STALE baseline提示及既有WARN，不新增豁免。精确日志、源码／主工作区保全及资源终态在正式定向artifacts的`handoff-checks/`。代码patch只含本轮自有源码／工具／测试／registry，正式证据含全部原失败和封闭审计备份；不打包node_modules、解码临时DB或私密Token。
+
+
+## 0.30 分支集成登记（2026-11-20）
+
+委托人随后追问为何未合并到0.30，本任务按该意图完成集成：`lucy-v0.30`从7dded547快进包含f865775d，原P168未提交运行／UI代码保留原位；七份共享文档按三方差集合并，P168现值不倒退，其改动不混入本任务提交。后续以主工作区本Plan及对应三台账为入口，原隔离指针和“未合并”为历史时点。
+
+合并后的工作区相关38文件回归首次419／420（单个意外401）、原失败用例单独1／1通过，同源码同参数完整复跑420／420通过；首个失败与原因未确证事实保留。全库TypeScript通过，文档形态／术语／IA／e2e通过；lint:spec因P168原有8条API文档漏项仍失败。详见[集成复核](../reviews/2026-11-20-core-availability-v030-integration-review.md)。未重建Docker、未重跑正式30分钟、未签浏览器或新组合UAT；原正式严格FAIL与剩余矩阵不变，未push或发布。

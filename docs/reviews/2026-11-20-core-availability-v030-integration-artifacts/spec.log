@@ -1,0 +1,32 @@
+
+> project-lucy-eval@0.30.0 lint:spec
+> node scripts/lint-spec.mjs
+
+[spec-lint] PASS route-status
+  routes and status table are aligned for first-batch modules
+[spec-lint] FAIL api-spec
+  webui/docs/03-api-spec.md: missing /api/admin/ops-step-uat/background
+[spec-lint] FAIL api-spec
+  webui/docs/03-api-spec.md: missing /api/admin/ops-step-uat/console-probe
+[spec-lint] FAIL api-spec
+  webui/docs/03-api-spec.md: missing /api/admin/ops-step-uat/diagnostic
+[spec-lint] FAIL api-spec
+  webui/docs/03-api-spec.md: missing /api/admin/ops-step-uat/read-failure
+[spec-lint] FAIL api-spec
+  webui/docs/03-api-spec.md: missing /api/admin/ops-step-uat/reset
+[spec-lint] FAIL api-spec
+  webui/docs/03-api-spec.md: missing /api/admin/ops-step-uat/stdout-failure
+[spec-lint] FAIL api-spec
+  webui/docs/03-api-spec.md: missing /api/admin/ops-step-uat/sync-section
+[spec-lint] FAIL api-spec
+  webui/docs/03-api-spec.md: missing /api/admin/ops-steps
+[spec-lint] PASS skill-dependency
+  1 skill files have resolvable dependencies
+[spec-lint] WARN eval-schema-version
+  evals/chatbi_intl/eval/chatbi_intl-eval-cases.yaml: metadata.paired_quiz missing
+[spec-lint] PASS eval-schema-version
+  3 eval files are readable with safety_contract and valid quiz links
+[spec-lint] WARN access-role-policy
+  webui/config/access.yaml: role demo_readonly has no permission_model_version (migration window)
+[spec-lint] PASS access-role-policy
+  access role policy has no blocking errors

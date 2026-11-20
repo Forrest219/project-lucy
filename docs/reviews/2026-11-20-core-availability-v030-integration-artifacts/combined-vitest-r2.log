@@ -1,0 +1,229 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/webui
+
+{"ts":"2026-11-20T13:58:17.337Z","op":"sync_section","op_id":"ops_51be89679b7231e8a24fc666b88d5c87","step":"uat_sync_section","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:19.342Z","op":"sync_section","op_id":"ops_51be89679b7231e8a24fc666b88d5c87","step":"uat_sync_section","phase":"leave","elapsed_ms":2005,"result":"ok","reason_code":""}
+{"level":30,"time":1795183100761,"pid":40890,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63328","remoteAddress":"::ffff:127.0.0.1","remotePort":63329},"msg":"incoming request"}
+{"level":30,"time":1795183100768,"pid":40890,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":7.551875000000109,"msg":"request completed"}
+{"level":30,"time":1795183100770,"pid":40890,"hostname":"localhost","reqId":"req-2","req":{"method":"POST","url":"/api/semantic-assets/publish","host":"127.0.0.1:63330","remoteAddress":"::ffff:127.0.0.1","remotePort":63331},"msg":"incoming request"}
+{"level":30,"time":1795183100792,"pid":40890,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":21.897834000000103,"msg":"request completed"}
+{"level":30,"time":1795183100794,"pid":40890,"hostname":"localhost","reqId":"req-3","req":{"method":"GET","url":"/api/semantic-assets/releases/rel_20261120_215820_772_63b895bd/status","host":"127.0.0.1:63332","remoteAddress":"::ffff:127.0.0.1","remotePort":63333},"msg":"incoming request"}
+{"level":30,"time":1795183100799,"pid":40890,"hostname":"localhost","reqId":"req-3","res":{"statusCode":200},"responseTime":5.2070830000000115,"msg":"request completed"}
+{"level":30,"time":1795183100828,"pid":40890,"hostname":"localhost","reqId":"req-4","req":{"method":"GET","url":"/api/semantic-assets/releases/rel_20261120_215820_772_63b895bd/status","host":"127.0.0.1:63334","remoteAddress":"::ffff:127.0.0.1","remotePort":63335},"msg":"incoming request"}
+{"level":30,"time":1795183100828,"pid":40890,"hostname":"localhost","reqId":"req-4","res":{"statusCode":200},"responseTime":0.4351249999999709,"msg":"request completed"}
+{"level":30,"time":1795183100950,"pid":40890,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63336","remoteAddress":"::ffff:127.0.0.1","remotePort":63337},"msg":"incoming request"}
+{"level":30,"time":1795183100951,"pid":40890,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.670415999999932,"msg":"request completed"}
+{"level":30,"time":1795183101108,"pid":40890,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63342","remoteAddress":"::ffff:127.0.0.1","remotePort":63343},"msg":"incoming request"}
+{"level":30,"time":1795183101110,"pid":40890,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.5242500000001655,"msg":"request completed"}
+{"level":30,"time":1795183101268,"pid":40890,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63346","remoteAddress":"::ffff:127.0.0.1","remotePort":63347},"msg":"incoming request"}
+{"level":30,"time":1795183101269,"pid":40890,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.2038750000001528,"msg":"request completed"}
+{"level":30,"time":1795183101413,"pid":40890,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63348","remoteAddress":"::ffff:127.0.0.1","remotePort":63349},"msg":"incoming request"}
+{"level":30,"time":1795183101414,"pid":40890,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.1591249999999036,"msg":"request completed"}
+{"level":30,"time":1795183101555,"pid":40890,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63352","remoteAddress":"::ffff:127.0.0.1","remotePort":63353},"msg":"incoming request"}
+{"level":30,"time":1795183101556,"pid":40890,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.1146249999997053,"msg":"request completed"}
+{"level":30,"time":1795183101696,"pid":40890,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63354","remoteAddress":"::ffff:127.0.0.1","remotePort":63355},"msg":"incoming request"}
+{"level":30,"time":1795183101697,"pid":40890,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.1714579999998023,"msg":"request completed"}
+{"level":30,"time":1795183101801,"pid":40890,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63356","remoteAddress":"::ffff:127.0.0.1","remotePort":63357},"msg":"incoming request"}
+{"level":30,"time":1795183101802,"pid":40890,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.2460000000000946,"msg":"request completed"}
+{"level":30,"time":1795183101885,"pid":40890,"hostname":"localhost","reqId":"req-2","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63358","remoteAddress":"::ffff:127.0.0.1","remotePort":63359},"msg":"incoming request"}
+{"level":30,"time":1795183101887,"pid":40890,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":1.664792000000034,"msg":"request completed"}
+{"level":30,"time":1795183101888,"pid":40890,"hostname":"localhost","reqId":"req-3","req":{"method":"POST","url":"/api/semantic-assets/publish","host":"127.0.0.1:63360","remoteAddress":"::ffff:127.0.0.1","remotePort":63361},"msg":"incoming request"}
+{"level":30,"time":1795183101898,"pid":40890,"hostname":"localhost","reqId":"req-3","res":{"statusCode":200},"responseTime":10.118957999999566,"msg":"request completed"}
+{"level":30,"time":1795183105420,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63500","remoteAddress":"::ffff:127.0.0.1","remotePort":63501},"msg":"incoming request"}
+{"level":30,"time":1795183105427,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":6.3662910000000466,"msg":"request completed"}
+{"level":30,"time":1795183105569,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63502","remoteAddress":"::ffff:127.0.0.1","remotePort":63503},"msg":"incoming request"}
+{"level":30,"time":1795183105570,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.453416999999945,"msg":"request completed"}
+{"level":30,"time":1795183105686,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63504","remoteAddress":"::ffff:127.0.0.1","remotePort":63505},"msg":"incoming request"}
+{"level":30,"time":1795183105687,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.6277499999999918,"msg":"request completed"}
+{"level":30,"time":1795183105799,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63506","remoteAddress":"::ffff:127.0.0.1","remotePort":63507},"msg":"incoming request"}
+{"level":30,"time":1795183105800,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.5867500000000518,"msg":"request completed"}
+{"level":30,"time":1795183105928,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63508","remoteAddress":"::ffff:127.0.0.1","remotePort":63509},"msg":"incoming request"}
+{"level":30,"time":1795183105929,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.33816700000011224,"msg":"request completed"}
+{"level":30,"time":1795183106046,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63510","remoteAddress":"::ffff:127.0.0.1","remotePort":63511},"msg":"incoming request"}
+{"level":30,"time":1795183106046,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.26350000000002183,"msg":"request completed"}
+{"level":30,"time":1795183106167,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63513","remoteAddress":"::ffff:127.0.0.1","remotePort":63514},"msg":"incoming request"}
+{"level":30,"time":1795183106167,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.23537500000020373,"msg":"request completed"}
+{"level":30,"time":1795183106292,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63515","remoteAddress":"::ffff:127.0.0.1","remotePort":63516},"msg":"incoming request"}
+{"level":30,"time":1795183106292,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.2368340000000444,"msg":"request completed"}
+{"level":30,"time":1795183106420,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"ts":"2026-11-20T13:58:26.579Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"read_project","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:26.580Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"read_ktx_yaml","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:26.580Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"read_catalog_reloads","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:26.580Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"probe_execution","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:26.580Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"probe_execution","phase":"leave","elapsed_ms":0,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:26.580Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"read_catalog_reloads","phase":"leave","elapsed_ms":0,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:26.713Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"read_project","phase":"leave","elapsed_ms":133,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:26.713Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"read_ktx_yaml","phase":"leave","elapsed_ms":133,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:26.713Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"read_reload_state","phase":"enter","elapsed_ms":133,"result":"running","reason_code":""}
+{"level":30,"time":1795183106714,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":294.21012499999983,"msg":"request completed"}
+{"level":30,"time":1795183106716,"pid":41318,"hostname":"localhost","reqId":"req-2","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"ts":"2026-11-20T13:58:26.719Z","op":"diagnostic_collect","op_id":"ops_cdf78b26b3f11f3c51d2ec57beb80a17","step":"read_reload_state","phase":"leave","elapsed_ms":139,"result":"ok","reason_code":""}
+{"level":30,"time":1795183107157,"pid":41318,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":441.0908750000001,"msg":"request completed"}
+{"level":30,"time":1795183107440,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183107480,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":39.32733300000018,"msg":"request completed"}
+{"level":30,"time":1795183107495,"pid":41318,"hostname":"localhost","reqId":"req-2","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183107532,"pid":41318,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":37.041875000000346,"msg":"request completed"}
+{"level":30,"time":1795183107544,"pid":41318,"hostname":"localhost","reqId":"req-3","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183107583,"pid":41318,"hostname":"localhost","reqId":"req-3","res":{"statusCode":400},"responseTime":38.31654200000003,"msg":"request completed"}
+{"ts":"2026-11-20T13:58:27.583Z","op":"diagnostic_collect","op_id":"ops_b8aca5f896bae0c0939bfd87c1de6837","step":"read_project","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:27.583Z","op":"diagnostic_collect","op_id":"ops_b8aca5f896bae0c0939bfd87c1de6837","step":"read_ktx_yaml","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:27.583Z","op":"diagnostic_collect","op_id":"ops_b8aca5f896bae0c0939bfd87c1de6837","step":"read_catalog_reloads","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:27.583Z","op":"diagnostic_collect","op_id":"ops_b8aca5f896bae0c0939bfd87c1de6837","step":"probe_execution","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:27.585Z","op":"diagnostic_collect","op_id":"ops_b8aca5f896bae0c0939bfd87c1de6837","step":"read_project","phase":"fail","elapsed_ms":1,"result":"error","reason_code":"aborted"}
+{"ts":"2026-11-20T13:58:27.585Z","op":"diagnostic_collect","op_id":"ops_b8aca5f896bae0c0939bfd87c1de6837","step":"read_ktx_yaml","phase":"fail","elapsed_ms":1,"result":"error","reason_code":"aborted"}
+{"ts":"2026-11-20T13:58:27.585Z","op":"diagnostic_collect","op_id":"ops_b8aca5f896bae0c0939bfd87c1de6837","step":"read_catalog_reloads","phase":"fail","elapsed_ms":1,"result":"error","reason_code":"aborted"}
+{"ts":"2026-11-20T13:58:27.585Z","op":"diagnostic_collect","op_id":"ops_b8aca5f896bae0c0939bfd87c1de6837","step":"probe_execution","phase":"fail","elapsed_ms":1,"result":"error","reason_code":"aborted"}
+{"level":30,"time":1795183107745,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183107819,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":74.04908299999988,"msg":"request completed"}
+{"level":30,"time":1795183107845,"pid":41318,"hostname":"localhost","reqId":"req-2","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183107845,"pid":41318,"hostname":"localhost","reqId":"req-2","res":{"statusCode":413},"responseTime":0.46962500000017826,"msg":"request completed"}
+{"level":30,"time":1795183107869,"pid":41318,"hostname":"localhost","reqId":"req-3","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"ts":"2026-11-20T13:58:27.937Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"read_project","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:27.937Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"read_ktx_yaml","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:27.937Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"read_catalog_reloads","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:27.937Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"probe_execution","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"level":30,"time":1795183107937,"pid":41318,"hostname":"localhost","reqId":"req-3","res":{"statusCode":400},"responseTime":68.72449999999981,"msg":"request completed"}
+{"level":30,"time":1795183107960,"pid":41318,"hostname":"localhost","reqId":"req-4","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183107960,"pid":41318,"hostname":"localhost","reqId":"req-4","res":{"statusCode":413},"responseTime":0.28354099999978644,"msg":"request completed"}
+{"level":30,"time":1795183107976,"pid":41318,"hostname":"localhost","reqId":"req-5","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"ts":"2026-11-20T13:58:28.031Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"probe_execution","phase":"leave","elapsed_ms":94,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:28.031Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"read_catalog_reloads","phase":"leave","elapsed_ms":94,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:28.031Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"read_ktx_yaml","phase":"leave","elapsed_ms":94,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:28.031Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"read_project","phase":"leave","elapsed_ms":94,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:28.031Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"read_reload_state","phase":"enter","elapsed_ms":94,"result":"running","reason_code":""}
+{"level":30,"time":1795183108032,"pid":41318,"hostname":"localhost","reqId":"req-5","res":{"statusCode":200},"responseTime":56.008458000000246,"msg":"request completed"}
+{"ts":"2026-11-20T13:58:28.064Z","op":"diagnostic_collect","op_id":"ops_b9e2f21820811aaa65f7caa8032c0489","step":"read_reload_state","phase":"fail","elapsed_ms":126,"result":"error","reason_code":"aborted"}
+{"level":30,"time":1795183108061,"pid":41318,"hostname":"localhost","reqId":"req-6","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183108061,"pid":41318,"hostname":"localhost","reqId":"req-6","res":{"statusCode":413},"responseTime":0.26833299999998417,"msg":"request completed"}
+{"level":30,"time":1795183108062,"pid":41318,"hostname":"localhost","reqId":"req-7","req":{"method":"POST","url":"/api/catalog/reload","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183108062,"pid":41318,"hostname":"localhost","reqId":"req-7","res":{"statusCode":413},"responseTime":0.14704200000005585,"msg":"request completed"}
+{"level":30,"time":1795183108192,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63522","remoteAddress":"::ffff:127.0.0.1","remotePort":63523},"msg":"incoming request"}
+{"level":30,"time":1795183108205,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":12.840791000000081,"msg":"request completed"}
+{"level":30,"time":1795183108335,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63524","remoteAddress":"::ffff:127.0.0.1","remotePort":63525},"msg":"incoming request"}
+{"level":30,"time":1795183108336,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.9279590000001008,"msg":"request completed"}
+{"level":30,"time":1795183108451,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63527","remoteAddress":"::ffff:127.0.0.1","remotePort":63528},"msg":"incoming request"}
+{"level":30,"time":1795183108452,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.5884580000001733,"msg":"request completed"}
+{"level":30,"time":1795183108567,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63529","remoteAddress":"::ffff:127.0.0.1","remotePort":63530},"msg":"incoming request"}
+{"level":30,"time":1795183108567,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.49508400000013353,"msg":"request completed"}
+{"level":30,"time":1795183108687,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63532","remoteAddress":"::ffff:127.0.0.1","remotePort":63533},"msg":"incoming request"}
+{"level":30,"time":1795183108688,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.0013330000001588,"msg":"request completed"}
+{"level":30,"time":1795183108806,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63534","remoteAddress":"::ffff:127.0.0.1","remotePort":63535},"msg":"incoming request"}
+{"level":30,"time":1795183108807,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.6175830000001952,"msg":"request completed"}
+{"level":30,"time":1795183108938,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63536","remoteAddress":"::ffff:127.0.0.1","remotePort":63537},"msg":"incoming request"}
+{"level":30,"time":1795183108939,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.825249999999869,"msg":"request completed"}
+{"level":30,"time":1795183109086,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63538","remoteAddress":"::ffff:127.0.0.1","remotePort":63539},"msg":"incoming request"}
+{"level":30,"time":1795183109086,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.6392919999998412,"msg":"request completed"}
+{"level":30,"time":1795183109210,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:63541","remoteAddress":"::ffff:127.0.0.1","remotePort":63542},"msg":"incoming request"}
+{"level":30,"time":1795183109219,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":8.984165999999277,"msg":"request completed"}
+{"level":30,"time":1795183109358,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:63543","remoteAddress":"::ffff:127.0.0.1","remotePort":63544},"msg":"incoming request"}
+{"level":30,"time":1795183109359,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":409},"responseTime":1.4736250000005384,"msg":"request completed"}
+{"level":30,"time":1795183109495,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:63545","remoteAddress":"::ffff:127.0.0.1","remotePort":63546},"msg":"incoming request"}
+{"level":30,"time":1795183109504,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":9.307166000000507,"msg":"request completed"}
+{"level":30,"time":1795183109636,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:63547","remoteAddress":"::ffff:127.0.0.1","remotePort":63548},"msg":"incoming request"}
+{"level":30,"time":1795183109637,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":403},"responseTime":0.6967090000007374,"msg":"request completed"}
+{"level":30,"time":1795183109778,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:63549","remoteAddress":"::ffff:127.0.0.1","remotePort":63550},"msg":"incoming request"}
+{"level":30,"time":1795183109786,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":8.024374999999964,"msg":"request completed"}
+{"level":30,"time":1795183109787,"pid":41318,"hostname":"localhost","reqId":"req-2","req":{"method":"GET","url":"/api/catalog/assets/uploads","host":"127.0.0.1:63551","remoteAddress":"::ffff:127.0.0.1","remotePort":63552},"msg":"incoming request"}
+{"level":30,"time":1795183109788,"pid":41318,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":0.4056249999994179,"msg":"request completed"}
+{"level":30,"time":1795183109936,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/catalog/assets/uploads","host":"127.0.0.1:63553","remoteAddress":"::ffff:127.0.0.1","remotePort":63554},"msg":"incoming request"}
+{"level":30,"time":1795183109937,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.3943330000001879,"msg":"request completed"}
+{"level":30,"time":1795183110087,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/catalog/assets/schema-manifest?connectionId=demo-mysql&schema=dataforai","host":"127.0.0.1:63555","remoteAddress":"::ffff:127.0.0.1","remotePort":63556},"msg":"incoming request"}
+{"level":30,"time":1795183110088,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":0.7354999999997744,"msg":"request completed"}
+{"level":30,"time":1795183110317,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/catalog/assets/schema-manifest?connectionId=demo-mysql&schema=dataforai","host":"127.0.0.1:63557","remoteAddress":"::ffff:127.0.0.1","remotePort":63558},"msg":"incoming request"}
+{"level":30,"time":1795183110318,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":404},"responseTime":0.6531249999998181,"msg":"request completed"}
+{"level":30,"time":1795183110607,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/catalog/assets/schema-manifest?connectionId=..%2Fdemo-mysql&schema=dataforai","host":"127.0.0.1:63559","remoteAddress":"::ffff:127.0.0.1","remotePort":63560},"msg":"incoming request"}
+{"level":30,"time":1795183110607,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":403},"responseTime":0.18845800000053714,"msg":"request completed"}
+{"level":30,"time":1795183110857,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63562","remoteAddress":"::ffff:127.0.0.1","remotePort":63563},"msg":"incoming request"}
+{"level":30,"time":1795183110859,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.5291660000002594,"msg":"request completed"}
+{"level":30,"time":1795183111014,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:63565","remoteAddress":"::ffff:127.0.0.1","remotePort":63566},"msg":"incoming request"}
+{"level":30,"time":1795183111036,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":21.455667000000176,"msg":"request completed"}
+{"level":30,"time":1795183111202,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/catalog/assets/schema-manifest?connectionId=demo-mysql&schema=openclaw_db","host":"127.0.0.1:63568","remoteAddress":"::ffff:127.0.0.1","remotePort":63569},"msg":"incoming request"}
+{"level":30,"time":1795183111203,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.0218329999997877,"msg":"request completed"}
+{"level":30,"time":1795183111218,"pid":41318,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/catalog/assets/schema-manifest?connectionId=demo-mysql&schema=openclaw_db","host":"127.0.0.1:63570","remoteAddress":"::ffff:127.0.0.1","remotePort":63571},"msg":"incoming request"}
+{"level":30,"time":1795183111221,"pid":41318,"hostname":"localhost","reqId":"req-1","res":{"statusCode":404},"responseTime":2.9543750000002547,"msg":"request completed"}
+{"level":30,"time":1795183112106,"pid":42787,"hostname":"localhost","reqId":"req-1","req":{"method":"PUT","url":"/api/connections/mysql-aliyun/enabled-tables","host":"127.0.0.1:63579","remoteAddress":"::ffff:127.0.0.1","remotePort":63580},"msg":"incoming request"}
+{"ts":"2026-11-20T13:58:32.117Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"write_config","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.122Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"write_config","phase":"leave","elapsed_ms":4,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.122Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"catalog_reload","phase":"enter","elapsed_ms":5,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.125Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"catalog_reload","phase":"leave","elapsed_ms":7,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.125Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"policy_commit","phase":"enter","elapsed_ms":7,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.130Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"policy_commit","phase":"fail","elapsed_ms":13,"result":"error","reason_code":"unreadable"}
+{"ts":"2026-11-20T13:58:32.131Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"execution_reload","phase":"enter","elapsed_ms":13,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.131Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"execution_reload","phase":"leave","elapsed_ms":13,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.131Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"execution_ack","phase":"enter","elapsed_ms":13,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.131Z","op":"enabled_tables_save","op_id":"ops_4c684ab2edd91a9ff886a0a88a09a334","step":"execution_ack","phase":"leave","elapsed_ms":13,"result":"ok","reason_code":""}
+{"level":30,"time":1795183112136,"pid":42787,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":29.305124999999975,"msg":"request completed"}
+{"level":30,"time":1795183112251,"pid":42787,"hostname":"localhost","reqId":"req-1","req":{"method":"PUT","url":"/api/connections/mysql-aliyun/enabled-tables","host":"127.0.0.1:63582","remoteAddress":"::ffff:127.0.0.1","remotePort":63583},"msg":"incoming request"}
+{"ts":"2026-11-20T13:58:32.252Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"write_config","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.254Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"write_config","phase":"leave","elapsed_ms":1,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.254Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"catalog_reload","phase":"enter","elapsed_ms":1,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.256Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"catalog_reload","phase":"leave","elapsed_ms":3,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.256Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"policy_commit","phase":"enter","elapsed_ms":3,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.257Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"policy_commit","phase":"fail","elapsed_ms":4,"result":"error","reason_code":"unreadable"}
+{"ts":"2026-11-20T13:58:32.257Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"execution_reload","phase":"enter","elapsed_ms":4,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.257Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"execution_reload","phase":"leave","elapsed_ms":5,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.257Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"execution_ack","phase":"enter","elapsed_ms":5,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.258Z","op":"enabled_tables_save","op_id":"ops_f8b5b1b250d1173686607689fd998c44","step":"execution_ack","phase":"leave","elapsed_ms":5,"result":"ok","reason_code":""}
+{"level":30,"time":1795183112258,"pid":42787,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":6.642000000000053,"msg":"request completed"}
+{"level":30,"time":1795183112259,"pid":42787,"hostname":"localhost","reqId":"req-2","req":{"method":"PUT","url":"/api/connections/mysql-aliyun/enabled-tables","host":"127.0.0.1:63584","remoteAddress":"::ffff:127.0.0.1","remotePort":63585},"msg":"incoming request"}
+{"ts":"2026-11-20T13:58:32.260Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"write_config","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.262Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"write_config","phase":"leave","elapsed_ms":1,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.262Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"catalog_reload","phase":"enter","elapsed_ms":1,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.263Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"catalog_reload","phase":"leave","elapsed_ms":3,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.263Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"policy_commit","phase":"enter","elapsed_ms":3,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.266Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"policy_commit","phase":"leave","elapsed_ms":5,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.266Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"execution_reload","phase":"enter","elapsed_ms":5,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.266Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"execution_reload","phase":"leave","elapsed_ms":5,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.266Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"execution_ack","phase":"enter","elapsed_ms":5,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.266Z","op":"enabled_tables_save","op_id":"ops_d16b33ce30b3b8688f72e91ced8e87aa","step":"execution_ack","phase":"fail","elapsed_ms":5,"result":"error","reason_code":"unreadable"}
+{"level":30,"time":1795183112266,"pid":42787,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":7.050041999999962,"msg":"request completed"}
+{"level":30,"time":1795183112390,"pid":42787,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/connections","host":"127.0.0.1:63587","remoteAddress":"::ffff:127.0.0.1","remotePort":63588},"msg":"incoming request"}
+{"level":30,"time":1795183112400,"pid":42787,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":9.179082999999991,"msg":"request completed"}
+{"level":30,"time":1795183112527,"pid":42787,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/connections","host":"127.0.0.1:63589","remoteAddress":"::ffff:127.0.0.1","remotePort":63590},"msg":"incoming request"}
+{"level":30,"time":1795183112534,"pid":42787,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":6.780917000000045,"msg":"request completed"}
+{"level":30,"time":1795183112636,"pid":42787,"hostname":"localhost","reqId":"req-1","req":{"method":"PUT","url":"/api/connections/demo-mysql/enabled-tables","host":"127.0.0.1:63591","remoteAddress":"::ffff:127.0.0.1","remotePort":63592},"msg":"incoming request"}
+{"ts":"2026-11-20T13:58:32.637Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"write_config","phase":"enter","elapsed_ms":0,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.639Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"write_config","phase":"leave","elapsed_ms":2,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.639Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"catalog_reload","phase":"enter","elapsed_ms":2,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.641Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"catalog_reload","phase":"leave","elapsed_ms":3,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.641Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"policy_commit","phase":"enter","elapsed_ms":3,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.642Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"policy_commit","phase":"leave","elapsed_ms":5,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.642Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"execution_reload","phase":"enter","elapsed_ms":5,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.642Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"execution_reload","phase":"leave","elapsed_ms":5,"result":"ok","reason_code":""}
+{"ts":"2026-11-20T13:58:32.642Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"execution_ack","phase":"enter","elapsed_ms":5,"result":"running","reason_code":""}
+{"ts":"2026-11-20T13:58:32.642Z","op":"enabled_tables_save","op_id":"ops_e5d2f0d1e0d6a0e33e422b39f1658e6c","step":"execution_ack","phase":"leave","elapsed_ms":5,"result":"ok","reason_code":""}
+{"level":30,"time":1795183112643,"pid":42787,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":6.70679199999995,"msg":"request completed"}
+{"level":30,"time":1795183114070,"pid":43034,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63637","remoteAddress":"::ffff:127.0.0.1","remotePort":63638},"msg":"incoming request"}
+{"level":30,"time":1795183114077,"pid":43034,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":7.367375000000038,"msg":"request completed"}
+{"level":30,"time":1795183114209,"pid":43034,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/semantic-assets/validate","host":"127.0.0.1:63640","remoteAddress":"::ffff:127.0.0.1","remotePort":63641},"msg":"incoming request"}
+{"level":30,"time":1795183114210,"pid":43034,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.536958000000027,"msg":"request completed"}
+{"level":30,"time":1795183115315,"pid":43140,"hostname":"localhost","reqId":"req-1","req":{"method":"PUT","url":"/api/connections/demo/enabled-tables","host":"127.0.0.1:63666","remoteAddress":"::ffff:127.0.0.1","remotePort":63667},"msg":"incoming request"}
+{"level":30,"time":1795183115323,"pid":43140,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":7.0884170000000495,"msg":"request completed"}
+{"level":30,"time":1795183115346,"pid":43140,"hostname":"localhost","reqId":"req-1","req":{"method":"PUT","url":"/api/connections/demo/enabled-tables","host":"127.0.0.1:63668","remoteAddress":"::ffff:127.0.0.1","remotePort":63669},"msg":"incoming request"}
+{"level":30,"time":1795183115396,"pid":43140,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":50.216375000000085,"msg":"request completed"}
+{"level":30,"time":1795183115415,"pid":43140,"hostname":"localhost","reqId":"req-1","req":{"method":"PUT","url":"/api/connections/demo/enabled-tables","host":"127.0.0.1:63670","remoteAddress":"::ffff:127.0.0.1","remotePort":63671},"msg":"incoming request"}
+{"level":30,"time":1795183115417,"pid":43140,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.7956659999999829,"msg":"request completed"}
+{"level":30,"time":1795183115436,"pid":43140,"hostname":"localhost","reqId":"req-1","req":{"method":"PUT","url":"/api/connections/demo/enabled-tables","host":"127.0.0.1:63672","remoteAddress":"::ffff:127.0.0.1","remotePort":63673},"msg":"incoming request"}
+{"level":30,"time":1795183115439,"pid":43140,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":2.6094170000000076,"msg":"request completed"}
+{"level":30,"time":1795183115454,"pid":43140,"hostname":"localhost","reqId":"req-1","req":{"method":"PUT","url":"/api/connections/demo/enabled-tables","host":"127.0.0.1:63674","remoteAddress":"::ffff:127.0.0.1","remotePort":63675},"msg":"incoming request"}
+{"level":30,"time":1795183115455,"pid":43140,"hostname":"localhost","reqId":"req-1","res":{"statusCode":500},"responseTime":1.0560410000000502,"msg":"request completed"}
+{"level":30,"time":1795183115471,"pid":43140,"hostname":"localhost","reqId":"req-1","req":{"method":"PUT","url":"/api/connections/demo/enabled-tables","host":"127.0.0.1:63676","remoteAddress":"::ffff:127.0.0.1","remotePort":63677},"msg":"incoming request"}
+{"level":30,"time":1795183115472,"pid":43140,"hostname":"localhost","reqId":"req-1","res":{"statusCode":503},"responseTime":1.3079589999999826,"msg":"request completed"}
+{"level":30,"time":1795183118333,"pid":43217,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/admin/ops-step-uat/console-probe","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183118336,"pid":43217,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":2.6555830000000924,"msg":"request completed"}
+{"level":30,"time":1795183118336,"pid":43217,"hostname":"localhost","reqId":"req-2","req":{"method":"GET","url":"/api/admin/tokens","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183118337,"pid":43217,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":0.7486660000000711,"msg":"request completed"}
+{"level":30,"time":1795183118337,"pid":43217,"hostname":"localhost","reqId":"req-3","req":{"method":"POST","url":"/api/admin/ops-step-uat/diagnostic","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183118338,"pid":43217,"hostname":"localhost","reqId":"req-3","res":{"statusCode":409},"responseTime":0.6419170000000349,"msg":"request completed"}
+{"level":30,"time":1795183118338,"pid":43217,"hostname":"localhost","reqId":"req-4","req":{"method":"POST","url":"/api/admin/ops-step-uat/reset","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795183118342,"pid":43217,"hostname":"localhost","reqId":"req-4","res":{"statusCode":200},"responseTime":4.479082999999946,"msg":"request completed"}
+{"level":30,"time":1795183119617,"pid":43276,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/connections/demo/schema-structure","host":"127.0.0.1:63705","remoteAddress":"::ffff:127.0.0.1","remotePort":63706},"msg":"incoming request"}
+{"level":30,"time":1795183119624,"pid":43276,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":7.071290999999974,"msg":"request completed"}
+{"level":30,"time":1795183119626,"pid":43276,"hostname":"localhost","reqId":"req-2","req":{"method":"POST","url":"/api/connections/demo/schema-structure","host":"127.0.0.1:63707","remoteAddress":"::ffff:127.0.0.1","remotePort":63708},"msg":"incoming request"}
+{"level":30,"time":1795183119628,"pid":43276,"hostname":"localhost","reqId":"req-2","res":{"statusCode":400},"responseTime":1.38250000000005,"msg":"request completed"}
+
+ Test Files  38 passed (38)
+      Tests  420 passed (420)
+   Start at  21:58:06
+   Duration  36.20s (transform 1.44s, setup 1.81s, import 2.82s, tests 29.34s, environment 1ms)
+
