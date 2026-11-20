@@ -1,0 +1,78 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 3.533,
+  "body": {
+    "ok": true,
+    "data": {
+      "status": "ok",
+      "insecureTestProfile": true,
+      "lucyVersion": "0.30.0",
+      "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+      "gitDirty": true,
+      "bundledKtxVersion": "0.16.0",
+      "ktxRuntime": {
+        "ready": true,
+        "status": "ready",
+        "detail": "status: ready"
+      },
+      "policy": {
+        "policyVersion": "414987b77fb113a90e9873dbaad3940e99222705a89268c21adeece6f8ee5b6d",
+        "degradedGlobal": false,
+        "degradedAgents": [],
+        "healthy": true
+      },
+      "execution": {
+        "status": "unknown",
+        "lastCheckedAt": "2026-11-20T04:53:12.575Z",
+        "loadedConnectionIds": [
+          "uat-mysql"
+        ],
+        "unknownConnections": [
+          "lucy-ops"
+        ],
+        "activation": "unknown",
+        "reload": {
+          "state": "idle"
+        },
+        "verification": {
+          "state": "unverified"
+        }
+      },
+      "dataQaInstructions": {
+        "source": "mirror",
+        "length": 4680,
+        "lastError": "ENOENT: no such file or directory, open '/data/lucy/webui/config/data-qa-instructions.md'",
+        "loadedAt": "2026-11-20T04:50:58.102Z"
+      },
+      "contentLayout": {
+        "contentRoot": "/data/lucy/config",
+        "contentRootSource": "env",
+        "authoring": {
+          "semanticLayer": "/data/lucy/config/semantic-layer",
+          "wiki": "/data/lucy/config/wiki",
+          "evals": "/data/lucy/config/evals",
+          "skills": "/data/lucy/config/skills"
+        },
+        "mirror": {
+          "semanticLayer": "/data/lucy/semantic-layer",
+          "wiki": "/data/lucy/wiki",
+          "evals": "/data/lucy/evals",
+          "skills": "/data/lucy/skills"
+        },
+        "mirrorActive": true,
+        "drift": [],
+        "driftTruncated": false
+      },
+      "eventLoop": {
+        "p99Ms": 27.034,
+        "maxMs": 144.179,
+        "windowSeconds": 60
+      }
+    },
+    "diagnostics": {
+      "observedAt": "2026-11-20T04:53:17.470Z",
+      "ageMs": 14926,
+      "freshness": "stale"
+    }
+  }
+}

@@ -51,9 +51,9 @@
 
 | REQ | 需求 | 来源 | 优先级 | 跟进状态 |
 |---|---|---|---|---|
-| REQ-030-082 | 存活／就绪探针纯内存响应与诊断隔离 | 同构建 503 排查及探针读盘调用链核对；不预判现场根因 | P1（清单 P1-61；建议第一批） | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
-| REQ-030-083 | 重任务跨模块容量控制与许可生命周期 | 已有局部队列不能证明不同重任务并行时的总容量有界 | P1（清单 P1-62；建议第二批） | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
-| REQ-030-084 | 进程关停准入关闭与在途请求排空 | 已有清理先停 KTX，尚无全进程在途排空承诺；修订须与 Spec 191 同次评审 | P2（清单 P1-63；建议第三批） | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 |
+| REQ-030-082 | 存活／就绪探针纯内存响应与诊断隔离 | 同构建 503 排查及探针读盘调用链核对；不预判现场根因 | P1（清单 P1-61；建议第一批） | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-01真实停止／自动恢复局部复测PASS WITH GAP；完整F61矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
+| REQ-030-083 | 重任务跨模块容量控制与许可生命周期 | 已有局部队列不能证明不同重任务并行时的总容量有界 | P1（清单 P1-62；建议第二批） | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现已落地（本机单元与组件测试通过）；本机 Docker 局部 UAT PASS WITH GAP（仅真实导出入口；完整 F62 未完成）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。  |
+| REQ-030-084 | 进程关停准入关闭与在途请求排空 | 已有清理先停 KTX，尚无全进程在途排空承诺；修订须与 Spec 191 同次评审 | P2（清单 P1-63；建议第三批） | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
 | REQ-030-086 | Wiki 覆盖上传采用 YAML 授权声明 | 2026-11-20 本机 demo Docker 复现：覆盖上传 `allowed_roles` 差异被默认 `preserve_current` 静默剥掉 | P1（清单 P1-65；事故修复） | v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
 | REQ-030-079 | 角色权限与 Agent 列表读取响应、展示复用与统计减负 | 高频卡顿只读探查；历史日志聚合与角色上下文重复构建 | P1（清单 P1-58；第一批） | v1.1。委托人2026-11-20批准分批交付并提交本进程；本轮实现与证据归档收口；首批主路径结果见测试台；完整F58／F59、2×／5×长测及剩余故障矩阵延期第二批，未计PASS；R未执行；不入核心分母；≠ 完整功能合同收口；≠ 可上线。 |
 | REQ-030-080 | 角色权限与 Agent 多人编辑的对象级冲突与草稿恢复 | 共用配置版本造成无关对象冲突；多人同账号与独立账号场景 | P1（清单 P1-59；第二批） | v1.1。委托人2026-11-20批准分批交付并提交本进程；本轮实现与证据归档收口；首批主路径结果见测试台；完整F58／F59、2×／5×长测及剩余故障矩阵延期第二批，未计PASS；R未执行；不入核心分母；≠ 完整功能合同收口；≠ 可上线。 |
@@ -1370,21 +1370,21 @@ P1-40 同类排查证明：界面成功反馈与动作真实结果不一致是�
 - 总账：[P1-61](lucy-20261107-lucy-0-30-feature-inventory-pool.md)，不入核心分母；优先级与先后顺序为草案建议。
 - 差集及去重：[核对报告](../reviews/2026-11-19-core-availability-gap-assessment.md)；不重复已实现的worker、恢复、局部探测队列和既有发布门禁，不预判本次现场503根因。
 - 合同：[Spec](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md)；实施：[Plan](lucy-20261119-memory-probe-diagnostics-isolation-plan.md)；测试台：[UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md) F61。
-- 现值：v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。
+- 现值：v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-01真实停止／自动恢复局部复测PASS WITH GAP；完整F61矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。
 
 ## REQ-030-083：重任务跨模块容量控制与许可生命周期
 
 - 总账：[P1-62](lucy-20261107-lucy-0-30-feature-inventory-pool.md)，不入核心分母；优先级与先后顺序为草案建议。
 - 差集及去重：[核对报告](../reviews/2026-11-19-core-availability-gap-assessment.md)；不重复已实现的worker、恢复、局部探测队列和既有发布门禁，不预判本次现场503根因。
 - 合同：[Spec](../specs/lucy-20261119-heavy-work-capacity-control-spec.md)；实施：[Plan](lucy-20261119-heavy-work-capacity-control-plan.md)；测试台：[UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md) F62。
-- 现值：v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。
+- 现值：v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现已落地（本机单元与组件测试通过）；本机 Docker 局部 UAT PASS WITH GAP（仅真实导出入口；完整 F62 未完成）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。
 
 ## REQ-030-084：进程关停准入关闭与在途请求排空
 
 - 总账：[P1-63](lucy-20261107-lucy-0-30-feature-inventory-pool.md)，不入核心分母；优先级与先后顺序为草案建议。
 - 差集及去重：[核对报告](../reviews/2026-11-19-core-availability-gap-assessment.md)；不重复已实现的worker、恢复、局部探测队列和既有发布门禁，不预判本次现场503根因。
 - 合同：[Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md)；实施：[Plan](lucy-20261119-process-drain-lifecycle-plan.md)；测试台：[UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md) F63。
-- 现值：v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。
+- 现值：v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。
 
 ## REQ-030-086：Wiki 覆盖上传采用 YAML 授权声明
 

@@ -10,8 +10,8 @@
 |---|---|
 | 文档类型 / 版本 | 实施 Plan / v0.1-draft |
 | 功能编号 | P1-62／REQ-030-083 |
-| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
-| 授权边界 | 委托人授权按本 Plan Task 1–3 实施运行代码与 Vitest／API 文档；不恢复 D7 延期、不改已有问数限流；Task 4（真实 Docker F62／runner）仍须另行测试执行授权；禁止提交／推送／发布／客户升级 |
+| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现已落地（本机单元与组件测试通过）；本机 Docker 局部 UAT PASS WITH GAP（仅真实导出入口；完整 F62 未完成）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
+| 授权边界 | 委托人授权按本 Plan Task 1–3 实施运行代码与 Vitest／API 文档；不恢复 D7 延期、不改已有问数限流；Task 4 的本次局部执行已于 2026-11-20 获授权，完整矩阵不视为已验；禁止提交／推送／发布／客户升级 2026-11-20委托人后续批准：本进程已完成修复、回归及取证可作阶段性本地commit；不含push、发布或客户变更，未完成矩阵仍保留GAP。 |
 | 验收 | [Spec](../specs/lucy-20261119-heavy-work-capacity-control-spec.md) SC-01–10；[测试台](../qa/uat/suites/core-availability/suite.md) F62 |
 
 ## 目标
@@ -25,7 +25,7 @@
 3. 冻结模块有效基线、夹具、镜像和资源；有意的429独立计数，不计性能成功。P1-58／59共享工作树实现保留。
 4. 不新增持久表、不改变副本或KTX；D7正式完整导出仍延期，仅检查许可接缝，不改其业务实现或结论。
 
-## 实施任务（当前全部未执行）
+## 实施任务（实现已落地；局部实测见本次跑次）
 
 ### Task 1：调用图和负控基线
 
@@ -39,7 +39,7 @@
 - 拟新增 `webui/server/runtime/heavy-work-capacity.ts`；先测试2/16/4边界、跨类别轮转、全队列拒绝、短于5秒的原deadline、等待取消与重复释放，再实现最小状态机。
 - 执行许可同时满足总/类别约束后一次性保留；无持许可等待次级锁的环路；内部重试继承同一许可。
 - 暴露固定类别指标与等待原因，不导出Token/用户高基数标签；release以底层执行真实终结且资源全部关闭为准，事务安全停止点只写原领域终态/恢复事实。
-- 授权后拟命令：`cd webui && npx vitest run server/__tests__/heavy-work-capacity.test.ts server/__tests__/background-probes.test.ts`；预期边界/负控均通过。新增文件本轮不存在。
+- 授权后拟命令：`cd webui && npx vitest run server/__tests__/heavy-work-capacity.test.ts server/__tests__/background-probes.test.ts`；预期边界/负控均通过。新增文件已在后续实现中落地，现值见头部状态。
 - 出口：SC-01–04／09。
 
 ### Task 3：三入口接线与安全/结果等价
@@ -54,7 +54,7 @@
 
 - 执行授权后在隔离Docker跑F62：真实三入口≥80提交、两个身份、迟退任务、取消及恢复；采集实际启动/结束序列与客户端结果双oracle。
 - 不在客户现网压测，不用sleep替身冒充真实业务执行；本条纯算法单测可用替身，但UAT降级须独立授权。
-- 共用拟runner `scripts/uat/core-availability.mts` F62，不在本轮创建。实现时先登记Current Commands／CI Mapping。
+- 共用拟runner `scripts/uat/core-availability.mts` F62，该完整入口尚未创建；本次局部使用 readyz-diagnostic-repro.py。实现时先登记Current Commands／CI Mapping。
 - 本模块容量与语义证据回F62；混合重建/导出/发现加正常MCP的系统预算回R-CAV/P1-13，不作SC额外前置。
 
 ## 浏览器验证
@@ -69,7 +69,7 @@
 
 ## 完成定义
 
-本轮完成为草案与配套登记；未来收口需三类真实接线及全部SC证据。可用性组合结论仍消费既有发布取证，不声称提高任意负载下的系统容量。
+实现已落地；本次仅真实导出入口实测，收口仍需三类真实接线及全部SC证据。可用性组合结论仍消费既有发布取证，不声称提高任意负载下的系统容量。
 
 ## 风险
 
@@ -82,4 +82,8 @@
 
 ## 落盘清单
 
-17项共用自查见 [suite](../qa/uat/suites/core-availability/suite.md)；未实现/执行runner，未授权更改运行行为。
+17项共用自查见 [suite](../qa/uat/suites/core-availability/suite.md)；本次具名局部runner已实现并执行；本次未改产品运行行为。
+
+## 2026-11-20 本机局部复现
+
+[具名跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro.md)记录冻结候选、真实故障、逐项判定及剩余缺口；[执行 Plan](../plans/lucy-20261120-readyz-diagnostic-repro-uat-plan.md)限定本次授权。保留原SC和门槛，本次不修改产品运行代码，不改客户环境。

@@ -6,10 +6,10 @@
 | 日期 / 产品线 | 2026-11-19 / 0.30.0 |
 | 功能编号 / 优先级 | P1-63／REQ-030-084；建议 P2 第三批；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权，含 Spec 191 §4.2.3／§4.4 具名顺序修订）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过；demo stop_grace_period=45s 已渲染核对）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
-| 授权边界 | 委托人授权按本合同实施运行代码、entrypoint／demo `stop_grace_period`、配套 Node／bash 测试、API 文档与 Spec 191 具名修订；禁止提交／推送／发布／客户升级；禁止执行真实 UAT／压测／Docker 故障演练（须另行授权） |
+| 状态 | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
+| 授权边界 | 2026-11-20委托人明示按原合同修复已复现缺口，授权相关运行代码、测试工具及本机隔离Docker全真复测；不改客户环境、不提交、不推送、不发布；完整矩阵不得推定通过 2026-11-20委托人后续批准：本进程已完成修复、回归及取证可作阶段性本地commit；不含push、发布或客户变更，未完成矩阵仍保留GAP。 |
 | 需求 / 计划 | [总账](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261119-process-drain-lifecycle-plan.md) |
-| 测试台 | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md)，F63；无跑次 |
+| 测试台 | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md)，F63；[修复跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repair.md) |
 
 ## 闭口层级
 
@@ -27,7 +27,7 @@
 
 ## 2. 生命周期与顺序
 
-| 状态 | 新业务请求 | 就绪/存活 | 离开条件 |
+| 状态 | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
 |---|---|---|---|
 | BOOTING | 依原启动门禁 | readyz503；可监听后livez200 | 原预热及两监听完成 |
 | SERVING | 依原鉴权准入 | readyz200/livez200 | 已确认整实例TERM/INT |
@@ -114,3 +114,17 @@ New terms:
 ## 4. 决策与范围
 
 推荐先排空再依赖清理；仅加 preStop 睡眠缺少准入屏障和完成证据，不采用。多副本切换不是本合同。Spec191 §4.2.3／§4.4 顺序修订、内部通信方式与 20／40／45 秒预算已于 2026-11-20 委托人确权并授权实施。内部通信必须限定本实例且可验证接收确认，不能依靠公开无鉴权管理端点。新增通信文件或信号约定不得携带凭据；不改 KTX 源码。
+
+## 2026-11-20 首轮仅复现（历史）
+
+[首轮跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro.md)当时仅获复现授权，保留局部FAIL，不回改历史。后续委托人已明示授权按原Spec／Plan修复并本机Docker复测；当前授权及状态见头部。
+
+## 已授权缺口修复与本次结果
+
+MCP在首个异步准入前同步登记；处理Promise、已接受上游请求／流、异步响应门禁终态后才注销。客户端close不单独注销；空闲GET／SSE不占业务计数，DRAINING拒绝新请求。原鉴权、撤权、预算取消与审计合同保留，不把TCP结束外推为远程数据库事务完成。
+
+真实Docker发现npm启动器先退出，父entrypoint误判排空；本次直接node --import tsx server/index.ts启动并等待实际服务PID，保持原Spec191 drain-first和20／40／45秒预算。实际PID接线归原Task3／SC-03、07，不另立项。
+
+先补真实入口与实际Node PID回归，再执行诊断正常／挂起两档共三轮MySQL10秒查询TERM、确认后探针／新RPC拒绝及同容器同卷恢复。
+
+[修复跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repair.md)记录最终镜像、真实I/O／DB／TERM证据、PASS WITH GAP与完整矩阵剩余项。没有客户变更、提交、推送或发布；本次浏览器不适用。

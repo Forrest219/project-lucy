@@ -63,6 +63,7 @@ export class DiagnosticSnapshotService {
   private lastStartMono = Number.NEGATIVE_INFINITY;
   private timer: NodeJS.Timeout | null = null;
   private closed = false;
+  private collectorAbort: AbortController | null = null;
   private closeWaiters: Array<() => void> = [];
 
   constructor(options: DiagnosticSnapshotOptions) {
@@ -155,6 +156,7 @@ export class DiagnosticSnapshotService {
       return;
     }
     this.closed = true;
+    this.collectorAbort?.abort();
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -189,6 +191,7 @@ export class DiagnosticSnapshotService {
     this.inFlight = true;
     const generation = this.generation;
     const controller = new AbortController();
+    this.collectorAbort = controller;
     let timedOut = false;
     const deadlineTimer = setTimeout(() => {
       timedOut = true;
@@ -222,6 +225,7 @@ export class DiagnosticSnapshotService {
       clearTimeout(deadlineTimer);
       // Permit released only after the real collect promise settled.
       this.inFlight = false;
+      this.collectorAbort = null;
       this.collectorPromise = null;
     }
   }

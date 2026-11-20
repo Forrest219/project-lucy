@@ -1,0 +1,38 @@
+[diagnostic-collector] closed pid=1126 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=1196 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=1316 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=1386 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=1457 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=1576 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=1717 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=1836 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=1925 aborted=false code=0 signal=null
+[diagnostic-collector] closed pid=2031 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=2156 aborted=false code=0 signal=null
+[diagnostic-collector] closed pid=356 aborted=false code=0 signal=null
+[diagnostic-collector] closed pid=501 aborted=false code=0 signal=null
+[diagnostic-collector] closed pid=782 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=878 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] closed pid=949 aborted=true code=null signal=SIGKILL
+[diagnostic-collector] stage=reading pid=1126
+[diagnostic-collector] stage=reading pid=1196
+[diagnostic-collector] stage=reading pid=1316
+[diagnostic-collector] stage=reading pid=1386
+[diagnostic-collector] stage=reading pid=1457
+[diagnostic-collector] stage=reading pid=1576
+[diagnostic-collector] stage=reading pid=1717
+[diagnostic-collector] stage=reading pid=1836
+[diagnostic-collector] stage=reading pid=1925
+[diagnostic-collector] stage=reading pid=2031
+[diagnostic-collector] stage=reading pid=2156
+[diagnostic-collector] stage=reading pid=356
+[diagnostic-collector] stage=reading pid=501
+[diagnostic-collector] stage=reading pid=782
+[diagnostic-collector] stage=reading pid=878
+[diagnostic-collector] stage=reading pid=949
+{"level":30,"time":1795150258208,"pid":249,"hostname":"509668a674b9","tool":"sl_query","callId":"62c0ec75-a6e7-44cd-8784-639d081fd52d","sessionId":"48f719d0-32a2-4743-9d7e-6b93d3e9d505","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795150260167,"pid":249,"hostname":"509668a674b9","tool":"sl_query","callId":"62c0ec75-a6e7-44cd-8784-639d081fd52d","sessionId":"48f719d0-32a2-4743-9d7e-6b93d3e9d505","durationMs":1958.832500999999,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+{"level":30,"time":1795150388084,"pid":249,"hostname":"509668a674b9","tool":"sl_query","callId":"21cc4406-58b6-4ffd-a6ef-e671c5efa4e2","sessionId":"6e1ab250-9096-452b-b1c8-6d3451c0c8bb","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795150388623,"pid":249,"hostname":"509668a674b9","tool":"sl_query","callId":"21cc4406-58b6-4ffd-a6ef-e671c5efa4e2","sessionId":"6e1ab250-9096-452b-b1c8-6d3451c0c8bb","durationMs":539.5192500000121,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+{"level":30,"time":1795150397996,"pid":249,"hostname":"509668a674b9","tool":"sl_query","callId":"0f6e592e-47a8-4f88-bc16-9fcb6bc6e13a","sessionId":"4a2b06a5-e0ce-4646-b979-7d6785bf3354","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795150398493,"pid":249,"hostname":"509668a674b9","tool":"sl_query","callId":"0f6e592e-47a8-4f88-bc16-9fcb6bc6e13a","sessionId":"4a2b06a5-e0ce-4646-b979-7d6785bf3354","durationMs":497.5592089999991,"outcome":"ok","resultSize":310,"msg":"tool.end"}

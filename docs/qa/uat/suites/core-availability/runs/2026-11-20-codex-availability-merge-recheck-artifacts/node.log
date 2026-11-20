@@ -1,0 +1,40 @@
+✔ entrypoint refuses placeholder ktx.yaml by default (541.186166ms)
+✔ entrypoint can explicitly allow placeholder ktx.yaml for template-only demos (956.616959ms)
+✔ entrypoint restores missing semantic context for an existing volume (1223.666958ms)
+✔ entrypoint does not overwrite existing customer semantic context (1460.854459ms)
+✔ entrypoint skips template sync when LUCY_DISABLE_TEMPLATE_SYNC=1 (977.750625ms)
+✔ entrypoint refuses to start when the template and project have no schema files (304.352959ms)
+✔ entrypoint initializes git repository on empty project volume (895.844875ms)
+✔ entrypoint does not re-init when .git already exists (882.8625ms)
+✔ entrypoint keeps historical access.yaml tokens when ktx.yaml is missing (1004.124375ms)
+✔ entrypoint reuses the persistent KTX internal token across starts (1906.600833ms)
+✔ entrypoint refuses to start in customer mode with LUCY_WEBUI_AUTH=off (explicit and default mode) (115.976666ms)
+✔ entrypoint allows development mode with LUCY_WEBUI_AUTH=off and customer mode with auth required/unset (3733.570584ms)
+✔ entrypoint refuses an invalid LUCY_DEPLOYMENT_MODE (25.259917ms)
+✔ entrypoint refuses customer mode with LUCY_WEBUI_COOKIE_SECURE=0 unless the explicit test profile is set (81.512041ms)
+✔ entrypoint allows insecure cookies only for the test profile or development, and Secure in customer (3427.65925ms)
+✔ entrypoint refuses a deployment mode that contradicts the Chart-pinned mode (extraEnvFrom override) (889.968209ms)
+✔ entrypoint seeds the ops evidence connection before the daemon starts (SC-19) (850.332584ms)
+✔ entrypoint ensures lucy_admin for every template instead of the demo-only patch (0.340792ms)
+✔ entrypoint appends missing lucy_admin tools without rewriting an existing role (1539.924375ms)
+✔ entrypoint creates a missing lucy_admin on a non-demo template (1613.199542ms)
+✔ entrypoint supervises a KTX MCP daemon for reload (0.465334ms)
+✔ supervisor pid published from a command substitution stays alive (10.539041ms)
+✔ entrypoint drain-first: Lucy notified before supervisor TERM (2.7845ms)
+✔ entrypoint preserves exit status through drain-first shutdown (0.823083ms)
+✔ entrypoint owns the actual Node PID, not an early-exiting npm launcher (291.858709ms)
+✔ entrypoint budgets and stop-timeout conflict warning (0.453417ms)
+✔ duplicate shutdown is idempotent (single owner) (0.547083ms)
+✔ drain request file carries no credentials (0.416083ms)
+✔ compose demo stop_grace_period is ≥45s (file + render) (108.306125ms)
+✔ bash drain ack wait tolerates missing lucy pid (no hang) (7.091208ms)
+✔ drain-then-supervisor order simulation with fake pids (2536.893041ms)
+✔ seed-only entrypoint still exits 0 (shutdown path not required) (1263.388375ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22515.274042

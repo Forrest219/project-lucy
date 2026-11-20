@@ -1,0 +1,12 @@
+[
+  {
+    "elapsedS": 0.057,
+    "running": true,
+    "exitCode": 0
+  },
+  {
+    "elapsedS": 1.094,
+    "running": false,
+    "exitCode": 143
+  }
+]

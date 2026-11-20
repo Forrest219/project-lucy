@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type ServerResponse } from "node:http";
+import { admitMcpProcessWork, trackMcpUpstreamWork } from "../runtime/mcp-process-work.js";
+import { getProcessLifecyclePhase, SERVICE_DRAINING, SERVICE_DRAINING_MESSAGE } from "../runtime/process-drain.js";
 import path from "node:path";
 import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
 import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
@@ -386,6 +388,7 @@ function forwardToUpstream(
       { hostname: target.host, port: target.port, path: url, method, headers },
       resolve
     );
+    trackMcpUpstreamWork(upstream);
     // Spec 162 §6.2 / SC-13：把在途请求句柄交给调用方，客户端断开时可以取消上游。
     onRequest?.(upstream);
     upstream.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
@@ -8019,6 +8022,16 @@ export function buildProxy(options: BuildProxyOptions = {}) {
   void runStartupRecoveryScan();
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    // Atomic SERVING check + ticket precedes every async admission/dispatch step.
+    // GET is an idle transport subscription, not an accepted business RPC.
+    const work = req.method === "GET" ? null : admitMcpProcessWork(res);
+    const phase = getProcessLifecyclePhase();
+    if ((work && !work.ok) || phase === "DRAINING" || phase === "STOPPING" || phase === "STOPPED") {
+      res.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" });
+      res.end(JSON.stringify({ ok: false, error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE } }));
+      return;
+    }
+    const handle = async () => {
     try {
       // 宿主 attested 确认：非 tools/call，先于 MCP 准入信封校验。
       if (await handleSourceAmbiguityHostConfirm(req, res)) return;
@@ -8112,6 +8125,9 @@ export function buildProxy(options: BuildProxyOptions = {}) {
         res.end(JSON.stringify({ error: "Proxy error", detail }));
       }
     }
+    };
+    if (work?.ok) await work.run(handle);
+    else await handle();
   });
 
   return { server, host, port };

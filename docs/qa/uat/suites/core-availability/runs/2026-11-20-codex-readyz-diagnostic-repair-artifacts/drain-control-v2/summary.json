@@ -1,0 +1,47 @@
+{
+  "startedAt": "2026-11-20T04:50:17.115310+00:00",
+  "helperSha256": "76855c43828eb91398961b4cb619237acb2344852c097371ba3e8f1d94495401",
+  "diagnosticFaultInjected": false,
+  "scope": "scoped export and real 10-second MySQL operation plus TERM; not whole-suite PASS",
+  "batch2": {
+    "statuses": {
+      "200": 12
+    },
+    "maxMs": 51.477,
+    "diagnosticsStillStale": false,
+    "meaning": "actual audit_export adapter executed; does not cancel/recover diagnostic file I/O; no global-capacity conformance claim"
+  },
+  "batch3": {
+    "actualMysqlSleepObserved": true,
+    "query": {
+      "success": true,
+      "status": 200,
+      "elapsedMs": 10604.933,
+      "oracle": "count=4,sum=100"
+    },
+    "exited": true,
+    "exitElapsedS": 10.889,
+    "exitCode": 143,
+    "diagnosticFaultPresentDuringTerm": false,
+    "drainAckObserved": true,
+    "probeStatuses": {
+      "/api/livez": 200,
+      "/api/readyz": 503,
+      "/api/health": 200,
+      "newMcp": 503
+    },
+    "meaning": "single real in-flight query/TERM case; not 100-race or all recovery conformance"
+  },
+  "drainChecks": {
+    "queryCompleted": true,
+    "exitWithin40s": true,
+    "confirmedProbeSemantics": true
+  },
+  "sameVolumeRestart": {
+    "httpAndPureMcp": true,
+    "oracle": "count=4,sum=100",
+    "noReseed": true
+  },
+  "verdict": "PASS WITH GAP",
+  "finishedAt": "2026-11-20T04:51:14.133390+00:00"
+}

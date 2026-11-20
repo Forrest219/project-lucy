@@ -1,0 +1,20 @@
+{
+  "base": "18b63d01",
+  "branch": "codex/readyz-drain-checkpoint-20261120",
+  "vitestFirst": "40/42; two 5s timeouts during parallel checks",
+  "vitestIsolated": "42/42 at unchanged timeout and unchanged code",
+  "node": "32/32",
+  "typecheck": "0 errors",
+  "gates": {
+    "spec": "PASS",
+    "terminology": "PASS",
+    "ia": "PASS",
+    "e2e": "PASS",
+    "specDocs": "5 identical pre-existing baseline violations; task-owned 0"
+  },
+  "sourceDocsWhitespace": "PASS",
+  "rawEvidenceWhitespace": "retained byte-exact patch context/log EOF, not a source-code exception",
+  "newDockerCombinedUat": "NOT RUN; prior evidence kept with exact identities",
+  "customerChange": false,
+  "pushOrPublish": false
+}

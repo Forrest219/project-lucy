@@ -1,0 +1,2175 @@
+{
+  "sourceSummarySha256": "c33e0bccf35ff3f0d60ef33ac28f475262c8b59b912c03e82844946205f01a9e",
+  "period": {
+    "start": "2026-11-20T05:33:19.956335+00:00",
+    "end": "2026-11-20T06:33:05.202352+00:00",
+    "requiredSeconds": 7200
+  },
+  "probes": {
+    "/api/health": {
+      "count": 3575,
+      "non200": 0,
+      "p50Ms": 3.156791999936104,
+      "p99Ms": 387.7366250003688,
+      "maxMs": 2427.9883350001182
+    },
+    "/api/livez": {
+      "count": 3575,
+      "non200": 0,
+      "p50Ms": 2.404166999971494,
+      "p99Ms": 379.00479199999245,
+      "maxMs": 3108.878876999952
+    },
+    "/api/readyz": {
+      "count": 3575,
+      "non200": 0,
+      "p50Ms": 2.510291000129655,
+      "p99Ms": 378.97775100002764,
+      "maxMs": 2058.527333999984
+    }
+  },
+  "business": {
+    "http": {
+      "count": 3585,
+      "non200": 0,
+      "p50Ms": 27.689,
+      "p99Ms": 819.08,
+      "maxMs": 2674.81
+    },
+    "mcp": {
+      "count": 481,
+      "non200": 0,
+      "p50Ms": 5613.858,
+      "p99Ms": 30690.428,
+      "maxMs": 49573.348
+    }
+  },
+  "errors": [
+    {
+      "at": "2026-11-20T05:33:37.346258+00:00",
+      "kind": "mcp",
+      "error": "soak-query-0 query failed: {\"httpStatus\": 200, \"elapsedMs\": 17388.138, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 4, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+      "iteration": 0,
+      "ms": 17388.633124999986
+    },
+    {
+      "at": "2026-11-20T05:34:07.362620+00:00",
+      "kind": "mcp",
+      "error": "soak-query-5 query failed: {\"httpStatus\": 503, \"elapsedMs\": 3180.657, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 13, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+      "iteration": 5,
+      "ms": 3181.3231669999877
+    },
+    {
+      "at": "2026-11-20T05:43:25.501017+00:00",
+      "kind": "mcp",
+      "error": "soak-query-32 query failed: {\"httpStatus\": 200, \"elapsedMs\": 7027.697, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 44, \"result\": {\"isError\": true, \"content\": [{\"type\": \"text\", \"text\": \"{\\\"code\\\":\\\"semantic_recovery_required\\\",\\\"message\\\":\\\"该语义资产仍有未决恢复日志，恢复核验完成前不能读取或查询。\\\"}\"}]}}}",
+      "iteration": 32,
+      "ms": 7028.933208000012
+    },
+    {
+      "at": "2026-11-20T05:48:38.556751+00:00",
+      "kind": "mcp",
+      "error": "soak-query-67 query failed: {\"httpStatus\": 200, \"elapsedMs\": 17203.26, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 83, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+      "iteration": 67,
+      "ms": 17204.035875000045
+    },
+    {
+      "at": "2026-11-20T05:48:41.010035+00:00",
+      "kind": "mutation",
+      "error": "renamed source not readable",
+      "iteration": 3,
+      "ms": 21033.408249999866
+    },
+    {
+      "at": "2026-11-20T06:03:35.215519+00:00",
+      "kind": "mcp",
+      "error": "soak-query-200 query failed: {\"httpStatus\": 200, \"elapsedMs\": 12851.682, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 225, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+      "iteration": 200,
+      "ms": 12852.355834000036
+    },
+    {
+      "at": "2026-11-20T06:05:22.228276+00:00",
+      "kind": "http",
+      "error": "timed out",
+      "iteration": 1919,
+      "ms": 3234.5106249999844
+    },
+    {
+      "at": "2026-11-20T06:08:34.455698+00:00",
+      "kind": "mutation",
+      "error": "renamed source not readable",
+      "iteration": 7,
+      "ms": 14456.431915999929
+    },
+    {
+      "at": "2026-11-20T06:13:37.860138+00:00",
+      "kind": "mcp",
+      "error": "soak-query-303 query failed: {\"httpStatus\": 200, \"elapsedMs\": 14995.812, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 333, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+      "iteration": 303,
+      "ms": 14996.722791000138
+    },
+    {
+      "at": "2026-11-20T06:13:39.130812+00:00",
+      "kind": "mutation",
+      "error": "renamed source not readable",
+      "iteration": 8,
+      "ms": 19134.80379099974
+    },
+    {
+      "at": "2026-11-20T06:18:33.236586+00:00",
+      "kind": "mcp",
+      "error": "soak-query-350 query failed: {\"httpStatus\": 200, \"elapsedMs\": 11977.263, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 381, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+      "iteration": 350,
+      "ms": 11978.007833999982
+    },
+    {
+      "at": "2026-11-20T06:23:35.566098+00:00",
+      "kind": "mutation",
+      "error": "renamed source not readable",
+      "iteration": 10,
+      "ms": 15558.365625000079
+    },
+    {
+      "at": "2026-11-20T06:28:33.590921+00:00",
+      "kind": "mcp",
+      "error": "soak-query-455 query failed: {\"httpStatus\": 200, \"elapsedMs\": 12053.84, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 491, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+      "iteration": 455,
+      "ms": 12054.253332999906
+    }
+  ],
+  "postStopEventsRetained": 22,
+  "inflightAtUserStop": [
+    {
+      "at": "2026-11-20T06:34:05.223077+00:00",
+      "kind": "mcp",
+      "iteration": 489,
+      "status": 200,
+      "ms": 63774.846,
+      "oracle": "4/100"
+    }
+  ],
+  "mainPidValues": [
+    "5971"
+  ],
+  "procSamples": 14137,
+  "mainStateCounts": {
+    "R": 9682,
+    "S": 3829,
+    "D": 626
+  },
+  "mainWchanCounts": {
+    "0": 9802,
+    "futex_wait_queue": 368,
+    "do_epoll_wait": 3315,
+    "folio_wait_bit_common": 534,
+    "jbd2_log_wait_commit": 96,
+    "hrtimer_nanosleep": 1,
+    "migration_entry_wait_on_locked": 9,
+    "pipe_read": 7,
+    "__wait_on_buffer": 4,
+    "do_get_write_access": 1
+  },
+  "mainCpu": {
+    "totalObservedCpuSeconds": 2016.0600000001896,
+    "observedWallSeconds": 3584.9888341349942,
+    "binsOver80Percent": 2106,
+    "topBins": [
+      {
+        "at": 1795154724.2685246,
+        "elapsedSeconds": 0.25139537500217557,
+        "mainCpuSeconds": 0.29,
+        "fraction": 1.1535613970523138
+      },
+      {
+        "at": 1795154312.9239545,
+        "elapsedSeconds": 0.2574745010060724,
+        "mainCpuSeconds": 0.27,
+        "fraction": 1.0486475318720287
+      },
+      {
+        "at": 1795155505.6355689,
+        "elapsedSeconds": 0.2505172089950065,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0378528526764104
+      },
+      {
+        "at": 1795154907.9749286,
+        "elapsedSeconds": 0.2506885409966344,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0371435366225639
+      },
+      {
+        "at": 1795155213.7139394,
+        "elapsedSeconds": 0.2507822080006008,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0367561641349659
+      },
+      {
+        "at": 1795155508.4010205,
+        "elapsedSeconds": 0.25082570900121937,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0365763582820613
+      },
+      {
+        "at": 1795154013.776532,
+        "elapsedSeconds": 0.2508564999952796,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0364491253162365
+      },
+      {
+        "at": 1795154313.6767037,
+        "elapsedSeconds": 0.25092608399427263,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0361617089036248
+      },
+      {
+        "at": 1795155812.4727862,
+        "elapsedSeconds": 0.25102858299942454,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0357386274239377
+      },
+      {
+        "at": 1795153138.7062666,
+        "elapsedSeconds": 0.25106979200063506,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0355686278632132
+      },
+      {
+        "at": 1795153708.7646415,
+        "elapsedSeconds": 0.2510890829944401,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0354890658697304
+      },
+      {
+        "at": 1795155502.3716297,
+        "elapsedSeconds": 0.25110633300209884,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0354179318839674
+      },
+      {
+        "at": 1795155510.9132493,
+        "elapsedSeconds": 0.25114729200140573,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.03524906809883
+      },
+      {
+        "at": 1795153143.0843952,
+        "elapsedSeconds": 0.25115741699846694,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.035207333739967
+      },
+      {
+        "at": 1795153416.4092374,
+        "elapsedSeconds": 0.2512697499987553,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0347445325244602
+      },
+      {
+        "at": 1795155211.701803,
+        "elapsedSeconds": 0.25131879200489493,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.034542613888324
+      },
+      {
+        "at": 1795153706.4999526,
+        "elapsedSeconds": 0.25135145900276257,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0344081591232872
+      },
+      {
+        "at": 1795152815.140655,
+        "elapsedSeconds": 0.25135629100259393,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0343882739633394
+      },
+      {
+        "at": 1795155507.6474612,
+        "elapsedSeconds": 0.2515072919995873,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0337672436170424
+      },
+      {
+        "at": 1795155511.4162521,
+        "elapsedSeconds": 0.2517512920021545,
+        "mainCpuSeconds": 0.26,
+        "fraction": 1.0327653055213513
+      }
+    ]
+  },
+  "naturalDiagnosticWorkers": {
+    "observedCount": 258,
+    "maxSimultaneous": 1,
+    "pipeReadSamples": 0,
+    "maxObservedLifetimeSeconds": 2.9577579498291016
+  },
+  "cgroup": {
+    "maxObservedMemoryBytes": 2147483648,
+    "lastMemoryEvents": "low 0\nhigh 0\nmax 5031\noom 0\noom_kill 0\noom_group_kill 0",
+    "firstCpuStat": "usage_usec 74930880\nuser_usec 59750256\nsystem_usec 15180624\nnice_usec 0\nnr_periods 659\nnr_throttled 126\nthrottled_usec 13740062\nnr_bursts 0\nburst_usec 0",
+    "lastCpuStat": "usage_usec 4946865697\nuser_usec 3906420339\nsystem_usec 1040445358\nnice_usec 0\nnr_periods 36504\nnr_throttled 7560\nthrottled_usec 1126031334\nnr_bursts 0\nburst_usec 0"
+  },
+  "eventLoop": {
+    "maxMs": 3477.078,
+    "topWindows": [
+      {
+        "tick": 1930,
+        "at": "2026-11-20T06:05:20.644Z",
+        "path": "/api/health",
+        "ms": 1966.264251000015,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 6409,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      },
+      {
+        "tick": 1932,
+        "at": "2026-11-20T06:05:21.934Z",
+        "path": "/api/health",
+        "ms": 1749.6596250000875,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 7503,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      },
+      {
+        "tick": 1931,
+        "at": "2026-11-20T06:05:21.289Z",
+        "path": "/api/health",
+        "ms": 2427.9883350001182,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 7545,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      },
+      {
+        "tick": 1933,
+        "at": "2026-11-20T06:05:22.929Z",
+        "path": "/api/health",
+        "ms": 788.7291250000708,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 7546,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      },
+      {
+        "tick": 1934,
+        "at": "2026-11-20T06:05:23.987Z",
+        "path": "/api/health",
+        "ms": 165.41220799996518,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 7982,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      },
+      {
+        "tick": 1935,
+        "at": "2026-11-20T06:05:24.987Z",
+        "path": "/api/health",
+        "ms": 23.219625000143424,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 8841,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      },
+      {
+        "tick": 1936,
+        "at": "2026-11-20T06:05:25.985Z",
+        "path": "/api/health",
+        "ms": 1.7195830000564456,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 9818,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      },
+      {
+        "tick": 1937,
+        "at": "2026-11-20T06:05:26.986Z",
+        "path": "/api/health",
+        "ms": 1.1362079998943955,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 10818,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      },
+      {
+        "tick": 1938,
+        "at": "2026-11-20T06:05:28.032Z",
+        "path": "/api/health",
+        "ms": 88.17087500006892,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 11951,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      },
+      {
+        "tick": 1939,
+        "at": "2026-11-20T06:05:29.032Z",
+        "path": "/api/health",
+        "ms": 9.297166999895126,
+        "status": 200,
+        "diagnostics": {
+          "observedAt": "2026-11-20T06:05:16.169Z",
+          "ageMs": 12872,
+          "freshness": "fresh"
+        },
+        "eventLoop": {
+          "p99Ms": 113.181,
+          "maxMs": 3477.078,
+          "windowSeconds": 60
+        },
+        "dependencyStatus": "ok"
+      }
+    ]
+  },
+  "diagnosticFreshness": {
+    "fresh": 3393,
+    "stale": 182
+  },
+  "mutations": [
+    {
+      "iteration": 0,
+      "complete": true,
+      "start": "2026-11-20T05:33:19.957685+00:00",
+      "end": "2026-11-20T05:33:50.620306+00:00",
+      "seconds": 30.662621021270752,
+      "enabled": 1884,
+      "shortName": "uat_renamed1882",
+      "auditObservations": 7,
+      "auditStatesInProgress": 7,
+      "auditLinkedDeltaInsideWindow": 10438,
+      "mainCpuSecondsInSampleBins": 22.199999999999985,
+      "probeStats": {
+        "/api/health": {
+          "count": 30,
+          "non200": 0,
+          "p50Ms": 24.698290999993333,
+          "p99Ms": 719.0915000000023,
+          "maxMs": 719.0915000000023
+        },
+        "/api/livez": {
+          "count": 30,
+          "non200": 0,
+          "p50Ms": 16.252291000004334,
+          "p99Ms": 716.6254170000029,
+          "maxMs": 716.6254170000029
+        },
+        "/api/readyz": {
+          "count": 30,
+          "non200": 0,
+          "p50Ms": 16.187958000002254,
+          "p99Ms": 717.862000000001,
+          "maxMs": 717.862000000001
+        }
+      }
+    },
+    {
+      "iteration": 1,
+      "complete": true,
+      "start": "2026-11-20T05:38:19.972858+00:00",
+      "end": "2026-11-20T05:39:31.523969+00:00",
+      "seconds": 71.5511109828949,
+      "enabled": 1883,
+      "shortName": "uat_t1882",
+      "auditObservations": 15,
+      "auditStatesInProgress": 13,
+      "auditLinkedDeltaInsideWindow": 5932,
+      "mainCpuSecondsInSampleBins": 45.27000000000003,
+      "probeStats": {
+        "/api/health": {
+          "count": 71,
+          "non200": 0,
+          "p50Ms": 17.471625000005588,
+          "p99Ms": 1149.5366669999785,
+          "maxMs": 1149.5366669999785
+        },
+        "/api/livez": {
+          "count": 71,
+          "non200": 0,
+          "p50Ms": 17.338417000020854,
+          "p99Ms": 1047.5892919999897,
+          "maxMs": 1047.5892919999897
+        },
+        "/api/readyz": {
+          "count": 71,
+          "non200": 0,
+          "p50Ms": 15.475334000017028,
+          "p99Ms": 1097.0417920000036,
+          "maxMs": 1097.0417920000036
+        }
+      }
+    },
+    {
+      "iteration": 2,
+      "complete": true,
+      "start": "2026-11-20T05:43:19.973352+00:00",
+      "end": "2026-11-20T05:43:58.453336+00:00",
+      "seconds": 38.47998404502869,
+      "enabled": 1884,
+      "shortName": "uat_renamed1882",
+      "auditObservations": 8,
+      "auditStatesInProgress": 8,
+      "auditLinkedDeltaInsideWindow": 12871,
+      "mainCpuSecondsInSampleBins": 28.430000000000003,
+      "probeStats": {
+        "/api/health": {
+          "count": 38,
+          "non200": 0,
+          "p50Ms": 4.188958000042476,
+          "p99Ms": 845.9342920000199,
+          "maxMs": 845.9342920000199
+        },
+        "/api/livez": {
+          "count": 38,
+          "non200": 0,
+          "p50Ms": 3.161707999999635,
+          "p99Ms": 776.8054590000538,
+          "maxMs": 776.8054590000538
+        },
+        "/api/readyz": {
+          "count": 38,
+          "non200": 0,
+          "p50Ms": 3.198333999956958,
+          "p99Ms": 776.8075420000823,
+          "maxMs": 776.8075420000823
+        }
+      }
+    },
+    {
+      "iteration": 3,
+      "complete": false
+    },
+    {
+      "iteration": 4,
+      "complete": true,
+      "start": "2026-11-20T05:53:19.976768+00:00",
+      "end": "2026-11-20T05:53:49.337279+00:00",
+      "seconds": 29.36051106452942,
+      "enabled": 1884,
+      "shortName": "uat_renamed1882",
+      "auditObservations": 6,
+      "auditStatesInProgress": 3,
+      "auditLinkedDeltaInsideWindow": -936,
+      "mainCpuSecondsInSampleBins": 21.15,
+      "probeStats": {
+        "/api/health": {
+          "count": 29,
+          "non200": 0,
+          "p50Ms": 36.359375,
+          "p99Ms": 436.1302910000086,
+          "maxMs": 436.1302910000086
+        },
+        "/api/livez": {
+          "count": 29,
+          "non200": 0,
+          "p50Ms": 31.37487499997951,
+          "p99Ms": 433.0583330001682,
+          "maxMs": 433.0583330001682
+        },
+        "/api/readyz": {
+          "count": 29,
+          "non200": 0,
+          "p50Ms": 31.536000000080094,
+          "p99Ms": 433.23733300017193,
+          "maxMs": 433.23733300017193
+        }
+      }
+    },
+    {
+      "iteration": 5,
+      "complete": true,
+      "start": "2026-11-20T05:58:19.983869+00:00",
+      "end": "2026-11-20T05:58:52.681679+00:00",
+      "seconds": 32.69780993461609,
+      "enabled": 1883,
+      "shortName": "uat_t1882",
+      "auditObservations": 7,
+      "auditStatesInProgress": 5,
+      "auditLinkedDeltaInsideWindow": 53,
+      "mainCpuSecondsInSampleBins": 23.049999999999986,
+      "probeStats": {
+        "/api/health": {
+          "count": 33,
+          "non200": 0,
+          "p50Ms": 4.874416999984533,
+          "p99Ms": 330.5836249999702,
+          "maxMs": 330.5836249999702
+        },
+        "/api/livez": {
+          "count": 33,
+          "non200": 0,
+          "p50Ms": 3.658167000161484,
+          "p99Ms": 330.3184169998858,
+          "maxMs": 330.3184169998858
+        },
+        "/api/readyz": {
+          "count": 33,
+          "non200": 0,
+          "p50Ms": 3.752875000005588,
+          "p99Ms": 330.4262500000186,
+          "maxMs": 330.4262500000186
+        }
+      }
+    },
+    {
+      "iteration": 6,
+      "complete": true,
+      "start": "2026-11-20T06:03:19.993066+00:00",
+      "end": "2026-11-20T06:03:58.553564+00:00",
+      "seconds": 38.560497999191284,
+      "enabled": 1884,
+      "shortName": "uat_renamed1882",
+      "auditObservations": 8,
+      "auditStatesInProgress": 6,
+      "auditLinkedDeltaInsideWindow": 155,
+      "mainCpuSecondsInSampleBins": 28.250000000000014,
+      "probeStats": {
+        "/api/health": {
+          "count": 38,
+          "non200": 0,
+          "p50Ms": 7.431165999965742,
+          "p99Ms": 298.6082090002019,
+          "maxMs": 298.6082090002019
+        },
+        "/api/livez": {
+          "count": 38,
+          "non200": 0,
+          "p50Ms": 7.129625000059605,
+          "p99Ms": 297.1285829998087,
+          "maxMs": 297.1285829998087
+        },
+        "/api/readyz": {
+          "count": 38,
+          "non200": 0,
+          "p50Ms": 6.706082999939099,
+          "p99Ms": 297.4484170000069,
+          "maxMs": 297.4484170000069
+        }
+      }
+    },
+    {
+      "iteration": 7,
+      "complete": false
+    },
+    {
+      "iteration": 8,
+      "complete": false
+    },
+    {
+      "iteration": 9,
+      "complete": true,
+      "start": "2026-11-20T06:18:19.999247+00:00",
+      "end": "2026-11-20T06:18:49.871652+00:00",
+      "seconds": 29.87240481376648,
+      "enabled": 1883,
+      "shortName": "uat_t1882",
+      "auditObservations": 6,
+      "auditStatesInProgress": 4,
+      "auditLinkedDeltaInsideWindow": -538,
+      "mainCpuSecondsInSampleBins": 21.25999999999999,
+      "probeStats": {
+        "/api/health": {
+          "count": 30,
+          "non200": 0,
+          "p50Ms": 9.698166999965906,
+          "p99Ms": 387.5452499999665,
+          "maxMs": 387.5452499999665
+        },
+        "/api/livez": {
+          "count": 30,
+          "non200": 0,
+          "p50Ms": 7.432750000152737,
+          "p99Ms": 380.4944590004161,
+          "maxMs": 380.4944590004161
+        },
+        "/api/readyz": {
+          "count": 30,
+          "non200": 0,
+          "p50Ms": 7.4270419999957085,
+          "p99Ms": 380.64829199993983,
+          "maxMs": 380.64829199993983
+        }
+      }
+    },
+    {
+      "iteration": 10,
+      "complete": false
+    },
+    {
+      "iteration": 11,
+      "complete": true,
+      "start": "2026-11-20T06:28:20.013158+00:00",
+      "end": "2026-11-20T06:28:43.273604+00:00",
+      "seconds": 23.260445833206177,
+      "enabled": 1883,
+      "shortName": "uat_t1882",
+      "auditObservations": 5,
+      "auditStatesInProgress": 3,
+      "auditLinkedDeltaInsideWindow": -499,
+      "mainCpuSecondsInSampleBins": 17.870000000000015,
+      "probeStats": {
+        "/api/health": {
+          "count": 23,
+          "non200": 0,
+          "p50Ms": 11.512457999866456,
+          "p99Ms": 225.62158400006592,
+          "maxMs": 225.62158400006592
+        },
+        "/api/livez": {
+          "count": 23,
+          "non200": 0,
+          "p50Ms": 11.1507090004161,
+          "p99Ms": 225.15258400002494,
+          "maxMs": 225.15258400002494
+        },
+        "/api/readyz": {
+          "count": 23,
+          "non200": 0,
+          "p50Ms": 11.136625000275671,
+          "p99Ms": 225.1695830002427,
+          "maxMs": 225.1695830002427
+        }
+      }
+    }
+  ],
+  "receiptVerification": [
+    {
+      "iteration": 0,
+      "shortNameMatches": true,
+      "physicalTableMatches": true,
+      "mysqlOracleMatches": true,
+      "saveRuntimeAck": true,
+      "enabledCountMatches": true,
+      "allPassed": true
+    },
+    {
+      "iteration": 1,
+      "shortNameMatches": true,
+      "physicalTableMatches": true,
+      "mysqlOracleMatches": true,
+      "saveRuntimeAck": true,
+      "enabledCountMatches": true,
+      "allPassed": true
+    },
+    {
+      "iteration": 2,
+      "shortNameMatches": true,
+      "physicalTableMatches": true,
+      "mysqlOracleMatches": true,
+      "saveRuntimeAck": true,
+      "enabledCountMatches": true,
+      "allPassed": true
+    },
+    {
+      "iteration": 4,
+      "shortNameMatches": true,
+      "physicalTableMatches": true,
+      "mysqlOracleMatches": true,
+      "saveRuntimeAck": true,
+      "enabledCountMatches": true,
+      "allPassed": true
+    },
+    {
+      "iteration": 5,
+      "shortNameMatches": true,
+      "physicalTableMatches": true,
+      "mysqlOracleMatches": true,
+      "saveRuntimeAck": true,
+      "enabledCountMatches": true,
+      "allPassed": true
+    },
+    {
+      "iteration": 6,
+      "shortNameMatches": true,
+      "physicalTableMatches": true,
+      "mysqlOracleMatches": true,
+      "saveRuntimeAck": true,
+      "enabledCountMatches": true,
+      "allPassed": true
+    },
+    {
+      "iteration": 9,
+      "shortNameMatches": true,
+      "physicalTableMatches": true,
+      "mysqlOracleMatches": true,
+      "saveRuntimeAck": true,
+      "enabledCountMatches": true,
+      "allPassed": true
+    },
+    {
+      "iteration": 11,
+      "shortNameMatches": true,
+      "physicalTableMatches": true,
+      "mysqlOracleMatches": true,
+      "saveRuntimeAck": true,
+      "enabledCountMatches": true,
+      "allPassed": true
+    }
+  ],
+  "operationStages": {
+    "validate": {
+      "attempted": 12,
+      "passed": 12,
+      "failed": [],
+      "p99Ms": 2381.743
+    },
+    "upload": {
+      "attempted": 12,
+      "passed": 12,
+      "failed": [],
+      "p99Ms": 24037.148
+    },
+    "save": {
+      "attempted": 12,
+      "passed": 12,
+      "failed": [],
+      "p99Ms": 13480.164
+    },
+    "reload": {
+      "attempted": 12,
+      "passed": 12,
+      "failed": [],
+      "p99Ms": 2814.505
+    },
+    "newShortNameRead": {
+      "attempted": 12,
+      "passed": 8,
+      "failed": [
+        {
+          "iteration": 3,
+          "status": 503,
+          "passed": false,
+          "ms": 38.677,
+          "error": {
+            "code": -32000,
+            "message": "audit_unavailable",
+            "data": {
+              "reason": "question_budget_unavailable"
+            }
+          }
+        },
+        {
+          "iteration": 7,
+          "status": 503,
+          "passed": false,
+          "ms": 14.287,
+          "error": {
+            "code": -32000,
+            "message": "audit_unavailable",
+            "data": {
+              "reason": "question_budget_unavailable"
+            }
+          }
+        },
+        {
+          "iteration": 8,
+          "status": 503,
+          "passed": false,
+          "ms": 14.005,
+          "error": {
+            "code": -32000,
+            "message": "audit_unavailable",
+            "data": {
+              "reason": "question_budget_unavailable"
+            }
+          }
+        },
+        {
+          "iteration": 10,
+          "status": 503,
+          "passed": false,
+          "ms": 19.233,
+          "error": {
+            "code": -32000,
+            "message": "audit_unavailable",
+            "data": {
+              "reason": "question_budget_unavailable"
+            }
+          }
+        }
+      ],
+      "p99Ms": 4424.869
+    },
+    "queryAfterReload": {
+      "attempted": 8,
+      "passed": 8,
+      "failed": [],
+      "p99Ms": 16548.543
+    }
+  },
+  "actualAuditOverlapProven": true,
+  "realReloads": [
+    {
+      "at": "2026-11-20T05:33:38.631907+00:00",
+      "kind": "reload-end",
+      "iteration": 0,
+      "status": 200,
+      "ms": 1387.373,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "6937",
+      "pidAfter": "7016"
+    },
+    {
+      "at": "2026-11-20T05:39:07.600595+00:00",
+      "kind": "reload-end",
+      "iteration": 1,
+      "status": 200,
+      "ms": 2713.384,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "10830",
+      "pidAfter": "10907"
+    },
+    {
+      "at": "2026-11-20T05:43:43.297861+00:00",
+      "kind": "reload-end",
+      "iteration": 2,
+      "status": 200,
+      "ms": 2608.682,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "14038",
+      "pidAfter": "14135"
+    },
+    {
+      "at": "2026-11-20T05:48:40.970230+00:00",
+      "kind": "reload-end",
+      "iteration": 3,
+      "status": 200,
+      "ms": 2390.873,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "17750",
+      "pidAfter": "17873"
+    },
+    {
+      "at": "2026-11-20T05:53:38.686176+00:00",
+      "kind": "reload-end",
+      "iteration": 4,
+      "status": 200,
+      "ms": 1379.623,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "21576",
+      "pidAfter": "21653"
+    },
+    {
+      "at": "2026-11-20T05:58:37.255073+00:00",
+      "kind": "reload-end",
+      "iteration": 5,
+      "status": 200,
+      "ms": 1206.318,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "25530",
+      "pidAfter": "25622"
+    },
+    {
+      "at": "2026-11-20T06:03:37.613654+00:00",
+      "kind": "reload-end",
+      "iteration": 6,
+      "status": 200,
+      "ms": 2814.505,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "29494",
+      "pidAfter": "29585"
+    },
+    {
+      "at": "2026-11-20T06:08:34.440382+00:00",
+      "kind": "reload-end",
+      "iteration": 7,
+      "status": 200,
+      "ms": 1193.791,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "33484",
+      "pidAfter": "33566"
+    },
+    {
+      "at": "2026-11-20T06:13:39.115239+00:00",
+      "kind": "reload-end",
+      "iteration": 8,
+      "status": 200,
+      "ms": 1329.941,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "37496",
+      "pidAfter": "37593"
+    },
+    {
+      "at": "2026-11-20T06:18:34.474344+00:00",
+      "kind": "reload-end",
+      "iteration": 9,
+      "status": 200,
+      "ms": 1373.17,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "41317",
+      "pidAfter": "41394"
+    },
+    {
+      "at": "2026-11-20T06:23:35.545495+00:00",
+      "kind": "reload-end",
+      "iteration": 10,
+      "status": 200,
+      "ms": 1300.836,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "45265",
+      "pidAfter": "45342"
+    },
+    {
+      "at": "2026-11-20T06:28:34.759223+00:00",
+      "kind": "reload-end",
+      "iteration": 11,
+      "status": 200,
+      "ms": 1260.974,
+      "reloadStatus": "succeeded",
+      "configVerification": "verified",
+      "pidBefore": "49281",
+      "pidAfter": "49360"
+    }
+  ],
+  "auditSeeds": [
+    {
+      "at": "2026-11-20T05:38:24.768995+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-1",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 200027,
+      "lastId": 203026
+    },
+    {
+      "at": "2026-11-20T05:43:22.032696+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-2",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 203044,
+      "lastId": 206043
+    },
+    {
+      "at": "2026-11-20T05:48:20.719370+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-3",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 206082,
+      "lastId": 209081
+    },
+    {
+      "at": "2026-11-20T05:53:20.467872+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-4",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 209117,
+      "lastId": 212116
+    },
+    {
+      "at": "2026-11-20T05:58:20.474607+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-5",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 212175,
+      "lastId": 215174
+    },
+    {
+      "at": "2026-11-20T06:03:20.555958+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-6",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 215224,
+      "lastId": 218223
+    },
+    {
+      "at": "2026-11-20T06:08:20.452855+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-7",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 218283,
+      "lastId": 221282
+    },
+    {
+      "at": "2026-11-20T06:13:20.736783+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-8",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 221332,
+      "lastId": 224331
+    },
+    {
+      "at": "2026-11-20T06:18:20.399763+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-9",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 224380,
+      "lastId": 227379
+    },
+    {
+      "at": "2026-11-20T06:23:20.607984+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-10",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 227431,
+      "lastId": 230430
+    },
+    {
+      "at": "2026-11-20T06:28:20.417027+00:00",
+      "kind": "audit-seed",
+      "fixtureOnly": true,
+      "batch": "cycle-11",
+      "inserted": 3000,
+      "users": 67,
+      "firstId": 230490,
+      "lastId": 233489
+    }
+  ],
+  "cpuProfile": {
+    "files": [
+      {
+        "file": "cpu-000.cpuprofile",
+        "at": "2026-11-20T05:33:02.901Z",
+        "finishedAt": "2026-11-20T05:34:03.221Z",
+        "usedSeconds": 43.274546,
+        "samples": 5033,
+        "anchoredStartEpoch": 1795152782.9295106,
+        "anchoredEndEpoch": 1795152843.2324507,
+        "stopResponseLagSeconds": -0.011450767517089844
+      },
+      {
+        "file": "cpu-001.cpuprofile",
+        "at": "2026-11-20T05:34:03.222Z",
+        "finishedAt": "2026-11-20T05:35:03.570Z",
+        "usedSeconds": 60.297492,
+        "samples": 4868,
+        "anchoredStartEpoch": 1795152843.2494507,
+        "anchoredEndEpoch": 1795152903.5533617,
+        "stopResponseLagSeconds": 0.01663827896118164
+      },
+      {
+        "file": "cpu-002.cpuprofile",
+        "at": "2026-11-20T05:35:03.575Z",
+        "finishedAt": "2026-11-20T05:36:04.910Z",
+        "usedSeconds": 61.320598,
+        "samples": 4927,
+        "anchoredStartEpoch": 1795152903.6054997,
+        "anchoredEndEpoch": 1795152964.9302266,
+        "stopResponseLagSeconds": -0.020226478576660156
+      },
+      {
+        "file": "cpu-003.cpuprofile",
+        "at": "2026-11-20T05:36:04.918Z",
+        "finishedAt": "2026-11-20T05:37:05.684Z",
+        "usedSeconds": 60.639122,
+        "samples": 5209,
+        "anchoredStartEpoch": 1795152964.9660187,
+        "anchoredEndEpoch": 1795153025.6097217,
+        "stopResponseLagSeconds": 0.07427835464477539
+      },
+      {
+        "file": "cpu-004.cpuprofile",
+        "at": "2026-11-20T05:37:05.718Z",
+        "finishedAt": "2026-11-20T05:38:06.233Z",
+        "usedSeconds": 60.474637,
+        "samples": 5258,
+        "anchoredStartEpoch": 1795153025.7453167,
+        "anchoredEndEpoch": 1795153086.2245457,
+        "stopResponseLagSeconds": 0.008454322814941406
+      },
+      {
+        "file": "cpu-005.cpuprofile",
+        "at": "2026-11-20T05:38:06.237Z",
+        "finishedAt": "2026-11-20T05:39:07.002Z",
+        "usedSeconds": 60.703459,
+        "samples": 4846,
+        "anchoredStartEpoch": 1795153086.2603636,
+        "anchoredEndEpoch": 1795153146.9743607,
+        "stopResponseLagSeconds": 0.027639389038085938
+      },
+      {
+        "file": "cpu-006.cpuprofile",
+        "at": "2026-11-20T05:39:07.007Z",
+        "finishedAt": "2026-11-20T05:40:07.488Z",
+        "usedSeconds": 60.447828,
+        "samples": 5046,
+        "anchoredStartEpoch": 1795153147.0299838,
+        "anchoredEndEpoch": 1795153207.4885497,
+        "stopResponseLagSeconds": -0.0005497932434082031
+      },
+      {
+        "file": "cpu-007.cpuprofile",
+        "at": "2026-11-20T05:40:07.491Z",
+        "finishedAt": "2026-11-20T05:41:08.431Z",
+        "usedSeconds": 60.868804,
+        "samples": 4804,
+        "anchoredStartEpoch": 1795153207.5131238,
+        "anchoredEndEpoch": 1795153268.3831077,
+        "stopResponseLagSeconds": 0.04789233207702637
+      },
+      {
+        "file": "cpu-008.cpuprofile",
+        "at": "2026-11-20T05:41:08.438Z",
+        "finishedAt": "2026-11-20T05:42:09.278Z",
+        "usedSeconds": 60.793484,
+        "samples": 5130,
+        "anchoredStartEpoch": 1795153268.4593887,
+        "anchoredEndEpoch": 1795153329.2604427,
+        "stopResponseLagSeconds": 0.017557382583618164
+      },
+      {
+        "file": "cpu-009.cpuprofile",
+        "at": "2026-11-20T05:42:09.287Z",
+        "finishedAt": "2026-11-20T05:43:09.904Z",
+        "usedSeconds": 60.581854,
+        "samples": 4996,
+        "anchoredStartEpoch": 1795153329.3103127,
+        "anchoredEndEpoch": 1795153389.8942926,
+        "stopResponseLagSeconds": 0.009707450866699219
+      },
+      {
+        "file": "cpu-010.cpuprofile",
+        "at": "2026-11-20T05:43:09.908Z",
+        "finishedAt": "2026-11-20T05:44:10.273Z",
+        "usedSeconds": 60.326494,
+        "samples": 5186,
+        "anchoredStartEpoch": 1795153389.9274597,
+        "anchoredEndEpoch": 1795153450.2640057,
+        "stopResponseLagSeconds": 0.008994340896606445
+      },
+      {
+        "file": "cpu-011.cpuprofile",
+        "at": "2026-11-20T05:44:11.217Z",
+        "finishedAt": "2026-11-20T05:45:11.644Z",
+        "usedSeconds": 60.399144,
+        "samples": 5163,
+        "anchoredStartEpoch": 1795153451.2346416,
+        "anchoredEndEpoch": 1795153511.6436827,
+        "stopResponseLagSeconds": 0.0003173351287841797
+      },
+      {
+        "file": "cpu-012.cpuprofile",
+        "at": "2026-11-20T05:45:11.646Z",
+        "finishedAt": "2026-11-20T05:46:11.938Z",
+        "usedSeconds": 60.255682,
+        "samples": 5066,
+        "anchoredStartEpoch": 1795153511.6632636,
+        "anchoredEndEpoch": 1795153571.9286137,
+        "stopResponseLagSeconds": 0.009386301040649414
+      },
+      {
+        "file": "cpu-013.cpuprofile",
+        "at": "2026-11-20T05:46:11.944Z",
+        "finishedAt": "2026-11-20T05:47:12.411Z",
+        "usedSeconds": 60.444918,
+        "samples": 5028,
+        "anchoredStartEpoch": 1795153571.9600368,
+        "anchoredEndEpoch": 1795153632.4078026,
+        "stopResponseLagSeconds": 0.0031974315643310547
+      },
+      {
+        "file": "cpu-014.cpuprofile",
+        "at": "2026-11-20T05:47:12.414Z",
+        "finishedAt": "2026-11-20T05:48:12.652Z",
+        "usedSeconds": 60.208182,
+        "samples": 5232,
+        "anchoredStartEpoch": 1795153632.4286346,
+        "anchoredEndEpoch": 1795153692.6463857,
+        "stopResponseLagSeconds": 0.005614280700683594
+      },
+      {
+        "file": "cpu-015.cpuprofile",
+        "at": "2026-11-20T05:48:12.654Z",
+        "finishedAt": "2026-11-20T05:49:13.196Z",
+        "usedSeconds": 60.45794,
+        "samples": 5152,
+        "anchoredStartEpoch": 1795153692.6679146,
+        "anchoredEndEpoch": 1795153753.1270986,
+        "stopResponseLagSeconds": 0.06890153884887695
+      },
+      {
+        "file": "cpu-016.cpuprofile",
+        "at": "2026-11-20T05:49:13.199Z",
+        "finishedAt": "2026-11-20T05:50:13.538Z",
+        "usedSeconds": 60.299633,
+        "samples": 5199,
+        "anchoredStartEpoch": 1795153753.2125068,
+        "anchoredEndEpoch": 1795153813.5202827,
+        "stopResponseLagSeconds": 0.017717361450195312
+      },
+      {
+        "file": "cpu-017.cpuprofile",
+        "at": "2026-11-20T05:50:13.541Z",
+        "finishedAt": "2026-11-20T05:51:13.888Z",
+        "usedSeconds": 60.319121,
+        "samples": 5224,
+        "anchoredStartEpoch": 1795153813.5526338,
+        "anchoredEndEpoch": 1795153873.8742666,
+        "stopResponseLagSeconds": 0.013733386993408203
+      },
+      {
+        "file": "cpu-018.cpuprofile",
+        "at": "2026-11-20T05:51:13.891Z",
+        "finishedAt": "2026-11-20T05:52:14.257Z",
+        "usedSeconds": 60.33866,
+        "samples": 5220,
+        "anchoredStartEpoch": 1795153873.9020746,
+        "anchoredEndEpoch": 1795153934.2472596,
+        "stopResponseLagSeconds": 0.009740352630615234
+      },
+      {
+        "file": "cpu-019.cpuprofile",
+        "at": "2026-11-20T05:52:14.258Z",
+        "finishedAt": "2026-11-20T05:53:14.584Z",
+        "usedSeconds": 60.290371,
+        "samples": 5170,
+        "anchoredStartEpoch": 1795153934.2684166,
+        "anchoredEndEpoch": 1795153994.5664217,
+        "stopResponseLagSeconds": 0.0175783634185791
+      },
+      {
+        "file": "cpu-020.cpuprofile",
+        "at": "2026-11-20T05:53:14.590Z",
+        "finishedAt": "2026-11-20T05:54:14.824Z",
+        "usedSeconds": 60.203132,
+        "samples": 5242,
+        "anchoredStartEpoch": 1795153994.5997837,
+        "anchoredEndEpoch": 1795154054.8080528,
+        "stopResponseLagSeconds": 0.01594710350036621
+      },
+      {
+        "file": "cpu-021.cpuprofile",
+        "at": "2026-11-20T05:54:14.826Z",
+        "finishedAt": "2026-11-20T05:55:15.101Z",
+        "usedSeconds": 60.248058,
+        "samples": 5307,
+        "anchoredStartEpoch": 1795154054.8347566,
+        "anchoredEndEpoch": 1795154115.0916536,
+        "stopResponseLagSeconds": 0.009346485137939453
+      },
+      {
+        "file": "cpu-022.cpuprofile",
+        "at": "2026-11-20T05:55:15.102Z",
+        "finishedAt": "2026-11-20T05:56:15.341Z",
+        "usedSeconds": 60.199354,
+        "samples": 5290,
+        "anchoredStartEpoch": 1795154115.1094627,
+        "anchoredEndEpoch": 1795154175.3197017,
+        "stopResponseLagSeconds": 0.02129840850830078
+      },
+      {
+        "file": "cpu-023.cpuprofile",
+        "at": "2026-11-20T05:56:15.343Z",
+        "finishedAt": "2026-11-20T05:57:15.762Z",
+        "usedSeconds": 60.390588,
+        "samples": 5298,
+        "anchoredStartEpoch": 1795154175.3497756,
+        "anchoredEndEpoch": 1795154235.7468905,
+        "stopResponseLagSeconds": 0.015109539031982422
+      },
+      {
+        "file": "cpu-024.cpuprofile",
+        "at": "2026-11-20T05:57:15.763Z",
+        "finishedAt": "2026-11-20T05:58:16.083Z",
+        "usedSeconds": 60.287514,
+        "samples": 5251,
+        "anchoredStartEpoch": 1795154235.7692297,
+        "anchoredEndEpoch": 1795154296.0616868,
+        "stopResponseLagSeconds": 0.021313190460205078
+      },
+      {
+        "file": "cpu-025.cpuprofile",
+        "at": "2026-11-20T05:58:16.085Z",
+        "finishedAt": "2026-11-20T05:59:16.404Z",
+        "usedSeconds": 60.261639,
+        "samples": 5269,
+        "anchoredStartEpoch": 1795154296.0901196,
+        "anchoredEndEpoch": 1795154356.3519278,
+        "stopResponseLagSeconds": 0.05207228660583496
+      },
+      {
+        "file": "cpu-026.cpuprofile",
+        "at": "2026-11-20T05:59:16.414Z",
+        "finishedAt": "2026-11-20T06:00:16.815Z",
+        "usedSeconds": 60.249299,
+        "samples": 5229,
+        "anchoredStartEpoch": 1795154356.4186738,
+        "anchoredEndEpoch": 1795154416.6722085,
+        "stopResponseLagSeconds": 0.1427915096282959
+      },
+      {
+        "file": "cpu-027.cpuprofile",
+        "at": "2026-11-20T06:00:16.820Z",
+        "finishedAt": "2026-11-20T06:01:17.294Z",
+        "usedSeconds": 60.443222,
+        "samples": 5248,
+        "anchoredStartEpoch": 1795154416.8322966,
+        "anchoredEndEpoch": 1795154477.2756517,
+        "stopResponseLagSeconds": 0.018348217010498047
+      },
+      {
+        "file": "cpu-028.cpuprofile",
+        "at": "2026-11-20T06:01:17.299Z",
+        "finishedAt": "2026-11-20T06:02:17.720Z",
+        "usedSeconds": 60.40285,
+        "samples": 5206,
+        "anchoredStartEpoch": 1795154477.3011107,
+        "anchoredEndEpoch": 1795154537.7049227,
+        "stopResponseLagSeconds": 0.015077352523803711
+      },
+      {
+        "file": "cpu-029.cpuprofile",
+        "at": "2026-11-20T06:02:17.722Z",
+        "finishedAt": "2026-11-20T06:03:18.031Z",
+        "usedSeconds": 60.276539,
+        "samples": 5231,
+        "anchoredStartEpoch": 1795154537.7232838,
+        "anchoredEndEpoch": 1795154598.0096967,
+        "stopResponseLagSeconds": 0.021303176879882812
+      },
+      {
+        "file": "cpu-030.cpuprofile",
+        "at": "2026-11-20T06:03:18.041Z",
+        "finishedAt": "2026-11-20T06:04:18.514Z",
+        "usedSeconds": 60.399743,
+        "samples": 5084,
+        "anchoredStartEpoch": 1795154598.0414097,
+        "anchoredEndEpoch": 1795154658.4419076,
+        "stopResponseLagSeconds": 0.07209229469299316
+      },
+      {
+        "file": "cpu-031.cpuprofile",
+        "at": "2026-11-20T06:04:18.518Z",
+        "finishedAt": "2026-11-20T06:05:22.993Z",
+        "usedSeconds": 62.19572,
+        "samples": 5285,
+        "anchoredStartEpoch": 1795154658.5230436,
+        "anchoredEndEpoch": 1795154720.8694077,
+        "stopResponseLagSeconds": 2.1235923767089844
+      },
+      {
+        "file": "cpu-032.cpuprofile",
+        "at": "2026-11-20T06:05:23.065Z",
+        "finishedAt": "2026-11-20T06:06:23.856Z",
+        "usedSeconds": 60.748111,
+        "samples": 5160,
+        "anchoredStartEpoch": 1795154723.0866106,
+        "anchoredEndEpoch": 1795154783.8396666,
+        "stopResponseLagSeconds": 0.016333341598510742
+      },
+      {
+        "file": "cpu-033.cpuprofile",
+        "at": "2026-11-20T06:06:23.857Z",
+        "finishedAt": "2026-11-20T06:07:24.238Z",
+        "usedSeconds": 60.357099,
+        "samples": 5285,
+        "anchoredStartEpoch": 1795154783.8580987,
+        "anchoredEndEpoch": 1795154844.2154136,
+        "stopResponseLagSeconds": 0.022586345672607422
+      },
+      {
+        "file": "cpu-034.cpuprofile",
+        "at": "2026-11-20T06:07:24.239Z",
+        "finishedAt": "2026-11-20T06:08:24.543Z",
+        "usedSeconds": 60.274475,
+        "samples": 5262,
+        "anchoredStartEpoch": 1795154844.2362187,
+        "anchoredEndEpoch": 1795154904.5198977,
+        "stopResponseLagSeconds": 0.023102283477783203
+      }
+    ],
+    "weightedObservedSeconds": 2099.679312,
+    "leafTop": [
+      {
+        "frame": "(idle) @ :0",
+        "sampledSeconds": 737.979183,
+        "percentOfObservedWall": 35.14723314090547
+      },
+      {
+        "frame": "all @ :0",
+        "sampledSeconds": 164.790589,
+        "percentOfObservedWall": 7.848369418043778
+      },
+      {
+        "frame": "(garbage collector) @ :0",
+        "sampledSeconds": 146.469441,
+        "percentOfObservedWall": 6.975800550250885
+      },
+      {
+        "frame": "stat @ :0",
+        "sampledSeconds": 124.680144,
+        "percentOfObservedWall": 5.93805650641187
+      },
+      {
+        "frame": "realpath @ :0",
+        "sampledSeconds": 78.807162,
+        "percentOfObservedWall": 3.753295160342086
+      },
+      {
+        "frame": "(program) @ :0",
+        "sampledSeconds": 64.536306,
+        "percentOfObservedWall": 3.0736267977288145
+      },
+      {
+        "frame": "Statement @ :0",
+        "sampledSeconds": 37.336442,
+        "percentOfObservedWall": 1.7781973555016861
+      },
+      {
+        "frame": "run @ :0",
+        "sampledSeconds": 37.250342,
+        "percentOfObservedWall": 1.7740967293009173
+      },
+      {
+        "frame": "next @ file:///app/webui/node_modules/yaml/dist/parse/parser.js:176",
+        "sampledSeconds": 36.618741,
+        "percentOfObservedWall": 1.7440158976048434
+      },
+      {
+        "frame": "hasDelimitedRef @ file:///app/webui/server/proxy/acl.ts:1",
+        "sampledSeconds": 24.585599,
+        "percentOfObservedWall": 1.1709216192915464
+      },
+      {
+        "frame": "normalizeSourceRef @ file:///app/webui/server/source-name-registry.ts:1",
+        "sampledSeconds": 23.302161,
+        "percentOfObservedWall": 1.1097961896764166
+      },
+      {
+        "frame": "getIn @ file:///app/webui/node_modules/yaml/dist/nodes/Collection.js:96",
+        "sampledSeconds": 18.199918,
+        "percentOfObservedWall": 0.8667951289506253
+      },
+      {
+        "frame": "stat @ node:internal/fs/promises:1036",
+        "sampledSeconds": 17.698541,
+        "percentOfObservedWall": 0.8429163872239933
+      },
+      {
+        "frame": "read @ :0",
+        "sampledSeconds": 14.983068,
+        "percentOfObservedWall": 0.7135883996365251
+      },
+      {
+        "frame": "fstat @ :0",
+        "sampledSeconds": 14.667486,
+        "percentOfObservedWall": 0.6985583901395319
+      },
+      {
+        "frame": "close @ :0",
+        "sampledSeconds": 14.565098,
+        "percentOfObservedWall": 0.6936820264293769
+      },
+      {
+        "frame": "openFileHandle @ :0",
+        "sampledSeconds": 14.36474,
+        "percentOfObservedWall": 0.6841397120933295
+      },
+      {
+        "frame": "enabledNameMatchesRow @ file:///app/webui/src/lib/enabled-table-identity.ts:1",
+        "sampledSeconds": 13.505329,
+        "percentOfObservedWall": 0.6432091283090187
+      },
+      {
+        "frame": "postMessage @ :0",
+        "sampledSeconds": 13.158994,
+        "percentOfObservedWall": 0.6267144665756462
+      },
+      {
+        "frame": "access @ :0",
+        "sampledSeconds": 12.260351,
+        "percentOfObservedWall": 0.5839154069828736
+      },
+      {
+        "frame": "resolveFlowCollection @ file:///app/webui/node_modules/yaml/dist/compose/resolve-flow-collection.js:14",
+        "sampledSeconds": 12.010231,
+        "percentOfObservedWall": 0.5720031116827996
+      },
+      {
+        "frame": "promiseInitHook @ node:internal/async_hooks:328",
+        "sampledSeconds": 11.312487,
+        "percentOfObservedWall": 0.5387721322655009
+      },
+      {
+        "frame": "parseFlowCollection @ file:///app/webui/node_modules/yaml/dist/parse/lexer.js:360",
+        "sampledSeconds": 10.736661,
+        "percentOfObservedWall": 0.5113476585990194
+      },
+      {
+        "frame": "resolveCollection @ file:///app/webui/node_modules/yaml/dist/compose/compose-collection.js:11",
+        "sampledSeconds": 10.100244,
+        "percentOfObservedWall": 0.4810374585430977
+      },
+      {
+        "frame": "get @ :0",
+        "sampledSeconds": 9.463733,
+        "percentOfObservedWall": 0.4507227816130428
+      },
+      {
+        "frame": "parse @ file:///app/webui/node_modules/yaml/dist/parse/parser.js:165",
+        "sampledSeconds": 9.338425,
+        "percentOfObservedWall": 0.44475482263550536
+      },
+      {
+        "frame": " @ file:///app/webui/server/display-snapshot.ts:1",
+        "sampledSeconds": 9.327756,
+        "percentOfObservedWall": 0.44424669742138223
+      },
+      {
+        "frame": "prepare @ file:///app/webui/node_modules/better-sqlite3/lib/methods/wrappers.js:4",
+        "sampledSeconds": 9.146546,
+        "percentOfObservedWall": 0.43561633187154064
+      },
+      {
+        "frame": "postMessage @ node:internal/worker:380",
+        "sampledSeconds": 8.879347,
+        "percentOfObservedWall": 0.4228906266425127
+      },
+      {
+        "frame": "step @ file:///app/webui/node_modules/yaml/dist/parse/parser.js:240",
+        "sampledSeconds": 7.925174,
+        "percentOfObservedWall": 0.3774468774686865
+      },
+      {
+        "frame": "realpath @ node:internal/fs/promises:1177",
+        "sampledSeconds": 7.875952,
+        "percentOfObservedWall": 0.375102614717766
+      },
+      {
+        "frame": "readFileHandle @ node:internal/fs/promises:512",
+        "sampledSeconds": 7.797183,
+        "percentOfObservedWall": 0.3713511370730694
+      },
+      {
+        "frame": "_propagate @ node:internal/async_local_storage/async_hooks:64",
+        "sampledSeconds": 7.688982,
+        "percentOfObservedWall": 0.3661979215614618
+      },
+      {
+        "frame": "flowCollection @ file:///app/webui/node_modules/yaml/dist/parse/parser.js:767",
+        "sampledSeconds": 7.641022,
+        "percentOfObservedWall": 0.36391376322709607
+      },
+      {
+        "frame": "lex @ file:///app/webui/node_modules/yaml/dist/parse/lexer.js:152",
+        "sampledSeconds": 7.612031,
+        "percentOfObservedWall": 0.36253302856755487
+      }
+    ],
+    "inclusiveTop": [
+      {
+        "frame": "(root) @ :0",
+        "sampledSeconds": 2099.679312,
+        "percentOfObservedWall": 100.0
+      },
+      {
+        "frame": "(idle) @ :0",
+        "sampledSeconds": 737.979183,
+        "percentOfObservedWall": 35.14723314090547
+      },
+      {
+        "frame": "rebuildInferredTurnsUnlocked @ file:///app/webui/server/proxy/audit.ts:438",
+        "sampledSeconds": 299.702187,
+        "percentOfObservedWall": 14.273712432520266
+      },
+      {
+        "frame": "parseDocument @ file:///app/webui/node_modules/yaml/dist/public-api.js:40",
+        "sampledSeconds": 189.66671,
+        "percentOfObservedWall": 9.033127531238923
+      },
+      {
+        "frame": "compose @ file:///app/webui/node_modules/yaml/dist/compose/composer.js:132",
+        "sampledSeconds": 187.161133,
+        "percentOfObservedWall": 8.913796117833064
+      },
+      {
+        "frame": " @ file:///app/webui/server/display-snapshot.ts:1",
+        "sampledSeconds": 178.541512,
+        "percentOfObservedWall": 8.503275284925987
+      },
+      {
+        "frame": "all @ :0",
+        "sampledSeconds": 164.790589,
+        "percentOfObservedWall": 7.848369418043778
+      },
+      {
+        "frame": "stat @ node:internal/fs/promises:1036",
+        "sampledSeconds": 147.748222,
+        "percentOfObservedWall": 7.036704184091137
+      },
+      {
+        "frame": "(garbage collector) @ :0",
+        "sampledSeconds": 146.469441,
+        "percentOfObservedWall": 6.975800550250885
+      },
+      {
+        "frame": "parse @ file:///app/webui/node_modules/yaml/dist/parse/parser.js:165",
+        "sampledSeconds": 131.380846,
+        "percentOfObservedWall": 6.257186287883947
+      },
+      {
+        "frame": "drainFileIo @ file:///app/webui/server/display-snapshot.ts:1",
+        "sampledSeconds": 130.624487,
+        "percentOfObservedWall": 6.221163691686647
+      },
+      {
+        "frame": "stat @ :0",
+        "sampledSeconds": 126.199767,
+        "percentOfObservedWall": 6.010430558549981
+      },
+      {
+        "frame": "parse @ file:///app/webui/node_modules/yaml/dist/public-api.js:60",
+        "sampledSeconds": 116.423038,
+        "percentOfObservedWall": 5.54480092910493
+      },
+      {
+        "frame": "readYamlDocument @ file:///app/webui/server/semantic-layer.ts:1",
+        "sampledSeconds": 114.447016,
+        "percentOfObservedWall": 5.450690271886624
+      },
+      {
+        "frame": "sqliteTransaction @ file:///app/webui/node_modules/better-sqlite3/lib/methods/transaction.js:52",
+        "sampledSeconds": 97.360537,
+        "percentOfObservedWall": 4.636924145681157
+      },
+      {
+        "frame": " @ file:///app/webui/server/semantic-layer.ts:1",
+        "sampledSeconds": 80.534703,
+        "percentOfObservedWall": 3.835571581799726
+      },
+      {
+        "frame": "realpath @ :0",
+        "sampledSeconds": 79.577929,
+        "percentOfObservedWall": 3.7900039565661063
+      },
+      {
+        "frame": "parseYaml @ file:///app/webui/server/semantic-layer.ts:1",
+        "sampledSeconds": 77.882184,
+        "percentOfObservedWall": 3.7092418615971963
+      },
+      {
+        "frame": "next @ file:///app/webui/node_modules/yaml/dist/parse/parser.js:176",
+        "sampledSeconds": 71.829668,
+        "percentOfObservedWall": 3.420982794347788
+      },
+      {
+        "frame": "(program) @ :0",
+        "sampledSeconds": 64.536306,
+        "percentOfObservedWall": 3.0736267977288145
+      },
+      {
+        "frame": " @ file:///app/webui/server/proxy/audit.ts:456",
+        "sampledSeconds": 64.084779,
+        "percentOfObservedWall": 3.052122228082419
+      },
+      {
+        "frame": "loadContentPaths @ file:///app/webui/server/paths.ts:1",
+        "sampledSeconds": 60.02545,
+        "percentOfObservedWall": 2.8587913238438385
+      },
+      {
+        "frame": "canonical @ file:///app/webui/server/display-generation.ts:1",
+        "sampledSeconds": 58.343114,
+        "percentOfObservedWall": 2.7786678502074036
+      },
+      {
+        "frame": " @ node:fs:2861",
+        "sampledSeconds": 55.331849,
+        "percentOfObservedWall": 2.6352523780069514
+      },
+      {
+        "frame": "next @ file:///app/webui/node_modules/yaml/dist/compose/composer.js:138",
+        "sampledSeconds": 53.623629,
+        "percentOfObservedWall": 2.5538961446889754
+      },
+      {
+        "frame": "composeDoc @ file:///app/webui/node_modules/yaml/dist/compose/compose-doc.js:8",
+        "sampledSeconds": 52.38251,
+        "percentOfObservedWall": 2.494786213333896
+      },
+      {
+        "frame": "lex @ file:///app/webui/node_modules/yaml/dist/parse/lexer.js:152",
+        "sampledSeconds": 49.083884,
+        "percentOfObservedWall": 2.337684794029156
+      },
+      {
+        "frame": "lookupInquiryNo @ file:///app/webui/server/admin/audit-inquiry-serial.ts:13",
+        "sampledSeconds": 47.970462,
+        "percentOfObservedWall": 2.2846566009314473
+      },
+      {
+        "frame": "prepare @ file:///app/webui/node_modules/better-sqlite3/lib/methods/wrappers.js:4",
+        "sampledSeconds": 47.868346,
+        "percentOfObservedWall": 2.2797931915804863
+      },
+      {
+        "frame": "ensureInquirySerialSchema @ file:///app/webui/server/admin/audit-inquiry-serial.ts:4",
+        "sampledSeconds": 47.605286,
+        "percentOfObservedWall": 2.267264611692283
+      },
+      {
+        "frame": "composeNode @ file:///app/webui/node_modules/yaml/dist/compose/compose-node.js:11",
+        "sampledSeconds": 47.516242,
+        "percentOfObservedWall": 2.2630237736037664
+      },
+      {
+        "frame": "composeCollection @ file:///app/webui/node_modules/yaml/dist/compose/compose-collection.js:28",
+        "sampledSeconds": 47.258467,
+        "percentOfObservedWall": 2.2507468988197563
+      },
+      {
+        "frame": "resolveCollection @ file:///app/webui/node_modules/yaml/dist/compose/compose-collection.js:11",
+        "sampledSeconds": 47.059915,
+        "percentOfObservedWall": 2.241290597618652
+      },
+      {
+        "frame": "loadOverlayNamesForSource @ file:///app/webui/server/proxy/source-ambiguity-gate.ts:11",
+        "sampledSeconds": 42.540803,
+        "percentOfObservedWall": 2.0260619208310797
+      },
+      {
+        "frame": "readFile @ node:internal/fs/promises:1243",
+        "sampledSeconds": 41.935854,
+        "percentOfObservedWall": 1.9972504258307422
+      }
+    ],
+    "done": false,
+    "error": null,
+    "monotonicEpochOffset": 1795105995.2846537,
+    "monotonicOffsetRangeSeconds": 0.07462143898010254
+  },
+  "profilerControl": {
+    "at": 1795154912.6206946,
+    "observerOnly": true,
+    "reason": "Separate native CPU profiler overhead from unchanged workload; probes and proc continue",
+    "stopped": [
+      {
+        "pid": 6518,
+        "commandSha256": "58daa51bf60c33020bb5f2e03d437760938ae2f9ce2e58cc9a44707700083057"
+      }
+    ]
+  },
+  "observerPhases": {
+    "profiled": {
+      "startEpoch": 1795152799.956335,
+      "endEpoch": 1795154912.6206946,
+      "probes": {
+        "/api/health": {
+          "count": 2106,
+          "non200": 0,
+          "p50Ms": 3.927458999969531,
+          "p99Ms": 442.8218340000021,
+          "maxMs": 2427.9883350001182
+        },
+        "/api/livez": {
+          "count": 2106,
+          "non200": 0,
+          "p50Ms": 2.9451249999692664,
+          "p99Ms": 440.0138760000118,
+          "maxMs": 3108.878876999952
+        },
+        "/api/readyz": {
+          "count": 2106,
+          "non200": 0,
+          "p50Ms": 3.153708000027109,
+          "p99Ms": 435.1012090000004,
+          "maxMs": 2058.527333999984
+        }
+      },
+      "errors": [
+        {
+          "at": "2026-11-20T05:33:37.346258+00:00",
+          "kind": "mcp",
+          "error": "soak-query-0 query failed: {\"httpStatus\": 200, \"elapsedMs\": 17388.138, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 4, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+          "iteration": 0,
+          "ms": 17388.633124999986
+        },
+        {
+          "at": "2026-11-20T05:34:07.362620+00:00",
+          "kind": "mcp",
+          "error": "soak-query-5 query failed: {\"httpStatus\": 503, \"elapsedMs\": 3180.657, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 13, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+          "iteration": 5,
+          "ms": 3181.3231669999877
+        },
+        {
+          "at": "2026-11-20T05:43:25.501017+00:00",
+          "kind": "mcp",
+          "error": "soak-query-32 query failed: {\"httpStatus\": 200, \"elapsedMs\": 7027.697, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 44, \"result\": {\"isError\": true, \"content\": [{\"type\": \"text\", \"text\": \"{\\\"code\\\":\\\"semantic_recovery_required\\\",\\\"message\\\":\\\"该语义资产仍有未决恢复日志，恢复核验完成前不能读取或查询。\\\"}\"}]}}}",
+          "iteration": 32,
+          "ms": 7028.933208000012
+        },
+        {
+          "at": "2026-11-20T05:48:38.556751+00:00",
+          "kind": "mcp",
+          "error": "soak-query-67 query failed: {\"httpStatus\": 200, \"elapsedMs\": 17203.26, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 83, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+          "iteration": 67,
+          "ms": 17204.035875000045
+        },
+        {
+          "at": "2026-11-20T05:48:41.010035+00:00",
+          "kind": "mutation",
+          "error": "renamed source not readable",
+          "iteration": 3,
+          "ms": 21033.408249999866
+        },
+        {
+          "at": "2026-11-20T06:03:35.215519+00:00",
+          "kind": "mcp",
+          "error": "soak-query-200 query failed: {\"httpStatus\": 200, \"elapsedMs\": 12851.682, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 225, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+          "iteration": 200,
+          "ms": 12852.355834000036
+        },
+        {
+          "at": "2026-11-20T06:05:22.228276+00:00",
+          "kind": "http",
+          "error": "timed out",
+          "iteration": 1919,
+          "ms": 3234.5106249999844
+        }
+      ],
+      "mainStateCounts": {
+        "R": 5738,
+        "S": 2104,
+        "D": 475
+      },
+      "mainWchanCounts": {
+        "0": 5831,
+        "futex_wait_queue": 250,
+        "do_epoll_wait": 1738,
+        "folio_wait_bit_common": 410,
+        "jbd2_log_wait_commit": 78,
+        "hrtimer_nanosleep": 1,
+        "migration_entry_wait_on_locked": 2,
+        "pipe_read": 5,
+        "__wait_on_buffer": 2
+      },
+      "maxRollingEventLoopDelayMs": 3477.078
+    },
+    "observer-transition": {
+      "startEpoch": 1795154912.6206946,
+      "endEpoch": 1795154942.6206946,
+      "probes": {
+        "/api/health": {
+          "count": 30,
+          "non200": 0,
+          "p50Ms": 2.203624999616295,
+          "p99Ms": 139.138832999859,
+          "maxMs": 139.138832999859
+        },
+        "/api/livez": {
+          "count": 30,
+          "non200": 0,
+          "p50Ms": 1.319124999921769,
+          "p99Ms": 138.47808400029317,
+          "maxMs": 138.47808400029317
+        },
+        "/api/readyz": {
+          "count": 30,
+          "non200": 0,
+          "p50Ms": 1.3160840002819896,
+          "p99Ms": 138.50804199976847,
+          "maxMs": 138.50804199976847
+        }
+      },
+      "errors": [
+        {
+          "at": "2026-11-20T06:08:34.455698+00:00",
+          "kind": "mutation",
+          "error": "renamed source not readable",
+          "iteration": 7,
+          "ms": 14456.431915999929
+        }
+      ],
+      "mainStateCounts": {
+        "S": 27,
+        "R": 85,
+        "D": 6
+      },
+      "mainWchanCounts": {
+        "futex_wait_queue": 1,
+        "0": 83,
+        "folio_wait_bit_common": 4,
+        "do_epoll_wait": 29,
+        "jbd2_log_wait_commit": 1
+      },
+      "maxRollingEventLoopDelayMs": 389.808
+    },
+    "no-profiler-client": {
+      "startEpoch": 1795154942.6206946,
+      "endEpoch": 1795156385.202352,
+      "probes": {
+        "/api/health": {
+          "count": 1439,
+          "non200": 0,
+          "p50Ms": 2.4623340000398457,
+          "p99Ms": 227.64937500003725,
+          "maxMs": 815.9956669998355
+        },
+        "/api/livez": {
+          "count": 1439,
+          "non200": 0,
+          "p50Ms": 1.897249999921769,
+          "p99Ms": 225.15258400002494,
+          "maxMs": 814.8165010004304
+        },
+        "/api/readyz": {
+          "count": 1439,
+          "non200": 0,
+          "p50Ms": 2.004749999847263,
+          "p99Ms": 225.1695830002427,
+          "maxMs": 814.7937920000404
+        }
+      },
+      "errors": [
+        {
+          "at": "2026-11-20T06:13:37.860138+00:00",
+          "kind": "mcp",
+          "error": "soak-query-303 query failed: {\"httpStatus\": 200, \"elapsedMs\": 14995.812, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 333, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+          "iteration": 303,
+          "ms": 14996.722791000138
+        },
+        {
+          "at": "2026-11-20T06:13:39.130812+00:00",
+          "kind": "mutation",
+          "error": "renamed source not readable",
+          "iteration": 8,
+          "ms": 19134.80379099974
+        },
+        {
+          "at": "2026-11-20T06:18:33.236586+00:00",
+          "kind": "mcp",
+          "error": "soak-query-350 query failed: {\"httpStatus\": 200, \"elapsedMs\": 11977.263, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 381, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+          "iteration": 350,
+          "ms": 11978.007833999982
+        },
+        {
+          "at": "2026-11-20T06:23:35.566098+00:00",
+          "kind": "mutation",
+          "error": "renamed source not readable",
+          "iteration": 10,
+          "ms": 15558.365625000079
+        },
+        {
+          "at": "2026-11-20T06:28:33.590921+00:00",
+          "kind": "mcp",
+          "error": "soak-query-455 query failed: {\"httpStatus\": 200, \"elapsedMs\": 12053.84, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 491, \"error\": {\"code\": -32003, \"message\": \"KTX upstream unavailable\", \"data\": {\"reason\": \"upstream_unavailable\"}}}}",
+          "iteration": 455,
+          "ms": 12054.253332999906
+        }
+      ],
+      "mainStateCounts": {
+        "R": 3859,
+        "D": 145,
+        "S": 1698
+      },
+      "mainWchanCounts": {
+        "0": 3888,
+        "do_epoll_wait": 1548,
+        "folio_wait_bit_common": 120,
+        "futex_wait_queue": 117,
+        "jbd2_log_wait_commit": 17,
+        "migration_entry_wait_on_locked": 7,
+        "pipe_read": 2,
+        "__wait_on_buffer": 2,
+        "do_get_write_access": 1
+      },
+      "maxRollingEventLoopDelayMs": 824.181
+    }
+  },
+  "samplingCaveats": [
+    "Profiler is passive native sampling at 100Hz; not exact span tracing.",
+    "Main-thread /proc snapshots are 250ms nominal; CPU totals exclude boundary bins.",
+    "Health eventLoop max is a rolling 60-second value, not a new stall on every row.",
+    "Live partial captures cannot establish completion; final raw files determine verdict."
+  ]
+}

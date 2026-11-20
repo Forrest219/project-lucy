@@ -1,0 +1,37 @@
+{
+  "startedAt": "2026-11-20T07:35:53.660119+00:00",
+  "helperSha256": "18d35306116483f38e82156eb47ca3dfb89deedb74e5a3d7832744b6a5c59d33",
+  "scope": "F61 real process termination/recovery; not full F61/F63",
+  "probeBudget": {
+    "/api/livez": {
+      "count": 120,
+      "non200": 0,
+      "p99Ms": 38.5544169999921,
+      "maxMs": 95.40216599999985
+    },
+    "/api/readyz": {
+      "count": 120,
+      "non200": 0,
+      "p99Ms": 27.9660409999924,
+      "maxMs": 96.04349999999977
+    }
+  },
+  "autonomousRecovery": {
+    "fresh": true,
+    "elapsedS": 9.229,
+    "oldFifoReleased": false
+  },
+  "secondRecovery": {
+    "fresh": true,
+    "oldFifoReleased": false
+  },
+  "workerBound": {
+    "maxConcurrent": 1,
+    "observedWorkers": 16,
+    "maxObservedLifetimeS": 4.827979626999877,
+    "actuallyBlockedWorkers": 14,
+    "samplingIntervalS": 0.25
+  },
+  "verdict": "PASS WITH GAP",
+  "finishedAt": "2026-11-20T07:38:58.623907+00:00"
+}

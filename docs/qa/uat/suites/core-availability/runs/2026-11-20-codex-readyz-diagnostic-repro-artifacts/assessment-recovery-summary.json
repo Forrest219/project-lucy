@@ -1,0 +1,33 @@
+{
+  "startedAt": "2026-11-20T04:27:19.820269+00:00",
+  "helperSha256": "92dd7ba79b6ebac2eef56a5849feea2908353e655b66a265177f7c5d896a18a9",
+  "diagnosticFaultInjected": true,
+  "scope": "scoped export and real 10-second MySQL operation plus TERM; not whole-suite PASS",
+  "batch2": {
+    "statuses": {
+      "200": 12
+    },
+    "maxMs": 89.559,
+    "diagnosticsStillStale": true,
+    "meaning": "actual audit_export adapter executed; does not cancel/recover diagnostic file I/O; no global-capacity conformance claim"
+  },
+  "batch3": {
+    "actualMysqlSleepObserved": true,
+    "query": {
+      "success": false,
+      "error": "Remote end closed connection without response"
+    },
+    "exited": true,
+    "exitElapsedS": 1.005,
+    "exitCode": 143,
+    "diagnosticFaultPresentDuringTerm": true,
+    "meaning": "single real in-flight query/TERM case; not 100-race or all recovery conformance"
+  },
+  "sameVolumeRestart": {
+    "httpAndPureMcp": true,
+    "oracle": "count=4,sum=100",
+    "noReseed": true
+  },
+  "verdict": "FAIL",
+  "finishedAt": "2026-11-20T04:28:17.751932+00:00"
+}

@@ -302,9 +302,9 @@
 | P1-66 | P1（性能差集；建议） | Agent 名册摘要投影与单对象详情按需读取 | REQ-030-087 | P1-58 续作／治理读路径／兼容 | 否 | v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 | [Spec](../specs/lucy-20261120-agent-roster-summary-projection-spec.md) · [Plan](lucy-20261120-agent-roster-summary-projection-plan.md) · [UAT](../qa/uat/suites/agent-roster-summary/suite.md) |
 | P1-64 | P1（事故修复） | 同连接跨 Schema 短名冲突与保存运行时确认修复 | REQ-030-085 | 扫描生成／Manifest 上传／Source Map 编译与保存 ack | 否 | v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 | [Spec](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) · [Plan](lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) · [UAT](../qa/uat/suites/source-shortname-conflict/suite.md) |
 | P1-65 | P1（事故修复） | Wiki 覆盖上传采用 YAML 授权声明（差异／损坏须显式选择） | REQ-030-086 | Spec 193 §5 增量；治理主路径 | 否 | v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-wiki-upload-acl-adoption-spec.md) · [Plan](lucy-20261120-wiki-upload-acl-adoption-plan.md) · [UAT](../qa/uat/suites/wiki-upload-acl-adoption/suite.md) |
-| P1-61 | P1（第一批；建议） | 存活／就绪探针纯内存响应与诊断隔离 | REQ-030-082 | P1-21／46 续作；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) · [Plan](lucy-20261119-memory-probe-diagnostics-isolation-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
-| P1-62 | P1（第二批；建议） | 重任务跨模块容量控制与许可生命周期 | REQ-030-083 | 复用局部队列；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-heavy-work-capacity-control-spec.md) · [Plan](lucy-20261119-heavy-work-capacity-control-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
-| P1-63 | P2（第三批；建议） | 进程关停准入关闭与在途请求排空 | REQ-030-084 | Spec 191 生命周期增量；功能合同 | 否 | v0.1-draft。仅文档；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md) · [Plan](lucy-20261119-process-drain-lifecycle-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
+| P1-61 | P1（第一批；建议） | 存活／就绪探针纯内存响应与诊断隔离 | REQ-030-082 | P1-21／46 续作；功能合同 | 否 | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-01真实停止／自动恢复局部复测PASS WITH GAP；完整F61矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。  | [Spec](../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) · [Plan](lucy-20261119-memory-probe-diagnostics-isolation-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
+| P1-62 | P1（第二批；建议） | 重任务跨模块容量控制与许可生命周期 | REQ-030-083 | 复用局部队列；功能合同 | 否 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现已落地（本机单元与组件测试通过）；本机 Docker 局部 UAT PASS WITH GAP（仅真实导出入口；完整 F62 未完成）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。  | [Spec](../specs/lucy-20261119-heavy-work-capacity-control-spec.md) · [Plan](lucy-20261119-heavy-work-capacity-control-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
+| P1-63 | P2（第三批；建议） | 进程关停准入关闭与在途请求排空 | REQ-030-084 | Spec 191 生命周期增量；功能合同 | 否 | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。  | [Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md) · [Plan](lucy-20261119-process-drain-lifecycle-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-60 | P0（问数主路径事故修复） | begin 价值重评与零绑定 MCP 问数不受影响 | REQ-030-081 | P0-1 修复／零绑定主路径／有绑定发布一致性另段 | 否（沿用 P0-1） | v0.9；功能合同已收口（SC-01–12通过，P1-60／P1-64同一冻结候选完整复验）；预算持久化锁竞争修复纳入；本轮增量已提交；未推送／发布；不入新增核心分母；本条收口不表示可上线。 | [Spec](../specs/lucy-20261119-webui-publish-caliber-registry-repair-spec.md) · [Plan](lucy-20261119-webui-publish-caliber-registry-repair-plan.md) · [UAT](../qa/uat/suites/begin-zero-binding/suite.md) · [任务包](../../inbox/20261120-1037-p1-60-multi-agent-dev-pack.md) · [决议](../reviews/2026-11-20-begin-hide-decision.md) · [错题](../lessons/2026-11-19-begin-zero-binding-test-gap.md) |
 | P1-58 | P1（第一批） | 角色权限与 Agent 列表读取响应、展示复用与统计减负 | REQ-030-079 | 治理主路径／性能 | 否 | v1.1。委托人2026-11-20批准分批交付并提交本进程；本轮实现与证据归档收口；首批主路径结果见测试台；完整F58／F59、2×／5×长测及剩余故障矩阵延期第二批，未计PASS；R未执行；不入核心分母；≠ 完整功能合同收口；≠ 可上线。 | [Spec](../specs/lucy-20261119-roles-agent-read-responsiveness-spec.md) · [Plan](lucy-20261119-roles-agent-read-responsiveness-plan.md) · [UAT](../qa/uat/suites/roles-agent-concurrency-scale/suite.md) |
 | P1-59 | P1（第二批） | 角色权限与 Agent 多人编辑的对象级冲突与草稿恢复 | REQ-030-080 | 治理主路径／并发正确性 | 否 | v1.1。委托人2026-11-20批准分批交付并提交本进程；本轮实现与证据归档收口；首批主路径结果见测试台；完整F58／F59、2×／5×长测及剩余故障矩阵延期第二批，未计PASS；R未执行；不入核心分母；≠ 完整功能合同收口；≠ 可上线。 | [Spec](../specs/lucy-20261119-roles-agent-concurrent-edit-spec.md) · [Plan](lucy-20261119-roles-agent-concurrent-edit-plan.md) · [UAT](../qa/uat/suites/roles-agent-concurrency-scale/suite.md) |
@@ -787,3 +787,21 @@
 委托人续授P1-60剩余整改、完整Docker UAT与两项同候选合并、类型／浏览器取证和整包终审。归属现有P1-60／REQ-030-081与P1-64／REQ-030-085，不新增能力；保留历史判定，本轮完整结果前不主张新PASS。
 
 P1-60完整R补记：N性能采样的预算持久化SQLITE_BUSY已在独立真SQLite观测中核实，改前镜像亦出现；本轮补真实写争用及故障零写入回归，修正保存事务取锁时机，预算／ACL规则保持。归属既有SC-05／10，不新增产品能力；未过完整矩阵前不主张PASS。
+
+### R-CAV-FDE-1883具名持续运行补验（2026-11-20）
+
+委托人明示授权：本机Docker构造至少1883张启用表，真实短名修改／保存／配置重载与审计维护并行，区分诊断I/O等待和主线程同步阻塞，回写测试台。复用P1-13组合取证及P1-61／62／63、P1-64相关入口，不新增产品能力或SC，不改客户环境、不提交、不推送、不发布。本轮仅测试工具／夹具／只读性能采集，不默认授权新增产品运行修复。
+
+已按委托人约1h收敛：实跑59分45秒，1883–1884启用表，12次真实提交／重载、8次完整恢复；[补验局部FAIL与收敛评估](../qa/uat/suites/core-availability/runs/2026-11-20-codex-fde-1883-soak.md)。5次预算相关业务503、HTTP超时与观测开销分列，客户入口摘流链路未自然复现；原2h、后置1883表I/O控制及最终全量审计闭包仍GAP。后续先消费18b63d01既有预算／短名修复，与可用性修复整合成同候选，再按[执行Plan](lucy-20261120-readyz-diagnostic-repro-uat-plan.md)核对同步热点和热重载差集；本轮未新增运行实现，不重复立项、不改变功能Spec现值。
+
+### 核心可用性本进程阶段提交授权（2026-11-20）
+
+2026-11-20委托人后续批准：本进程已完成修复、回归及取证可作阶段性本地commit；不含push、发布或客户变更，未完成矩阵仍保留GAP。 提交范围归属既有P1-61／62／63及R-CAV-FDE-1883，不纳入角色／Agent等其他进程改动。先提交已完成部分，再制定三问题后续Plan；不把阶段提交视为整包更新放行。
+
+阶段提交范围／基线对照及未完成出口见[本进程提交复核](../reviews/2026-11-20-core-availability-checkpoint-review.md)；该记录不替代原Spec现值或整包放行。
+
+### 0.30合入与后续计划分期（2026-11-20）
+
+委托人批准本次已完成修复合入lucy-v0.30并复跑现有测试；[后续Plan](lucy-20261120-core-availability-followup-plan.md)放下次开发，本轮不执行Task0–4。保留现有预算／短名修复，整合诊断实际取消及MCP／Node PID排空；只纳入已完成范围，不带入其他任务暂存。不push／发布／改客户环境，验证通过也不代签完整F61／F62／F63或客户根因。
+
+本次合入复验记录：[0.30既有修复复测](../qa/uat/suites/core-availability/runs/2026-11-20-codex-availability-merge-recheck.md)，源码d978f4df、镜像8baa62dc；44项Vitest／32项Node／类型0错，实际I/O恢复与三轮TERM均局部PASS WITH GAP；不签完整矩阵或用户更新。后续开发继续延期。

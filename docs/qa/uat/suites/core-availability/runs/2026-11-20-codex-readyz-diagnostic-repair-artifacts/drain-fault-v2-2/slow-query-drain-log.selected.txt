@@ -1,0 +1,18 @@
+2026-11-20T04:53:29.077907001Z [diagnostic-collector] stage=reading pid=369
+2026-11-20T04:53:29.146322959Z [diagnostic-collector] closed pid=369 aborted=false code=0 signal=null
+2026-11-20T04:53:39.154793131Z [diagnostic-collector] stage=reading pid=500
+2026-11-20T04:53:39.170738798Z [diagnostic-collector] closed pid=500 aborted=false code=0 signal=null
+2026-11-20T04:53:39.889336840Z {"level":30,"time":1795150419889,"pid":247,"hostname":"77cb79aabf15","tool":"sl_query","callId":"58bef7cd-703c-46d5-8dc5-c9d600df9139","sessionId":"05b99ac0-ea90-4f88-af93-fedb0f62859b","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+2026-11-20T04:53:42.408118591Z {"level":30,"time":1795150422407,"pid":247,"hostname":"77cb79aabf15","tool":"sl_query","callId":"58bef7cd-703c-46d5-8dc5-c9d600df9139","sessionId":"05b99ac0-ea90-4f88-af93-fedb0f62859b","durationMs":2518.663085000002,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+2026-11-20T04:53:48.997985011Z [diagnostic-collector] stage=reading pid=649
+2026-11-20T04:53:53.715737555Z [diagnostic-collector] closed pid=649 aborted=true code=null signal=SIGKILL
+2026-11-20T04:53:54.985475680Z {"level":30,"time":1795150434985,"pid":247,"hostname":"77cb79aabf15","tool":"sl_query","callId":"9e960423-60ba-49d8-addb-b634df1e7a6c","sessionId":"05b99ac0-ea90-4f88-af93-fedb0f62859b","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+2026-11-20T04:53:56.051406875Z [lucy] drain: begin pid=303 budget=20s
+2026-11-20T04:53:56.052870458Z [process-drain] draining pid=303 inFlight=1
+2026-11-20T04:53:56.254631208Z [lucy] drain: ack received
+2026-11-20T04:53:59.127821001Z [diagnostic-collector] stage=reading pid=760
+2026-11-20T04:54:03.709299253Z [diagnostic-collector] closed pid=760 aborted=true code=null signal=SIGKILL
+2026-11-20T04:54:05.747064671Z {"level":40,"time":1795150445746,"pid":247,"hostname":"77cb79aabf15","tool":"sl_query","callId":"9e960423-60ba-49d8-addb-b634df1e7a6c","sessionId":"05b99ac0-ea90-4f88-af93-fedb0f62859b","durationMs":10762.391255000002,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+2026-11-20T04:54:05.765614504Z [process-drain] settled pid=303 inFlight=0
+2026-11-20T04:54:05.971752671Z [lucy] drain: lucy settled exit
+2026-11-20T04:54:05.971764254Z [lucy] drain: stopping supervisor pid=239

@@ -68,7 +68,8 @@ defaults:
     "LUCY_AUDIT_DB",
     "KTX_INTERNAL_TOKEN",
     "LUCY_PROXY_UPSTREAM_HOST",
-    "LUCY_PROXY_UPSTREAM_PORT"
+    "LUCY_PROXY_UPSTREAM_PORT",
+    "LUCY_QUESTION_BUDGET"
   ]) previousEnv[key] = process.env[key];
   process.env.KTX_PROJECT_ROOT = projectRoot;
   process.env.LUCY_CONTENT_ROOT = ".";
@@ -102,6 +103,69 @@ async function waitForAuditRow(requestId: string): Promise<Record<string, unknow
 }
 
 describe("MCP execution stale classification", () => {
+  it.each([false, true])("keeps a real MCP RPC registered through drain (client disconnect=%s)", async (disconnect) => {
+    // Isolate lifecycle from Spec162's separate cancellation-on-close policy:
+    // the accepted upstream stays live after the client disappears.
+    process.env.LUCY_QUESTION_BUDGET = "off";
+    let start!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => { start = resolve; });
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    let calls = 0;
+    const upstream = createServer(async (req, res) => {
+      await readRequestBody(req);
+      calls++;
+      start();
+      await pending;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: "drain-query", result: { content: [{ type: "text", text: "ok" }] } }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+    const drain = await import("../runtime/process-drain.js");
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    drain.markProcessServing();
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`;
+    const controller = new AbortController();
+    const request = () => fetch(url, {
+      method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "drain-query", method: "tools/call", params: {
+        name: "lucy_query", arguments: { connectionId: "zijin", sourceName: "funds", measures: ["funds.fund_count"] }
+      } }), signal: controller.signal
+    });
+    const response = request().then(async (r) => ({ status: r.status, body: await r.json() }), () => null);
+    try {
+      await started;
+      expect(drain.processDrainInFlightCount()).toBe(1);
+      if (disconnect) controller.abort();
+      let drained = false;
+      const shutdown = drain.beginInstanceShutdown({ drainBudgetMs: 2_000 }).then(() => { drained = true; });
+      const rejected = await fetch(url, { method: "POST", body: "{}" });
+      expect(rejected.status).toBe(503);
+      expect(await rejected.json()).toMatchObject({ error: { code: "SERVICE_DRAINING" } });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(calls).toBe(1);
+      expect(drained).toBe(false);
+      expect(drain.processDrainInFlightCount()).toBe(1);
+      release();
+      const result = await response;
+      if (!disconnect) expect(result?.status).toBe(200);
+      await shutdown;
+      expect(drain.processDrainInFlightCount()).toBe(0);
+    } finally {
+      release();
+      await response;
+      drain.resetProcessDrainForTests();
+      server.closeAllConnections();
+      upstream.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    }
+  });
+
   it("classifies a resident-runtime missing connection as execution_config_stale", async () => {
     const upstream = createServer(async (req, res) => {
       await readRequestBody(req);

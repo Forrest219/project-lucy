@@ -1,0 +1,21 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/inbox/availability-integration-20261120/worktree/webui
+
+{"level":30,"time":1795160107690,"pid":82096,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/livez","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795160107692,"pid":82096,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":1.5187080000000606,"msg":"request completed"}
+{"level":30,"time":1795160107692,"pid":82096,"hostname":"localhost","reqId":"req-2","req":{"method":"GET","url":"/api/readyz","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795160107693,"pid":82096,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":0.30445899999995163,"msg":"request completed"}
+{"level":30,"time":1795160107693,"pid":82096,"hostname":"localhost","reqId":"req-3","req":{"method":"GET","url":"/api/health","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795160107693,"pid":82096,"hostname":"localhost","reqId":"req-3","res":{"statusCode":200},"responseTime":0.37816700000030323,"msg":"request completed"}
+{"level":30,"time":1795160107869,"pid":82096,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/readyz","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795160107869,"pid":82096,"hostname":"localhost","reqId":"req-1","res":{"statusCode":503},"responseTime":0.2341660000001866,"msg":"request completed"}
+{"level":30,"time":1795160107870,"pid":82096,"hostname":"localhost","reqId":"req-2","req":{"method":"GET","url":"/api/readyz","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795160107871,"pid":82096,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":0.22533299999986411,"msg":"request completed"}
+{"level":30,"time":1795160107871,"pid":82096,"hostname":"localhost","reqId":"req-3","req":{"method":"GET","url":"/api/health","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1795160107871,"pid":82096,"hostname":"localhost","reqId":"req-3","res":{"statusCode":200},"responseTime":0.13595800000030067,"msg":"request completed"}
+
+ Test Files  6 passed (6)
+      Tests  44 passed (44)
+   Start at  15:35:01
+   Duration  7.71s (transform 1.40s, setup 368ms, import 134ms, tests 6.78s, environment 0ms)
+

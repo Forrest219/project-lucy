@@ -1,0 +1,5 @@
+
+> project-lucy-eval@0.30.0 lint:terminology
+> node webui/scripts/lint-terminology.mjs
+
+Terminology lint passed (1178 files scanned).

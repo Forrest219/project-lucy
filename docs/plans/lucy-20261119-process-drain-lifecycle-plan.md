@@ -10,8 +10,8 @@
 |---|---|
 | 文档类型 / 版本 | 实施 Plan / v0.1-draft |
 | 功能编号 | P1-63／REQ-030-084 |
-| 状态 | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权，含 Spec 191 §4.2.3／§4.4 具名顺序修订）；开发授权已获得；实现完成（本机 Vitest／Node 单元与组件测试通过；demo stop_grace_period=45s 已渲染核对）；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
-| 授权边界 | 委托人授权按本 Plan Task 1–3 实施运行代码、entrypoint、demo `stop_grace_period`、配套测试与 Spec 191 具名修订；Task 4（真实 Docker F63／runner）仍须另行测试执行授权；禁止提交／推送／发布／客户升级 |
+| 状态 | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
+| 授权边界 | 2026-11-20委托人明示按原合同修复已复现缺口，授权相关运行代码、测试工具及本机隔离Docker全真复测；不改客户环境、不提交、不推送、不发布；完整矩阵不得推定通过 2026-11-20委托人后续批准：本进程已完成修复、回归及取证可作阶段性本地commit；不含push、发布或客户变更，未完成矩阵仍保留GAP。 |
 | 验收 | [Spec](../specs/lucy-20261119-process-drain-lifecycle-spec.md) SC-01–09；[测试台](../qa/uat/suites/core-availability/suite.md) F63 |
 
 ## 目标
@@ -25,7 +25,7 @@
 3. 冻结进程拓扑、PID/退出码、现有reload/清理基线及测试镜像。区分正常TERM与依赖崩溃/SIGKILL，不承诺不可捕获信号完成排空。核对标准Docker demo的Compose stop grace；若仍缺配置，须取得运行配置修改授权后与entrypoint同次补齐≥45秒，不能只改定制测试台。
 4. P1-61应先形成内存生命周期可读边界；P1-62若尚未实施，先证明原任务真实settle接法，不能用未落地接口作前置假设。两者的SC不复制成本条SC。
 
-## 实施任务（当前全部未执行）
+## 实施任务（设计任务清单；实施已完成，验收见现值）
 
 ### Task 1：冻结旧顺序与领域终态
 
@@ -50,7 +50,7 @@
 - 实现先通知/确认Lucy DRAINING、20秒排空，再原supervisor清理；取消通知与剩余状态记录包含在20秒内，不另加无界等待。内部通信不承载凭据，不暴露公网。
 - 更新原Spec191具名段落及API合同；`SERVICE_DRAINING` 不带固定Retry-After，提示服务恢复后显式重试。自定义stop超时冲突必须显式校验。
 - 获运行配置修改授权后，Modify `deploy/compose/docker-compose.demo.yml`，为标准Docker demo显式配置 `stop_grace_period: 45s`（或更长且经预算校验的值），并用Compose渲染结果核对；其他部署文件不在本稿默认扩改。
-- 授权后拟运行：`node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs` 与 `cd webui && npx vitest run server/__tests__/process-drain.test.ts`；预期退出/竞态/兼容断言通过。新增文件当前不存在。
+- 授权后拟运行：`node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs` 与 `cd webui && npx vitest run server/__tests__/process-drain.test.ts`；预期退出/竞态/兼容断言通过。相关文件已实现，证据见修复跑次。
 - 出口：SC-03／05–07／09；既有退出码/supervisor异常路径不能回退。
 
 ### Task 4：真实信号局部验收及恢复
@@ -58,7 +58,7 @@
 - 获执行授权后在隔离Docker对真实进程发送TERM；用真实测试数据库延迟构造在途请求，不能仅在应用回包前sleep冒充依赖还可用。
 - 三轮正常排空与超时兜底，≥100轮准入竞态；每轮核对信号确认、受理时间、KTX存活、任务执行次数/回执与退出顺序。
 - 重启后用已鉴权HTTP完成原合法主任务，并用无WebUI Cookie的纯MCP完成 `initialize`→`tools/list`→合法轻量数据查询且核对结果；有原回执的未知写结果先查旧回执，不自动重放，不为无回执模块新造job API。
-- F63只验证本生命周期；实际反代传播/升级窗口归R-CAV与P1-52，真实Agent题库归P1-53／54。共享runner本轮不创建。
+- F63只验证本生命周期；实际反代传播/升级窗口归R-CAV与P1-52，真实Agent题库归P1-53／54。完整共享runner尚未创建；本次局部使用readyz-diagnostic-repro.py。
 
 ## 浏览器验证
 
@@ -72,7 +72,7 @@
 
 ## 完成定义
 
-本轮是设计草案与登记完成；未来开发须批准Spec191修订和本合同、取得具名授权后才开始。F63通过只证明有界排空，不证明单副本升级零中断或可上线。
+目标缺口修复及本机局部复测已完成，完整F63矩阵仍未完成；以头部现值及具名跑次为准，不主张功能合同收口或可上线。
 
 ## 风险
 
@@ -85,4 +85,18 @@
 
 ## 落盘清单
 
-17项共用自查见 [suite](../qa/uat/suites/core-availability/suite.md)；本轮未改entrypoint、KTX、运行配置或交付形态。
+17项共用自查见 [suite](../qa/uat/suites/core-availability/suite.md)；本次仅修改原合同内entrypoint实际PID等待，不改KTX或交付形态。
+
+## 2026-11-20 首轮仅复现（历史）
+
+[首轮跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro.md)当时仅获复现授权，保留局部FAIL，不回改历史。后续委托人已明示授权按原Spec／Plan修复并本机Docker复测；当前授权及状态见头部。
+
+## 已授权缺口修复与本次结果
+
+MCP在首个异步准入前同步登记；处理Promise、已接受上游请求／流、异步响应门禁终态后才注销。客户端close不单独注销；空闲GET／SSE不占业务计数，DRAINING拒绝新请求。原鉴权、撤权、预算取消与审计合同保留，不把TCP结束外推为远程数据库事务完成。
+
+真实Docker发现npm启动器先退出，父entrypoint误判排空；本次直接node --import tsx server/index.ts启动并等待实际服务PID，保持原Spec191 drain-first和20／40／45秒预算。实际PID接线归原Task3／SC-03、07，不另立项。
+
+先补真实入口与实际Node PID回归，再执行诊断正常／挂起两档共三轮MySQL10秒查询TERM、确认后探针／新RPC拒绝及同容器同卷恢复。
+
+[修复跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repair.md)记录最终镜像、真实I/O／DB／TERM证据、PASS WITH GAP与完整矩阵剩余项。没有客户变更、提交、推送或发布；本次浏览器不适用。
