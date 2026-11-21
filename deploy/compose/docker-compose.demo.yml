@@ -98,6 +98,8 @@ services:
       # in customer mode. /api/health reports insecureTestProfile while set.
       LUCY_WEBUI_COOKIE_SECURE: "0"
       LUCY_WEBUI_TEST_PROFILE: "1"
+      # P1-68 UAT harness: unset/off → ops-step-uat routes 404; set to 1 for suite runs only.
+      LUCY_OPS_STEP_UAT: "${LUCY_OPS_STEP_UAT:-}"
       POSTHOG_DISABLED: "1"
     ports:
       - "${LUCY_DEMO_WEBUI_HOST_PORT:-55176}:5174"
