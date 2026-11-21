@@ -1,6 +1,6 @@
 # SQLite 风险与 PostgreSQL 迁移准备：源码盘点
 
-日期：2026-11-20。关联：P1-71／REQ-030-092；[Spec](../specs/lucy-20261120-storage-readiness-spec.md)／[Plan](../plans/lucy-20261120-storage-readiness-plan.md)。
+日期：2026-11-20。关联：P1-71／REQ-030-092；[Spec](../specs/lucy-20261120-storage-readiness-spec.md)／[Plan](../plans/lucy-20261120-storage-readiness-plan.md)。**现值（2026-11-22）**：0.30 不开发；材料保留在需求池作下一期开发目标；终稿未确权；未获开发授权。
 
 证据范围：当前共享工作树源码及已有 Spec／测试设计，含其他任务未提交实现。未打开任何运行数据库、客户数据、凭据或真实连接配置；未采样服务、未运行 Docker、备份或迁移。下列是源码入口盘点，不是线上版本认证、完整表清单或容量实测。
 

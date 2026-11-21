@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v2.08 / 2026-11-22 |
+| 版本 / 日期 | v2.09 / 2026-11-22 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**；**P2-2 对标对象已修正、D17 首页形态已裁决、D19／D20 已纳入、D21 MD 标配已登记（2026-11-19，见 v1.54／v1.56／v1.57 行）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码  **P1-57两处功能阻塞已修复；委托人已延期G6正式完整导出，本轮客户功能测试排除此项，可按限定范围进行。原完整范围FAIL证据保留。** |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,7 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v2.09 | 2026-11-22 | **P1-71／REQ-030-092 明确不开发并留池作下一期目标**：委托人「本 Spec 不开发，明确移入需求池，作为下一期开发的目标」。状态改为 0.30 不开发；准备材料保留；终稿未确权；未获开发授权；测试台仍 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 |
 | v2.08 | 2026-11-22 | P1-68／REQ-030-089：委托人批准 commit→平滑 demo:upgrade→UAT-SUITE-OPS-STEP R0／01–08 全真跑次。跑次 PASS WITH GAP（gitSha=88b2e9ea；见测试台跑次）；重度 Linux／16MiB／UID、age_limit 1h、51／52 表、双连接 catalog 仍为设计值 GAP；≠ 功能合同完全收口；≠ 可上线；不 push／不发布。 |
 | P1-72完成 | 2026-11-20 | 取消人工证明门槛，统一主路径／内部载体；286＋97自动化与39项真库验证通过，Codex CLI终审收口；扩展回归20项及全仓8条API登记既有缺口单列；未发布。 |
 | P1-72授权 | 2026-11-20 | 委托人批准取消行权限人工证明开关并要求落地；REQ-030-093／Spec／Plan v1.0，开发与隔离 Docker 验证已授权；不发布。 |
@@ -312,7 +313,7 @@
 | 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 核心分母 | 跟进状态 | Spec／Plan |
 |---|---|---|---|---|---|---|---|
 | P1-72 | P1 | 行权限自动强制执行，取消运维人工证明开关 | REQ-030-093 | 行权限可用性修复 | 否 | v1.0。终稿已确权；开发授权已获得；实现与 Codex CLI 代码终审完成；功能合同已收口（定向回归286项、脚本合同97项、隔离Docker39项）；测试台 UAT-SUITE-ROW-POLICY-AUTO PASS；扩展回归与全仓门禁既有缺口单列，远端CI未执行；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md) · [Plan](lucy-20261120-row-policy-automatic-enforcement-plan.md) · [测试台](../qa/uat/suites/row-policy-automatic-enforcement/suite.md) |
-| P1-71 | P1（准备项；执行未排期） | SQLite 风险防范与 PostgreSQL 迁移准备 | REQ-030-092 | 存储可靠性／可迁移性 | 否 | v0.1-draft。仅文档准备已授权；源码盘点、风险差集与 Spec／Plan／UAT 设计已落盘；终稿未确权，开发及演练执行未授权；不升级、不迁移、不操作客户实例；不入核心分母；≠ 功能合同收口；≠ 可上线。 | [Spec](../specs/lucy-20261120-storage-readiness-spec.md) · [Plan](lucy-20261120-storage-readiness-plan.md) · [UAT](../qa/uat/suites/storage-readiness/suite.md) |
+| P1-71 | P1（Deferred；下一期） | SQLite 风险防范与 PostgreSQL 迁移准备 | REQ-030-092 | 存储可靠性／可迁移性 | 否 | v0.1-draft。0.30 不开发；准备材料保留在需求池作下一期开发目标。源码盘点、风险差集与 Spec／Plan／UAT 设计已落盘；终稿未确权；未获开发授权；不升级、不迁移、不操作客户实例；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 | [Spec](../specs/lucy-20261120-storage-readiness-spec.md) · [Plan](lucy-20261120-storage-readiness-plan.md) · [UAT](../qa/uat/suites/storage-readiness/suite.md) |
 | P1-69 | P1（可用性差集） | MCP执行层热重载在途保护与统一截止 | REQ-030-090 | 热重载生命周期／Spec191增量 | 否 | v0.1。Codex CLI终稿确权通过；开发授权已获得；实现已落地，组件与真实shell回归通过；候选6本机Docker排空／拒绝／恢复及直接CLI定向已验证，完整F69矩阵仍有缺口；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 | [Spec](../specs/lucy-20261120-runtime-reload-drain-spec.md) · [Plan](lucy-20261120-runtime-reload-drain-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-70 | P1（可用性差集） | 正常语义写入期间MCP读取有界等待 | REQ-030-091 | 语义发布／恢复屏障增量 | 否 | v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得；功能合同收口（本机自动化与真实Docker）；远端CI未执行；30分钟组合结果独立登记；不入核心分母；≠ 整套UAT PASS；≠ 可上线。 | [Spec](../specs/lucy-20261120-semantic-read-write-settle-spec.md) · [Plan](lucy-20261120-semantic-read-write-settle-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
 | P1-68 | P1（运行观察；建议） | 运维步骤账（Lucy 运维与 IT 运维） | REQ-030-089 | 运行观察／步骤可定位 | 否 | v1.0。终稿已确权；开发授权已获得；实现与独立代码评审完成；本机 demo Docker 平滑升级后 UAT-SUITE-OPS-STEP R0／01–08 全真 PASS（gitSha=88b2e9ea；跑次 [2026-11-22-cursor-ops-step](../qa/uat/suites/ops-step/runs/2026-11-22-cursor-ops-step.md)）；测试台 PASS WITH GAP（重度 Linux 管道 100ms／UID 追加拒绝／16MiB 双轮转、age_limit 1h 墙钟、51／52 表矩阵、双连接 catalog 配对仍为设计值 GAP）；不入核心分母；≠ 功能合同完全收口；≠ 可上线。 | [Spec](../specs/lucy-20261120-ops-step-journal-spec.md) · [Plan](lucy-20261120-ops-step-journal-plan.md) · [UAT](../qa/uat/suites/ops-step/suite.md) |

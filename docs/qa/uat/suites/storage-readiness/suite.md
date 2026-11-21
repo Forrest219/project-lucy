@@ -5,7 +5,7 @@
 | 版本 / 日期 | v0.1-draft / 2026-11-20 |
 | 总账 / REQ | P1-71／REQ-030-092 |
 | 关联 | [Spec](../../../../specs/lucy-20261120-storage-readiness-spec.md) · [Plan](../../../../plans/lucy-20261120-storage-readiness-plan.md) |
-| 状态 | NOT RUN；仅设计；开发与执行未授权 |
+| 状态 | NOT RUN；仅设计；0.30 不开发；材料在需求池作下一期目标；开发与执行未授权 |
 | 用例 / 夹具 | [cases](cases.md) · [fixtures](fixtures.md) |
 | 执行环境 | 未来单独授权后使用隔离本机 Docker、合成数据及真实数据库；当前不启动环境 |
 | 最近跑次 | 尚无；不创建伪跑次 |
