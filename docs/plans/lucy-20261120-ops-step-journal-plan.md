@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 实施计划 / v1.0 |
 | 日期 | 2026-11-20 |
 | 功能编号 | P1-68／REQ-030-089 |
-| 状态 | v1.0。终稿已确权（委托人2026-11-20明示“授权你修正，并定稿”）；开发授权已获得（委托人2026-11-20明示“授权你拆分多 agent 执行的任务，完成落地和 code review，暂不进行 docker 重建”）；实现已在工作树落地并完成独立代码评审；测试台 NOT RUN（未执行 Docker 重建、真实前台浏览器与 UAT，SC-01–SC-18 尚未取证）；不入核心分母；≠ 功能收口；≠ 可上线。 |
+| 状态 | v1.0。终稿已确权；开发授权已获得；实现与独立代码评审完成；本机 demo Docker 平滑升级后 UAT-SUITE-OPS-STEP R0／01–08 全真 PASS（gitSha=88b2e9ea；跑次 [2026-11-22-cursor-ops-step](../qa/uat/suites/ops-step/runs/2026-11-22-cursor-ops-step.md)）；测试台 PASS WITH GAP（重度 Linux 管道 100ms／UID 追加拒绝／16MiB 双轮转、age_limit 1h 墙钟、51／52 表矩阵、双连接 catalog 配对仍为设计值 GAP）；不入核心分母；≠ 功能合同完全收口；≠ 可上线。 |
 | 授权边界 | 只写、评审、优化并定稿设计与登记。不改运行代码，不执行 UAT，不重建镜像，不改客户现场。开发与跑次须另行授权。 |
 | 验收 | Spec SC-01–SC-18 全部通过，且测试台 `UAT-SUITE-OPS-STEP` 必做项 PASS。本 Plan 落盘不等于上述验收已经发生。 |
 | 关联 | [Spec](../specs/lucy-20261120-ops-step-journal-spec.md) · [UAT](../qa/uat/suites/ops-step/suite.md) |
