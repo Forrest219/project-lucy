@@ -1,16 +1,18 @@
 # Cases — UAT-SUITE-ROW-POLICY
 
+> 2026-11-20 P1-72 更新：新版本取消人工证明门槛。历史 2026-11-15 FAIL／BLOCKED 跑次保留；本文件的新期望不追改旧结果。
+
 | ID | 标题 | 层级 | 期望摘要 |
 |---|---|---|---|
 | UAT-R0 | 环境门禁与档位 | 手工／脚本 | 记录 `gitSha`、proven 原值、跑次档位 |
-| UAT-ROW-01 | 关 proven | MCP 全真 | 原因码就是 `row_policy_upstream_unproven`，且没有事实行 |
+| UAT-ROW-01 | 默认配置自动执行 | MCP 全真 | 不设置证明变量，查询成功且仅返回授权范围内的行 |
 | UAT-ROW-02 | 12 人在表 A 隔离 | WebUI＋MCP | 每人与对照逐值一致；查询不自带行级列过滤 |
 | UAT-ROW-03 | 表 B 上范围不同 | MCP 全真 | 两张自造表；至少一人两表范围不同 |
-| UAT-ROW-04 | 一次点名两张受保护表 | MCP 全真 | proven 已开；原因码就是 `row_policy_query_shape_forbidden` |
+| UAT-ROW-04 | 一次点名两张受保护表 | MCP 全真 | 默认环境；原因码就是 `row_policy_query_shape_forbidden` |
 | UAT-ROW-05 | 三条现行合同向量 | MCP 全真 | 伪造载体被剥掉；用户 AND 放宽不得变宽；OR 树被拒 |
 | UAT-ROW-06 | 未包装工具拒绝 | MCP 全真 | `lucy_read_source`、`lucy_freshness` 被拒且无样本行 |
 | UAT-ROW-07 | 配错取值 | WebUI／API | 现行实现预期 FAIL，归 `GAP-UAT-P1-28-VALUE`，不得改期望 |
-| UAT-ROW-08 | 清理并恢复 proven | WebUI／API | 无残留；`printenv` 回到开跑前 |
+| UAT-ROW-08 | 清理并恢复环境 | WebUI／API | 无残留；额外变更的环境恢复到开跑前 |
 | UAT-ROW-OBS | Wiki／join 观察 | MCP | 不计入套件 PASS／FAIL |
 
 P0-3 表级歧义先于行策略。点名来源必须带连接与 source。返回 `source_ambiguity_gate` 时，先完成来源确认再继续。确认后仍被歧义拦住，记 FAIL。
@@ -39,11 +41,11 @@ P0-3 表级歧义先于行策略。点名来源必须带连接与 source。返�
 
 ---
 
-## UAT-ROW-01 — 关 proven
+## UAT-ROW-01 — 默认配置自动执行
 
 ### 前置
 
-按 fixtures 做 Gate-Off 重建。重建后重记 health／`gitSha`。`printenv` 必须不是 `1`／`true`／`TRUE`。
+使用未设置人工证明变量的默认环境，记录 health／`gitSha`；不为启用行权限重建或重启。
 
 ### 步骤
 
@@ -52,8 +54,8 @@ P0-3 表级歧义先于行策略。点名来源必须带连接与 source。返�
 
 ### 期望
 
-- 拒绝原因**就是** `row_policy_upstream_unproven`。其他原因码记 FAIL，并写上实际码。
-- 响应中没有事实行。
+- 查询必须成功，结果仅包含该 Agent 的授权域，并与不受限对照中同域的值一致。
+- 返回旧 `row_policy_upstream_unproven` 或其他拒绝均不能记 PASS。
 
 ---
 
@@ -61,7 +63,7 @@ P0-3 表级歧义先于行策略。点名来源必须带连接与 source。返�
 
 ### 前置
 
-按 fixtures 做 Gate-On 重建。重建后重记 health／`gitSha`。`printenv` 必须为真。
+沿用默认环境，不设置人工证明变量；记录 health／`gitSha`。
 
 12 个 Agent 覆盖至少 3 个真实取值，每个取值至少一人。每人只挂 `uat-row-policy-role`。用该 Agent 的 Token 调 `lucy_explain_query`，确认 `finalRowsNonTrue=true`，且 `allowedTables` 不含 `*`。角色级预览不算证据。不满足记 **BLOCKED（夹具）**。
 
@@ -98,7 +100,7 @@ P0-3 表级歧义先于行策略。点名来源必须带连接与 source。返�
 
 ### 前置
 
-proven 仍是 Gate-On。若已回到关闭态，本条 FAIL，不得用 unproven 拒绝代替。
+沿用默认环境，不得用旧人工证明拒绝代替本条查询形状拒绝。
 
 ### 步骤
 
@@ -158,12 +160,12 @@ proven 仍是 Gate-On。若已回到关闭态，本条 FAIL，不得用 unproven
 
 ---
 
-## UAT-ROW-08 — 清理并恢复 proven
+## UAT-ROW-08 — 清理并恢复环境
 
 ### 步骤
 
 1. 吊销 Token，删除全部 `uat-row-policy-*` Agent 与 Role。
-2. 按 fixtures 用不带 proven 变量的原 demo compose 重建 lucy。
+2. 若额外执行了遗留变量兼容测试，恢复开跑前环境；普通场景无需为行权限重建 lucy。
 3. `printenv` 与 Admin 列表再查一次。
 
 ### 期望

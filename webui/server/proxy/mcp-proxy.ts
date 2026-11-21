@@ -7980,7 +7980,14 @@ export async function forwardAuthorizedLucyQuery(
 ): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> {
   const decision = await authorizeAndRewrite(identity, "lucy_query", args);
   if (!decision.allowed) return { ok: false, reason: decision.reason ?? "acl_denied" };
-  const outbound = decision.forcedFilters ? { ...args, forced_filters: decision.forcedFilters } : args;
+  // P1-72: use the same mandatory carrier as the public MCP path. Bundled
+  // KTX ignores forced_filters, so forwarding only that field would lose RLS.
+  let outbound: Record<string, unknown>;
+  try {
+    outbound = applyLucyQueryForcedFilters(args, decision.forcedFilters);
+  } catch {
+    return { ok: false, reason: "row_policy_forced_filters_invalid" };
+  }
   const projectRoot = await resolveProjectRoot();
   const hiveDecision = await resolveAndMaybeServeHiveTool({
     projectRoot,
@@ -8009,7 +8016,7 @@ export async function forwardAuthorizedLucyQuery(
       jsonrpc: "2.0",
       id: `lucy-offline-batch-${randomUUID()}`,
       method: "tools/call",
-      params: { name: "lucy_query", arguments: outbound }
+      params: { name: "sl_query", arguments: lucyQueryUpstreamArgs(outbound) }
     }));
     const upstream = await forwardToKtx("POST", "/mcp", { "content-type": "application/json" }, body, sessionId, onRequest);
     const text = await readUpstreamBody(upstream);

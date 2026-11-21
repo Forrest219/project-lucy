@@ -7,12 +7,12 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Gate C evidence (executable, not signed):
+ * Forced row-policy carrier regression:
  * - BY-01: Proxy injects forced_filters + prepends forced exprs into filters[];
  *   mock-KTX AND → returned rows ⊆ forced domain (Lucy-owned carrier for bundled KTX 0.16.0).
  * - BY-18: lucy_explain_query is local (E1–E5); no upstream tools/call.
  *
- * Deploy抽检 + Gate C signatures remain human / UAT; proven stays false by default.
+ * P1-72: runtime enforcement is automatic. Real KTX rowsets remain separate Docker evidence.
  * Do not require kaelio/ktx publish.
  */
 
@@ -163,8 +163,9 @@ afterEach(async () => {
 });
 
 describe("BY-01 mock-KTX row ⊆ forced domain", () => {
-  it("injects forced_filters on the wire and mock outer-AND returns only in-domain rows", async () => {
-    process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = "true";
+  it.each([undefined, "false", "true", "1", "invalid"])("enforces the row domain with legacy flag %s", async (flag) => {
+    if (flag === undefined) delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+    else process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = flag;
     const upstreamSeen: Array<Record<string, unknown>> = [];
 
     const upstream = createServer(async (req, res) => {
@@ -261,7 +262,7 @@ describe("BY-01 mock-KTX row ⊆ forced domain", () => {
     }
   });
 
-  it("keeps proven=false deny before any upstream forward", async () => {
+  it("rejects unsafe filters before any upstream forward without an env gate", async () => {
     const upstreamSeen: string[] = [];
     const upstream = createServer(async (req, res) => {
       upstreamSeen.push(await readRequestBody(req));
@@ -296,7 +297,8 @@ describe("BY-01 mock-KTX row ⊆ forced domain", () => {
             name: "lucy_query",
             arguments: {
               connectionId: "warehouse",
-              measures: ["fin_ledger.total_sales"]
+              measures: ["fin_ledger.total_sales"],
+              filters: ["region = 'West' OR 1=1"]
             }
           }
         })
@@ -305,7 +307,7 @@ describe("BY-01 mock-KTX row ⊆ forced domain", () => {
         result?: { isError?: boolean; content?: Array<{ text?: string }> };
       };
       expect(rpc.result?.isError).toBe(true);
-      expect(rpc.result?.content?.[0]?.text).toMatch(/row_policy_upstream_unproven/);
+      expect(rpc.result?.content?.[0]?.text).toMatch(/filters_string_forbidden_on_scoped/);
       expect(upstreamSeen).toHaveLength(0);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
@@ -378,19 +380,77 @@ describe("BY-18 explain E1–E5", () => {
       };
       expect(ast.digests.length).toBeGreaterThan(0);
       expect(ast.forcedFilters.or.length).toBeGreaterThan(0);
-      // E4 — proven default false
+      // P1-72 — product enforcement, independent of deployment env
       const executionPath = diagnostic.executionPath as {
         wouldDeny: boolean;
         denyReason?: string;
         upstreamForcedPredicateProven: boolean;
       };
-      expect(executionPath.upstreamForcedPredicateProven).toBe(false);
-      expect(executionPath.wouldDeny).toBe(true);
-      expect(executionPath.denyReason).toBe("row_policy_upstream_unproven");
+      expect(executionPath.upstreamForcedPredicateProven).toBe(true);
+      expect(executionPath.wouldDeny).toBe(false);
+      expect(executionPath.denyReason).toBeUndefined();
       expect(diagnostic).not.toHaveProperty("leaked");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
       await new Promise<void>((resolve, reject) => upstream.close((err) => (err ? reject(err) : resolve())));
     }
+  });
+});
+
+// Internal consumers must use the same on-wire carrier as public MCP requests.
+describe("P1-72 internal authorized queries", () => {
+  it.each([undefined, "false"])("filters before aggregation with legacy flag %s", async flag => {
+    if (flag === undefined) delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+    else process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = flag;
+    const calls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
+    const upstream = createServer(async (req, res) => {
+      const rpc = JSON.parse(await readRequestBody(req));
+      if (rpc.method === "initialize") {
+        res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "internal-row-session" });
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result: { capabilities: {} } }));
+      } else if (rpc.method === "notifications/initialized") {
+        res.writeHead(202); res.end();
+      } else {
+        calls.push(rpc.params);
+        const args = rpc.params.arguments;
+        const rows = rowsMatchingStockKtxFilters(args.filters);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result: { content: [{ type: "text", text: JSON.stringify({ rows }) }] } }));
+      }
+    });
+    await new Promise<void>(resolve => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+    try {
+      const { forwardAuthorizedLucyQuery } = await import("../proxy/mcp-proxy");
+      const outcome = await forwardAuthorizedLucyQuery({ userId: "scoped_agent", tokenLabel: "scoped-token", tokenHashPrefix: "test" }, {
+        connectionId: "warehouse", measures: ["fin_ledger.total_sales"],
+        forcedFilters: { forged: true },
+        forced_filters: { or: [{ and: [{ field: "fin_ledger.region", op: "eq", value: "West" }] }] },
+        filters: [{ field: "fin_ledger.amount", op: "gt", value: 0 }]
+      });
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) throw new Error(outcome.reason);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.name).toBe("sl_query");
+      expect(calls[0]?.arguments.forcedFilters).toBeUndefined();
+      expect(calls[0]?.arguments.filters).toEqual(["(fin_ledger.region = 'East')", "fin_ledger.amount > 0"]);
+      const rpc = outcome.payload as { result: { content: Array<{ text: string }> } };
+      expect(JSON.parse(rpc.result.content[0]!.text).rows).toEqual(FIXTURE_ROWS.filter(row => row.region === "East"));
+    } finally {
+      await new Promise<void>((resolve, reject) => upstream.close(err => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("does not forward an invalid mandatory carrier", async () => {
+    const acl = await import("../proxy/acl");
+    vi.spyOn(acl, "authorizeAndRewrite").mockResolvedValue({ allowed: true, forcedFilters: { or: [] } });
+    try {
+      const { forwardAuthorizedLucyQuery } = await import("../proxy/mcp-proxy");
+      const outcome = await forwardAuthorizedLucyQuery({ userId: "scoped_agent", tokenLabel: "test", tokenHashPrefix: "test" }, {
+        connectionId: "warehouse", measures: ["fin_ledger.total_sales"]
+      });
+      expect(outcome).toEqual({ ok: false, reason: "row_policy_forced_filters_invalid" });
+    } finally { vi.restoreAllMocks(); }
   });
 });

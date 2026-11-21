@@ -447,8 +447,13 @@ async function runMcpCases() {
     measures: ["superstore_orders.total_sales"]
   });
   await saveJson("08-mcp-lucy-query.json", q, [token]);
-  const unproven = /row_policy_upstream_unproven/.test(q.text);
-  record("MCP-1", unproven, unproven ? "unproven deny" : q.text.slice(0, 200));
+  let queryEnvelope;
+  try {
+    const data = q.text.split("\n").filter(line => line.startsWith("data:"));
+    queryEnvelope = JSON.parse(data.length ? data[data.length - 1].slice(5) : q.text);
+  } catch { queryEnvelope = null; }
+  const enforced = q.status === 200 && queryEnvelope?.result && !queryEnvelope.error && queryEnvelope.result.isError !== true;
+  record("MCP-1", enforced, enforced ? "automatic row enforcement (full rowset checks in P1-72 suite)" : q.text.slice(0, 200));
 
   const read = await mcpCall("lucy_read_source", {
     connectionId: "demo-mysql",

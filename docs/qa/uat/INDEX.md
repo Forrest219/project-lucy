@@ -6,6 +6,7 @@
 
 | Suite | 总账 ID | 路径 | 必做环境 | 最近跑次 | 结果 |
 |---|---|---|---|---|---|
+| `UAT-SUITE-ROW-POLICY-AUTO` | P1-72／REQ-030-093 | [suites/row-policy-automatic-enforcement](suites/row-policy-automatic-enforcement/suite.md) | 隔离本机 Docker＋真实 MCP／KTX／MySQL | [2026-11-20-codex-default-row-policy](suites/row-policy-automatic-enforcement/runs/2026-11-20-codex-default-row-policy.md) | **PASS**（39 项真库；286＋97 自动化；既有扩展回归／全仓门禁缺口单列；不是 P1-28 全套 PASS；≠ 可上线） |
 | `UAT-SUITE-STORAGE-READINESS` | P1-71／REQ-030-092 | [suites/storage-readiness](suites/storage-readiness/suite.md) | 未来另行授权的隔离 Docker＋合成数据＋真实 SQLite／PostgreSQL；本次不执行 | 尚无 | **NOT RUN**（仅用例设计；开发／演练未授权；不升级、不操作客户实例） |
 | `UAT-SUITE-OPS-STEP` | P1-68／REQ-030-089 | [suites/ops-step](suites/ops-step/suite.md) | 本机 demo Docker；IT 路径看容器标准输出；Lucy 运维路径前台浏览器 1920×1080 | 尚无 | **NOT RUN**。v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan／UAT 设计；终稿未确权；开发未授权；测试台 NOT RUN；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | `UAT-SUITE-AGENT-ROSTER-SUMMARY` | P1-66／REQ-030-087 | [suites/agent-roster-summary](suites/agent-roster-summary/suite.md) | 隔离 Docker 原生专用卷＋真实 MySQL；前台 Chrome；BAL／SKEW × B109／W2／W5 | [2026-11-20 执行记录](suites/agent-roster-summary/runs/2026-11-20-codex-p166-docker.md) | **PASS WITH GAP（仅F66-A）**：本批BA-01–07收口，最小Docker／前台／MCP通过；[批次A记录](suites/agent-roster-summary/runs/2026-11-20-codex-p166-batch-a.md)。原F66完整矩阵FAIL保留，冷／首访／扩展规模暂停；≠ 可上线 |
@@ -107,9 +108,9 @@ node scripts/uat/run-catalog-scan-wide-api.mjs
 
 # 行级隔离（P1-28／P1-29）
 # 用例：docs/qa/uat/suites/row-policy-finance-scenario/cases.md
-# 夹具：同目录 fixtures.md（自造 uat_row_policy_；proven 用同一 compose project 重建）
+# 夹具：同目录 fixtures.md（自造 uat_row_policy_；P1-72 起默认自动执行，无需 proven 切换）
 # 最近判定：FAIL（2026-11-15-cursor-row-policy-retest；仍 BLOCKED 于歧义门闩／可用性）
-# 复跑前确认 printenv LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN 未设置，且没有 uat-row-policy-* / uat_row_policy_ 残留
+# 复跑前记录旧变量原值（新版本已忽略），确认没有 uat-row-policy-* / uat_row_policy_ 残留
 
 # 全页面／全 GET 路由事件循环看守（P1-31；整改 P1-32／P1-33）— 最近判定：PASS WITH GAP（2026-11-16-claude-page-sweep-after-rebuild；首跑 FAIL）
 # 全量：npm --prefix webui run sweep:event-loop（约 8–15 分钟，自行 docker cp＋vite build）

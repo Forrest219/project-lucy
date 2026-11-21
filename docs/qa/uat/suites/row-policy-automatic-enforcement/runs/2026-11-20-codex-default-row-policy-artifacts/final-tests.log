@@ -1,0 +1,45 @@
+ ❯ server/__tests__/help.test.ts (47 tests | 1 failed) 2077ms
+ ❯ src/__tests__/help-center.test.tsx (35 tests | 1 failed) 2146ms
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts (21 tests | 18 failed) 1025ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 20 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/__tests__/help-center.test.tsx > HelpCenter > §1.5 table has 4 columns and 26 rows that mirror navigation.ts
+AssertionError: expected 26 to be 27 // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-09／SC-10 空结果带 next_step，三处一致且上游取值不变
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-11 非空结果无 next_step；P0-4 可核对块与业务字段共存
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-12 text 不是 JSON 对象 → 018 不注入；skipped_reason 不被 AV 抹掉
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > C2：SSE 成功查数缺 originalEnvelopeWire → isError／assemble_failed，无成功块
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-18 JSON：200 + isError:true + rows:[] 不发且不调 allowedToolNames
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-18 SSE：200 + isError:true + rows:[] 不发且不调 allowedToolNames
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-19 上游 text 已带 next_step 键时不覆盖（可与 P0-4 块共存）
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-20 有数据／非 lucy_query 时不触发可见性裁决（计数）
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-22 无 structuredContent 时 text＋meta 仍注入
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-23 structured 已有 next_step、text 无 → 018 整单跳过；P0-4 仍可投影
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-24 rows=[] 且截断 → repair 与 next_step 并存
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-25 overflow：018 跳过 next_step；P0-4 保留字面量并加可核对块
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-25 precision：018 跳过 next_step；P0-4 保留字面量并加可核对块
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-25 underflow：018 跳过 next_step；P0-4 保留字面量并加可核对块
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-30 JSON／SSE：HTTP 500 + JSON-RPC result + rows:[] → 无 next_step 且不调 allowedToolNames
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-14 审计行数不被污染，载荷无 rows/totalRows/columns/headers 键
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > N7 用户 filters 去值摘要进入 next_step.query，不含原始值
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-13(b) 018 注入成功后 AV 键冲突失败 → _meta 仍含 next_step
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  server/__tests__/help.test.ts > Help handbook > the bundled handbook entry map mirrors the current navigation directory
+AssertionError: expected [ Array(4) ] to deeply equal [ '运行状态', '运维步骤', …(2) ]
+ Test Files  3 failed | 25 passed (28)
+      Tests  20 failed | 376 passed (396)
+   Duration  19.44s (transform 1.50s, setup 1.45s, import 2.23s, tests 11.76s, environment 2.36s)

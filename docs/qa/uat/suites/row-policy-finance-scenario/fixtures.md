@@ -13,7 +13,7 @@
 | 行范围种类 | ≥ 3 个库内真实取值 | 用不带行级列过滤的不受限 `lucy_query`，按该列分组后读出候选 |
 | 跨表差异 | ≥ 1 人 | `u12` 在表 A 与表 B 上的取值不同，且都真实存在 |
 | 临时 Role | `uat-row-policy-role` | 只授予表 A／表 B，**不得**再挂「全部行」Role |
-| proven | `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` | 只在进程环境里读取（`1`／`true`／`TRUE` 为开）。没有运行期热切换 |
+| proven（历史） | `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` | P1-72 起所有值均忽略；默认无需设置；仅遗留部署兼容测试可刻意保留 |
 
 ## 两档跑次（不要混写成一次 PASS）
 
@@ -28,19 +28,13 @@
 
 开跑时把连接 id、两张 source 名、行级列、三个取值、以及自造对象清单写入跑次。source 名用 `uat_row_policy_` 前缀，不要把 `dataforai.` 物理前缀当成 source 名。
 
-## proven 切换
+## 默认环境与遗留变量兼容
 
-关与开都要重建 **同一个** compose project 的 lucy 容器，保留原数据卷。
+新版本默认自动执行行权限，不再要求 Gate-Off／Gate-On 切换，不需要为策略生效重建或重启。
 
-- 禁止 `docker compose -p lucy-ac-p1-by01`。那个 project 会换卷、换容器名。
-- 先读正在跑的容器标签 `com.docker.compose.project`，后面的 `-p` 只能等于这个值。
-- Gate-Off：`docker compose -p <该 project> -f deploy/compose/docker-compose.demo.yml -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml up -d --force-recreate --no-deps lucy`
-- Gate-On：`docker compose -p <该 project> -f deploy/compose/docker-compose.demo.yml -f deploy/compose/docker-compose.row-policy-uat-proven-on.yml up -d --force-recreate --no-deps lucy`。这个 overlay 只设置 proven。
-- 禁止用 `docker-compose.ac-p1-by01.yml` 整份 overlay。它的用法说明要求 `-p lucy-ac-p1-by01`，会换数据卷；它还把 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=true` 写进环境（Gate-Off 会静默失效），并带 `KTX_VERSION`（与镜像构建参数同名的运行期变量，不改捆绑的 KTX）和 `POSTHOG_DISABLED=1`。
-- 每次重建后重新 `GET /api/health`，重记 `gitSha`。容器内 `printenv LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 必须与本阶段声明一致。
-- 结束时用不带 proven overlay 的原 demo compose、同一个 `-p`，再 `--force-recreate --no-deps lucy`。`printenv` 必须为空或非真。只改文件、不重建，不算恢复。
-
-CONVENTIONS 对本套件的豁免只覆盖上面这一次切换。用重启掩盖失败的查询，仍是 FAIL。
+- 主场景保持未设置人工证明变量，记录运行版本和原环境。
+- 遗留 false／true 的独立兼容测试由 [P1-72 套件](../row-policy-automatic-enforcement/suite.md) 承接；两个值都不得阻断或放宽行域。
+- 不换 compose project／数据卷，不用重启掩盖失败；额外修改过环境的跑次结束恢复原值。
 
 ## 角色与 Agent
 
@@ -73,7 +67,7 @@ Token：`POST /api/admin/agents/<id>/tokens`。明文不写跑次。
 ## 禁止
 
 - 把 Bearer、密码、Token 明文写入 runs／INDEX／inbox
-- 测完让 proven 停在打开，而开跑前不是打开
+- 额外兼容测试修改环境后不恢复原值
 - 留下 `uat-row-policy-*`
 - 用少于 12 人的抽样代替 UAT-ROW-02
 - 在受限查询里自带行级列过滤来凑对照

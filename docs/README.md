@@ -5,6 +5,8 @@
 > 与既有 `access-control/ licensing/ plans/ qa/ ui-ux-feedback/ user-guide/` 并列；
 > 另有 `lessons/` 错题本。客户交付向的子集另见 `docs/governance/product-docs-index.md`。
 
+- [行权限自动强制执行](specs/lucy-20261120-row-policy-automatic-enforcement-spec.md)：P1-72／REQ-030-093；v1.0。终稿已确权；开发授权已获得；实现与 Codex CLI 代码终审完成；功能合同已收口（定向回归286项、脚本合同97项、隔离Docker39项）；测试台 UAT-SUITE-ROW-POLICY-AUTO PASS；扩展回归与全仓门禁既有缺口单列，远端CI未执行；不入核心分母；≠ 可上线。
+
 ## 目录布局
 
 | 子目录 | 内容 |

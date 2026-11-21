@@ -110,7 +110,7 @@ export const ROW25_OWNER_SYMBOLS = Object.freeze({
   "ROW25-V15": "ROW25-V15 intent 与终结审计故障注入",
   "ROW25-V16": "ROW25-V16 模板变更后 policyVersion 变化且无需重启",
   "ROW25-V17": "ROW25-V17 未包装 lucy_read_source 按 row_policy_requires_wrapped_tool 拒绝",
-  "ROW25-V18": "ROW25-V18 phase-off scoped 取数 row_policy_upstream_unproven",
+  "ROW25-V18": "ROW25-V18 默认配置自动强制执行行域",
   "ROW25-V19": "ROW25-V19 D-03 大写清单文件名",
   "ROW25-V20": "ROW25-V20 清单不可用与目录能力未知失败关闭",
   "ROW25-V21": "ROW25-V21 目录可靠时装载时字段不存在",
@@ -201,7 +201,7 @@ const RTP_RTV_REGISTRY = rowPolicyCaseIds().map((executionId) =>
 
 /**
  * Handler labels for BY-01..19. Each value contains its execution id.
- * BY-09 is the phase-off unproven case; the others are phase-on.
+ * BY-09 checks the default environment; legacy phase names are evidence partitions.
  */
 export const BY_OWNER_SYMBOLS = Object.freeze({
   "BY-01": "BY-01 ag_east 无用户筛选时仅见华东",
@@ -212,7 +212,7 @@ export const BY_OWNER_SYMBOLS = Object.freeze({
   "BY-06": "BY-06 entity_details 与 sl_validate 均 row_policy_requires_wrapped_tool",
   "BY-07": "BY-07 未包装 lucy_read_source 按 row_policy_requires_wrapped_tool 拒绝",
   "BY-08": "BY-08 sl_query 按 tool_absolute_deny:sl_query 拒绝",
-  "BY-09": "BY-09 phase-off scoped 取数 row_policy_upstream_unproven",
+  "BY-09": "BY-09 默认配置自动强制执行行域",
   "BY-10": "BY-10 ag_east_west 见华东与西南",
   "BY-11": "BY-11 跨来源 join 不扩权",
   "BY-12": "BY-12 left join 不扩权",
@@ -251,7 +251,7 @@ export const REGISTRY = Object.freeze([
 ]);
 
 /**
- * Execution ids that run in the given gate phase (`off` = upstream unproven, `on` = proven).
+ * Execution ids that run in the given gate phase (`off` = default config, `on` = legacy-flag compatibility).
  * Entries with `phase: "both"` appear in either phase list.
  *
  * @param {"off"|"on"} phase

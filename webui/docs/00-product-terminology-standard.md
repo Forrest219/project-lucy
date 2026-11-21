@@ -253,9 +253,9 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Final Rows | 最终行约束 | FinalRows | 仅用户 filter、仅 Role 并集 | `EffectiveRowGrant AND AgentConstraints AND TokenScope`；AC-P1：Constraints/TokenScope≡TRUE；**AC-P1.5**：Constraints 可非 TRUE（Spec 100）；TokenScope 仍≡TRUE |
 | Forced Predicate | 强制谓词 | ForcedPredicateAST | 拼进用户 filters 的 SQL | Proxy 编译自 FinalRows；不可被 OR/括号等放宽 |
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户可写 filters | AC-P1 上游主路径；仅 Proxy 可写 |
-| Upstream Forced Predicate Proven | 上游强制谓词已证明 | proven 标志 | 代码写完即已证明 | Gate C bypass 全绿后才可置真；未证明取数 deny |
+| Upstream Forced Predicate Proven | 上游强制谓词已证明 | proven 标志 | 代码写完即已证明 | P1-72 起为产品强制执行契约的兼容诊断字段；不再由部署变量置真 |
 | Row Policy Requires Wrapped Tool | 需包装工具 | `row_policy_requires_wrapped_tool` | capability_forbidden（混作主文案） | 受保护源上非 lucy_query 取数通道 |
-| Row Policy Upstream Unproven | 上游契约未证明 | `row_policy_upstream_unproven` | 临时放行碰运气 | FinalRows≠TRUE 且 proven≠true 的取数路径 |
+| Row Policy Upstream Unproven | 上游契约未证明 | `row_policy_upstream_unproven` | 临时放行碰运气 | 历史拒绝码；P1-72 起不因人工证明变量拒绝 |
 | Agent Constraints | 个人行限制 | 人级收紧、FinalRows 收紧 | 行级策略、行级权限策略、Agent 强制约束（弃用主术语）、Role 间 AND、Row Grant OR（混称）、TokenScope | 挂在 Agent 上、在角色行级策略之上再限制这个人，与 EffectiveRowGrant **AND**；**AC-P1.5 Spec 100**；Role 上 forbidden；AC-P1 配置出现即失败 |
 | Permission Model Version | 权限模型版本 | `permission_model_version`、模型版本 | 用户字段 role/roles、修改历史推断世代 | Role 上 `1`=legacy、`2`=显式模型 |
 | Row Policy | 行级策略 | row_policy、结构化行谓词 | Segment、查询 filters、overlay 表达式当权限 | 仅 `access.yaml` 内 structured 谓词；op∈{eq,in}；Spec 99 |
@@ -862,7 +862,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Agent Constraints Editor | 个人行限制 | constraints / 人级收紧 | 行级策略、Agent 强制约束（按钮与标题弃用）、Role 强制约束、Token 行收紧、多 Role 自动 AND | **仅 Agent Admin**（Spec 100）；从当前角色已授权的表勾选；Role / Token 不提供 |
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户 filters 即行权限 | 仅 Proxy 注入 |
 | Row Policy Requires Wrapped Tool | 需包装工具 | 请使用 lucy_query | 表未授权（混用） | Toast / 审计主文案 |
-| Row Policy Upstream Unproven | 上游契约未证明 | 行策略未启用取数 | 临时可用 | proven 前取数 deny |
+| Row Policy Upstream Unproven | 上游契约未证明 | 行策略未启用取数 | 临时可用 | 历史拒绝码；P1-72 起取消人工证明门槛 |
 | Scope Intersection Empty | 行范围与用户筛选无交集 | `scope_intersection_empty` | 允许执行（混用） | 调用流水：`outcome=ok` 且裁决原因区分空交集。**第二处承载：MCP 工具响应的 `next_step.kind`（同一概念、同一机器码，跨面引用须写明承载位）** |
 | Canonical Source Key | 规范源键 | 源键 | 表名（作为唯一 ID） | 预览 / snapshot 展示四元组 |
 | Policy Version | 策略版本 | `policyVersion` | 配置时间戳（冒充策略世代） | 保存成功回执与审计列 |

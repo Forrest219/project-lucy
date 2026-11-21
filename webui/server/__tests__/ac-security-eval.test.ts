@@ -229,10 +229,10 @@ describe("AC-SEC-SCOPE", () => {
 /**
  * AC-SEC-ROW / BYPASS (ADR §5.1 BY-01…19).
  * Full matrix lives in row-policy-ac-p1.test.ts ("AC-SEC-ROW / BYPASS").
- * Smoke here: unproven deny + AbsoluteDeny sl_query still holds with a scoped Role present.
+ * Smoke here: automatic row enforcement + AbsoluteDeny sl_query with a scoped Role.
  */
 describe("AC-SEC-ROW", () => {
-  it("smoke: unproven deny + AbsoluteDeny sl_query with scoped role", async () => {
+  it("smoke: automatic row enforcement + AbsoluteDeny sl_query with scoped role", async () => {
     const previousProven = process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
     delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
     try {
@@ -281,7 +281,7 @@ measures:
       await expect(authorizeAndRewrite(identity("scoped_smoke"), "lucy_query", {
         connectionId: "warehouse",
         measures: ["fin_ledger.amount"]
-      })).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+      })).resolves.toMatchObject({ allowed: true, forcedFilters: { or: expect.any(Array) } });
 
       await expect(authorizeAndRewrite(identity("scoped_smoke"), "sl_query", {
         connectionId: "warehouse",
@@ -297,7 +297,7 @@ measures:
 /**
  * AC-SEC-CONSTRAINT (Spec 100 / design-upgrade §6.4).
  * Full SC-P15 matrix: agent-constraints-ac-p15.test.ts.
- * Smoke here: OR→TRUE + Constraints tighten; cannot widen via user filters; P1 unproven holds.
+ * Smoke here: OR→TRUE + Constraints tighten; cannot widen via user filters; automatic enforcement holds.
  */
 describe("AC-SEC-CONSTRAINT", () => {
   async function seedConstrainedAllRole(): Promise<void> {
@@ -344,7 +344,7 @@ measures:
     );
   }
 
-  it("OR=TRUE + Constraints → FinalRows≠TRUE; proven injects; user forged filters cannot widen", async () => {
+  it("OR=TRUE + Constraints → FinalRows≠TRUE; automatic injection; user forged filters cannot widen", async () => {
     const previousProven = process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
     process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = "true";
     try {
@@ -393,7 +393,7 @@ measures:
     }
   });
 
-  it("Constraints do not bypass unproven gate (P1 regression)", async () => {
+  it("Constraints enforce automatically with the legacy flag unset", async () => {
     const previousProven = process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
     delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
     try {
@@ -407,7 +407,7 @@ measures:
           connectionId: "warehouse",
           measures: ["fin_ledger.amount"]
         })
-      ).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+      ).resolves.toMatchObject({ allowed: true, forcedFilters: { or: expect.any(Array) } });
     } finally {
       if (previousProven === undefined) delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
       else process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = previousProven;

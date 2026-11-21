@@ -29,7 +29,6 @@ import {
   buildForcedFiltersPayload,
   compileScopedRowGrant,
   formatRowPolicyAttribution,
-  isUpstreamForcedPredicateProven,
   mergeRowGrants,
   rowGrantDigest,
   validateProtectedLucyQueryArgs,
@@ -3555,12 +3554,9 @@ export async function authorizeAndRewrite(
           return { allowed: false, reason: "row_policy_requires_wrapped_tool" };
         }
         if (toolName === "lucy_query") {
-          // BY-02…05 / BY-12…16 — shape fail-closed before proven gate.
+          // BY-02…05 / BY-12…16 — shape fail-closed before mandatory predicate injection.
           const shapeDeny = validateProtectedLucyQueryArgs(args);
           if (shapeDeny) return { allowed: false, reason: shapeDeny };
-          if (!isUpstreamForcedPredicateProven()) {
-            return { allowed: false, reason: "row_policy_upstream_unproven" };
-          }
           if (protectedSources.length > 1) {
             return { allowed: false, reason: "row_policy_query_shape_forbidden" };
           }

@@ -1,5 +1,7 @@
 # UAT：AC-P1 Row Policy
 
+> **2026-11-20 现行替代条款（P1-72）：** [行权限自动强制执行](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md) 取代本文人工 proven 置真与缺变量拒绝条款。新版本默认执行合法行约束，旧环境变量忽略；强制注入、绑定和旁路拒绝仍保留。本文原 Gate C 签字和矩阵为历史证据，不是新版本部署启用步骤。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | AC-P1 Row Policy UAT 勾选清单 |

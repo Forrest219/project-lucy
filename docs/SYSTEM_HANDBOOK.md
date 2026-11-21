@@ -2933,13 +2933,11 @@ Step 6 输出的 MCP 配置是**占位符 + 环境变量**，**不写明文**。
 
 多角色叠加时，同源多个角色的行授予取**并集**；再与 Agent 强制约束求交，得到**最终行约束**（Final Rows）。配置保存前可用 dryRun 预览最终行约束的摘要与 `digest`。
 
-**重要边界——当前取数能力受上游证明开关约束**：
+**行级策略自动执行**：合法策略保存并取得运行时确认后，`lucy_query` 自动按最终行约束过滤。无需设置 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 或重启服务；旧部署遗留的该变量已忽略。
 
-行级策略依赖上游对强制谓词的拼接能力。该能力默认**未证明**（`LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 不应设置）。在未证明状态下：
-
-- 受行级策略保护的表通过 `lucy_query` 取数会返回 `row_policy_upstream_unproven`，这是**预期的安全拒绝，不是故障**；
-- 受保护表上的 `lucy_read_source` / `lucy_freshness` / `entity_details` 会被 `row_policy_requires_wrapped_tool` 拒绝，只允许走已包装的查询路径；
-- `lucy_explain_query` 始终可在本地执行，用于诊断。
+- 行约束由代理强制注入，用户过滤只能进一步收紧；无法安全执行的查询会明确拒绝，不会返回全部行；
+- 受保护表上的 `lucy_read_source` / `lucy_freshness` / `entity_details` 仍按 `row_policy_requires_wrapped_tool` 拒绝，应使用 `lucy_query`；
+- `lucy_explain_query` 提供本地诊断，不转发、不返回行数据；诊断成功不代表其他查询校验已通过。
 
 **不要**为了「恢复业务」而把强制条件手写进用户查询的 `filters` 字符串——代理自动前置的条件与用户可写的过滤条件是两回事，手写会绕过裁决。
 
@@ -2969,13 +2967,7 @@ Step 6 输出的 MCP 配置是**占位符 + 环境变量**，**不写明文**。
 
 **权限**：需要已登录的 `WebUI` 管理员，`owner` 与运维都能看，页内链接可达角色详情。
 
-**必须知道的一条边界——视图不反映上游证明开关**：行级策略依赖上游对强制谓词的拼接能力，该能力默认**未证明**（`LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 不应设置）。在未证明状态下：
-
-- 受行级策略保护的表通过 `lucy_query` 取数会返回 `row_policy_upstream_unproven`——这是**预期的安全拒绝，不是故障**；
-- 受保护表上的 `lucy_read_source` / `lucy_freshness` / `entity_details` 会被 `row_policy_requires_wrapped_tool` 拒绝，只允许走已包装的查询路径；
-- `lucy_explain_query` 始终可在本地执行，用于诊断。
-
-也就是说：**行权限视图可能显示「受限行授予」，而真实取数会被拒**。视图展示的是配置态，执行是否放行取决于上游开关。
+**视图与执行**：视图展示最终行约束；合法配置在支持的查询路径上自动执行，无需运维开启证明开关。字段绑定、工具权限及查询形状检查仍然生效；视图展示不等于任意查询一定成功。受保护表请使用 `lucy_query`，可用 `lucy_explain_query` 查看本地诊断。
 
 **四种降级态互不共用空态**：无授权、不可满足、编译失败、空筛选各有独立文案；全部必需编译失败时显示不可用，**不会显示成「零授权」**。字段绑定失败时也要先分清是运维侧（目录不可用）还是用户侧（字段不存在）。
 

@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | AC-P1 / P1.5 行策略与 Agent Constraints 恢复 Runbook |
 | 文档类型 | Checklist |
-| 版本 | v1.2 |
+| 版本 | v1.3 |
 | 撰写日期 | 2026-08-09 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
@@ -14,16 +14,22 @@
 
 ---
 
+## 当前启用方式（2026-11-20，P1-72）
+
+合法行策略保存并收到运行确认后，查询自动强制执行，不需要设置 LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN 或重启。旧变量的所有值均已忽略；若需紧急停用问数，使用现有 Agent 停用／Token 吊销。不得删除行策略来代替停用。
+
+当前合同：[行权限自动强制执行](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md)。以下保留的 2026-08-09 签字属于历史证据，不再构成部署人工启用要求。
+
 ## 症状对照
 
 | 症状 | 常见原因 | 裁决码 / 信号 |
 |---|---|---|
-| scoped 源无法取数 | proven 未开（默认） | `row_policy_upstream_unproven` |
+| scoped 源无法取数 | 检查身份／表权限、字段绑定、策略编译与查询形状；若仍出现旧码，核对是否运行旧版本 | 记录实际裁决码；不靠修改旧变量恢复 |
 | 未包装工具 / 整源读失败 | O2 fail-closed | `row_policy_requires_wrapped_tool` |
 | 查询被拒（字符串 filter / expr / join） | 受保护源 args 加严 | `invalid_arguments:…` / `row_policy_query_shape_forbidden` |
 | Role / Agent 无法保存或 Agent DataPlane 全拒 | 非法 `row_policy`、measure 字段、缺 policy、非法 Agent `constraints`、Role 上 `constraints`、超限 / 不可满足 FinalRows | `row_policy_*` / `constraints_*` / `final_rows_*` / `role_resolution_failed:*` |
 | Admin 编译失败 banner | 外部坏 YAML（含非法 scoped / 坏 constraints） | 见 AC-P0 降级 Runbook |
-| `row_access:all` 仍无法取数 | Agent Constraints 使 FinalRows≠TRUE + proven 未开 | `row_policy_upstream_unproven` |
+| `row_access:all` 带个人约束 | Agent Constraints 参与最终行约束；自动执行 | 核对约束与查询形状，不需要运维开关 |
 
 ---
 
@@ -37,20 +43,19 @@
 3. dryRun → 确认 preview `rowGrant` 为 `all` 或带 `digest` 的 scoped。
 4. 保存；确认 `runtimeAck` + 新 `policyVersion`。
 5. 抽测：
-   - proven=false：`lucy_query` × scoped → **仍** `row_policy_upstream_unproven`（预期，非故障）
+   - 默认环境：`lucy_query` × scoped → 自动强制过滤，抽查无域外行
    - `lucy_read_source` / `lucy_freshness` / `entity_details` × scoped → `row_policy_requires_wrapped_tool`
    - `lucy_explain_query` → 本地允许（诊断）
 
 ---
 
-## 路径 B — 「全员查不了数」其实是未证明
+## 路径 B — 已保存策略但查询失败
 
-1. 确认环境变量 / 配置：**默认不应**设置 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN`。
-2. 若误开 proven 但 **Lucy carrier / bundled KTX 对 `filters[]` 的 AND 行为**未验证或失效（注：KTX 0.16 丢弃 `forced_filters` 是预期；安全边界是 Lucy 写入的 `filters[]` 前缀）：
-   - **立即关闭** proven（删 env 或设为 false）并重启同进程 WebUI/Proxy
-   - 取数恢复为明确 deny（`row_policy_upstream_unproven`），避免「碰运气放行」
-3. 向调用方说明：受保护源须走 `lucy_query`；当前波次在 Gate C 证明完成前不提供行级取数。
-4. **禁止**为「恢复业务」而由运维/调用方手写强制条件进用户 `filters` 字符串（与 Proxy 自动 prepend 的 carrier 无关）。
+1. 核对运行版本：新版本不再产生因缺少人工证明标志导致的拒绝；旧版本仍需按其历史合同排查。
+2. 读取实际裁决码，区分字段／目录绑定、策略编译、工具权限与查询形状；按相应错误修复，不改旧证明变量。
+3. 对受保护源使用 `lucy_query`；确认返回范围与最终行约束一致，用户过滤只能收紧。
+4. 若怀疑强制过滤执行异常，先停用受影响 Agent 或吊销 Token，保留策略和审计，修复后用隔离真实查询验证再恢复。不得去掉行限制恢复查询。
+5. 代理自动注入的过滤与调用方手写字符串过滤不同，不能用后者充当行权限。
 
 ---
 
@@ -62,17 +67,17 @@
 
 ---
 
-## proven 置真检查单（仅 Gate C）
+## 发布验证检查单
 
-在设置 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=true` 之前必须全部满足：
+证明由产品开发与发布验证承担，不再让运维填写 true。
 
-- [x] ADR Gate A + Spec 99 Gate B 已批准
-- [x] `npm test -- --run row-policy-ac-p1 ac-security-eval mcp-proxy-row-policy-by01-by18` 绿（含 Lucy 载体 BY-01：`forced_filters` + `filters[]` 前缀；**不**替代部署抽检）
-- [x] UAT [`uat-ac-p1.md`](uat-ac-p1.md) BY-01…19 人工项勾选（**含部署环境行集抽检签字**）；Gate C 总签 2026-08-09
-- [x] Lucy 侧强制谓词载体已书面证明（见 [`evidence-ktx-forced-filters.md`](evidence-ktx-forced-filters.md)）；**不**要求 `kaelio/ktx` 发版
-- [x] Release notes **未**声称 Dynamic RLS / 多租户隔离 — [`release-notes-ac-p1.md`](release-notes-ac-p1.md)
+- 行策略、Agent Constraints、字段绑定、伪造字段剥离与形状拒绝回归通过；
+- 普通 MCP 和内部查询入口均有 filters 强制前缀，并在真实 bundled KTX／目标适配路径验证行集和聚合；
+- 默认未设置与遗留 false／true 的结果一致；
+- 注入失败不转发、不退回全部行；
+- 不把本机证据外推为全部数据库／上游版本支持，不宣称 Dynamic RLS／多租户隔离。
 
-Gate C 总签后：允许在目标环境作为**运维变更**置真；未执行变更前保持 proven=false。
+历史 Gate C 材料仍见 [uat-ac-p1](uat-ac-p1.md) 与 [载体证据](evidence-ktx-forced-filters.md)。
 
 ---
 
@@ -88,7 +93,7 @@ Gate C 总签后：允许在目标环境作为**运维变更**置真；未执行
 4. 修复后 dryRun：确认每源 **FinalRows** 摘要 / digest / protected；**不**把「编译通过」当成「行级取数已生效」。
 5. 保存须 `runtimeAck === true` + `policyVersion`；失败则盘与 runtime 保持写前（U-REL）。
 6. 抽测：
-   - proven=false + FinalRows≠TRUE → `row_policy_upstream_unproven`
+   - FinalRows≠TRUE → 自动强制过滤，抽查结果仅在最终行域内
    - 未包装工具 → `row_policy_requires_wrapped_tool`
    - 清除约束：`PATCH constraints: null` 后 FinalRows 回到 EffectiveRowGrant
 

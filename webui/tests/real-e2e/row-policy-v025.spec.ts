@@ -79,12 +79,6 @@ function markBlocked(testInfo: TestInfo, description: string): void {
   testInfo.skip(true, `BLOCKED: ${description}`);
 }
 
-function forcedPredicateProven(): boolean {
-  const instance = runContext().instance as { env?: Record<string, string | undefined> };
-  const raw = instance.env?.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
-  return raw === "1" || raw === "true" || raw === "TRUE";
-}
-
 function sameSet(left: string[], right: string[]): boolean {
   if (left.length !== right.length) return false;
   const sorted = [...right].sort();
@@ -376,10 +370,6 @@ async function queryRegions(token: string, intent: string): Promise<RegionRead> 
 
 async function readRegions(testInfo: TestInfo, token: string, intent: string): Promise<RegionRead | null> {
   const result = await queryRegions(token, intent);
-  if (result.refusal !== null && result.refusal.includes("row_policy_upstream_unproven") && !forcedPredicateProven()) {
-    markBlocked(testInfo, `scoped read refused with ${result.refusal}; forced-predicate gate is off`);
-    return null;
-  }
   return result;
 }
 
@@ -961,10 +951,6 @@ test(ROW25_OWNER_SYMBOLS["ROW25-V17"], async ({}, testInfo) => {
     wrapped.refusal === null || !wrapped.refusal.includes("row_policy_requires_wrapped_tool"),
     `lucy_query must not be refused as an unwrapped tool, refusal=${wrapped.refusal}`
   );
-  if (wrapped.refusal?.includes("row_policy_upstream_unproven") && !forcedPredicateProven()) {
-    markBlocked(testInfo, "wrapped lucy_query is behind the unproven gate; the unwrapped refusal was already recorded");
-    return;
-  }
   assertion(testInfo, "consistency", wrapped.ok && isEastOnly(wrapped.regions), `wrapped query regions=${JSON.stringify(wrapped.regions)} refusal=${wrapped.refusal}`);
   assertion(testInfo, "no_side_effect", deniedPayload.rows.length === 0, "unwrapped read returned rows");
   assertNoLeak(testInfo, `${denied.text}\n${wrapped.raw}`, "unwrapped refusal carries no credential");
@@ -977,11 +963,11 @@ test(ROW25_OWNER_SYMBOLS["ROW25-V18"], async ({ browser }, testInfo) => {
   await withOwner(browser, async (page) => {
     const before = rolePolicyText((await roleDocument(page, ROLES.east)).body);
     const preview = await previewRole(page, { roleId: ROLES.east, tables: [FACT] });
-    const seen = await queryRegions(agentTokens[AGENTS.east], "ROW25-V18 phase-off");
+    const seen = await queryRegions(agentTokens[AGENTS.east], "ROW25-V18 automatic enforcement");
     assertion(
       testInfo,
       "deny",
-      seen.refusal !== null && seen.refusal.includes("row_policy_upstream_unproven") && !seen.ok,
+      seen.ok && isEastOnly(seen.regions),
       `refusal=${seen.refusal} regions=${JSON.stringify(seen.regions)}`
     );
     assertion(
@@ -993,12 +979,12 @@ test(ROW25_OWNER_SYMBOLS["ROW25-V18"], async ({ browser }, testInfo) => {
     assertion(
       testInfo,
       "consistency",
-      seen.refusal !== null && seen.refusal.includes("row_policy_upstream_unproven"),
-      "a successful preview must not clear row_policy_upstream_unproven"
+      seen.ok && isEastOnly(seen.regions),
+      "a successful preview must preserve the automatic row domain"
     );
     const after = rolePolicyText((await roleDocument(page, ROLES.east)).body);
-    assertion(testInfo, "no_side_effect", before === after, "phase-off preview wrote rp_east");
-    assertNoLeak(testInfo, `${preview.text}\n${seen.raw}`, "phase-off refusal carries no credential");
+    assertion(testInfo, "no_side_effect", before === after, "preview wrote rp_east");
+    assertNoLeak(testInfo, `${preview.text}\n${seen.raw}`, "automatic query carries no credential");
   });
 });
 

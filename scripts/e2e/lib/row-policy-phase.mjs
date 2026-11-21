@@ -1,13 +1,7 @@
-// Two-phase (Gate-Off → Gate-On) helpers for the row-policy strength-B runner.
-//
-// Lucy reads LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN from process.env
-// (`webui/server/proxy/row-policy.ts` → `isUpstreamForcedPredicateProven`).
-// There is no runtime admin switch. Changing the flag on a run instance
-// therefore requires restarting the Lucy process that this harness spawned,
-// against the same runDir / data volume.
-//
-// This module mutates ONLY `<runDir>/run.json` `instance.env`. It never writes
-// customer sign-off configs (compose, Helm, deploy templates).
+// Compatibility environment fixtures for the strength-B runner.
+// P1-72: off/on are retained as artifact partitions. Both execute row policies.
+// The old variable is deliberately varied to prove it has no effect; it is not
+// a product prerequisite. Process restarts here only isolate test environments.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -83,9 +77,9 @@ export function collectPhaseStats(results, expectedIds, spawned) {
 /**
  * Write `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` onto the run instance env only.
  * `enabled=true` sets `"1"`; `enabled=false` deletes the key so a later customer
- * sign-off cannot inherit proven=1 from this mutation.
+ * run can exercise the default environment independently.
  *
- * Restart is required: Lucy only sees process.env of the process that was spawned.
+ * Restart isolates compatibility fixtures; no runtime enablement step is needed.
  *
  * @param {string} runDir
  * @param {boolean} enabled
@@ -115,7 +109,7 @@ export function setForcedPredicateProven(runDir, enabled) {
     envValue: enabled ? "1" : null,
     restartRequired: true,
     restartReason:
-      "Lucy reads LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN from process.env (webui/server/proxy/row-policy.ts). Restart the same runDir / data volume after this mutation."
+      "Legacy-flag compatibility fixture: restart isolates the test process; row policies are enforced in both environments."
   };
 }
 

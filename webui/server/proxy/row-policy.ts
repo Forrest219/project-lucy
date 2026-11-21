@@ -72,12 +72,6 @@ const UNSAFE_FIELD = /[()'"`;\\]|--|\/\*|\*\/|\bor\b|\band\b|\bunion\b|\bselect\
 const SAFE_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SAFE_QUALIFIED = /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/;
 
-/** Spec 99 §6.3 — default false until Gate C sets env after BY matrix green. */
-export function isUpstreamForcedPredicateProven(): boolean {
-  const raw = process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
-  return raw === "1" || raw === "true" || raw === "TRUE";
-}
-
 function isScalar(value: unknown): value is string | number | boolean {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
@@ -476,9 +470,10 @@ export interface ExplainForcedPredicateDiagnostics {
   /** E4 — execution path for lucy_query (explain itself may still succeed) */
   executionPath: {
     tool: "lucy_query";
+    /** Legacy response field: the product enforces row policies without an operator flag. */
     upstreamForcedPredicateProven: boolean;
     wouldDeny: boolean;
-    denyReason?: "row_policy_upstream_unproven";
+    denyReason?: string;
     note: string;
   };
 }
@@ -494,7 +489,6 @@ export function buildExplainForcedPredicateDiagnostics(input: {
   /** Spec 100 — precomputed FinalRows; when set, explain uses FinalRows not bare rowGrant. */
   finalRowsBySource?: Record<string, RowGrant>;
 }): ExplainForcedPredicateDiagnostics {
-  const proven = isUpstreamForcedPredicateProven();
   const protectedSources: Array<{
     connectionId: string;
     sourceName: string;
@@ -555,7 +549,6 @@ export function buildExplainForcedPredicateDiagnostics(input: {
     };
   }
 
-  const wouldDeny = finalRowsNonTrue && !proven;
   return {
     semantics: "permission_forced_predicate_diagnostic",
     upstreamForwarded: false,
@@ -564,14 +557,11 @@ export function buildExplainForcedPredicateDiagnostics(input: {
     forcedPredicateAst,
     executionPath: {
       tool: "lucy_query",
-      upstreamForcedPredicateProven: proven,
-      wouldDeny,
-      denyReason: wouldDeny ? "row_policy_upstream_unproven" : undefined,
-      note: wouldDeny
-        ? "Explain is a local diagnostic only. The lucy_query execution path will deny with row_policy_upstream_unproven until upstream forced_filters is proven (Gate C)."
-        : finalRowsNonTrue
-          ? "Explain is a local diagnostic only. lucy_query may execute with Proxy-injected forced_filters; this response is not a data return."
-          : "Explain is a local diagnostic only. FinalRows is TRUE for requested sources; this response is not a data return."
+      upstreamForcedPredicateProven: true,
+      wouldDeny: false,
+      note: finalRowsNonTrue
+        ? "Explain is a local diagnostic only. Row policies are enforced automatically by the Proxy; no operator flag is required. Other query checks still apply; this response is not a data return."
+        : "Explain is a local diagnostic only. FinalRows is TRUE for requested sources; this response is not a data return."
     }
   };
 }
@@ -730,6 +720,7 @@ export function applyLucyQueryForcedFilters(
   if (forcedFilters) {
     record.forced_filters = forcedFilters;
     const forcedExprs = compileForcedFiltersToUpstreamFilterExprs(forcedFilters);
+    if (forcedExprs.length === 0) throw new Error("row_policy_forced_filters_empty");
     const existing = Array.isArray(record.filters)
       ? [...record.filters]
       : record.filters === undefined

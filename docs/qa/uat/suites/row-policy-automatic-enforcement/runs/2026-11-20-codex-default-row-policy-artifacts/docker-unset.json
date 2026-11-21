@@ -1,0 +1,147 @@
+{
+  "phase": "unset",
+  "passed": 13,
+  "nodeVersion": "v22.23.5",
+  "ktxVersion": "@kaelio/ktx 0.16.0",
+  "sourceSha256": {
+    "../server/proxy/acl.ts": "7633196a647bf322d679ece78bcef6c1b553f2fcd24b3be6dd93e4d5bd806ca5",
+    "../server/proxy/row-policy.ts": "fd96e5ae14e6d4ebe1bf0c43ba4d7efcc3b490fa70de7e15e915676717ef016b",
+    "../server/proxy/mcp-proxy.ts": "15a7c4dc55782ba469c6581bac293484ab482987be9cd3bed9c93e2da244425f",
+    "row-policy-automatic-enforcement.mts": "9cc0911fc399ba2d805a1285f9d1eefe74ac8110138277aa1c9c01752468c3d0"
+  },
+  "gold": [
+    {
+      "region": "Central South",
+      "total_sales": "363958.9831"
+    },
+    {
+      "region": "East",
+      "total_sales": "550670.8159"
+    },
+    {
+      "region": "Northeast",
+      "total_sales": "302200.0925"
+    },
+    {
+      "region": "Southwest",
+      "total_sales": "242646.2038"
+    }
+  ],
+  "reports": [
+    {
+      "name": "default-east",
+      "ms": 1763.93,
+      "result": [
+        {
+          "region": "East",
+          "total_sales": 550670.8159
+        }
+      ]
+    },
+    {
+      "name": "default-west",
+      "ms": 429.19,
+      "result": [
+        {
+          "region": "Southwest",
+          "total_sales": 242646.2038
+        }
+      ]
+    },
+    {
+      "name": "unrestricted-control",
+      "ms": 380.98,
+      "result": [
+        {
+          "region": "Central South",
+          "total_sales": 363958.9831
+        },
+        {
+          "region": "East",
+          "total_sales": 550670.8159
+        },
+        {
+          "region": "Northeast",
+          "total_sales": 302200.0925
+        },
+        {
+          "region": "Southwest",
+          "total_sales": 242646.2038
+        }
+      ]
+    },
+    {
+      "name": "agent-constraints",
+      "ms": 429.81,
+      "result": [
+        {
+          "region": "East",
+          "total_sales": 550670.8159
+        }
+      ]
+    },
+    {
+      "name": "forged-carriers",
+      "ms": 462.3,
+      "result": [
+        {
+          "region": "East",
+          "total_sales": 550670.8159
+        }
+      ]
+    },
+    {
+      "name": "user-narrow",
+      "ms": 422.42,
+      "result": [
+        {
+          "region": "East",
+          "total_sales": 550670.8159
+        }
+      ]
+    },
+    {
+      "name": "string-bypass",
+      "ms": 21.25,
+      "result": "filters_string_forbidden_on_scoped"
+    },
+    {
+      "name": "or-bypass",
+      "ms": 7.24,
+      "result": "filters_field_required"
+    },
+    {
+      "name": "lucy_read_source",
+      "ms": 13.41,
+      "result": "row_policy_requires_wrapped_tool"
+    },
+    {
+      "name": "lucy_freshness",
+      "ms": 5.93,
+      "result": "row_policy_requires_wrapped_tool"
+    },
+    {
+      "name": "raw-upstream-tool",
+      "ms": 5.86,
+      "result": "tool_absolute_deny:sl_query"
+    },
+    {
+      "name": "internal-query",
+      "ms": 348.16,
+      "result": [
+        {
+          "region": "East",
+          "total_sales": 550670.8159
+        }
+      ]
+    },
+    {
+      "name": "explain",
+      "ms": 20.85,
+      "result": {
+        "local": true,
+        "enforcedAutomatically": true
+      }
+    }
+  ]
+}

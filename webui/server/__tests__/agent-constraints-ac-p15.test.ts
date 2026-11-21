@@ -761,13 +761,13 @@ describe("AC-P1.5 gate + forced predicate reuse (WP-I3)", () => {
     expect(decision).toEqual({ allowed: true, forcedFilters: deptForced });
   });
 
-  it("SC-P15-06: proven≠true → row_policy_upstream_unproven (Constraints do not bypass)", async () => {
+  it("SC-P15-06: Constraints automatically enforce without an operator flag", async () => {
     const { authorizeAndRewrite } = await loadAllConstrained(false);
 
     await expect(authorizeAndRewrite(identity("all_constrained"), "lucy_query", {
       connectionId: "warehouse",
       measures: ["fin_ledger.total_sales"]
-    })).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+    })).resolves.toMatchObject({ allowed: true, forcedFilters: { or: expect.any(Array) } });
 
     // explain stays local-allow without forcedFilters (Spec 100 §7 / Spec 99)
     await expect(authorizeAndRewrite(identity("all_constrained"), "lucy_explain_query", {

@@ -50,7 +50,7 @@ test("every registry ownerSymbol is bound and contains its execution id", () => 
   assert.equal(by09.phase, "off");
   assert.equal(by09.catalogId, "SEC-11-BY09");
   assert.equal(by09.ownerFile, "scripts/e2e/security/row-policy-cases.mjs");
-  assert.match(by09.ownerSymbol, /row_policy_upstream_unproven/);
+  assert.match(by09.ownerSymbol, /自动强制执行/);
 });
 
 test("registry does not use East or West region literals", () => {

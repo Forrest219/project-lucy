@@ -1,0 +1,55 @@
+{
+  "gitSha": "72b96e6869b56b3ae2dcf7b6c527764e4d3c4cee",
+  "gitDirty": true,
+  "image": "sha256:ff8826999ee6f137743879721208a3fdec4247cda7164dcb892bd2a5adf87cbe",
+  "method": "existing arm64 image + read-only candidate server mount; isolated temporary project; real bundled KTX and read-only demo MySQL",
+  "sourceSha256": {
+    "webui/server/proxy/acl.ts": "7633196a647bf322d679ece78bcef6c1b553f2fcd24b3be6dd93e4d5bd806ca5",
+    "webui/server/proxy/row-policy.ts": "fd96e5ae14e6d4ebe1bf0c43ba4d7efcc3b490fa70de7e15e915676717ef016b",
+    "webui/server/proxy/mcp-proxy.ts": "15a7c4dc55782ba469c6581bac293484ab482987be9cd3bed9c93e2da244425f"
+  },
+  "targetedVitest": {
+    "filesPassed": 23,
+    "testsPassed": 286
+  },
+  "harness": {
+    "testsPassed": 97
+  },
+  "docker": {
+    "environments": [
+      "unset",
+      "false",
+      "true"
+    ],
+    "checksEach": 13,
+    "checksPassed": 39
+  },
+  "browser": {
+    "browser": "foreground Chrome",
+    "url": "http://127.0.0.1:55177/help?section=row-level-policy",
+    "directoryClickToUpdatedContentObservedUpperBoundMs": 2773,
+    "handbookApiMs": 13.813,
+    "scope": "existing help text only; no other page UAT claim"
+  },
+  "expandedRegression": {
+    "testsPassed": 376,
+    "testsFailed": 20,
+    "baselineReproduced": {
+      "emptyResultLegacyBegin": 18,
+      "handbookNavigation": 2
+    },
+    "reason": "begin_not_available in old fixture, and shared ops-step navigation 27 vs handbook 26"
+  },
+  "checks": {
+    "typecheck": "PASS",
+    "terminology": "PASS",
+    "iaBoundary": "PASS",
+    "specDocs": "PASS",
+    "spec": "FAIL: 8 pre-existing ops-step API routes absent from API spec",
+    "e2eLedger": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "ci": "NOT RUN",
+  "customer": "NOT RUN",
+  "release": "NOT RUN"
+}

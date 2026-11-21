@@ -289,7 +289,7 @@ ${BASE_ROLE_TOOLS}`,
     }
   });
 
-  it("SC-P1-04: unproven lucy_query denies on protected source", async () => {
+  it("SC-P1-04: configured row policy executes without an operator flag", async () => {
     projectRoot = await makeProject(accessYaml(
       `  scoped_ok:
     permission_model_version: 2
@@ -318,7 +318,7 @@ ${BASE_ROLE_TOOLS}`,
     await expect(authorizeAndRewrite(identity("scoped_agent"), "lucy_query", {
       connectionId: "warehouse",
       measures: ["fin_ledger.total_sales"]
-    })).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+    })).resolves.toMatchObject({ allowed: true, forcedFilters: { or: expect.any(Array) } });
 
     // explain stays local-allow without forcedFilters
     await expect(authorizeAndRewrite(identity("scoped_agent"), "lucy_explain_query", {
@@ -555,7 +555,7 @@ describe("AC-SEC-ROW / BYPASS", () => {
     })).resolves.toEqual({ allowed: false, reason: "tool_absolute_deny:sl_query" });
   });
 
-  it("BY-09: unproven lucy_query denies on protected source", async () => {
+  it("BY-09: default lucy_query automatically enforces the protected source", async () => {
     projectRoot = await makeProject(accessYaml(SCOPED_EAST_ROLE, SCOPED_EAST_AGENT));
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_CONTENT_ROOT = ".";
@@ -564,7 +564,7 @@ describe("AC-SEC-ROW / BYPASS", () => {
     await expect(authorizeAndRewrite(identity("scoped_agent"), "lucy_query", {
       connectionId: "warehouse",
       measures: ["fin_ledger.total_sales"]
-    })).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+    })).resolves.toMatchObject({ allowed: true, forcedFilters: { or: expect.any(Array) } });
   });
 
   it("BY-10: OR arms across two roles yield merged scoped grant", async () => {
@@ -765,8 +765,8 @@ describe("AC-SEC-ROW / BYPASS", () => {
         "fin_ledger"
       )
     );
-    expect(diagnostics.executionPath.wouldDeny).toBe(true);
-    expect(diagnostics.executionPath.denyReason).toBe("row_policy_upstream_unproven");
+    expect(diagnostics.executionPath.wouldDeny).toBe(false);
+    expect(diagnostics.executionPath.denyReason).toBeUndefined();
   });
 
   it("BY-19: measure field in row_policy fails compilation", async () => {
@@ -1033,5 +1033,13 @@ describe("isScopeIntersectionEmpty", () => {
         undefined
       )
     ).toBe(false);
+  });
+});
+
+
+describe("P1-72 forced carrier failure", () => {
+  it.each([{ or: [] }, { or: [{ and: [] }] }])("refuses an empty forced carrier %j", async payload => {
+    const { applyLucyQueryForcedFilters } = await import("../proxy/row-policy");
+    expect(() => applyLucyQueryForcedFilters({ filters: [] }, payload)).toThrow(/row_policy_forced_filters_empty/);
   });
 });
