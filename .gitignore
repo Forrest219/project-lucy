@@ -87,3 +87,6 @@ inbox/20260809-gate-c-uat/.tokens.local
 .cursor/mcp.json
 # 本机 WebUI UAT 登录凭据路径（指向桌面文件，禁止入库）
 .cursor/rules/lucy-webui-uat-login.mdc
+
+# P1-68 运维步骤账本地文件（内容根下的 .lucy/ops-steps.jsonl）
+.lucy/

@@ -46,6 +46,7 @@ export const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   fieldQuestions: CircleHelp,
   securityEval: ShieldAlert,
   governanceOverview: Gauge,
+  opsSteps: ClipboardList,
   agents: Bot,
   tokens: Key,
   roles: KeyRound,

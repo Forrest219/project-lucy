@@ -184,7 +184,14 @@ import {
 } from "./admin/mcp-runtime.js";
 import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
 import { readKtxYamlDigest, snapshotExecutionRuntimeObservations } from "./mcp-runtime-state.js";
-import { collectDiagnosticIo } from "./runtime/diagnostic-collector.js";
+import { collectDiagnosticIo, type DiagnosticStepHold } from "./runtime/diagnostic-collector.js";
+import {
+  createOpsStepId,
+  getOpsStepJournal,
+  opsStepReasonFromError
+} from "./runtime/ops-step-journal.js";
+import { registerOpsStepRoutes } from "./admin/ops-steps.js";
+import { opsStepUatBusyError, registerOpsStepUatRoutes } from "./admin/ops-step-uat.js";
 import { reloadKtxMcpAfterConfigWrite } from "./ktx-mcp-reload.js";
 
 async function settleExecutionRuntime(
@@ -475,7 +482,8 @@ function supportedErrorDetail(error: SupportedError): unknown {
       ...(typeof source.schema === "string" ? { schema: source.schema } : {}),
       ...(typeof source.table === "string" ? { table: source.table } : {}),
       ...(typeof source.phase === "string" ? { phase: source.phase } : {}),
-      ...(tableRejection ? { tableRejection } : {})
+      ...(tableRejection ? { tableRejection } : {}),
+      ...(typeof source.opsStepId === "string" ? { opsStepId: source.opsStepId } : {})
     };
   }
   if (error.code === "connection_references_remain") {
@@ -765,7 +773,10 @@ const CONTENT_LAYOUT_TTL_MS = 30_000;
  * Full diagnostic collect for the P1-61 background snapshot.
  * May perform file / subprocess / network I/O — never call from probe handlers.
  */
-async function collectDependencyDiagnostics(signal: AbortSignal): Promise<DiagnosticData> {
+async function collectDependencyDiagnostics(
+  signal: AbortSignal,
+  uatTrigger?: { opId: string; steps: DiagnosticStepHold["steps"]; holdMs: number }
+): Promise<DiagnosticData> {
   const policy = getPolicyRuntimeStatus();
   const reusedLayout = contentLayoutCache?.value && Date.now() - contentLayoutCache.at < CONTENT_LAYOUT_TTL_MS
     ? contentLayoutCache.value : undefined;
@@ -773,7 +784,10 @@ async function collectDependencyDiagnostics(signal: AbortSignal): Promise<Diagno
     probe: peekExecutionProbe(),
     observations: snapshotExecutionRuntimeObservations(),
     ktxRuntime: peekKtxRuntimeStatus(),
-    ...(reusedLayout ? { contentLayout: reusedLayout } : {})
+    ...(reusedLayout ? { contentLayout: reusedLayout } : {}),
+    ...(uatTrigger
+      ? { opId: uatTrigger.opId, uatHold: { steps: uatTrigger.steps, holdMs: uatTrigger.holdMs } }
+      : {})
   });
   const { ktxRuntime } = io;
   const contentLayout = io.contentLayout ?? contentLayoutCache?.value;
@@ -2044,6 +2058,7 @@ export function buildServer() {
     const parsed = parseRequestedTables(request.body?.tables);
     if (!parsed.ok) throw enabledTableError("BAD_REQUEST", parsed.message);
     const { tables } = parsed;
+    const opsStepId = createOpsStepId();
     // P1-62: capacity before project/DB/channel open; queue wait counts into CALL_BUDGET_MS.
     const moduleStartedAt = Date.now();
     const callBudgetMs = tables ? CALL_BUDGET_MS : SCHEMA_REQUEST_TIMEOUT_MS;
@@ -2072,9 +2087,18 @@ export function buildServer() {
         try {
           const data = await previewSchemaStructure(projectRoot, request.params.connId, schema, {
             requestTimeoutMs: SCHEMA_REQUEST_TIMEOUT_MS,
+            opsStepId,
             ...(tables ? { tables, callBudgetMs: remainingBudget } : {})
           });
-          return { ok: true, data };
+          return {
+            ok: true,
+            data: {
+              ...data,
+              ...((data.rejections?.length ?? 0) > 0 || (data.deferred?.length ?? 0) > 0
+                ? { opsStepId }
+                : {})
+            }
+          };
         } catch (err) {
           if (err instanceof SchemaStructureError) {
             console.error("[schema-structure] preview API failed", {
@@ -2084,7 +2108,10 @@ export function buildServer() {
               message: err.message,
               detail: err.detail ?? null
             });
-            throw enabledTableError(err.code, err.message, err.detail);
+            throw enabledTableError(err.code, err.message, {
+              ...(err.detail && typeof err.detail === "object" ? err.detail : {}),
+              opsStepId
+            });
           }
           console.error("[schema-structure] preview API unexpected failure", {
             connectionId: request.params.connId,
@@ -2166,94 +2193,153 @@ export function buildServer() {
       new Set(oldEnabledTables)
     );
 
-    // M45: local patch preserves order, comments and unknown
-    // fields in unrelated parts of ktx.yaml so the dry-run diff only shows
-    // the enabled_tables sequence change.
-    const { proposedYaml } = patchConnectionEnabledTablesYaml(yamlText, connId, newEnabledTables);
-    const diff = makeDiff(yamlText, proposedYaml);
-
-    if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables, warnings } };
-    }
-
-    const digestBefore = await ktxDigestSnapshot(projectRoot);
-
-    // Spec 174 §3.2 — barrier spans ktx.yaml write → catalog reload → policy commit.
-    // L25-16 N05 / G17 — the legacy write entry joins the SAME ktx.yaml write lock as the
-    // control-plane batch service; otherwise the batch service's mutual-exclusion promise
-    // does not hold (the legacy entry could interleave while the batch holds the lock).
-    return withKtxYamlWriteLock(() =>
-    withDisplayWriteBarrier(["C", "D", "P", "L"], async () => {
-    const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
-      enabled: true,
-      changeType: "enabled_tables_update",
-      assetKind: "governance",
-      ...auditActorFields(trustedActorFromRequest(request)),
-      source: "connections_enabled_tables_api",
-      targetId: connId,
-      oldSummary: { count: oldEnabledTables.length, enabledTables: oldEnabledTables },
-      newSummary: { count: newEnabledTables.length, enabledTables: newEnabledTables },
-      diff
-    });
-
-    let catalogRuntimeAck = false;
-    try {
-      const catalogRun = await reloadCatalog(projectRoot, { connectionId: connId });
-      catalogRuntimeAck = catalogRun.status === "success" && !catalogRun.warnings.some(
-        (warning) => warning.code === "SCHEMA_MANIFEST_MISSING"
-      );
-    } catch (err) {
-      console.error("[enabled-tables] ktx.yaml written but catalog reload failed", err);
-    }
-
-    // Spec 131 / P1-1: catalog_bound capabilities depend on enabled_tables — recompile now.
-    // P1-64 D9 — also fail Policy ack when Source Map compile issues are present.
-    let policyVersion = "";
-    let policyRuntimeAck = false;
-    let policyRuntimeIssues: Array<{ reason?: string }> = [];
-    try {
-      const { commitEffectivePolicy } = await import("./proxy/acl.js");
-      const status = await commitEffectivePolicy();
-      policyVersion = status.policyVersion;
-      const ack = ackKtxWritePolicyRuntime(status);
-      policyRuntimeAck = ack.policyRuntimeAck;
-      policyRuntimeIssues = ack.policyRuntimeIssues;
-      if (!policyRuntimeAck) {
-        console.error("[enabled-tables] ktx.yaml written but policy runtime not acknowledged", {
-          connId,
-          policyVersion: status.policyVersion,
-          degradedGlobal: status.degradedGlobal,
-          policyRuntimeIssues
-        });
-      }
-    } catch (err) {
-      console.error("[enabled-tables] ktx.yaml written but commitEffectivePolicy failed", err);
-      policyRuntimeAck = false;
-    }
-
-    const executionRuntimePending = await settleExecutionRuntime(projectRoot, digestBefore, connId);
-
-    const executionAck = await executionAckForConnection(connId);
-
-    return {
-      ok: true,
-      data: {
-        written: true,
-        auditId,
-        oldEnabledTables,
-        newEnabledTables,
-        warnings,
-        policyVersion,
-        policyRuntimeAck,
-        policyRuntimeIssues,
-        catalogRuntimeAck,
-        ...executionAck,
-        executionRuntimePending,
-        runtimeAck: policyRuntimeAck
-      }
+    const journal = dryRun ? undefined : getOpsStepJournal();
+    const opId = dryRun ? undefined : createOpsStepId();
+    let writeConfigOpen = !dryRun;
+    const failWriteConfig = (error: unknown) => {
+      if (!writeConfigOpen || !journal || !opId) return;
+      writeConfigOpen = false;
+      journal.writeStep({
+        op: "enabled_tables_save",
+        opId,
+        step: "write_config",
+        phase: "fail",
+        reasonCode: opsStepReasonFromError(error)
+      });
     };
-    })
-    );
+    if (journal && opId) {
+      journal.writeStep({ op: "enabled_tables_save", opId, step: "write_config", phase: "enter" });
+    }
+
+    try {
+      // M45: local patch preserves order, comments and unknown
+      // fields in unrelated parts of ktx.yaml so the dry-run diff only shows
+      // the enabled_tables sequence change.
+      const { proposedYaml } = patchConnectionEnabledTablesYaml(yamlText, connId, newEnabledTables);
+      const diff = makeDiff(yamlText, proposedYaml);
+
+      if (dryRun) {
+        return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables, warnings } };
+      }
+
+      const digestBefore = await ktxDigestSnapshot(projectRoot);
+
+      // Spec 174 §3.2 — barrier spans ktx.yaml write → catalog reload → policy commit.
+      // L25-16 N05 / G17 — the legacy write entry joins the SAME ktx.yaml write lock as the
+      // control-plane batch service; otherwise the batch service's mutual-exclusion promise
+      // does not hold (the legacy entry could interleave while the batch holds the lock).
+      return await withKtxYamlWriteLock(() =>
+      withDisplayWriteBarrier(["C", "D", "P", "L"], async () => {
+      const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
+        enabled: true,
+        changeType: "enabled_tables_update",
+        assetKind: "governance",
+        ...auditActorFields(trustedActorFromRequest(request)),
+        source: "connections_enabled_tables_api",
+        targetId: connId,
+        oldSummary: { count: oldEnabledTables.length, enabledTables: oldEnabledTables },
+        newSummary: { count: newEnabledTables.length, enabledTables: newEnabledTables },
+        diff
+      });
+      journal?.writeStep({ op: "enabled_tables_save", opId: opId!, step: "write_config", phase: "leave" });
+      writeConfigOpen = false;
+
+      let catalogRuntimeAck = false;
+      try {
+        await journal!.runStep({
+          op: "enabled_tables_save",
+          opId: opId!,
+          step: "catalog_reload",
+          body: () => reloadCatalog(projectRoot, { connectionId: connId }),
+          classifyReturn: (catalogRun) => {
+            const manifestMissing = catalogRun.warnings.some(
+              (warning) => warning.code === "SCHEMA_MANIFEST_MISSING"
+            );
+            catalogRuntimeAck = catalogRun.status === "success" && !manifestMissing;
+            return catalogRuntimeAck
+              ? { ok: true }
+              : { ok: false, reasonCode: manifestMissing ? "missing" : "unreadable" };
+          }
+        });
+      } catch (err) {
+        console.error("[enabled-tables] ktx.yaml written but catalog reload failed", err);
+      }
+
+      // Spec 131 / P1-1: catalog_bound capabilities depend on enabled_tables — recompile now.
+      // P1-64 D9 — also fail Policy ack when Source Map compile issues are present.
+      let policyVersion = "";
+      let policyRuntimeAck = false;
+      let policyRuntimeIssues: Array<{ reason?: string }> = [];
+      try {
+        const status = await journal!.runStep({
+          op: "enabled_tables_save",
+          opId: opId!,
+          step: "policy_commit",
+          body: async () => {
+            const { commitEffectivePolicy } = await import("./proxy/acl.js");
+            return commitEffectivePolicy();
+          },
+          classifyReturn: (policyStatus) => {
+            policyVersion = policyStatus.policyVersion;
+            const ack = ackKtxWritePolicyRuntime(policyStatus);
+            policyRuntimeAck = ack.policyRuntimeAck;
+            policyRuntimeIssues = ack.policyRuntimeIssues;
+            return policyRuntimeAck ? { ok: true } : { ok: false, reasonCode: "unreadable" };
+          }
+        });
+        if (!policyRuntimeAck) {
+          console.error("[enabled-tables] ktx.yaml written but policy runtime not acknowledged", {
+            connId,
+            policyVersion: status.policyVersion,
+            degradedGlobal: status.degradedGlobal,
+            policyRuntimeIssues
+          });
+        }
+      } catch (err) {
+        console.error("[enabled-tables] ktx.yaml written but commitEffectivePolicy failed", err);
+        policyRuntimeAck = false;
+      }
+
+      const executionRuntimePending = await journal!.runStep({
+        op: "enabled_tables_save",
+        opId: opId!,
+        step: "execution_reload",
+        body: () => settleExecutionRuntime(projectRoot, digestBefore, connId)
+      });
+
+      const executionAck = await journal!.runStep({
+        op: "enabled_tables_save",
+        opId: opId!,
+        step: "execution_ack",
+        body: () => executionAckForConnection(connId),
+        classifyReturn: (ack) => ack.executionRuntimeAck
+          ? { ok: true }
+          : { ok: false, reasonCode: "unreadable" }
+      });
+
+      return {
+        ok: true,
+        data: {
+          written: true,
+          auditId,
+          oldEnabledTables,
+          newEnabledTables,
+          warnings,
+          policyVersion,
+          policyRuntimeAck,
+          policyRuntimeIssues,
+          catalogRuntimeAck,
+          ...executionAck,
+          executionRuntimePending,
+          runtimeAck: policyRuntimeAck
+        }
+      };
+      })
+      );
+    } catch (error) {
+      failWriteConfig(error);
+      throw error;
+    }
   });
 
   app.post<{
@@ -3403,6 +3489,40 @@ export function buildServer() {
   registerMcpToolsRoutes(app);
   registerMcpPlaygroundRoutes(app);
   registerMcpRuntimeRoutes(app);
+  registerOpsStepRoutes(app);
+  registerOpsStepUatRoutes(app, {
+    startDiagnostic: (input) => {
+      const opId = createOpsStepId();
+      if (input.lifecycle === "production") {
+        const accepted = diagnosticSnapshot.tickForceForUat({
+          opId,
+          steps: input.steps,
+          holdMs: input.holdMs
+        });
+        if (!accepted) {
+          throw opsStepUatBusyError("诊断采集正在进行，请稍后重试");
+        }
+        return { opId };
+      }
+      if (diagnosticSnapshot.isCollecting()) {
+        throw opsStepUatBusyError("生产诊断正在进行，请先等待结束");
+      }
+      if (diagnosticSnapshot.isBackgroundEnabled()) {
+        throw opsStepUatBusyError("请先暂停后台诊断，再启动独立观察");
+      }
+      const controller = new AbortController();
+      const cleanup = setTimeout(() => controller.abort(), input.holdMs + 10_000);
+      cleanup.unref?.();
+      void collectDependencyDiagnostics(controller.signal, {
+        opId,
+        steps: input.steps,
+        holdMs: input.holdMs
+      }).catch(() => undefined).finally(() => clearTimeout(cleanup));
+      return { opId };
+    },
+    setBackgroundEnabled: (enabled) => diagnosticSnapshot.setBackgroundEnabledForUat(enabled),
+    waitForIdle: () => diagnosticSnapshot.waitUntilIdle()
+  });
   registerGovernanceObservabilityRoutes(app);
   registerUiUsageRoutes(app);
   registerCaseRoutes(app);

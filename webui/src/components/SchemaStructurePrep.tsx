@@ -12,7 +12,10 @@ import {
   newTablesFromGenerated,
   readCheckedTableColumns,
   reloadPreparedCatalog,
+  schemaStructureOpsStepId,
+  schemaStructureOpsStepRefs,
   writeMinimalManifest,
+  type SchemaStructureOpsStepRef,
   type SchemaStructurePreview
 } from "../lib/prepareSchemaStructure";
 import { canReadDatabaseStructure } from "../lib/setupAssistant";
@@ -61,7 +64,19 @@ export function SchemaStructurePrep({
   const [reloadPending, setReloadPending] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    message: string;
+    opsStepId?: string;
+    opsStepRefs: SchemaStructureOpsStepRef[];
+  } | null>(null);
+
+  function showError(value: unknown, fallback = "读取失败") {
+    setError({
+      message: typeof value === "string" ? value : value instanceof Error ? value.message : fallback,
+      opsStepId: schemaStructureOpsStepId(value),
+      opsStepRefs: schemaStructureOpsStepRefs(value)
+    });
+  }
 
   const readable = canReadDatabaseStructure(connection);
   const known =
@@ -107,7 +122,7 @@ export function SchemaStructurePrep({
     if (reloadStatus !== "success" || tables === 0) {
       setReloadPending(true);
       setPreview(null);
-      setError("本地目录尚未读到表。");
+      showError("本地目录尚未读到表。");
       return;
     }
     setReloadPending(false);
@@ -119,7 +134,7 @@ export function SchemaStructurePrep({
     const result = await writeMinimalManifest(connection.id, schema, yaml, { confirmOverwrite });
     invalidateCatalog();
     if (result.status === "invalid") {
-      setError(result.message);
+      showError(result.message);
       return;
     }
     if (result.status === "exists") {
@@ -142,7 +157,7 @@ export function SchemaStructurePrep({
       const data = await fetchSchemaStructure(connection.id, schema);
       const names = manifestTableNames(data.yaml);
       if (names.length === 0) {
-        setError("这个 Schema 没有可读取的表。");
+        showError("这个 Schema 没有可读取的表。");
         return;
       }
       const existingYaml = refreshExisting
@@ -150,7 +165,7 @@ export function SchemaStructurePrep({
         : "tables: {}\n";
       const candidates = refreshExisting ? newTablesFromGenerated(existingYaml, data.yaml) : names;
       if (candidates.length === 0) {
-        setError("数据库里没有尚未写入 Manifest 的表。现有 YAML 已保留。");
+        showError("数据库里没有尚未写入 Manifest 的表。现有 YAML 已保留。");
         return;
       }
       setRefreshPlan({
@@ -162,7 +177,7 @@ export function SchemaStructurePrep({
       });
       setPreview(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取失败");
+      showError(err);
     } finally {
       setBusy(false);
     }
@@ -205,7 +220,7 @@ export function SchemaStructurePrep({
       }
       await commitYaml(yaml, overwrite);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取失败");
+      showError(err);
     } finally {
       setBusy(false);
       setProgress(null);
@@ -219,7 +234,7 @@ export function SchemaStructurePrep({
       const run = await reloadPreparedCatalog(connection.id, schema);
       await settleAfterReload(run.status);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取失败");
+      showError(err);
     } finally {
       setBusy(false);
     }
@@ -364,13 +379,28 @@ export function SchemaStructurePrep({
         </div>
       ) : null}
       {error ? (
-        <p
+        <div
           role="alert"
           data-testid={`${idPrefix}-structure-error`}
           className="whitespace-pre-wrap break-words text-sm"
         >
-          {error}
-        </p>
+          <p>{error.message}</p>
+          {error.opsStepId ? (
+            <p className="mt-1" data-testid={`${idPrefix}-ops-step-id`}>
+              操作号：<code className="notranslate" translate="no">{error.opsStepId}</code>
+            </p>
+          ) : null}
+          {error.opsStepRefs.length > 0 ? (
+            <ul className="mt-1 space-y-1" data-testid={`${idPrefix}-ops-step-refs`}>
+              {error.opsStepRefs.map((ref) => (
+                <li key={ref.table} data-testid={`${idPrefix}-ops-step-ref-${ref.table}`}>
+                  表「<code className="notranslate" translate="no">{ref.table}</code>」操作号：
+                  <code className="notranslate" translate="no">{ref.opsStepId}</code>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
       <div className="pl-drawer-footer">
         <button
@@ -419,7 +449,7 @@ export function SchemaStructurePrep({
                   try {
                     await commitYaml(pendingYaml, true);
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "读取失败");
+                    showError(err);
                   } finally {
                     setBusy(false);
                   }
@@ -433,7 +463,7 @@ export function SchemaStructurePrep({
                 try {
                   await commitYaml(preview.yaml);
                 } catch (err) {
-                  setError(err instanceof Error ? err.message : "读取失败");
+                  showError(err);
                 } finally {
                   setBusy(false);
                 }

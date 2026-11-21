@@ -23,6 +23,7 @@ import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
 import { SchemaReadDeadline, SchemaReadTimeout } from "./schema-read-deadline.js";
+import { getOpsStepJournal, opsStepReasonFromError } from "./runtime/ops-step-journal.js";
 import { readSchemaTableRejection } from "../shared/schema-table-rejection.js";
 import {
   allocateSourceNames,
@@ -763,6 +764,7 @@ export type ReadSchemaColumnsDeps = {
    */
   sourceNameRegistry?: ConnectionSourceRegistry;
   readConnectionSourceManifestsImpl?: typeof readConnectionSourceManifests;
+  opsStepId?: string;
 };
 
 type ResolvedSchemaRead =
@@ -836,6 +838,29 @@ function uniqueInOrder(values: string[]): string[] {
   return [...new Set(values)];
 }
 
+type SchemaOpsStepReason = ReturnType<typeof opsStepReasonFromError>;
+
+function classifySchemaReadReturn(
+  read: SchemaColumnsRead,
+  requested: string[] | undefined,
+  errorReason: SchemaOpsStepReason | undefined
+): { ok: true } | { ok: false; reasonCode: SchemaOpsStepReason } {
+  if (read.status === "too_large") return { ok: false, reasonCode: "too_large" };
+  if (read.status === "error") return { ok: false, reasonCode: errorReason ?? "unreadable" };
+  const rejection = requested
+    ?.map((table) => read.rejections?.find((item) => item.table === table))
+    .find((item): item is SchemaColumnRejection => item !== undefined)
+    ?? read.rejections?.[0];
+  if (rejection) {
+    return {
+      ok: false,
+      reasonCode: rejection.reason === "too_wide" ? "too_large" : rejection.reason
+    };
+  }
+  if ((read.deferred?.length ?? 0) > 0) return { ok: false, reasonCode: "timeout" };
+  return { ok: true };
+}
+
 /**
  * Read table names, or the columns of the requested tables.
  *
@@ -895,8 +920,10 @@ export async function readSchemaColumns(
     throw error;
   }
   const requested = resolved.mode === "list-names" ? undefined : resolved.tables;
-  try {
-    if (catalog) {
+  let returnedErrorReason: SchemaOpsStepReason | undefined;
+  const body = async (): Promise<SchemaColumnsRead> => {
+    try {
+      if (catalog) {
       if (resolved.mode === "list-names") {
         const tableSql = catalogTablesSql(catalog.catalog, safeSchema);
         const tablesResult = await (deadline
@@ -1106,32 +1133,44 @@ export async function readSchemaColumns(
       };
     }
     return { status: "ok", columns };
-  } catch (error) {
-    if (error instanceof SchemaStructureError) {
-      if (error.message.includes("超过一次可读取的上限")) {
-        return { status: "too_large" };
+    } catch (error) {
+      if (error instanceof SchemaStructureError) {
+        if (error.message.includes("超过一次可读取的上限")) {
+          return { status: "too_large" };
+        }
+        returnedErrorReason = "unreadable";
+        const detail =
+          error.detail && typeof error.detail === "object"
+            ? (error.detail as {
+                connectionId?: string | null;
+                schema?: string | null;
+                table?: string | null;
+                phase?: string | null;
+              })
+            : undefined;
+        return { status: "error", message: error.message, ...(detail ? { detail } : {}) };
       }
-      const detail =
-        error.detail && typeof error.detail === "object"
-          ? (error.detail as {
-              connectionId?: string | null;
-              schema?: string | null;
-              table?: string | null;
-              phase?: string | null;
-            })
-          : undefined;
-      return { status: "error", message: error.message, ...(detail ? { detail } : {}) };
+      if (error instanceof SchemaReadTimeout) {
+        returnedErrorReason = "timeout";
+        return { status: "error", message: "读取表结构超时，请稍后重试。" };
+      }
+      returnedErrorReason = "unreadable";
+      console.error("[schema-structure] unexpected read failure", {
+        connectionId,
+        schema: safeSchema,
+        detail: error instanceof Error ? error.message : String(error)
+      });
+      return { status: "error", message: "读取表结构失败。" };
     }
-    if (error instanceof SchemaReadTimeout) {
-      return { status: "error", message: "读取表结构超时，请稍后重试。" };
-    }
-    console.error("[schema-structure] unexpected read failure", {
-      connectionId,
-      schema: safeSchema,
-      detail: error instanceof Error ? error.message : String(error)
-    });
-    return { status: "error", message: "读取表结构失败。" };
-  }
+  };
+  if (!deps.opsStepId) return body();
+  return getOpsStepJournal().runStep({
+    op: "schema_structure_read",
+    opId: deps.opsStepId,
+    step: resolved.mode === "list-names" ? "list_tables" : "read_columns",
+    body,
+    classifyReturn: (read) => classifySchemaReadReturn(read, requested, returnedErrorReason)
+  });
 }
 
 export async function previewSchemaStructure(
@@ -1141,12 +1180,23 @@ export async function previewSchemaStructure(
   deps: ReadSchemaColumnsDeps = {}
 ): Promise<SchemaStructurePreview> {
   const safeSchema = assertSchemaIdent(schema);
+  const detailWithOpsStep = (detail?: unknown) => deps.opsStepId
+    ? {
+        ...(detail && typeof detail === "object" ? detail : {}),
+        opsStepId: deps.opsStepId
+      }
+    : detail;
   const read = await readSchemaColumns(projectRoot, connectionId, schema, deps);
   if (read.status === "too_large") {
-    throw new SchemaStructureError("READ_FAILED", "这次读取超过一次可读取的上限。");
+    throw new SchemaStructureError(
+      "READ_FAILED",
+      "这次读取超过一次可读取的上限。",
+      400,
+      detailWithOpsStep()
+    );
   }
   if (read.status === "error") {
-    throw new SchemaStructureError("READ_FAILED", read.message, 400, read.detail);
+    throw new SchemaStructureError("READ_FAILED", read.message, 400, detailWithOpsStep(read.detail));
   }
   const requested = deps.tables?.map((table) => table.trim()).filter(Boolean) ?? [];
   const batch = requested.length > 1;
@@ -1162,7 +1212,7 @@ export async function previewSchemaStructure(
       "READ_FAILED",
       rejection ? rejectionMessage(rejection) : `表「${requested[0]}」没有读到字段。`,
       400,
-      tableRejection ? { tableRejection } : undefined
+      detailWithOpsStep(tableRejection ? { tableRejection } : undefined)
     );
   }
   const readRegistry = deps.readConnectionSourceManifestsImpl ?? readConnectionSourceManifests;

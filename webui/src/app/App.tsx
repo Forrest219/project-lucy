@@ -45,6 +45,7 @@ const AgentDetailRoute = lazyRoute(() => import("../pages/admin/AgentDetail"), "
 const TokensRoute = lazyRoute(() => import("../pages/admin/Tokens"), "Tokens");
 const NewTokenRoute = lazyRoute(() => import("../pages/admin/NewToken"), "NewToken");
 const GovernanceOverviewRoute = lazyRoute(() => import("../pages/admin/GovernanceOverview"), "GovernanceOverview");
+const OpsStepsRoute = lazyRoute(() => import("../pages/admin/OpsSteps"), "OpsSteps");
 const AuditRoute = lazyRoute(() => import("../pages/admin/Audit"), "Audit");
 const AuditReconciliationRoute = lazyRoute(() => import("../pages/admin/AuditReconciliation"), "AuditReconciliation");
 const McpPlaygroundRoute = lazyRoute(() => import("../pages/admin/McpPlayground"), "McpPlayground");
@@ -90,6 +91,7 @@ const {
   Tokens,
   NewToken,
   GovernanceOverview,
+  OpsSteps,
   Audit,
   AuditReconciliation,
   McpPlayground,
@@ -131,6 +133,7 @@ const {
   Tokens: TokensRoute.Component,
   NewToken: NewTokenRoute.Component,
   GovernanceOverview: GovernanceOverviewRoute.Component,
+  OpsSteps: OpsStepsRoute.Component,
   Audit: AuditRoute.Component,
   AuditReconciliation: AuditReconciliationRoute.Component,
   McpPlayground: McpPlaygroundRoute.Component,
@@ -172,6 +175,7 @@ const ROUTE_PRELOADS: Array<{ match: (path: string) => boolean; route: LazyRoute
   { match: (p) => p.startsWith("/admin/agents/") && p.endsWith("/tokens/new"), route: NewTokenRoute },
   { match: (p) => p.startsWith("/admin/agents/"), route: AgentDetailRoute },
   { match: (p) => p === "/admin/usage", route: GovernanceOverviewRoute },
+  { match: (p) => p === "/admin/ops-steps", route: OpsStepsRoute },
   { match: (p) => p === "/admin/roles", route: RoleListRoute },
   { match: (p) => p.startsWith("/admin/roles/"), route: RoleDetailRoute },
   { match: (p) => p === "/admin/row-policies", route: RowPolicyViewRoute },
@@ -560,6 +564,7 @@ export function AppFrame() {
             <Route path="/wiki" element={<WikiEditor />} />
             <Route path="/skills" element={<SkillList />} />
             <Route path="/admin/usage" element={<GovernanceOverview />} />
+            <Route path="/admin/ops-steps" element={<OpsSteps />} />
             <Route path="/admin/governance" element={<Navigate to="/admin/usage" replace />} />
             <Route path="/admin/agents" element={<AgentList />} />
             <Route path="/admin/agents/:userId" element={<AgentDetail />} />

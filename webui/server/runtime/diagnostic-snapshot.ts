@@ -7,6 +7,10 @@
  * observedAt; the in-flight permit is held until the collector actually settles.
  */
 
+import type { DiagnosticStepHold } from "./diagnostic-collector.js";
+
+export type DiagnosticSnapshotUatTrigger = DiagnosticStepHold & { opId: string };
+
 export type DiagnosticsFreshness = "unknown" | "fresh" | "stale";
 
 export type DiagnosticsMeta = {
@@ -20,7 +24,7 @@ export type DiagnosticData = Record<string, unknown>;
 
 export type DiagnosticSnapshotOptions = {
   /** Full diagnostic collect (may do file/SQLite/subprocess/network I/O). */
-  collect: (signal: AbortSignal) => Promise<DiagnosticData>;
+  collect: (signal: AbortSignal, uatTrigger?: DiagnosticSnapshotUatTrigger) => Promise<DiagnosticData>;
   /** Monotonic clock in ms (default: performance.now). */
   monotonicNow?: () => number;
   /** Wall clock (default: () => new Date()). */
@@ -47,7 +51,7 @@ type PublishedRecord = {
 };
 
 export class DiagnosticSnapshotService {
-  private readonly collectFn: (signal: AbortSignal) => Promise<DiagnosticData>;
+  private readonly collectFn: (signal: AbortSignal, uatTrigger?: DiagnosticSnapshotUatTrigger) => Promise<DiagnosticData>;
   private readonly monotonicNow: () => number;
   private readonly wallNow: () => Date;
   private readonly intervalMs: number;
@@ -97,6 +101,11 @@ export class DiagnosticSnapshotService {
     return this.inFlight;
   }
 
+  /** Whether the periodic background timer is armed. */
+  isBackgroundEnabled(): boolean {
+    return this.timer !== null;
+  }
+
   /** Test helper: drop published data back to unknown without closing. */
   resetPublishedForTests(): void {
     this.published = null;
@@ -139,6 +148,25 @@ export class DiagnosticSnapshotService {
     if (this.closed || this.inFlight) return;
     this.lastStartMono = this.monotonicNow();
     this.collectorPromise = this.runCollector();
+  }
+
+  /** Force one collect with an explicit UAT hold. Keeps the production deadline. */
+  tickForceForUat(trigger: DiagnosticSnapshotUatTrigger): boolean {
+    if (this.closed || this.inFlight) return false;
+    this.lastStartMono = this.monotonicNow();
+    this.collectorPromise = this.runCollector(trigger);
+    return true;
+  }
+
+  /** Pause or resume only the periodic timer. Never aborts the current collect. */
+  setBackgroundEnabledForUat(enabled: boolean): void {    if (enabled) {
+      this.start();
+      return;
+    }
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
   }
 
   /** Wait until the current collector (if any) has actually settled. */
@@ -187,7 +215,7 @@ export class DiagnosticSnapshotService {
     this.failedSinceSuccess = true;
   }
 
-  private async runCollector(): Promise<void> {
+  private async runCollector(uatTrigger?: DiagnosticSnapshotUatTrigger): Promise<void> {
     this.inFlight = true;
     const generation = this.generation;
     const controller = new AbortController();
@@ -200,7 +228,7 @@ export class DiagnosticSnapshotService {
     }, this.deadlineMs);
 
     try {
-      const data = await this.collectFn(controller.signal);
+      const data = await this.collectFn(controller.signal, uatTrigger);
       if (timedOut) {
         // Deadline already marked failure; do not publish a late success.
         return;

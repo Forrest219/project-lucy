@@ -9,6 +9,11 @@ import type {
   SourcesResponse
 } from "./types";
 
+export type SchemaStructureOpsStepRef = {
+  table: string;
+  opsStepId: string;
+};
+
 export type SchemaStructurePreview = {
   schema: string;
   readable: boolean;
@@ -16,6 +21,7 @@ export type SchemaStructurePreview = {
   tableCount: number;
   columnCount: number;
   namesOnly?: boolean;
+  opsStepId?: string;
   mapped: { number: number; string: number; time: number };
   downgraded: Array<{ table: string; column: string; rawType: string }>;
   /** Batch reads only; see `server/schema-structure.ts`. */
@@ -76,7 +82,39 @@ const REJECTION_REASON_TEXT: Record<string, string> = {
   deferred: "这次没有读完，请稍后重试。"
 };
 
-type TableRejection = { table: string; reason: string; message?: string };
+type TableRejection = { table: string; reason: string; message?: string; opsStepId?: string };
+
+type RequestOpsStep = {
+  tables: string[];
+  opsStepId?: string;
+};
+
+function readOpsStepId(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const opsStepId = (value as { opsStepId?: unknown }).opsStepId;
+  return typeof opsStepId === "string" && opsStepId ? opsStepId : undefined;
+}
+
+export function schemaStructureOpsStepId(error: unknown): string | undefined {
+  return error instanceof ApiError ? readOpsStepId(error.detail) : undefined;
+}
+
+export function schemaStructureOpsStepRefs(error: unknown): SchemaStructureOpsStepRef[] {
+  if (!(error instanceof ApiError)) return [];
+  const value = (error.detail as { opsStepRefs?: unknown } | undefined)?.opsStepRefs;
+  if (!Array.isArray(value)) return [];
+  const refs: SchemaStructureOpsStepRef[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const table = (item as { table?: unknown }).table;
+    const opsStepId = (item as { opsStepId?: unknown }).opsStepId;
+    if (typeof table !== "string" || !table || typeof opsStepId !== "string" || !opsStepId || seen.has(table)) continue;
+    seen.add(table);
+    refs.push({ table, opsStepId });
+  }
+  return refs;
+}
 
 function readFailureMessage(failures: TableRejection[]): string {
   const listed = failures
@@ -116,16 +154,19 @@ export async function readCheckedTableColumns(
   const strikes = new Map<string, number>();
   while (pending.length > 0) {
     const batch = pending.slice(0, batchSize);
+    const requestOpsStep: RequestOpsStep = { tables: batch };
     onProgress?.(done, selected.length, batch[0]!);
     let part: SchemaStructurePreview;
     try {
       part = await fetchSchemaStructure(connectionId, schema, batch);
+      requestOpsStep.opsStepId = readOpsStepId(part);
     } catch (error) {
+      requestOpsStep.opsStepId = error instanceof ApiError ? readOpsStepId(error.detail) : undefined;
       const rejection = error instanceof ApiError && error.code === "READ_FAILED"
         ? readSchemaTableRejection((error.detail as { tableRejection?: unknown } | undefined)?.tableRejection)
         : undefined;
       if (batch.length !== 1 || !rejection || rejection.table !== batch[0]) throw error;
-      failures.push(rejection);
+      failures.push({ ...rejection, opsStepId: requestOpsStep.opsStepId });
       strikes.delete(batch[0]);
       pending = pending.slice(1);
       done += 1;
@@ -172,7 +213,12 @@ export async function readCheckedTableColumns(
         strikes.set(t, count);
         if (count >= 2) {
           // C6: two consecutive deferred → record as failure, stop retrying this table.
-          failures.push({ table: t, reason: "deferred", message: `表「${t}」这次没有读完，请稍后重试。` });
+          failures.push({
+            table: t,
+            reason: "deferred",
+            message: `表「${t}」这次没有读完，请稍后重试。`,
+            opsStepId: requestOpsStep.opsStepId
+          });
           dropped.push(t);
           deferredSet.delete(t);
         }
@@ -192,7 +238,10 @@ export async function readCheckedTableColumns(
         if (Object.prototype.hasOwnProperty.call(readTables, name)) entries[name] = readTables[name];
       }
     }
-    failures.push(...rejections);
+    failures.push(...rejections.map((rejection) => ({
+      ...rejection,
+      opsStepId: requestOpsStep.tables.includes(rejection.table) ? requestOpsStep.opsStepId : undefined
+    })));
     downgraded.push(...part.downgraded);
     mapped.number += part.mapped.number;
     mapped.string += part.mapped.string;
@@ -214,7 +263,17 @@ export async function readCheckedTableColumns(
     downgraded
   };
   if (failures.length > 0) {
-    throw new ApiError({ code: "READ_FAILED", message: readFailureMessage(failures) }, { partial: result });
+    const opsStepRefs: SchemaStructureOpsStepRef[] = [];
+    const seen = new Set<string>();
+    for (const failure of failures) {
+      if (!failure.opsStepId || seen.has(failure.table)) continue;
+      seen.add(failure.table);
+      opsStepRefs.push({ table: failure.table, opsStepId: failure.opsStepId });
+    }
+    throw new ApiError(
+      { code: "READ_FAILED", message: readFailureMessage(failures), detail: { opsStepRefs } },
+      { partial: result }
+    );
   }
   return result;
 }
