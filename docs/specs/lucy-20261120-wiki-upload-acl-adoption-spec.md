@@ -6,6 +6,7 @@
 | 日期 / 产品线 | 2026-11-20 / 0.30.0 |
 | 功能编号 / 优先级 | P1-65／REQ-030-086；事故修复／治理主路径；不入核心分母 |
 | 台账号 | 无 |
+| 阶段 | S5 |
 | 状态 | v0.2。终稿已确权；开发授权已获得；实现完成；四项验证缺口已整改；改后 Docker UAT＝PASS（见测试台 INDEX）；功能合同已收口；不入核心分母；≠ 可上线。 |
 | 授权边界 | 委托人已授权四项缺口整改、真实 UAT、清理与收口复核；本轮追加授权仅 commit 本任务；不 push、不发布，≠ 可上线 |
 | 需求 / 计划 | [REQ-030-086](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [总账 P1-65](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261120-wiki-upload-acl-adoption-plan.md) |

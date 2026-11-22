@@ -6,6 +6,7 @@
 | 功能编号 / 优先级 | P1-69／REQ-030-090；不入核心分母 |
 | 台账号 | 无 |
 | 日期／基线 | 2026-11-20／7dded5478a05e256aa23d33567b49beb3820ec3b |
+| 阶段 | S4 |
 | 状态 | v0.1。Codex CLI终稿确权通过；开发授权已获得；实现已落地，组件与真实shell回归通过；候选6本机Docker排空／拒绝／恢复及直接CLI定向已验证，完整F69矩阵仍有缺口；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
 | 授权边界 | 用户已批准执行CA-00–09；本任务只交合同材料，CA-06须先有正式合同与G2记录；不push／发布／改客户环境 |
 | 需求／计划／测试台 | [总账](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [需求池](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [Plan](../plans/lucy-20261120-runtime-reload-drain-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |

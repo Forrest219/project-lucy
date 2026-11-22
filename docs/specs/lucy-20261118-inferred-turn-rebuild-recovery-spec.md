@@ -6,7 +6,8 @@
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0` |
 | 功能编号 / 优先级 | **P1-45**／REQ-030-066／**P1**（事故修复；前方报告分级为 **P0-02**）。**不入 0.30 核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账，不占用 v0.25 登记册 |
-| 状态 | **v0.2＋P1-50 水位注记。终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」；OQ-1＝`inferred_rebuild_state`）。代码已实现；测试台 UAT-SUITE-INFERRED-REBUILD-RECOVERY＝**PASS**（[2026-11-18-cursor-irr](../qa/uat/suites/inferred-turn-rebuild-recovery/runs/2026-11-18-cursor-irr-p145-p147.md)）。P1-50／FDE R01：完成水位改为与读快照同一 `ceilingId`（见 §3.1 注）。不入核心分母。≠ 可上线** |
+| 阶段 | S5 |
+| 状态 | S5｜**v0.2＋P1-50 水位注记；功能合同已收口（2026-11-22，漏斗底端分批收口·批次 1）**。终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」；OQ-1＝`inferred_rebuild_state`）；代码已实现；SC-01–SC-08 通过；测试台 UAT-SUITE-INFERRED-REBUILD-RECOVERY＝**PASS**（[2026-11-18-cursor-irr](../qa/uat/suites/inferred-turn-rebuild-recovery/runs/2026-11-18-cursor-irr-p145-p147.md)；P1-57-G8 真实 SIGKILL 复验通过）。P1-50／FDE R01：完成水位改为与读快照同一 `ceilingId`（见 §3.1 注）。不入核心分母。≠ 可上线** |
 | 决策来源 | 委托人 2026-11-18 要求按仓库规范为前方升级测试报告三则 P0 分别制定 Spec 与 UAT |
 | 需求来源 | 前方报告《Lucy 升级与稳定性测试报告》LUCY-TR-20261118-01 v1.2（委托人 Obsidian Inbox）§4.1 P0-02；证据 E05／E06／E17 |
 | 实施主体 | WebUI 服务端：`webui/server/proxy/audit.ts`（`rebuildInferredTurnsUnlocked`）、`webui/server/admin/inferred-turn-maintainer.ts`（`covered`／`scanFull`）。不改 Helm、不改 KTX |

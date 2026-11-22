@@ -2,7 +2,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **v0.2。与 Spec 同句：终稿已确权、开发已授权；代码已实现（allocate 分块 25＋块间 yield）；vitest 5／5＋P1-45 回归 20／20；测试台 NOT RUN；不入核心分母；≠ 可上线** |
+| 状态 | S5｜v0.2；功能合同已收口（2026-11-22，漏斗底端分批收口·批次 1）。与 Spec 同句：终稿已确权、开发已授权；代码已实现（allocate 分块 25＋块间 yield；v0.7 削峰：写片 2–8、`write_slice`／窗口 DELETE／PASSIVE off-thread）；vitest 5／5＋P1-45 回归 20／20；SC-01–SC-10 通过；测试台＝PASS（shave2-default，RPB-09＝3／3）；不入核心分母；≠ 可上线 |
 | 主 Spec | [`docs/specs/lucy-20261118-rebuild-probe-budget-spec.md`](../specs/lucy-20261118-rebuild-probe-budget-spec.md) |
 | 总账 | **P1-47**／REQ-030-068（前方报告 P0-01）；**不入核心分母** |
 | 授权边界 | **开发已授权（委托人 2026-11-18「授权定稿」）。** 限 `proxy/audit.ts` 前置同步段分块／让出、必要时 `page-budget`／`yield-slices` 与 vitest／UAT。**不得**以放宽 Helm timeout 或缩小数据关单。Wave 顺序：在 P1-45 合入后再改同一重建路径 |

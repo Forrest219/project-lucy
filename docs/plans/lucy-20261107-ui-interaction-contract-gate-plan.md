@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | v0.5 / 2026-11-07 |
-| 状态 | **v0.5，开发授权已获得；功能合同已收口（2026-11-07）**。本条收口不表示可上线 |
+| 状态 | 阶段:S5｜**v0.5，开发授权已获得；功能合同已收口（2026-11-07）**。本条收口不表示可上线 |
 | 授权边界 | 2026-11-07 委托人授权落地 lint 与治理正文。不授权改页面、发版走查判定或 WebUI 运行代码。本条收口不表示可上线。Spec 见 [lucy-20261107-ui-interaction-contract-gate-spec.md](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md) v0.5 |
 | 验收 | 授权落地后：Spec SC-01–SC-15 逐条有证据；生产 grandfather 名单内的现行 Spec 不因 `interaction-contract` 失败；diff 落在 Spec §8。`lint:spec`、`lint:terminology`、`lint:ia-boundary` 退出码为 0。`lint:spec-docs` 与 `lint:spec-docs:test` 仍退出 1，原因是两份既有 Plan 的 `filename`／`plan-parts`，该失败在本次之前已存在，不在 §8。**不构成发布取证，不表示可上线** |
 | 目标 | 按 Spec v0.5 的文法实现 lint，并把授权口令、豁免与六问的分叉、元素清单和 Fixed 与 Verified 的差别写进现有治理文件 |

@@ -4,7 +4,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **v0.7；R2-F＋R4 已闭合（2026-11-15）；实现中；关 GAP-UAT-P1-11-RUNTIME；不入核心分母；≠ 可上线** |
+| 状态 | S5｜v0.7；功能合同已收口（2026-11-22，漏斗底端分批收口·批次 1）。R2-F＋R4 已闭合（2026-11-15）；开发授权已获得；实现已落地；SC-01–SC-09 通过；测试台复测 PASS（cursor-p1-27-ops-retest）；GAP-UAT-P1-11-RUNTIME 已关闭；不入核心分母；≠ 可上线 |
 | 主 Spec | [`docs/specs/lucy-20261115-ops-concept-code-root-runtime-fix-spec.md`](../specs/lucy-20261115-ops-concept-code-root-runtime-fix-spec.md) **v0.7** |
 | 总账 | **P1-27**／REQ-030-048；**不入核心分母**；P1-11 伴生事故修复 |
 | 父合同 | [P1-11 Spec](../specs/lucy-20261109-concept-registry-lucy-ops-control-plane-spec.md) |

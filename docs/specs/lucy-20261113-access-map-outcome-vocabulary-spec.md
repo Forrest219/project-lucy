@@ -5,7 +5,8 @@
 | 文档类型 / 版本 | 事故修复合同 / **v0.1** |
 | 日期 / 目标版本 | 2026-11-13 / 不绑定产品版本号 |
 | 功能编号 / 优先级 | **P1-19**／REQ-030-040／**P1** |
-| 状态 | **v0.1；实现已落地（2026-11-13）**。vitest access-map 三文件 76/76。**测试台已复跑 PASS（2026-11-14）**：[`UAT-SUITE-ACCESS-MAP`](../qa/uat/suites/access-map-sankey-empty/suite.md)／[跑次](../qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md)（UAT-04 关闭 F-1）。**不表示可上线** |
+| 阶段 | S5 |
+| 状态 | S5｜**v0.1；功能合同已收口（2026-11-22，漏斗底端分批收口·批次 1）**。实现已落地（2026-11-13）；vitest access-map 三文件 76/76；SC-01–SC-03 通过；**测试台已复跑 PASS（2026-11-14）**：[`UAT-SUITE-ACCESS-MAP`](../qa/uat/suites/access-map-sankey-empty/suite.md)／[跑次](../qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md)（UAT-04 关闭 F-1）；**不表示可上线** |
 | 决策来源 | UAT [`2026-11-13-claude-adversarial`](../qa/uat/suites/access-map-sankey-empty/runs/2026-11-13-claude-adversarial.md) 发现 F-1 |
 | 授权 | 委托人同句「立项修一下」＝本条开发授权 |
 

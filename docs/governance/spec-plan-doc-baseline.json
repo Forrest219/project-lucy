@@ -3650,10 +3650,6 @@
       "rule": "plan-parts"
     },
     {
-      "file": "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
-      "rule": "metadata"
-    },
-    {
       "file": "docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md",
       "rule": "plan-parts"
     },

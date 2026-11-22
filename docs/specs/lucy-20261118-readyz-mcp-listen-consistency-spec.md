@@ -6,7 +6,8 @@
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0` |
 | 功能编号 / 优先级 | **P1-46**／REQ-030-067／**P1**（事故修复；前方报告分级为 **P0-03**）。**不入 0.30 核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账，不占用 v0.25 登记册 |
-| 状态 | **v0.2。终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」）。代码已实现；vitest 守卫通过；测试台 UAT-SUITE-READYZ-MCP-LISTEN＝**PASS**（[2026-11-18-cursor-rml](../qa/uat/suites/readyz-mcp-listen/runs/2026-11-18-cursor-rml-p145-p147.md)）。不入核心分母。≠ 可上线** |
+| 阶段 | S5 |
+| 状态 | S5｜**v0.2；功能合同已收口（2026-11-22，漏斗底端分批收口·批次 1）**。终稿已确权、开发已授权（委托人 2026-11-18「授权定稿」）；代码已实现；vitest 守卫通过；SC-01–SC-06 通过；测试台 UAT-SUITE-READYZ-MCP-LISTEN＝**PASS**（[2026-11-18-cursor-rml](../qa/uat/suites/readyz-mcp-listen/runs/2026-11-18-cursor-rml-p145-p147.md)）。不入核心分母。≠ 可上线** |
 | 决策来源 | 委托人 2026-11-18 要求按仓库规范为前方升级测试报告三则 P0 分别制定 Spec 与 UAT |
 | 需求来源 | 前方报告 LUCY-TR-20261118-01 v1.2 §4.1 P0-03；证据 E23 |
 | 实施主体 | WebUI 服务端：`webui/server/index.ts`（`app.listen`／`proxy.listen`／`markWebuiWarmupComplete`）、`webui/server/runtime/readiness.ts`。不改 Helm 探针路径（见 OQ-2） |

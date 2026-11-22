@@ -6,7 +6,8 @@
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0` |
 | 功能编号 / 优先级 | **P1-47**／REQ-030-068／**P1**（事故修复；前方报告分级为 **P0-01**）。**不入 0.30 核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账，不占用 v0.25 登记册 |
-| 状态 | **v0.7。终稿已确权；削峰已落地。代码：撤销 skip；写片 2–8；`write_slice`＋窗口 `delete_window`＋PASSIVE 经 rebuild worker off-thread；30 天回看不变。测试台＝**PASS**（[shave2-default](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-19-cursor-rpb-shave2-default.md) RPB-09＝3／3，livez max 7–17ms）。暂停仍为交付安全带。不入核心分母。≠ 可上线** |
+| 阶段 | S5 |
+| 状态 | S5｜**v0.7；功能合同已收口（2026-11-22，漏斗底端分批收口·批次 1）**。终稿已确权；开发授权已获得；削峰已落地（撤销 skip；写片 2–8；`write_slice`＋窗口 `delete_window`＋PASSIVE 经 rebuild worker off-thread；30 天回看不变）；SC-01–SC-10 通过（SC-08–10 暂停合同不替代默认配置关单）；测试台＝**PASS**（[shave2-default](../qa/uat/suites/rebuild-probe-budget/runs/2026-11-19-cursor-rpb-shave2-default.md) RPB-09＝3／3，livez max 7–17ms／p99 7–10ms；P1-57-G7／G9 测程纠正后复验通过）。暂停仍为交付安全带。不入核心分母。≠ 可上线** |
 | 决策来源 | 委托人 2026-11-18 要求按仓库规范为前方升级测试报告三则 P0 分别制定 Spec 与 UAT |
 | 需求来源 | 前方报告 LUCY-TR-20261118-01 v1.2 §4.1 P0-01；证据 E07／E15–E18；客户事故错题 [`2026-11-17-k8s-upgrade-event-loop-readiness-timeout`](../lessons/2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md) |
 | 实施主体 | WebUI 服务端：`webui/server/proxy/audit.ts`（重建前置事务）、`page-budget`／`yield-slices`、必要时 `inferred-turn-maintainer`。不改 Helm timeout 关单 |

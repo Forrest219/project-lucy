@@ -6,6 +6,7 @@
 | 日期 | 2026-11-20 |
 | 功能编号 / 优先级 | P1-72／REQ-030-093；既有行权限可用性修复；不入核心分母 |
 | 台账号 | 无 |
+| 阶段 | S5 |
 | 状态 | v1.0。终稿已确权；开发授权已获得；实现与 Codex CLI 代码终审完成；功能合同已收口（定向回归286项、脚本合同97项、隔离Docker39项）；测试台 UAT-SUITE-ROW-POLICY-AUTO PASS；扩展回归与全仓门禁既有缺口单列，远端CI未执行；不入核心分母；≠ 可上线。 |
 | 授权 | 委托人批准取消人工证明开关、保留强制隔离、统一入口与验证方案并明确要求落地；Codex CLI 核定本合同；不含发布或客户实例变更 |
 | 关联 | [Plan](../plans/lucy-20261120-row-policy-automatic-enforcement-plan.md)；[UAT](../qa/uat/suites/row-policy-automatic-enforcement/suite.md)；P1-25 评审、P1-28 场景验收 |

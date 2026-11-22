@@ -6,6 +6,7 @@
 | 日期 / 目标版本 | 2026-11-20 / 0.30.0 |
 | 功能编号 / 优先级 | P1-68／REQ-030-089；P1（运行观察；建议）；不入核心分母 |
 | 台账号 | 无 |
+| 阶段 | S4 |
 | 状态 | v1.0。终稿已确权；开发授权已获得；实现与独立代码评审完成；本机 demo Docker 平滑升级后 UAT-SUITE-OPS-STEP R0／01–08 全真 PASS（gitSha=88b2e9ea；跑次 [2026-11-22-cursor-ops-step](../qa/uat/suites/ops-step/runs/2026-11-22-cursor-ops-step.md)）；测试台 PASS WITH GAP（重度 Linux 管道 100ms／UID 追加拒绝／16MiB 双轮转、age_limit 1h 墙钟、51／52 表矩阵、双连接 catalog 配对仍为设计值 GAP）；不入核心分母；≠ 功能合同完全收口；≠ 可上线。 |
 | 授权边界 | 2026-11-20 委托人要求按仓库规范起草、优化并定稿 Spec、Plan 与 UAT。本条只含需求规格。不含运行代码、不含测试执行、不含镜像或客户现场变更。 |
 | 需求 / 总账 | [REQ-030-089](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [P1-68](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) |

@@ -2,7 +2,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **v0.2。与 Spec 同句：终稿已确权、开发已授权；代码已实现（`markWebuiWarmupComplete` 在 `proxy.listen` 后）；vitest 14/14；测试台 NOT RUN；不入核心分母；≠ 可上线** |
+| 状态 | S5｜v0.2；功能合同已收口（2026-11-22，漏斗底端分批收口·批次 1）。与 Spec 同句：终稿已确权、开发已授权；代码已实现（`markWebuiWarmupComplete` 在 `proxy.listen` 后）；vitest 14/14；SC-01–SC-06 通过；测试台 UAT-SUITE-READYZ-MCP-LISTEN＝PASS（2026-11-18-cursor-rml）；不入核心分母；≠ 可上线 |
 | 主 Spec | [`docs/specs/lucy-20261118-readyz-mcp-listen-consistency-spec.md`](../specs/lucy-20261118-readyz-mcp-listen-consistency-spec.md) |
 | 总账 | **P1-46**／REQ-030-067（前方报告 P0-03）；**不入核心分母** |
 | 授权边界 | **开发已授权（委托人 2026-11-18「授权定稿」）。** 限 `index.ts`、`runtime/readiness.ts` 及对应 vitest／UAT。默认不改 Helm |
