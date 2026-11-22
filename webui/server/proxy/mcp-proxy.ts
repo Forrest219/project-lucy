@@ -145,6 +145,7 @@ import {
   type BudgetSnapshot,
   type BudgetTicket,
   type BudgetState,
+  type ContinuationMode,
 } from "./question-experience.js";
 import { bindQuestionBudgetSettlement } from "./question-budget-lifecycle.js";
 import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadAmbiguityCatalogFromDir, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
@@ -1301,11 +1302,13 @@ function lucyContinueQuestionTool() {
   return {
     name: "lucy_continue_question",
     description:
-      "Continue the current question after question_budget_exhausted. Pass the continueToken from that response. This does not start a new question and does not require a database connection.",
+      "Budget escape after question_budget_exhausted. Pass the continueToken from that response. Default mode `continue` continues the same question (without lucy_begin_question, up to 5 continuations). When the stop payload has continuable=false and its next_step asks for mode=new_question, pass mode=new_question to reopen the budget for a new question on the same token (begin-not-available scopes only; where lucy_begin_question is available, use it instead). This is a budget limit, not a permission denial.",
     inputSchema: {
       type: "object",
       properties: {
-        token: { type: "string" }
+        token: { type: "string" },
+        // P1-74 / D7：显式 `continue`（默认）或 `new_question`；旧客户端只传 token ⇒ continue。
+        mode: { type: "string", enum: ["continue", "new_question"] }
       },
       required: ["token"],
       additionalProperties: false
@@ -1467,6 +1470,27 @@ async function shouldHideBeginQuestion(identity: Identity, sessionId: string | n
   } catch {
     return true;
   }
+}
+
+/**
+ * P1-74 / D7：预算开启时，凡可见任一**计费问数工具**的身份必须可达
+ * `lucy_continue_question`（含 mode=new_question）。只放宽该逃生工具的
+ * 可见性／可达性，不新增任何 connection／source／行权限；wiki-only 等
+ * 非问数身份不在本条范围，沿用既有 ACL（SC-47 合同不变）。
+ */
+const BILLED_DATA_TOOL_NAMES = new Set([
+  "lucy_query",
+  "lucy_read_source",
+  "lucy_freshness",
+  "lucy_explain_query"
+]);
+
+function budgetEscapeToolReachable(visibleTools: ReadonlySet<string> | readonly string[]): boolean {
+  if (!questionBudgetEnabled()) return false;
+  for (const tool of visibleTools) {
+    if (BILLED_DATA_TOOL_NAMES.has(tool)) return true;
+  }
+  return false;
 }
 
 function numericLimit(value: unknown): number {
@@ -2121,6 +2145,8 @@ async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: 
     const visibleTools = new Set(await allowedToolNames(identity));
     // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
     if (hideBegin) visibleTools.delete("lucy_begin_question");
+    // P1-74 / D7：计费问数身份必须可达逃生工具（不新增数据权限）。
+    if (budgetEscapeToolReachable(visibleTools)) visibleTools.add("lucy_continue_question");
     const catalogTool = visibleTools.has("lucy_catalog")
       ? "`lucy_catalog`"
       : visibleTools.has("kx_catalog")
@@ -2146,10 +2172,14 @@ async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: 
           ""
         ]
       : [];
-    // 与 md「失败预算与交付时限」同一处置：触顶后停止循环；续查通道只在该工具可见时点名。
+    // P1-74 / D5：与 md「问询预算」同一处置口径 —— 预算终止不是权限拒绝；
+    // 按 continuable／next_step 分支：续查多档（无 begin 时默认至多 5 档），
+    // 硬停后按 next_step 重试。inactive 模式不得点名 begin（P1-60 工具隐藏合同）。
     const budgetExhaustedLine = visibleTools.has("lucy_continue_question")
-      ? "- When a data tool returns `question_budget_exhausted`, stop looping. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` and then keep querying; a question can be continued only once. If `continuable` is false, deliver the verified partial results, state the gaps, and do not retry."
-      : "- When a data tool returns `question_budget_exhausted`, stop looping, deliver the verified partial results, state the gaps, and do not retry.";
+      ? (hideBegin
+          ? "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, call `lucy_continue_question` with `mode=new_question` and the `continueToken` to reopen the budget for a new question on the same token, then retry the data tool. Deliver verified partial results only when no such path is available."
+          : "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, follow the structured `next_step`: `lucy_begin_question` starts a new question where begin is available; `lucy_continue_question` with `mode=new_question` and the `continueToken` reopens the budget with the same token where begin is not available, then retry the data tool. Deliver verified partial results only when no such path is available.")
+      : "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial; deliver the verified partial results, state the gaps, and do not retry.";
     return [
       "# Lucy Data QA Runtime Instructions",
       "",
@@ -4195,6 +4225,8 @@ async function localToolsListPayload(identity: Identity, requestId: string | num
   const visibleTools = new Set(await allowedToolNames(identity));
   // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
   if (await shouldHideBeginQuestion(identity, sessionId)) visibleTools.delete("lucy_begin_question");
+  // P1-74 / D7：计费问数身份必须可达逃生工具（不新增数据权限）。
+  if (budgetEscapeToolReachable(visibleTools)) visibleTools.add("lucy_continue_question");
   const tools = localToolBuilders()
     .filter((local) => visibleTools.has(local.name))
     .map((local) => local.build());
@@ -4259,6 +4291,8 @@ async function writeToolsListResponse(
   const visibleTools = new Set(await allowedToolNames(identity));
   // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
   if (await shouldHideBeginQuestion(identity, sessionId)) visibleTools.delete("lucy_begin_question");
+  // P1-74 / D7：计费问数身份必须可达逃生工具（不新增数据权限）。
+  if (budgetEscapeToolReachable(visibleTools)) visibleTools.add("lucy_continue_question");
   let body = originalBody;
   let filterFailed = false;
   let errorDetail: string | undefined;
@@ -5025,6 +5059,9 @@ async function writeCertifiedRouteResponse(
   if (questionBudgetBypassEnabled() && questionBudgetEnabled()) {
     const compiledBudget = await effectivePermissions(identity).catch(() => null);
     const allowedTools = compiledBudget && compiledBudget.ok ? (compiledBudget.permissions.tools ?? []) : [];
+    // P1-74 / D7：计费问数身份即使未显式授予 continue，也按数据问数能力获得逃生可达。
+    const canContinue = allowedTools.includes("lucy_continue_question") || allowedTools.includes("*") || budgetEscapeToolReachable(allowedTools);
+    const canBegin = allowedTools.includes("lucy_begin_question") || allowedTools.includes("*");
     const budgetDecision = await questionBudget.consumePersisted(
       requestMeta.lucyTurnId,
       Date.now(),
@@ -5033,7 +5070,8 @@ async function writeCertifiedRouteResponse(
       {
         identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
         sessionId: requestMeta.lucySessionId,
-        canContinue: allowedTools.includes("lucy_continue_question") || allowedTools.includes("*")
+        canContinue,
+        canBegin
       }
     );
     if (budgetDecision.action !== "allow") {
@@ -5041,7 +5079,13 @@ async function writeCertifiedRouteResponse(
         {
           reason: budgetDecision.reason,
           ...(budgetDecision.action === "stop"
-            ? { partial: budgetDecision.partial, continueToken: budgetDecision.continueToken, continuable: budgetDecision.continuable }
+            ? {
+                partial: budgetDecision.partial,
+                continueToken: budgetDecision.continueToken,
+                continuable: budgetDecision.continuable,
+                // P1-74 / D4：与数据工具停机同一结构化下一步口径。
+                ...(budgetDecision.nextStep ? { next_step: budgetDecision.nextStep } : {})
+              }
             : { partial: true })
         },
         true,
@@ -5260,7 +5304,12 @@ async function buildDenialRepairPayload(
   // ACL check for tool calls
   if (rpcMethod === "tools/call" && toolName) {
     const aclSpan = trace.start("acl");
-    const decision = await aclCheck(identity, toolName, toolArgs);
+    // P1-74 / D7：计费问数身份在预算开启时可达逃生工具 —— 不新增数据权限，
+    // 仅放宽 `lucy_continue_question` 本工具的调用闸门（wiki-only 等非问数
+    // 身份仍走既有 ACL，SC-47 合同不变）。
+    const decision = toolName === "lucy_continue_question" && budgetEscapeToolReachable(await allowedToolNames(identity).catch(() => [] as string[]))
+      ? { allowed: true as const, reason: "allowed" }
+      : await aclCheck(identity, toolName, toolArgs);
     if (decision.allowed) {
       aclSpan.end({ status: "ok", reasonCode: "allowed", attrs: { decision: "allow" } });
     } else {
@@ -5752,7 +5801,9 @@ async function buildDenialRepairPayload(
       const budgetScope = `${identity.tokenHashPrefix ?? "no-token"}:${requestMeta.lucySessionId ?? "no-session"}`;
       const compiledBudget = await effectivePermissions(identity).catch(() => null);
       const allowedTools = compiledBudget && compiledBudget.ok ? (compiledBudget.permissions.tools ?? []) : [];
-      const canContinue = allowedTools.includes("lucy_continue_question") || allowedTools.includes("*");
+      // P1-74 / D7：计费问数身份即使未显式授予 continue，也按数据问数能力获得逃生可达。
+      const canContinue = allowedTools.includes("lucy_continue_question") || allowedTools.includes("*") || budgetEscapeToolReachable(allowedTools);
+      const canBegin = allowedTools.includes("lucy_begin_question") || allowedTools.includes("*");
       const budgetDecision = await questionBudget.consumePersisted(
         requestMeta.lucyTurnId,
         Date.now(),
@@ -5761,7 +5812,8 @@ async function buildDenialRepairPayload(
         {
           identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
           sessionId: requestMeta.lucySessionId,
-          canContinue
+          canContinue,
+          canBegin
         }
       );
       if (budgetDecision.action === "reject") {
@@ -5834,7 +5886,9 @@ async function buildDenialRepairPayload(
                 reason: budgetDecision.reason,
                 partial: budgetDecision.partial,
                 continueToken: budgetDecision.continueToken,
-                continuable: budgetDecision.continuable
+                continuable: budgetDecision.continuable,
+                // P1-74 / D4：结构化下一步（软信封；预算终止不是权限拒绝）。
+                ...(budgetDecision.nextStep ? { next_step: budgetDecision.nextStep } : {})
               })
             }]
           }
@@ -5912,6 +5966,26 @@ async function buildDenialRepairPayload(
           budgetContinuation: { ...previousFact, ...appliedFact },
           ...(rolloverSnap ? { budgetSnapshot: rolloverSnap } : {})
         };
+      }
+      if (budgetDecision.reopened) {
+        // P1-74 / Task 2：new_question 重开在**本次数据调用**兑现 —— 换窗与准入
+        // 同一事务已提交；预算行解除旧 turn 归属。清除**仍为当前值的** reported-turn
+        // 指针（只 forget 旧 turnId，不碰其它候选），不新建上报 turn／BindingSession。
+        const appliedReopen = {
+          applied: true,
+          windowId: budgetDecision.ticket?.windowId ?? null,
+          round: budgetDecision.ticket?.round ?? null,
+          requestId: budgetDecision.ticket?.requestId ?? null
+        };
+        const previousReopen = (argsSummary?.budgetReopen ?? {}) as Record<string, unknown>;
+        const rolloverSnap =
+          "budgetSnapshot" in budgetDecision ? budgetDecision.budgetSnapshot : undefined;
+        argsSummary = {
+          ...(argsSummary ?? {}),
+          budgetReopen: { ...previousReopen, ...appliedReopen },
+          ...(rolloverSnap ? { budgetSnapshot: rolloverSnap } : {})
+        };
+        if (requestMeta.lucyTurnId) reportedTurns.forget(requestMeta.lucyTurnId);
       }
       if (budgetDecision.ticket) {
         const ticket = budgetDecision.ticket;
@@ -6165,22 +6239,36 @@ async function buildDenialRepairPayload(
     if (toolName === "lucy_continue_question") {
       const args = (toolArgs as Record<string, unknown> | undefined) ?? {};
       const token = typeof args.token === "string" ? args.token : "";
+      // P1-74 / D7：mode 缺省为 continue（旧客户端只传 token）；非法值由引擎判 invalid_arguments。
+      const mode: ContinuationMode | undefined = args.mode === "new_question" || args.mode === "continue"
+        ? args.mode
+        : typeof args.mode === "string"
+          ? (args.mode as ContinuationMode)
+          : undefined;
       const scopeKey = budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? "");
       const declared = await questionBudget.declareContinuation(
         questionBudgetScopeMode() === "stable"
           ? budgetScopeKey(scopeKey, requestMeta.lucySessionId)
           : `turn:${requestMeta.lucyTurnId ?? "none"}`,
-        token
+        token,
+        Date.now(),
+        mode
       );
       const responseBody = jsonRpcToolResult(
         requestId,
         JSON.stringify(declared.ok
-          ? { ok: true, idempotent: declared.idempotent === true, declared: declared.declared === true }
+          ? {
+              ok: true,
+              idempotent: declared.idempotent === true,
+              declared: declared.declared === true,
+              ...(declared.reopen ? { reopen: true } : {})
+            }
           : { ok: false, reason: declared.reason }),
         declared.ok ? {} : { isError: true }
       );
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
+      const reopen = declared.ok === true && declared.reopen === true;
       recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
@@ -6188,23 +6276,25 @@ async function buildDenialRepairPayload(
         tool: toolName,
         argsSummary: {
           tokenPresent: token.length > 0,
+          mode: mode ?? "continue",
           // Spec 162 §6.7 / SC-30：续查**声明**事实。与后续数据调用上的
-          // `budgetContinuation.applied` 是两条可区分事实。
+          // `budgetContinuation.applied` / `budgetReopen.applied` 是可区分事实。
           budgetContinuation: {
             declared: declared.ok === true && declared.declared === true,
             idempotent: declared.ok === true && declared.idempotent === true,
+            reopen,
             windowId: declared.ok ? declared.windowId ?? null : null,
             round: declared.ok ? declared.round ?? null : null
           }
         },
         outcome: declared.ok ? "ok" : "error",
-        decisionReason: declared.ok ? "budget_continuation_declared" : declared.reason,
+        decisionReason: declared.ok ? (reopen ? "budget_reopen_declared" : "budget_continuation_declared") : declared.reason,
         errorDetail: declared.ok ? undefined : declared.reason,
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
         ...requestMeta,
-        ...(await auditMeta(identity, declared.ok ? "budget_continuation_declared" : declared.reason)),
+        ...(await auditMeta(identity, declared.ok ? (reopen ? "budget_reopen_declared" : "budget_continuation_declared") : declared.reason)),
       });
       return;
     }

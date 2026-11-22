@@ -57,7 +57,7 @@
 
 - 对失败建立错误指纹（tool + source + normalized reason + relevant argument shape）。同一指纹最多做一次有信息增益的修正重试；只在 `eq` / `=` / `in` 之间循环不算修正。
 - 同一问询最多 60 次数据工具调用，或累计 300 秒数据处理时长（不含思考时间），以先到者为准。同一输入最多重复 1 次；已成功读取的 source 不重复读取，只有瞬时错误可额外重试一次。协议方法（含 `lucy_begin_question` 与 `lucy_continue_question`）不占这个预算。
-- 问询预算用尽时停止循环。代理返回 `question_budget_exhausted`。若 `continuable` 为 true，调用 `lucy_continue_question`，传入返回的 `continueToken`，然后继续查数。若 `continuable` 为 false，直接交付已验证的部分结果并说明缺口，不要重试。同一问询只能继续一次。
+- 问询预算用尽时停止循环。代理返回 `question_budget_exhausted`——这是**问询预算限制，不是权限拒绝**。若 `continuable` 为 true，调用 `lucy_continue_question`，传入返回的 `continueToken`（默认 `mode=continue`），然后重试同一数据工具；未使用 `lucy_begin_question` 的问询默认可继续至多 5 次（初始窗＋5 次续查＝至多 6 窗，调用上界约 360 次，非无限）。若 `continuable` 为 false（续查档数用尽），按返回的结构化 `next_step` 执行：`lucy_begin_question` 可见时用它开启新问询；begin 不可见时，以 `mode=new_question` 加同一 `continueToken` 调用 `lucy_continue_question` 重开预算（不换 Token、不需要新 session），然后重试数据工具。只有 `next_step` 为 `hard_budget_stop` 时，才交付已验证的部分结果并说明缺口，不要重试。
 - 部分可回答时仍必须回复：逐项给出 `ok` / `no_data` / `unavailable` / `partial`，说明期间、版本/批次、情景、失败影响与 provenance。不得因一个子问题失败而丢弃整轮已取得的结果。
 
 ## `lucy_query` 参数形态

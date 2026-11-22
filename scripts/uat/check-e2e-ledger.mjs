@@ -167,6 +167,12 @@ const REQUIRED = [
     suiteId: "UAT-SUITE-BUDGET-AUDIT",
     suiteDir: "docs/qa/uat/suites/budget-audit",
     latestRun: "docs/qa/uat/suites/budget-audit/runs/2026-11-15-cursor-p1-14-audit-retest.md"
+  },
+  {
+    poolId: "P1-74",
+    suiteId: "UAT-SUITE-BUDGET-ESCAPE",
+    suiteDir: "docs/qa/uat/suites/budget-escape"
+    // NOT RUN — no latestRun until first full-truth baseline
   }
 ];
 

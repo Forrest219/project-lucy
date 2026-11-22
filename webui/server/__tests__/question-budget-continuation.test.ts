@@ -260,7 +260,9 @@ describe("question budget continuation", () => {
     expect(state?.windowId).toBe(2);
     expect(state?.continuations).toBe(1);
     expect(state?.pendingToken).toBeNull();
-    expect(state?.presentedToken).toBeNull();
+    // P1-74 / Task 1b：换窗即轮换 presentedToken（新窗新凭证，旧凭证不得跨窗兑现）。
+    expect(state?.presentedToken).toBeTruthy();
+    expect(state?.presentedToken).not.toBe(TURN);
     // 旧窗口的已结算时长进入归档而不是凭空消失
     expect(Object.values(state?.archivedBusyMsByWindow ?? {})).toContain(QUESTION_BUDGET_MAX_BUSY_MS);
 
@@ -604,11 +606,15 @@ describe("question budget continuation", () => {
     expect(continued.continued).toBe(true);
     expect(seeded.rows.get(scopeKey)?.windowId).toBe(2);
 
-    // 第二次停机（窗口 2），凭证字符串与第一次相同
+    // 第二次停机（窗口 2）：每窗轮换 presentedToken（P1-74 / Task 1b），
+    // 新窗凭证不得等于上一窗凭证，且不得泄漏作用域／身份信息
     const stop2 = await exhaustByCalls(budget, 3_000);
     expect(stop2.action).toBe("stop");
     if (stop2.action !== "stop" || stop1.action !== "stop") return;
-    expect(stop2.continueToken).toBe(stop1.continueToken);
+    expect(stop2.continueToken).toBeTruthy();
+    expect(stop2.continueToken).not.toBe(stop1.continueToken);
+    expect(stop2.continueToken).not.toContain("bq:");
+    expect(stop2.continueToken).not.toContain(IDENTITY);
 
     // 发布的是该窗口已落库的行，不得被另一窗口重算的候选态覆盖
     const rowAfterStop2 = seeded.rows.get(scopeKey);

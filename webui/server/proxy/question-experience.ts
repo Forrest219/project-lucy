@@ -13,6 +13,28 @@ export const QUESTION_BUDGET_MAX_BUSY_MS = 300_000;
 export const QUESTION_BUDGET_MAX_INFLIGHT = 4;
 export const QUESTION_BUDGET_ABS_EXEC_MS = 120_000;
 
+/**
+ * P1-74 / D2 —— begin active 的续查档数保持窗口 Spec 原合同（1 档）；
+ * begin inactive／不可用时默认 5 档（初始窗＋5 次续查＝至多 6 窗，见 Spec §5.1）。
+ * 环境变量名见 Spec OQ-1；合同默认 5。
+ */
+export const QUESTION_BUDGET_INACTIVE_MAX_CONTINUATIONS = 5;
+
+export function questionBudgetInactiveMaxContinuations(): number {
+  const configured = Number(process.env.QUESTION_BUDGET_MAX_CONTINUATIONS_WHEN_BEGIN_INACTIVE);
+  if (!Number.isFinite(configured) || configured < 0) return QUESTION_BUDGET_INACTIVE_MAX_CONTINUATIONS;
+  return Math.floor(configured);
+}
+
+/**
+ * P1-74 —— 停机载荷的结构化下一步。预算是软信封（D8）：本字段与 reason 一起
+ * 表达「预算终止、不是权限拒绝」，并给出当前实况下可达的逃生动作。
+ */
+export type BudgetNextStep =
+  | { action: "lucy_continue_question"; mode: "continue" | "new_question"; then: "retry_data_tool" }
+  | { action: "lucy_begin_question"; then: "retry_data_tool" }
+  | { action: "hard_budget_stop"; hints: ["ops_clear_scope"] };
+
 /** D7：默认 settled。elapsed 只把时间判定退回流逝时间。 */
 export function questionBudgetWallMode(): "settled" | "elapsed" {
   return process.env.LUCY_QUESTION_BUDGET_WALL_MODE === "elapsed" ? "elapsed" : "settled";
@@ -97,6 +119,8 @@ export type BudgetStop = {
   continuationMatched?: boolean;
   continuationCreditLeft?: boolean;
   canContinueByCapability?: boolean;
+  /** P1-74 / D4：结构化下一步；active 硬停指向 begin，inactive 硬停指向 mode=new_question。 */
+  nextStep?: BudgetNextStep;
   /** Present on real exhaustion stops; never on unavailable. */
   budgetSnapshot?: BudgetSnapshot;
 };
@@ -119,6 +143,8 @@ export type BudgetAllow = {
   action: "allow";
   ticket?: BudgetTicket;
   continued?: boolean;
+  /** P1-74：本次准入兑现了一个 mode=new_question 重开声明（新问询生命周期）。 */
+  reopened?: boolean;
   /** Pre-rollover snapshot when `continued` is true (REQ-030-035 R3b). */
   budgetSnapshot?: BudgetSnapshot;
 };
@@ -172,9 +198,27 @@ export function buildBudgetSnapshot(input: {
   };
 }
 
+/**
+ * P1-74 / REQ-030-095 — 逃生模式。`continue`＝同一问询续查换窗；
+ * `new_question`＝inactive 硬停后的预算专用重开（无 begin 副作用）。
+ * 旧客户端只传 token 时按 `continue` 处理。
+ */
+export type ContinuationMode = "continue" | "new_question";
+
 export type ContinuationDeclaration =
-  | { ok: true; idempotent?: boolean; declared?: boolean; windowId?: number; round?: number }
-  | { ok: false; reason: "question_budget_unavailable" | "pending_exists" | "no_credit" | "not_exhausted" | "mismatch" };
+  | { ok: true; idempotent?: boolean; declared?: boolean; reopen?: boolean; windowId?: number; round?: number }
+  | {
+      ok: false;
+      reason:
+        | "question_budget_unavailable"
+        | "pending_exists"
+        | "no_credit"
+        | "not_exhausted"
+        | "not_hard_stopped"
+        | "use_begin_question"
+        | "mismatch"
+        | "invalid_arguments";
+    };
 
 /**
  * A budget stop caused by the durable store being unreadable/unwritable, not by
@@ -219,6 +263,17 @@ export type BudgetState = {
   inflight?: number;
   pendingToken?: string | null;
   presentedToken?: string | null;
+  /**
+   * P1-74 / D2：续查档数策略在**问询生命周期建立时**快照 —— begin 建立时记
+   * `active`（1 档）；无 begin 的新生命周期记 `inactive`（默认 5 档）。
+   * 旧行缺该字段时仅按持久 turnId 推导一次（有 turn=active，否则 inactive）
+   * 并在下一次同事务提交中落库；重启后不得按当前参与态重新快照。
+   */
+  continuationPolicy?: "active" | "inactive";
+  /** P1-74 / Task 1b：代次。begin／续查换窗／重开均 +1；幂等键含代次，旧凭证不得跨代兑现。 */
+  generation?: number;
+  /** P1-74 / Task 2：mode=new_question 的两段式声明（与 pendingToken 互斥）。 */
+  pendingReopen?: { token: string; round: number; windowId: number; generation: number } | null;
   archivedBusyMsByWindow?: Record<string, number>;
   /** 内存标志：已从持久层装载。不是「内存里已有键」。 */
   loaded?: boolean;
@@ -351,7 +406,7 @@ export class QuestionBudget {
       state.loaded = true;
       this.turns.set(scopeKey, state);
     }
-    const decision = this.applyConsume(scopeKey, state, now, continueToken, turnId, true);
+    const decision = this.applyConsume(scopeKey, state, now, continueToken, turnId, true, false);
     return decision.action === "reject"
       ? {
           action: "stop",
@@ -379,6 +434,8 @@ export class QuestionBudget {
       identityKey?: string;
       sessionId?: string | null;
       canContinue?: boolean;
+      /** P1-74：该身份是否可调用 `lucy_begin_question`（active 硬停的 next_step 指向 begin）。 */
+      canBegin?: boolean;
     }
   ): Promise<BudgetDecision> {
     const scopeKey = this.resolveScopeKey(turnId, fallbackScope, options);
@@ -389,7 +446,8 @@ export class QuestionBudget {
         return { action: "reject", reason: "question_budget_concurrency_exceeded" };
       }
       const canContinue = options?.canContinue ?? true;
-      const decision = this.decideConsume(state, now, continueToken, turnId, canContinue);
+      const canBegin = options?.canBegin ?? false;
+      const decision = this.decideConsume(state, now, continueToken, turnId, canContinue, canBegin);
       if (decision.kind === "reject") {
         return { action: "reject", reason: "question_budget_concurrency_exceeded" };
       }
@@ -399,6 +457,7 @@ export class QuestionBudget {
         return this.stopFrom(
           committed,
           canContinue,
+          canBegin,
           decision.presented,
           decision.matched,
           decision.exhaustionSnapshot
@@ -416,6 +475,7 @@ export class QuestionBudget {
         action: "allow",
         ticket,
         continued: decision.continued,
+        reopened: decision.reopened,
         ...(decision.exhaustionSnapshot ? { budgetSnapshot: decision.exhaustionSnapshot } : {})
       };
     });
@@ -428,18 +488,75 @@ export class QuestionBudget {
     return this.withScopeSerialization(scopeKey, () => this.loadState(scopeKey, now));
   }
 
-  async declareContinuation(scopeKey: string, token: string, now = Date.now()): Promise<ContinuationDeclaration> {
+  /**
+   * P1-74 —— `lucy_continue_question` 两段式声明（永不直接换窗／消费）。
+   *
+   * `mode=continue`（默认）：同一问询续查。旧客户端只传 token 即走此分支。
+   * `mode=new_question`：inactive 硬停后的预算专用重开 —— 仅接受 inactive 已硬停
+   * 状态，校验硬停凭证；active 生命周期必须走 `lucy_begin_question`。
+   * 两类 pending 互斥；幂等键含 round＋windowId＋generation＋token。
+   */
+  async declareContinuation(
+    scopeKey: string,
+    token: string,
+    now = Date.now(),
+    mode: ContinuationMode = "continue"
+  ): Promise<ContinuationDeclaration> {
+    if (mode !== "continue" && mode !== "new_question") {
+      return { ok: false, reason: "invalid_arguments" };
+    }
     return this.withScopeSerialization(scopeKey, async () => {
       const state = await this.loadState(scopeKey, now);
       if (state.processUnavailable) return { ok: false, reason: "question_budget_unavailable" };
+
+      if (mode === "new_question") {
+        if (state.continuationPolicy === "active") return { ok: false, reason: "use_begin_question" };
+        if (!this.isExhausted(state, now) || (state.continuations ?? 0) < this.maxContinuationsFor(state)) {
+          // 不得用新开绕过同一问询的剩余续查档。
+          return { ok: false, reason: "not_hard_stopped" };
+        }
+        if (token !== state.presentedToken) return { ok: false, reason: "mismatch" };
+        const pending = state.pendingReopen;
+        if (
+          pending
+          && pending.token === token
+          && pending.round === (state.round ?? 0)
+          && pending.windowId === (state.windowId ?? 0)
+          && pending.generation === (state.generation ?? 0)
+        ) {
+          return { ok: true, idempotent: true, reopen: true };
+        }
+        if (this.hasPending(state)) return { ok: false, reason: "pending_exists" };
+        const candidate = this.cloneState(state);
+        candidate.pendingReopen = {
+          token,
+          round: state.round ?? 0,
+          windowId: state.windowId ?? 0,
+          generation: state.generation ?? 0
+        };
+        const published = await this.commit(
+          scopeKey,
+          candidate,
+          `reopen:${candidate.round}:${candidate.windowId}:${candidate.generation}:${token}`,
+          now
+        );
+        if (!published) return { ok: false, reason: "question_budget_unavailable" };
+        return { ok: true, declared: true, reopen: true, windowId: published.windowId, round: published.round };
+      }
+
       if (state.pendingToken === token) return { ok: true, idempotent: true };
-      if (state.pendingToken) return { ok: false, reason: "pending_exists" };
-      if ((state.continuations ?? 0) >= 1) return { ok: false, reason: "no_credit" };
+      if (this.hasPending(state)) return { ok: false, reason: "pending_exists" };
+      if ((state.continuations ?? 0) >= this.maxContinuationsFor(state)) return { ok: false, reason: "no_credit" };
       if (!this.isExhausted(state, now)) return { ok: false, reason: "not_exhausted" };
       if (token !== state.presentedToken) return { ok: false, reason: "mismatch" };
       const candidate = this.cloneState(state);
       candidate.pendingToken = token;
-      const published = await this.commit(scopeKey, candidate, `declare:${candidate.round}:${token}`, now);
+      const published = await this.commit(
+        scopeKey,
+        candidate,
+        `declare:${candidate.round}:${candidate.windowId}:${candidate.generation}:${token}`,
+        now
+      );
       if (!published) return { ok: false, reason: "question_budget_unavailable" };
       return { ok: true, declared: true, windowId: published.windowId, round: published.round };
     });
@@ -476,6 +593,11 @@ export class QuestionBudget {
       candidate.continuations = 0;
       candidate.pendingToken = null;
       candidate.presentedToken = null;
+      // P1-74：begin 建立 active 生命周期 —— 续查档数快照为 1（D2），代次前进，
+      // 并清掉两类 pending（旧窗口凭证不得跨代兑现）。
+      candidate.continuationPolicy = "active";
+      candidate.generation = (state.generation ?? 0) + 1;
+      candidate.pendingReopen = null;
       candidate.originStartedAt = now;
       candidate.startedAt = now;
       const published = await this.commit(scopeKey, candidate, `begin:${input.turnId}`, now);
@@ -521,20 +643,22 @@ export class QuestionBudget {
     now: number,
     continueToken: string | undefined,
     turnId: string | undefined,
-    canContinue: boolean
+    canContinue: boolean,
+    canBegin: boolean
   ): BudgetDecision {
-    const decided = this.decideConsume(state, now, continueToken, turnId, canContinue);
+    const decided = this.decideConsume(state, now, continueToken, turnId, canContinue, canBegin);
     if (decided.kind === "reject") {
       return { action: "reject", reason: "question_budget_concurrency_exceeded" };
     }
     Object.assign(state, decided.candidate);
     this.turns.set(scopeKey, state);
     if (decided.kind === "stop") {
-      return this.stopFrom(state, canContinue, decided.presented, decided.matched, decided.exhaustionSnapshot);
+      return this.stopFrom(state, canContinue, canBegin, decided.presented, decided.matched, decided.exhaustionSnapshot);
     }
     return {
       action: "allow",
       continued: decided.continued,
+      reopened: decided.reopened,
       ...(decided.exhaustionSnapshot ? { budgetSnapshot: decided.exhaustionSnapshot } : {})
     };
   }
@@ -608,6 +732,9 @@ export class QuestionBudget {
       continuations: 0,
       pendingToken: null,
       presentedToken: null,
+      continuationPolicy: "inactive",
+      generation: 0,
+      pendingReopen: null,
       archivedBusyMsByWindow: {},
       startedAt: now,
       originStartedAt: now,
@@ -640,6 +767,17 @@ export class QuestionBudget {
     return callsExhausted || timeExhausted;
   }
 
+  /** P1-74 / D2：续查档数按**快照**的参与态分支（active=1，inactive=默认 5）。 */
+  private maxContinuationsFor(state: BudgetState): number {
+    return state.continuationPolicy === "active"
+      ? 1
+      : questionBudgetInactiveMaxContinuations();
+  }
+
+  private hasPending(state: BudgetState): boolean {
+    return state.pendingToken != null || state.pendingReopen != null;
+  }
+
   private presentToken(state: BudgetState, turnId: string | undefined): string {
     if (state.presentedToken) return state.presentedToken;
     if (turnId) return turnId;
@@ -651,8 +789,9 @@ export class QuestionBudget {
     now: number,
     continueToken: string | undefined,
     turnId: string | undefined,
-    canContinue: boolean
-  ): 
+    canContinue: boolean,
+    canBegin: boolean
+  ):
     | { kind: "reject" }
     | {
         kind: "stop" | "allow";
@@ -660,6 +799,7 @@ export class QuestionBudget {
         idempotencyKey: string;
         requestId: string;
         continued: boolean;
+        reopened: boolean;
         presented: boolean;
         matched: boolean;
         exhaustionSnapshot?: BudgetSnapshot;
@@ -674,11 +814,46 @@ export class QuestionBudget {
     );
     const toolTrusted = state.pendingToken != null;
     const exhausted = this.isExhausted(state, now);
-    const useContinuation = exhausted && (state.continuations ?? 0) < 1 && (toolTrusted || headerTrusted);
+    // P1-74 / D2：续查档数按快照策略（active=1，inactive=默认 5）。
+    const maxContinuations = this.maxContinuationsFor(state);
+    // P1-74 / Task 2：reopen 声明优先兑现；与续查声明互斥（两类 pending 不共存）。
+    const pendingReopen = state.pendingReopen;
+    const reopenMatches = Boolean(
+      pendingReopen
+      && pendingReopen.token === state.presentedToken
+      && pendingReopen.round === (state.round ?? 0)
+      && pendingReopen.windowId === (state.windowId ?? 0)
+      && pendingReopen.generation === (state.generation ?? 0)
+    );
+    const useReopen = exhausted && reopenMatches;
+    const useContinuation = !useReopen && exhausted && (state.continuations ?? 0) < maxContinuations && (toolTrusted || headerTrusted);
     const candidate = this.cloneState(state);
     // REQ-030-035 R3：换窗前快照必须用清零前读数。
     let rolloverSnapshot: BudgetSnapshot | undefined;
-    if (useContinuation) {
+    if (useReopen) {
+      rolloverSnapshot = buildBudgetSnapshot({
+        eventKind: "continuation_rollover",
+        state: candidate,
+        now
+      });
+      this.addArchived(candidate, candidate.round ?? 0, candidate.windowId ?? 0, candidate.busyMs ?? 0);
+      // 新问询生命周期：窗／续查计数归零，round／window／generation 前进；
+      // 不生成上报 turn，预算行解除旧归属（不写 conversation turn／BindingSession）。
+      candidate.round = (candidate.round ?? 0) + 1;
+      candidate.windowId = (candidate.windowId ?? 0) + 1;
+      candidate.generation = (candidate.generation ?? 0) + 1;
+      candidate.calls = 0;
+      candidate.busyMs = 0;
+      candidate.continuations = 0;
+      candidate.turnId = null;
+      candidate.continuationPolicy = "inactive";
+      candidate.startedAt = now;
+      candidate.originStartedAt = now;
+      candidate.pendingReopen = null;
+      candidate.pendingToken = null;
+      // 每窗轮换 presentedToken（Task 1b）：旧凭证不得跨窗／跨代兑现。
+      candidate.presentedToken = randomUUID();
+    } else if (useContinuation) {
       rolloverSnapshot = buildBudgetSnapshot({
         eventKind: "continuation_rollover",
         state: candidate,
@@ -689,22 +864,26 @@ export class QuestionBudget {
       candidate.busyMs = 0;
       candidate.startedAt = now;
       candidate.windowId = (candidate.windowId ?? 0) + 1;
+      candidate.generation = (candidate.generation ?? 0) + 1;
       candidate.continuations = (candidate.continuations ?? 0) + 1;
       candidate.pendingToken = null;
-      candidate.presentedToken = null;
+      candidate.pendingReopen = null;
+      // 每窗轮换 presentedToken（Task 1b）；SC-E9b：幂等键含 window／代次。
+      candidate.presentedToken = randomUUID();
     }
     const presented = headerPresented || toolTrusted;
-    const matched = Boolean(useContinuation);
+    const matched = Boolean(useContinuation || useReopen);
     if (this.isExhausted(candidate, now)) {
       if (!candidate.presentedToken) candidate.presentedToken = this.presentToken(candidate, turnId ?? state.turnId ?? undefined);
       const token = candidate.presentedToken;
-      const stopSource = useContinuation ? state : candidate;
+      const stopSource = useContinuation || useReopen ? state : candidate;
       return {
         kind: "stop",
         candidate,
-        idempotencyKey: `stop:${candidate.round ?? 0}:${candidate.windowId ?? 0}:${token}`,
+        idempotencyKey: `stop:${candidate.round ?? 0}:${candidate.windowId ?? 0}:${candidate.generation ?? 0}:${token}`,
         requestId: "",
         continued: false,
+        reopened: false,
         presented,
         matched: headerPresented ? Boolean(headerTrusted) : false,
         exhaustionSnapshot: buildBudgetSnapshot({
@@ -721,36 +900,60 @@ export class QuestionBudget {
     candidate.currentConcurrency = (candidate.currentConcurrency ?? 0) + 1;
     candidate.peakConcurrency = Math.max(candidate.peakConcurrency ?? 0, candidate.currentConcurrency);
     void canContinue;
+    void canBegin;
     return {
       kind: "allow",
       candidate,
       idempotencyKey: `admit:${requestId}`,
       requestId,
       continued: useContinuation,
+      reopened: useReopen,
       presented,
       matched,
       ...(rolloverSnapshot ? { exhaustionSnapshot: rolloverSnapshot } : {})
     };
   }
 
+  /**
+   * P1-74 / D4：组装停机载荷 —— 软信封＋结构化 next_step。
+   *
+   * - 有续查额度且逃生工具可达 → `mode=continue`；
+   * - active 硬停 → 指向 `lucy_begin_question`（不得靠 new_question 绕过绑定合同）；
+   * - inactive 硬停且逃生工具可达 → 指向 `mode=new_question`（预算专用重开）；
+   * - 都不可达 → `hard_budget_stop`（仅运维清桶）。
+   * 任何分支都不是权限拒绝。
+   */
   private stopFrom(
     state: BudgetState,
     canContinue: boolean,
+    canBegin: boolean,
     presented: boolean,
     matched: boolean,
     budgetSnapshot?: BudgetSnapshot
   ): BudgetStop {
     const token = state.presentedToken ?? "";
+    const policy = state.continuationPolicy === "active" ? "active" : "inactive";
+    const creditLeft = (state.continuations ?? 0) < this.maxContinuationsFor(state);
+    const continuable = canContinue && creditLeft;
+    const canReopen = !creditLeft && (policy === "active" ? canBegin : canContinue);
+    const nextStep: BudgetNextStep | undefined = continuable
+      ? { action: "lucy_continue_question", mode: "continue", then: "retry_data_tool" }
+      : canReopen && policy === "active"
+        ? { action: "lucy_begin_question", then: "retry_data_tool" }
+        : canReopen
+          ? { action: "lucy_continue_question", mode: "new_question", then: "retry_data_tool" }
+          : { action: "hard_budget_stop", hints: ["ops_clear_scope"] };
     return {
       action: "stop",
       reason: "question_budget_exhausted",
       partial: true,
       continueToken: token,
-      continuable: canContinue && (state.continuations ?? 0) < 1,
+      continuable,
       continuationPresented: presented,
       continuationMatched: matched,
-      continuationCreditLeft: (state.continuations ?? 0) < 1,
+      continuationCreditLeft: creditLeft,
       canContinueByCapability: canContinue,
+      nextStep,
       ...(budgetSnapshot ? { budgetSnapshot } : {})
     };
   }
@@ -783,6 +986,14 @@ export class QuestionBudget {
       const normalized = this.normalizeLoad(loaded);
       if (normalized.row) {
         state = this.cloneState({ ...this.freshState(scopeKey, now), ...normalized.row, scopeKey });
+        // P1-74 / SC-E9b：旧行缺 continuationPolicy 时仅按持久 turnId 推导一次
+        // （有 turn=active，否则 inactive）；推导值随下一次同事务提交落库。
+        // 不得在同一生命周期重启后按当前参与态重新快照。
+        if (normalized.row.continuationPolicy !== "active" && normalized.row.continuationPolicy !== "inactive") {
+          state.continuationPolicy = state.turnId != null ? "active" : "inactive";
+        }
+        state.generation = normalized.row.generation ?? 0;
+        if (normalized.row.pendingReopen === undefined) state.pendingReopen = null;
         state.inflight = 0;
         state.currentConcurrency = 0;
         this.turns.set(scopeKey, state);
@@ -826,6 +1037,15 @@ export class QuestionBudget {
     const row = normalized.row
       ? this.cloneState({ ...this.freshState(current.scopeKey ?? "", current.startedAt), ...normalized.row })
       : this.freshState(current.scopeKey ?? "", current.startedAt);
+    if (
+      normalized.row
+      && normalized.row.continuationPolicy !== "active"
+      && normalized.row.continuationPolicy !== "inactive"
+    ) {
+      row.continuationPolicy = row.turnId != null ? "active" : "inactive";
+    }
+    row.generation = normalized.row?.generation ?? 0;
+    if (!normalized.row || normalized.row.pendingReopen === undefined) row.pendingReopen = null;
     row.loaded = true;
     row.processUnavailable = false;
     row.commitUnverified = false;
@@ -941,7 +1161,11 @@ export function classifyFailure(input: {
     return "引擎超时与并发";
   }
   // Spec 162 §6.3：续查声明被拒是调用者用错了续查通道。
-  if (reason === "pending_exists" || reason === "no_credit" || reason === "not_exhausted" || reason === "mismatch") {
+  // P1-74：续查加档（D2）与重开前置（Task 2）同属「用法与语义」，不是权限拒绝。
+  if (
+    reason === "pending_exists" || reason === "no_credit" || reason === "not_exhausted"
+    || reason === "not_hard_stopped" || reason === "use_begin_question" || reason === "mismatch"
+  ) {
     return "用法与语义";
   }
   if (isFilterPushdownText(text) || reason === "filter_pushdown") return "过滤条件下推";

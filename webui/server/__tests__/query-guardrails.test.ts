@@ -348,7 +348,8 @@ describe("proxy call order", () => {
     const guardAt = source.indexOf("applyLucyCallGuard({");
     const forwardAt = source.indexOf("lucyQueryUpstreamArgs(toolArgs)");
     const budgetAt = source.indexOf("questionBudget.consume(");
-    const aclAt = source.indexOf("const decision = await aclCheck(identity, toolName, toolArgs);");
+    // P1-74 / D7：逃生工具可达时代理跳过 aclCheck（三元分支），锚点保持「调用本身」。
+    const aclAt = source.indexOf("await aclCheck(identity, toolName, toolArgs)");
     const earlyAt = source.lastIndexOf("countWithoutSourceBeforeAcl(", aclAt);
     expect(guardAt).toBeGreaterThan(0);
     expect(forwardAt).toBeGreaterThan(guardAt);

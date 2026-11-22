@@ -316,16 +316,26 @@ defaults:
     expect(instructions).toContain("`continuable` is true");
     expect(instructions).toContain("call `lucy_continue_question`");
     expect(instructions).toContain("`continueToken`");
-    expect(instructions).toContain("only once");
+    // P1-74 / D2：inactive 续查档数默认至多 5 档（不再是一次）
+    expect(instructions).toContain("up to 5 times");
     expect(instructions).toContain("`continuable` is false");
   });
 
   it("still says to stop and deliver partial results, without naming lucy_continue_question, when it is not visible", async () => {
-    const instructions = await initializeInstructionsWithTools([], "init-continue-hidden");
-    expect(instructions).toContain("question_budget_exhausted");
-    expect(instructions).toContain("deliver the verified partial results");
-    expect(instructions).not.toContain("lucy_continue_question");
-    expect(instructions).not.toContain("continueToken");
+    // P1-74 / D7：计费问数身份（含 lucy_query）在预算开启时默认可达 continue。
+    // 「不可见」分支在预算关闭（LUCY_QUESTION_BUDGET=off）时仍须成立。
+    const previousBudget = process.env.LUCY_QUESTION_BUDGET;
+    process.env.LUCY_QUESTION_BUDGET = "off";
+    try {
+      const instructions = await initializeInstructionsWithTools([], "init-continue-hidden");
+      expect(instructions).toContain("question_budget_exhausted");
+      expect(instructions).toContain("deliver the verified partial results");
+      expect(instructions).not.toContain("lucy_continue_question");
+      expect(instructions).not.toContain("continueToken");
+    } finally {
+      if (previousBudget === undefined) delete process.env.LUCY_QUESTION_BUDGET;
+      else process.env.LUCY_QUESTION_BUDGET = previousBudget;
+    }
   });
 
   it("injects instructions when upstream result has no instructions field at all", async () => {

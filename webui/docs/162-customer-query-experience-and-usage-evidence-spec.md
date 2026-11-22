@@ -120,7 +120,7 @@ function onToolCall(call):
 
 ### 7.2 问询预算
 
-默认值可配置：数据工具 60 次，或已结算的数据处理时长 300 秒，先到为准（2026-11-11 由 [`lucy-20261111-question-budget-threshold-relax-spec.md`](../../docs/specs/lucy-20261111-question-budget-threshold-relax-spec.md) 从 20／120 放宽）。空闲时间不计入。同一问询允许继续一次，继续后计数清零再给同一档。第二次用尽后仍返回可继续，由客户端决定是否再问；服务端不再自动加档。历史审计行不按这个口径重解释。
+默认值可配置：数据工具 60 次，或已结算的数据处理时长 300 秒，先到为准（2026-11-11 由 [`lucy-20261111-question-budget-threshold-relax-spec.md`](../../docs/specs/lucy-20261111-question-budget-threshold-relax-spec.md) 从 20／120 放宽）。空闲时间不计入。**续查档数（2026-11-22 由 [`lucy-20261122-question-budget-mainpath-escape-spec.md`](../../docs/specs/lucy-20261122-question-budget-mainpath-escape-spec.md) v1.1 修订）：`lucy_begin_question` 建立的 active 生命周期仍为 1 次；无 begin 的 inactive 生命周期默认 5 次（至多 6 窗）。续查档数用尽硬停后，inactive 可经 `lucy_continue_question` `mode=new_question` 以同一 Token 重开预算（无 begin 副作用）；active 硬停仍走 `lucy_begin_question`。预算终止须与权限拒绝分列。** 继续后计数清零再给同一档。历史审计行不按这个口径重解释。
 
 ```text
 function budgetExceeded(turn):
