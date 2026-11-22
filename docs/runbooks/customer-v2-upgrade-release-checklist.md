@@ -43,6 +43,7 @@
 | C12 | 原生 linux/amd64 K3s：真实 0.17.0、原 RWO PVC，最终实例入口 dry-run 后实际升级至仓库 `VERSION`（当前 0.20.0）/KTX 0.16.0 | 原生升级记录，绑定包 SHA/提交/运行镜像 ID |
 | C13 | 缺引导 Secret 安全失败；Owner 仅认领一次；登录/退出、未登录拒绝；重启及再次 Helm 升级保持账号和 consumed 状态 | 原生管理员旅程；ACCEPTANCE.md |
 | C14 | 原 MCP Token 有效、无 Token 401；原连接/reindex/允许拒绝查询通过；非认证业务文件哈希保持 | 原生业务验收；不输出凭据或完整 values |
+| C14b | （P1-53）MCP 升级兼容：出包重验 `results/mcp-compatibility-candidate.json`；实例升级须私有基线＋`upgrade` POST；有回滚则条件必做 `ROLLBACK_VERIFY`。health／`tools/list` 不能单独放行；CI 子集不得 `releaseReady=true`。接线：`LUCY_MCP_COMPAT=1`＋`scripts/e2e/mcp-compatibility-hook.sh`；全真 Wave D 另需环境授权，≠ UAT PASS | `mcp-compatibility-hook`／`customer-release-readiness`；缺证据＝BLOCKED |
 | C15 | 切换前停机备份完整 PVC、核对哈希；保存原 Helm revision/values/镜像；重试不覆盖初始备份 | 原生备份记录；备份受控保存 |
 | C16 | 实际恢复旧镜像及原 PVC，再次升级成功；Helm rollback 不能代替安全状态恢复 | 原生恢复演练 |
 | C17 | stage/code/type；预检失败也有 0700 目录/0600 脱敏诊断；不保存异常消息、源代码行、命令原文、values、Token 或密码 | 错误分支回归 + 现场诊断 |

@@ -73,6 +73,11 @@ Options:
   --logical-instance-id <id>   The run-instance UUID (run.instanceId from the e2e run manifest) to
                                record in deployment.json. Required when --deployment-evidence is set;
                                B1's target-identity check refuses deployments missing this field.
+
+MCP compatibility (P1-53, optional; default off):
+  After tools/list, when LUCY_MCP_COMPAT=1, runs mcp-compatibility-hook (candidate by default).
+  --skip-mcp never yields publishable compatibility evidence. Missing env → BLOCKED.
+  Customer/instance upgrade: set LUCY_MCP_COMPAT_LANE=instance and LUCY_MCP_COMPAT_BASELINE.
 EOF
 }
 
@@ -272,5 +277,46 @@ if [[ "${SKIP_MCP}" -eq 0 ]]; then
   LIST_RESP="$(mcp_post "${PUBLIC_MCP_URL}" "${TOKEN}" "${LIST_BODY}")"
   printf '%s' "${LIST_RESP}" | mcp_tools_list_ok || fail "MCP tools/list rejected"
 fi
+
+# Optional MCP upgrade-compatibility hook after tools/list (P1-53 Task 5 / SC-17).
+# Health + tools/list alone must not be treated as compatibility PASS.
+maybe_run_mcp_compat_after_tools_list() {
+  local hook="${SCRIPT_DIR}/../e2e/mcp-compatibility-hook.sh"
+  local hook_rc=0
+  local lane="${LUCY_MCP_COMPAT_LANE:-acceptance}"
+  # Resolve repo hook when packaged as scripts/acceptance.sh next to k8s-gate-lib.
+  if [[ ! -f "${hook}" ]]; then
+    hook="$(cd "${SCRIPT_DIR}/../.." && pwd)/scripts/e2e/mcp-compatibility-hook.sh"
+  fi
+  if [[ ! -f "${hook}" ]]; then
+    if [[ "${LUCY_MCP_COMPAT:-0}" == "1" ]]; then
+      fail "LUCY_MCP_COMPAT=1 but mcp-compatibility-hook.sh is not in this package"
+    fi
+    log "mcp-compat hook absent (package without P1-53 scripts); SKIPPED"
+    return 0
+  fi
+  if [[ -n "${PUBLIC_MCP_URL}" && -z "${LUCY_MCP_URL:-}" ]]; then
+    export LUCY_MCP_URL="${PUBLIC_MCP_URL}"
+  fi
+  set +e
+  # bash 3.2: avoid empty-array "${arr[@]}" under set -u; branch instead.
+  if [[ "${SKIP_MCP}" -eq 1 ]]; then
+    bash "${hook}" run --lane "${lane}" --skip-mcp
+  else
+    bash "${hook}" run --lane "${lane}"
+  fi
+  hook_rc=$?
+  set -e
+  if [[ "${hook_rc}" -eq 3 ]]; then
+    log "mcp-compat: SKIPPED (LUCY_MCP_COMPAT unset/off or --skip-mcp)"
+    return 0
+  fi
+  if [[ "${hook_rc}" -ne 0 ]]; then
+    fail "mcp-compat hook blocked/failed (exit ${hook_rc}); tools/list is not compatibility PASS"
+  fi
+  log "mcp-compat: hook finished (lane=${lane})"
+}
+
+maybe_run_mcp_compat_after_tools_list
 
 log "OK — acceptance passed (release=${RELEASE} deployment=${DEPLOYMENT} service=${SERVICE})"

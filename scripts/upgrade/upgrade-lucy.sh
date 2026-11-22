@@ -32,10 +32,17 @@ Options:
       --skip-preserve-check Skip before/after preserve marker verification
   -h, --help                Show this help
 
+MCP compatibility (P1-53, optional; default off):
+  After /api/health, when LUCY_MCP_COMPAT=1, runs
+  node scripts/e2e/run-mcp-compatibility.mjs candidate (via mcp-compatibility-hook).
+  Set LUCY_MCP_URL (demo default http://127.0.0.1:57881/mcp). Missing env → BLOCKED,
+  never fake PASS. Health alone is not MCP compatibility PASS. Does not auto-rollback.
+
 Examples:
   npm run demo:upgrade
   bash scripts/upgrade/upgrade-lucy.sh -f docker-compose.yml --backup-dir inbox/backups
   bash scripts/upgrade/upgrade-lucy.sh --fresh
+  LUCY_MCP_COMPAT=1 LUCY_MCP_URL=http://127.0.0.1:57881/mcp npm run demo:upgrade
 EOF
 }
 
@@ -318,6 +325,35 @@ fi
 ensure_bootstrap_token
 build_and_up
 wait_for_health
+
+# Optional MCP upgrade-compatibility candidate hook (P1-53 Task 5). Default off.
+# Exit 3 = SKIPPED (flag off); exit 2 = BLOCKED (fail closed). Never invents PASS.
+maybe_run_mcp_compat_candidate() {
+  local hook_rc=0
+  local demo_mcp_port
+  if [[ -z "${LUCY_MCP_URL:-}" ]]; then
+    if printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q demo; then
+      demo_mcp_port="${LUCY_DEMO_PROXY_HOST_PORT:-57881}"
+      export LUCY_MCP_URL="${LUCY_MCP_URL:-http://127.0.0.1:${demo_mcp_port}/mcp}"
+    fi
+  fi
+  export LUCY_MCP_COMPAT_LANE="${LUCY_MCP_COMPAT_LANE:-compose}"
+  set +e
+  bash "${ROOT}/scripts/e2e/mcp-compatibility-hook.sh" run --lane "${LUCY_MCP_COMPAT_LANE}"
+  hook_rc=$?
+  set -e
+  if [[ "${hook_rc}" -eq 3 ]]; then
+    echo "[lucy-upgrade] mcp-compat: SKIPPED (set LUCY_MCP_COMPAT=1 to run candidate after health)"
+    return 0
+  fi
+  if [[ "${hook_rc}" -ne 0 ]]; then
+    echo "[lucy-upgrade] mcp-compat: blocked/failed (exit ${hook_rc}); health alone is not compatibility PASS" >&2
+    exit "${hook_rc}"
+  fi
+  echo "[lucy-upgrade] mcp-compat: candidate hook finished"
+}
+
+maybe_run_mcp_compat_candidate
 
 if [[ "${FRESH}" -eq 0 && "${SKIP_PRESERVE_CHECK}" -eq 0 && "${VOLUME_KIND}" == "named" && -n "${BEFORE_SNAPSHOT}" ]]; then
   AFTER_SNAPSHOT="$(snapshot_preserve_state || true)"

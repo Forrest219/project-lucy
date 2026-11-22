@@ -364,6 +364,86 @@
       "reason": null
     },
     {
+      "path": "scripts/e2e/__tests__/mcp-compat-config-profile.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/mcp-compat-config-profile.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-upgrade-journeys-schema-smoke.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/mcp-upgrade-journeys-schema-smoke.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-upgrade-question-bank.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/mcp-upgrade-question-bank.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-compatibility.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/mcp-compatibility.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/run-mcp-compatibility.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/run-mcp-compatibility.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-compatibility-evidence.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/mcp-compatibility-evidence.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-compatibility-wiring.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/mcp-compatibility-wiring.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-agent-journeys.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/mcp-agent-journeys.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
       "path": "scripts/e2e/__tests__/measure-evidence.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",
