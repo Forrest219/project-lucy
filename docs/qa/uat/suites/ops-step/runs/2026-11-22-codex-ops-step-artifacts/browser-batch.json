@@ -1,0 +1,924 @@
+{
+  "engine": "mysql",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "startedAt": "2026-11-22T10:30:20.611Z",
+  "headless": false,
+  "cases": [
+    {
+      "name": "connections-batch-51",
+      "result": "PASS",
+      "pageMs": 115.5,
+      "calls": [
+        {
+          "status": 200,
+          "ms": 54.9,
+          "tables": [
+            "uat_ops_step_batch_00",
+            "uat_ops_step_batch_01",
+            "uat_ops_step_batch_02",
+            "uat_ops_step_batch_03",
+            "uat_ops_step_batch_04",
+            "uat_ops_step_batch_05",
+            "uat_ops_step_batch_06",
+            "uat_ops_step_batch_07",
+            "uat_ops_step_batch_08",
+            "uat_ops_step_batch_09",
+            "uat_ops_step_batch_10",
+            "uat_ops_step_batch_11",
+            "uat_ops_step_batch_12",
+            "uat_ops_step_batch_13",
+            "uat_ops_step_batch_14",
+            "uat_ops_step_batch_15",
+            "uat_ops_step_batch_16",
+            "uat_ops_step_batch_17",
+            "uat_ops_step_batch_18",
+            "uat_ops_step_batch_19",
+            "uat_ops_step_batch_20",
+            "uat_ops_step_batch_21",
+            "uat_ops_step_batch_22",
+            "uat_ops_step_batch_23",
+            "uat_ops_step_batch_24",
+            "uat_ops_step_batch_25",
+            "uat_ops_step_batch_26",
+            "uat_ops_step_batch_27",
+            "uat_ops_step_batch_28",
+            "uat_ops_step_batch_29",
+            "uat_ops_step_batch_30",
+            "uat_ops_step_batch_31",
+            "uat_ops_step_batch_32",
+            "uat_ops_step_batch_33",
+            "uat_ops_step_batch_34",
+            "uat_ops_step_batch_35",
+            "uat_ops_step_batch_36",
+            "uat_ops_step_batch_37",
+            "uat_ops_step_batch_38",
+            "uat_ops_step_batch_39",
+            "uat_ops_step_batch_40",
+            "uat_ops_step_batch_41",
+            "uat_ops_step_batch_42",
+            "uat_ops_step_batch_43",
+            "uat_ops_step_batch_44",
+            "uat_ops_step_batch_45",
+            "uat_ops_step_batch_46",
+            "uat_ops_step_batch_47",
+            "uat_ops_step_batch_48",
+            "uat_ops_step_batch_49"
+          ],
+          "operationId": "ops_5cab9491bbcdc5f8143707298a2ef5c3",
+          "path": "data.opsStepId"
+        },
+        {
+          "status": 400,
+          "ms": 11.5,
+          "tables": [
+            "uat_ops_step_batch_50"
+          ],
+          "operationId": "ops_840e0af17b916be197c68e3b82e79c06",
+          "path": "error.detail.opsStepId"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:30:24.726Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_5cab9491bbcdc5f8143707298a2ef5c3",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:30:24.741Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_5cab9491bbcdc5f8143707298a2ef5c3",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 15,
+          "result": "error",
+          "reason_code": "missing"
+        },
+        {
+          "ts": "2026-11-22T10:30:24.755Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_840e0af17b916be197c68e3b82e79c06",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:30:24.762Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_840e0af17b916be197c68e3b82e79c06",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 6,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ]
+    },
+    {
+      "name": "wizard-batch-51",
+      "result": "PASS",
+      "pageMs": 97.3,
+      "calls": [
+        {
+          "status": 200,
+          "ms": 41.3,
+          "tables": [
+            "uat_ops_step_batch_00",
+            "uat_ops_step_batch_01",
+            "uat_ops_step_batch_02",
+            "uat_ops_step_batch_03",
+            "uat_ops_step_batch_04",
+            "uat_ops_step_batch_05",
+            "uat_ops_step_batch_06",
+            "uat_ops_step_batch_07",
+            "uat_ops_step_batch_08",
+            "uat_ops_step_batch_09",
+            "uat_ops_step_batch_10",
+            "uat_ops_step_batch_11",
+            "uat_ops_step_batch_12",
+            "uat_ops_step_batch_13",
+            "uat_ops_step_batch_14",
+            "uat_ops_step_batch_15",
+            "uat_ops_step_batch_16",
+            "uat_ops_step_batch_17",
+            "uat_ops_step_batch_18",
+            "uat_ops_step_batch_19",
+            "uat_ops_step_batch_20",
+            "uat_ops_step_batch_21",
+            "uat_ops_step_batch_22",
+            "uat_ops_step_batch_23",
+            "uat_ops_step_batch_24",
+            "uat_ops_step_batch_25",
+            "uat_ops_step_batch_26",
+            "uat_ops_step_batch_27",
+            "uat_ops_step_batch_28",
+            "uat_ops_step_batch_29",
+            "uat_ops_step_batch_30",
+            "uat_ops_step_batch_31",
+            "uat_ops_step_batch_32",
+            "uat_ops_step_batch_33",
+            "uat_ops_step_batch_34",
+            "uat_ops_step_batch_35",
+            "uat_ops_step_batch_36",
+            "uat_ops_step_batch_37",
+            "uat_ops_step_batch_38",
+            "uat_ops_step_batch_39",
+            "uat_ops_step_batch_40",
+            "uat_ops_step_batch_41",
+            "uat_ops_step_batch_42",
+            "uat_ops_step_batch_43",
+            "uat_ops_step_batch_44",
+            "uat_ops_step_batch_45",
+            "uat_ops_step_batch_46",
+            "uat_ops_step_batch_47",
+            "uat_ops_step_batch_48",
+            "uat_ops_step_batch_49"
+          ],
+          "operationId": "ops_9cb032a01dbfcf7c1db2b63cddce9d6c",
+          "path": "data.opsStepId"
+        },
+        {
+          "status": 400,
+          "ms": 13.2,
+          "tables": [
+            "uat_ops_step_batch_50"
+          ],
+          "operationId": "ops_24973a8825bccbd017b399d7ba514d80",
+          "path": "error.detail.opsStepId"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:30:25.494Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_9cb032a01dbfcf7c1db2b63cddce9d6c",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:30:25.528Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_9cb032a01dbfcf7c1db2b63cddce9d6c",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 33,
+          "result": "error",
+          "reason_code": "missing"
+        },
+        {
+          "ts": "2026-11-22T10:30:25.544Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_24973a8825bccbd017b399d7ba514d80",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:30:25.548Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_24973a8825bccbd017b399d7ba514d80",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 3,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ]
+    },
+    {
+      "name": "connections-batch-52",
+      "result": "PASS",
+      "pageMs": 115.3,
+      "calls": [
+        {
+          "status": 200,
+          "ms": 12.5,
+          "tables": [
+            "uat_ops_step_batch_00",
+            "uat_ops_step_batch_01",
+            "uat_ops_step_batch_02",
+            "uat_ops_step_batch_03",
+            "uat_ops_step_batch_04",
+            "uat_ops_step_batch_05",
+            "uat_ops_step_batch_06",
+            "uat_ops_step_batch_07",
+            "uat_ops_step_batch_08",
+            "uat_ops_step_batch_09",
+            "uat_ops_step_batch_10",
+            "uat_ops_step_batch_11",
+            "uat_ops_step_batch_12",
+            "uat_ops_step_batch_13",
+            "uat_ops_step_batch_14",
+            "uat_ops_step_batch_15",
+            "uat_ops_step_batch_16",
+            "uat_ops_step_batch_17",
+            "uat_ops_step_batch_18",
+            "uat_ops_step_batch_19",
+            "uat_ops_step_batch_20",
+            "uat_ops_step_batch_21",
+            "uat_ops_step_batch_22",
+            "uat_ops_step_batch_23",
+            "uat_ops_step_batch_24",
+            "uat_ops_step_batch_25",
+            "uat_ops_step_batch_26",
+            "uat_ops_step_batch_27",
+            "uat_ops_step_batch_28",
+            "uat_ops_step_batch_29",
+            "uat_ops_step_batch_30",
+            "uat_ops_step_batch_31",
+            "uat_ops_step_batch_32",
+            "uat_ops_step_batch_33",
+            "uat_ops_step_batch_34",
+            "uat_ops_step_batch_35",
+            "uat_ops_step_batch_36",
+            "uat_ops_step_batch_37",
+            "uat_ops_step_batch_38",
+            "uat_ops_step_batch_39",
+            "uat_ops_step_batch_40",
+            "uat_ops_step_batch_41",
+            "uat_ops_step_batch_42",
+            "uat_ops_step_batch_43",
+            "uat_ops_step_batch_44",
+            "uat_ops_step_batch_45",
+            "uat_ops_step_batch_46",
+            "uat_ops_step_batch_47",
+            "uat_ops_step_batch_48",
+            "uat_ops_step_batch_49"
+          ],
+          "operationId": "ops_d540f8b3884db64a31116c189746228a",
+          "path": "data.opsStepId"
+        },
+        {
+          "status": 200,
+          "ms": 38.1,
+          "tables": [
+            "uat_ops_step_batch_50",
+            "uat_ops_step_batch_51"
+          ],
+          "operationId": "ops_0525c69ec0d0cd68a4ef0aa3bddb8389",
+          "path": "data.opsStepId"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:30:26.277Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_d540f8b3884db64a31116c189746228a",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:30:26.283Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_d540f8b3884db64a31116c189746228a",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 5,
+          "result": "error",
+          "reason_code": "missing"
+        },
+        {
+          "ts": "2026-11-22T10:30:26.326Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_0525c69ec0d0cd68a4ef0aa3bddb8389",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:30:26.331Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_0525c69ec0d0cd68a4ef0aa3bddb8389",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 4,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ]
+    },
+    {
+      "name": "wizard-batch-52",
+      "result": "PASS",
+      "pageMs": 81.2,
+      "calls": [
+        {
+          "status": 200,
+          "ms": 12.5,
+          "tables": [
+            "uat_ops_step_batch_00",
+            "uat_ops_step_batch_01",
+            "uat_ops_step_batch_02",
+            "uat_ops_step_batch_03",
+            "uat_ops_step_batch_04",
+            "uat_ops_step_batch_05",
+            "uat_ops_step_batch_06",
+            "uat_ops_step_batch_07",
+            "uat_ops_step_batch_08",
+            "uat_ops_step_batch_09",
+            "uat_ops_step_batch_10",
+            "uat_ops_step_batch_11",
+            "uat_ops_step_batch_12",
+            "uat_ops_step_batch_13",
+            "uat_ops_step_batch_14",
+            "uat_ops_step_batch_15",
+            "uat_ops_step_batch_16",
+            "uat_ops_step_batch_17",
+            "uat_ops_step_batch_18",
+            "uat_ops_step_batch_19",
+            "uat_ops_step_batch_20",
+            "uat_ops_step_batch_21",
+            "uat_ops_step_batch_22",
+            "uat_ops_step_batch_23",
+            "uat_ops_step_batch_24",
+            "uat_ops_step_batch_25",
+            "uat_ops_step_batch_26",
+            "uat_ops_step_batch_27",
+            "uat_ops_step_batch_28",
+            "uat_ops_step_batch_29",
+            "uat_ops_step_batch_30",
+            "uat_ops_step_batch_31",
+            "uat_ops_step_batch_32",
+            "uat_ops_step_batch_33",
+            "uat_ops_step_batch_34",
+            "uat_ops_step_batch_35",
+            "uat_ops_step_batch_36",
+            "uat_ops_step_batch_37",
+            "uat_ops_step_batch_38",
+            "uat_ops_step_batch_39",
+            "uat_ops_step_batch_40",
+            "uat_ops_step_batch_41",
+            "uat_ops_step_batch_42",
+            "uat_ops_step_batch_43",
+            "uat_ops_step_batch_44",
+            "uat_ops_step_batch_45",
+            "uat_ops_step_batch_46",
+            "uat_ops_step_batch_47",
+            "uat_ops_step_batch_48",
+            "uat_ops_step_batch_49"
+          ],
+          "operationId": "ops_0802f45c18975d6b018fdf0865b385ec",
+          "path": "data.opsStepId"
+        },
+        {
+          "status": 200,
+          "ms": 12,
+          "tables": [
+            "uat_ops_step_batch_50",
+            "uat_ops_step_batch_51"
+          ],
+          "operationId": "ops_ace2ab42844f8739af0ce417d437fd6e",
+          "path": "data.opsStepId"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:30:27.029Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_0802f45c18975d6b018fdf0865b385ec",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:30:27.034Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_0802f45c18975d6b018fdf0865b385ec",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 5,
+          "result": "error",
+          "reason_code": "missing"
+        },
+        {
+          "ts": "2026-11-22T10:30:27.049Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_ace2ab42844f8739af0ce417d437fd6e",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:30:27.055Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_ace2ab42844f8739af0ce417d437fd6e",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 5,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "name": "connections-batch-51-list",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 23.3,
+        "body": {
+          "schema": "p168_mysql"
+        },
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 62.5,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "connections-batch-51-failures",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 54.9,
+        "body": {
+          "schema": "p168_mysql",
+          "tables": [
+            "uat_ops_step_batch_00",
+            "uat_ops_step_batch_01",
+            "uat_ops_step_batch_02",
+            "uat_ops_step_batch_03",
+            "uat_ops_step_batch_04",
+            "uat_ops_step_batch_05",
+            "uat_ops_step_batch_06",
+            "uat_ops_step_batch_07",
+            "uat_ops_step_batch_08",
+            "uat_ops_step_batch_09",
+            "uat_ops_step_batch_10",
+            "uat_ops_step_batch_11",
+            "uat_ops_step_batch_12",
+            "uat_ops_step_batch_13",
+            "uat_ops_step_batch_14",
+            "uat_ops_step_batch_15",
+            "uat_ops_step_batch_16",
+            "uat_ops_step_batch_17",
+            "uat_ops_step_batch_18",
+            "uat_ops_step_batch_19",
+            "uat_ops_step_batch_20",
+            "uat_ops_step_batch_21",
+            "uat_ops_step_batch_22",
+            "uat_ops_step_batch_23",
+            "uat_ops_step_batch_24",
+            "uat_ops_step_batch_25",
+            "uat_ops_step_batch_26",
+            "uat_ops_step_batch_27",
+            "uat_ops_step_batch_28",
+            "uat_ops_step_batch_29",
+            "uat_ops_step_batch_30",
+            "uat_ops_step_batch_31",
+            "uat_ops_step_batch_32",
+            "uat_ops_step_batch_33",
+            "uat_ops_step_batch_34",
+            "uat_ops_step_batch_35",
+            "uat_ops_step_batch_36",
+            "uat_ops_step_batch_37",
+            "uat_ops_step_batch_38",
+            "uat_ops_step_batch_39",
+            "uat_ops_step_batch_40",
+            "uat_ops_step_batch_41",
+            "uat_ops_step_batch_42",
+            "uat_ops_step_batch_43",
+            "uat_ops_step_batch_44",
+            "uat_ops_step_batch_45",
+            "uat_ops_step_batch_46",
+            "uat_ops_step_batch_47",
+            "uat_ops_step_batch_48",
+            "uat_ops_step_batch_49"
+          ]
+        },
+        "operationId": "ops_5cab9491bbcdc5f8143707298a2ef5c3",
+        "requestId": null
+      },
+      "pageMs": 115.5,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "wizard-batch-51-list",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 11,
+        "body": {
+          "schema": "p168_mysql"
+        },
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 47.8,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "wizard-batch-51-failures",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 41.3,
+        "body": {
+          "schema": "p168_mysql",
+          "tables": [
+            "uat_ops_step_batch_00",
+            "uat_ops_step_batch_01",
+            "uat_ops_step_batch_02",
+            "uat_ops_step_batch_03",
+            "uat_ops_step_batch_04",
+            "uat_ops_step_batch_05",
+            "uat_ops_step_batch_06",
+            "uat_ops_step_batch_07",
+            "uat_ops_step_batch_08",
+            "uat_ops_step_batch_09",
+            "uat_ops_step_batch_10",
+            "uat_ops_step_batch_11",
+            "uat_ops_step_batch_12",
+            "uat_ops_step_batch_13",
+            "uat_ops_step_batch_14",
+            "uat_ops_step_batch_15",
+            "uat_ops_step_batch_16",
+            "uat_ops_step_batch_17",
+            "uat_ops_step_batch_18",
+            "uat_ops_step_batch_19",
+            "uat_ops_step_batch_20",
+            "uat_ops_step_batch_21",
+            "uat_ops_step_batch_22",
+            "uat_ops_step_batch_23",
+            "uat_ops_step_batch_24",
+            "uat_ops_step_batch_25",
+            "uat_ops_step_batch_26",
+            "uat_ops_step_batch_27",
+            "uat_ops_step_batch_28",
+            "uat_ops_step_batch_29",
+            "uat_ops_step_batch_30",
+            "uat_ops_step_batch_31",
+            "uat_ops_step_batch_32",
+            "uat_ops_step_batch_33",
+            "uat_ops_step_batch_34",
+            "uat_ops_step_batch_35",
+            "uat_ops_step_batch_36",
+            "uat_ops_step_batch_37",
+            "uat_ops_step_batch_38",
+            "uat_ops_step_batch_39",
+            "uat_ops_step_batch_40",
+            "uat_ops_step_batch_41",
+            "uat_ops_step_batch_42",
+            "uat_ops_step_batch_43",
+            "uat_ops_step_batch_44",
+            "uat_ops_step_batch_45",
+            "uat_ops_step_batch_46",
+            "uat_ops_step_batch_47",
+            "uat_ops_step_batch_48",
+            "uat_ops_step_batch_49"
+          ]
+        },
+        "operationId": "ops_9cb032a01dbfcf7c1db2b63cddce9d6c",
+        "requestId": null
+      },
+      "pageMs": 97.3,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "connections-batch-52-list",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 76.5,
+        "body": {
+          "schema": "p168_mysql"
+        },
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 114.3,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "connections-batch-52-failures",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 12.5,
+        "body": {
+          "schema": "p168_mysql",
+          "tables": [
+            "uat_ops_step_batch_00",
+            "uat_ops_step_batch_01",
+            "uat_ops_step_batch_02",
+            "uat_ops_step_batch_03",
+            "uat_ops_step_batch_04",
+            "uat_ops_step_batch_05",
+            "uat_ops_step_batch_06",
+            "uat_ops_step_batch_07",
+            "uat_ops_step_batch_08",
+            "uat_ops_step_batch_09",
+            "uat_ops_step_batch_10",
+            "uat_ops_step_batch_11",
+            "uat_ops_step_batch_12",
+            "uat_ops_step_batch_13",
+            "uat_ops_step_batch_14",
+            "uat_ops_step_batch_15",
+            "uat_ops_step_batch_16",
+            "uat_ops_step_batch_17",
+            "uat_ops_step_batch_18",
+            "uat_ops_step_batch_19",
+            "uat_ops_step_batch_20",
+            "uat_ops_step_batch_21",
+            "uat_ops_step_batch_22",
+            "uat_ops_step_batch_23",
+            "uat_ops_step_batch_24",
+            "uat_ops_step_batch_25",
+            "uat_ops_step_batch_26",
+            "uat_ops_step_batch_27",
+            "uat_ops_step_batch_28",
+            "uat_ops_step_batch_29",
+            "uat_ops_step_batch_30",
+            "uat_ops_step_batch_31",
+            "uat_ops_step_batch_32",
+            "uat_ops_step_batch_33",
+            "uat_ops_step_batch_34",
+            "uat_ops_step_batch_35",
+            "uat_ops_step_batch_36",
+            "uat_ops_step_batch_37",
+            "uat_ops_step_batch_38",
+            "uat_ops_step_batch_39",
+            "uat_ops_step_batch_40",
+            "uat_ops_step_batch_41",
+            "uat_ops_step_batch_42",
+            "uat_ops_step_batch_43",
+            "uat_ops_step_batch_44",
+            "uat_ops_step_batch_45",
+            "uat_ops_step_batch_46",
+            "uat_ops_step_batch_47",
+            "uat_ops_step_batch_48",
+            "uat_ops_step_batch_49"
+          ]
+        },
+        "operationId": "ops_d540f8b3884db64a31116c189746228a",
+        "requestId": null
+      },
+      "pageMs": 115.3,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "wizard-batch-52-list",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 21.9,
+        "body": {
+          "schema": "p168_mysql"
+        },
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 63.2,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "wizard-batch-52-failures",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 12.5,
+        "body": {
+          "schema": "p168_mysql",
+          "tables": [
+            "uat_ops_step_batch_00",
+            "uat_ops_step_batch_01",
+            "uat_ops_step_batch_02",
+            "uat_ops_step_batch_03",
+            "uat_ops_step_batch_04",
+            "uat_ops_step_batch_05",
+            "uat_ops_step_batch_06",
+            "uat_ops_step_batch_07",
+            "uat_ops_step_batch_08",
+            "uat_ops_step_batch_09",
+            "uat_ops_step_batch_10",
+            "uat_ops_step_batch_11",
+            "uat_ops_step_batch_12",
+            "uat_ops_step_batch_13",
+            "uat_ops_step_batch_14",
+            "uat_ops_step_batch_15",
+            "uat_ops_step_batch_16",
+            "uat_ops_step_batch_17",
+            "uat_ops_step_batch_18",
+            "uat_ops_step_batch_19",
+            "uat_ops_step_batch_20",
+            "uat_ops_step_batch_21",
+            "uat_ops_step_batch_22",
+            "uat_ops_step_batch_23",
+            "uat_ops_step_batch_24",
+            "uat_ops_step_batch_25",
+            "uat_ops_step_batch_26",
+            "uat_ops_step_batch_27",
+            "uat_ops_step_batch_28",
+            "uat_ops_step_batch_29",
+            "uat_ops_step_batch_30",
+            "uat_ops_step_batch_31",
+            "uat_ops_step_batch_32",
+            "uat_ops_step_batch_33",
+            "uat_ops_step_batch_34",
+            "uat_ops_step_batch_35",
+            "uat_ops_step_batch_36",
+            "uat_ops_step_batch_37",
+            "uat_ops_step_batch_38",
+            "uat_ops_step_batch_39",
+            "uat_ops_step_batch_40",
+            "uat_ops_step_batch_41",
+            "uat_ops_step_batch_42",
+            "uat_ops_step_batch_43",
+            "uat_ops_step_batch_44",
+            "uat_ops_step_batch_45",
+            "uat_ops_step_batch_46",
+            "uat_ops_step_batch_47",
+            "uat_ops_step_batch_48",
+            "uat_ops_step_batch_49"
+          ]
+        },
+        "operationId": "ops_0802f45c18975d6b018fdf0865b385ec",
+        "requestId": null
+      },
+      "pageMs": 81.2,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "captures": [
+    "batch-connections-51.png",
+    "batch-wizard-51.png",
+    "batch-connections-52.png",
+    "batch-wizard-52.png"
+  ],
+  "browser": "157.0.8103.79",
+  "anonymous": {
+    "status": 401,
+    "code": "AUTH_REQUIRED"
+  },
+  "result": "PASS",
+  "finishedAt": "2026-11-22T10:30:27.591Z"
+}

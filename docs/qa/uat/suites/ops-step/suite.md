@@ -5,10 +5,10 @@
 | Suite ID | `UAT-SUITE-OPS-STEP` |
 | 总账 ID | P1-68／REQ-030-089 |
 | 目标 | Lucy 运维与 IT 运维能用同一个操作号指出停在哪个运维步骤；写账失败不破坏原操作 |
-| 合同回链 | [Spec](../../../specs/lucy-20261120-ops-step-journal-spec.md) SC-01–SC-18 |
+| 合同回链 | [Spec](../../../../specs/lucy-20261120-ops-step-journal-spec.md) SC-01–SC-18 |
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md) |
-| runs | 尚无 |
+| runs | [2026-11-22 前台补跑](runs/2026-11-22-codex-ops-step-foreground.md) · [2026-11-22 历史跑次](runs/2026-11-22-cursor-ops-step.md) |
 
 ## 全真性
 
@@ -24,7 +24,7 @@
 
 ## 判定
 
-INDEX 现值：**NOT RUN**。没有跑次不得写成 PASS。
+现行判定见 [INDEX](../../INDEX.md)。前台补跑覆盖 UAT-OPS-STEP-04／05 的前台与持久化路径。
 
 - 每个日志断言必须绑定当次 `op_id` 和日志游标，不得用相同步骤名的旧行凑证据。
 - 每个故障注入都要记录恢复结果；靠重启伪装故障修复不得判 PASS。SC-14 的重启只用于验证历史持久化与进程代次，不作为修复手段。

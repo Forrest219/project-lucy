@@ -1,0 +1,621 @@
+{
+  "engine": "mysql",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "startedAt": "2026-11-22T10:27:52.422Z",
+  "headless": false,
+  "cases": [
+    {
+      "name": "ops-empty",
+      "result": "PASS",
+      "sidebar": true
+    },
+    {
+      "name": "connections-read-columns",
+      "result": "PASS",
+      "operationId": "ops_954694a689704ce1b426ab62b7105a16",
+      "errorText": "有 1 张表没有读到字段：表「uat_ops_step_sentinel」没有读到字段。\n\n表「uat_ops_step_sentinel」操作号：ops_954694a689704ce1b426ab62b7105a16",
+      "stdout": [
+        {
+          "ts": "2026-11-22T10:27:55.460Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_954694a689704ce1b426ab62b7105a16",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:27:55.464Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_954694a689704ce1b426ab62b7105a16",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 4,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:27:55.460Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_954694a689704ce1b426ab62b7105a16",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:27:55.464Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_954694a689704ce1b426ab62b7105a16",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 4,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ]
+    },
+    {
+      "name": "wizard-read-columns",
+      "result": "PASS",
+      "operationId": "ops_5dcd7e006db123eb0e5e089b74c7f63e",
+      "errorText": "有 1 张表没有读到字段：表「uat_ops_step_sentinel」没有读到字段。\n表「uat_ops_step_sentinel」操作号：ops_5dcd7e006db123eb0e5e089b74c7f63e",
+      "stdout": [
+        {
+          "ts": "2026-11-22T10:27:56.828Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_5dcd7e006db123eb0e5e089b74c7f63e",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:27:56.833Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_5dcd7e006db123eb0e5e089b74c7f63e",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 5,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:27:56.828Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_5dcd7e006db123eb0e5e089b74c7f63e",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:27:56.833Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_5dcd7e006db123eb0e5e089b74c7f63e",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 5,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ]
+    },
+    {
+      "name": "ops-before-restart",
+      "result": "PASS",
+      "opId": "ops_f14b6e36a32ef0115e36ad5b98f31442"
+    },
+    {
+      "name": "ops-after-503-and-restart",
+      "result": "PASS",
+      "opId": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+      "checkedIds": [
+        "ops_954694a689704ce1b426ab62b7105a16",
+        "ops_5dcd7e006db123eb0e5e089b74c7f63e"
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "name": "ops-empty-navigation",
+      "clock": "navigation",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "GET",
+        "path": "/api/admin/ops-steps",
+        "status": 200,
+        "ms": 5.6,
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 104.4,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "connections-table-names",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 35.6,
+        "body": {
+          "schema": "p168_mysql"
+        },
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 63.8,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "connections-read_columns",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 400,
+        "ms": 9,
+        "body": {
+          "schema": "p168_mysql",
+          "tables": [
+            "uat_ops_step_sentinel"
+          ]
+        },
+        "operationId": "ops_954694a689704ce1b426ab62b7105a16",
+        "message": "表「uat_ops_step_sentinel」没有读到字段。",
+        "requestId": null
+      },
+      "pageMs": 47,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "wizard-table-names",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 200,
+        "ms": 24.9,
+        "body": {
+          "schema": "p168_mysql"
+        },
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 61.6,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "wizard-read_columns",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-mysql/schema-structure",
+        "status": 400,
+        "ms": 44.4,
+        "body": {
+          "schema": "p168_mysql",
+          "tables": [
+            "uat_ops_step_sentinel"
+          ]
+        },
+        "operationId": "ops_5dcd7e006db123eb0e5e089b74c7f63e",
+        "message": "表「uat_ops_step_sentinel」没有读到字段。",
+        "requestId": null
+      },
+      "pageMs": 81,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "ops-inflight-navigation",
+      "clock": "navigation",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "GET",
+        "path": "/api/admin/ops-steps",
+        "status": 200,
+        "ms": 3,
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 70.2,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "ops-after-restart-navigation",
+      "clock": "navigation",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "GET",
+        "path": "/api/admin/ops-steps",
+        "status": 200,
+        "ms": 5.6,
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 142.6,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "captures": [
+    "mysql-empty.png",
+    "mysql-connections-read_columns.png",
+    "mysql-wizard-read_columns.png",
+    "mysql-inflight.png",
+    "mysql-previous-incomplete.png",
+    "mysql-failed-history.png"
+  ],
+  "browser": "157.0.8103.79",
+  "anonymous": {
+    "status": 401,
+    "code": "AUTH_REQUIRED"
+  },
+  "restart": {
+    "opId": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+    "beforeFile": [
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_project",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_ktx_yaml",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_catalog_reloads",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "probe_execution",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "probe_execution",
+        "phase": "leave",
+        "elapsed_ms": 0,
+        "result": "ok",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.383Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_catalog_reloads",
+        "phase": "leave",
+        "elapsed_ms": 1,
+        "result": "ok",
+        "reason_code": ""
+      }
+    ],
+    "beforeStdout": [
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_project",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_ktx_yaml",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_catalog_reloads",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "probe_execution",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "probe_execution",
+        "phase": "leave",
+        "elapsed_ms": 0,
+        "result": "ok",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.383Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_catalog_reloads",
+        "phase": "leave",
+        "elapsed_ms": 1,
+        "result": "ok",
+        "reason_code": ""
+      }
+    ],
+    "failedSchemaIds": [
+      "ops_954694a689704ce1b426ab62b7105a16",
+      "ops_5dcd7e006db123eb0e5e089b74c7f63e"
+    ],
+    "gateway": {
+      "upBefore": {
+        "http": 200,
+        "origin": "upstream",
+        "body": "Upstream responded",
+        "ms": 21.4
+      },
+      "during": {
+        "http": 503,
+        "origin": "local-gateway",
+        "body": "Upstream unavailable",
+        "ms": 10.2
+      },
+      "upAfter": {
+        "http": 200,
+        "origin": "upstream",
+        "body": "Upstream responded",
+        "ms": 54.4
+      }
+    },
+    "container": {
+      "id": "dc84073fc9526cc96cbc8f7faca2ab9cbfc64f2b2218b74b8f6c0dd285d9300b",
+      "volume": "lucy-uat-ops-front-1122_lucy-demo-data",
+      "startedBefore": "2026-11-22T10:24:02.32183034Z",
+      "startedAfter": "2026-11-22T10:27:58.190002172Z"
+    },
+    "afterFile": [
+      {
+        "ts": "2026-11-22T10:27:55.460Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_954694a689704ce1b426ab62b7105a16",
+        "step": "read_columns",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:55.464Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_954694a689704ce1b426ab62b7105a16",
+        "step": "read_columns",
+        "phase": "fail",
+        "elapsed_ms": 4,
+        "result": "error",
+        "reason_code": "missing"
+      },
+      {
+        "ts": "2026-11-22T10:27:56.828Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_5dcd7e006db123eb0e5e089b74c7f63e",
+        "step": "read_columns",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:56.833Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_5dcd7e006db123eb0e5e089b74c7f63e",
+        "step": "read_columns",
+        "phase": "fail",
+        "elapsed_ms": 5,
+        "result": "error",
+        "reason_code": "missing"
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_project",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_ktx_yaml",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_catalog_reloads",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "probe_execution",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.382Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "probe_execution",
+        "phase": "leave",
+        "elapsed_ms": 0,
+        "result": "ok",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:27:57.383Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_catalog_reloads",
+        "phase": "leave",
+        "elapsed_ms": 1,
+        "result": "ok",
+        "reason_code": ""
+      }
+    ],
+    "afterHistory": {
+      "orphan": {
+        "key": "history:9",
+        "op": "diagnostic_collect",
+        "opId": "ops_f14b6e36a32ef0115e36ad5b98f31442",
+        "step": "read_ktx_yaml",
+        "phase": "enter",
+        "ts": "2026-11-22T10:27:57.382Z",
+        "elapsedMs": 0,
+        "result": "running",
+        "reasonCode": "",
+        "state": "previous_incomplete",
+        "enteredAt": "2026-11-22T10:27:57.382Z",
+        "durationMs": null
+      },
+      "matchedSchemaIds": [
+        "ops_954694a689704ce1b426ab62b7105a16",
+        "ops_5dcd7e006db123eb0e5e089b74c7f63e"
+      ]
+    }
+  },
+  "result": "PASS",
+  "finishedAt": "2026-11-22T10:28:04.269Z"
+}
