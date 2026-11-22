@@ -55,4 +55,4 @@
 
 ## 当前判定
 
-**NOT RUN**。门禁 Spec **v1.1**；题库 Spec／Plan **v1.0 终稿确权**；开发未授权（暂不开发）；无执行器／配置资产包实现／全真跑次。≠ 可上线。
+**NOT RUN／Wave D BLOCKED**。门禁 Spec **v1.1**；题库 Spec／Plan **v1.0**；开发已授权；Wave D 已跑 candidate 全真（[2026-11-22-cursor-wave-d-candidate](runs/2026-11-22-cursor-wave-d-candidate.md)）：serviceLatency PASS；functional FAIL（JOIN-01 chasm／ACL-03b unproven 漂移）；agentLatency BLOCKED（本机无 ready Agent）。**不得**写 INDEX PASS。≠ UAT PASS；≠ 可上线。

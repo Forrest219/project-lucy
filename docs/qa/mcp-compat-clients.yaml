@@ -1,0 +1,43 @@
+# MCP upgrade compatibility — Agent client candidate pool (Spec D25 / Plan Task 3).
+# This is a POOL, not an all-must-run denominator. Each run detects ready candidates,
+# then the operator (or CI preset) selects exactly one; report must not extrapolate.
+#
+# PRE / POST same-fingerprint rule:
+#   Capture, candidate certify, POST, and ROLLBACK_VERIFY must keep the same
+#   clientFingerprint and modelFingerprint. Switching client or model mid-suite
+#   is BLOCKED. Missing adapter, binary, auth, or multi-turn ⇒ reselect or BLOCKED.
+#   Direct MCP / HTTP scripts must never masquerade as the Agent denominator.
+# Authority: docs/specs/lucy-20261118-mcp-upgrade-compatibility-spec.md D25;
+#            docs/plans/lucy-20261118-mcp-upgrade-compatibility-plan.md Task 3.
+# Independent of docs/qa/real-e2e-clients.yaml (global real-e2e required set).
+version: 1
+candidates:
+  - id: claude-code-cli
+    detect: "command -v claude >/dev/null && claude --version"
+    adapter: scripts/e2e/adapters/claude-code.mjs
+    multiTurn: true
+    authHint: "ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN, or `claude login` (probe: claude auth status)"
+
+  - id: cursor-agent-cli
+    detect: "command -v cursor-agent >/dev/null || command -v agent >/dev/null; (cursor-agent --version 2>/dev/null || agent --version 2>/dev/null)"
+    adapter: scripts/e2e/adapters/cursor-cli.mjs
+    multiTurn: true
+    authHint: "CURSOR_API_KEY (optional model override: LUCY_E2E_CURSOR_MODEL)"
+
+  - id: openclaw-cli
+    detect: "command -v openclaw >/dev/null && openclaw --version"
+    adapter: scripts/e2e/adapters/openclaw.mjs
+    multiTurn: true
+    authHint: "product-native login; OPENCLAW_API_KEY when the binary requires it (optional model: LUCY_E2E_OPENCLAW_MODEL)"
+
+  - id: codex-cli
+    detect: "command -v codex >/dev/null && codex --version"
+    adapter: scripts/e2e/adapters/codex.mjs
+    multiTurn: true
+    authHint: "OPENAI_API_KEY or ChatGPT login (optional model: LUCY_E2E_CODEX_MODEL)"
+
+  - id: kimi-code-cli
+    detect: "command -v kimi >/dev/null && kimi --version"
+    adapter: scripts/e2e/adapters/kimi-code.mjs
+    multiTurn: true
+    authHint: "kimi login (credentials under ~/.kimi-code), or KIMI_API_KEY / MOONSHOT_API_KEY (optional model: LUCY_E2E_KIMI_MODEL)"

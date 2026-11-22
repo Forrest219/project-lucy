@@ -1,0 +1,1728 @@
+# P1-54 MCP upgrade question bank — executable journeys (Spec v1.0 §3/§4/§5).
+# Schema is journeys/compat-question-bank (NOT mainline-scenarios.mjs).
+# Secrets never live here; TokenRefs are env placeholders only.
+# CompatConfigProfile apply/restore and P1-53 judge are out of scope for this file.
+
+kind: mcp-upgrade-question-bank
+questionBankId: lucy-mcp-upgrade-question-bank
+version: 1
+configProfileId: lucy-mcp-compat-demo
+# Fingerprint filled/verified when profile apply lands (Wave A1); placeholder for digest binding.
+requiredConfigFingerprint: "sha256:d2b4b8b61d218f8108f3fe15ecac311c3e182fb835c0a2fbcbfccc1a0395eee3"
+specRef: docs/specs/lucy-20261118-mcp-upgrade-question-bank-spec.md
+regionVocabulary: [East, Southwest, Central South, Northeast]
+forbiddenRegionVocabulary: [华东, 西南, 华北, 西北, 华南]
+forbiddenRoles: [lucy_admin]
+
+sharedEvidence:
+  - requestId
+  - traceId
+  - turnWallClockMs
+  - mcpClientRttMs
+  - serverDurationMs
+  - configProfileFingerprint
+  - windowAnchor
+  - identityId
+  - snapshotId
+
+# §5 COMPAT ↔ QB denominator (machine-checkable). COMPAT-10–12 reuse cold-start/timing/replay via P1-53.
+denominatorMaps:
+  COMPAT-01: [QB-BIZ-01]
+  COMPAT-02: [QB-BIZ-02a, QB-BIZ-02b, QB-BIZ-02c, QB-BIZ-02d]
+  COMPAT-03: [QB-FOLLOW-01]
+  COMPAT-04: [QB-FOLLOW-02]
+  COMPAT-05: [QB-FOLLOW-03, QB-JOIN-01, QB-JOIN-02]
+  COMPAT-06: [QB-DB-01, QB-DB-02]
+  COMPAT-07: [QB-ACL-01, QB-ACL-02a, QB-ACL-02b, QB-ACL-02c]
+  COMPAT-08: [QB-ACL-03a, QB-ACL-03b-gate, QB-ACL-03c]
+  COMPAT-09: [QB-BIZ-03]
+  COMPAT-OPS-01: [QB-OPS-01]
+  COMPAT-OPS-02: [QB-OPS-02]
+  COMPAT-OPS-03: [QB-OPS-03a, QB-OPS-03b]
+  COMPAT-OPS-04: [QB-OPS-04]
+  COMPAT-OPS-05: [QB-OPS-05, QB-OPS-05b]
+  COMPAT-OPS-06: [QB-OPS-06]
+  COMPAT-OPS-07: [QB-OPS-07a, QB-OPS-07b]
+  COMPAT-OPS-08: [QB-OPS-08]
+  COMPAT-OPS-09: [QB-OPS-09]
+  COMPAT-OPS-10: [QB-OPS-10]
+  COMPAT-OPS-11: [QB-OPS-11]
+
+coldStartFirstRoundReuse: [QB-BIZ-01, QB-FOLLOW-01, QB-OPS-01]
+
+cases:
+  # -------------------------------------------------------------------------
+  # 4.1 Business + incident isomorphism
+  # -------------------------------------------------------------------------
+  - id: QB-BIZ-01
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-01]
+    title: Independent single-table order_count + total_sales
+    turns:
+      - text: "查询 superstore_orders 的订单数和销售总额。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "查询 superstore_orders 订单数与销售总额"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.order_count, superstore_orders.total_sales]
+          filters: []
+    oracle:
+      kind: exact
+      ref: baseline:demo-mysql.superstore_orders.gold
+      expect:
+        order_count: 1000
+        total_sales: 1459476.0953
+    budgetClass: simple-metric
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-BIZ-02a
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-02]
+    title: Region group — order_count and profit margin including loss rows
+    turns:
+      - text: "按区域统计订单数和利润率，亏损行也要算。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "按区域统计订单数与利润率"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.order_count, superstore_orders.profit_margin]
+          dimensions: [{ field: superstore_orders.region }]
+          filters: []
+    oracle:
+      kind: independent-query
+      ref: sql:demo-mysql.region_order_count_profit_margin
+      notes: "COUNT DISTINCT orders; profit_margin = SUM(profit)/SUM(sales); include loss rows"
+    budgetClass: group-metric
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-BIZ-02b
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-02]
+    title: Legal empty — year 1900 sales
+    turns:
+      - text: "查询 1900 年订单销售额。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "查询 1900 年订单销售额"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          filters:
+            - { field: superstore_orders.order_year, op: eq, value: 1900 }
+    oracle:
+      kind: exact
+      ref: baseline:demo-mysql.superstore_orders.empty-1900
+      expect:
+        rowCount: 0
+        legalEmpty: true
+        notError: true
+    budgetClass: empty-result
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-BIZ-02c
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-02]
+    title: Time window — 2025 sales
+    turns:
+      - text: "查询 2025 年订单销售额。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "查询 2025 年订单销售额"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          filters:
+            - { field: superstore_orders.order_year, op: eq, value: 2025 }
+    oracle:
+      kind: independent-query
+      ref: sql:demo-mysql.superstore_orders.sales_by_year_2025
+    budgetClass: time-window
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-BIZ-02d
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-02]
+    title: Filter — Furniture category order_count
+    turns:
+      - text: "查询 Furniture 品类的订单数。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "查询 Furniture 品类订单数"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.order_count]
+          filters:
+            - { field: superstore_orders.category, op: eq, value: Furniture }
+    oracle:
+      kind: independent-query
+      ref: sql:demo-mysql.superstore_orders.order_count_category_Furniture
+      expectFilter: { category: Furniture }
+    budgetClass: filter-metric
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-BIZ-03
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-09]
+    title: ESC-11 isomorphism — begin + pinned query must not source_ambiguity_gate
+    turns:
+      - text: "请使用lucy查询25年11月和12月会员收入"
+    agentRequirements: { publicMcp: true, sameSession: true }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: allow_readonly
+        begin:
+          question: "请使用lucy查询25年11月和12月会员收入"
+          intentSummary: "未选表概况：查询超市业务会员与收入相关指标，未指定来源表"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          dimensions: [{ field: superstore_orders.region }]
+          filters:
+            - "region='East'"
+            - "discount > 0.2"
+          # First lucy_query must succeed; no person/host confirm.
+    oracle:
+      kind: invariant
+      ref: invariant:esc11-no-source-ambiguity-gate
+      expect:
+        firstQueryReasonNot: source_ambiguity_gate
+        schemaEvidenceUnavailableForbidden: true
+        noDenyThenRetryGreen: true
+    budgetClass: incident-watch
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  # -------------------------------------------------------------------------
+  # 4.2 Follow-ups + multi-table
+  # -------------------------------------------------------------------------
+  - id: QB-FOLLOW-01
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-03]
+    title: Same-session time-window follow-ups with MoM
+    turns:
+      - text: "查询 2025 年 11 月订单销售额"
+      - text: "那 12 月呢？"
+      - text: "和上月相比呢？"
+    agentRequirements: { publicMcp: true, sameSession: true }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "2025-11 订单销售额同会话追问"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          filters: []
+          # Agent must retain month context across turns; judge checks session continuity.
+    oracle:
+      kind: independent-query
+      ref: sql:demo-mysql.superstore_orders.sales_2025_11_12_mom
+      expect:
+        sameMeasureAcrossTurns: superstore_orders.total_sales
+        sameSession: true
+    budgetClass: follow-up
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-FOLLOW-02
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-04]
+    title: Same-session region split and profit margin follow-ups
+    turns:
+      - text: "查询 2025 年 11 月销售额"
+      - text: "再按区域拆分"
+      - text: "各区域利润率呢？"
+    agentRequirements: { publicMcp: true, sameSession: true }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "2025-11 销售额按区域与利润率追问"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales, superstore_orders.profit_margin]
+          dimensions: [{ field: superstore_orders.region }]
+          filters: []
+    oracle:
+      kind: independent-query
+      ref: sql:demo-mysql.superstore_orders.sales_2025_11_by_region_margin
+      expect:
+        retainMonth: "2025-11"
+        retainRegionDimension: true
+        profitMarginFormula: SUM/SUM
+        sameSession: true
+    budgetClass: follow-up
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-FOLLOW-03
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-05]
+    title: Same-session single-table to declared join expansion
+    turns:
+      - text: "查询订单销售额"
+      - text: "关联退货看看"
+      - text: "再按区域负责人看看"
+    agentRequirements: { publicMcp: true, sameSession: true }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders, superstore_returns, superstore_people]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "订单销售额扩展退货与区域负责人"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          filters: []
+    oracle:
+      kind: independent-query
+      ref: sql:demo-mysql.superstore_declared_joins_path
+      expect:
+        declaredJoinsOnly: true
+        sameSession: true
+        mustNotDropPath: true
+    budgetClass: follow-up-join
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-JOIN-01
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-05]
+    title: Declared join — sales, returns, regional manager by region
+    turns:
+      - text: "按区域统计订单销售额、退货量和区域负责人。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders, superstore_returns, superstore_people]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "按区域统计销售额、退货量与负责人"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales, superstore_returns.return_count]
+          dimensions:
+            - { field: superstore_orders.region }
+            - { field: superstore_people.regional_manager }
+          filters: []
+    oracle:
+      kind: independent-query
+      ref: sql:demo-mysql.superstore_orders_returns_people_by_region
+      notes: "Grain reconcile via declared join SQL"
+    budgetClass: multi-source-join
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-JOIN-02
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-05]
+    title: Unknown table join must deny without misleading next step
+    turns:
+      - text: "把订单和不存在的表关联，返回销售额。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect:
+          outcome: deny
+          requireToolsCall: true
+          reasonFamily: unknown_or_unresolved_source
+          upstreamExecutions: 0
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: allow_readonly
+        begin: "订单与不存在表关联"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          # Deliberately references a non-existent companion source.
+          dimensions: [{ field: nonexistent_ghost_table.some_field }]
+          filters: []
+    oracle:
+      kind: deny
+      ref: deny:unknown-join-reference
+      expect:
+        noMisleadingNextStep: true
+        noCrossTableInvention: true
+    budgetClass: denial
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  # -------------------------------------------------------------------------
+  # 4.3 Multi-db + ACL
+  # -------------------------------------------------------------------------
+  - id: QB-DB-01
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-06]
+    title: Dual-connection fixture — query demo-mysql and lucy-ops separately then compare
+    turns:
+      - text: "分别查询 demo-mysql 的订单数和 lucy-ops 近窗工具调用次数，并对比两边结果。"
+    agentRequirements: { publicMcp: true, sameSession: true }
+    identities:
+      - id: dual_conn_readonly
+        role: compat_fixture_dual_readonly
+        tokenRef: env:COMPAT_TOKEN_DUAL_CONN
+        expect:
+          outcome: allow
+          forbiddenRole: lucy_admin
+    connectionIds: [demo-mysql, lucy-ops]
+    sources: [superstore_orders, ops_calls]
+    mcpControls:
+      - identity: dual_conn_readonly
+        begin: "双连接分别查询后对比"
+        query:
+          # Two sequential single-connection queries; never invent cross-connection join.
+          steps:
+            - connectionId: demo-mysql
+              measures: [superstore_orders.order_count]
+              filters: []
+            - connectionId: lucy-ops
+              measures: [ops_calls.call_count]
+              filters: []
+              # W0 ops_calls: no gov.* allowed on this source.
+    oracle:
+      kind: independent-query
+      ref: sql:dual-conn.demo-mysql-and-lucy-ops-separate
+      expect:
+        identityNotAdmin: true
+        separateQueriesOnly: true
+    budgetClass: multi-db
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-DB-02
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-06]
+    title: Illegal cross-connection join must deny with split-by-connection next step
+    turns:
+      - text: "把 demo-mysql 订单和 lucy-ops 调用记录 join 在一起统计销售额。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: dual_conn_readonly
+        role: compat_fixture_dual_readonly
+        tokenRef: env:COMPAT_TOKEN_DUAL_CONN
+        expect:
+          outcome: deny
+          requireToolsCall: true
+          reasonFamily: cross_connection
+          upstreamExecutions: 0
+          forbiddenRole: lucy_admin
+    connectionIds: [demo-mysql, lucy-ops]
+    sources: [superstore_orders, ops_calls]
+    mcpControls:
+      - identity: dual_conn_readonly
+        begin: "非法跨连接 join"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales, ops_calls.call_count]
+          filters: []
+    oracle:
+      kind: deny
+      ref: deny:cross-connection-join
+      expect:
+        nextStepHint: split_by_connection
+        noCrossConnectionJoinSuccess: true
+    budgetClass: denial
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-ACL-01
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-07]
+    title: No lucy_query tool vs legal readonly pair (D7a)
+    turns:
+      - text: "查询订单销售额"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: deny_no_query
+        role: compat_fixture_no_lucy_query
+        tokenRef: env:COMPAT_TOKEN_NO_QUERY
+        expect:
+          outcome: deny
+          requireToolsCall: true
+          reasonFamily: tool_forbidden
+          upstreamExecutions: 0
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    runsByIdentity: [deny_no_query, allow_readonly]
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: deny_no_query
+        begin: "无 lucy_query 工具负例"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          filters: []
+      - identity: allow_readonly
+        begin: "合法只读对照"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          filters: []
+    oracle:
+      kind: deny
+      ref: deny:tool-forbidden-paired-allow
+      expect:
+        d7a: true
+        pairedAllowIdentity: allow_readonly
+        oralDenialAloneNotPass: true
+    budgetClass: denial
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-ACL-02a
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-07]
+    title: demo_readonly asking lucy-ops must deny (D7a)
+    turns:
+      - text: "查询 lucy-ops 近 7 天工具调用次数。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: deny_readonly_ops
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect:
+          outcome: deny
+          requireToolsCall: true
+          reasonFamily: source_or_connection_forbidden
+          upstreamExecutions: 0
+      - id: allow_ops_w0
+        role: demo_ops
+        tokenRef: env:COMPAT_TOKEN_DEMO_OPS
+        expect: { outcome: allow }
+    runsByIdentity: [deny_readonly_ops, allow_ops_w0]
+    connectionIds: [lucy-ops]
+    sources: [ops_calls]
+    mcpControls:
+      - identity: deny_readonly_ops
+        begin: "demo_readonly 问 lucy-ops"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_calls.call_count]
+          filters: []
+      - identity: allow_ops_w0
+        begin: "demo_ops W0 合法对照"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_calls.call_count]
+          filters: []
+    oracle:
+      kind: deny
+      ref: deny:demo-readonly-vs-lucy-ops
+      expect: { d7a: true, pairedAllowIdentity: allow_ops_w0 }
+    budgetClass: denial
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-ACL-02b
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-07]
+    title: demo_ops asking superstore must deny (D7a)
+    turns:
+      - text: "查询 superstore_orders 的订单数。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: deny_ops_superstore
+        role: demo_ops
+        tokenRef: env:COMPAT_TOKEN_DEMO_OPS
+        expect:
+          outcome: deny
+          requireToolsCall: true
+          reasonFamily: source_or_connection_forbidden
+          upstreamExecutions: 0
+      - id: allow_readonly
+        role: demo_readonly
+        tokenRef: env:COMPAT_TOKEN_READONLY
+        expect: { outcome: allow }
+    runsByIdentity: [deny_ops_superstore, allow_readonly]
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: deny_ops_superstore
+        begin: "demo_ops 问 superstore"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.order_count]
+          filters: []
+      - identity: allow_readonly
+        begin: "demo_readonly 合法对照"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.order_count]
+          filters: []
+    oracle:
+      kind: deny
+      ref: deny:demo-ops-vs-superstore
+      expect: { d7a: true, pairedAllowIdentity: allow_readonly }
+    budgetClass: denial
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-ACL-02c
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-07]
+    title: Frozen W0-only fixture Role asking ops_agents must deny (never lucy_ops_reader)
+    turns:
+      - text: "查询配置 Agent 数量（ops_agents）。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: deny_frozen_w0
+        # Permanent negative fixture: ops_calls + ops_call_tables ONLY; never healable.
+        role: compat_fixture_frozen_w0_only
+        tokenRef: env:COMPAT_TOKEN_FROZEN_W0
+        expect:
+          outcome: deny
+          requireToolsCall: true
+          reasonFamily: source_or_connection_forbidden
+          upstreamExecutions: 0
+          # Contract: must NOT bind healable product Role lucy_ops_reader.
+          forbiddenRoles: [lucy_ops_reader, lucy_admin]
+        constraints:
+          frozenW0Only: true
+          healForbidden: true
+          allowedSourcesExactly: [ops_calls, ops_call_tables]
+      - id: allow_ops_w1w2
+        role: compat_fixture_ops_w1w2
+        tokenRef: env:COMPAT_TOKEN_OPS_W1W2
+        expect: { outcome: allow }
+    runsByIdentity: [deny_frozen_w0, allow_ops_w1w2]
+    connectionIds: [lucy-ops]
+    sources: [ops_agents]
+    mcpControls:
+      - identity: deny_frozen_w0
+        begin: "frozen W0 问未放行 ops_agents"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_agents.agent_count]
+          filters:
+            - { field: gov.calendar_days, op: eq, value: 7 }
+      - identity: allow_ops_w1w2
+        begin: "W1/W2 夹具合法对照"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_agents.agent_count]
+          filters:
+            - { field: gov.calendar_days, op: eq, value: 7 }
+    oracle:
+      kind: deny
+      ref: deny:frozen-w0-ops-agents
+      expect:
+        d7a: true
+        boundRoleMustBe: compat_fixture_frozen_w0_only
+        mustNotBind: lucy_ops_reader
+        pairedAllowIdentity: allow_ops_w1w2
+    budgetClass: denial
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-ACL-03a
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-08]
+    title: Table A visible / table B invisible pair
+    turns:
+      - text: "分别查询表 A（superstore_orders）销售额与表 B（superstore_returns）退货量。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: table_a_only
+        role: compat_fixture_table_a_only
+        tokenRef: env:COMPAT_TOKEN_TABLE_A
+        expect:
+          outcome: deny
+          requireToolsCall: true
+          reasonFamily: source_or_connection_forbidden
+          upstreamExecutions: 0
+          notes: "Ask B (returns) → deny"
+      - id: table_a_allow
+        role: compat_fixture_table_a_only
+        tokenRef: env:COMPAT_TOKEN_TABLE_A
+        expect:
+          outcome: allow
+          notes: "Ask A (orders) → allow"
+      - id: table_ab_allow
+        role: compat_fixture_table_ab
+        tokenRef: env:COMPAT_TOKEN_TABLE_AB
+        expect: { outcome: allow }
+    runsByIdentity: [table_a_only, table_a_allow, table_ab_allow]
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders, superstore_returns]
+    mcpControls:
+      - identity: table_a_only
+        begin: "表 B 不可见负例"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_returns.return_count]
+          filters: []
+      - identity: table_a_allow
+        begin: "表 A 可见成交"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          filters: []
+      - identity: table_ab_allow
+        begin: "AB 全放行对照"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales, superstore_returns.return_count]
+          filters: []
+    oracle:
+      kind: deny
+      ref: deny:table-a-visible-b-hidden
+      expect:
+        d7a: true
+        pairedAllowOnA: true
+        regionVocabEnglishOnly: true
+    budgetClass: denial
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-ACL-03b-gate
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-08]
+    title: Proven-gate watch — scoped row narrow expects row_policy_upstream_unproven
+    turns:
+      - text: "在已做 scoped 行收窄的身份下查询 superstore_orders 销售额（单 source）。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: row_scoped_unproven
+        role: compat_fixture_row_policy_unproven_gate
+        tokenRef: env:COMPAT_TOKEN_ROW_SCOPED
+        expect:
+          outcome: deny
+          requireToolsCall: true
+          reasonFamily: row_policy_upstream_unproven
+          reasonCode: row_policy_upstream_unproven
+          upstreamExecutions: 0
+          # NOT row-isolation success; general lane does not claim East-only deal.
+          notRowIsolationSuccess: true
+        constraints:
+          singleProtectedSource: superstore_orders
+          # Fixture region vocab must stay English (East/Southwest).
+          rowScopeExample: { field: region, values: [East] }
+          productDefaultProven: false
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: row_scoped_unproven
+        begin: "proven 门看守题"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          filters: []
+    oracle:
+      kind: deny
+      ref: deny:row-policy-upstream-unproven-gate
+      expect:
+        reasonCode: row_policy_upstream_unproven
+        notRowIsolationDeal: true
+        regionVocabEnglishOnly: true
+    budgetClass: denial
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-ACL-03c
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-08]
+    title: Field exposure differential — hidden field must not appear
+    turns:
+      - text: "查询订单销售额，并尝试读取受限字段。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: field_restricted
+        role: compat_fixture_fields_masked
+        tokenRef: env:COMPAT_TOKEN_FIELD_RESTRICTED
+        expect:
+          outcome: allow
+          hiddenFieldsAbsent: [superstore_orders.customer_name]
+          legalFieldsUsable: [superstore_orders.total_sales]
+      - id: field_full
+        role: compat_fixture_fields_full
+        tokenRef: env:COMPAT_TOKEN_FIELD_FULL
+        expect:
+          outcome: allow
+          legalFieldsUsable: [superstore_orders.total_sales, superstore_orders.customer_name]
+    runsByIdentity: [field_restricted, field_full]
+    connectionIds: [demo-mysql]
+    sources: [superstore_orders]
+    mcpControls:
+      - identity: field_restricted
+        begin: "字段差分受限身份"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          dimensions: [{ field: superstore_orders.customer_name }]
+          filters: []
+      - identity: field_full
+        begin: "字段差分全量对照"
+        query:
+          connectionId: demo-mysql
+          measures: [superstore_orders.total_sales]
+          dimensions: [{ field: superstore_orders.customer_name }]
+          filters: []
+    oracle:
+      kind: privacy
+      ref: privacy:field-exposure-differential
+      expect:
+        hiddenFieldMustNotAppear: superstore_orders.customer_name
+        restrictedIdentity: field_restricted
+        fullIdentity: field_full
+    budgetClass: privacy
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  # -------------------------------------------------------------------------
+  # 4.4 Ops W0 (no gov.* in mcpControls filters)
+  # -------------------------------------------------------------------------
+  - id: QB-OPS-01
+    version: 1
+    lane: ops-w0
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-01]
+    title: W0 — tool call and deny counts last 7 days
+    turns:
+      - text: "近 7 天每个工具的调用次数和拒绝次数？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w0
+        role: demo_ops
+        tokenRef: env:COMPAT_TOKEN_DEMO_OPS
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_calls]
+    mcpControls:
+      - identity: allow_ops_w0
+        begin: "近 7 天工具调用与拒绝"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_calls.call_count, ops_calls.denied_count]
+          dimensions: [{ field: ops_calls.tool }]
+          # W0: filters MUST NOT contain any gov.*
+          filters: []
+        windowAnchor:
+          kind: maxCallDay
+          source: ops_calls
+          naturalDays: 7
+          timezone: UTC
+    oracle:
+      kind: independent-query
+      ref: sql:lucy-ops.ops_calls.tool_call_deny_last7_d21
+      expect:
+        d21Anchor: true
+        noGovFilters: true
+        snapshotIdMayBeNull: true
+    budgetClass: ops-w0
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-02
+    version: 1
+    lane: ops-w0
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-02]
+    title: W0 — which physical_table was called most in last 7 days
+    turns:
+      - text: "近 7 天哪张表调用最多？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w0
+        role: demo_ops
+        tokenRef: env:COMPAT_TOKEN_DEMO_OPS
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_call_tables]
+    mcpControls:
+      - identity: allow_ops_w0
+        begin: "近 7 天表调用排行"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_call_tables.call_count]
+          dimensions: [{ field: ops_call_tables.physical_table }]
+          filters: []
+        windowAnchor:
+          kind: maxCallDay
+          source: ops_call_tables
+          naturalDays: 7
+          timezone: UTC
+    oracle:
+      kind: independent-query
+      ref: sql:lucy-ops.ops_call_tables.top_physical_table_last7_d21
+      expect:
+        d21Anchor: true
+        noGovFilters: true
+        notTokenPopulation: true
+    budgetClass: ops-w0
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-03a
+    version: 1
+    lane: ops-w0
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-03]
+    title: W0 follow-up — deny reasons for a target table
+    turns:
+      - text: "近 7 天哪张表调用最多？"
+      - text: "那张表被拒绝的主要原因是什么？"
+    agentRequirements: { publicMcp: true, sameSession: true }
+    identities:
+      - id: allow_ops_w0
+        role: demo_ops
+        tokenRef: env:COMPAT_TOKEN_DEMO_OPS
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_call_tables, ops_calls]
+    mcpControls:
+      - identity: allow_ops_w0
+        begin: "追问拒绝原因"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_calls.denied_count]
+          dimensions: [{ field: ops_calls.decision_reason }]
+          filters: []
+        windowAnchor:
+          kind: maxCallDay
+          source: ops_calls
+          naturalDays: 7
+          timezone: UTC
+    oracle:
+      kind: independent-query
+      ref: sql:lucy-ops.ops_calls.decision_reason_followup
+      expect:
+        sameSession: true
+        retainTargetTable: true
+        noDefaultHighCardinalityGroup: true
+        noGovFilters: true
+    budgetClass: ops-w0-follow-up
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-03b
+    version: 1
+    lane: ops-w0
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-03]
+    title: W0 follow-up — read generated_sql after filter
+    turns:
+      - text: "近 7 天某张高调用表的调用情况？"
+      - text: "过滤后看一下 generated_sql。"
+    agentRequirements: { publicMcp: true, sameSession: true }
+    identities:
+      - id: allow_ops_w0
+        role: demo_ops
+        tokenRef: env:COMPAT_TOKEN_DEMO_OPS
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_calls, ops_call_tables]
+    mcpControls:
+      - identity: allow_ops_w0
+        begin: "过滤后读 generated_sql"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_calls.call_count]
+          filters: []
+          # After filter, explain/generated_sql path; forbid default high-cardinality group-by.
+        windowAnchor:
+          kind: maxCallDay
+          source: ops_calls
+          naturalDays: 7
+          timezone: UTC
+    oracle:
+      kind: independent-query
+      ref: sql:lucy-ops.ops_calls.generated_sql_after_filter
+      expect:
+        sameSession: true
+        mustReadGeneratedSql: true
+        noDefaultHighCardinalityGroup: true
+        noGovFilters: true
+    budgetClass: ops-w0-follow-up
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-04
+    version: 1
+    lane: ops-w0
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-04]
+    title: W0 freshness via lucy_freshness
+    turns:
+      - text: "lucy-ops 数据新鲜度怎么样？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w0
+        role: demo_ops
+        tokenRef: env:COMPAT_TOKEN_DEMO_OPS
+        # freshness 返回元数据，不是事实行集；不得按 nonempty-to-empty 判 FAIL。
+        expect: { outcome: allow, legalEmpty: true }
+    connectionIds: [lucy-ops]
+    sources: [ops_calls]
+    mcpControls:
+      - identity: allow_ops_w0
+        begin: "lucy_freshness 合法可达"
+        tool: lucy_freshness
+        freshness:
+          connectionId: lucy-ops
+          sourceName: ops_calls
+        query:
+          # No gov.* on W0 path.
+          filters: []
+    oracle:
+      kind: invariant
+      ref: invariant:lucy-freshness-reachable
+      expect:
+        tool: lucy_freshness
+        distinguishStructuralVsBusinessFreshness: true
+        noFixedWriteTime: true
+        noGovFilters: true
+    budgetClass: ops-w0
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-05
+    version: 1
+    lane: ops-w0
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-05]
+    title: W0 token_label usage via ops_calls (agent_id, token_label) — not population
+    turns:
+      - text: "各 Agent 的 token_label 调用量？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w0
+        role: demo_ops
+        tokenRef: env:COMPAT_TOKEN_DEMO_OPS
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_calls]
+    mcpControls:
+      - identity: allow_ops_w0
+        begin: "钉 ops_calls 按 agent_id×token_label"
+        query:
+          connectionId: lucy-ops
+          sourceName: ops_calls
+          measures: [ops_calls.call_count]
+          dimensions:
+            - { field: ops_calls.agent_id }
+            - { field: ops_calls.token_label }
+          filters: []
+        windowAnchor:
+          kind: maxCallDay
+          source: ops_calls
+          naturalDays: 7
+          timezone: UTC
+    oracle:
+      kind: independent-query
+      ref: sql:lucy-ops.ops_calls.agent_token_label_usage
+      expect:
+        sourceMustBe: ops_calls
+        notOpsTokens: true
+        notTokenPopulation: true
+        groupBy: [agent_id, token_label]
+        noGovFilters: true
+    budgetClass: ops-w0
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  # -------------------------------------------------------------------------
+  # 4.5 Ops W1 / W2 (mcpControls MUST declare allowed gov window knobs)
+  # -------------------------------------------------------------------------
+  - id: QB-OPS-05b
+    version: 1
+    lane: ops-w1
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-05]
+    title: W1 token_label usage via ops_tokens with gov window
+    turns:
+      - text: "按问数归因，各 Agent 的 token_label 调用量是多少？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w1w2
+        role: compat_fixture_ops_w1w2
+        tokenRef: env:COMPAT_TOKEN_OPS_W1W2
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_tokens]
+    mcpControls:
+      - identity: allow_ops_w1w2
+        begin: "ops_tokens 问数归因"
+        query:
+          connectionId: lucy-ops
+          sourceName: ops_tokens
+          measures: [ops_tokens.call_count]
+          dimensions:
+            - { field: ops_tokens.agent_id }
+            - { field: ops_tokens.token_label }
+          filters:
+            - { field: gov.calendar_days, op: eq, value: 7 }
+    oracle:
+      kind: independent-query
+      ref: sql:lucy-ops.ops_tokens.agent_token_label_usage
+      expect:
+        sourceMustBe: ops_tokens
+        notTokenPopulation: true
+        requireGovWindowKnob: true
+    budgetClass: ops-w1
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-06
+    version: 1
+    lane: ops-w1
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-06]
+    title: W1 configured agents and available token population
+    turns:
+      - text: "配置了多少 Agent？可用 Token 有多少？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w1w2
+        role: compat_fixture_ops_w1w2
+        tokenRef: env:COMPAT_TOKEN_OPS_W1W2
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_agents]
+    mcpControls:
+      - identity: allow_ops_w1w2
+        begin: "配置 Agent／可用 Token 人口"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_agents.agent_count, ops_agents.available_token_count]
+          filters:
+            - { field: gov.calendar_days, op: eq, value: 30 }
+    oracle:
+      kind: independent-query
+      ref: builder:ops_agents.configured_population
+      expect:
+        notActiveUsageMix: true
+        notLabelDedupAsPopulation: true
+        requireGovWindowKnob: true
+    budgetClass: ops-w1
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-07a
+    version: 1
+    lane: ops-w1
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-07]
+    title: W1 active agents in gov.calendar_days=7 Shanghai window
+    turns:
+      - text: "在 gov.calendar_days=7（上海）窗内哪些 Agent 有访问？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w1w2
+        role: compat_fixture_ops_w1w2
+        tokenRef: env:COMPAT_TOKEN_OPS_W1W2
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_agent_activity]
+    mcpControls:
+      - identity: allow_ops_w1w2
+        begin: "治理窗内活跃 Agent"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_agent_activity.active_agent_count]
+          dimensions: [{ field: ops_agent_activity.agent_id }]
+          filters:
+            - { field: gov.calendar_days, op: eq, value: 7 }
+            - { field: gov.calendar_tz, op: eq, value: Asia/Shanghai }
+    oracle:
+      kind: independent-query
+      ref: builder:ops_agent_activity.active_in_gov_window
+      expect:
+        governanceWindowAuthoritative: true
+        discloseUtcCallDay: true
+        requireGovWindowKnob: true
+        forbiddenPhrase: "从未连接"
+    budgetClass: ops-w1
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-07b
+    version: 1
+    lane: ops-w1
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-07]
+    title: W1 silent agents = configured minus active
+    turns:
+      - text: "哪些配置 Agent 在近窗内是沉默的？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w1w2
+        role: compat_fixture_ops_w1w2
+        tokenRef: env:COMPAT_TOKEN_OPS_W1W2
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_agents, ops_agent_activity]
+    mcpControls:
+      - identity: allow_ops_w1w2
+        begin: "沉默 Agent＝配置−活跃"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_agents.agent_count]
+          filters:
+            - { field: gov.calendar_days, op: eq, value: 7 }
+            - { field: gov.calendar_tz, op: eq, value: Asia/Shanghai }
+    oracle:
+      kind: independent-query
+      ref: builder:ops_agents.silent_equals_configured_minus_active
+      expect:
+        formula: configured_minus_active
+        forbiddenPhrase: "从未连接"
+        requireGovWindowKnob: true
+    budgetClass: ops-w1
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-08
+    version: 1
+    lane: ops-w1
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-08]
+    title: W1 MECE five-tier agent activity classification
+    turns:
+      - text: "按窗口无记录／仅连接／轻量业务未问／查数未问／问询活跃五档，给各 Agent 归类。"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w1w2
+        role: compat_fixture_ops_w1w2
+        tokenRef: env:COMPAT_TOKEN_OPS_W1W2
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_question_kpi_agents, ops_agent_activity]
+    mcpControls:
+      - identity: allow_ops_w1w2
+        begin: "MECE 五档"
+        query:
+          connectionId: lucy-ops
+          measures: [ops_question_kpi_agents.agent_count]
+          dimensions: [{ field: ops_question_kpi_agents.tier }]
+          filters:
+            - { field: gov.calendar_days, op: eq, value: 30 }
+            - { field: gov.calendar_tz, op: eq, value: Asia/Shanghai }
+    oracle:
+      kind: independent-query
+      ref: builder:ops_question_kpi_agents.mece_five_tiers
+      expect:
+        tiers:
+          - window_no_record
+          - window_connect_only
+          - window_soft_usage
+          - window_query_without_ask
+          - window_question_active
+        deepestWins: true
+        forbiddenPhrase: "从未连接"
+        requireGovWindowKnob: true
+    budgetClass: ops-w1
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-09
+    version: 1
+    lane: ops-w2
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-09]
+    title: W2 grant/access paths and confirmed unauthorized vs builder meta
+    turns:
+      - text: "授权路径、访问路径和确凿越权分别有多少？有没有孤儿授权？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w1w2
+        role: compat_fixture_ops_w1w2
+        tokenRef: env:COMPAT_TOKEN_OPS_W1W2
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_map_meta, ops_grant_paths, ops_access_paths, ops_edge_signals]
+    mcpControls:
+      - identity: allow_ops_w1w2
+        begin: "授权／访问路径与越权对账"
+        query:
+          # ops_map_meta 与 ops_edge_signals 无 join 边；分两步单源查询（同 QB-DB-01 形态）。
+          steps:
+            - connectionId: lucy-ops
+              measures:
+                - ops_map_meta.grant_paths
+                - ops_map_meta.access_paths
+                - ops_map_meta.orphan_grants
+              filters:
+                - { field: gov.calendar_days, op: eq, value: 30 }
+            - connectionId: lucy-ops
+              measures:
+                - ops_edge_signals.confirmed_unauthorized_edges
+              filters:
+                - { field: gov.calendar_days, op: eq, value: 30 }
+    oracle:
+      kind: independent-query
+      ref: builder:ops_map_meta.paths_and_unauthorized
+      expect:
+        reconcileWithBuilderMeta: true
+        noSecondAlgorithm: true
+        requireGovWindowKnob: true
+    budgetClass: ops-w2
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-10
+    version: 1
+    lane: ops-w2
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-10]
+    title: W2 window-unvisited tables and table activity rate
+    turns:
+      - text: "近 30 天哪些表没有被访问？表活跃率如何？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w1w2
+        role: compat_fixture_ops_w1w2
+        tokenRef: env:COMPAT_TOKEN_OPS_W1W2
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_table_adoption]
+    mcpControls:
+      - identity: allow_ops_w1w2
+        begin: "近窗未访问与表活跃率"
+        query:
+          connectionId: lucy-ops
+          measures:
+            - ops_table_adoption.unvisited_table_count
+            - ops_table_adoption.activity_rate
+          dimensions: [{ field: ops_table_adoption.physical_table }]
+          filters:
+            - { field: gov.calendar_days, op: eq, value: 30 }
+            - { field: gov.calendar_tz, op: eq, value: Asia/Shanghai }
+    oracle:
+      kind: independent-query
+      ref: builder:ops_table_adoption.window_unvisited_and_activity_rate
+      expect:
+        windowUnvisitedNotLifetimeSinceOnline: true
+        timezone: Asia/Shanghai
+        activityRateFormula: active_days/denom_days
+        requireGovWindowKnob: true
+        forbiddenPhrase: "上线以来从未访问"
+    budgetClass: ops-w2
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+
+  - id: QB-OPS-11
+    version: 1
+    lane: ops-w2
+    configProfileId: lucy-mcp-compat-demo
+    mapsTo: [COMPAT-OPS-11]
+    title: W2 snapshot coverage — raw/denied calls and pathKey dedup rate
+    turns:
+      - text: "当前治理投影快照的原始调用、拒绝调用和 pathKey 去重覆盖率是多少？"
+    agentRequirements: { publicMcp: true, sameSession: false }
+    identities:
+      - id: allow_ops_w1w2
+        role: compat_fixture_ops_w1w2
+        tokenRef: env:COMPAT_TOKEN_OPS_W1W2
+        expect: { outcome: allow }
+    connectionIds: [lucy-ops]
+    sources: [ops_map_meta, ops_map_nodes]
+    mcpControls:
+      - identity: allow_ops_w1w2
+        begin: "图快照覆盖率对账"
+        query:
+          connectionId: lucy-ops
+          measures:
+            - ops_map_meta.raw_calls
+            - ops_map_meta.denied_calls
+            - ops_map_meta.coverage_ratio
+          filters:
+            - { field: gov.window_hours, op: eq, value: 168 }
+    oracle:
+      kind: independent-query
+      ref: builder:ops_map_meta.snapshot_coverage_pathkey
+      expect:
+        reconcileWithBuilderMeta: true
+        pathKeyDedup: true
+        requireGovWindowKnob: true
+    budgetClass: ops-w2
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId

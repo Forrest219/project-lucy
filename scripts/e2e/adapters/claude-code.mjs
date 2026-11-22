@@ -62,7 +62,18 @@ export function prepare({ workDir, mcpUrl }) {
   return { env: {}, files: [file], mcpConfigPath: file };
 }
 
-export function buildInvocation({ binaryPath, question, workDir, prepared, env, secrets = [] }) {
+export const supportsContinuation = true;
+
+export function buildInvocation({
+  binaryPath,
+  question,
+  workDir,
+  prepared,
+  env,
+  secrets = [],
+  sessionId = null,
+  continueSession = false
+}) {
   const args = [
     "-p",
     question,
@@ -75,6 +86,11 @@ export function buildInvocation({ binaryPath, question, workDir, prepared, env, 
     "--permission-mode",
     "bypassPermissions"
   ];
+  // Same-session follow-up: native continue (-c). Session id is recorded from parseResult;
+  // Claude Code continues the latest session in this workDir when -c is set.
+  if (continueSession || sessionId) {
+    args.push("-c");
+  }
   // The model this run talks to. It is a model NAME, not a credential, so it belongs
   // in argv where it stays visible in the transcript (the env allowlist would strip
   // it, and a stripped model means the client silently falls back to its own default

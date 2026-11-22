@@ -6,14 +6,14 @@
 | 日期 / 目标版本 | 2026-11-19／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-54**／REQ-030-075／**P0 底线的题库＋配置合同**。不入 0.30 核心分母 |
 | 台账号 | 无。挂现行 `0.30` 执行总账 |
-| 状态 | **v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿；闭合 Cursor Round2／Kimi B1–B13 与 B15）。开发未授权（明示暂不开发）。测试台沿用 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。未授权不改执行器、权限、数据与运行代码。≠ 可上线** |
+| 状态 | **v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿；闭合 Cursor Round2／Kimi B1–B13 与 B15）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0 授权登记）。测试台沿用 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。≠ UAT PASS；≠ 可上线** |
 | 决策来源 | 多场景题库独立成 Spec 并覆盖 Lucy Ops；全真须配合 Lucy 配置；2026-11-19 批准复审建议（配置前置、frozen 负例夹具、通用车道行隔离策略③＋proven 门②、Plan 归属拆分） |
 | 父合同 | [P1-53](lucy-20261118-mcp-upgrade-compatibility-spec.md) **v1.1**；本 Spec＝题目语义＋CompatConfigProfile 正本；不另造放行阈值 |
 | 配套 Plan | [lucy-20261118-mcp-upgrade-question-bank-plan.md](../plans/lucy-20261118-mcp-upgrade-question-bank-plan.md) |
 | 评审 | [Kimi v0.2 评审](../reviews/2026-11-19-p1-54-question-bank-spec-plan-review.md)；[Cursor Round2](../reviews/2026-11-19-p1-54-question-bank-review-round2-cursor.md) |
 | 关联合同 | [可问治理面](lucy-20261101-ops-evidence-askable-governance-spec.md)、[P1-49 Ops ACL 草案](lucy-20261118-lucy-ops-reader-headless-governance-acl-spec.md)、[P1-35](lucy-20261116-source-ambiguity-mcp-escape-spec.md)、[真实用户 E2E](lucy-20261018-enterprise-security-and-real-e2e-spec.md) |
 | 测试台 | [`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`](../qa/uat/suites/mcp-upgrade-compatibility/suite.md) |
-| 授权边界 | **终稿确权 ≠ 开发授权**。实现须另发「授权进入开发」 |
+| 授权边界 | **终稿确权 ≠ 开发授权**。委托人 2026-11-22 已发「开工，落地执行」＝本 Plan 步骤 1–4 开发授权；不得改 P1-53 放行判定／发布接线；Docker 重建／出包另授；每 Wave 完成后 code review 再进入下一 Wave |
 
 ## 闭口层级
 

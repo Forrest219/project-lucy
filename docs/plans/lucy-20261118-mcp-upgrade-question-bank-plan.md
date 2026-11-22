@@ -4,11 +4,11 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | **v1.0** / 2026-11-19 |
-| 状态 | **v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿）。开发未授权（明示暂不开发）。测试台共享 NOT RUN。未授权不改执行器、权限、数据与运行代码。≠ 可上线** |
+| 状态 | **v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0）。测试台共享 NOT RUN。≠ UAT PASS；≠ 可上线** |
 | 主 Spec | [`docs/specs/lucy-20261118-mcp-upgrade-question-bank-spec.md`](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md) **v1.0** |
 | 父门禁 | [P1-53 v1.1](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)（加载／digest／判定／D27；**不**创建题库内容） |
 | 总账 | **P1-54**／REQ-030-075；P0 底线题库＋配置合同；不入核心分母 |
-| 授权边界 | **终稿确权 ≠ 开发授权**。Task 1 起须另发开发授权。本条只改：`mcp-upgrade-journeys.yaml` **内容**、CompatConfigProfile 描述／应用／还原脚本、题库契约测。**不得**：改 P1-53 放行阈值；实现判定器／发布接线（归 P1-53）；改客户生产 Role；实现 P1-49 heal；打开产品默认 proven 开关。构建／部署／出包另授权 |
+| 授权边界 | **终稿确权 ≠ 开发授权**。委托人 2026-11-22 已授权步骤 1–4。本条只改：`mcp-upgrade-journeys.yaml` **内容**、CompatConfigProfile 描述／应用／还原脚本、题库契约测。**不得**：改 P1-53 放行阈值；实现判定器／发布接线（归 P1-53）；改客户生产 Role；实现 P1-49 heal；打开产品默认 proven 开关。构建／部署／出包另授权；每 Wave 完成后 code review 再进入下一 Wave |
 | 验收 | Spec SC-01–SC-24；缺匹配配置＝BLOCKED 不删题 |
 
 ## 目标
@@ -31,7 +31,7 @@
 ## 开工前置
 
 1. Spec／本 Plan **v1.0 终稿确权**已落盘。
-2. 开发授权另发；当前只文档。
+2. 开发授权已发（委托人 2026-11-22）；可执行步骤 1–4；每 Wave 后 code review。
 3. 秘密只从受保护路径读。
 4. 不默认重建 Docker；缺环境／缺配置指纹＝BLOCKED。
 5. 通用车道不启用产品默认 proven；不把行隔离成交塞进 demo profile。

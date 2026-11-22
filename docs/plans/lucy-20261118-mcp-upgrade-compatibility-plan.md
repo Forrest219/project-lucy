@@ -12,10 +12,10 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | **v1.1** / 2026-11-18 |
-| 状态 | **v1.1。终稿补丁（收编 P1-54 题库正本／Ops 分母／CompatConfigProfile 前置 D27）。开发未授权（明示暂不开发）。测试台 NOT RUN。未授权不改执行器、发布门禁与运行代码。≠ 可上线** |
+| 状态 | **v1.1。终稿补丁（收编 P1-54 题库正本／Ops 分母／CompatConfigProfile 前置 D27）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0）。测试台 NOT RUN。≠ UAT PASS；≠ 可上线** |
 | 主 Spec | [`docs/specs/lucy-20261118-mcp-upgrade-compatibility-spec.md`](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md) |
 | 总账 | **P1-53**／REQ-030-074；升级放行＝P0 底线；**不入**核心分母 |
-| 授权边界 | **终稿确权 ≠ 开发授权**。Task 1 起须另发开发授权。授权后改本 Plan 白名单：判定器／执行器／证据校验／CI／Runbook。**题库 YAML 内容与 CompatConfigProfile 应用／还原脚本归 P1-54**；本条只 Consume／Validate／调用。不得修 `webui/server`／`webui/src` 或 KTX。git commit、Docker 重建、生产升级／回滚／出包另授权 |
+| 授权边界 | **终稿确权 ≠ 开发授权**。委托人 2026-11-22 已授权 Task 1+。白名单：判定器／执行器／证据校验／CI／Runbook。**题库 YAML 内容与 CompatConfigProfile 应用／还原脚本归 P1-54**；本条只 Consume／Validate／调用。不得修 `webui/server`／`webui/src` 或 KTX。git commit、Docker 重建、生产升级／回滚／出包另授权；每 Wave 完成后 code review 再进入下一 Wave |
 | 验收 | Spec SC-01–SC-25；UAT 必做分母完整且 INDEX=PASS；缺匹配环境或 **缺 CompatConfigProfile 指纹**＝BLOCKED，不得假绿 |
 
 ## 目标
@@ -27,7 +27,7 @@
 ## 开工前置
 
 1. Spec／Plan **v1.1 终稿补丁**与 P1-54 题库合同已落盘。
-2. **开发授权**须另发；未授权不得执行 Task 1+。
+2. **开发授权**已发（委托人 2026-11-22）；可执行 Task 1+；每 Wave 后 code review。
 3. 环境：对齐 D20／D21／D27；构建／部署／生产升级另授权。
 4. 秘密只从受保护路径读。
 5. 每 Task 检查 `git status`；不覆盖他人改动。
@@ -35,7 +35,7 @@
 
 ## Task 0：合同与测试台登记（文档；已完成至 v1.1）
 
-**Done:** 入池→v1.0 定稿→**v1.1 收编 P1-54／D27 配置前置**。INDEX=NOT RUN；**≠ 开发授权**。
+**Done:** 入池→v1.0 定稿→**v1.1 收编 P1-54／D27 配置前置**。INDEX=NOT RUN。**开发授权已于 2026-11-22 发出**（历史 Task 0 完成时尚未授权）。
 
 ## Task 1：题库加载与纯判定器（须开发授权）
 
