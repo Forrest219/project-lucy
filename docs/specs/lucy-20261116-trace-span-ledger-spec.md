@@ -3,11 +3,12 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | 调用流水 trace 级可追溯与存档（span 模型）Spec |
-| 文档类型 / 版本 | Spec / **v1.0** |
+| 文档类型 / 版本 | Spec / **v1.1** |
 | 日期 / 目标版本 | 2026-11-16／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-36**／REQ-030-057／**P1**（审计证据增量；延伸 v0.25 审计增量）。**不入 0.30 核心分母** |
-| 阶段 | S4 |
-| 状态 | **S4｜终稿确权（委托人 2026-11-17 授权代理修正后定稿，免 Codex 终审）；v1.0；已获开发授权（委托人 2026-11-17「授权开发落地」）；代码已落地（span 表、同事务写入、spans.csv 与 spanCoverage、`/api/admin/audit/status`），vitest 回归无新增失败，本机 demo 已平滑升级并取证；测试台 `UAT-SUITE-TRACE-LEDGER`＝**PASS WITH GAP**（2026-11-17 宽目录沙箱 Tier-A 跑次 `docs/qa/uat/suites/trace-span-ledger/runs/2026-11-17-claude-wide-sandbox-tierA.md`；TRC-01/02/03/04/05/06/10/11 有证据，TRC-07/08/09 NOT RUN，不是整套 PASS）；登记发现 F-1～F-5，其中 F-2（正式完整导出 `mode=complete` 因既有 F-02 失败关闭，`spans.csv` 只在诊断包验证）与 F-3（SC-06 与 §6.2 口径冲突）待委托人裁定。≠ UAT PASS；≠ 可上线** |
+| 阶段 | S5 |
+| 收口范围 | scoped：TRC-01–06／10／11；SC-05 以诊断包 `spans.csv` 为证；SC-06 仅协议／wiki 行主状态≠unknown（其他 `tools/call` 保持 §6.2／v2p5-1）；不含 TRC-07／08／09、正式 `mode=complete` 封存补证、既有 F-02 修复 |
+| 状态 | S5｜**v1.1；功能合同已收口（2026-11-22，scoped；裁定包 F-3=A／F-2=B／TRC=B）**。证据＝沙箱 Tier-A [跑次](../qa/uat/suites/trace-span-ledger/runs/2026-11-17-claude-wide-sandbox-tierA.md)＋[收口记录](../reviews/2026-11-22-p136-p137-s5-closure-record.md)。测试台仍 PASS WITH GAP。不入核心分母。≠ 可上线 |
 | 决策来源 | 委托人 2026-11-16 夜：要求「平台记录日志、流水的能力满足 trace 级的访问追溯和存档，同时满足审计要求」；经澄清选定：本轮交付＝文档＋指标＋UAT 套件（不改运行代码）；存档范围＝**第 1 层**（trace 全链路关联＋封存导出，不含防篡改链与外送）；实现路线＝**方案 B（新增 span 表）**（评审建议过方案 A，委托人选 B，代价见 §9）；委托人批准设计后授权对抗性审阅（过程评审，记录见 [评审记录](../reviews/2026-11-16-p1-36-p1-37-adversarial-review.md)） |
 | 需求来源 | 客户全量调用流水分析（2026-11-09 18:54–11-16 18:50，23,687 条；客户材料**未入仓**，见 §1 证据等级）；基准 [v0.25 审计增量 Spec](lucy-20261020-v2p5-audit-increment-spec.md) S01–S07 |
 | 撰写日期 / 撰写人 / 委托人 | 2026-11-16／Claude（Cursor Agent）／xingchen |
@@ -24,6 +25,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v1.1 scoped S5 | 2026-11-22 委托人勾选裁定包（F-3=A／F-2=B／TRC=B）并授权改 Spec／收口：SC-06 改文案对齐 §6.2（仅协议／wiki 强制主状态≠unknown）；SC-05 收口证据允许诊断包 `spans.csv`；TRC-07／08／09 写入收口范围另期；升 **S5｜功能合同已收口（scoped）**。≠ 可上线 |
 | v1.0 CR-07 确权 | 2026-11-17 委托人确权：`calls-v2.csv` 末尾追加 `ip_source`／`trusted_source`／`rejection_fingerprint` 属 D8／P1-37 允许的 additive 变化，批准豁免；第 17 行与豁免条款由「列与顺序不改」改为「既有列与顺序不改、仅末尾追加」；等价守卫登记 F-8（`calls-v2.csv` 既有列，golden 由追加前 `28cad205` 的实现产出）与 F-9（`spans.csv` 冻结首版） |
 | v1.0 复核修订 | 2026-11-17 代码审查后的实现对齐，不改合同：manifest `derivationVersion` 取现行派生版本 `v2p5-2`（D7，与 `spanCoverage.version` 一致）；基础导出路径的 `spans.unsequenced` 与 pack 路径同口径计数（不再硬编码 0；仍为被排除 span 数，与 `spanCoverage.unsequenced` 的行数量纲不同）；Trace ID／Trace Span 并入术语标准 §4.7；`redactStorageDetail` 补 `scheme://user:password@host` 口令段；TRC-11 事件环度量改为先锚点再补尾（Node 直方图首个回调只作锚点），脚本默认规模降为 2 万条、10 万条须显式 `--traces 100000` |
 | v1.0 | 2026-11-17 **终稿确权（委托人授权代理修正后定稿，免 Codex 终审；≠ 开发授权）**：O1–O8 全部闭合（O6 冻结为每 trace span 表＋索引平均 ≤ 8 KB、平均 span 数协议 ≤ 6／业务 ≤ 14，span 与父行同寿命、不新增清理；O2／O7／O8 取建议值）；`session_shortcircuit` 注明为 P1-37 U3b 预留。R3 修订**未经第 4 轮复审**，为已知缺口。|
@@ -36,8 +38,8 @@
 
 - 层级：功能合同
 - 本条承诺：**已落库**的调用流水行（迁移提交后写入、`derivation_version=v2p5-2`，含协议请求、wiki、被拒请求）**每一条**都带 `trace_id`，且能还原该请求从准入到响应的**阶段记录（span）**；行与其阶段记录在同一事务写入（要么都在，要么都不在）；封存导出包带阶段记录文件，行数、哈希与截止序号可与库对账。**本条不承诺「每个请求都必有一行」**：入口完整性（先持久后释放、received 屏障）属 v0.25 S02／S05；本条只在审计写入健康时用测试台独立发送清单**检出**漏记，写入故障下的丢行是 S02 缺口，在 §9 如实登记，不被本条掩盖也不被本条修复。
-- 本条出口：SC-01–SC-12（vitest 契约／等价测试＋测试台 `UAT-SUITE-TRACE-LEDGER` 必做，含 UAT-TRC-11）。
-- 不在本条出口：防篡改链与外送（本轮第 2、3 层）；历史行回写；客户现场复测与客户 amd64（证据等级归发布取证）；**审计写入改为先持久后释放（fail-closed）**——属 v0.25 S02 规范流程，本条不承担也不削弱（见 D4、O2）；身份归责、最小权限解释、字段敏感性分级、结果流向（审计报告 v1.1 非目标，不变）。
+- 本条出口：scoped v1.1 — SC-01–SC-06、SC-10–SC-12（vitest 契约／等价测试＋测试台 `UAT-SUITE-TRACE-LEDGER` 已验子集，含 UAT-TRC-11）。**SC-05** 以诊断包 `spans.csv` 为证即可（正式 `mode=complete` 因既有 F-02 另期）。**SC-07／SC-08／SC-09**（TRC-07／08／09）不在本 scoped 出口。
+- 不在本条出口：防篡改链与外送（本轮第 2、3 层）；历史行回写；客户现场复测与客户 amd64（证据等级归发布取证）；正式完整导出 `mode=complete` 的 F-02 修复与补证；TRC-07／08／09；**审计写入改为先持久后释放（fail-closed）**——属 v0.25 S02 规范流程，本条不承担也不削弱（见 D4、O2）；身份归责、最小权限解释、字段敏感性分级、结果流向（审计报告 v1.1 非目标，不变）。
 - 上线关系：本条收口不表示可上线；**功能合同收口 ≠ UAT PASS ≠ 可上线**。
 
 ## Terminology Compliance
@@ -299,8 +301,8 @@ reconcile(cutoff_seq):
 | SC-02 | 每个 trace 恰一个根 span；全部节点可达根且无环；`parent.seq<child.seq`、`seq` 连续；阶段在枚举内；`attrs` 键在白名单内；`reason_code` 在有限注册表内（未知值 FAIL）；列约束由 DB `CHECK` 保证；真实流量 `attrs.dropped` 恒为 0；32 上限与 `truncated` 汇总（31＋1、`dropped` 计算）由 vitest 契约覆盖；外键与唯一键生效（`foreign_keys=ON`），既有子表写路径不被拒 | `UAT-TRC-02`＋vitest |
 | SC-03 | 原子性：对 span 插入注入失败，行与 span **都不落库**（无孤儿）；客户端响应与注入前一致、不新增失败形态；审计写入失败计数增加；清除注入后恢复 | `UAT-TRC-03` |
 | SC-04 | 时间一致性（C9a–C9d，取整容差 1 ms 固定；根终点与行 `duration_ms` 同一读数） | `UAT-TRC-04` |
-| SC-05 | 封存包含 `spans.csv`；行数、sha256、截止序号与库一致（`ledger_seq` 经 JOIN 所属行；`unsequenced` 单列上报）；审计写入 pending＝0 且 S 相等时两次导出规范化内容一致，前缀比较一致；既有文件的既有列不变（`calls-v2.csv` 仅末尾追加 D8／P1-37 列） | `UAT-TRC-05` |
-| SC-06 | 新版本写入的协议、wiki 与其他 `tools/call` 行：必有 span 集合齐全（§6.2，含 `tools/call` 最小集合），`primary_status` 与最终结果一致且不为 `unknown`；被拒为 `denied`＋`error_category=policy_denied`；旧行不变且 `derivation_version` 仍为 `v2p5-1` | `UAT-TRC-06` |
+| SC-05 | 封存路径产出 `spans.csv`（**scoped 出口：诊断包路径即可**；正式 `mode=complete` 因既有 F-02 另期）；行数、sha256、截止序号与库一致（`ledger_seq` 经 JOIN 所属行；`unsequenced` 单列上报）；审计写入 pending＝0 且 S 相等时两次导出规范化内容一致，前缀比较一致；既有文件的既有列不变（`calls-v2.csv` 仅末尾追加 D8／P1-37 列） | `UAT-TRC-05` |
+| SC-06 | 新版本写入的**协议与 wiki** 行：必有 span 集合齐全（§6.2），`primary_status` 与最终结果一致且不为 `unknown`；**其他 `tools/call` 行**：必有 span 最小集合（§6.2），主状态证据路径保持 `v2p5-1`（入参校验失败等可仍为 `unknown`，不因本条抬升）；被拒为 `denied`＋`error_category=policy_denied`；旧行不变且 `derivation_version` 仍为 `v2p5-1` | `UAT-TRC-06` |
 | SC-07 | `error_detail` 对固定输入按预期输出表脱敏（占位保留、无空串／NULL、无误伤：公网 IPv4／IPv6、版本号、时间戳、端口样式串保持原样）；`digest_kind` 补全。**`hdfs://` 等存储路径的脱敏由 vitest 契约表覆盖（纯字符串函数），不入必做 UAT**（需 hive／hdfs 环境，见 O8）；UAT 用真实内网 IP 连接错误验证脱敏函数确实接在写入路径上；`[REDACTED_TOOL]`（`sl_query`）仅当基线跑次能用**合法入参**触发含 `sl_query` 的真实上游错误时才入 UAT，否则降为 vitest（缺 `measures` 的入参会被 `validateLucyToolArgs()` 本地拦截，错误不含 `sl_query`，不得用作夹具） | `UAT-TRC-07`＋vitest |
 | SC-08 | **两列均存在且落账**；`ip_source` 与 `trusted_source` 在五种场景（默认、可信代理 XFF、`X-Real-IP`、不可信对端伪造 XFF、不可信对端伪造 `X-Real-IP`）下联合取值正确；默认配置下明示为 `socket`；不可信对端分别伪造 `X-Forwarded-For` 与 `X-Real-IP` 都不得被标为 `customer`／`trusted_proxy`；UAT 记录伪造头对 ACL／限流地址的现状（既有风险，不在本条修） | `UAT-TRC-08` |
 | SC-09 | 热路径开销：`lucy_query` P95 相对写入前基线增量 ≤ 5 ms；`initialize` P95 增量 ≤ 3 ms（建议值，见 O1）；合法请求成功率不降 | `UAT-TRC-09` |

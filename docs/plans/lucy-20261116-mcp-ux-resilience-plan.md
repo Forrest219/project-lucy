@@ -4,13 +4,13 @@
 |---|---|
 | 文档名称 | MCP 握手、失败信息、会话恢复与快速失败（体验韧性）Plan |
 | 文档类型 | Other（实施 Plan） |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-11-16 |
 | 撰写人 | Claude（Cursor Agent） |
 | 委托人 | xingchen |
 | 基于材料 | [Spec](../specs/lucy-20261116-mcp-ux-resilience-spec.md)；[P1-35 Spec](../specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md)；[P1-36 Spec](../specs/lucy-20261116-trace-span-ledger-spec.md)；客户全量调用流水分析（2026-11-16） |
 | 适用范围 | P1-37／REQ-030-058：U1 握手长尾、U2 失败信息可操作、U3 会话恢复与限流、U4 拒绝快速返回；指标字典与 UAT |
-| 状态 | **S4｜终稿确权（委托人 2026-11-17 授权代理修正后定稿，免 Codex 终审）；v1.0；已获开发授权（委托人 2026-11-17「授权开发落地」）；部分落地：U1（描述索引按文件指纹缓存；宽目录沙箱复现长尾后修复，**偏离 Spec 的 instructions 缓存设计**）、U2、U3a、U4（拒绝与门闩路径跳过逐 Agent 权限编译）已实现；U3b 按委托人决定不实现（MCPX-09／10＝BLOCKED）；M1–M6 取数脚本与宽目录沙箱夹具已交付并通过 MCPX-12 核对；vitest 回归无新增失败，本机 demo 已平滑升级；测试台 `UAT-SUITE-MCP-UX-RESILIENCE`＝**PASS WITH GAP**（2026-11-17 宽目录沙箱 Tier-A 跑次 `docs/qa/uat/suites/mcp-ux-resilience/runs/2026-11-17-claude-wide-sandbox-tierA.md`；MCPX-09／10 BLOCKED，其余缺口见跑次，不是整套 PASS）。≠ UAT PASS；≠ 可上线** |
+| 状态 | S5｜**v1.1；功能合同已收口（2026-11-22，scoped；裁定包 U1=A／GAP=B）**。证据＝沙箱 Tier-A 跑次＋[收口记录](../reviews/2026-11-22-p136-p137-s5-closure-record.md)。测试台仍 PASS WITH GAP。不入核心分母。≠ 可上线 |
 | 授权边界 | 本 Plan **只定义步骤与验证**。终稿确权已获得（委托人 2026-11-17 授权代理修正后定稿，免 Codex）；O1–O7 已按 Spec §9 闭合（O6 转开工前置）。改运行代码仍须**委托人另发开发授权**。不含：门闩判定改写（P1-35）、解冻 P0-7、U5–U8、改 KTX 源码、客户现场验证 |
 | 验收 | 见 §3 |
 | 输出位置 | `docs/plans/lucy-20261116-mcp-ux-resilience-plan.md` |
