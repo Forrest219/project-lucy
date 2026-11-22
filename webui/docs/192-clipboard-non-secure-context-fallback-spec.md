@@ -4,7 +4,7 @@
 |---|---|
 | 版本 | v0.1 |
 | 日期 | 2026-10-26 |
-| 状态 | 用户已批准执行；尚未走 cross-review（落盘即执行，见 §9 待审阅项） |
+| 状态 | P1-40／REQ-030-061：S5｜功能合同已收口（2026-11-22，S4→S5 并行波次·scoped）。假成功修复已提交 `65f40847`；UAT helper＋十个可点入口 REAL；收口范围不含公网 COPY-04 与 6 个 helper-only 入口。≠ 可上线 |
 | 范围 | WebUI 前端全部复制入口；不涉及后端 API、ACL、MCP endpoint、Session |
 | 关联 Plan | [`plans/wo-M65-clipboard-non-secure-context-fallback.md`](plans/wo-M65-clipboard-non-secure-context-fallback.md) |
 | 关联 Bug 台账 | [`docs/ui-ux-feedback/pages/admin-agents.md`](../../docs/ui-ux-feedback/pages/admin-agents.md) `UX-ADMIN-AGENTS-042` |
@@ -366,5 +366,7 @@ Chromium 对表单控件给出**空选区**，而 `execCommand("copy")` 在空�
 - 单测改为在 `execCommand` 被调用的瞬间读取「焦点与选区文本」，不再只看 textarea 的 value；新增多行长文本、聚焦失败不报成功、焦点还原、对话框内挂载 4 条。
 
 验证：`clipboard.test.tsx`＋`new-token.test.tsx` 31 passed；先红后绿（改前 4 条失败）。真实浏览器验证见测试台 `UAT-SUITE-COPY-FAKE-SUCCESS` 修复后跑次（局域网明文 HTTP＋真实粘贴读回）。
+
+**2026-11-22 scoped 收口（S4→S5 并行波次·5b）**：功能合同已收口。收口范围＝demo／局域网明文 HTTP 下 R0／01／02a–02j／03；不含公网 UAT-COPY-04（未授权升级）与 6 个 helper-only 入口（另批授权）。≠ 可上线。
 
 补记（同日同类排查）：§13.2 记录过的「把 `{ ok, reason }` 真值对象当布尔用」在 `Onboarding.tsx` 的 `writeMcpConfigToClipboard` 里仍然存在（`if (!copiedOk)` 恒为假，复制失败仍提示「MCP 配置已复制」），§13.1 的回归未覆盖。已改为判 `copied.ok`；`onboarding.test.tsx` 新增「剪贴板失败不得提示已复制／成功才提示已复制」两条（先红后绿）；`lint:copy-surfaces` 新增 R5，要求每个 `copyTextToClipboard` 调用点读取返回值 `.ok`。
