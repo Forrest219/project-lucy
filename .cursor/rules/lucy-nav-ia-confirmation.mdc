@@ -1,0 +1,16 @@
+---
+description: 一级／二级导航与页内分页 Tab 的增删改须委托人独立确认
+alwaysApply: true
+---
+
+# 导航信息架构变更确认
+
+规则正文只在 `docs/governance/DEVELOPMENT.md`「导航信息架构变更：委托人独立确认」。本规则只指向它，不另写一套口径。
+
+**需要独立确认**：一级分组、二级菜单项、二级页内分页 Tab 的增删／改名／改路由或分组归属／改默认 Tab。
+
+**不代替本条的口令**：终稿确权、开发授权、功能合同收口、`lint:ia-boundary` 全绿。
+
+**未确认时**：只允许在 Spec／Plan／`webui/docs/06-navigation-ia.md` 中提案；不得改 `webui/src/app/navigation.ts`、主导航挂载，或把未确认项写进 `user-facing` 交付主张。
+
+**确认后**：同批更新 `06-navigation-ia.md` 与实现，并在 Spec／收口记录写明确认日期与清单范围。

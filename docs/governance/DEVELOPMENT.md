@@ -48,6 +48,39 @@
 
 `AGENTS.md` 与 Cursor 规则只**指向**本节，不另写第二套口径。
 
+## 导航信息架构变更：委托人独立确认（强制）
+
+> 触发：2026-11-22 委托人发现二级菜单出现未预期页签（如 `/admin/ops-steps`／P1-68）。功能合同收口或开发授权**不能**顺带批准导航可见面变更。委托人批准写入本文件为**全库强制规则**。
+
+### 强制含义
+
+1. **增删改一级分组、二级菜单项，或二级页内的分页 Tab**（会进入主导航、改侧栏结构、或改变页内主导分页／URL 可读结构者），**必须获得委托人的独立明示确认**，与终稿确权、开发授权、功能合同收口互不替代。
+2. Spec／Plan／UAT **可以提案**导航变更（写清增删项、分组、路由、受影响画像），但**不得**在未获该独立确认前改运行导航或把它当成已批准交付面。
+3. **一次确认只覆盖当次列出的导航变更清单**；同 Spec 后续再增删导航项须重新确认。
+
+### 需要独立确认
+
+| 变更类型 | 典型落点 |
+|---|---|
+| 一级分组增删／改名／重排 | `navGroups` 分组、`06-navigation-ia.md` 分组树 |
+| 二级菜单项增删／改名／改 `to`／改分组归属 | `webui/src/app/navigation.ts`、主导航事实表 |
+| 二级页内分页 Tab 增删／改名／改默认 Tab（进入 URL 或主导航可读结构） | 页面路由 Tab、IA 文档中的「页面内二级入口」 |
+
+### 一般不必（仍须遵守术语／设计规范）
+
+- 页内筛选、状态 pill、表格列、空／加载／错误态文案
+- Drawer／Modal／页内链接（**不进**主导航）
+- 兼容重定向、历史书签路由保留（主导航已移除或不展示）
+- 仅实现已确认清单、不改变可见导航结构的代码修复
+
+### 改代码前的检查（须能答「是」）
+
+1. 本次 diff 是否触及上表「需要独立确认」任一类？若是 → 会话里是否已有委托人**针对该导航清单**的明示确认？
+2. 若尚无确认 → **停手**：只允许在 Spec／Plan／IA 文档中提案，不得改 `navigation.ts`、主导航挂载、`06-navigation-ia.md` 事实表中的对应行，也不得把未确认项写进 `user-facing` 交付主张。
+3. 确认后落地时，同批更新 [`webui/docs/06-navigation-ia.md`](../../webui/docs/06-navigation-ia.md) 与实现，并在 Spec／收口记录中写明确认日期与确认范围。
+
+**与机器门禁的关系：** `lint:ia-boundary` 只校路由／边界一致性，**不**代替本条人工确认。门禁全绿 ≠ 导航变更已获批准。
+
 ## Docker 对齐：功能优先，默认不谈客户部署环境
 
 开发和测试以**功能本身**为准（需求台总账、Spec 功能合同、测试台 UAT），运行与验证环境对齐 **Docker**（本机 compose / demo），不是客户用什么环境部署。
@@ -105,6 +138,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 - `.ktx/secrets/` 下的密码/密钥文件：禁止读取内容后输出、禁止提交到 git
 - `ktx.yaml` 中的数据库连接信息：改动前必须先确认，不能静默修改
 - 生产数据库（Aliyun RDS MySQL）：只读查询，禁止 DDL/DML 写操作
+- **主导航／二级菜单／页内分页 Tab 的增删改**：无委托人针对当次导航清单的独立明示确认前，禁止改运行导航或主张为已批准交付面（正文见「导航信息架构变更：委托人独立确认」）
 
 ## Spec 落位规则
 
@@ -402,6 +436,7 @@ S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口
 | 18 | **WebUI 验证强制浏览器＋计时**：触及 WebUI 用户可见面时，开发验证与测试台不得只验后端 HTTP；须真实前台浏览器＋导航／primaryReady（或等价）计时，并与 API 耗时分列。仅 API smoke 不得记 WebUI PASS／收口 | 本文件「验证策略：浏览器测试约束」＋ [`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md) | 无（评审／UAT 出门人工） |
 | 19 | **Spec／Plan「状态」行禁止英文状态词，表头写「状态」不写 `Status`**（匹配规则见「状态措辞用中文」） | [`lucy-20261122-spec-status-vocabulary-chinese-plan.md`](../plans/lucy-20261122-spec-status-vocabulary-chinese-plan.md) | `lint:spec-docs`（规则 `status-vocab`）＋ `lint:status-vocab`（PR CI） |
 | 20 | **Spec 头部须恰好一行可解析「阶段」；「状态」不得与阶段机器可判矛盾；Plan「状态」行须镜像阶段码前缀；执行总账「跟进状态」须 `CODE｜` 且与主 Spec「阶段」同码**（口径见「开发台漏斗阶段码」） | [`lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) | `lint:spec-docs`（`status-funnel`＋`inventory-stage`）＋ `lint:status-funnel`／`lint:inventory-stage`（PR CI） |
+| 21 | **导航 IA 变更须委托人独立确认**：增删改一级分组、二级菜单项或二级页内分页 Tab 时，Spec／Plan 可提案，但改运行导航前必须有针对当次清单的明示确认；终稿确权／开发授权／功能收口均不代替。确认后同批更新 `06-navigation-ia.md` | 本文件「导航信息架构变更：委托人独立确认」 | 无（人工；`lint:ia-boundary` 不代替） |
 
 ### 交互合同
 
@@ -446,11 +481,12 @@ S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口
 
 ### Review 要求
 
-- Spec / Plan 评审必须检查：本清单 17 条是否逐条可答；回答不得是「门禁全绿」。
+- Spec / Plan 评审必须检查：本清单各条是否逐条可答；回答不得是「门禁全绿」。
 - 评审发现形态不合规时，**先修文档形态**，再论内容。
 - 「受影响画像」小节缺失、四个画像行留空或写「所有用户」——属形态不合规，先退回形态；判定内容（依据是否可核对、判 `↓` 有无补偿路径、有无触发最差口径）按内容退回，并按 [`user-personas.md`](user-personas.md) §6.1 五问逐项回答。
 - 缺「闭口层级」，或功能合同的出口写入整库旅程、Agent 路径、跨模块或系统级故障演练、证据等级，先退回形态。这些内容属于发布取证。证明本条不变量所需的局部故障注入留在功能合同里。
 - 同一功能的 Spec 与 Plan 编号不一致（日期或 slug 不同），先退回形态。
+- 提案或落地触及一级／二级导航或页内分页 Tab 时，核对是否已有委托人针对当次清单的独立确认；无确认不得把运行导航变更当作已批准（清单第 21 条）。
 
 ## 全系统术语规范
 
@@ -491,7 +527,8 @@ WebUI 的 UI/UX 约束分散在下表几处；**各自只有一份正文**，本
 | 视觉与交互规范（颜色、网格、字体、按钮、数据网格、指标卡、Toast、筛选输入、浮层、页面布局、空／加载／错误态） | [`webui/docs/design-system/README.md`](../../webui/docs/design-system/README.md) | `lint:spec-docs` 规则 `ds-shape`（形态）、`ds-ref`（引用章节存在）、`ds-index`／`ds-meta`（章节入 README、头部有版本与日期）、「新模式」引用规则 |
 | 设计规范缺口与临时决策 | [`webui/docs/design-system/99-governance.md`](../../webui/docs/design-system/99-governance.md) | `lint:spec-docs` 规则 `ds-td-expiry`（每条须有「升级期限：YYYY-MM-DD」且未过期） |
 | 术语与浏览器翻译防御 | [`webui/docs/00-product-terminology-standard.md`](../../webui/docs/00-product-terminology-standard.md) | `lint:terminology` |
-| 信息架构边界 | [`webui/docs/06-navigation-ia.md`](../../webui/docs/06-navigation-ia.md) | `lint:ia-boundary` |
+| 信息架构边界（结构事实） | [`webui/docs/06-navigation-ia.md`](../../webui/docs/06-navigation-ia.md) | `lint:ia-boundary` |
+| 导航 IA 变更批准（增删改一级／二级／页内分页 Tab） | 本文件「导航信息架构变更：委托人独立确认」 | 无（人工；与 `lint:ia-boundary` 分工） |
 | 受控输入与 IME | [`14-components-filter-input.md`](../../webui/docs/design-system/14-components-filter-input.md) | `lint:url-driven-input` |
 | UI 交互合同 | [交互合同门禁 Spec](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md) | 见该 Spec |
 | 发版前界面检查 | [`docs/runbooks/webui-release-ux-checklist.md`](../runbooks/webui-release-ux-checklist.md) · [发版 UX 评审 Spec](../specs/lucy-20261030-webui-release-ux-review-spec.md) | `release-ux-invariants.test.ts` |
@@ -506,6 +543,7 @@ WebUI 的 UI/UX 约束分散在下表几处；**各自只有一份正文**，本
 - 若需求超出已定义章节，先在 `webui/docs/design-system/99-governance.md` 记录临时决策，再在后续迭代升级为正式规范；临时决策对应 Spec 收口后，应升格为正式章节并归档，不得长期悬挂。
 - 设计规范的现行版本以各章头部「版本」为准；改规范正文时同步更新该章版本与日期。
 - 未经 Spec 登记，不得新增与既有章节并列的另一套组件类名族。
+- 未经委托人针对当次清单的独立确认，不得增删改一级分组、二级菜单项或二级页内分页 Tab（见「导航信息架构变更：委托人独立确认」）。
 
 ## Onboarding（首次拉取本仓库）
 

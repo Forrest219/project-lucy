@@ -2,6 +2,14 @@
 
 本文定义 KTX WebUI 的导航口径。目标是让普通用户能一眼看出当前页面在维护什么内容，避免只看到 Catalog、Table、Wiki、Review 等技术页面名。
 
+## 0. 变更批准（全库强制）
+
+增删改**一级分组、二级菜单项，或二级页内分页 Tab**，必须先获得委托人针对当次清单的**独立明示确认**，再改本文件事实表与 `webui/src/app/navigation.ts`（及对应路由挂载）。
+
+- 规则正文：[`docs/governance/DEVELOPMENT.md`](../../docs/governance/DEVELOPMENT.md)「导航信息架构变更：委托人独立确认」
+- Spec／Plan 可提案；终稿确权、开发授权、功能合同收口、`lint:ia-boundary` 全绿均**不代替**该确认
+- 页内筛选、状态 pill、Drawer／Modal、不进主导航的兼容重定向：一般不触发本条
+
 ## 1. 问题
 
 历史页面导航偏实现视角：

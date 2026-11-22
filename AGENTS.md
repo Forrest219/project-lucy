@@ -8,6 +8,8 @@
 
 **Docker 对齐（强制）**：开发与测试以**功能**为主（总账 / Spec / UAT），环境与验证路径对齐 **Docker**（本机 compose / demo），**默认不关心客户部署环境**。除非用户或当前任务明确要求出包、发布取证或客户现场交付，否则不要把解释、排期、实现或验证默认导向 Helm / K8s / 客户拓扑。正文见 DEVELOPMENT「Docker 对齐：功能优先，默认不谈客户部署环境」。
 
+**导航 IA 变更（强制）**：增删改一级分组、二级菜单项或二级页内分页 Tab，必须获得委托人针对当次清单的**独立明示确认**；终稿确权／开发授权／功能合同收口均不代替。Spec／Plan 可提案，未确认前不得改运行导航。正文只在 DEVELOPMENT「导航信息架构变更：委托人独立确认」，本文件不另写第二套。
+
 **产品线 `0.30.0` / 分支 `lucy-v0.30`**：**需求台（执行总账 SOT）**＝[`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；**开发台**＝各 Spec 头部「状态」；**测试台**＝[`docs/qa/uat/INDEX.md`](docs/qa/uat/INDEX.md)；勾连／基准线追评＝[`docs/governance/e2e-ledger.md`](docs/governance/e2e-ledger.md)。方向见 [`docs/plans/lucy-20261107-lucy-0-30-core-direction.md`](docs/plans/lucy-20261107-lucy-0-30-core-direction.md)。**先入总账再动手／再叙事**；主张 UAT 须挂测试台。**功能合同收口 ≠ UAT PASS ≠ 可上线**。中间态出口或 `user-facing` 定稿前做差集补录（见 DEVELOPMENT）。**P0 立项 ≠ 开发授权**。**终稿确权**＝Codex CLI 终审，或无 Codex 时委托人明示确权。未授权条目禁止改运行代码。
 
 功能的现行状态只以 Spec 头部「状态」行为准；总账「跟进状态」是其镜像，须同句。改状态时按 DEVELOPMENT 改完现值镜像。历史变更行、复核快照和实施笔记不是现值。已作废的「未执行且不排期」和「不可交付 UAT」不得抄回。机器检查是 `lint:spec-docs` 的 `stale-status`；三台勾连可选 `node scripts/uat/check-e2e-ledger.mjs`。
