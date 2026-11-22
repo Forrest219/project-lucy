@@ -16,6 +16,10 @@ spec = importlib.util.spec_from_file_location('core1883_base', BASE)
 base = importlib.util.module_from_spec(spec)
 exec(compile(source, str(BASE), 'exec'), base.__dict__)
 fx = base.fx
+GATEWAY_PATH = BASE.with_name('core-availability-gateway.py')
+gateway_spec = importlib.util.spec_from_file_location('core_availability_gateway', GATEWAY_PATH)
+gateway_module = importlib.util.module_from_spec(gateway_spec)
+exec(compile(GATEWAY_PATH.read_bytes(), str(GATEWAY_PATH), 'exec'), gateway_module.__dict__)
 TABLES = [fx.SOURCE] + ['uat_t%04d' % i for i in range(1, 1884)]
 BASE_ENABLED = TABLES[:-1] # Always >=1883; spare toggles the actual config digest.
 TARGET = TABLES[-2]
@@ -76,6 +80,12 @@ for(let offset=0;offset<count;offset+=1000)d.transaction(()=>{for(let i=offset;i
 console.log(JSON.stringify({fixtureOnly:true,batch,inserted:count,users:67,firstId:start+1,lastId:d.prepare('SELECT MAX(id) n FROM access_log').get().n}));d.close();
 '''
 
+class RemoteExecError(RuntimeError):
+    def __init__(self,binding,message):
+        self.remote_exec={k:binding[k] for k in ['ticket','logicalRequestId','remoteTicketPath','stdinExpected','remoteLaunchAttempted','remoteTicketExistence'] if k in binding}
+        super().__init__('remote exec '+binding['ticket']+' logicalRequestId '+binding['logicalRequestId']+': '+message)
+
+
 class Rig(base.Rig):
     def __init__(self,image,out):
         super().__init__(image,out,'soak1883')
@@ -84,6 +94,7 @@ class Rig(base.Rig):
         self.data_volume=self.tag+'-data'
         self.extra_tables_created=False
         self.rpc_lock=threading.Lock()
+        self.gateway = None
         self.mcp_timeout=180
         self.mutation_timeout=180
         self.operation_deadline=threading.local()
@@ -93,13 +104,20 @@ class Rig(base.Rig):
 
     def request(self,base_url,route,method='GET',body=None,headers=None,timeout=None,admin=True):
         if timeout is None:
-            timeout=self.mcp_timeout if base_url==self.mcp and route=='/mcp' else self.mutation_timeout
+            timeout=self.mcp_timeout if route=='/mcp' else self.mutation_timeout
         deadline=getattr(self.operation_deadline,'value',None)
         if deadline is not None:
             remaining=deadline-time.monotonic()
             if remaining<=0:raise TimeoutError('operation total deadline before next request')
             timeout=min(timeout,remaining)
-        return fx.Rig.request(self,base_url,route,method,body,headers,timeout,admin)
+        via_gateway = self.gateway is not None and base_url == self.gateway.url
+        hop_id = secrets.token_hex(16) if via_gateway else None
+        if via_gateway:
+            headers = {**(headers or {}), gateway_module.HOP: hop_id}
+        result = fx.Rig.request(self,base_url,route,method,body,headers,timeout,admin,send_origin=route!='/mcp')
+        if via_gateway:
+            result['gatewayHopId'] = hop_id
+        return result
 
     def call(self,name,tool=None,args=None,method='tools/call',who='a',session=None,save=True):
         with self.rpc_lock:
@@ -108,18 +126,48 @@ class Rig(base.Rig):
         body={'jsonrpc':'2.0','id':rpc_id,'method':method}
         if method=='tools/call':body['params']={'name':tool,'arguments':args or {}}
         elif method=='initialize':body['params']={'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'core1883-uat','version':'2'}}
-        result=self.request(self.mcp,'/mcp','POST',body,{'Authorization':'Bearer '+self.tokens[who],'Accept':'application/json, text/event-stream','x-lucy-session-id':session or name},admin=False)
+        result=self.request(self.gateway.url if self.gateway else self.mcp,'/mcp','POST',body,{'Authorization':'Bearer '+self.tokens[who],'Accept':'application/json, text/event-stream','x-lucy-session-id':session or name},admin=False)
         result['rpcId']=rpc_id
         if save:self.save(name,result)
         return result
 
-    def exec(self,*args,data=None,timeout=60):
+    def exec(self,*args,data=None,timeout=60,logical_request_id=None):
         deadline=getattr(self.operation_deadline,'value',None)
         if deadline is not None:
             timeout=min(timeout,deadline-time.monotonic())
             if timeout<=0:raise TimeoutError('operation total deadline before exec')
         ticket=secrets.token_hex(8)
-        return run_owned_process(['docker','exec','-i',self.app,'python3','-c',EXEC_GUARD,json.dumps([str(x) for x in args]),str(timeout),ticket],data,timeout+4)
+        binding={'ticket':ticket,'logicalRequestId':logical_request_id or 'exec-'+ticket,
+                 'stdinExpected':data is not None,'inputBytes':len(data.encode()) if isinstance(data,str) else 0,
+                 'args0':str(args[0]),'remoteTicketPath':'/tmp/lucy-core1883/exec-tickets/'+ticket+'.json',
+                 'executionSeconds':timeout,'cleanupGraceSeconds':2,'hostStartedAt':fx.now(),'hostCallFinished':False,'hostOutcome':None,
+                 'remoteLaunchAttempted':None,'remoteTicketExistence':'unknown'}
+        self.operation_deadline.exec_binding=binding
+        folder=self.out/'exec-bindings';folder.mkdir(exist_ok=True)
+        path=folder/(ticket+'.json')
+        path.write_text(json.dumps(binding,indent=2)+'\n') # Persist identity before docker launch.
+        command=['docker','exec']+(['-i'] if data is not None else [])+[self.app,'python3','-c',EXEC_GUARD,
+                 json.dumps([str(x) for x in args]),str(timeout),ticket,
+                 json.dumps({k:binding[k] for k in ['logicalRequestId','stdinExpected']})]
+        launched=False
+        try:
+            # Binding I/O must not spend then reset an existing operation budget.
+            # Re-clamp immediately before launch; no extra bookkeeping I/O in
+            # between this clock check and the owned subprocess call.
+            if deadline is not None:
+                timeout=min(timeout,deadline-time.monotonic())
+                if timeout<=0:raise TimeoutError('operation total deadline during exec binding; remote not launched')
+            binding['executionSeconds']=timeout;command[-3]=str(timeout)
+            launched=True
+            result=run_owned_process(command,data,timeout+4)
+            binding.update(hostCallFinished=True,hostOutcome='success',hostFinishedAt=fx.now(),remoteLaunchAttempted=True)
+            path.write_text(json.dumps(binding,indent=2)+'\n')
+            return result
+        except Exception as error:
+            binding.update(hostCallFinished=True,hostOutcome='error',hostFinishedAt=fx.now(),remoteLaunchAttempted=launched,
+                           remoteTicketExistence='unknown' if launched else 'not_created_by_this_call',hostErrorType=type(error).__name__,hostError=fx.scrub(str(error)))
+            path.write_text(json.dumps(binding,indent=2)+'\n')
+            raise RemoteExecError(binding,fx.scrub(str(error))) from error
 
     def close(self,deadline=None):
         # A bounded cleanup owns all remote descendants through their container.
@@ -160,14 +208,31 @@ class Rig(base.Rig):
     def audit_verify(self,seconds=90):
         return json.loads(self.exec('python3','-c',AUDIT_VERIFY,'/data/lucy/.ktx-ui/audit.sqlite',self.cutoff,'1000',str(seconds),timeout=seconds+2))
 
+    def setup_gateway(self, evidence):
+        self.gateway = gateway_module.Gateway(self.web, self.mcp, evidence, self.mcp_timeout)
+        gateway_ready = self.request(self.gateway.url, '/api/readyz', timeout=3, admin=False)
+        gateway_http = self.request(self.gateway.url, '/api/project', timeout=3)
+        direct_ready = self.request(self.web, '/api/readyz', timeout=3, admin=False)
+        direct_http = self.request(self.web, '/api/project', timeout=3)
+        self.save('gateway-preflight', {'gatewayReady': gateway_ready, 'gatewayHttp': gateway_http,
+                                       'directReady': direct_ready, 'directHttp': direct_http})
+        fx.require(all(response['httpStatus'] == 200 for response in
+                       [gateway_ready, gateway_http, direct_ready, direct_http]), 'gateway or direct fixture preflight failed')
+
     def seed(self):
         boot,env=super().seed()
         config=json.loads((self.project/'ktx.yaml').read_text())
         config['connections'][fx.CONN]['enabled_tables']=[fx.SCHEMA+'.'+t for t in BASE_ENABLED]
         # Match normal deployed block YAML; the line-oriented save route does
         # not accept a JSON document even though read-only parsers accept it.
-        yaml_text=fx.run(['node','-e',"const fs=require('fs'),Y=require('./webui/node_modules/yaml');process.stdout.write(Y.stringify(JSON.parse(fs.readFileSync(0,'utf8'))));"],json.dumps(config))
-        (self.project/'ktx.yaml').write_text(yaml_text+'\n')
+        connection = config['connections'][fx.CONN]
+        enabled_tables = connection.pop('enabled_tables')
+        lines = ['connections:', '  ' + fx.CONN + ':']
+        lines.extend('    ' + key + ': ' + json.dumps(value) for key, value in connection.items())
+        lines.append('    enabled_tables:')
+        lines.extend('      - ' + json.dumps(table) for table in enabled_tables)
+        lines.append('storage: ' + json.dumps(config['storage']))
+        (self.project/'ktx.yaml').write_text('\n'.join(lines) + '\n')
         manifest={'tables':{t:{'table':fx.SCHEMA+'.'+t,'columns':[{'name':'order_id','type':'number','pk':True},{'name':'tenant','type':'string'},{'name':'amount','type':'number'}]} for t in TABLES}}
         (self.project/('config/semantic-layer/'+fx.CONN+'/_schema/uat.yaml')).write_text(json.dumps(manifest))
         for t in TABLES[1:-2]:
@@ -190,14 +255,26 @@ class Rig(base.Rig):
             super().sql(commands)
         return result
 
-    def audit_facts(self,full=False):
+    def audit_facts(self,full=False,logical_request_id=None):
         if full:return self.audit_verify()
-        return json.loads(self.exec('node','-e',r'''
+        logical_request_id=logical_request_id or 'audit-facts-'+secrets.token_hex(8)
+        previous=getattr(self.operation_deadline,'exec_binding',None)
+        raw=self.exec('node','-e',r'''
 const D=require('/app/webui/node_modules/better-sqlite3');const d=new D('/data/lucy/.ktx-ui/audit.sqlite',{readonly:true});d.pragma('busy_timeout=1000');
 const newest=d.prepare('SELECT COALESCE(MAX(id),0) maxId FROM access_log').get();
 const states=d.prepare('SELECT status,COUNT(*) n FROM inferred_rebuild_state GROUP BY status').all();
 console.log(JSON.stringify({at:new Date().toISOString(),newest,states,fullClosureVerified:false}));d.close();
-''',timeout=8))
+''',timeout=8,logical_request_id=logical_request_id)
+        try:return json.loads(raw)
+        except (ValueError,TypeError) as error:
+            binding=getattr(self.operation_deadline,'exec_binding',None)
+            # A successful command can still fail logical JSON parsing. Bind
+            # only the new ticket created by this call, never stale threadlocal.
+            if binding is not previous and isinstance(binding,dict) and binding.get('logicalRequestId')==logical_request_id and binding.get('hostOutcome')=='success':
+                binding.update(logicalResult='parse_error',logicalErrorType=type(error).__name__)
+                (self.out/'exec-bindings'/(binding['ticket']+'.json')).write_text(json.dumps(binding,indent=2)+'\n')
+                raise RemoteExecError(binding,'remote command succeeded; audit facts JSON parse '+type(error).__name__) from error
+            raise
 
     def scale_facts(self):
         physical=int(self.sql("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='uat' AND TABLE_TYPE='BASE TABLE';"))
@@ -320,30 +397,68 @@ def run_owned_process(command, data=None, timeout=60):
 # This wrapper runs INSIDE the task container. A docker client timeout alone does
 # not terminate docker-exec work. Group absence is independent of pipe completion.
 EXEC_GUARD = r'''
-import json,os,pathlib,signal,subprocess,sys,time
+import json,os,pathlib,select,signal,subprocess,sys,time
 ''' + OWNED_GROUP_PROGRAM + r'''
 args=json.loads(sys.argv[1]);seconds=float(sys.argv[2]);ticket=sys.argv[3]
+started_mono=time.monotonic();deadline=started_mono+seconds
+metadata=json.loads(sys.argv[4]) if len(sys.argv)>4 else {'stdinExpected':True,'logicalRequestId':'exec-'+ticket}
 folder=pathlib.Path('/tmp/lucy-core1883/exec-tickets');folder.mkdir(parents=True,exist_ok=True)
-p=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
-record={'pid':p.pid,'startedAt':time.time(),'args0':args[0],'complete':False,'cleanupGraceSeconds':OWNED_PROCESS_CLEANUP_SECONDS}
-path=folder/(ticket+'.json');path.write_text(json.dumps(record));cleanup_started=False;cleanup_deadline=None
+record={'ticket':ticket,'logicalRequestId':metadata['logicalRequestId'],'startedAt':time.time(),
+        'guardStartedMonotonic':started_mono,'executionDeadlineMonotonic':deadline,
+        'args0':args[0],'complete':False,'phase':'input','childStarted':False,
+        'stdinExpected':metadata['stdinExpected'],'inputBytes':0,'inputComplete':False,'cleanupGraceSeconds':OWNED_PROCESS_CLEANUP_SECONDS}
+path=folder/(ticket+'.json');path.write_text(json.dumps(record))
+p=None;cleanup_started=False;cleanup_deadline=None
+
+def read_stdin_before_deadline():
+    # Raw readiness/read avoids BufferedReader waiting beyond the same original
+    # monotonic deadline. Do not launch a child until input reaches real EOF.
+    chunks=[]
+    if metadata['stdinExpected']:
+        while True:
+            remaining=deadline-time.monotonic()
+            if remaining<=0:raise subprocess.TimeoutExpired('remote stdin',seconds)
+            ready,_,_=select.select([sys.stdin.fileno()],[],[],remaining)
+            if not ready:raise subprocess.TimeoutExpired('remote stdin',seconds)
+            if time.monotonic()>=deadline:raise subprocess.TimeoutExpired('remote stdin',seconds)
+            chunk=os.read(sys.stdin.fileno(),65536)
+            if not chunk:break
+            chunks.append(chunk);record['inputBytes']+=len(chunk)
+    if time.monotonic()>=deadline:raise subprocess.TimeoutExpired('remote stdin',seconds)
+    return b''.join(chunks)
+
 try:
- try:out,err=p.communicate(sys.stdin.buffer.read(),timeout=seconds)
+ try:
+  input_data=read_stdin_before_deadline()
+  record.update(inputComplete=True,inputFinishedMonotonic=time.monotonic(),phase='starting')
+  remaining=deadline-time.monotonic()
+  if remaining<=0:raise subprocess.TimeoutExpired('remote stdin',seconds)
+  p=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
+  record.update(pid=p.pid,childStarted=True,phase='execution',childStartedMonotonic=time.monotonic());path.write_text(json.dumps(record))
+  remaining=deadline-time.monotonic()
+  if remaining<=0:raise subprocess.TimeoutExpired(args,seconds)
+  out,err=p.communicate(input_data,timeout=remaining)
  except subprocess.TimeoutExpired:
-  record['timedOut']=True;cleanup_started=True;cleanup_deadline=time.monotonic()+OWNED_PROCESS_CLEANUP_SECONDS
+  record['timedOut']=True
+  if p is None:
+   record.update(complete=True,phase='input_timeout',childStarted=False,groupTermination=None,returnCode=124,finishedAt=time.time())
+   path.write_text(json.dumps(record));sys.stderr.write('remote input deadline before child start; ticket '+ticket+' logicalRequestId '+metadata['logicalRequestId']+'\n');sys.exit(124)
+  cleanup_started=True;cleanup_deadline=time.monotonic()+OWNED_PROCESS_CLEANUP_SECONDS
   out,err,proof=terminate_owned_group(p,cleanup_deadline)
-  record.update(complete=bool(proof['parentReaped'] and proof['groupAbsent']),groupTermination=proof,returnCode=p.returncode,finishedAt=time.time());path.write_text(json.dumps(record))
-  sys.stderr.write('remote owned process deadline; group termination '+json.dumps(proof)+'\n');sys.exit(124 if record['complete'] else 125)
+  record.update(phase='execution_timeout',complete=bool(proof['parentReaped'] and proof['groupAbsent']),groupTermination=proof,returnCode=p.returncode,finishedAt=time.time());path.write_text(json.dumps(record))
+  sys.stderr.write('remote owned process deadline ticket '+ticket+' logicalRequestId '+metadata['logicalRequestId']+'; group termination '+json.dumps(proof)+'\n');sys.exit(124 if record['complete'] else 125)
  cleanup_deadline=time.monotonic()+OWNED_PROCESS_CLEANUP_SECONDS
  if owned_process_group_exists(p.pid,cleanup_deadline):
   cleanup_started=True;out,err,proof=terminate_owned_group(p,cleanup_deadline)
   record.update(orphanedDescendants=True,complete=bool(proof['parentReaped'] and proof['groupAbsent']),groupTermination=proof,returnCode=p.returncode,finishedAt=time.time());path.write_text(json.dumps(record))
-  sys.stderr.write('remote owned parent exited with descendants; '+json.dumps(proof)+'\n');sys.exit(125)
- record.update(complete=True,groupTermination={'groupAbsent':True,'parentReaped':True,'cleanupGraceSeconds':OWNED_PROCESS_CLEANUP_SECONDS,'cleanupSeconds':0},returnCode=p.returncode,finishedAt=time.time());path.write_text(json.dumps(record))
+  sys.stderr.write('remote owned parent exited with descendants ticket '+ticket+' logicalRequestId '+metadata['logicalRequestId']+'; '+json.dumps(proof)+'\n');sys.exit(125)
+ record.update(phase='finished',complete=True,groupTermination={'groupAbsent':True,'parentReaped':True,'cleanupGraceSeconds':OWNED_PROCESS_CLEANUP_SECONDS,'cleanupSeconds':0},returnCode=p.returncode,finishedAt=time.time());path.write_text(json.dumps(record))
  sys.stdout.buffer.write(out);sys.stderr.buffer.write(err);sys.exit(p.returncode)
 except BaseException as error:
  if isinstance(error,SystemExit):raise
  record['error']=type(error).__name__+': '+str(error)
+ if p is None:
+  record.update(phase='input_error',childStarted=False,groupTermination=None,finishedAt=time.time());path.write_text(json.dumps(record));sys.stderr.write(json.dumps(record)+'\n');sys.exit(125)
  if not cleanup_started:
   cleanup_started=True
   try:
@@ -456,6 +571,9 @@ check();pathlib.Path(target+'.json').write_text(json.dumps(r,indent=2)+'\n');pri
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', required=True)
+    parser.add_argument('--mysql-image', default='mysql:8.4')
+    parser.add_argument('--expected-git-sha')
+    parser.add_argument('--gateway', action='store_true', help='Exercise loopback reverse proxy for readyz, HTTP and MCP')
     parser.add_argument('--out', required=True)
     parser.add_argument('--mode', choices=['formal', 'calibration'], default='formal')
     parser.add_argument('--contract-policy',choices=['strict','p1-69'],default='strict',help='Explicit approved P1-69 SC03 owner/recovery/audit mapping; all raw failures remain')
@@ -769,6 +887,7 @@ class ArrivalLedger:
                 except Exception as error:
                     self.emit({'kind': 'request-terminal', **fields, 'ok': False, 'status': 0,
                                'error': fx.scrub(str(error)), 'errorType': type(error).__name__,
+                               **({'remoteExec':error.remote_exec} if isinstance(error,RemoteExecError) else {}),
                                'dispatchedMonotonic': begin, 'finishedMonotonic': time.monotonic(),
                                'ms': (time.monotonic()-begin)*1000,
                                'censoredNatural': time.monotonic() >= self.end})
@@ -866,6 +985,7 @@ def main(argv=None):
     running_deadline=running_started+args.overall_seconds
     signal.setitimer(signal.ITIMER_REAL, args.overall_seconds)
     rig = Rig(args.image, root/'candidate')
+    rig.mysql_image = args.mysql_image
     rig.mcp_timeout, rig.mutation_timeout = args.mcp_timeout, args.mutation_timeout
     scheduler = ArrivalLedger(emit, stop)
     started = None
@@ -883,6 +1003,19 @@ def main(argv=None):
         save_summary()
         print('Starting isolated real 1883-table fixture', flush=True)
         rig.start()
+        if args.gateway:
+            health = json.loads((rig.out/'health.json').read_text())['body']['data']
+            actual_identity = {
+                'gitSha': health.get('gitSha'), 'gitDirty': health.get('gitDirty'),
+                'appImageId': fx.run(['docker', 'inspect', rig.app, '--format', '{{.Image}}']),
+                'mysqlImageId': fx.run(['docker', 'inspect', rig.db, '--format', '{{.Image}}']),
+            }
+            rig.save('run-identity', actual_identity)
+            if args.expected_git_sha:
+                expected_identity = {'gitSha': args.expected_git_sha, 'gitDirty': False,
+                                     'appImageId': args.image, 'mysqlImageId': args.mysql_image}
+                fx.require(actual_identity == expected_identity, 'runtime identity differs from frozen candidate')
+            rig.setup_gateway(root/'gateway.jsonl')
         initial_scale = rig.scale_facts()
         rig.save('scale-initial', initial_scale)
         fx.require(all(initial_scale[k] >= 1883 for k in ['physical', 'enabled', 'manifest']), 'scale not met')
@@ -904,14 +1037,15 @@ for p in pathlib.Path('/proc').iterdir():
         fx.run(['docker', 'exec', '-d', rig.app, 'python3', '-c', PROC, pid], timeout=15)
         manifest = json.loads((rig.project/('config/semantic-layer/'+fx.CONN+'/_schema/uat.yaml')).read_text())
         identities = ['a']+['agent%02d' % i for i in range(1, 12)]
-        def probe(path):
-            response = rig.request(rig.web, path, timeout=3, admin=False)
+        def probe(path, via_gateway=False):
+            endpoint = rig.gateway.url if via_gateway else rig.web
+            response = rig.request(endpoint, path, timeout=3, admin=False)
             data = response['body']
             return {'status': response['httpStatus'], 'ok': response['httpStatus'] == 200 and response['elapsedMs'] <= 3000,
                     'path': path, 'apiMs': response['elapsedMs'], 'diagnostics': data.get('diagnostics'),
                     'eventLoop': data.get('data', {}).get('eventLoop'), 'receipt': response}
         def http(n):
-            response = rig.request(rig.web, '/api/project', timeout=3)
+            response = rig.request(rig.gateway.url if rig.gateway else rig.web, '/api/project', timeout=3)
             return {'status': response['httpStatus'], 'ok': response['httpStatus'] == 200 and response['body'].get('ok') is not False and response['elapsedMs'] <= 3000,
                     'apiMs': response['elapsedMs'], 'receipt': response}
         def mcp(n):
@@ -926,7 +1060,8 @@ for p in pathlib.Path('/proc').iterdir():
             except Exception as error:value.update(ok=False,error=fx.scrub(str(error)))
             return value
         def audit(n):
-            return {'ok': True, 'facts': rig.audit_facts()}
+            facts=rig.audit_facts(logical_request_id='audit-progress-'+str(n))
+            return {'ok': True, 'facts':facts,'remoteExec':dict(rig.operation_deadline.exec_binding)}
         def mutate(n):
             rig.operation_deadline.value=time.monotonic()+args.cycle_seconds
             event('mutation-start', iteration=n)
@@ -978,6 +1113,8 @@ for p in pathlib.Path('/proc').iterdir():
             return {'ok': True, 'status': 200, 'shortName': new_name, 'scale': scale}
         for path in ['/api/livez', '/api/readyz', '/api/health']:
             scheduler.add('probe:'+path, 1, 4, lambda n, p=path: probe(p))
+        if args.gateway:
+            scheduler.add('gateway-readyz', 1, 4, lambda n: probe('/api/readyz', via_gateway=True))
         scheduler.add('http', 1, 4, http)
         scheduler.add('mcp', 5, args.mcp_concurrency, mcp)
         scheduler.add('audit-progress', 5, 1, audit)
@@ -1152,6 +1289,8 @@ for p in pathlib.Path('/proc').iterdir():
                                    live['maxMs'] <= 1000 and ready['p99Ms'] is not None and ready['p99Ms'] <= 1500)
         enough = summary['completedMutations'] == math.ceil(args.seconds/args.cycle_seconds)
         main_lanes = ['http', 'mcp', 'mutation']+['probe:'+p for p in ['/api/livez', '/api/readyz', '/api/health']]
+        if args.gateway:
+            main_lanes.append('gateway-readyz')
         accounted = all(counts[k]['conserved'] and counts[k]['missed'] == 0 and counts[k]['inflight'] == 0 for k in main_lanes)
         main_failures = [e for e in summary['eventErrors'] if e['lane'] in main_lanes and not contract_failure_verdict(e,snapshot,args.contract_policy)['expected']]
         passed = (not summary.get('controlledStop') and enough and accounted and not main_failures and
@@ -1197,6 +1336,8 @@ for p in pathlib.Path('/proc').iterdir():
                 summary['cleanup']=json.loads((rig.out/'cleanup.json').read_text())
             except Exception as cleanup_error:
                 summary.update(cleanupError=fx.scrub(str(cleanup_error)),status='FAIL')
+        if rig.gateway:
+            rig.gateway.close()
         summary['workersAfterCleanup']=scheduler.finish(min(5,max(0,cleanup_deadline-time.monotonic())))
         with write_lock:
             summary['counts']=ledger_counts(list(records))

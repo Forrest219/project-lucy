@@ -104,6 +104,8 @@ def verify_query_aggregate(data, expected, source=SOURCE):
     return {'actualRow':row,'values':bound}
 
 class Rig:
+    mysql_image = "mysql:8.4"
+
     def __init__(self,image,out,label,variant='I0'):
         self.image,self.out,self.label=image,pathlib.Path(out),label
         self.variant=variant
@@ -116,15 +118,17 @@ class Rig:
         self.boot,self.password,self.dbpass,self.rootpass=[secrets.token_urlsafe(28) for _ in range(4)]
         self.tokens={name:secrets.token_urlsafe(28) for name in ['a','b','c','expired','revoked','disabled','denied']}
         SECRETS.extend([self.boot,self.password,self.dbpass,self.rootpass,*self.tokens.values()])
-        self.jar=http.cookiejar.CookieJar();self.opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
+        self.jar=http.cookiejar.CookieJar()
+        self.opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPCookieProcessor(self.jar))
+        self.anonymous_opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
         self.rpc_id=0;self.web=self.mcp='';self.events=[];self.created=[]
     def save(self,name,obj):
         text=obj if isinstance(obj,str) else json.dumps(obj,ensure_ascii=False,indent=2)
         (self.out/(name+'.json')).write_text(scrub(text)+'\n')
-    def request(self,base,route,method='GET',body=None,headers=None,timeout=180,admin=True):
-        req=urllib.request.Request(base+route,data=None if body is None else json.dumps(body).encode(),method=method,headers={'Origin':base,**({'Content-Type':'application/json'} if body is not None else {}),**(headers or {})})
+    def request(self,base,route,method='GET',body=None,headers=None,timeout=180,admin=True,send_origin=True):
+        req=urllib.request.Request(base+route,data=None if body is None else json.dumps(body).encode(),method=method,headers={**({'Origin':base} if send_origin else {}),**({'Content-Type':'application/json'} if body is not None else {}),**(headers or {})})
         started=time.monotonic()
-        try: res=(self.opener if admin else urllib.request.build_opener()).open(req,timeout=timeout)
+        try: res=(self.opener if admin else self.anonymous_opener).open(req,timeout=timeout)
         except urllib.error.HTTPError as e: res=e
         raw=res.read().decode()
         try: value=json.loads(raw)
@@ -228,7 +232,7 @@ class Rig:
     def start(self):
         boot,env=self.seed();run(['docker','volume','create',self.data_volume]);self.created.append('data')
         run(['docker','network','create',self.network]);self.created.append('network')
-        run(['docker','run','-d','--name',self.db,'--network',self.network,'--env-file',env,'mysql:8.4']);self.created.append('db')
+        run(['docker','run','-d','--name',self.db,'--network',self.network,'--env-file',env,self.mysql_image]);self.created.append('db')
         mysql_deadline=time.monotonic()+90
         mysql_readiness=wait_fixture_mysql_tcp_ready(self.db,mysql_deadline)
         self.save('mysql-tcp-readiness',mysql_readiness)

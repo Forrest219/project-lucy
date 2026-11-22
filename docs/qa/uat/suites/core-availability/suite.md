@@ -1,5 +1,7 @@
 # UAT-SUITE-CORE-AVAILABILITY — 轻探针、重任务容量与进程排空
 
+[标准复测手册](retest.md)提供同事与 Agent 共用的 Docker 入口、固定档位与离线独立判定。
+
 | 元数据 | 内容 |
 |---|---|
 | Suite ID | `UAT-SUITE-CORE-AVAILABILITY` |

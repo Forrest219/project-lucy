@@ -2,6 +2,19 @@
 
 以下为完整矩阵；2026-11-20仅执行[具名局部跑次](runs/2026-11-20-codex-readyz-diagnostic-repro.md)，结果逐项区分。只采用 [fixtures](fixtures.md) 与 [suite](suite.md) 的固定档位、真实性及判定；本次实际runner及范围见suite，未跑分支不得推定通过。
 
+## 标准复测档位
+
+[复测手册](retest.md)冻结 `calibration` 和 `formal` 的输入与结论。以下用例属于 1883 表本机组合回归。
+
+| ID | 用户步骤与必做判据 | 证据 |
+|---|---|---|
+| UAT-CAV-STD-01 | 核对干净候选、依赖镜像、合成规模与隔离环境。反代和直连 `readyz` 与鉴权读取完成预检，纯 MCP 握手、列工具与真实查询通过。 | 冻结清单、实际构建身份、预检回执和初始业务结果 |
+| UAT-CAV-STD-02 | 固定调度 3 条直连探针、反代 `readyz` 与鉴权 HTTP 各 1 Hz，纯 MCP 合计每 5 秒 1 次。HTTP 在 3 秒内返回正确内容。CPU 采样关闭，直连 livez p99 ≤ 400ms／max ≤ 1000ms，直连及反代 readyz p99 ≤ 1500ms。未预期错误、漏发、无终态均失败。 | 请求账本、网关回执及独立计数 |
+| UAT-CAV-STD-03 | 每轮真实校验、上传、保存启用表并重载。物理表、配置启用表和 Manifest 均保持 ≥1883，KTX PID 改变，改名后可读，合法 MCP 查询返回 4／100。合同内重载拒绝逐次核查 owner 和同身份／原问题恢复，原失败保留在分母。 | 变更回执、PID、MCP 结果、独立 SQL 和预算证据 |
+| UAT-CAV-STD-04 | 真实 FIFO 阻塞诊断进程，确认进程终止。仅恢复路径，在未释放旧 FIFO、Lucy PID 不变的条件下恢复 fresh，合法 HTTP 和纯 MCP 恢复。 | FIFO 阻塞见证、进程终态和诊断／业务回执 |
+| UAT-CAV-STD-05 | 在线审计采集守恒，末尾用一致快照独立核对历史分母、关联正确性、水位和恢复审计。容器、网络、卷和私密夹具均清理。 | 在线采集账本、闭合快照及双哈希、清理回执 |
+
+
 ## R0：身份、基线与判定器
 
 `UAT-CAV-R0`：记录镜像digest/SHA/dirty/架构、资源、卷、夹具、原模块可用输入。先验证普通HTTP鉴权读取、现有合法MCP工具和本用例需用的导出/发现路径成功。冻结独立oracle和所有分母；故意错报状态码、漏一个实际执行、伪造计数/成功payload，判定器必须检出。环境错误为BLOCKED，改前目标负例可记FAIL但不得伪造快基线。
@@ -79,11 +92,11 @@ R-CAV为新补充剧本，P1-13负责人在候选验证计划中具名选择并�
 
 ## F69：配置热重载在途保护与统一截止
 
-P1-69／REQ-030-090：[功能合同](../../../../specs/lucy-20261120-runtime-reload-drain-spec.md)。当前NOT RUN；不改既有F61／F62／F63及R-CAV结论。
+P1-69／REQ-030-090：[功能合同](../../../../specs/lucy-20261120-runtime-reload-drain-spec.md)。实际执行与剩余项见[测试台](../../INDEX.md)和[r6 定向](runs/2026-11-20-codex-followup-r6-directed.md)。
 
 # CA-03：功能SC与真实验收矩阵
 
-状态：设计完成，全部新SC **NOT RUN**；基线7dded5478a05e256aa23d33567b49beb3820ec3b。SC编号属于拟议新功能合同，须M正式登记后才能消费；FUP-04／05只作工程包汇总。默认Docker单实例／纯MCP合法Token，无WebUI Cookie／person／宿主attestation。
+起草时全部新 SC 为 **NOT RUN**。基线7dded5478a05e256aa23d33567b49beb3820ec3b。SC编号属于拟议新功能合同，须M正式登记后才能消费；FUP-04／05只作工程包汇总。默认Docker单实例／纯MCP合法Token，无WebUI Cookie／person／宿主attestation。
 
 | 编号 | 反例／约束生效 | 合法用户／恢复证明 | 必须证据／归属 |
 |---|---|---|---|
@@ -129,13 +142,13 @@ supervisor截止／过期请求测试应使用真实shell＋可控stub child证�
 7. 三阶段TERM竞争：排空、启动、核验。证明不会用reload finally重新开放，随后同卷启动原任务恢复。
 8. 直接模式真实进程合同对照，supervisor过期请求／迟到回执另测。所有镜像与运行代码hash匹配同候选。
 
-1883表3600秒12完整周期、固定到达吞吐／探针重档、审计完整闭包及诊断FIFO只恢复路径归CA-08／FUP-01–06；该组合跑次不是单条功能合同全部出口的替代品。
+CA-08／FUP-01–06 的历史草案为 3600 秒／12 周期。其后执行窗口见[正式跑次](runs/2026-11-20-codex-followup-r6-1800.md)，独立复测按[标准档位](retest.md)执行。固定到达、探针预算、审计闭包与诊断 FIFO 自动恢复仍逐项举证。
 
 ## 浏览器触发判据
 
 若本实现仅新增MCP服务器503与内部生命周期、页面／保存反馈完全未改，不强制浏览器。若修改TableWhitelist、CreateConnectionDrawer、Toast、错误交互或新的reload状态可见字段，必须真实前台浏览器＋导航/primaryReady和保存动作即时计时，与API耗时分列；缺失就不能签相应用户可见面PASS。移动窄屏不在本轮范围。
 
 
-## F70：正常语义写入有界等待（NOT RUN）
+## F70：正常语义写入有界等待
 
 [Spec](../../../../specs/lucy-20261120-semantic-read-write-settle-spec.md) SC-01–08：真实写／镜像阶段等待与首次执行；固定20秒及原剩余截止；孤儿／失败关闭和同身份恢复；files_saved阶段准确性；ACL／代次复核；TERM／断连／reload无自等；后继owner不延长；1883表短校准后30分钟12周期。用真实文件/WAL、实际owner和实际SQL／预算／审计核对；组件绿不代签Docker或完整矩阵。

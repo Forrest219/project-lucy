@@ -544,4 +544,174 @@ class ColumnOracleRegressions(unittest.TestCase):
         ]:
             with self.subTest(data=data),self.assertRaises(AssertionError):self.verify(data)
 
+class RemoteStdinDeadlineRegressions(unittest.TestCase):
+    @contextlib.contextmanager
+    def guard(self, command, seconds=.35, stdin_expected=True):
+        ticket='uat-stdin-deadline-'+secrets.token_hex(8)
+        path=pathlib.Path('/tmp/lucy-core1883/exec-tickets')/(ticket+'.json')
+        metadata={'logicalRequestId':'audit-progress-fixture','stdinExpected':stdin_expected}
+        p=subprocess.Popen([sys.executable,'-c',soak.EXEC_GUARD,json.dumps(command),str(seconds),ticket,json.dumps(metadata)],
+                           stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
+        try:
+            until=time.monotonic()+1
+            while not path.exists() and time.monotonic()<until:time.sleep(.005)
+            self.assertTrue(path.exists(),'guard must publish its own ticket before input/child')
+            yield p,path
+        finally:
+            # An old red guard blocked on readEOF is first given EOF so its
+            # existing child deadline/owned-group cleanup can actually execute.
+            # Never leave the red test's child/session behind.
+            if p.stdin is not None:
+                p.stdin.close();p.stdin=None
+            try:p.communicate(timeout=4)
+            except subprocess.TimeoutExpired:
+                if path.exists():
+                    record=json.loads(path.read_text());pid=record.get('pid')
+                    if pid:
+                        try:
+                            if os.getpgid(pid)==pid:os.killpg(pid,signal.SIGKILL)
+                        except ProcessLookupError:pass
+                try:os.killpg(p.pid,signal.SIGKILL)
+                except ProcessLookupError:pass
+                p.communicate(timeout=2)
+            path.unlink(missing_ok=True)
+
+    def assert_no_child_timeout(self,p,path,expected_bytes):
+        self.assertEqual(p.wait(timeout=1.5),124)
+        record=json.loads(path.read_text())
+        self.assertTrue(record['complete']);self.assertFalse(record['childStarted'])
+        self.assertEqual(record['phase'],'input_timeout');self.assertFalse(record['inputComplete'])
+        self.assertEqual(record['inputBytes'],expected_bytes)
+        self.assertIsNone(record['groupTermination']);self.assertNotIn('pid',record)
+        self.assertEqual(record['logicalRequestId'],'audit-progress-fixture')
+
+    def test_open_stdin_without_eof_expires_before_child_launch(self):
+        with self.guard([sys.executable,'-c','import time;time.sleep(20)']) as (p,path):
+            self.assert_no_child_timeout(p,path,0)
+
+    def test_partial_stdin_without_eof_is_bounded_and_not_logged(self):
+        sentinel=b'fixture-private-input-not-for-logs'
+        with self.guard([sys.executable,'-c','import time;time.sleep(20)']) as (p,path):
+            p.stdin.write(sentinel);p.stdin.flush()
+            self.assert_no_child_timeout(p,path,len(sentinel))
+            self.assertNotIn(sentinel.decode(),path.read_text())
+
+    def test_missing_eof_does_not_launch_even_a_child_that_would_exit_first(self):
+        with tempfile.TemporaryDirectory() as folder:
+            marker=pathlib.Path(folder)/'would-start'
+            command=[sys.executable,'-c','import pathlib,sys;pathlib.Path(sys.argv[1]).write_text("started")',str(marker)]
+            with self.guard(command) as (p,path):
+                self.assert_no_child_timeout(p,path,0);self.assertFalse(marker.exists())
+
+    def test_no_input_exec_ignores_an_open_wrapper_stdin(self):
+        with self.guard([sys.executable,'-c','print("no-input-child")'],stdin_expected=False) as (p,path):
+            self.assertEqual(p.wait(timeout=1.5),0)
+            record=json.loads(path.read_text())
+            self.assertEqual(p.stdout.read(),b'no-input-child\n')
+            self.assertTrue(record['inputComplete']);self.assertTrue(record['childStarted'])
+            self.assertEqual(record['inputBytes'],0);self.assertTrue(record['groupTermination']['groupAbsent'])
+
+    def test_valid_eof_preserves_input_and_original_ticket(self):
+        with self.guard([sys.executable,'-c','import sys;sys.stdout.buffer.write(sys.stdin.buffer.read())'],seconds=1) as (p,path):
+            out,err=p.communicate(b'known fixture input',timeout=2)
+            self.assertEqual(p.returncode,0);self.assertEqual(out,b'known fixture input');self.assertEqual(err,b'')
+            record=json.loads(path.read_text())
+            self.assertTrue(record['complete']);self.assertTrue(record['groupTermination']['parentReaped'])
+            self.assertEqual(record['ticket'],path.stem);self.assertEqual(record['inputBytes'],19)
+
+    def test_near_deadline_eof_does_not_reset_child_execution_allowance(self):
+        with self.guard([sys.executable,'-c','import time;time.sleep(.6)'],seconds=.8) as (p,path):
+            time.sleep(.5)
+            out,err=p.communicate(b'x',timeout=4)
+            self.assertEqual(p.returncode,124,'EOF must not grant a fresh .8s child allowance')
+            record=json.loads(path.read_text())
+            self.assertTrue(record['childStarted']);self.assertTrue(record['inputComplete'])
+            self.assertLess(record['executionDeadlineMonotonic']-record['childStartedMonotonic'],.5)
+            self.assertAlmostEqual(record['executionDeadlineMonotonic']-record['guardStartedMonotonic'],.8,places=5)
+            self.assertTrue(record['groupTermination']['groupAbsent']);self.assertTrue(record['groupTermination']['parentReaped'])
+
+    def test_child_error_after_eof_does_not_become_a_success_or_false_timeout(self):
+        with self.guard([sys.executable,'-c','import sys;sys.exit(23)'],seconds=1) as (p,path):
+            p.communicate(b'',timeout=2)
+            self.assertEqual(p.returncode,23)
+            record=json.loads(path.read_text());self.assertTrue(record['complete'])
+            self.assertNotIn('timedOut',record);self.assertEqual(record['returnCode'],23)
+
+class RemoteExecCorrelationRegressions(unittest.TestCase):
+    def rig(self,folder):
+        rig=object.__new__(soak.Rig);rig.operation_deadline=threading.local();rig.out=pathlib.Path(folder);rig.app='task-owned-app'
+        return rig
+
+    def test_no_data_docker_exec_omits_i_and_persists_binding_before_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rig=self.rig(folder)
+            def run(command,data,timeout):
+                bindings=list((rig.out/'exec-bindings').glob('*.json'));self.assertEqual(len(bindings),1)
+                record=json.loads(bindings[0].read_text());self.assertEqual(record['logicalRequestId'],'audit-progress-214')
+                self.assertNotIn('-i',command);self.assertIsNone(data)
+                metadata=json.loads(command[-1]);self.assertFalse(metadata['stdinExpected']);self.assertEqual(metadata['logicalRequestId'],record['logicalRequestId'])
+                self.assertEqual(command[-2],record['ticket']);return '{"facts":true}'
+            with mock.patch.object(soak,'run_owned_process',side_effect=run):
+                self.assertEqual(rig.exec('node','-e','fixture',timeout=8,logical_request_id='audit-progress-214'),'{"facts":true}')
+            record=json.loads(next((rig.out/'exec-bindings').glob('*.json')).read_text());self.assertTrue(record['hostCallFinished']);self.assertEqual(record['hostOutcome'],'success')
+
+    def test_stdin_error_preserves_unique_ticket_without_input_content(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rig=self.rig(folder);sentinel='never log this synthetic input'
+            with mock.patch.object(soak,'run_owned_process',side_effect=TimeoutError('fixture deadline')) as run:
+                with self.assertRaises(soak.RemoteExecError) as caught:rig.exec('node',data=sentinel,timeout=8,logical_request_id='audit-progress-214')
+            self.assertIn('-i',run.call_args[0][0]);record=json.loads(next((rig.out/'exec-bindings').glob('*.json')).read_text())
+            self.assertEqual(caught.exception.remote_exec['ticket'],record['ticket']);self.assertEqual(record['hostOutcome'],'error')
+            self.assertNotIn(sentinel,json.dumps(record));self.assertEqual(record['inputBytes'],len(sentinel))
+
+    def test_binding_io_crossing_existing_deadline_does_not_launch_remote(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rig=self.rig(folder);rig.operation_deadline.value=10
+            with mock.patch.object(soak.time,'monotonic',side_effect=[9,11]),mock.patch.object(soak,'run_owned_process') as run:
+                with self.assertRaises(soak.RemoteExecError):rig.exec('node',timeout=8,logical_request_id='audit-progress-214')
+            run.assert_not_called();record=json.loads(next((rig.out/'exec-bindings').glob('*.json')).read_text())
+            self.assertFalse(record['remoteLaunchAttempted']);self.assertEqual(record['remoteTicketExistence'],'not_created_by_this_call')
+            self.assertEqual(record['hostOutcome'],'error')
+
+    def test_binding_io_spends_original_remaining_budget_without_reset(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rig=self.rig(folder);rig.operation_deadline.value=10
+            with mock.patch.object(soak.time,'monotonic',side_effect=[8,9.75]),mock.patch.object(soak,'run_owned_process',return_value='{}') as run:
+                rig.exec('node',timeout=8,logical_request_id='audit-progress-214')
+            command,data,host_timeout=run.call_args[0]
+            self.assertEqual(float(command[-3]),.25);self.assertEqual(host_timeout,4.25)
+            record=json.loads(next((rig.out/'exec-bindings').glob('*.json')).read_text());self.assertEqual(record['executionSeconds'],.25)
+
+    def test_nonjson_remote_success_keeps_unique_ticket_on_failed_logical_terminal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rig=self.rig(folder);events=[];stop=threading.Event()
+            def parse(n):return rig.audit_facts(logical_request_id='audit-progress-'+str(n))
+            ledger=soak.ArrivalLedger(events.append,stop);ledger.add('audit-progress',.02,1,parse)
+            with mock.patch.object(soak,'run_owned_process',return_value='not JSON'):
+                ledger.start(time.monotonic(),.01);self.assertEqual(ledger.finish(1),0)
+            terminal=next(x for x in events if x['kind']=='request-terminal')
+            record=json.loads(next((rig.out/'exec-bindings').glob('*.json')).read_text())
+            self.assertFalse(terminal['ok']);self.assertEqual(terminal['remoteExec']['ticket'],record['ticket'])
+            self.assertEqual(terminal['remoteExec']['logicalRequestId'],terminal['requestId'])
+            self.assertEqual(record['hostOutcome'],'success');self.assertEqual(record['logicalResult'],'parse_error')
+
+    def test_parse_failure_never_uses_a_stale_matching_threadlocal_binding(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rig=self.rig(folder);old={'ticket':'old-ticket','logicalRequestId':'audit-progress-0','hostOutcome':'success'}
+            rig.operation_deadline.exec_binding=old
+            with mock.patch.object(rig,'exec',return_value='not JSON'):
+                with self.assertRaises(json.JSONDecodeError):rig.audit_facts(logical_request_id='audit-progress-0')
+            self.assertIs(rig.operation_deadline.exec_binding,old);self.assertNotIn('logicalResult',old)
+
+    def test_scheduler_terminal_error_keeps_exact_ticket_binding(self):
+        stop=threading.Event();events=[]
+        binding={'ticket':'fixture-ticket','logicalRequestId':'audit-progress-0','remoteTicketPath':'/tmp/fixture-ticket.json','stdinExpected':False}
+        def fail(n):raise soak.RemoteExecError(binding,'fixture deadline')
+        ledger=soak.ArrivalLedger(events.append,stop);ledger.add('audit-progress',.02,1,fail)
+        ledger.start(time.monotonic(),.01);self.assertEqual(ledger.finish(1),0)
+        terminal=next(x for x in events if x['kind']=='request-terminal')
+        self.assertFalse(terminal['ok']);self.assertEqual(terminal['requestId'],'audit-progress-0')
+        self.assertEqual(terminal['remoteExec']['logicalRequestId'],terminal['requestId']);self.assertEqual(terminal['remoteExec']['ticket'],'fixture-ticket')
+
+
 if __name__=='__main__':unittest.main()
