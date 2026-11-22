@@ -1,0 +1,144 @@
+{
+  "metrics": [
+    {
+      "stage": "a0",
+      "all": 0,
+      "successful": 0,
+      "protocol": 0,
+      "cold": 247.3,
+      "coldApi": "30.9",
+      "firstSpa": 329,
+      "firstSpaApi": "15",
+      "warm": [
+        97.7,
+        79.6,
+        79.9
+      ],
+      "warmApi": [
+        "41.9",
+        "62.1",
+        "30.3"
+      ],
+      "search": 86.4,
+      "searchApi": "21.2",
+      "clear": 70.7,
+      "clearApi": "15.3",
+      "maxLongTask": 61,
+      "consoleErrors": 0,
+      "minLaneInterval": null,
+      "healthChecks": 0,
+      "apiBytes": 85064,
+      "start": "2026-11-22T10:37:15.849Z",
+      "end": "2026-11-22T10:37:19.035Z"
+    },
+    {
+      "stage": "a1500",
+      "all": 1500,
+      "successful": 1500,
+      "protocol": 0,
+      "cold": 158.6,
+      "coldApi": "37.3",
+      "firstSpa": 330,
+      "firstSpaApi": "30.1",
+      "warm": [
+        97.5,
+        63.9,
+        81.9
+      ],
+      "warmApi": [
+        "24.2",
+        "27.2",
+        "34.3"
+      ],
+      "search": 101.3,
+      "searchApi": "17.5",
+      "clear": 68.1,
+      "clearApi": "17",
+      "maxLongTask": 0,
+      "consoleErrors": 0,
+      "minLaneInterval": 503.6962499999936,
+      "healthChecks": 3,
+      "apiBytes": 88685,
+      "start": "2026-11-22T10:38:38.168Z",
+      "end": "2026-11-22T10:38:40.881Z"
+    },
+    {
+      "stage": "a5000",
+      "all": 5000,
+      "successful": 5000,
+      "protocol": 0,
+      "cold": 165.2,
+      "coldApi": "44.1",
+      "firstSpa": 327.6,
+      "firstSpaApi": "34.8",
+      "warm": [
+        80.2,
+        64.3,
+        97.6
+      ],
+      "warmApi": [
+        "79.8",
+        "29.2",
+        "60"
+      ],
+      "search": 116.1,
+      "searchApi": "32.8",
+      "clear": 84.6,
+      "clearApi": "30.9",
+      "maxLongTask": 0,
+      "consoleErrors": 0,
+      "minLaneInterval": 503.434957999998,
+      "healthChecks": 6,
+      "apiBytes": 88655,
+      "start": "2026-11-22T10:41:42.123Z",
+      "end": "2026-11-22T10:41:44.784Z"
+    },
+    {
+      "stage": "a10000",
+      "all": 10000,
+      "successful": 10000,
+      "protocol": 0,
+      "cold": 204.5,
+      "coldApi": "65",
+      "firstSpa": 355.8,
+      "firstSpaApi": "37.3",
+      "warm": [
+        96.7,
+        64.1,
+        81.2
+      ],
+      "warmApi": [
+        "80.8",
+        "42.7",
+        "56.5"
+      ],
+      "search": 117.5,
+      "searchApi": "37.9",
+      "clear": 84.1,
+      "clearApi": "43",
+      "maxLongTask": 55,
+      "consoleErrors": 0,
+      "minLaneInterval": 503.54033300001174,
+      "healthChecks": 9,
+      "apiBytes": 88655,
+      "start": "2026-11-22T10:46:06.415Z",
+      "end": "2026-11-22T10:46:09.307Z"
+    }
+  ],
+  "verdict": "PASS",
+  "cleanup": {
+    "revoked": 200,
+    "successfulRevocations": 200,
+    "inventoryRestored": true,
+    "containerUnchanged": true,
+    "health": {
+      "status": "ok",
+      "gitSha": "8fe7cebc0e73d98aba3e687899fb83e34651e0aa",
+      "gitDirty": false,
+      "lucyVersion": "0.30.0"
+    },
+    "resourcesRemaining": 0,
+    "sharedContainerUnchanged": true,
+    "privateRemoved": true
+  }
+}

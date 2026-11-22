@@ -1,0 +1,133 @@
+{
+  "at": "2026-11-22T10:01:13.325Z",
+  "mode": "agent",
+  "web": "http://127.0.0.1:55576",
+  "browser": "157.0.8103.79",
+  "headless": false,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "samples": [
+    {
+      "name": "agent-cold-navigation",
+      "path": "/admin/agents",
+      "clock": "navigation",
+      "ms": 121.6,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 473,
+      "rows": 2,
+      "longestTaskMs": 0,
+      "api": [
+        {
+          "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+          "status": 200,
+          "ok": true,
+          "ms": 13.8,
+          "bytes": 1343,
+          "serverTiming": "access;dur=4.9, permissions;dur=2.4, total;dur=10.6, cache;desc=hit, builds;desc=0",
+          "count": 2,
+          "total": null,
+          "range": null,
+          "projection": "summary",
+          "error": null
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "status": 200,
+          "ok": true,
+          "ms": 30.6,
+          "bytes": 1899,
+          "serverTiming": "access;dur=5.0, permissions;dur=2.1, stats;dur=16.9, total;dur=28.1, cache;desc=miss, builds;desc=0",
+          "count": 2,
+          "total": null,
+          "range": "30d",
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "name": "agent-create-modal-role-options",
+      "path": "/admin/agents",
+      "clock": "event",
+      "ms": 81.1,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 514,
+      "rows": null,
+      "longestTaskMs": 0,
+      "api": [
+        {
+          "path": "/api/admin/roles?includeTemplates=false",
+          "status": 200,
+          "ok": true,
+          "ms": 35.4,
+          "bytes": 2105,
+          "serverTiming": "access;dur=2.8, permissions;dur=28.4, total;dur=33.2, cache;desc=miss, builds;desc=1",
+          "count": 3,
+          "total": null,
+          "range": null,
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "name": "agent-drawer-ready",
+      "path": "/admin/agents",
+      "clock": "event",
+      "ms": 397.2,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 523,
+      "rows": null,
+      "longestTaskMs": 0,
+      "api": [
+        {
+          "path": "/api/admin/agents/demo_agent?range=7d",
+          "status": 200,
+          "ok": true,
+          "ms": 30.6,
+          "bytes": 4485,
+          "serverTiming": "total;dur=28.5, builds;desc=0",
+          "count": null,
+          "total": null,
+          "range": null,
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    }
+  ],
+  "cases": [
+    {
+      "id": "UAT-PERF-AGENT-01",
+      "result": "PASS",
+      "rolesBeforeModal": 0
+    },
+    {
+      "id": "UAT-PERF-AGENT-02",
+      "result": "PASS",
+      "listRequests": 1,
+      "detailRequests": 0
+    },
+    {
+      "id": "Agent 14d statistics observation",
+      "result": "PASS",
+      "status": 200,
+      "ms": 12.2
+    }
+  ],
+  "completed": "2026-11-22T10:01:15.261Z"
+}

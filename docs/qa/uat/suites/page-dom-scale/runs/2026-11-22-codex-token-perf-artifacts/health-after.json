@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "data": {
+    "gitSha": "8fe7cebc0e73d98aba3e687899fb83e34651e0aa",
+    "gitDirty": false,
+    "lucyVersion": "0.30.0",
+    "status": "ok",
+    "ktxRuntime": {
+      "ready": true,
+      "status": "ready",
+      "detail": "status: ready"
+    }
+  }
+}

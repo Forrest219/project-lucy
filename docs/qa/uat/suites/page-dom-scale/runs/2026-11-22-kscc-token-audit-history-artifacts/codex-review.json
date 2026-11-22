@@ -1,0 +1,107 @@
+{
+  "metrics": [
+    {
+      "stage": "a0",
+      "all": 0,
+      "successful": 0,
+      "protocol": 0,
+      "cold": 195.1,
+      "coldApi": "22.4",
+      "firstSpa": 328.8,
+      "firstSpaApi": "19.3",
+      "warm": [
+        97.8,
+        79.9,
+        96.5
+      ],
+      "warmApi": [
+        "21",
+        "15.6",
+        "29.7"
+      ],
+      "search": 68.6,
+      "searchApi": "13.3",
+      "clear": 70.2,
+      "clearApi": "30.9",
+      "maxLongTask": 0,
+      "consoleErrors": 0,
+      "apiBytes": 84064,
+      "start": "2026-11-22T10:16:18.144Z",
+      "end": "2026-11-22T10:16:21.129Z"
+    },
+    {
+      "stage": "a300",
+      "all": 300,
+      "successful": 300,
+      "protocol": 0,
+      "cold": 178.2,
+      "coldApi": "38.9",
+      "firstSpa": 311.6,
+      "firstSpaApi": "15.4",
+      "warm": [
+        96.9,
+        81.1,
+        82.6
+      ],
+      "warmApi": [
+        "38.6",
+        "25.6",
+        "25.9"
+      ],
+      "search": 73.3,
+      "searchApi": "14.6",
+      "clear": 56.1,
+      "clearApi": "18.2",
+      "maxLongTask": 0,
+      "consoleErrors": 0,
+      "apiBytes": 87585,
+      "start": "2026-11-22T10:18:59.881Z",
+      "end": "2026-11-22T10:19:02.319Z"
+    },
+    {
+      "stage": "a1500",
+      "all": 1500,
+      "successful": 1500,
+      "protocol": 0,
+      "cold": 182,
+      "coldApi": "31.7",
+      "firstSpa": 311.3,
+      "firstSpaApi": "21.3",
+      "warm": [
+        97.7,
+        80.2,
+        97.8
+      ],
+      "warmApi": [
+        "65.5",
+        "35.5",
+        "31.2"
+      ],
+      "search": 88.5,
+      "searchApi": "26.7",
+      "clear": 70.7,
+      "clearApi": "28.3",
+      "maxLongTask": 0,
+      "consoleErrors": 0,
+      "apiBytes": 87585,
+      "start": "2026-11-22T10:29:21.197Z",
+      "end": "2026-11-22T10:29:23.695Z"
+    }
+  ],
+  "verdict": "PASS",
+  "cleanup": {
+    "revoked": 200,
+    "successfulRevocations": 200,
+    "inventoryRestored": true,
+    "containerUnchanged": true,
+    "health": {
+      "status": "ok",
+      "gitSha": "8fe7cebc0e73d98aba3e687899fb83e34651e0aa",
+      "gitDirty": false,
+      "lucyVersion": "0.30.0"
+    },
+    "resourcesRemaining": 0,
+    "sharedContainerUnchanged": true,
+    "privateRemoved": true
+  }
+}

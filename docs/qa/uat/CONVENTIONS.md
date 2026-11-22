@@ -22,6 +22,8 @@
 
 纯 MCP／纯 API／无页面选择器不适用本节；仍遵守全真与禁止 CR 冒充。
 
+页面卡顿、首屏或列表性能的跨人复测，使用 [WebUI 性能复测指南](webui-performance-retest.md) 交接场景、计时和证据。各套件的 `cases.md`／`fixtures.md` 继续提供具体步骤和预算。
+
 ## 编号
 
 | 前缀 | 含义 |

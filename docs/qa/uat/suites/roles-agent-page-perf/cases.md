@@ -57,9 +57,9 @@ UAT-R0 PASS；新开标签或硬刷新；**不要**先打开新建弹窗。
 
 ### 步骤
 
-1. 打开 `/admin/agents`（或导航等价入口）  
-2. 等待 Agent 列表主区可见  
-3. 在弹窗打开前检查 Network：是否出现 `/api/admin/roles`
+1. 按 [WebUI 性能复测指南](../../webui-performance-retest.md) 在前台记录候选和起点。从已登录的新浏览器上下文打开 `/admin/agents`，记录本轮浏览器缓存状态。
+2. 记录导航到本次预期 Agent 行可见、列表可操作的耗时。空夹具须核对真实空态与列表响应。另记当次名册 API 状态和耗时。
+3. 在弹窗打开前检查 Network 记录中是否出现 `/api/admin/roles`。随后按 `UAT-PERF-AGENT-02` 单独验证弹窗触发角色列表读取。
 
 ### 期望
 

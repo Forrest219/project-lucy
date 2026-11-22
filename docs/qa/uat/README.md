@@ -8,6 +8,7 @@
 | 非定位 | 不替代功能 Spec 收口（开发台）；不替代产品线总账（需求台）；不替代发布取证整包；绿灯 ≠ 可上线 |
 | 三台规则 | [`docs/governance/DEVELOPMENT.md`](../../governance/DEVELOPMENT.md)「端到端三台账」；勾连 [`e2e-ledger.md`](../../governance/e2e-ledger.md) |
 | 约定 | [`CONVENTIONS.md`](CONVENTIONS.md) |
+| 页面性能复测 | [WebUI 性能复测指南](webui-performance-retest.md)（前台浏览器、冷热层、跑次交接） |
 | 辅助脚本 | 仓库 `scripts/uat/`（种子／矩阵／ledger lint；**不是**判定 SOT） |
 | 密钥 | **只写凭据文件路径**；禁止把密码写入本树、inbox、截图说明或回复 |
 | 旧目录 | [`docs/uat/`](../../uat/README.md) 已降为**历史归档／重定向**，不得当作现行测试台或新开用例落点 |

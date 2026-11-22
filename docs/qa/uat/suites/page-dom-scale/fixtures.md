@@ -4,7 +4,7 @@
 
 | 指标 | 参照 | 说明 |
 |---|---|---|
-| primaryReady（前台 SPA） | ≤1000 ms | 沿用 fixtures §5 B 线；5× 线 2000 ms 仅备注 |
+| primaryReady（前台 SPA） | ≤1000 ms | 横向规模观测参照线；5× 线 2000 ms 仅备注 |
 | 渲染期 longtask | 单任务 ≤200 ms，>200 ms 记观察 | 感知阈值 |
 | consoleErrors | 0 | >0 记观察 |
 | API 同窗口 | 分列记录，不套用页面线 | 防止"API 快冒充页面快" |
@@ -26,14 +26,14 @@
 
 | 页面 | 列表 API | 现状 | 加压目标 | 清理可行性 |
 |---|---|---:|---:|---|
-| /admin/tokens | GET /api/admin/tokens | 4 | ≥200 | 可（吊销/删除） |
+| /admin/tokens | GET /api/admin/tokens | 以 R0 实测为准（历史首批为 13） | 在实测基线上新增 200 | 可（吊销/删除） |
 | /ops/calls | GET /api/admin/audit | 4 行（7d） | ≥300 行 | 不可删（留样本） |
 | /publish/history | GET /api/semantic-assets/releases | 0 | 少量真实 + 外推 | 不可删（留样本） |
 | /eval/runs | GET /api/eval/runs | 0 | 少量真实 + 外推 | 不可删（留样本） |
 | /connections/enabled-tables | PUT /api/connections/:id/enabled-tables | demo-mysql 3 表 | ≥200 张 | 可（DROP + 重置） |
 | /admin/access-map | GET /api/admin/access-map | 现状 | 复用审计行 | 配置类还原 |
 
-## 5. 清理（fixtures §7）
+## 5. 清理
 
 - 可清理对象逐批删除并 verify（tokens 吊销、DB 表 DROP、启用范围重置）；记录 verify 前后计数。
 - 不可删数据（audit 行/eval run/release 记录）：跑次写明"真实业务数据留作观测样本"，并确认不含敏感内容（全部为 UAT 只读调用/评测产物）。

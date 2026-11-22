@@ -1,0 +1,186 @@
+{
+  "session": "8fa4c42f-203e-4c99-be70-a12387888ffd",
+  "enabledTools": [
+    "mcp__local_uat__read_sanitized_uat_status"
+  ],
+  "reviewedSnapshot": {
+    "phase": "complete",
+    "completedStages": [
+      {
+        "stage": "a0",
+        "toolRows": 0,
+        "all": 0,
+        "complete": true
+      },
+      {
+        "stage": "a300",
+        "toolRows": 300,
+        "all": 300,
+        "complete": true
+      },
+      {
+        "stage": "a1500",
+        "toolRows": 1500,
+        "all": 1500,
+        "complete": true
+      }
+    ],
+    "verdict": "PASS",
+    "findings": 0,
+    "metrics": [
+      {
+        "stage": "a0",
+        "rawRows": 0,
+        "auditedSuccessful": 0,
+        "inventory": 202,
+        "pageMs": [
+          195.1,
+          328.8,
+          97.8,
+          79.9,
+          96.5,
+          68.6,
+          70.2
+        ],
+        "apiMs": [
+          [
+            22.4
+          ],
+          [
+            19.3
+          ],
+          [
+            21
+          ],
+          [
+            15.6
+          ],
+          [
+            29.7
+          ],
+          [
+            13.3
+          ],
+          [
+            30.9
+          ]
+        ],
+        "longestTaskMs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "foreground": true,
+        "complete": true
+      },
+      {
+        "stage": "a300",
+        "rawRows": 300,
+        "auditedSuccessful": 300,
+        "inventory": 202,
+        "pageMs": [
+          178.2,
+          311.6,
+          96.9,
+          81.1,
+          82.6,
+          73.3,
+          56.1
+        ],
+        "apiMs": [
+          [
+            38.9
+          ],
+          [
+            15.4
+          ],
+          [
+            38.6
+          ],
+          [
+            25.6
+          ],
+          [
+            25.9
+          ],
+          [
+            14.6
+          ],
+          [
+            18.2
+          ]
+        ],
+        "longestTaskMs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "foreground": true,
+        "complete": true
+      },
+      {
+        "stage": "a1500",
+        "rawRows": 1500,
+        "auditedSuccessful": 1500,
+        "inventory": 202,
+        "pageMs": [
+          182,
+          311.3,
+          97.7,
+          80.2,
+          97.8,
+          88.5,
+          70.7
+        ],
+        "apiMs": [
+          [
+            31.7
+          ],
+          [
+            21.3
+          ],
+          [
+            65.5
+          ],
+          [
+            35.5
+          ],
+          [
+            31.2
+          ],
+          [
+            26.7
+          ],
+          [
+            28.3
+          ]
+        ],
+        "longestTaskMs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "foreground": true,
+        "complete": true
+      }
+    ],
+    "cleanup": {
+      "revoked": 200,
+      "inventoryRestored": true,
+      "resourcesRemaining": 0,
+      "privateRemoved": true
+    }
+  }
+}

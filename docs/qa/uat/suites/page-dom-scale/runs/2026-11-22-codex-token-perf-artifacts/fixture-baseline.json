@@ -1,0 +1,21 @@
+{
+  "at": "2026-11-22T10:01:12.082Z",
+  "mode": "baseline",
+  "prefix": "uat_pds_wperf_20261122_",
+  "writes": [],
+  "before": {
+    "total": 2,
+    "rows": [
+      {
+        "agent": "demo_agent",
+        "label": "p0-demo"
+      },
+      {
+        "agent": "demo_ops",
+        "label": "demo-ops"
+      }
+    ]
+  },
+  "auditTotal": 0,
+  "completed": "2026-11-22T10:01:12.113Z"
+}
