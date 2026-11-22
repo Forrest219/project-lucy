@@ -10,7 +10,8 @@
 | P1-66 严格评审 | v0.124（2026-11-20）：严格过程评审修订至 v0.2-draft，8 项设计问题已修订；未确权、开发未授权、UAT NOT RUN。 |
 | P1-66 本轮变更 | v0.123（2026-11-20）：新增 REQ-030-087／P1-66，授权优化方案、Spec／Plan、保留现场权限展开规模的 Docker 浏览器验证设计；不授权实现或执行。 |
 | P1-73 本轮变更 | v0.139（2026-11-22）：P1-73 开发授权已获得；伞级阶段 S2→S3；实现进行中（范围限 Spec §8 白名单）。v0.137：P1-73 终稿确权；Spec／Plan／建议书 v1.0／S2；未获开发授权。v0.136：伞含 `status-vocab`。v0.135：入池 REQ-030-094。 |
-| 版本 / 日期 | v0.139 / 2026-11-22 |
+| P1-74 本轮变更 | v0.141（2026-11-22）：Spec／Plan v1.1 终审闭环修订，D1–D9 不变；UAT 设计 v1.0，BESC-R0／01–12 全必做；开发未授权，仍 NOT RUN。v0.140：终稿确权；v0.139：挂测试台；v0.138：入池。 |
+| 版本 / 日期 | v0.141 / 2026-11-22 |
 | 状态 | **已开线**。跟进主表＝[功能清单池／执行总账 SOT](lucy-20261107-lucy-0-30-feature-inventory-pool.md)（v1.24）。**REQ-030-062**／P1-41 访问关系图桑基还原：D0＝C，终稿确权，开发授权已获得（不含线上升级），功能已实现并提交；测试台 Docker 种子容器全真 PASS WITH GAP、线上 07 BLOCKED。**REQ-030-061**／P1-40 明文 HTTP 复制按钮假成功：已授权修复并落工作树，测试台改前 FAIL → 改后 PASS WITH GAP（未提交）。**REQ-030-060**／P1-39 客户 K8s 升级 event loop／readyz 事故已入池，**根因已定位**（本机受控限速复现：`211f2d64` 推断问询维护器启动 `scanFull` 同步全索引扫描，慢盘＋冷缓存下超 10s `onReady` 超时致 0.30 启动崩溃；0.25.0／r1 无此维护器；已起草 Spec／Plan／测试台 `UAT-SUITE-COLD-START-SLOW-DISK`，终稿未确权，开发未授权）。**REQ-030-042**／P1-21 重读路径与探针减负功能合同已收口（2026-11-13；SC-14 p99 门槛 400ms）。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做；可选 LOOP-05 BLOCKED）。**REQ-030-041**／P1-20 外部目录单表读字段开发授权已获得、实现已落地（2026-11-13；客户 live 未验）。**REQ-030-040**／P1-19 已落地。**REQ-030-036…039** 差集补录（**不入核心分母**）。**可信证据未开工项不进本池**——见 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)。其余 P0／P1 现值同清单池。本条不表示可上线  **P1-57的G6正式完整导出已由委托人D7延期，本轮客户功能测试排除此项，可按限定范围进行；原FAIL保留。** |
 | 授权边界 | **只登记、不实现**。条目进入实施前须：需求澄清 → 独立 Spec → Plan → 开发授权；本池自身不构成其中任一步。**P0 立项 ≠ 开发授权**；**入池 ≠ 立项** |
 | 验收 | 本池自身的验收＝条目结构完整（ID／标题／来源／优先级／状态齐备）＋ 来源可追。**不构成任何功能验收** |
@@ -67,6 +68,7 @@
 | REQ-030-088 | 用户旅程性能门禁（API／WebUI 交互／MCP 问询） | 2026-11-20 KSC 实例（0.25.0／6d2664b3）实测 roles API 48–73 s、agents 4.8 MB 无分区（错题本）；系统性盘点：性能 runner 存在但 CI 零命中、MCP 问询延迟零预算、被测与部署版本漂移无看守 | P1（清单 P1-67；测试基建；建议） | v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan 设计；终稿未确权；开发未授权；测试台未建；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | REQ-030-090 | MCP执行层热重载在途保护与统一截止 | CA-03确认配置重载未消费真实MCP在途，60秒仅为回执等待 | P1（清单P1-69；可用性差集） | v0.1。Codex CLI终稿确权通过；开发授权已获得；实现已落地，组件与真实shell回归通过；候选6本机Docker排空／拒绝／恢复及直接CLI定向已验证，完整F69矩阵仍有缺口；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
 | REQ-030-091 | 正常语义写入期间MCP读取有界等待 | 候选4正常Manifest写入触发现行D3导致合法查询失败；委托人明示批准补充合同并修复 | P1（清单P1-70；可用性差集） | v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得；功能合同收口（本机自动化与真实Docker）；远端CI未执行；30分钟组合结果独立登记；不入核心分母；≠ 整套UAT PASS；≠ 可上线。 |
+| REQ-030-095 | 问询预算主路径逃生（触顶后可达 fallback） | 2026-11-22 多用户／Wave D：额度触顶后零绑定无 begin 换窗、续查仅 1 档 → 合法长问询失败关闭；门禁误报 deny | P1（清单 P1-74；主路径可用性） | S4｜实现已落地（实现 CR APPROVE）；待验收；平滑升级后 UAT＝PASS WITH GAPS（BESC-07／10A 环境 BLOCKED，非产品 FAIL）；不入核心分母；≠ 功能合同收口；≠ 可上线 | [Spec](../specs/lucy-20261122-question-budget-mainpath-escape-spec.md) · [Plan](lucy-20261122-question-budget-mainpath-escape-plan.md) · [UAT](../qa/uat/suites/budget-escape/suite.md) · [错题](../lessons/2026-11-22-question-budget-exhausted-recurring.md) |
 | REQ-030-094 | Spec 开发台状态治理（漏斗＋状态词） | 2026-11-22 状态自由长文不可机读＋英文／中文两套状态词；漏斗与状态词建议书互补一并审阅 | P1（清单 P1-73；文档治理） | S3｜v1.0。开发授权已获得（委托人 2026-11-22 授予 P1-73／REQ-030-094）；实现进行中。伞级事实源＝漏斗 Spec；姊妹建议书为 Wave A 子句、不构成独立总账镜像。测试台 not_registered；不入核心分母。仍 ≠ 功能合同收口；≠ 可上线 | [Spec](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) · [Plan](lucy-20261122-spec-status-funnel-gate-plan.md) · [状态词建议书](lucy-20261122-spec-status-vocabulary-chinese-plan.md) |
 | REQ-030-093 | 行权限自动强制执行 | FDE 反馈策略保存后被部署 env 阻断；委托人批准取消人工证明、保留隔离并落地 | P1（P1-72） | v1.0。终稿已确权；开发授权已获得；实现与 Codex CLI 代码终审完成；功能合同已收口（定向回归286项、脚本合同97项、隔离Docker39项）；测试台 UAT-SUITE-ROW-POLICY-AUTO PASS；扩展回归与全仓门禁既有缺口单列，远端CI未执行；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md) · [Plan](lucy-20261120-row-policy-automatic-enforcement-plan.md) |
 | REQ-030-092 | SQLite 风险防范与 PostgreSQL 迁移准备 | 2026-11-20 继续 SQLite、「只做准备」；2026-11-22 明示本 Spec 不开发、移入需求池作下一期目标 | P1（清单 P1-71；Deferred；下一期） | v0.1-draft。0.30 不开发；准备材料保留在需求池作下一期开发目标。源码盘点、风险差集与 Spec／Plan／UAT 设计已落盘；终稿未确权；未获开发授权；不升级、不迁移、不操作客户实例；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 | [Spec](../specs/lucy-20261120-storage-readiness-spec.md) · [Plan](lucy-20261120-storage-readiness-plan.md) · [UAT](../qa/uat/suites/storage-readiness/suite.md) · [盘点](../reviews/2026-11-20-storage-readiness-inventory.md) |
@@ -1474,6 +1476,13 @@ v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得�
 状态：v1.0。终稿已确权；开发授权已获得；实现与 Codex CLI 代码终审完成；功能合同已收口（定向回归286项、脚本合同97项、隔离Docker39项）；测试台 UAT-SUITE-ROW-POLICY-AUTO PASS；扩展回归与全仓门禁既有缺口单列，远端CI未执行；不入核心分母；≠ 可上线。
 
 [总账 P1-72](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md) · [Plan](lucy-20261120-row-policy-automatic-enforcement-plan.md) · [UAT](../qa/uat/suites/row-policy-automatic-enforcement/suite.md)。不改 P1-25 历史评估或 P1-28 既有 FAIL。
+
+## REQ-030-095：问询预算主路径逃生（触顶后可达 fallback）
+
+- **来源**：2026-11-22 委托人裁定——合法用户额度用尽后必须有 fallback；不得因 runaway 拦截误伤正常长问询。证据：Wave D PM 报告、错题本 `2026-11-22-question-budget-exhausted-recurring`；根合同 Spec 162／窗口 Spec／P1-60／P1-12。对抗审阅后退回；同日批准 1A–6A 定稿。
+- **期望**：保留 60／300 与 settled busy；inactive 显式续查加档（默认 5）；硬停后 `lucy_continue_question` **`mode=new_question`** 同 Token 再开；D7 计费问数身份逃生可达；软信封（不强制 `isError=true`）；本仓 compat 成交链（D9）；budget≠deny 且 reason 分列；验收 SC-E1–E10。不回退 P1-60 begin 无副作用。
+- **状态**：S4｜实现已落地（Lane A/B/C；实现 CR **APPROVE**，见 [reviews/2026-11-22-p174-budget-escape-implementation-cr](../reviews/2026-11-22-p174-budget-escape-implementation-cr.md)）；平滑升级后 UAT [`UAT-SUITE-BUDGET-ESCAPE`](../qa/uat/suites/budget-escape/runs/2026-11-22-kimi-p174-budget-escape.md)＝**PASS WITH GAPS**（R0／01–06／08／09A-B-C／10B／11／12 功能轴 PASS；**BESC-07／10A 环境 BLOCKED**，非产品 FAIL）；不入核心分母；≠ 完整 PASS；≠ 功能合同收口；≠ 可上线。
+- **挂接**：[Spec](../specs/lucy-20261122-question-budget-mainpath-escape-spec.md) · [Plan](lucy-20261122-question-budget-mainpath-escape-plan.md) · [UAT](../qa/uat/suites/budget-escape/suite.md) · 清单 **P1-74**
 
 ## REQ-030-094：Spec 开发台状态治理（漏斗＋状态词）
 
