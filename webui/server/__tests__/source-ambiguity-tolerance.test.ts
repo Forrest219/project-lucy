@@ -348,6 +348,55 @@ describe("P1-35 v0.4 source selection tolerance", () => {
     expect(out.denial.message).toContain("拆成单来源");
     expect(out.denial.repair.usableTargets.length).toBeGreaterThan(0);
     expect(out.executed).toBe(false);
+    // CR-12：上限数字必须是常量的真实取值，不得把 `${SOURCE_COUNT_CAP}` 原样写进用户可见文案。
+    expect(out.denial.message).toContain(`不超过 ${SOURCE_COUNT_CAP} 个`);
+    expect(out.denial.message).not.toContain("${");
+  });
+
+  it("SC-E09 F1: probe wholly unavailable → empty usable, honest probe-failure text (not fake schema-evidence, no pin-to-pass hint)", async () => {
+    const s = await session("超市最近怎么样");
+    const out = await checkSourceAmbiguityGate({
+      ...s,
+      toolName: "lucy_query",
+      args: { connectionId: CONN, measures: ["a.m", "b.m", "c.m", "d.m", "e.m"] },
+      permissions,
+      matchableSources: sharedSources(),
+      sourceMapReliable: false
+    });
+    expect(out.kind).toBe("deny");
+    if (out.kind !== "deny") throw new Error("unreachable");
+    expect(out.executed).toBe(false);
+    expect(out.denial.repair.usableTargets).toEqual([]);
+    const f1 = `${out.denial.repair.factualError}${out.denial.repair.text}`;
+    expect(f1).toContain("探测");
+    expect(f1).toContain("稍后重试");
+    expect(f1).not.toContain("缺少真实 Schema 证据");
+    expect(f1).not.toMatch(/钉选/);
+  });
+
+  it("SC-E07/E08 H2: probe healthy but every candidate legitimately fails → empty usable, per-candidate reason, no fake schema-evidence", async () => {
+    const s = await session("超市最近怎么样");
+    const probe = new Map(
+      ["a", "b", "c", "d", "e"].map((n) => [
+        repairEvidenceIdentityKey(idOf(n)),
+        { schemaExists: true as boolean | null, completion: "partial", measureNames: ["m"] }
+      ])
+    );
+    const out = await checkSourceAmbiguityGate({
+      ...s,
+      toolName: "lucy_query",
+      args: { connectionId: CONN, measures: ["a.m", "b.m", "c.m", "d.m", "e.m"] },
+      permissions,
+      matchableSources: sharedSources(),
+      sourceMapReliable: true,
+      schemaProbeByIdentity: probe
+    });
+    expect(out.kind).toBe("deny");
+    if (out.kind !== "deny") throw new Error("unreachable");
+    expect(out.denial.repair.usableTargets).toEqual([]);
+    expect(out.denial.repair.rejected).toHaveLength(5);
+    expect(out.denial.repair.rejected.every((r) => r.reason === "not_compiled")).toBe(true);
+    expect(out.denial.repair.factualError).not.toContain("缺少真实 Schema 证据");
   });
 
   // ─── 纯判定 ──────────────────────────────────────────────────────────

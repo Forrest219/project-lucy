@@ -6,8 +6,8 @@
 | 日期 / 目标版本 | 2026-11-22／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-73**／REQ-030-094／**P1**（文档治理；不挡原 P0）。**不入 0.30 核心分母**。伞下双规则：`status-funnel`＋姊妹 `status-vocab` |
 | 台账号 | 无。挂现行 `0.30` 执行总账 |
-| 阶段 | S3 |
-| 状态 | S3｜v1.0。开发授权已获得（委托人 2026-11-22 授予 P1-73／REQ-030-094）；实现进行中。伞级事实源＝漏斗 Spec；姊妹建议书为 Wave A 子句、不构成独立总账镜像。测试台 not_registered；不入核心分母。仍 ≠ 功能合同收口；≠ 可上线 |
+| 阶段 | S5 |
+| 状态 | S5｜v1.0。功能合同已收口（2026-11-22，P1-73／P1-35 S5 收口批）。开发授权已获得；Wave A／B 已落地（status-vocab＋status-funnel＋PR CI）；SC-01–SC-15 证据关闭（[审计](../reviews/2026-11-22-p1-73-sc-evidence-audit.md)）；实现 CR PASS（[CR](../reviews/2026-11-22-p1-73-status-funnel-implementation-cr.md)）。伞级事实源＝漏斗 Spec；姊妹建议书为 Wave A 子句、不构成独立总账镜像。测试台 not_registered；不入核心分母。全仓 MIG 另授权、≠ 已迁完。本条收口不表示可上线 |
 | 决策来源 | 2026-11-22 漏斗＋状态词互补一并审阅；[伞评审](../reviews/2026-11-22-p1-73-status-governance-umbrella-review.md) REQUEST CHANGES；同日委托人批准代理反馈改裁并定稿 |
 | 需求来源 | 自由长文「状态」不可机读；英文／中文两套状态词并行；见 `inbox/20261122-1123-spec-funnel.md` |
 | 实施主体 | 文档、`scripts/lint-spec-docs.mjs`、夹具、`DEVELOPMENT.md`、grandfather json、`package.json`、`lucy-ci.yml`、`test-layers-and-release-gates.md`。**不改** WebUI／Proxy／Ops／KTX 运行时代码 |
@@ -20,6 +20,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v1.0｜S5 | 2026-11-22：功能合同已收口（P1-73／P1-35 S5 收口批）；SC-01–SC-15＋实现 CR PASS；全仓 MIG 另授权；≠ 可上线 |
 | v1.0｜S3 | 2026-11-22：开发授权已获得（委托人授予 P1-73／REQ-030-094）；阶段 S2→S3；实现进行中；仍 ≠ 功能合同收口；≠ 可上线 |
 | v1.0 | 闭合伞评审 blocker／已批准改裁；OQ-1…7 裁定；终稿确权；阶段 S2；未获开发授权 |
 | v0.2-draft | 与状态词建议书合并审阅：双规则伞、映射表、分工 |

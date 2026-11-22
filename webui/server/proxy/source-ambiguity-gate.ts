@@ -720,10 +720,13 @@ export function denialMessageFor(detail: string | undefined): string {
     return "跨连接多来源不能在一次查询中合并：请按连接拆分为单连接查询";
   }
   if (detail === "source_count_over_cap") {
-    return "单次查询引用的来源过多：请拆成单来源（或不超过 ${SOURCE_COUNT_CAP} 个已声明 join 的来源）查询";
+    return `单次查询引用的来源过多：请拆成单来源（或不超过 ${SOURCE_COUNT_CAP} 个已声明 join 的来源）查询`;
   }
   return SOURCE_AMBIGUITY_MESSAGE;
 }
+
+const PROBE_FAILURE_TEXT =
+  "来源目录探测暂不可用，暂时无法核验候选来源是否可用：请稍后重试，或待目录恢复后再查。";
 
 function denialPayload(
   candidates: AmbiguityCandidateRow[],
@@ -937,7 +940,12 @@ async function denyWithCandidates(
       schemaProbeByIdentity: input.schemaProbeByIdentity,
       args: input.args
     });
-  const closure = buildAmbiguityRepairClosure(toRepairTargetEvidence(rows, evidenceMap));
+  let closure = buildAmbiguityRepairClosure(toRepairTargetEvidence(rows, evidenceMap));
+  // SC-E09 F1：探测整体不可用时给探测失败类说明（允许空 usable），不把「缺少真实 Schema 证据」当唯一原因，
+  // 也不暗示钉选即可越过目录健康门。
+  if (input.sourceMapReliable === false && !input.repairEvidenceByName && closure.usableTargets.length === 0) {
+    closure = { ...closure, factualError: PROBE_FAILURE_TEXT, text: PROBE_FAILURE_TEXT };
+  }
   await persistAmbiguityCandidateSnapshot({
     scopeKey: ctx.sagScope,
     generation: ctx.generation,

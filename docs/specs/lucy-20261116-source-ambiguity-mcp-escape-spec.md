@@ -6,7 +6,8 @@
 | 日期 / 目标版本 | 2026-11-16／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 台账号 | 无 |
 | 功能编号 / 优先级 | 清单 **P1-35**；需求池 **REQ-030-056**／**P1**（P0-3／REQ-030-024 伴生持久修复；**不入核心分母**） |
-| 状态 | **v0.4；委托人明示确权＋授权进入开发（2026-11-16 夜，免 Codex 终审）：选表歧义由强拦降为「放行＋披露＋审计」（D10–D15）；v0.4 已实现并全真复测，ESCAPE UAT INDEX＝PASS（R0／ESC-01～10，[v0.4 跑次](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-v04.md)）；GAP-UAT-P0-3-ESCAPE 关闭。≠ D5／功能合同收口 ≠ 可上线** |
+| 阶段 | S5 |
+| 状态 | S5｜v0.4。功能合同已收口（2026-11-22，P1-73／P1-35 S5 收口批）。委托人明示确权＋授权进入开发（2026-11-16 夜，免 Codex）；选表歧义「放行＋披露＋审计」（D10–D15）已实现；ESCAPE UAT INDEX＝PASS（含 ESC-11，[2026-11-18 post-rebuild](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-18-cursor-sag-escape-post-rebuild.md)；对照 [v0.4](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-v04.md)）；SC-E01–E30 证据关闭（[审计](../reviews/2026-11-22-p1-35-sc-e-evidence-audit.md)）；实现 CR PASS（[CR](../reviews/2026-11-22-p1-35-implementation-cr.md)）。GAP-UAT-P0-3-ESCAPE 已关。不入核心分母。本条收口不表示可上线 |
 | 授权边界 | v0.3 范围已授权并合入。**v0.4（D10–D15）：委托人 2026-11-16 夜明示「不用 Codex 终审，授权定稿、开发」＝终稿确权＋开发授权**（仓库规则：无 Codex 时委托人明示确权）。授权范围＝v0.4 实现、测试、UAT 与文档镜像；**不**表示可上线。 |
 | 决策来源 | 客户 WorkBuddy 报障；错题 [`2026-11-16-source-ambiguity-gate-deadlock`](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md)；评估 [`2026-11-16-source-ambiguity-gate-availability-assessment`](../reviews/2026-11-16-source-ambiguity-gate-availability-assessment.md)；UAT [`UAT-SUITE-SOURCE-AMBIGUITY-ESCAPE`](../qa/uat/suites/source-ambiguity-mcp-escape/suite.md) 基线 FAIL；委托人确认「持久修复、非临时应付」；Codex R1／R2 [`inbox/2026-11-16-p1-35-codex-r1.txt`](../../inbox/2026-11-16-p1-35-codex-r1.txt)／[`inbox/2026-11-16-p1-35-codex-r2.txt`](../../inbox/2026-11-16-p1-35-codex-r2.txt) |
 | 父合同 | [P0-3 表级歧义门闩 Spec v0.5](lucy-20261107-source-ambiguity-gate-spec.md)（REQ-030-024）。本条**修订**父合同中导致纯 MCP 死路的条款；未声明修订处仍以父 Spec 为准 |

@@ -814,7 +814,24 @@ test("SC-09／SC-10 生产名单：grandfather 内无口令无标记不被误伤
     JSON.parse(readFileSync(new URL("../docs/governance/spec-status-funnel-grandfather.json", import.meta.url), "utf8")).files
   );
   const hits = scanRepo().blocking.filter((v) => v.rule === "status-funnel");
-  assert.ok(hits.length > 0, "已授权未迁「| 阶段 |」的存量 Spec 应被判失败（SC-10 类，待 MIG 批次）");
+  // 双向：名单内「状态行含口令 OR 标记行」且头部无「| 阶段 |」的文件集合（预期失败集）须与实际失败集一致。
+  // 预期集为空 → 实际须 0 失败（无口令无标记不被误伤）；预期集非空 → 实际须全部判失败（SC-10 类）。
+  const head60 = (text) => text.split("\n").slice(0, 60).join("\n");
+  const expectedFail = [...listed].filter((file) => {
+    const text = readFileSync(new URL("../" + file, import.meta.url), "utf8");
+    const status = head60(text).match(/^\|\s*\*{0,2}状态\*{0,2}\s*\|([^|\n]*)/m)?.[1] ?? "";
+    const marked = text
+      .replace(/```[\s\S]*?```/g, "")
+      .split("\n")
+      .some((line) => line.trim() === "状态漏斗门禁：纳入检查");
+    const hasPhase = /^\|\s*\*{0,2}阶段\*{0,2}\s*\|/m.test(head60(text));
+    return (status.includes("开发授权已获得") || marked) && !hasPhase;
+  });
+  assert.deepEqual(
+    hits.filter((h) => listed.has(h.file)).map((h) => h.file).sort(),
+    expectedFail.sort(),
+    "grandfather 名单内实际 status-funnel 失败集应等于「授权口令或标记行且缺阶段」预期集"
+  );
   for (const h of hits) {
     assert.ok(listed.has(h.file), `${h.file} 不在 grandfather 名单却被判失败`);
     const text = readFileSync(new URL("../" + h.file, import.meta.url), "utf8");

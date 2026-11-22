@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | **v0.3**／2026-11-16 |
-| 状态 | **v0.4；委托人明示确权＋授权进入开发（2026-11-16 夜，免 Codex 终审）：选表歧义由强拦降为「放行＋披露＋审计」（D10–D15）；v0.4 已实现并全真复测，ESCAPE UAT INDEX＝PASS（R0／ESC-01～10，[v0.4 跑次](../qa/uat/suites/source-ambiguity-mcp-escape/runs/2026-11-16-cursor-sag-escape-v04.md)）；GAP-UAT-P0-3-ESCAPE 关闭。≠ D5／功能合同收口 ≠ 可上线** |
+| 状态 | 阶段:S5｜v0.4。功能合同已收口（2026-11-22，P1-73／P1-35 S5 收口批）。委托人明示确权＋授权开发（2026-11-16）；ESCAPE INDEX＝PASS（含 ESC-11）；SC-E 证据＋实现 CR PASS。GAP-UAT-P0-3-ESCAPE 已关。本条收口不表示可上线 |
 | 授权边界 | R2-F＋R4 已闭合（2026-11-16）。可按本 Plan 改运行代码；**≠ 可上线** |
 | 验收 | Spec SC-E01–SC-E19；ESCAPE INDEX＝**PASS**（收紧后 ESC-01／02／03 全绿）；SAG-01 v2 deny；D5＝H1／H2／F1 vitest；`lint:spec-docs`。**GAP 关闭 ≠ 功能合同收口**。**≠ 发布取证／可上线** |
 | 台账号 | 无 |

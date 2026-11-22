@@ -4,11 +4,11 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | v1.0 / 2026-11-22 |
-| 状态 | 阶段:S3｜v1.0。开发授权已获得（委托人 2026-11-22 授予 P1-73／REQ-030-094）；实现进行中。伞级事实源＝漏斗 Spec；姊妹建议书为 Wave A 子句、不构成独立总账镜像。测试台 not_registered；不入核心分母。仍 ≠ 功能合同收口；≠ 可上线 |
+| 状态 | 阶段:S5｜v1.0。功能合同已收口（2026-11-22，P1-73／P1-35 S5 收口批）。开发授权已获得；Wave A／B 已落地；SC-01–SC-15＋实现 CR PASS。伞级事实源＝漏斗 Spec；姊妹建议书为 Wave A 子句、不构成独立总账镜像。测试台 not_registered；不入核心分母。全仓 MIG 另授权。本条收口不表示可上线 |
 | 主 Spec | [`docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) v1.0 |
 | 姊妹建议书 | [`lucy-20261122-spec-status-vocabulary-chinese-plan.md`](lucy-20261122-spec-status-vocabulary-chinese-plan.md)（`status-vocab`；伞下 Wave A；不另开总账行；状态句为伞级子句） |
 | 总账 | **P1-73**／REQ-030-094；**不入核心分母**；双规则 `status-funnel`＋`status-vocab` |
-| 授权边界 | **当前不得改运行代码、不得改 lint。** 获开发授权后，仅允许 Spec §8 白名单路径。不授权改 `webui/src`、`webui/server`、KTX；不授权无文件列表的全仓 Spec 散文重写（存量迁移须另列文件并授权） |
+| 授权边界 | 开发授权已获得；落地限 Spec §8 白名单。不授权改 `webui/src`、`webui/server`、KTX；全仓 Spec 散文迁移须另列文件并授权。本条已收口 ≠ 可上线 |
 | 验收 | Spec SC-01–SC-15（funnel）；姊妹建议书 §6.2（vocab，若同批授权）；夹具可打假；grandfather 内现行 Spec 不因 funnel 误红 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「强制流程：Plan Mode」「新增 Spec／Plan 的落盘清单」 |
 
