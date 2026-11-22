@@ -8,7 +8,7 @@ questionBankId: lucy-mcp-upgrade-question-bank
 version: 1
 configProfileId: lucy-mcp-compat-demo
 # Fingerprint filled/verified when profile apply lands (Wave A1); placeholder for digest binding.
-requiredConfigFingerprint: "sha256:d2b4b8b61d218f8108f3fe15ecac311c3e182fb835c0a2fbcbfccc1a0395eee3"
+requiredConfigFingerprint: "sha256:957326482275fcc47a6c81e0462fa9085103af6b30fcaad5612297a80e733053"
 specRef: docs/specs/lucy-20261118-mcp-upgrade-question-bank-spec.md
 regionVocabulary: [East, Southwest, Central South, Northeast]
 forbiddenRegionVocabulary: [华东, 西南, 华北, 西北, 华南]
@@ -443,13 +443,15 @@ cases:
       - snapshotId
 
   - id: QB-JOIN-01
-    version: 1
+    version: 2
     lane: demo-business
     configProfileId: lucy-mcp-compat-demo
     mapsTo: [COMPAT-05]
-    title: Declared join — sales, returns, regional manager by region
+    # v2: demo returns 无预定义 measure 且无法经 join 触达 region（chasm）；控制面验
+    # 已声明 orders↔people join。退货量单表见 ACL-03a／独立 returns 题。
+    title: Declared join — order sales + regional manager by region
     turns:
-      - text: "按区域统计订单销售额、退货量和区域负责人。"
+      - text: "按区域统计订单销售额和区域负责人。"
     agentRequirements: { publicMcp: true, sameSession: false }
     identities:
       - id: allow_readonly
@@ -457,21 +459,21 @@ cases:
         tokenRef: env:COMPAT_TOKEN_READONLY
         expect: { outcome: allow }
     connectionIds: [demo-mysql]
-    sources: [superstore_orders, superstore_returns, superstore_people]
+    sources: [superstore_orders, superstore_people]
     mcpControls:
       - identity: allow_readonly
-        begin: "按区域统计销售额、退货量与负责人"
+        begin: "按区域统计销售额与负责人"
         query:
           connectionId: demo-mysql
-          measures: [superstore_orders.total_sales, superstore_returns.return_count]
+          measures: [superstore_orders.total_sales, superstore_orders.order_count]
           dimensions:
             - { field: superstore_orders.region }
             - { field: superstore_people.regional_manager }
           filters: []
     oracle:
       kind: independent-query
-      ref: sql:demo-mysql.superstore_orders_returns_people_by_region
-      notes: "Grain reconcile via declared join SQL"
+      ref: sql:demo-mysql.superstore_orders_people_by_region
+      notes: "Declared orders↔people join; avoid returns chasm / empty measures"
     budgetClass: multi-source-join
     evidence:
       - requestId
@@ -862,7 +864,7 @@ cases:
       - snapshotId
 
   - id: QB-ACL-03a
-    version: 1
+    version: 2
     lane: controlled-fixture
     configProfileId: lucy-mcp-compat-demo
     mapsTo: [COMPAT-08]
@@ -898,7 +900,9 @@ cases:
         begin: "表 B 不可见负例"
         query:
           connectionId: demo-mysql
-          measures: [superstore_returns.return_count]
+          # returns 无预定义 measure；用 ad-hoc count 触发表级拒绝。
+          measures:
+            - { expr: "count(superstore_returns.id)", name: "return_count" }
           filters: []
       - identity: table_a_allow
         begin: "表 A 可见成交"
@@ -910,7 +914,9 @@ cases:
         begin: "AB 全放行对照"
         query:
           connectionId: demo-mysql
-          measures: [superstore_orders.total_sales, superstore_returns.return_count]
+          measures:
+            - superstore_orders.total_sales
+            - { expr: "count(superstore_returns.id)", name: "return_count" }
           filters: []
     oracle:
       kind: deny
@@ -932,48 +938,46 @@ cases:
       - snapshotId
 
   - id: QB-ACL-03b-gate
-    version: 1
+    version: 2
     lane: controlled-fixture
     configProfileId: lucy-mcp-compat-demo
     mapsTo: [COMPAT-08]
-    title: Proven-gate watch — scoped row narrow expects row_policy_upstream_unproven
+    # v2（2026-11-22 选项 2）：跟 P1-72 — 不再期望 unproven 拒绝；验 scoped 行隔离成交。
+    title: Scoped row isolation deal — East/Southwest total_sales (single source)
     turns:
       - text: "在已做 scoped 行收窄的身份下查询 superstore_orders 销售额（单 source）。"
     agentRequirements: { publicMcp: true, sameSession: false }
     identities:
-      - id: row_scoped_unproven
+      - id: row_scoped_deal
         role: compat_fixture_row_policy_unproven_gate
         tokenRef: env:COMPAT_TOKEN_ROW_SCOPED
         expect:
-          outcome: deny
-          requireToolsCall: true
-          reasonFamily: row_policy_upstream_unproven
-          reasonCode: row_policy_upstream_unproven
-          upstreamExecutions: 0
-          # NOT row-isolation success; general lane does not claim East-only deal.
-          notRowIsolationSuccess: true
+          outcome: allow
+          rowIsolationSuccess: true
+          regionScope: [East, Southwest]
+          # Historical deny code must NOT be the pass criterion (P1-72).
+          notUnprovenDeny: true
         constraints:
           singleProtectedSource: superstore_orders
-          # Fixture region vocab must stay English (East/Southwest).
-          rowScopeExample: { field: region, values: [East] }
-          productDefaultProven: false
+          rowScopeExample: { field: region, values: [East, Southwest] }
     connectionIds: [demo-mysql]
     sources: [superstore_orders]
     mcpControls:
-      - identity: row_scoped_unproven
-        begin: "proven 门看守题"
+      - identity: row_scoped_deal
+        begin: "scoped 行隔离成交题"
         query:
           connectionId: demo-mysql
           measures: [superstore_orders.total_sales]
           filters: []
     oracle:
-      kind: deny
-      ref: deny:row-policy-upstream-unproven-gate
+      kind: exact
+      ref: baseline:demo-mysql.superstore_orders.region-east-southwest.total_sales
       expect:
-        reasonCode: row_policy_upstream_unproven
-        notRowIsolationDeal: true
+        total_sales: 793317.0197
+        rowIsolationSuccess: true
         regionVocabEnglishOnly: true
-    budgetClass: denial
+        regionScope: [East, Southwest]
+    budgetClass: simple-metric
     evidence:
       - requestId
       - traceId

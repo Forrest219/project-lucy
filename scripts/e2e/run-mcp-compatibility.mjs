@@ -437,9 +437,10 @@ function caseStatusFromFunctional(c) {
 }
 
 function buildEvidenceCases(suite, functionalCases, attempts) {
+  // functionalCaseFromControl ids are `${caseId}:${identityId}`; group by caseId.
   const byId = new Map();
   for (const c of functionalCases ?? []) {
-    const id = c.id ?? c.caseId;
+    const id = c.caseId ?? (typeof c.id === "string" ? c.id.split(":")[0] : c.id);
     if (!id) continue;
     const list = byId.get(id) ?? [];
     list.push(c);
@@ -447,7 +448,11 @@ function buildEvidenceCases(suite, functionalCases, attempts) {
   }
   const attemptByCase = new Map();
   for (const a of attempts ?? []) {
-    const id = a.caseId ?? a.id;
+    const raw = a.caseId ?? a.id;
+    const id =
+      typeof raw === "string" && raw.includes(":") && !byId.has(raw)
+        ? raw.split(":")[0]
+        : raw;
     if (!id) continue;
     const list = attemptByCase.get(id) ?? [];
     list.push(a);
@@ -456,8 +461,19 @@ function buildEvidenceCases(suite, functionalCases, attempts) {
   const ids = (suite?.cases ?? []).map((c) => c.id);
   return ids.map((id) => {
     const funcs = byId.get(id) ?? [];
-    const primary = funcs[0] ?? { id };
-    const caseAttempts = attemptByCase.get(id) ?? primary.attempts ?? [{ ok: true, kind: "synthetic" }];
+    if (funcs.length === 0) {
+      return {
+        id,
+        status: "NOT_RUN",
+        attempts: attemptByCase.get(id) ?? []
+      };
+    }
+    // Worst identity wins (FAIL > NOT_RUN > PASS).
+    const primary =
+      funcs.find((f) => caseStatusFromFunctional(f) === "FAIL") ??
+      funcs.find((f) => caseStatusFromFunctional(f) !== "PASS") ??
+      funcs[0];
+    const caseAttempts = attemptByCase.get(id) ?? primary.attempts ?? [];
     return {
       id,
       status: caseStatusFromFunctional(primary),

@@ -315,3 +315,106 @@ test("begin failure clears the stale turn before the retried data call (Task 4b)
   const lastQueryHeaders = followupCalls.map((r) => r.headers["x-lucy-turn-id"]);
   assert.equal(lastQueryHeaders[lastQueryHeaders.length - 1], undefined);
 });
+
+// ─── P1-54 S5 T-JUDGE-1：Wave D 形态的归因锁定（BUG-J1 / Step 4） ───
+
+const WAVE_D_BEGIN_TOOL_IS_ERROR = {
+  kind: "lucy_begin_question",
+  ok: false,
+  reason: "tool_is_error",
+  isError: true,
+  envelopeEmpty: false
+};
+const WAVE_D_QUERY_BUDGET_STOP = {
+  kind: "lucy_query",
+  ok: false,
+  reason: "question_budget_exhausted",
+  isError: true,
+  envelopeEmpty: false
+};
+
+test("T-JUDGE J1: Wave D allow case (begin tool_is_error + query budget stop) → budget_exhausted, never new deny", () => {
+  const fc = functionalCaseFromControl({
+    identity: { id: "allow_readonly", expect: { outcome: "allow" } },
+    controlResult: { attempts: [WAVE_D_BEGIN_TOOL_IS_ERROR, WAVE_D_QUERY_BUDGET_STOP] },
+    caseId: "QB-BIZ-01"
+  });
+  assert.equal(fc.observedOutcome, "deny");
+  assert.equal(fc.observedDenyClass, "budget_exhausted");
+  const axes = threeAxis({ functionalCases: [fc] });
+  assert.equal(axes.functionalCompatibility, "FAIL", "budget stop is not field allow success");
+  assert.ok(axes.reasons.includes("QB-BIZ-01:allow_readonly: budget_exhausted (expected allow)"));
+  assert.ok(!axes.reasons.some((r) => r.includes("new deny")));
+});
+
+test("T-JUDGE J1: begin tool_is_error + successful query is allow (begin_not_available is not an ACL deny)", () => {
+  const fc = functionalCaseFromControl({
+    identity: { id: "allow_readonly", expect: { outcome: "allow" } },
+    controlResult: {
+      attempts: [
+        { ...WAVE_D_BEGIN_TOOL_IS_ERROR, reason: "tool_is_error" },
+        { kind: "lucy_query", ok: true, reason: null, isError: false, envelopeEmpty: false }
+      ],
+      toolRes: { parsed: { parsed: { rows: [{ n: 1 }], rowCount: 1 } } }
+    },
+    caseId: "QB-BIZ-01"
+  });
+  assert.equal(fc.observedOutcome, "allow");
+  assert.equal(fc.observedDenyClass, null);
+  assert.equal(threeAxis({ functionalCases: [fc] }).functionalCompatibility, "PASS");
+});
+
+test("T-JUDGE J1: ACL deny identity stays 'other' while allow identity on same case is budget_exhausted (QB-ACL-01 shape)", () => {
+  const aclDenyAttempts = [
+    { ...WAVE_D_BEGIN_TOOL_IS_ERROR },
+    { kind: "lucy_query", ok: false, reason: "tool_is_error", isError: true, envelopeEmpty: false }
+  ];
+  const denyFc = functionalCaseFromControl({
+    identity: { id: "deny_no_query", expect: { outcome: "deny" } },
+    controlResult: { attempts: aclDenyAttempts },
+    caseId: "QB-ACL-01"
+  });
+  const allowFc = functionalCaseFromControl({
+    identity: { id: "allow_readonly", expect: { outcome: "allow" } },
+    controlResult: { attempts: [WAVE_D_BEGIN_TOOL_IS_ERROR, WAVE_D_QUERY_BUDGET_STOP] },
+    caseId: "QB-ACL-01"
+  });
+  assert.equal(denyFc.observedDenyClass, "other");
+  assert.equal(allowFc.observedDenyClass, "budget_exhausted");
+  const axes = threeAxis({ functionalCases: [denyFc, allowFc] });
+  assert.ok(!axes.reasons.some((r) => r.startsWith("QB-ACL-01:deny_no_query")), "real expected deny stays green");
+  assert.ok(axes.reasons.includes("QB-ACL-01:allow_readonly: budget_exhausted (expected allow)"));
+});
+
+test("T-JUDGE J1: begin failure alone (no data attempt) is not read as an ACL deny class", () => {
+  const fc = functionalCaseFromControl({
+    identity: { id: "allow_readonly", expect: { outcome: "allow" } },
+    controlResult: { attempts: [WAVE_D_BEGIN_TOOL_IS_ERROR] },
+    caseId: "QB-BIZ-01"
+  });
+  assert.equal(fc.observedDenyClass, null);
+});
+
+// ─── BUG-J2（案级 status 与功能轴 reasons 一致；按 caseId 分组）──────────────
+test("BUG-J2: candidate evidence case.status must be FAIL when functional axis reasons name that case", async () => {
+  const { buildCandidateEvidence } = await import("../run-mcp-compatibility.mjs");
+  const attempts = [
+    { ...WAVE_D_QUERY_BUDGET_STOP, caseId: "QB-BIZ-01", identityId: "allow_readonly" }
+  ];
+  const fc = functionalCaseFromControl({
+    identity: { id: "allow_readonly", expect: { outcome: "allow" } },
+    controlResult: { attempts },
+    caseId: "QB-BIZ-01"
+  });
+  const axes = threeAxis({ functionalCases: [fc] });
+  assert.equal(axes.functionalCompatibility, "FAIL");
+  const doc = buildCandidateEvidence({
+    suite: { cases: [{ id: "QB-BIZ-01" }] },
+    suiteDigest: "sha256:t",
+    verdict: { status: "FAIL", verdicts: axes, reasons: axes.reasons },
+    functionalCases: [fc],
+    attempts
+  });
+  const row = doc.cases.find((c) => c.id === "QB-BIZ-01");
+  assert.equal(row.status, "FAIL");
+});

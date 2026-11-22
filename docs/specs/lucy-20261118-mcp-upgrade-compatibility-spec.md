@@ -6,13 +6,13 @@
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-53**／REQ-030-074。编号在 P1 序列；**升级放行优先级＝P0 底线**（挡「可升级／可出包」宣称）。**不入** 0.30 核心分母，**不挡**「0.30 核心升级完成」宣称 |
 | 台账号 | 无。挂现行 `0.30` 执行总账；编号避让 P1-52／REQ-030-073 |
-| 阶段 | S4 |
-| 状态 | S4｜**v1.1。终稿补丁确权（委托人 2026-11-18 批准：收编 P1-54 题库正本／Ops 分母／Lucy 配置资产包前置；闭合评审 B1）。开发授权已获得（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现已落地／待验收**（Task 1–5 工作树已有；Wave D candidate 全真 FAIL）。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。收口终态＝`X_REL`（非 S5）。≠ UAT PASS；≠ 可上线** |
+| 阶段 | X_REL |
+| 状态 | X_REL｜**v1.1。发布取证已收口（2026-11-22）**。SC-01–SC-25＋实现 CR PASS；四入口全真 PASS（[四入口](../qa/uat/suites/mcp-upgrade-compatibility/runs/2026-11-22-cursor-p153-xrel-four-entry.md)；[candidate](../qa/uat/suites/mcp-upgrade-compatibility/runs/2026-11-22-cursor-p153-certify-candidate.md)；[SC](../reviews/2026-11-22-p1-53-sc-evidence-audit.md)；[CR](../reviews/2026-11-22-p1-53-implementation-cr.md)；[收口](../reviews/2026-11-22-p1-53-xrel-closure-record.md)）。测试台 INDEX＝PASS。本条通过不表示各模块无问题，更不表示可上线 |
 | 决策来源 | 2026-11-16 客户 WorkBuddy「会员收入」被 `source_ambiguity_gate` 高频阻断；委托人要求每次升级不得破坏既有 MCP 问数能力；2026-11-18 目标对齐与 T1–T10 定稿；同日批准收编独立题库 Spec（P1-54）并确认全真须配合 Lucy 配置资产包 |
 | 错题与证据 | [表级歧义门闩死路](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md)；[主路径可用性优先](../governance/DEVELOPMENT.md)；技术问题 brief `inbox/20261118-mcp-upgrade-compatibility-technical-questions-for-cursor.md`（可删） |
 | 实施主体 | `scripts/e2e/` 全真 Agent／MCP 执行器与版本化题库、`scripts/upgrade/` 与 `scripts/gates/` 升级接线、发布证据校验器、测试台。不得修改 KTX 源码 |
 | 配套 Plan | [lucy-20261118-mcp-upgrade-compatibility-plan.md](../plans/lucy-20261118-mcp-upgrade-compatibility-plan.md) |
-| 题库合同 | [P1-54 多场景题库 **v1.0**](lucy-20261118-mcp-upgrade-question-bank-spec.md)（语义正本；终稿确权、开发已授权）；可执行实例 `scripts/e2e/contracts/mcp-upgrade-journeys.yaml` |
+| 题库合同 | [P1-54 多场景题库 **v1.1／S5**](lucy-20261118-mcp-upgrade-question-bank-spec.md)（语义正本；终稿确权、开发已授权）；可执行实例 `scripts/e2e/contracts/mcp-upgrade-journeys.yaml` |
 | 测试台 | [`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`](../qa/uat/suites/mcp-upgrade-compatibility/suite.md) |
 | 关联合同 | [P1-35 纯 MCP 逃生](lucy-20261116-source-ambiguity-mcp-escape-spec.md)、[P1-37 MCP 体验韧性](lucy-20261116-mcp-ux-resilience-spec.md)、[P1-13 发版性能基线](lucy-20261113-release-perf-baseline-gate-spec.md)、P1-52 升级可靠性（并行登记）、[真实用户 E2E](lucy-20261018-enterprise-security-and-real-e2e-spec.md)、[可问治理面](lucy-20261101-ops-evidence-askable-governance-spec.md) |
 | 授权边界 | **终稿确权 ≠ 开发授权**。委托人 2026-11-22 已发「开工，落地执行」＝Plan Task 1+ 开发授权；Docker 重建／出包／生产升级仍另授；每 Wave 完成后 code review 再进入下一 Wave |
@@ -283,7 +283,7 @@ function replayInstanceBaseline(instance, restoredCandidate, suite, agentClient,
 - 具体客户题目只在私有基线；仓库只存通用合成题与通用配置 profile 描述（无秘密）。
 - 产品缺陷修复另开条目。
 - 各 Agent 适配器 **不在本条出口默认已实现**；缺则改选或 BLOCKED。
-- **开发已授权 ≠ UAT PASS ≠ 可上线**；测试台仍 NOT RUN，直至实现落地并全真跑通。
+- **发布取证已收口（X_REL）≠ 可上线**；测试台 INDEX＝PASS；本条通过不表示各模块无问题。
 
 ## 10. 变更记录
 

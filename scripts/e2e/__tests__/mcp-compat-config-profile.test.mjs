@@ -130,6 +130,45 @@ describe("computeConfigProfileFingerprint", () => {
   });
 });
 
+describe("O1 frozen dual-connection tool list + W1/W2 coverage (P1-54 S5 T-BANK-1)", () => {
+  const O1_TOOLS = [
+    "connection_list",
+    "lucy_begin_question",
+    "lucy_catalog",
+    "lucy_explain_query",
+    "lucy_freshness",
+    "lucy_query",
+    "lucy_read_source",
+  ];
+  const toolsOf = (profile, roleId) => [...profile.fixtureRoles[roleId].allow.tools].sort();
+  const sourceNamesOf = (profile, roleId) =>
+    profile.fixtureRoles[roleId].allow.tableSelectors
+      .filter((s) => s.connection === "lucy-ops")
+      .flatMap((s) => s.names);
+
+  it("O1 frozen: dual-connection fixture tool set is exactly the 7-tool list, no admin/wiki", () => {
+    const profile = loadCompatConfigProfile();
+    assert.deepEqual(toolsOf(profile, DUAL_READONLY_ROLE_ID), O1_TOOLS);
+    assert.deepEqual(profile.fixtureRoles[DUAL_READONLY_ROLE_ID].allow.connections.slice().sort(), [
+      "demo-mysql",
+      "lucy-ops",
+    ]);
+  });
+
+  it("W1/W2/W1W2 fixtures use the O1 tool set and cover QB-OPS-10/11 sources", () => {
+    const profile = loadCompatConfigProfile();
+    for (const roleId of ["compat_fixture_ops_w1_reader", "compat_fixture_ops_w2_reader", "compat_fixture_ops_w1w2"]) {
+      assert.deepEqual(toolsOf(profile, roleId), O1_TOOLS, roleId);
+    }
+    for (const roleId of ["compat_fixture_ops_w2_reader", "compat_fixture_ops_w1w2"]) {
+      const names = sourceNamesOf(profile, roleId);
+      for (const source of ["ops_table_adoption", "ops_map_meta", "ops_map_nodes"]) {
+        assert.ok(names.includes(source), `${roleId} must allow ${source}`);
+      }
+    }
+  });
+});
+
 describe("applyCompatConfigProfile — no admin / frozen carrier", () => {
   it("applies fixtures without using lucy_admin for dual-connection", () => {
     const root = mkdtempSync(path.join(tmpdir(), "lucy-mcp-compat-apply-"));

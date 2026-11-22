@@ -236,31 +236,30 @@ export function validateQuestionBankContract(suite, options = {}) {
       }
     }
 
-    // QB-ACL-03b-gate: proven watch, NOT row-isolation deal.
+    // QB-ACL-03b-gate v2: scoped row-isolation DEAL (P1-72); NOT unproven deny.
     if (id === "QB-ACL-03b-gate") {
-      const reason =
-        c.oracle?.expect?.reasonCode ??
-        c.identities?.[0]?.expect?.reasonCode;
-      if (reason !== "row_policy_upstream_unproven") {
+      const ident = c.identities?.[0]?.expect ?? {};
+      const oracle = c.oracle?.expect ?? {};
+      if (ident.outcome !== "allow" || c.oracle?.kind === "deny") {
         problems.push(
-          "QB-ACL-03b-gate expects row_policy_upstream_unproven not row isolation success",
+          "QB-ACL-03b-gate expects row isolation success (allow), not unproven deny",
         );
       }
-      if (
-        c.oracle?.expect?.notRowIsolationDeal !== true &&
-        c.identities?.[0]?.expect?.notRowIsolationSuccess !== true
-      ) {
+      if (oracle.rowIsolationSuccess !== true && ident.rowIsolationSuccess !== true) {
         problems.push(
-          "QB-ACL-03b-gate expects row_policy_upstream_unproven not row isolation success",
+          "QB-ACL-03b-gate expects row isolation success (allow), not unproven deny",
         );
       }
-      if (
-        c.oracle?.expect?.rowIsolationSuccess === true ||
-        c.oracle?.expect?.notRowIsolationDeal === false ||
-        c.identities?.[0]?.expect?.notRowIsolationSuccess === false
-      ) {
+      const denyCode =
+        oracle.reasonCode ?? ident.reasonCode ?? ident.reasonFamily;
+      if (denyCode === "row_policy_upstream_unproven") {
         problems.push(
-          "QB-ACL-03b-gate expects row_policy_upstream_unproven not row isolation success",
+          "QB-ACL-03b-gate expects row isolation success (allow), not unproven deny",
+        );
+      }
+      if (oracle.notRowIsolationDeal === true || ident.notRowIsolationSuccess === true) {
+        problems.push(
+          "QB-ACL-03b-gate expects row isolation success (allow), not unproven deny",
         );
       }
     }

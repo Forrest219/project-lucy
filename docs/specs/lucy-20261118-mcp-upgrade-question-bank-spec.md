@@ -2,13 +2,13 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能 Spec／**v1.0** |
+| 文档类型 / 版本 | 功能 Spec／**v1.1** |
 | 日期 / 目标版本 | 2026-11-19／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-54**／REQ-030-075／**P0 底线的题库＋配置合同**。不入 0.30 核心分母 |
 | 台账号 | 无。挂现行 `0.30` 执行总账 |
-| 阶段 | S3 |
-| 状态 | S3｜**v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿；闭合 Cursor Round2／Kimi B1–B13 与 B15）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0 授权登记）。测试台沿用 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。≠ UAT PASS；≠ 可上线** |
-| 决策来源 | 多场景题库独立成 Spec 并覆盖 Lucy Ops；全真须配合 Lucy 配置；2026-11-19 批准复审建议（配置前置、frozen 负例夹具、通用车道行隔离策略③＋proven 门②、Plan 归属拆分） |
+| 阶段 | S5 |
+| 状态 | S5｜v1.1。功能合同已收口（2026-11-22，P1-54 S5 严口径收口批）。终稿确权（委托人 2026-11-19）；开发授权已获得（委托人 2026-11-22「开工，落地执行」）；委托人 2026-11-22 选项 2：QB-ACL-03b-gate 改义为 scoped 行隔离成交（跟 P1-72）。题库 journeys 与 CompatConfigProfile 已落地；SC-01–SC-24 证据审计＋实现 CR PASS（[SC 审计](../reviews/2026-11-22-p1-54-sc-evidence-audit.md)；[实现 CR](../reviews/2026-11-22-p1-54-implementation-cr.md)）。严口径复跑：candidate PASS，零 new deny、零 expected denial becoming allow，34／34 案 PASS，三维 PASS（[复跑报告](../qa/uat/suites/mcp-upgrade-compatibility/runs/2026-11-22-cursor-p154-s5-strict-rerun.md)）。共享测试台随后由 P1-53 certifyCandidate 升 INDEX＝PASS（2026-11-22）；本条仍≠可上线；不入核心分母；P1-53 发布取证收口（X_REL）另轨 |
+| 决策来源 | 多场景题库独立成 Spec 并覆盖 Lucy Ops；全真须配合 Lucy 配置；2026-11-19 批准复审建议（配置前置、frozen 负例夹具、通用车道行隔离策略③＋proven 门②、Plan 归属拆分）；**2026-11-22 委托人选选项 2**：QB-ACL-03b-gate 改义为 scoped 行隔离成交（跟 P1-72，不再期望 `row_policy_upstream_unproven`） |
 | 父合同 | [P1-53](lucy-20261118-mcp-upgrade-compatibility-spec.md) **v1.1**；本 Spec＝题目语义＋CompatConfigProfile 正本；不另造放行阈值 |
 | 配套 Plan | [lucy-20261118-mcp-upgrade-question-bank-plan.md](../plans/lucy-20261118-mcp-upgrade-question-bank-plan.md) |
 | 评审 | [Kimi v0.2 评审](../reviews/2026-11-19-p1-54-question-bank-spec-plan-review.md)；[Cursor Round2](../reviews/2026-11-19-p1-54-question-bank-review-round2-cursor.md) |
@@ -90,8 +90,8 @@ P1-54 题目语义 + CompatConfigProfile 合同
 | 语义 | superstore 三表＋已声明 join；ops 12 源覆盖题目引用 |
 | 产品 Role 指纹 | `demo_readonly`、现行 `lucy_ops_reader`（盘点用；**不作永久 Source 负例载体**） |
 | 受控夹具 | 无 `lucy_query`；表 A／B；字段暴露差分；**双连接只读编排**（禁 admin）；W1／W2 Source 放行；**frozen W0-only Role**（永久负例） |
-| 行级策略（通用车道） | **不做行级成交隔离**（默认 proven=false 会撞 `row_policy_upstream_unproven`）。另设 proven 门看守题。行隔离成交归客户私有基线／既有行权限 UAT |
-| 行级若启用（仅客户／另授 lab） | 单次 `lucy_query` 至多一个 protected source；demo 词表 East／Southwest；Role 须 v2＋`row_access` 且编译成功 |
+| 行级策略（通用车道） | **含一条** scoped 行隔离成交题（**QB-ACL-03b-gate v2**，region∈{East,Southwest}；跟 P1-72）。**不再**以 `row_policy_upstream_unproven` 为通用车道 PASS 准则（该码为历史拒绝）。更复杂客户行隔离仍可另层 UAT |
+| 行级形状约束 | 单次 `lucy_query` 至多一个 protected source；demo 词表 East／Southwest；Role 须 v2＋`row_access` 且编译成功 |
 | Ops | 扩展题 snapshot／投影就绪；W0 禁 `gov.*`；W1／W2 MCP 对照须含允许的窗口旋钮 |
 | 生命周期 | 备份指纹→应用→用后还原；还原失败＝FAIL 并停 |
 
@@ -133,7 +133,7 @@ P1-54 题目语义 + CompatConfigProfile 合同
 | D19 | 配置前置 | 无匹配 profile → BLOCKED |
 | D20 | 分母 | 场景 PASS＝§5 映射的全部 QB（含其全部 identities 跑次）PASS |
 | D21 | 窗口锚点 | W0：`windowAnchor.maxCallDay`＝该身份可见 `ops_calls` 最大 UTC `call_day`；含端点取 N 自然日；缺日＝0 行合法。W1／W2：以治理窗为准，UTC `call_day` 仅披露 |
-| D22 | 行级通用车道 | 不要求行隔离成交；设 proven 门看守题。客户／lab 行隔离另层 |
+| D22 | 行级通用车道 | **v1.1**：通用车道以 **03b-gate v2** 验收一条 scoped 行隔离成交（P1-72）；不以 unproven 拒绝码为 PASS。客户更复杂行隔离仍可另层 |
 | D23 | 证据字段 | 与 P1-53 对齐：`mcpClientRttMs[]`、`serverDurationMs[]`；W0 `snapshotId` 可为 null，改记 `windowAnchor` |
 
 ## 3. 可执行题目结构
@@ -208,7 +208,7 @@ evidence:
 | **QB-FOLLOW-01**／COMPAT-03 | ①「查询 2025 年 11 月订单销售额」②「那 12 月呢？」③「和上月相比呢？」 | 同指标；环比独立 SQL；同会话 |
 | **QB-FOLLOW-02**／COMPAT-04 | ①「查询 2025 年 11 月销售额」②「再按区域拆分」③「各区域利润率呢？」 | 保留月份／区域／SUM/SUM |
 | **QB-FOLLOW-03**／COMPAT-05 | ①订单销售额②关联退货③按区域负责人 | 已声明 join；不丢路径 |
-| **QB-JOIN-01**／COMPAT-05 | 「按区域统计订单销售额、退货量和区域负责人。」 | join SQL／粒度对账 |
+| **QB-JOIN-01**／COMPAT-05 | 「按区域统计订单销售额和区域负责人。」（v2：orders↔people 已声明 join；returns 因 chasm／无预定义 measure 不进本控制面） | join SQL／粒度对账 |
 | **QB-JOIN-02**／COMPAT-05 | 「把订单和不存在的表关联，返回销售额。」 | 未知引用拒绝；无误导下一步 |
 
 ### 4.3 多库与权限
@@ -222,10 +222,10 @@ evidence:
 | **QB-ACL-02b**／COMPAT-07 | `demo_ops` 问 superstore | 拒绝＋D7a |
 | **QB-ACL-02c**／COMPAT-07 | **frozen W0-only 夹具 Role** 问 `ops_agents` | 未放行 Source→拒绝；**不绑**可 heal 的 `lucy_ops_reader` |
 | **QB-ACL-03a**／COMPAT-08 | 表 A 可见／B 不可见 | 成对 |
-| **QB-ACL-03b-gate**／COMPAT-08 | 故意造 scoped 行收窄（单 source）后 `lucy_query` | 断言 `row_policy_upstream_unproven`（proven 门看守；**不是**行隔离成交） |
+| **QB-ACL-03b-gate**／COMPAT-08 | scoped 行收窄（单 source，region∈East／Southwest）后 `lucy_query` | **v2**：成交＋oracle（demo gold `total_sales=793317.0197`）；**不是** unproven 拒绝 |
 | **QB-ACL-03c**／COMPAT-08 | 字段暴露差分两身份 | 隐藏字段不出现；合法字段可用 |
 
-> 通用车道**无**「East 身份成交且只含 East 行」题。客户私有基线层可另验行隔离成交。
+> 通用车道以 03b-gate v2 覆盖「scoped 行隔离仍可成交」；更细 East-only 对照仍可在客户私有基线另验。
 
 ### 4.4 Ops W0
 
@@ -282,7 +282,7 @@ evidence:
 | SC-05 | 追问同会话 |
 | SC-06 | join／未知 join |
 | SC-07 | 多库夹具；未用 admin |
-| SC-08 | ACL 成对；02c＝frozen；03b-gate＝proven 码；03c＝字段差分 |
+| SC-08 | ACL 成对；02c＝frozen；03b-gate＝scoped 行隔离成交（v2）；03c＝字段差分 |
 | SC-09 | 事故同形 |
 | SC-10 | W0 OPS-01–05；禁 gov.*；D21 锚点 |
 | SC-11 | W1／W2 仅夹具；filters 含窗口旋钮；还原 |
@@ -304,7 +304,7 @@ evidence:
 |---|---|
 | 合法成交？ | 业务／多表／多库／W0／W1／W2 均有合法题 |
 | 逃生？ | 不新增产品门禁；夹具配合法对照 |
-| 约束＋成交？ | 是；proven 门与行隔离成交分开 |
+| 约束＋成交？ | 是；03b-gate v2 同时覆盖「行收窄约束仍成交」 |
 | BLOCKED 掩盖？ | 缺配置＝BLOCKED 且不删题 |
 
 ## 10. 版本
@@ -318,7 +318,7 @@ evidence:
 | O1 | 双连接夹具最小工具集名单 | 开发授权后冻结 |
 | O2 | 客户私有 profile 仓外落位 | 随 P1-53 私有基线 Runbook |
 | O3 | P1-49 heal | **不**替代 frozen W0 负例（已闭合原则） |
-| O4 | lab 开 proven 做行隔离成交 | **未授权**；须委托人另批环境变体 |
+| O4 | lab 开 proven 做行隔离成交 | **由 03b-gate v2 取代（2026-11-22 选项 2／P1-72）**；不再依赖部署 proven 开关 |
 | O5 | 术语标准补登 | Follow-up |
 
 ## 12. 变更记录
@@ -327,4 +327,5 @@ evidence:
 |---|---|
 | v0.1-draft | 入池；盘点；业务＋Ops |
 | v0.2-draft | 配置前置；禁 admin；East／Southwest；gov 分立 |
+| **v1.1** | **2026-11-22 选项 2**：QB-ACL-03b-gate 改义为 scoped 行隔离成交（跟 P1-72）；D22／SC-08／§0.2／O4 同句；journeys case version=2；≠ UAT PASS；≠ 可上线 |
 | **v1.0** | **终稿确权（暂不开发）**：close-layer；identities；COMPAT-02 四题；D7a；frozen 02c；行级③＋03b-gate；D21／gov filters 映射；OPS-05／05b；证据字段对齐；Plan 归属 SC-24 |

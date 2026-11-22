@@ -274,20 +274,25 @@ test("fixture restore failure stops subsequent cases", async () => {
   }
 });
 
-test("QB-ACL-03b-gate expects row_policy_upstream_unproven not row isolation success", () => {
+test("QB-ACL-03b-gate expects row isolation success (allow), not unproven deny", () => {
   const mutated = cloneSuite((suite) => {
     const c = suite.cases.find((x) => x.id === "QB-ACL-03b-gate");
-    c.oracle.expect.reasonCode = "row_isolation_success";
-    c.oracle.expect.notRowIsolationDeal = false;
-    c.oracle.expect.rowIsolationSuccess = true;
-    c.identities[0].expect.reasonCode = "row_isolation_success";
-    c.identities[0].expect.notRowIsolationSuccess = false;
+    c.oracle.kind = "deny";
+    c.oracle.expect = {
+      reasonCode: "row_policy_upstream_unproven",
+      notRowIsolationDeal: true
+    };
+    c.identities[0].expect = {
+      outcome: "deny",
+      reasonCode: "row_policy_upstream_unproven",
+      notRowIsolationSuccess: true
+    };
   });
   const result = validateQuestionBankContract(mutated);
   assert.equal(result.status, "FAIL");
   assert.ok(
     result.problems.some((p) =>
-      /QB-ACL-03b-gate expects row_policy_upstream_unproven not row isolation success/.test(p),
+      /QB-ACL-03b-gate expects row isolation success \(allow\), not unproven deny/.test(p),
     ),
   );
 

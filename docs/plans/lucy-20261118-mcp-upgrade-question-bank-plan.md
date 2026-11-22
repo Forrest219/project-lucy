@@ -3,9 +3,9 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 实施计划（Plan） |
-| 版本 / 日期 | **v1.0** / 2026-11-19 |
-| 状态 | S3｜**v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0）。测试台共享 NOT RUN。≠ UAT PASS；≠ 可上线** |
-| 主 Spec | [`docs/specs/lucy-20261118-mcp-upgrade-question-bank-spec.md`](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md) **v1.0** |
+| 版本 / 日期 | **v1.1** / 2026-11-22 |
+| 状态 | 阶段:S5｜v1.1。功能合同已收口（2026-11-22，P1-54 S5 严口径收口批；与 Spec 同句）。开发授权已获得；Plan 步骤 1–4 已落地（journeys.yaml 内容、CompatConfigProfile、题库契约测；QB-ACL-03b-gate v2 为 scoped 行隔离成交）。SC-01–SC-24 证据审计＋实现 CR PASS；严口径复跑 candidate PASS（零 new deny、零 expected denial becoming allow、34／34、三维 PASS）。共享套件 INDEX 由 P1-53 certifyCandidate 升 PASS（2026-11-22）。≠ 可上线 |
+| 主 Spec | [`docs/specs/lucy-20261118-mcp-upgrade-question-bank-spec.md`](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md) **v1.1** |
 | 父门禁 | [P1-53 v1.1](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)（加载／digest／判定／D27；**不**创建题库内容） |
 | 总账 | **P1-54**／REQ-030-075；P0 底线题库＋配置合同；不入核心分母 |
 | 授权边界 | **终稿确权 ≠ 开发授权**。委托人 2026-11-22 已授权步骤 1–4。本条只改：`mcp-upgrade-journeys.yaml` **内容**、CompatConfigProfile 描述／应用／还原脚本、题库契约测。**不得**：改 P1-53 放行阈值；实现判定器／发布接线（归 P1-53）；改客户生产 Role；实现 P1-49 heal；打开产品默认 proven 开关。构建／部署／出包另授权；每 Wave 完成后 code review 再进入下一 Wave |
@@ -60,7 +60,7 @@ test("QB-DB-01 identity lucy_admin => FAIL");
 test("region vocabulary 华东/西南 in fixture => FAIL");
 test("agent self-reported number cannot replace oracle");
 test("fixture restore failure stops subsequent cases");
-test("QB-ACL-03b-gate expects row_policy_upstream_unproven not row isolation success");
+test("QB-ACL-03b-gate expects row isolation success (allow), not unproven deny");
 ```
 
 Run（登记名，开发后写入 test-layers）：`node --test scripts/e2e/__tests__/mcp-upgrade-question-bank.test.mjs`
@@ -87,7 +87,7 @@ Run（登记名，开发后写入 test-layers）：`node --test scripts/e2e/__te
 |---|---|
 | 有题无配置 | D19；父 D27 BLOCKED |
 | P1-49 翻面 02c | frozen Role（D8a） |
-| 行隔离撞 proven | 通用车道 03b-gate＋放弃成交隔离 |
+| 行隔离撞 proven | **v1.1／选项 2**：03b-gate 改为成交验收（P1-72）；不再依赖 proven 拒绝码 |
 | Plan 与 P1-53 撞 YAML | 归属表；父 Plan 改为 Consume |
 | Agent 跟 SOP 查 ops_tokens | OPS-05 钉 ops_calls；OPS-05b 承接 |
 | 夹具未还原 | 失败即停 |

@@ -4,7 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
-| [lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md](lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md) | P1-54→S5 严口径多 Agent。v0.1；**执行至 R-1＝NO-GO（2026-11-22）**：N3×P1-72＋fixture Token 阻塞；未 S5。≠ UAT PASS；≠ 可上线。 |
+| [lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md](lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md) | P1-54→S5 严口径多 Agent。**执行完成（2026-11-22）**：选项 2＋ENV＋复跑 PASS → **P1-54 S5**。INDEX 仍 NOT RUN。≠ UAT PASS；≠ 可上线。 |
 | [lucy-20261122-s4-to-s5-parallel-wave-plan.md](lucy-20261122-s4-to-s5-parallel-wave-plan.md) | S4→S5 并行波次（默认 1a／2a／3a／4c／5b／6a／7a）。Lane A／C scoped 收口；Lane B 缺口清单；36／37 裁定包待勾选。≠ 可上线；不 push。 |
 | [lucy-20261122-spec-status-vocabulary-chinese-plan.md](lucy-20261122-spec-status-vocabulary-chinese-plan.md) | P1-73／REQ-030-094／Wave A；阶段:S5｜v1.0（伞下 Wave A 子句）。功能合同已收口（2026-11-22，随伞 P1-73）。本条收口不表示可上线 |
 | [lucy-20261122-prepack-closure-multi-agent-plan.md](lucy-20261122-prepack-closure-multi-agent-plan.md) | 出包前收口多 Agent（剔出 P1-58／59；不出包）。候选 `prepack-8e3e3f24`／`8e3e3f24`；CAV 定向 PASS WITH GAP；须知＋就绪评审已落盘。≠ 可上线；≠ 出包授权。 |
@@ -32,8 +32,8 @@ This directory stores repository-level implementation plans that are not scoped 
 | [lucy-20261119-p147-write-slice-spike-shave-plan.md](lucy-20261119-p147-write-slice-spike-shave-plan.md) | **v0.3**（P1-47）：写片尖峰削峰（保持 30 天回看）；W0＋W1 已落地，W2 默认多跑 UAT PASS，W3 未跑。**≠ 可上线** |
 | [lucy-20261118-ff4762c9-upgrade-blocker-integration-plan.md](lucy-20261118-ff4762c9-upgrade-blocker-integration-plan.md) | **v0.1.1**：同事 `84becc34` 升级 blocker 补丁→`lucy-v0.30` 外科手术式集成计划；2026-11-19 补形态并追加 Task 5／6 偏差更正记录。**≠ 可上线** |
 | [lucy-20261119-fde-3b1c62af-local-repro-uat-plan.md](lucy-20261119-fde-3b1c62af-local-repro-uat-plan.md) | v0.3；旧候选及基线的L1复现已完成，原四基线完整L2未完成，旧复现模式历史BLOCKED保留。P1-57新修复模式原完整范围实测FAIL保留；委托人2026-11-19延期G6正式完整导出，本次客户功能测试排除此项，可按限定范围进行。真实局部结果及D5边界见跑次，本条不另授权运行代码；≠ 可上线。 |
-| [lucy-20261118-mcp-upgrade-question-bank-plan.md](lucy-20261118-mcp-upgrade-question-bank-plan.md) | S3｜**v1.0 终稿确权**（P1-54／REQ-030-075）：题库＋CompatConfigProfile；**开发已授权（2026-11-22）**；实现进行中；共享测试台 NOT RUN。配对 [Spec](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md)。≠ 可上线 |
-| [lucy-20261118-mcp-upgrade-compatibility-plan.md](lucy-20261118-mcp-upgrade-compatibility-plan.md) | S4｜**v1.1 终稿补丁**（P1-53／REQ-030-074）：收编 P1-54／D27；**开发授权已获得（2026-11-22）**；实现已落地／待验收；测试台 NOT RUN；收口终态＝X_REL。配对 [Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)。≠ 可上线 |
+| [lucy-20261118-mcp-upgrade-question-bank-plan.md](lucy-20261118-mcp-upgrade-question-bank-plan.md) | 阶段:S5｜**v1.1。功能合同已收口（2026-11-22，严口径）**（P1-54／REQ-030-075）。共享 INDEX＝**PASS**（P1-53 candidate）。配对 [Spec](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md)。≠ 可上线 |
+| [lucy-20261118-mcp-upgrade-compatibility-plan.md](lucy-20261118-mcp-upgrade-compatibility-plan.md) | 阶段:X_REL｜**v1.1。发布取证已收口（2026-11-22）**（P1-53／REQ-030-074）。INDEX＝PASS。配对 [Spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)。≠ 可上线 |
 | [lucy-20261118-customer-upgrade-reliability-gate-plan.md](lucy-20261118-customer-upgrade-reliability-gate-plan.md) | S1｜**v0.1-draft**（P1-52／REQ-030-073）：仅登记与起草；终稿未确权；未获开发授权；收口终态＝X_REL；≠ 可上线。配对 [Spec](../specs/lucy-20261118-customer-upgrade-reliability-gate-spec.md) |
 | [lucy-20261118-version-axis-naming-plan.md](lucy-20261118-version-axis-naming-plan.md) | S1｜**v0.3-draft。仅方案稿：Task 全部未开工；未获开发授权；终稿未确权**（**P1-51／REQ-030-072**）。对齐 Spec v0.3：自动分配器、交付仓追溯、运行时／镜像身份；SC-01–SC-13；测试台 not_registered；不入核心分母。**仍不进入开发；≠ S2**。配对 [Spec](../specs/lucy-20261118-version-axis-naming-spec.md)。**≠ 可上线** |
 | [lucy-20261118-fde-pack-gate-parallel-plan.md](lucy-20261118-fde-pack-gate-parallel-plan.md) | **v0.1**：对齐 FDE 打包源码准入（R01／R02／R04–R07；R03 已关）。多 agent 并行；R01→R07 串行改 `audit.ts`。委托人已授权推进。**≠ 可上线** |

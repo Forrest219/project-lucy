@@ -73,6 +73,12 @@ fixtureRoles:
         - lucy_freshness
         - lucy_begin_question
 
+  # O1 FROZEN (P1-54 S5 T-BANK-1, 2026-11-22): minimal dual-connection tool set =
+  #   lucy_catalog, connection_list, lucy_query, lucy_read_source,
+  #   lucy_explain_query, lucy_freshness, lucy_begin_question  (7 tools).
+  # No wiki_*, no lucy_admin, no connections:["*"]. Same 7 tools as W1/W2 ops fixtures.
+  # Guarded by mcp-compat-config-profile.test.mjs "O1 frozen ...". Changing this list
+  # changes the profile fingerprint and requires a deliberate re-freeze.
   compat_fixture_dual_readonly:
     purpose: dual_connection_readonly
     mapsTo: [QB-DB-01]
@@ -279,9 +285,9 @@ fixtureRoles:
         - lucy_begin_question
 
   compat_fixture_row_policy_unproven_gate:
-    purpose: proven_gate_watch
+    purpose: row_isolation_deal
     mapsTo: [QB-ACL-03b-gate]
-    note: "Scoped row_access on a single protected source so lucy_query hits row_policy_upstream_unproven. NOT a row-isolation success deal. Shape must be row_access: scoped + row_policy.predicates (product v2); object-shaped row_access fails v2_row_access_required."
+    note: "Scoped row_access (region in East/Southwest) on a single protected source for QB-ACL-03b-gate v2 row-isolation DEAL (P1-72 / 2026-11-22 option 2). Role id kept for fingerprint continuity; NOT an unproven-deny carrier. Shape: row_access: scoped + row_policy.predicates (product v2)."
     allow:
       permission_model_version: 2
       connections: [demo-mysql]

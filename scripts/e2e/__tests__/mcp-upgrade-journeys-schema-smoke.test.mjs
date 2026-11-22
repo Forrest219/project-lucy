@@ -113,11 +113,13 @@ describe("mcp-upgrade-journeys.yaml schema smoke", () => {
     assert.notEqual(deny.role, "lucy_ops_reader");
   });
 
-  it("QB-ACL-03b-gate expects row_policy_upstream_unproven", () => {
+  it("QB-ACL-03b-gate expects scoped row isolation deal (allow)", () => {
     const c = doc.cases.find((x) => x.id === "QB-ACL-03b-gate");
     assert.ok(c);
-    assert.equal(c.oracle.expect.reasonCode, "row_policy_upstream_unproven");
-    assert.equal(c.oracle.expect.notRowIsolationDeal, true);
+    assert.equal(c.identities[0].expect.outcome, "allow");
+    assert.equal(c.oracle.expect.rowIsolationSuccess, true);
+    assert.notEqual(c.oracle.expect.reasonCode, "row_policy_upstream_unproven");
+    assert.equal(c.oracle.kind, "exact");
   });
 
   it("QB-DB cases forbid lucy_admin", () => {

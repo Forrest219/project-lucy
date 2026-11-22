@@ -5,7 +5,7 @@
 | Suite ID | `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY` |
 | 总账 ID | **P1-53**／REQ-030-074（升级放行＝P0 底线；不入核心分母）；**P1-54**／REQ-030-075（独立多场景题库） |
 | 目标 | **与 Spec 目标同句**：≥1 真实 Agent 经 Lucy Public MCP 跑**全题库**、对照基线；三维（功能／MCP 服务耗时／Agent 墙钟）全过 → 敢不敢部署／升级 |
-| 合同回链 | [门禁 Spec **v1.1**](../../../../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)；[独立题库 Spec **v1.0**](../../../../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md)；[门禁 Plan](../../../../plans/lucy-20261118-mcp-upgrade-compatibility-plan.md)；[题库 Plan v1.0](../../../../plans/lucy-20261118-mcp-upgrade-question-bank-plan.md)；[事故错题](../../../../lessons/2026-11-16-source-ambiguity-gate-deadlock.md) |
+| 合同回链 | [门禁 Spec **v1.1**](../../../../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)；[独立题库 Spec **v1.1／S5**](../../../../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md)；[门禁 Plan](../../../../plans/lucy-20261118-mcp-upgrade-compatibility-plan.md)；[题库 Plan v1.1／S5](../../../../plans/lucy-20261118-mcp-upgrade-question-bank-plan.md)；[事故错题](../../../../lessons/2026-11-16-source-ambiguity-gate-deadlock.md) |
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md) |
 | runs | [runs/](runs/) |

@@ -157,8 +157,8 @@
 | REQ-030-071 | 重建快照上界与完成水位不一致：并发新增调用未入推断却被标已覆盖（FDE R01） | FDE 打包门槛 R01；水位写 `MAX(ts)` 导致重建中插入且 `id>ceiling` 被误判已覆盖 | **P1**（清单 P1-50） | **X_SUP｜被取代（并入 REQ-030-066／P1-45；2026-11-22 文档收口）**：合同落点＝P1-45 Spec §3.1（`ceilingId`／`covered()` 按 id）；不另开独立 Spec／UAT；随 P1-45 S5 闭合；不入核心分母；≠ 可上线 |
 | REQ-030-072 | 版本轴分工与命名规约：候选 `rc.N` 自动分配＋交付主键＋私有化分叉追溯 | 2026-11-18 对话：版本乱／合并前镜像与定稿撞号；委托人确认采纳 `rc.N`＋交付主键（否决候选用 `0.31`）、号码自动分配、后期可追溯与私有化分叉定位；暂不开发 | **P1**（清单 P1-51） | S1｜**入池＋Spec／Plan（2026-11-18）**：v0.3-draft；测试台 not_registered。**≠ 终稿确权 ≠ 开发授权；≠ S2**；不入核心分母；≠ 可上线 |
 | REQ-030-073 | 客户镜像升级可靠性分层门禁：同一 digest＋客户数据量级＋A/B 必跑＋C 按边界触发 | 2026-11-18 客户升级 502／503 回滚复盘；委托人认可 digest 等基线绑定、客户数据规模覆盖与「环境等价而非复制客户 K8s」折中，授权只生成 Spec／Plan | **P1**（清单 P1-52） | S1｜**v0.1-draft。仅登记与起草；终稿未确权；未获开发授权；收口终态＝X_REL；≠ 可上线** |
-| REQ-030-074 | MCP 升级兼容底线：真实 Agent＋Lucy MCP 批题对照基线→敢不敢部署／升级 | 客户 WorkBuddy 会员收入事故；目标对齐＋T1–T10；2026-11-18 收编题库／配置前置 | **P0 底线**（清单 P1-53） | S4｜**v1.1 终稿补丁＋开发授权已获得（2026-11-22）**：实现已落地／待验收；测试台 NOT RUN；收口终态＝X_REL；不入核心分母；≠ UAT PASS；≠ 可上线 |
-| REQ-030-075 | MCP 升级兼容多场景题库＋CompatConfigProfile：业务／Ops／配置前置 | 独立题库；委托人确认全真须配合 Lucy 配置才具备落地条件 | **P0 底线（题库＋配置；清单 P1-54）** | S3｜**v1.0 终稿确权＋开发已授权（2026-11-22）**：实现进行中；共享测试台 NOT RUN；不入核心分母；≠ UAT PASS；≠ 可上线 |
+| REQ-030-074 | MCP 升级兼容底线：真实 Agent＋Lucy MCP 批题对照基线→敢不敢部署／升级 | 客户 WorkBuddy 会员收入事故；目标对齐＋T1–T10；2026-11-18 收编题库／配置前置 | **P0 底线**（清单 P1-53） | X_REL｜**v1.1。发布取证已收口（2026-11-22）**；四入口全真＋SC／CR；INDEX PASS；不入核心分母；≠ 可上线 |
+| REQ-030-075 | MCP 升级兼容多场景题库＋CompatConfigProfile：业务／Ops／配置前置 | 独立题库；委托人确认全真须配合 Lucy 配置才具备落地条件 | **P0 底线（题库＋配置；清单 P1-54）** | S5｜**v1.1。功能合同已收口（2026-11-22，严口径）**；选项 2：03b＝行隔离成交；共享 INDEX＝PASS（P1-53 candidate）；不入核心分母；≠ 可上线 |
 | REQ-030-076 | FDE 3b1c62af 打包前检查本机复现 UAT（L1 原样复现＋L2 全真） | FDE 报告 `Lucy升级检查_3b1c62af_20261119`；委托人 2026-11-19 要求本机按 UAT 规范复现 | **P1（清单 P1-55）** | **Plan v0.2（2026-11-19）**：D1–D4 已确认；测试台 `UAT-SUITE-FDE-PACKCHECK`＝NOT RUN。只涉及测试台与证据，**不改运行代码**；≠ 开发授权；不入核心分母；≠ 可上线 |
 | REQ-030-077 | FDE 报告候选缺陷补录：F01 正式导出等待追平、F02 慢合法 Hive 语法回退、F03 单表 defer 披露、F04 宽表整批 deferred 收敛、AUDIT-01 滚动窗口重复归属 | FDE 3b1c62af 打包前检查（4 项 P0＋F03 P1）；差集补录（事实有、池没有） | **P1（清单 P1-56；FDE 标 P0，待本机复现后由委托人定级）** | **本机 L1 复现成立；L2 全真未做；契约修订与整改 Plan v1.0 已定稿；4 份修订已由委托人明示终稿确权，并整批授权运行代码开发（2026-11-19 12:35；Codex 首轮终审意见已全部采纳，未复审）；实现已落地（2026-11-19）：EC-14–17／LS-19–24／N26-1–6／SC-11–16 vitest 36 passed（4 skip 与本批无关）；LS-24 `node --test` 5/5；`lint:spec-docs`＋`lint:e2e-ledger` PASS；demo 容器复核未做；O3 存量批量标脏延后、未授权**。≠ UAT PASS；≠ 可上线 |
 
@@ -1318,20 +1318,20 @@ P1-40 同类排查证明：界面成功反馈与动作真实结果不一致是�
 - 清单：P1-53（**升级放行＝P0 底线；不入核心分母**；编号避让 P1-52／REQ-030-073）
 - 状态：S3｜v1.1；终稿补丁确权＋开发已授权；实现进行中（Wave 0）
 - Spec／Plan：[lucy-20261118-mcp-upgrade-compatibility-spec](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)／[plan](lucy-20261118-mcp-upgrade-compatibility-plan.md)（**v1.1 终稿补丁**）
-- 测试台：`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`，NOT RUN
+- 测试台：`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`，INDEX **PASS**（四入口：[跑次](../qa/uat/suites/mcp-upgrade-compatibility/runs/2026-11-22-cursor-p153-xrel-four-entry.md)）
 - 题库正本＝REQ-030-075；开跑前须 CompatConfigProfile 指纹（D27）；缺环境／缺配置 BLOCKED。
-- **开发已授权（委托人 2026-11-22「开工，落地执行」）**；实现进行中；每 Wave 后 code review；Docker／出包／生产升级另授；测试台仍 NOT RUN；≠ UAT PASS；≠ 可上线
+- **X_REL｜发布取证已收口（2026-11-22）**；≠ 可上线
 
 ## REQ-030-075：MCP 升级兼容多场景题库
 
 独立题库＋**Lucy 配置资产包**。委托人确认：全真须配合连接／语义／Role／权限等配置才具备落地条件。覆盖业务、追问、多表、权限、多库与 Ops W0／受控 W1／W2。
 
 - 清单：P1-54（**P0 底线题库＋配置合同；不入核心分母**）
-- 状态：S3｜v1.0；终稿确权＋开发已授权；实现进行中（Wave 0）
-- Spec／Plan：[question-bank-spec](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md)／[plan](lucy-20261118-mcp-upgrade-question-bank-plan.md)（**v1.0**）
+- 状态：**S5｜v1.1。功能合同已收口（2026-11-22，严口径）**；选项 2：QB-ACL-03b-gate＝scoped 行隔离成交（P1-72）
+- Spec／Plan：[question-bank-spec](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md)／[plan](lucy-20261118-mcp-upgrade-question-bank-plan.md)（**v1.1**）
 - 父合同：REQ-030-074／P1-53 v1.1；提供 `questionBankDigest`＋`configProfileFingerprint`
-- 测试台：共享 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`，NOT RUN
-- **开发已授权（委托人 2026-11-22「开工，落地执行」）**；实现进行中；不得改 P1-53 放行判定／发布接线；Docker／出包另授；≠ UAT PASS；≠ 可上线
+- 测试台：共享 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`，INDEX **PASS**（P1-53 certifyCandidate；严口径证据：[复跑](../qa/uat/suites/mcp-upgrade-compatibility/runs/2026-11-22-cursor-p154-s5-strict-rerun.md)）
+- 证据：SC／CR PASS；零 new deny／零翻转／34／34／三维 PASS。不得改 P1-53 放行判定／发布接线；≠ UAT PASS；≠ 可上线
 
 ## REQ-030-076：FDE 3b1c62af 打包前检查本机复现 UAT
 
