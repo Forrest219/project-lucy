@@ -5,8 +5,9 @@
 | 文档类型 / 版本 | Spec / **v0.1** |
 | 日期 / 目标版本 | 2026-11-15／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-32**／REQ-030-053、**P1-33**／REQ-030-054／**P1**（事故修复延伸）。**不入 0.30 核心分母** |
-| 阶段 | S4 |
-| 状态 | **开发授权已获得（2026-11-15），实现已落地（本机沙箱），功能合同待终稿复核**。F-1…F-7 均已改并有等价测试；测试台 `UAT-SUITE-EQUIV-GUARD` 首跑见 INDEX 现值；`UAT-SUITE-PAGE-SWEEP` 的 UAT-SWEEP-02 结果见该套件最新跑次。≠ UAT PASS；≠ 可上线 |
+| 阶段 | S5 |
+| 收口范围 | scoped：SC-01–SC-09 本机证据（EQUIV-GUARD＋PAGE-SWEEP PASS WITH GAP）；不含 v2／export-pack 完整路径夹具、linkedHandshakeRows、客户现场复测、EQ-04 daily-question-kpi 变异 |
+| 状态 | S5｜**v0.1；功能合同已收口（2026-11-22，S4→S5 并行波次·scoped）**。开发授权已获得（2026-11-15）；实现已落地；F-1…F-7 已改并有等价测试；终稿复核按波次默认 scoped 闭合。测试台见 INDEX。不入核心分母。≠ 可上线 |
 | 决策来源 | 委托人 2026-11-15 23:47：「授权进行开发落地，并按 UAT模块的规范落地相应的测试用例，未来升级迭代要进行等价测试，防止旧病复发」。本条按「委托人明示确权＋开发授权」处理（本会话无 Codex CLI 终审；先例同 P1-34）。如委托人不认可这一理解，须撤回并走 Codex 终审 |
 | 需求来源 | [P1-31 排查报告](../reviews/2026-11-15-page-by-page-event-loop-sweep-report.md) F-1…F-7；[O1 复评](../reviews/2026-11-15-p1-21-o1-worker-thread-reassessment.md)（结论：不默认启用 worker） |
 | 实施主体 | WebUI 服务端：`webui/server/proxy/{audit-as-of-proof,sqlite-in-chunks,audit}.ts`、`webui/server/admin/{audit,audit-inquiry-pack-rows,audit-local-timestamp,yield-slices,reconciliation,inferred-turn-maintainer,access-map-echo,ui-usage,daily-question-kpi}.ts`；测试 `webui/server/__tests__/equivalence/` |
@@ -19,6 +20,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v0.1-S5 | 2026-11-22 | 功能合同已收口（S4→S5 并行波次·scoped）；夹具盲区／linkedHandshakeRows／客户现场入收口范围。≠ 可上线 |
 | v0.1 | 2026-11-15 初稿并落地。F-1／F-2／F-3／F-4／F-5／F-6／F-7 整改；新增等价测试目录与登记册；挂测试台 `UAT-SUITE-EQUIV-GUARD`；门禁基线随整改收缩 |
 
 ## 闭口层级

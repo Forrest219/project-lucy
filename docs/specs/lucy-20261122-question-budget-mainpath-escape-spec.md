@@ -5,9 +5,10 @@
 | 文档类型 / 版本 | 功能设计基线 / **v1.1** |
 | 日期 | 2026-11-22 |
 | 功能编号 / 优先级 | **REQ-030-095／清单 P1-74**；修订 Spec 162 §7.2 与窗口 Spec 的**逃生档数／可达性／新问询通道** / P1（主路径可用性） |
-| 阶段 | S4 |
-| 状态 | S4｜**v1.1**。**实现已落地**（Lane A/B/C 入工作树，未提交；开发授权已执行；实现 CR **APPROVE**，见 [reviews/2026-11-22-p174-budget-escape-implementation-cr](../reviews/2026-11-22-p174-budget-escape-implementation-cr.md)）；**待验收**——平滑升级后 UAT [`UAT-SUITE-BUDGET-ESCAPE`](../qa/uat/suites/budget-escape/runs/2026-11-22-kimi-p174-budget-escape.md)＝**PASS WITH GAPS**（R0／01–06／08／09A-B-C／10B／11／12 功能轴 PASS；**BESC-07／10A 环境 BLOCKED**；全量 Wave D 分母因 fixture token 轮换另案）；≠ 完整 PASS；≠ 功能合同收口；≠ 可上线 |（Lane A Proxy 核心／Lane B compat／Lane C 指导；实现 CR **APPROVE**，见 [reviews/2026-11-22-p174-budget-escape-implementation-cr](../reviews/2026-11-22-p174-budget-escape-implementation-cr.md)）；平滑升级后 UAT [`UAT-SUITE-BUDGET-ESCAPE`](../qa/uat/suites/budget-escape/runs/2026-11-22-kimi-p174-budget-escape.md)＝**PASS WITH GAPS**（R0／01–06／08／09A-B-C／10B／11／12 功能轴 PASS；**BESC-07／10A 环境 BLOCKED**；全量 Wave D 分母因 fixture token 轮换另案）；≠ 完整 PASS；≠ 功能合同收口；≠ 可上线 |
-| 终审记录 | [Spec／Plan／UAT 终稿审阅](../reviews/2026-11-22-question-budget-mainpath-escape-final-review.md)：文档设计闭环通过；事故修复与 UAT 未执行 |
+| 阶段 | S5 |
+| 收口范围 | scoped：功能轴 BESC-R0／01–06／08／09／10B／11／12；不含 BESC-07 begin-active、BESC-10A busy≥300s、Wave D 全量 34 案分母（另案） |
+| 状态 | S5｜**v1.1；功能合同已收口（2026-11-22，S4→S5 并行波次·scoped）**。实现已提交（`72d47cb0`）；开发授权已执行；实现 CR **APPROVE**（[reviews/2026-11-22-p174-budget-escape-implementation-cr](../reviews/2026-11-22-p174-budget-escape-implementation-cr.md)）；UAT [`UAT-SUITE-BUDGET-ESCAPE`](../qa/uat/suites/budget-escape/runs/2026-11-22-kimi-p174-budget-escape.md) 功能轴 PASS WITH GAPS（BESC-07／10A 环境 BLOCKED 写入收口范围）。不入核心分母。≠ 可上线 |
+| 终审记录 | [Spec／Plan／UAT 终稿审阅](../reviews/2026-11-22-question-budget-mainpath-escape-final-review.md)；[实现 CR APPROVE](../reviews/2026-11-22-p174-budget-escape-implementation-cr.md)；UAT [2026-11-22-kimi-p174-budget-escape](../qa/uat/suites/budget-escape/runs/2026-11-22-kimi-p174-budget-escape.md)；2026-11-22 scoped S5 |
 | 决策来源 | 2026-11-22 委托人：合法用户额度用尽后必须有 fallback；不得因异常拦截误伤正常长问询体感。同日批准修订建议并定稿。取证见 [`inbox/2026-11-22-question-budget-pm-scenario-report.md`](../../inbox/2026-11-22-question-budget-pm-scenario-report.md)、[`docs/lessons/2026-11-22-question-budget-exhausted-recurring.md`](../lessons/2026-11-22-question-budget-exhausted-recurring.md) |
 | 与既有 Spec 的关系 | **修订** Spec 162 §7.2 的续查档数与「再问」可达性，以及窗口 Spec（`lucy-20261029-question-budget-window-optimization-spec`）在 **begin 不可用** 时的逃生合同。**不改** 60／300 默认阈值（REQ-030-033）、settled busy、稳定作用域键、失败四维度、旁路纳管。与 P1-60（零绑定隐藏 begin／`begin_not_available`）**正交互补**：P1-60 保证无绑定可直接问数；本条保证问数过程中触顶后仍有主路径逃生，且硬停后可**显式新开问询** |
 | 实施主体 | Lucy（Proxy 问询预算层 + initialize 指导 + 本仓 MCP compat／UAT 判定）；不修改 KTX 源码 |
@@ -344,4 +345,5 @@ function onLucyBeginQuestion_when_active:
 | v0.1-draft | 2026-11-22 | 首稿：inactive 加档、分列 budget≠deny；对抗审阅后退回 |
 | v1.0 | 2026-11-22 | 委托人批准 1A–6A：D7 `mode=new_question`、D8 软信封、D9 compat 成交链、参与态快照、两段式伪代码、多窗幂等、reason 分列、资源上界披露；终稿确权；开发未授权 |
 | **v1.1** | 2026-11-22 | 终审闭环修订：active 硬停走 begin；inactive new_question 校验硬停与凭证；统一锁／pending 互斥／旧票据归档；新增 SC-E9b 持久恢复；修正 BESC-09／11／12 映射。D1–D9 不变；开发未授权 |
-| v1.1-impl | 2026-11-22 | **实现已落地**（未提交）：Lane A 引擎／持久化／D7 可达、Lane B compat 分列＋成交链、Lane C 指导；实现 CR＝APPROVE（[reviews/2026-11-22-p174-budget-escape-implementation-cr](../reviews/2026-11-22-p174-budget-escape-implementation-cr.md)）。UAT＝PASS WITH GAPS（BESC-07／10A 环境 BLOCKED）。≠ 完整 PASS；≠ 可上线 |
+| v1.1-S5 | 2026-11-22 | **功能合同已收口（scoped）**：阶段 S4→S5；实现提交 `72d47cb0`；收口范围不含 BESC-07／10A／Wave D 全量。≠ 可上线 |
+| v1.1-impl | 2026-11-22 | **实现已落地**（当时未提交，后合入 `72d47cb0`）：Lane A／B／C；实现 CR＝APPROVE。UAT＝PASS WITH GAPS（BESC-07／10A 环境 BLOCKED）。≠ 完整 PASS；≠ 可上线（已作废作现值，见 v1.1-S5） |

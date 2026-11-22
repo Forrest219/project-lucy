@@ -10,7 +10,7 @@
 | 委托人 | xingchen |
 | 基于材料 | [Spec](../specs/lucy-20261115-audit-export-scale-and-equivalence-guard-spec.md)、[P1-31 排查报告](../reviews/2026-11-15-page-by-page-event-loop-sweep-report.md)、[O1 复评](../reviews/2026-11-15-p1-21-o1-worker-thread-reassessment.md)、委托人 2026-11-15 23:47「授权进行开发落地，并按 UAT模块的规范落地相应的测试用例，未来升级迭代要进行等价测试，防止旧病复发」 |
 | 适用范围 | P1-32／REQ-030-053、P1-33／REQ-030-054：F-1…F-7 整改、等价守卫、测试台登记 |
-| 状态 | 阶段:S4｜**实现已落地（2026-11-16），待终稿复核**。`UAT-SUITE-EQUIV-GUARD`、`UAT-SUITE-PAGE-SWEEP` 首个整改后跑次均 PASS WITH GAP。≠ UAT PASS；≠ 可上线 |
+| 状态 | 阶段:S5｜**功能合同已收口（2026-11-22，S4→S5 并行波次·scoped）**。实现已落地（2026-11-16）；EQUIV-GUARD／PAGE-SWEEP PASS WITH GAP；夹具盲区与 linkedHandshakeRows 入收口范围另账。≠ 可上线 |
 | 授权边界 | 委托人 2026-11-15 23:47 同句＝开发授权；本会话无 Codex CLI，按「委托人明示确权＋开发授权」处理（先例同 P1-34）。不含：引入 worker、改 Chart 探针、改导出文件格式、处理 `linkedHandshakeRows`、客户现场验证 |
 | 验收 | 见 §4 |
 | 输出位置 | `docs/plans/lucy-20261115-audit-export-scale-and-equivalence-guard-plan.md` |

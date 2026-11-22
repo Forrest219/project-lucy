@@ -6,8 +6,9 @@
 | 日期 / 目标版本 | 2026-11-20 / 0.30.0 |
 | 功能编号 / 优先级 | P1-68／REQ-030-089；P1（运行观察；建议）；不入核心分母 |
 | 台账号 | 无 |
-| 阶段 | S4 |
-| 状态 | v1.0。终稿已确权；开发授权已获得；实现与独立代码评审完成；本机 demo Docker 平滑升级后 UAT-SUITE-OPS-STEP R0／01–08 全真 PASS（gitSha=88b2e9ea；跑次 [2026-11-22-cursor-ops-step](../qa/uat/suites/ops-step/runs/2026-11-22-cursor-ops-step.md)）；测试台 PASS WITH GAP（重度 Linux 管道 100ms／UID 追加拒绝／16MiB 双轮转、age_limit 1h 墙钟、51／52 表矩阵、双连接 catalog 配对仍为设计值 GAP）；不入核心分母；≠ 功能合同完全收口；≠ 可上线。 |
+| 阶段 | S5 |
+| 收口范围 | scoped：R0／01–08 全真 PASS；设计值 GAP（Linux 管道 100ms／UID 追加拒绝／16MiB 双轮转／age_limit 1h／51／52 表矩阵／双连接 catalog 配对）另期 |
+| 状态 | S5｜v1.0；功能合同已收口（2026-11-22，S4→S5 并行波次·scoped）。终稿已确权；开发授权已获得；实现与独立代码评审完成；本机 demo Docker 平滑升级后 UAT-SUITE-OPS-STEP R0／01–08 全真 PASS（gitSha=88b2e9ea；跑次 [2026-11-22-cursor-ops-step](../qa/uat/suites/ops-step/runs/2026-11-22-cursor-ops-step.md)）；设计值重度项写入收口范围。不入核心分母；≠ 可上线。 |
 | 授权边界 | 2026-11-20 委托人要求按仓库规范起草、优化并定稿 Spec、Plan 与 UAT。本条只含需求规格。不含运行代码、不含测试执行、不含镜像或客户现场变更。 |
 | 需求 / 总账 | [REQ-030-089](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [P1-68](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) |
 | 计划 / 测试台 | [Plan](../plans/lucy-20261120-ops-step-journal-plan.md) · [UAT-SUITE-OPS-STEP](../qa/uat/suites/ops-step/suite.md) · [INDEX](../qa/uat/INDEX.md) |
@@ -366,3 +367,5 @@ New terms:
 2026-11-20 v1.0（实施轮）：委托人授权拆分多 Agent 完成落地与 code review、暂不重建 Docker。共享写账内核、诊断父子接入、两条保存链、读字段操作号关联、管理读接口与只读页面已在工作树落地；两轮独立代码评审发现的缺陷已修复（stdout 覆盖风险、轮转失败停摆、裁剪拆实例、读模型重复行、非表级错误丢号、Catalog 读失败误记 leave、后台暂停不等空闲、isolated 与生产并发、页面自推状态、读故障未绑定）。类型检查与本条定向回归通过；未执行 Docker 重建、真实前台浏览器与 UAT，SC-01–SC-18 尚未取证，测试台仍 NOT RUN，≠ 功能收口，≠ 可上线。
 
 2026-11-22 v1.0（UAT 跑次）：委托人批准 commit→平滑 demo:upgrade→UAT-SUITE-OPS-STEP R0／01–08 全真。R0／01–08 PASS（`gitSha=88b2e9ea`）；测试台 PASS WITH GAP；重度 Linux 管道／UID／16MiB、age_limit 1h、51／52 表、双连接 catalog 仍为设计值 GAP；≠ 功能合同完全收口；≠ 可上线；不 push／不发布。
+
+2026-11-22 v1.0（S4→S5 scoped）：阶段 S4→S5；设计值重度 GAP 写入收口范围另期；功能合同已收口。≠ 可上线；不 push。
