@@ -23,6 +23,10 @@
 
 **Tech Stack:** `scripts/e2e/lib/mcp-compatibility*.mjs`、`mcp-upgrade-journeys.yaml`、CompatConfigProfile、`run-mcp-compatibility.mjs`、node:test、demo Docker、kimi（或已登记 Agent）。
 
+## 开工前置
+
+按 M-00 确认委托人已明确批准执行本 Plan，记录 Git 基线，并将 D1–D6、§1.1 分母表、授权白名单和并行锁写入 `00-lock.md`。
+
 ## Global Constraints
 
 - **严口径硬门禁（S5 前置，缺一不可）**
@@ -234,6 +238,10 @@ M-00
 
 ---
 
+## 验收
+
+按 T-RUN-1 和 R-1 核对严口径复跑。`new deny` 和 `expected denial becoming allow` 均须为零，预期放行的用例须实际放行，`requiredConfigFingerprint` 须匹配。SC 审计和实现 CR 的验收见 T-CLOSE-1。
+
 ## 5. 成功／失败形态
 
 | 形态 | 条件 |
@@ -244,6 +252,10 @@ M-00
 | **失败** | R-1 NO-GO 或洗绿被拒 |
 
 ---
+
+## 完成定义
+
+由 R-2 在 R-1 判定 GO 且 SC 审计和实现 CR 通过后写入 S5 状态及镜像，并登记收口记录。共享 INDEX 按实际 UAT 结果登记。其他出口按 §5 判定。
 
 ## 6. 风险
 

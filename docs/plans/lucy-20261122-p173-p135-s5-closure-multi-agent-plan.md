@@ -23,6 +23,10 @@
 
 **Tech Stack:** 文档／`scripts/lint-spec-docs.mjs`／vitest（webui server）／既有 ESCAPE UAT 证据；不改 KTX。
 
+## 开工前置
+
+委托人明确批准执行本 Plan 后，按 M-00 冻结 D1–D5、§3 授权白名单、并行写入边界和 Git 基线。
+
 ## Global Constraints
 
 - S5＝「功能合同已收口」且 SC 证据关闭＋有收口／CR 记录；**UAT PASS ≠ S5**；**S5 ≠ 可上线**。
