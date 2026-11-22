@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | v1.0 / 2026-11-22 |
-| 状态 | 阶段:S5｜v1.0。功能合同已收口（2026-11-22，P1-73／P1-35 S5 收口批）。开发授权已获得；Wave A／B 已落地；SC-01–SC-15＋实现 CR PASS。伞级事实源＝漏斗 Spec；姊妹建议书为 Wave A 子句、不构成独立总账镜像。测试台 not_registered；不入核心分母。全仓 MIG 另授权。本条收口不表示可上线 |
+| 状态 | S5｜v1.2。功能合同已收口（2026-11-22，P1-73／P1-35 S5 收口批）。开发授权已获得；Wave A／B 已落地；v1.1 MIG＋`inventory-stage`；**v1.2 降熵 A＋B＋C**（D8／D8b）。SC-01–SC-15＋实现 CR PASS。伞级事实源＝漏斗 Spec。测试台 not_registered；不入核心分母。本条收口不表示可上线 |
 | 主 Spec | [`docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) v1.0 |
 | 姊妹建议书 | [`lucy-20261122-spec-status-vocabulary-chinese-plan.md`](lucy-20261122-spec-status-vocabulary-chinese-plan.md)（`status-vocab`；伞下 Wave A；不另开总账行；状态句为伞级子句） |
 | 总账 | **P1-73**／REQ-030-094；**不入核心分母**；双规则 `status-funnel`＋`status-vocab` |

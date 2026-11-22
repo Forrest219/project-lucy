@@ -6,7 +6,8 @@
 | 日期 / 目标版本 | 2026-11-20 / 0.30.0 |
 | 功能编号 / 优先级 | P1-66／REQ-030-087；P1（性能差集；建议）；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 |
+| 阶段 | S5 |
+| 状态 | S5｜v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 |
 | 授权边界 | 委托人 2026-11-20 要求入总账、先出优化方案和 Spec／Plan，设计保留现场权限展开规模的 Docker 浏览器验证；2026-11-20 委托人明示 v0.2 定稿并授权按 Plan 开发及 Docker 浏览器验证，完整覆盖旧接口、按需详情和六组夹具；不提交、推送或发布，不升级 109 |
 | 需求 / 总账 | [REQ-030-087](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-087agent-名册摘要投影与单对象详情按需读取) · [P1-66](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) |
 | 计划 / 测试台 | [Plan](../plans/lucy-20261120-agent-roster-summary-projection-plan.md) · [UAT-SUITE-AGENT-ROSTER-SUMMARY](../qa/uat/suites/agent-roster-summary/suite.md) · [INDEX](../qa/uat/INDEX.md) |

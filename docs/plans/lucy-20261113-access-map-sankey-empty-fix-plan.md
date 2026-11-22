@@ -6,7 +6,7 @@
 |---|---|
 | 文档版本 / 日期 | **v0.2** / 2026-11-13 |
 | 优先级 | **P0**（部署侧主视觉失效） |
-| 状态 | **功能合同已收口（2026-11-13）**。实现 `f3f88837`；vitest turn-correlation＋usage-first **24/24**；[closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md)。Spec 见 [`lucy-20261113-access-map-sankey-empty-fix-spec.md`](../specs/lucy-20261113-access-map-sankey-empty-fix-spec.md)。**≠ 可上线** |
+| 状态 | **S5｜功能合同已收口（2026-11-13）**。实现 `f3f88837`；vitest turn-correlation＋usage-first **24/24**；[closure](../reviews/2026-11-13-access-map-sankey-empty-fix-closure.md)。Spec 见 [`lucy-20261113-access-map-sankey-empty-fix-spec.md`](../specs/lucy-20261113-access-map-sankey-empty-fix-spec.md)。**≠ 可上线** |
 | 错题本 | [`docs/lessons/2026-11-13-access-map-sankey-empty.md`](../lessons/2026-11-13-access-map-sankey-empty.md) |
 | 相关合同 | confirmed-only [`lucy-20261105-access-map-confirmed-only-spec.md`](../specs/lucy-20261105-access-map-confirmed-only-spec.md)；usage-first [`lucy-20261105-access-map-usage-first-spec.md`](../specs/lucy-20261105-access-map-usage-first-spec.md)；关联质量 [`lucy-20261019-audit-trust-and-admin-investigation-spec.md`](../specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md) §4.1 |
 | 证据提交 | `556fdc30`、`80ff5bca`；本机／云端 API `accessPaths=0` 同构 |

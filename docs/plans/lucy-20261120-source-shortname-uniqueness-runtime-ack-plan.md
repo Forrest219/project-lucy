@@ -12,7 +12,7 @@
 |---|---|
 | 文档类型 / 版本 | 实施 Plan / v0.4 |
 | 功能编号 | P1-64／REQ-030-085 |
-| 状态 | v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 |
+| 状态 | S5｜v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 |
 | 授权边界 | Task 1–6 与 Task 7 UAT 执行已获授权；禁止本轮 git commit／push（除非另授）；编排见 `inbox/20261120-0054-p1-64-multi-agent-dev-pack.md` |
 | 验收 | [Spec](../specs/lucy-20261120-source-shortname-uniqueness-runtime-ack-spec.md) SC-01–10；[UAT 用例](../qa/uat/suites/source-shortname-conflict/cases.md) R0／01–12 |
 | 原始证据 | [2026-11-19 Docker 复现](../qa/uat/suites/source-shortname-conflict/runs/2026-11-19-codex-docker-repro.md) |

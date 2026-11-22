@@ -2,7 +2,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **功能合同已收口（2026-11-13）**（SC-01–SC-14 证据关闭）。本条收口不表示可上线 |
+| 状态 | **S5｜功能合同已收口（2026-11-13）**（SC-01–SC-14 证据关闭）。本条收口不表示可上线 |
 | 主 Spec | [`docs/specs/lucy-20261111-catalog-scan-read-path-spec.md`](../specs/lucy-20261111-catalog-scan-read-path-spec.md) **v0.4**（SC-06／07 重锚 schema-wide；per-table 归 Spec 190） |
 | 授权边界 | 只改外部目录列库、列表的语句和传输，以及普通 MySQL 准备表结构的字段查询次数。不改 KTX，不把 `SHOW` 交给 `ktx sql`，不改问数，不改无点号库名的库内表清单 SQL，不改页面文案，不做浏览器测试 |
 | 验收 | Spec SC-01–SC-14 |

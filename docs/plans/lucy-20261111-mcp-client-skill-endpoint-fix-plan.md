@@ -5,7 +5,7 @@
 | 文档版本 / 日期 | **v0.1** / 2026-11-11 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P0**。功能编号无 |
 | 主 Spec | [`docs/specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md`](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md) |
-| 状态 | **v0.1 功能合同已收口（2026-11-11）**。SC-01–SC-11 通过（SC-10 于 Docker 重建后 CC 全真复测闭合）。证据见收口记录。本条收口不表示可上线 |
+| 状态 | **S5｜v0.1 功能合同已收口（2026-11-11）**。SC-01–SC-11 通过（SC-10 于 Docker 重建后 CC 全真复测闭合）。证据见收口记录。本条收口不表示可上线 |
 | 授权边界 | **已授权**：用户同会话要求 Spec／Plan 并推进落地 → 可改 `.mcp.json`、smoke 守卫／探针、接入文档口径、`package.json` 与测试门禁登记。**仍不授权** git commit（除非用户另授）、客户镜像、Docker `--fresh`／重建、重开 `/mcp/skills` passthrough、实现独立 `lucy-skills` server |
 | 验收 | 以主 Spec §3 SC-01–SC-11 为准 |
 | 实施主体 | 仓库根客户端配置、`scripts/smoke`、治理／接入文档 |

@@ -6,6 +6,7 @@
 | 日期 / 目标版本 | 2026-11-19／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-54**／REQ-030-075／**P0 底线的题库＋配置合同**。不入 0.30 核心分母 |
 | 台账号 | 无。挂现行 `0.30` 执行总账 |
+| 阶段 | S3 |
 | 状态 | S3｜**v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿；闭合 Cursor Round2／Kimi B1–B13 与 B15）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0 授权登记）。测试台沿用 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。≠ UAT PASS；≠ 可上线** |
 | 决策来源 | 多场景题库独立成 Spec 并覆盖 Lucy Ops；全真须配合 Lucy 配置；2026-11-19 批准复审建议（配置前置、frozen 负例夹具、通用车道行隔离策略③＋proven 门②、Plan 归属拆分） |
 | 父合同 | [P1-53](lucy-20261118-mcp-upgrade-compatibility-spec.md) **v1.1**；本 Spec＝题目语义＋CompatConfigProfile 正本；不另造放行阈值 |

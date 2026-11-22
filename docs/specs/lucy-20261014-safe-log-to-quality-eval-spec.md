@@ -10,7 +10,8 @@
 | Predecessor (security domain) | `webui/docs/65-safe-log-to-Security-Eval-spec.md` v0.3；实现见 `webui/server/eval/security-candidates.ts` |
 | Related work order | `docs/plans/wo-20261014-safe-log-to-quality-eval.md` |
 | Scope | Quality Candidate Pool、L1 断言型候选、L2 Intent Gap Draft、L3 人工补全、质量 `executable` 契约晋升 |
-| 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复，不改实现、不补验收证据。实现现状：前身安全域已实施（`webui/docs/65-safe-log-to-Security-Eval-spec.md` v0.3；实现见 `webui/server/eval/security-candidates.ts`），**质量域本条未落地**，配套 Work Order `docs/plans/wo-20261014-safe-log-to-quality-eval.md` 仍是 v0.1 草案。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
+| 阶段 | S1 |
+| 状态 | **S1｜形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复，不改实现、不补验收证据。实现现状：前身安全域已实施（`webui/docs/65-safe-log-to-Security-Eval-spec.md` v0.3；实现见 `webui/server/eval/security-candidates.ts`），**质量域本条未落地**，配套 Work Order `docs/plans/wo-20261014-safe-log-to-quality-eval.md` 仍是 v0.1 草案。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
 
 ## 闭口层级
 

@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | v0.1-draft / 2026-11-18 |
-| 状态 | **v0.1-draft。与 Spec 同句：仅登记与起草，不开发；终稿未确权；未获开发授权；未授权不改运行代码；测试台 not_registered；不入核心分母；≠ 可上线** |
+| 状态 | **S1｜v0.1-draft。与 Spec 同句：仅登记与起草，不开发；终稿未确权；未获开发授权；未授权不改运行代码；测试台 not_registered；不入核心分母；≠ 可上线** |
 | 主 Spec | [`docs/specs/lucy-20261118-lucy-ops-reader-headless-governance-acl-spec.md`](../specs/lucy-20261118-lucy-ops-reader-headless-governance-acl-spec.md) |
 | 总账 | **P1-49**／REQ-030-070；**不入核心分母** |
 | 授权边界 | **当前不得改运行代码。** 获终稿确权＋开发授权后，仅允许下方「文件白名单」。不授权改 ACL 编译内核、治理投影 builder、概念控制面、KTX |

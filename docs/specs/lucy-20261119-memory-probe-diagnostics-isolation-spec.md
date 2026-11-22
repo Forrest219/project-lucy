@@ -7,7 +7,7 @@
 | 功能编号 / 优先级 | P1-61／REQ-030-082；建议 P1 第一批；不入核心分母 |
 | 台账号 | 无 |
 | 阶段 | S4 |
-| 状态 | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-01真实停止／自动恢复局部复测PASS WITH GAP；完整F61矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
+| 状态 | S4｜v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-01真实停止／自动恢复局部复测PASS WITH GAP；完整F61矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
 | 授权边界 | 2026-11-20委托人明示按原合同修复已复现缺口，授权相关运行代码、测试工具及本机隔离Docker全真复测；不改客户环境、不提交、不推送、不发布；完整矩阵不得推定通过 2026-11-20委托人后续批准：本进程已完成修复、回归及取证可作阶段性本地commit；不含push、发布或客户变更，未完成矩阵仍保留GAP。 |
 | 需求 / 计划 | [总账](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261119-memory-probe-diagnostics-isolation-plan.md) |
 | 测试台 | [UAT-SUITE-CORE-AVAILABILITY](../qa/uat/suites/core-availability/suite.md)，F61；[修复跑次](../qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repair.md) |

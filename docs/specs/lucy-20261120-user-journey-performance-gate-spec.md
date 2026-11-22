@@ -6,7 +6,8 @@
 | 日期 / 目标版本 | 2026-11-20 / 0.30.0 |
 | 功能编号 / 优先级 | P1-67／REQ-030-088；P1（测试基建；建议）；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan 设计；终稿未确权；开发未授权；测试台未建；不入核心分母；≠ 功能收口；≠ 可上线。 |
+| 阶段 | S1 |
+| 状态 | S1｜v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan 设计；终稿未确权；开发未授权；测试台未建；不入核心分母；≠ 功能收口；≠ 可上线。 |
 | 授权边界 | 2026-11-20 委托人批准「立 P1 条目做用户旅程性能门禁」的设计授权；**不含** workflow／runner 运行代码改动、不含测试台建立、不含任何性能跑次执行；不含现场升级（109／KSC 由 P1-66 与交付流程处理）。 |
 | 需求 / 总账 | [REQ-030-088](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-088用户旅程性能门禁apiwebui-交互mcp-问询) · [P1-67](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) |
 | 计划 / 测试台 | [Plan](../plans/lucy-20261120-user-journey-performance-gate-plan.md) · 测试台 `UAT-SUITE-USER-JOURNEY-PERF`（待建，编号 `UAT-UJP-*`）· [INDEX](../qa/uat/INDEX.md) |

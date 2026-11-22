@@ -171,7 +171,7 @@ Spec 与 Plan 头部「状态」行禁止使用下列**英文状态词**。匹�
 
 推荐状态词（软约束；lint 不强制；近义中文不改写存量）。阶段码对照官方表见
 [`docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md)
-§3.1（S4／X_DEF 一对多；X_REL 无推荐原子）：
+§3.1（S4／X_DEF 一对多）：
 
 | 状态词 | 阶段码（软） | 含义 |
 |---|---|---|
@@ -180,7 +180,8 @@ Spec 与 Plan 头部「状态」行禁止使用下列**英文状态词**。匹�
 | 开发授权已获得 | S3 | 允许改运行代码（与 lint 授权口令同句） |
 | 实现已落地 | S4 | 代码已合入工作树或已提交 |
 | 待验收 | S4 | 实现完成，验收条目未关闭 |
-| 功能合同已收口 | S5 | SC 全部关闭且有收口记录 |
+| 功能合同已收口 | S5 | SC 全部关闭且有收口记录（**仅**闭口层级＝功能合同） |
+| 发布取证已收口 | X_REL | 发布取证 Spec 的收口终态（**不是**第二条进度链） |
 | 被取代 | X_SUP | 被后继 Spec 取代 |
 | 延期 | X_DEF | 委托人裁定延至后续产品线 |
 | 结案不做 | X_DEF | 委托人裁定不做 |
@@ -198,15 +199,28 @@ Spec 头部须恰好一行「阶段」元数据；单元格去掉空白与全部
 `S1` `S2` `S3` `S4` `S5` `X_DEF` `X_SUP` `X_REL`。字典与全部裁定（D1–D18、文法、伪代码）以
 [`docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md)
 为准；阶段码 ↔ 推荐中文的一对多映射以该 Spec §3.1 为准，本条不另拷词表。UAT／可上线不是阶段；
-发布取证层级闭口的「阶段」必须是 `X_REL`；「收口范围」行仅 S5 可写。
+「收口范围」行仅 S5 可写。
+
+**不是两套漏斗（降熵口径；委托人 2026-11-22 选 A＋B＋C）**
+
+1. **一条主进度**：所有 Spec（含发布取证）实施期只走 `S1→S2→S3→S4`。禁止把 `X_REL` 当成第二条从零爬的进度链。
+2. **终态按闭口层级分叉**：功能合同收口 → `S5`；发布取证收口 → `X_REL`；不做／延期 → `X_DEF`；被取代 → `X_SUP`。发布取证 **禁止** 标 `S5`。
+3. **口语**：对发布取证说「推进到收口（X_REL）」，不要说「推进到 S5」。
+4. **总账完成率分列**：`S5` 桶与 `X_REL` 桶分开统计，**禁止相加**冒充同一「总完成率」。在途发布取证留在 S1–S4，不进 `X_REL` 桶。
+5. **登记纪律**：仅在收口瞬间把阶段改成终态码；未收口却写 `X_REL`／`S5` 视为登记缺陷（门禁见漏斗 Spec D8／D8b）。
 
 机器门禁＝`lint:spec-docs` 规则 `status-funnel`（PR CI 独立入口 `npm run lint:status-funnel`，同一实现）。
 grandfather＝`docs/governance/spec-status-funnel-grandfather.json`：名单内 Spec 的状态行不含
 「开发授权已获得」、且正文无标记行「状态漏斗门禁：纳入检查」时本规则直接通过；口令或标记行取消跳过。
 Plan「状态」行去首尾空白与前导 `*` 后，须以 `阶段:<CODE>`／`<CODE>｜`／`<CODE>。` 开头镜像 Spec 阶段码。
-S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口`、`实现进行中` 等，见 Spec D4）；S1／S2 的状态行
+S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口`、`实现进行中` 等，见 Spec D4）；`X_REL` 不得含在途短语（见 Spec D8b）；S1／S2 的状态行
 不得含「开发授权已获得」；状态行首个「阶段:」之后不得把 `可上线`／`UAT PASS`／`测试台PASS` 当作阶段码，
 「≠」-前缀否定式（DEVELOPMENT 标准写法）放行。
+
+**总账跟进状态 ↔ Spec 阶段（P1-73 v1.1＋降熵补丁）**：执行总账「跟进状态」须以阶段码 `｜` 开头；有主 Spec
+（链接文案 `Spec`／`主 Spec`）时，须与 Spec「阶段」格同码。机器门禁＝规则 `inventory-stage`
+（`npm run lint:inventory-stage`，PR CI 同跑）。无主 Spec 的行仍须带合法阶段前缀。回填脚本
+`npm run mig:funnel-inventory`（仅授权 MIG 时用）。完成率分列规则见上条第 4 点与现行总账「收口分列」小节。
 
 ### 产品线执行总账（SOT）
 
@@ -387,7 +401,7 @@ S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口
 | 17 | **新功能 Spec 必含「受影响画像」小节**：4 画像（问数方／治理方／运维方／管理层）逐行判定 `↑`／`＝`／`↓`，写明变更前后体验与**可核对依据**；判 `↓` 必须写补偿路径并挂验收编号，否则不得收口。事实源与模板见 [`user-personas.md`](user-personas.md) | 本文件「Review 要求」＋ [`user-personas.md`](user-personas.md) §4／§5 | 无（评审／出门人工；`lint:spec-docs` 的 `persona-impact` 规则属第二阶段，**未实现**） |
 | 18 | **WebUI 验证强制浏览器＋计时**：触及 WebUI 用户可见面时，开发验证与测试台不得只验后端 HTTP；须真实前台浏览器＋导航／primaryReady（或等价）计时，并与 API 耗时分列。仅 API smoke 不得记 WebUI PASS／收口 | 本文件「验证策略：浏览器测试约束」＋ [`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md) | 无（评审／UAT 出门人工） |
 | 19 | **Spec／Plan「状态」行禁止英文状态词，表头写「状态」不写 `Status`**（匹配规则见「状态措辞用中文」） | [`lucy-20261122-spec-status-vocabulary-chinese-plan.md`](../plans/lucy-20261122-spec-status-vocabulary-chinese-plan.md) | `lint:spec-docs`（规则 `status-vocab`）＋ `lint:status-vocab`（PR CI） |
-| 20 | **Spec 头部须恰好一行可解析「阶段」；「状态」不得与阶段机器可判矛盾；Plan「状态」行须镜像阶段码前缀**（口径见「开发台漏斗阶段码」） | [`lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) | `lint:spec-docs`（规则 `status-funnel`）＋ `lint:status-funnel`（PR CI） |
+| 20 | **Spec 头部须恰好一行可解析「阶段」；「状态」不得与阶段机器可判矛盾；Plan「状态」行须镜像阶段码前缀；执行总账「跟进状态」须 `CODE｜` 且与主 Spec「阶段」同码**（口径见「开发台漏斗阶段码」） | [`lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) | `lint:spec-docs`（`status-funnel`＋`inventory-stage`）＋ `lint:status-funnel`／`lint:inventory-stage`（PR CI） |
 
 ### 交互合同
 

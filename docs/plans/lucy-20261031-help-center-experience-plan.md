@@ -7,7 +7,7 @@
 | 主 Spec | [Lucy 帮助中心体验 Spec](../specs/lucy-20261031-help-center-experience-spec.md)（**v0.5-draft**） |
 | 台账号 | **L25-12** → 池 **P2-2／REQ-030-002**。历史挂 v0.25 升级台账（[`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](2026-10-18-lucy-2.5-upgrade-proposal.md) §2.6） |
 | 需求来源 | 2026-10-31 Forrest：快速入门＋详细指南分册、门户式帮助中心、可复制带走（**2026-11-19 起首页形态改为概览内容页，D17 已裁决**）。**2026-11-16 委托人选方案 B**：开线时门户／快速入门必须深链「直连 vs Lucy」+「语义配置杠杆」（Spec D15／SC-21）。**2026-11-19 委托人修正对标对象**为 `https://www.kimi.com/code/docs/`（新增 D16／D18）；**并明示 MD 标配**——「复制 Markdown」升级为标准动作（D21／SC-26），据此解除 D6 的整本导出限制。**2026-11-19 委托人裁决 D17**：首页参照 `https://www.kimi.com/code/docs/` ＋ `https://docs.kaelio.com/ktx/docs/getting-started/quickstart` 采用概览内容页形态；**并明示两项候选都要纳入**（D19 错误参考章、D20 逃逸出口；SC-24／SC-25） |
-| 状态 | **`0.30.0` 池 P2-2／[`REQ-030-002`](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)**：与主 Spec 同为 **v0.5-draft**，**待评审、未授权实现**。本轮不实施、不开工。S0–S6 未执行，SC-01–SC-26 未执行。记录见 [A／B 剥离](../reviews/2026-11-03-product-close-peel-a-b.md)；总账 v1.57 |
+| 状态 | **X_DEF｜`0.30.0` 池 P2-2／[`REQ-030-002`](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)**：与主 Spec 同为 **v0.5-draft**，**待评审、未授权实现**。本轮不实施、不开工。S0–S6 未执行，SC-01–SC-26 未执行。记录见 [A／B 剥离](../reviews/2026-11-03-product-close-peel-a-b.md)；总账 v1.57 |
 | 授权边界 | **不授权开发、不授权改代码、不授权改手册正文、不授权部署。** 评审通过并另行授权后方可开工；D1–D21 冻结状态须在评审时与主 Spec 统一（D15–D21 已由委托人明示） |
 | 验收 | SC-01–SC-26。**全部未执行**。执行须在开发授权后，且只在主 Spec §12 的三层验证范围内 |
 | 实施主体 | Lucy WebUI。不改 KTX 源码，不新增数据库表，不新增运行时能力，不引入外部服务 |

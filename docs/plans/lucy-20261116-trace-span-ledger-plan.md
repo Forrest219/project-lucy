@@ -10,7 +10,7 @@
 | 委托人 | xingchen |
 | 基于材料 | [Spec](../specs/lucy-20261116-trace-span-ledger-spec.md)；[v0.25 审计增量 Spec](../specs/lucy-20261020-v2p5-audit-increment-spec.md)；[P1-32／P1-33 Spec](../specs/lucy-20261115-audit-export-scale-and-equivalence-guard-spec.md)；客户全量调用流水分析（2026-11-16） |
 | 适用范围 | P1-36／REQ-030-057：span 表、同事务写入、派生版本、脱敏、`ip_source`、封存导出与对账 |
-| 状态 | **终稿确权（委托人 2026-11-17 授权代理修正后定稿，免 Codex 终审）；v1.0；已获开发授权（委托人 2026-11-17「授权开发落地」）；代码已落地（span 表、同事务写入、spans.csv 与 spanCoverage、`/api/admin/audit/status`），vitest 回归无新增失败，本机 demo 已平滑升级并取证；测试台 `UAT-SUITE-TRACE-LEDGER`＝**PASS WITH GAP**（2026-11-17 宽目录沙箱 Tier-A 跑次 `docs/qa/uat/suites/trace-span-ledger/runs/2026-11-17-claude-wide-sandbox-tierA.md`；TRC-01/02/03/04/05/06/10/11 有证据，TRC-07/08/09 NOT RUN，不是整套 PASS）；登记发现 F-1～F-5，其中 F-2（正式完整导出 `mode=complete` 因既有 F-02 失败关闭，`spans.csv` 只在诊断包验证）与 F-3（SC-06 与 §6.2 口径冲突）待委托人裁定。≠ UAT PASS；≠ 可上线** |
+| 状态 | **S4｜终稿确权（委托人 2026-11-17 授权代理修正后定稿，免 Codex 终审）；v1.0；已获开发授权（委托人 2026-11-17「授权开发落地」）；代码已落地（span 表、同事务写入、spans.csv 与 spanCoverage、`/api/admin/audit/status`），vitest 回归无新增失败，本机 demo 已平滑升级并取证；测试台 `UAT-SUITE-TRACE-LEDGER`＝**PASS WITH GAP**（2026-11-17 宽目录沙箱 Tier-A 跑次 `docs/qa/uat/suites/trace-span-ledger/runs/2026-11-17-claude-wide-sandbox-tierA.md`；TRC-01/02/03/04/05/06/10/11 有证据，TRC-07/08/09 NOT RUN，不是整套 PASS）；登记发现 F-1～F-5，其中 F-2（正式完整导出 `mode=complete` 因既有 F-02 失败关闭，`spans.csv` 只在诊断包验证）与 F-3（SC-06 与 §6.2 口径冲突）待委托人裁定。≠ UAT PASS；≠ 可上线** |
 | 授权边界 | 本 Plan **只定义步骤与验证**。终稿确权已获得（委托人 2026-11-17 授权代理修正后定稿，免 Codex）；O1–O8 已按 Spec §9 闭合。改运行代码仍须**委托人另发开发授权**。不含：防篡改链与外送（第 2、3 层）、历史行回写、客户现场验证、WebUI 新页面 |
 | 验收 | 见 §3 |
 | 输出位置 | `docs/plans/lucy-20261116-trace-span-ledger-plan.md` |

@@ -22,6 +22,7 @@
  *   interaction-contract 触发的 Spec 须有可解析的交互合同与元素清单，或一份有效豁免。文法见
  *     docs/specs/lucy-20261107-ui-interaction-contract-gate-spec.md。grandfather 名单内的文件，
  *     在没有标记行、且状态行不含「开发授权已获得」时直接通过
+ *   inventory-stage 产品线执行总账「跟进状态」须以阶段码｜开头；有主 Spec 链接时与 Spec「阶段」格一致（P1-73 v1.1）
  *
  * 存量违规冻结在 docs/governance/spec-plan-doc-baseline.json：**基线只减不增**。
  * 新增违规 → exit 1；基线里已不再违规的条目 → 报 stale（提示可从基线移除），不阻塞。
@@ -585,6 +586,7 @@ export function scanRepo() {
       violations.push(...checkStatusFunnel(relPath, text, planText, { grandfatherFiles: funnelGrandfatherFiles }));
     }
   }
+  violations.push(...checkInventoryStageMirror());
   violations.push(...collectDesignSystemViolations());
   for (const relPath of STALE_STATUS_EXTRA) {
     if (!existsSync(path.join(repoRoot, relPath))) continue;
@@ -754,6 +756,15 @@ const FUNNEL_UNCLOSED_PHRASES = [
   "尚未收口",
   "实现进行中"
 ];
+/** D8b：X_REL＝发布取证已收口；状态行不得仍写在途短语。 */
+const FUNNEL_X_REL_OPEN_PHRASES = [
+  "实现进行中",
+  "终稿未确权",
+  "未获开发授权",
+  "开发未授权",
+  "评审前不开发",
+  "Wave 0"
+];
 const FUNNEL_SHIP_ALIAS = /可上线|UAT[ 　]+PASS|测试台PASS/g;
 const FUNNEL_STAGE_COLON = /阶段[:：]/;
 const FUNNEL_GRANDFATHER_FILE = "docs/governance/spec-status-funnel-grandfather.json";
@@ -835,9 +846,9 @@ export function checkStatusFunnel(specRel, specText, planText, options = {}) {
     return fail(`「阶段」单元格「${funnelStripCell(stageRows[0][1]) || "（空）"}」不是合法阶段码；须整格等于 S1／S2／S3／S4／S5／X_DEF／X_SUP／X_REL`);
   }
 
-  // D8：闭口层级「发布取证」→ 必须 X_REL。
-  if (funnelCloseLayer(specText) === "发布取证" && code !== "X_REL") {
-    return fail("「闭口层级」为发布取证时，「阶段」必须是 X_REL（D8）");
+  // D8：发布取证与功能合同共用 S1–S4；收口终态＝X_REL；禁止 S5。
+  if (funnelCloseLayer(specText) === "发布取证" && code === "S5") {
+    return fail("「闭口层级」为发布取证时，「阶段」不得为 S5；收口用 X_REL，实施期用 S1–S4（D8）");
   }
 
   // D4：S5 与「未收口」显式短语表矛盾。
@@ -845,6 +856,13 @@ export function checkStatusFunnel(specRel, specText, planText, options = {}) {
     const squashed = status.replace(/\s+/g, "");
     const hit = FUNNEL_UNCLOSED_PHRASES.find((phrase) => squashed.includes(phrase));
     if (hit) return fail(`阶段＝S5 时「状态」行不得含未收口短语「${hit}」（D4）`);
+  }
+
+  // D8b：X_REL 与在途短语矛盾（防把未收口发布取证标成终态）。
+  if (code === "X_REL") {
+    const squashed = status.replace(/\s+/g, "");
+    const hit = FUNNEL_X_REL_OPEN_PHRASES.find((phrase) => squashed.includes(phrase.replace(/\s+/g, "")));
+    if (hit) return fail(`阶段＝X_REL 时「状态」行不得含在途短语「${hit}」（D8b）`);
   }
 
   // D4：S1／S2 不得含授权口令。
@@ -872,6 +890,142 @@ export function checkStatusFunnel(specRel, specText, planText, options = {}) {
   }
 
   return [];
+}
+
+const INVENTORY_STAGE_FILES = [
+  "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md"
+];
+const INVENTORY_ID_RE = /^P(?:0-[A-Z]|[012]-\d+)$/;
+const INVENTORY_STAGE_PREFIX = /^(S[1-5]|X_DEF|X_SUP|X_REL)[｜|]/;
+
+/** 总账「跟进状态」单元格的阶段码前缀；无前缀返回 null。 */
+export function inventoryStagePrefix(statusCellText) {
+  const stripped = (statusCellText ?? "").trim().replace(/^\*+/, "").replace(/\*+$/, "").trim();
+  const match = INVENTORY_STAGE_PREFIX.exec(stripped);
+  return match ? match[1] : null;
+}
+
+/**
+ * 从总账 Spec／Plan 列提取主 Spec 相对路径（docs/specs/…）。
+ * 优先链接文案为「Spec」／「主 Spec」的 docs/specs 或 ../specs 目标；否则取首个 lucy-*-spec.md。
+ * 忽略「前序」类旁链与 webui/docs 流水号 Spec（不在本规则强制面）。
+ */
+export function inventoryPrimarySpecRels(linksCell) {
+  const links = [];
+  for (const match of (linksCell ?? "").matchAll(/\[([^\]]*)\]\(([^)]+)\)/g)) {
+    const label = match[1].trim();
+    let target = match[2].trim().split("#")[0];
+    if (!/-spec\.md$/i.test(target)) continue;
+    if (target.startsWith("../specs/")) target = `docs/specs/${path.posix.basename(target)}`;
+    else if (target.startsWith("docs/specs/")) target = target.replace(/^\.\//, "");
+    else if (!target.includes("/")) target = `docs/specs/${target}`;
+    else continue; // webui/docs 等旁路不进本规则
+    if (!target.startsWith("docs/specs/")) continue;
+    links.push({ label, rel: target });
+  }
+  const primary = links.filter((item) => /^(主\s*)?Spec$/i.test(item.label) || /^Spec\b/i.test(item.label));
+  if (primary.length) return [...new Set(primary.map((item) => item.rel))];
+  // 无「Spec」锚时：不把「前序／P1-xx」旁链当成主 Spec（例如 P1-50 只挂前序 P1-45）
+  const fallback = links.filter((item) => {
+    if (!/^lucy-.+-spec\.md$/i.test(path.posix.basename(item.rel))) return false;
+    if (/前序|关联|错题|closure|测试台/i.test(item.label)) return false;
+    if (/^P[012](?:-\d+|-[A-Z])\b/.test(item.label)) return false;
+    return true;
+  });
+  return [...new Set(fallback.map((item) => item.rel))];
+}
+
+function inventoryTableRows(text) {
+  const lines = text.split("\n");
+  let started = false;
+  const rows = [];
+  for (const line of lines) {
+    if (!started) {
+      if (line.startsWith("| 清单 ID")) started = true;
+      continue;
+    }
+    if (line.startsWith("#")) break;
+    if (!line.trimStart().startsWith("|")) continue;
+    const parts = line.trim().split("|");
+    if (parts[0].trim() === "") parts.shift();
+    if (parts.length && parts[parts.length - 1].trim() === "") parts.pop();
+    const cells = parts.map((cell) => cell.trim());
+    if (cells.length < 8) continue;
+    if (cells[0].startsWith("---") || cells[0] === "清单 ID") continue;
+    if (!INVENTORY_ID_RE.test(cells[0])) continue;
+    rows.push({ id: cells[0], status: cells[6], links: cells[7] ?? "" });
+  }
+  return rows;
+}
+
+/**
+ * P1-73 v1.1：执行总账跟进状态 ↔ Spec「阶段」一致性。
+ * 总账行须以 CODE｜开头；有主 Spec 时 Spec 须有可解析阶段格且等于该 CODE。
+ */
+export function checkInventoryStageMirror(options = {}) {
+  const files = options.inventoryFiles ?? INVENTORY_STAGE_FILES;
+  const readText = options.readText ?? ((rel) => read(rel));
+  const exists = options.exists ?? ((rel) => existsSync(path.join(repoRoot, rel)));
+  const violations = [];
+  for (const invRel of files) {
+    if (!exists(invRel)) {
+      violations.push({ file: invRel, rule: "inventory-stage", message: "执行总账文件不存在" });
+      continue;
+    }
+    const rows = inventoryTableRows(readText(invRel));
+    if (rows.length === 0) {
+      violations.push({ file: invRel, rule: "inventory-stage", message: "未解析到清单表行（须含「| 清单 ID」表头与 P*- 行）" });
+      continue;
+    }
+    for (const row of rows) {
+      const code = inventoryStagePrefix(row.status);
+      if (!code) {
+        violations.push({
+          file: invRel,
+          rule: "inventory-stage",
+          message: `${row.id}「跟进状态」须以阶段码｜开头（S1–S5／X_DEF／X_SUP／X_REL）`
+        });
+        continue;
+      }
+      if (!FUNNEL_CODES.has(code)) {
+        violations.push({
+          file: invRel,
+          rule: "inventory-stage",
+          message: `${row.id} 阶段前缀「${code}」不是合法阶段码`
+        });
+        continue;
+      }
+      const specs = inventoryPrimarySpecRels(row.links);
+      for (const specRel of specs) {
+        if (!exists(specRel)) {
+          violations.push({
+            file: invRel,
+            rule: "inventory-stage",
+            message: `${row.id} 主 Spec 缺失：${specRel}`
+          });
+          continue;
+        }
+        const stageRows = funnelFieldRows(readText(specRel), "阶段");
+        if (stageRows.length !== 1) {
+          violations.push({
+            file: invRel,
+            rule: "inventory-stage",
+            message: `${row.id} 配对 Spec ${path.posix.basename(specRel)} 须恰好一行「阶段」元数据（与总账 ${code} 对齐）`
+          });
+          continue;
+        }
+        const specCode = funnelStripCell(stageRows[0][1]);
+        if (specCode !== code) {
+          violations.push({
+            file: invRel,
+            rule: "inventory-stage",
+            message: `${row.id} 总账阶段 ${code} ≠ Spec ${path.posix.basename(specRel)} 阶段 ${specCode || "（空）"}`
+          });
+        }
+      }
+    }
+  }
+  return violations;
 }
 
 function locate(rel, options) {

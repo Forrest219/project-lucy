@@ -70,9 +70,10 @@ jobs:
       - run: npm run lint:spec
       - run: npm run lint:status-vocab
       # P1-73 Wave B（SC-15）：status-funnel 经导出入口进 PR CI；与 Wave A 同实现库。
-      # 存量残余：12 份已授权未迁「| 阶段 |」的 Spec（SC-10 类）在本步骤红，待 MIG 批次另授权补齐；
+      # P1-73 v1.1：总账跟进状态 ↔ Spec「阶段」一致性（委托人 2026-11-22 授权 MIG＋lint）。
       # 全量 lint:spec-docs 另有 prepack 存量红，故取导出入口而非全量（见 test-layers §8）。
       - run: npm run lint:status-funnel
+      - run: npm run lint:inventory-stage
       - run: npm run security:baseline
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:

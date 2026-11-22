@@ -6,7 +6,8 @@
 | 日期 / 产品线 | 2026-11-20 / 0.30.0 |
 | 功能编号 / 优先级 | P1-64／REQ-030-085；事故修复；不入核心分母 |
 | 台账号 | 无 |
-| 状态 | v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 |
+| 阶段 | S5 |
+| 状态 | S5｜v0.4。功能合同已收口（SC-01–10通过；合并候选全库TypeScript0错误，782项Vitest及29项概念模块回归通过，真实前台浏览器计时完成）；本轮增量已提交；未推送／发布；不入核心分母；本条收口不表示可上线。 |
 | 授权边界 | Task 1–6 与 Task 7 UAT 执行已获授权；禁止本轮 git commit／push（除非另授）；不改 KTX；不放宽 Source Map 判重 |
 | 需求 / 计划 | [REQ-030-085](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) · [总账 P1-64](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Plan](../plans/lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md) |
 | 复现证据 / 测试台 | 改前 [Docker 复现](../qa/uat/suites/source-shortname-conflict/runs/2026-11-19-codex-docker-repro.md)；本轮 [合并最终候选复验](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-combined-final.md) · [UAT-SUITE-SOURCE-SHORTNAME-CONFLICT](../qa/uat/suites/source-shortname-conflict/suite.md) |

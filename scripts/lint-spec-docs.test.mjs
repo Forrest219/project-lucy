@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   checkInteractionContract,
+  checkInventoryStageMirror,
   checkStatusFunnel,
   classifyViolations,
   collectDesignSystemViolations,
@@ -12,6 +13,8 @@ import {
   collectFilenameViolation,
   collectStaleStatusViolations,
   collectStatusVocabViolations,
+  inventoryPrimarySpecRels,
+  inventoryStagePrefix,
   listNumberedSpecsUnder,
   loadRegisteredRoutes,
   scanRepo
@@ -165,12 +168,15 @@ test("基线分类：基线内违规不阻塞，新增违规阻塞，基线失�
 test("仓库现状：门禁在基线之上必须通过（已知存量残余除外）", () => {
   const result = scanRepo();
   // 已知存量残余（非本条范围，禁止在本条修）：
-  //  1) lucy-20261122-prepack-closure-multi-agent-plan.md 的 plan-parts/metadata（其他在途条目的文件）；
-  //  2) status-funnel 对已授权、尚未迁「| 阶段 |」的存量 Spec 的 SC-10 类判失败（MIG 批次另授权补齐）。
-  // 上述两类在专用测试里钉住；此处只拦截一切新增违规。
+  //  1) 2026-11-22 编排／收口 Plan 缺 plan-parts／metadata（过程文件，非功能合同 Plan 模板）；
+  //  2) status-funnel SC-10 类（已授权未迁阶段）——MIG 后应收口为 0；仍保留过滤以防回归窗口。
+  const residualPlans = new Set([
+    "docs/plans/lucy-20261122-prepack-closure-multi-agent-plan.md",
+    "docs/plans/lucy-20261122-s4-to-s5-parallel-wave-plan.md",
+    "docs/plans/lucy-20261122-p173-p135-s5-closure-multi-agent-plan.md"
+  ]);
   const knownResidual = (v) =>
-    (v.file === "docs/plans/lucy-20261122-prepack-closure-multi-agent-plan.md" &&
-      (v.rule === "plan-parts" || v.rule === "metadata")) ||
+    (residualPlans.has(v.file) && (v.rule === "plan-parts" || v.rule === "metadata")) ||
     v.rule === "status-funnel";
   const unexpected = result.blocking.filter((v) => !knownResidual(v));
   assert.equal(
@@ -782,9 +788,12 @@ test("SC-05：状态行 ≠ 可上线 通过；阶段:后把可上线／UAT 当�
   assert.deepEqual(runFunnel({ stage: "S3", status: "阶段：S3｜v1.0。仍 ≠ 可上线" }), []);
 });
 
-test("SC-06：发布取证必须 X_REL；X_REL 放行", () => {
-  funnelFail(runFunnel({ stage: "S5", status: "功能合同已收口", layer: "发布取证" }), /X_REL/);
-  assert.deepEqual(runFunnel({ stage: "X_REL", status: "发布取证收口", layer: "发布取证" }), []);
+test("SC-06：发布取证禁止 S5；实施期 S1–S4／收口 X_REL 放行；X_REL 不得含在途短语", () => {
+  funnelFail(runFunnel({ stage: "S5", status: "功能合同已收口", layer: "发布取证" }), /不得为 S5/);
+  assert.deepEqual(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中", layer: "发布取证" }), []);
+  assert.deepEqual(runFunnel({ stage: "S4", status: "开发授权已获得；待验收", layer: "发布取证" }), []);
+  assert.deepEqual(runFunnel({ stage: "X_REL", status: "发布取证已收口", layer: "发布取证" }), []);
+  funnelFail(runFunnel({ stage: "X_REL", status: "实现进行中", layer: "发布取证" }), /在途短语/);
 });
 
 test("SC-07／SC-08：收口范围仅 S5；S5 合法收口范围通过", () => {
@@ -807,6 +816,63 @@ test("SC-12：Plan 镜像前缀与 Spec 阶段码一致", () => {
   funnelFail(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中", planStatus: "**S3**｜v1.0" }), /未镜像/);
   funnelFail(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中", planStatus: "阶段:S4｜v1.0" }), /未镜像/);
   funnelFail(runFunnel({ stage: "S4", status: "实现已落地", planStatus: "S3｜v1.0" }), /未镜像/);
+});
+
+test("inventory-stage：前缀解析与主 Spec 提取", () => {
+  assert.equal(inventoryStagePrefix("S5｜功能合同已收口"), "S5");
+  assert.equal(inventoryStagePrefix("*S3｜实现进行中*"), "S3");
+  assert.equal(inventoryStagePrefix("功能合同已收口"), null);
+  assert.deepEqual(
+    inventoryPrimarySpecRels(
+      "[Spec](../specs/lucy-20261118-lucy-ops-reader-headless-governance-acl-spec.md) · 前序 [可问治理面](../specs/lucy-20261101-ops-evidence-askable-governance-spec.md)"
+    ),
+    ["docs/specs/lucy-20261118-lucy-ops-reader-headless-governance-acl-spec.md"]
+  );
+  assert.deepEqual(
+    inventoryPrimarySpecRels("[Spec 191](../../webui/docs/191-execution-runtime-reload-spec.md)"),
+    []
+  );
+  assert.deepEqual(
+    inventoryPrimarySpecRels(
+      "前序 [P1-45](../specs/lucy-20261118-inferred-turn-rebuild-recovery-spec.md) · [fde-pack-gate-parallel-plan](lucy-20261118-fde-pack-gate-parallel-plan.md)"
+    ),
+    []
+  );
+});
+
+test("inventory-stage：缺前缀／与 Spec 阶段不一致失败；对齐通过", () => {
+  const inv = [
+    "| 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 核心分母 | 跟进状态 | Spec／Plan |",
+    "|---|---|---|---|---|---|---|---|",
+    "| P1-99 | P1 | 示例 | REQ-x | x | 否 | 功能合同已收口 | [Spec](../specs/lucy-fixture-a-spec.md) |",
+    "| P1-98 | P1 | 示例2 | REQ-y | x | 否 | S4｜实现已落地 | [Spec](../specs/lucy-fixture-b-spec.md) |",
+    "| P1-97 | P1 | 示例3 | REQ-z | x | 否 | S5｜功能合同已收口 | [Spec](../specs/lucy-fixture-c-spec.md) |"
+  ].join("\n");
+  const files = {
+    "docs/plans/fixture-inventory.md": inv,
+    "docs/specs/lucy-fixture-a-spec.md": "| 阶段 | S5 |\n| 状态 | S5｜功能合同已收口 |\n",
+    "docs/specs/lucy-fixture-b-spec.md": "| 阶段 | S5 |\n| 状态 | S5｜功能合同已收口 |\n",
+    "docs/specs/lucy-fixture-c-spec.md": "| 阶段 | S5 |\n| 状态 | S5｜功能合同已收口 |\n"
+  };
+  const result = checkInventoryStageMirror({
+    inventoryFiles: ["docs/plans/fixture-inventory.md"],
+    readText: (rel) => files[rel],
+    exists: (rel) => Object.prototype.hasOwnProperty.call(files, rel)
+  });
+  assert.equal(result.length, 2);
+  assert.match(result[0].message, /P1-99.*须以阶段码/);
+  assert.match(result[1].message, /P1-98.*S4 ≠ Spec .* S5/);
+  const okInv = inv.replace("功能合同已收口 | [Spec](../specs/lucy-fixture-a-spec.md)", "S5｜功能合同已收口 | [Spec](../specs/lucy-fixture-a-spec.md)")
+    .replace("S4｜实现已落地 | [Spec](../specs/lucy-fixture-b-spec.md)", "S5｜功能合同已收口 | [Spec](../specs/lucy-fixture-b-spec.md)");
+  files["docs/plans/fixture-inventory.md"] = okInv;
+  assert.deepEqual(
+    checkInventoryStageMirror({
+      inventoryFiles: ["docs/plans/fixture-inventory.md"],
+      readText: (rel) => files[rel],
+      exists: (rel) => Object.prototype.hasOwnProperty.call(files, rel)
+    }),
+    []
+  );
 });
 
 test("SC-09／SC-10 生产名单：grandfather 内无口令无标记不被误伤；失败只限授权缺阶段类", () => {

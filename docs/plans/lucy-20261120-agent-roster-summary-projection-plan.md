@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 实施计划 / v0.3（委托人批准分批） |
 | 日期 / 产品线 | 2026-11-20 / 0.30.0 |
 | 功能 / 需求 | P1-66／REQ-030-087；不入核心分母 |
-| 状态 | v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 |
+| 状态 | S5｜v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 |
 | 授权边界 | 委托人2026-11-20确认 v0.2 定稿并授权 T1–T7 开发及 Docker 浏览器验证，完整覆盖旧接口、按需详情和六组权限夹具；不提交、推送、发布，不升级 109 |
 | 验收 | [Spec SC-01–SC-12](../specs/lucy-20261120-agent-roster-summary-projection-spec.md#6-验收)；[测试台](../qa/uat/INDEX.md) UAT-SUITE-AGENT-ROSTER-SUMMARY；执行进度与失败证据见测试台配套 run |
 | 关联 | [Spec](../specs/lucy-20261120-agent-roster-summary-projection-spec.md) · [总账 P1-66](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [需求池](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) |

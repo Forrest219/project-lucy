@@ -2,7 +2,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **v0.2 草案（已含浏览器盘点），待委托人确认 Spec 范围、批次与裁决项 D-1–D-4**。本 Plan 是**优化方案**，不做开发；各批整改另出子 Plan 并另获开发授权 |
+| 状态 | **S1｜v0.2 草案（已含浏览器盘点），待委托人确认 Spec 范围、批次与裁决项 D-1–D-4**。本 Plan 是**优化方案**，不做开发；各批整改另出子 Plan 并另获开发授权 |
 | 主 Spec | [`docs/specs/lucy-20261114-webui-uiux-remediation-spec.md`](../specs/lucy-20261114-webui-uiux-remediation-spec.md) **v0.2-draft** |
 | 总账 | **P1-24**／REQ-030-045；**不入核心分母** |
 | 授权边界 | 本 Plan 只改文档：Spec、总账、需求池、`docs/README.md`、`docs/plans/README.md`，以及（D-1–D-3 获批后）设计系统 `01`／`03`／`10` 章的条款文字。**不改** `webui/src/`、`app.css`、测试、`scripts/`、KTX。各批整改须另入子 Plan、终稿确权、委托人另发开发授权 |

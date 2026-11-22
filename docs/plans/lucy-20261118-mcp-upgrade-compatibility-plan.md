@@ -12,7 +12,7 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | **v1.1** / 2026-11-18 |
-| 状态 | S3｜**v1.1。终稿补丁（收编 P1-54 题库正本／Ops 分母／CompatConfigProfile 前置 D27）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0）。测试台 NOT RUN。≠ UAT PASS；≠ 可上线** |
+| 状态 | S4｜**v1.1。终稿补丁（收编 P1-54 题库正本／Ops 分母／CompatConfigProfile 前置 D27）。开发授权已获得（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现已落地／待验收**（Task 1–5 已落；Wave D FAIL）。测试台 NOT RUN。收口终态＝`X_REL`。≠ UAT PASS；≠ 可上线** |
 | 主 Spec | [`docs/specs/lucy-20261118-mcp-upgrade-compatibility-spec.md`](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md) |
 | 总账 | **P1-53**／REQ-030-074；升级放行＝P0 底线；**不入**核心分母 |
 | 授权边界 | **终稿确权 ≠ 开发授权**。委托人 2026-11-22 已授权 Task 1+。白名单：判定器／执行器／证据校验／CI／Runbook。**题库 YAML 内容与 CompatConfigProfile 应用／还原脚本归 P1-54**；本条只 Consume／Validate／调用。不得修 `webui/server`／`webui/src` 或 KTX。git commit、Docker 重建、生产升级／回滚／出包另授权；每 Wave 完成后 code review 再进入下一 Wave |

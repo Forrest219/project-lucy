@@ -5,7 +5,8 @@
 | 文档类型 / 版本 | 功能设计基线 / **v0.5** |
 | 日期 / 目标版本 | 2026-11-09 / 产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 台账号 | 无 |
-| 状态 | **v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；功能合同层已收口（SC-01–SC-22 有自动化证据，2026-11-09）；实现 CR 已落盘（PASS，2026-11-13）**；**本分支概念注册表唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 已于 2026-11-13 结案不做）。**测试台** [`UAT-SUITE-OPS-CONCEPTS`](../qa/uat/suites/ops-concepts/suite.md) 已入 INDEX＝**FAIL**（[2026-11-15-claude-macmini-p1-11-ops](../qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md)；授权面 PASS；业务受理因模块路径／依赖装配失败——GAP-UAT-P1-11-RUNTIME）。伴生修复 **[P1-27／REQ-030-048](lucy-20261115-ops-concept-code-root-runtime-fix-spec.md)**（R2-F＋R4 已闭合；实现中；复测 **NOT RUN**）。**本条不表示可上线／发布取证**（P1-11／REQ-030-032） |
+| 阶段 | X_DEF |
+| 状态 | **X_DEF｜v0.5；R2-F＋R3（O1＝A／O2＝B）＋R4 已闭合（2026-11-09）；功能合同层已收口（SC-01–SC-22 有自动化证据，2026-11-09）；实现 CR 已落盘（PASS，2026-11-13）**；**本分支概念注册表唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 已于 2026-11-13 结案不做）。**测试台** [`UAT-SUITE-OPS-CONCEPTS`](../qa/uat/suites/ops-concepts/suite.md) 已入 INDEX＝**FAIL**（[2026-11-15-claude-macmini-p1-11-ops](../qa/uat/suites/ops-concepts/runs/2026-11-15-claude-macmini-p1-11-ops.md)；授权面 PASS；业务受理因模块路径／依赖装配失败——GAP-UAT-P1-11-RUNTIME）。伴生修复 **[P1-27／REQ-030-048](lucy-20261115-ops-concept-code-root-runtime-fix-spec.md)**（R2-F＋R4 已闭合；实现中；复测 **NOT RUN**）。**本条不表示可上线／发布取证**（P1-11／REQ-030-032） |
 | 授权边界 | **R4 已授予（2026-11-09）**。按 Plan S1–S7 改运行代码；**不含**本版 WebUI；**不含**问数热路径注入 |
 | 验收 | 见 §7 SC-01–SC-18；本条总出口＝Ops 控制面可完成概念 scan／人审写／只读盘点，且不改变业务问数热路径 |
 | 需求来源 | [REQ-030-032](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；委托人 2026-11-09：运维＝配置治理；正式立项并进 Lucy Ops；本版 Ops 检查完毕、下版再评估 WebUI |

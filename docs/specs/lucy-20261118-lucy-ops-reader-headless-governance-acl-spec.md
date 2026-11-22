@@ -6,7 +6,8 @@
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0`（不绑定发版号） |
 | 功能编号 / 优先级 | **P1-49**／REQ-030-070／**P1**（优先级待委托人裁定）。**不入 0.30 核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账，不占用 v0.25 登记册 |
-| 状态 | **v0.1-draft。仅登记与起草，不开发。** 目标：绑定 `lucy_ops_reader` 的无头 MCP Agent 在连接 `lucy-ops` 已启用 W0∪W1∪W2 时，角色表选择器对「规范 W0 指纹」实例可收敛到冻结 sourceName 全集，从而可问治理面 SOP（人口／MECE／近窗未访问等）可达；定制 Role 不被覆盖；W0 调用流水主路径仍可用。终稿未确权；未获开发授权；未授权不改运行代码；测试台 not_registered；不入核心分母；≠ 可上线 |
+| 阶段 | S1 |
+| 状态 | **S1｜v0.1-draft。仅登记与起草，不开发。** 目标：绑定 `lucy_ops_reader` 的无头 MCP Agent 在连接 `lucy-ops` 已启用 W0∪W1∪W2 时，角色表选择器对「规范 W0 指纹」实例可收敛到冻结 sourceName 全集，从而可问治理面 SOP（人口／MECE／近窗未访问等）可达；定制 Role 不被覆盖；W0 调用流水主路径仍可用。终稿未确权；未获开发授权；未授权不改运行代码；测试台 not_registered；不入核心分母；≠ 可上线 |
 | 决策来源 | 2026-11-18 委托人：表权限页只放行 `ops_calls`／`ops_call_tables` 而连接已启用多表；确认未开放表对无头运维有用；授权「按仓库规范起草 Spec 和 Plan，暂不进行开发」 |
 | 需求来源 | 同日对话；可问治理面已交付语义／Skill／Wiki，但正式 Role ACL 仍停在 SC-17c W0 两表；ensure 扩 `enabled_tables` 不扩 Role |
 | 实施主体 | Lucy：`access.yaml` 种子／ensure 窄例外、`ops-evidence`／`ensure-system-formal-roles`、相关单测与文档指针。不改 ACL 编译代数、不改治理投影 builder、不改 `lucy_admin` |

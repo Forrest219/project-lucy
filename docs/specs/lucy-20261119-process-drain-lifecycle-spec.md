@@ -28,7 +28,7 @@
 
 ## 2. 生命周期与顺序
 
-| 状态 | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
+| 状态 | S4｜v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
 |---|---|---|---|
 | BOOTING | 依原启动门禁 | readyz503；可监听后livez200 | 原预热及两监听完成 |
 | SERVING | 依原鉴权准入 | readyz200/livez200 | 已确认整实例TERM/INT |

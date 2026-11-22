@@ -6,7 +6,8 @@
 | 文档类型 / 版本 | Spec / **v1.0** |
 | 日期 / 目标版本 | 2026-11-16／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-36**／REQ-030-057／**P1**（审计证据增量；延伸 v0.25 审计增量）。**不入 0.30 核心分母** |
-| 状态 | **终稿确权（委托人 2026-11-17 授权代理修正后定稿，免 Codex 终审）；v1.0；已获开发授权（委托人 2026-11-17「授权开发落地」）；代码已落地（span 表、同事务写入、spans.csv 与 spanCoverage、`/api/admin/audit/status`），vitest 回归无新增失败，本机 demo 已平滑升级并取证；测试台 `UAT-SUITE-TRACE-LEDGER`＝**PASS WITH GAP**（2026-11-17 宽目录沙箱 Tier-A 跑次 `docs/qa/uat/suites/trace-span-ledger/runs/2026-11-17-claude-wide-sandbox-tierA.md`；TRC-01/02/03/04/05/06/10/11 有证据，TRC-07/08/09 NOT RUN，不是整套 PASS）；登记发现 F-1～F-5，其中 F-2（正式完整导出 `mode=complete` 因既有 F-02 失败关闭，`spans.csv` 只在诊断包验证）与 F-3（SC-06 与 §6.2 口径冲突）待委托人裁定。≠ UAT PASS；≠ 可上线** |
+| 阶段 | S4 |
+| 状态 | **S4｜终稿确权（委托人 2026-11-17 授权代理修正后定稿，免 Codex 终审）；v1.0；已获开发授权（委托人 2026-11-17「授权开发落地」）；代码已落地（span 表、同事务写入、spans.csv 与 spanCoverage、`/api/admin/audit/status`），vitest 回归无新增失败，本机 demo 已平滑升级并取证；测试台 `UAT-SUITE-TRACE-LEDGER`＝**PASS WITH GAP**（2026-11-17 宽目录沙箱 Tier-A 跑次 `docs/qa/uat/suites/trace-span-ledger/runs/2026-11-17-claude-wide-sandbox-tierA.md`；TRC-01/02/03/04/05/06/10/11 有证据，TRC-07/08/09 NOT RUN，不是整套 PASS）；登记发现 F-1～F-5，其中 F-2（正式完整导出 `mode=complete` 因既有 F-02 失败关闭，`spans.csv` 只在诊断包验证）与 F-3（SC-06 与 §6.2 口径冲突）待委托人裁定。≠ UAT PASS；≠ 可上线** |
 | 决策来源 | 委托人 2026-11-16 夜：要求「平台记录日志、流水的能力满足 trace 级的访问追溯和存档，同时满足审计要求」；经澄清选定：本轮交付＝文档＋指标＋UAT 套件（不改运行代码）；存档范围＝**第 1 层**（trace 全链路关联＋封存导出，不含防篡改链与外送）；实现路线＝**方案 B（新增 span 表）**（评审建议过方案 A，委托人选 B，代价见 §9）；委托人批准设计后授权对抗性审阅（过程评审，记录见 [评审记录](../reviews/2026-11-16-p1-36-p1-37-adversarial-review.md)） |
 | 需求来源 | 客户全量调用流水分析（2026-11-09 18:54–11-16 18:50，23,687 条；客户材料**未入仓**，见 §1 证据等级）；基准 [v0.25 审计增量 Spec](lucy-20261020-v2p5-audit-increment-spec.md) S01–S07 |
 | 撰写日期 / 撰写人 / 委托人 | 2026-11-16／Claude（Cursor Agent）／xingchen |

@@ -7,7 +7,7 @@
 | 功能编号 / 优先级 | **P1-73**／REQ-030-094／**P1**（文档治理；不挡原 P0）。**不入 0.30 核心分母**。伞下双规则：`status-funnel`＋姊妹 `status-vocab` |
 | 台账号 | 无。挂现行 `0.30` 执行总账 |
 | 阶段 | S5 |
-| 状态 | S5｜v1.0。功能合同已收口（2026-11-22，P1-73／P1-35 S5 收口批）。开发授权已获得；Wave A／B 已落地（status-vocab＋status-funnel＋PR CI）；SC-01–SC-15 证据关闭（[审计](../reviews/2026-11-22-p1-73-sc-evidence-audit.md)）；实现 CR PASS（[CR](../reviews/2026-11-22-p1-73-status-funnel-implementation-cr.md)）。伞级事实源＝漏斗 Spec；姊妹建议书为 Wave A 子句、不构成独立总账镜像。测试台 not_registered；不入核心分母。全仓 MIG 另授权、≠ 已迁完。本条收口不表示可上线 |
+| 状态 | S5｜v1.2。功能合同已收口（2026-11-22，P1-73／P1-35 S5 收口批）。开发授权已获得；Wave A／B 已落地；**v1.1 MIG＋`inventory-stage` 已落地**；**v1.2 降熵补丁（委托人选 A＋B＋C）**：一条主漏斗＋分叉终态；D8／D8b／SC-06／D2 修订。SC-01–SC-15 证据关闭（[审计](../reviews/2026-11-22-p1-73-sc-evidence-audit.md)）；实现 CR PASS（[CR](../reviews/2026-11-22-p1-73-status-funnel-implementation-cr.md)）。伞级事实源＝漏斗 Spec；姊妹建议书为 Wave A 子句。测试台 not_registered；不入核心分母。未挂 0.30 总账的存量 Spec 仍可留 grandfather。本条收口不表示可上线 |
 | 决策来源 | 2026-11-22 漏斗＋状态词互补一并审阅；[伞评审](../reviews/2026-11-22-p1-73-status-governance-umbrella-review.md) REQUEST CHANGES；同日委托人批准代理反馈改裁并定稿 |
 | 需求来源 | 自由长文「状态」不可机读；英文／中文两套状态词并行；见 `inbox/20261122-1123-spec-funnel.md` |
 | 实施主体 | 文档、`scripts/lint-spec-docs.mjs`、夹具、`DEVELOPMENT.md`、grandfather json、`package.json`、`lucy-ci.yml`、`test-layers-and-release-gates.md`。**不改** WebUI／Proxy／Ops／KTX 运行时代码 |
@@ -20,6 +20,8 @@
 
 | 版本 | 变更 |
 |---|---|
+| v1.2｜S5 | 2026-11-22：委托人选 **A＋B＋C 降熵补丁**——一条主漏斗＋分叉终态；修订 D2／D8／D8b／SC-06；§3.1「发布取证已收口」；总账收口分列。≠ 可上线 |
+| v1.1｜S5 | 2026-11-22：委托人授权 MIG 回填＋总账↔Spec 阶段一致性 lint；规则 `inventory-stage`／`lint:inventory-stage`／PR CI；0.30 总账主 Spec 已迁出 grandfather；附录全仓残余仍可另批。≠ 可上线 |
 | v1.0｜S5 | 2026-11-22：功能合同已收口（P1-73／P1-35 S5 收口批）；SC-01–SC-15＋实现 CR PASS；全仓 MIG 另授权；≠ 可上线 |
 | v1.0｜S3 | 2026-11-22：开发授权已获得（委托人授予 P1-73／REQ-030-094）；阶段 S2→S3；实现进行中；仍 ≠ 功能合同收口；≠ 可上线 |
 | v1.0 | 闭合伞评审 blocker／已批准改裁；OQ-1…7 裁定；终稿确权；阶段 S2；未获开发授权 |
@@ -111,13 +113,14 @@ New terms:
 | 编号 | 决策 | 裁定 |
 |---|---|---|
 | D1 | 主漏斗 | S1→S2→S3→S4→S5；S5＝合同收口终态。**保留 S4**（OQ-1＝A） |
-| D2 | 退出／旁路 | X_DEF／X_SUP／X_REL；发布取证闭口层级必须 X_REL |
+| D2 | 退出／旁路 | X_DEF／X_SUP／X_REL；发布取证**收口**终态必须 X_REL（实施期仍走 S1–S4，见 D8） |
 | D3 | 阶段文法 | 恰好一行阶段；单元格去掉空白与 `*` 后整格匹配 CODE（大小写敏感） |
 | D4 | S5 矛盾 | 阶段＝S5 时，状态行去掉空白后若命中「未收口」显式短语表 → 失败。短语表含：`≠功能合同收口`、`≠完整功能合同`、`≠功能已收口`、`功能合同尚未收口`、`功能合同待终稿复核`、`未收口`、`尚未收口`、`实现进行中`。**不含** `Wave 0`。v1 用显式表；正面语义判定留 v1.1。S1／S2 不得含「开发授权已获得」 |
 | D5 | 禁止冒充 | （1）**阶段格**不得含 `可上线`／`UAT PASS`／`测试台PASS`／散文／空格；（2）**状态行**：取首个 `阶段:`／`阶段：` 之后的连续 token，若命中 {`可上线`, `UAT PASS`, `测试台PASS`} → 失败；该 token 为 `≠`-前缀形式（如 `≠可上线`、`≠ UAT PASS`、`≠功能合同收口`）→ 放行（DEVELOPMENT 标准写法） |
 | D6 | 收口范围 | 可选「收口范围」仅当 S5 |
 | D7 | 镜像 | Plan 状态去空白与前导 `*` 后须以 `阶段:<CODE>`／`CODE｜`／`CODE。` 开头。**总账跟进状态＝伞级一句**（本 Spec 状态行），不以子建议书另镜像 |
-| D8 | 发布取证 | 闭口层级「发布取证」→ X_REL |
+| D8 | 发布取证 | **不是第二条漏斗**。实施期与功能合同共用 S1–S4；收口终态＝X_REL；**禁止 S5**。口语禁止对发布取证说「推进到 S5」 |
+| D8b | X_REL 在途矛盾 | 阶段＝X_REL 时，状态行去掉空白后若命中在途短语表 → 失败。短语表含：`实现进行中`、`终稿未确权`、`未获开发授权`、`开发未授权`、`评审前不开发`、`Wave 0` |
 | D9 | grandfather | 落地提交**前** `git ls-files docs/specs/*.md` 快照；落地提交内新建 Spec 不进名单。无口令无标记 → 本规则通过 |
 | D10 | 授权口令 | 「开发授权已获得」或标记行「状态漏斗门禁：纳入检查」 |
 | D11 | 生效 | 定稿 ≠ 门禁生效；须另获开发授权 |
@@ -126,7 +129,7 @@ New terms:
 | D14 | 迁移 | 附录指针；另授权 |
 | D15 | 双规则伞 | `status-funnel`＋`status-vocab`；共享实现；Wave A＝vocab，Wave B＝funnel（OQ-6＝A） |
 | D16 | 中文九词 | 软推荐；映射 §3.1；不代替阶段码 |
-| D17 | 总账 lint | v1 仅 Spec＋Plan（OQ-2＝A）；总账进 lint＝v1.1 |
+| D17 | 总账 lint | v1 仅 Spec＋Plan（OQ-2＝A）；**v1.1 已落地**：规则 `inventory-stage`（总账 `CODE｜` ↔ Spec「阶段」；委托人 2026-11-22 授权 MIG＋lint） |
 | D18 | hook | 本条不做 git／Cursor 复制判定 hook（OQ-5＝A） |
 
 ### 3.1 阶段码 ↔ 推荐中文（软；一对多已标明）
@@ -140,7 +143,7 @@ New terms:
 | S5 | 功能合同已收口 | 终态；可选收口范围 |
 | X_SUP | 被取代 | 退出 |
 | X_DEF | 延期 **或** 结案不做 | 一对多 |
-| X_REL | （无推荐原子） | 发布取证旁路 |
+| X_REL | 发布取证已收口 | 发布取证收口终态（旁路码；不是第二条 S1→S5） |
 
 ### 3.2 姊妹规则分工
 
@@ -188,10 +191,12 @@ function checkStatusFunnel(specRel, text, planText, opts):
     return PASS
 
   code = parseStageCode(text)  # 去 * 后整格；缺/非法 → FAIL
-  if closeLayer(text) == "发布取证" and code != "X_REL":
-    return FAIL("发布取证须 X_REL")
+  if closeLayer(text) == "发布取证" and code == "S5":
+    return FAIL("发布取证禁止 S5；收口用 X_REL，实施期 S1–S4")
   if code == "S5" and hitsUnclosedPhraseTable(statusRow(text)):
     return FAIL("S5 与未收口短语矛盾")
+  if code == "X_REL" and hitsXRelOpenPhraseTable(statusRow(text)):
+    return FAIL("X_REL 与在途短语矛盾")
   if code in {S1,S2} and statusRow(text).contains("开发授权已获得"):
     return FAIL("S1/S2 不得含授权口令")
   if stageCellHasProseOrShipAlias(stageCell(text)):  # 阶段格
@@ -214,7 +219,7 @@ function checkStatusFunnel(specRel, text, planText, opts):
 | SC-03 | S5 + 未收口短语表命中 → 失败；`≠功能已收口` 须命中 | 夹具 |
 | SC-04 | S1/S2 + 「开发授权已获得」→ 失败 | 夹具 |
 | SC-05 | 阶段格含 `可上线` → 失败；状态行 `≠ 可上线` → 通过 | 夹具 |
-| SC-06 | 发布取证 + 非 X_REL → 失败 | 夹具 |
+| SC-06 | 发布取证 + S5 → 失败；发布取证 + S1–S4／X_REL（无在途短语）→ 通过；X_REL + 在途短语 → 失败 | 夹具 |
 | SC-07 | S5 + 合法收口范围 → 通过 | 夹具 |
 | SC-08 | 非 S5 + 收口范围 → 失败 | 夹具 |
 | SC-09 | grandfather 无口令无标记 → 通过 | 夹具 |
@@ -255,9 +260,11 @@ function checkStatusFunnel(specRel, text, planText, opts):
 
 SC-14 路径检查 **以本节为准**。
 
-## 9. 附录：存量迁移批（指针；≠ 已迁完）
+## 9. 附录：存量迁移批（指针）
 
-草稿：`inbox/20261122-1123-spec-funnel.md`（非正式 SOT）。MIG-01…06 同前；另授权执行。
+草稿：`inbox/20261122-1123-spec-funnel.md`（非正式 SOT）。
+
+**2026-11-22 已授权并完成（0.30 总账面）**：主 Spec／配对 Plan／总账 `CODE｜` 回填＋`inventory-stage` lint；脚本 `npm run mig:funnel-inventory`。未挂 0.30 总账、仍留 grandfather 的历史 Spec 可另批 MIG，**≠** 本条要求一次清零全仓。
 
 ## 10. 落盘清单自检
 

@@ -7,7 +7,7 @@
 | 台账号 | 无 |
 | 日期 | 2026-11-20 |
 | 阶段 | S5 |
-| 状态 | v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得；功能合同收口（本机自动化与真实Docker）；远端CI未执行；30分钟组合结果独立登记；不入核心分母；≠ 整套UAT PASS；≠ 可上线。 |
+| 状态 | S5｜v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得；功能合同收口（本机自动化与真实Docker）；远端CI未执行；30分钟组合结果独立登记；不入核心分母；≠ 整套UAT PASS；≠ 可上线。 |
 | 授权 | 本轮委托人选择“批准补充合同并修复”；运行实现仍以本终稿通过 Codex CLI 确权为前置 |
 | 配对 Plan | [同名 Plan](../plans/lucy-20261120-semantic-read-write-settle-plan.md) |
 | 需求／测试入口 | [0.30总账](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[测试台](../qa/uat/INDEX.md)；core-availability F70 |
