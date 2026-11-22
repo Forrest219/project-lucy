@@ -148,13 +148,13 @@ const REQUIRED = [
     poolId: "P1-28",
     suiteId: "UAT-SUITE-ROW-POLICY",
     suiteDir: "docs/qa/uat/suites/row-policy-finance-scenario",
-    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-retest.md"
+    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-22-cursor-row-policy-decouple-retest.md"
   },
   {
     poolId: "P1-29",
     suiteId: "UAT-SUITE-ROW-POLICY",
     suiteDir: "docs/qa/uat/suites/row-policy-finance-scenario",
-    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-retest.md"
+    latestRun: "docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-22-cursor-row-policy-decouple-retest.md"
   },
   {
     poolId: "P1-12",

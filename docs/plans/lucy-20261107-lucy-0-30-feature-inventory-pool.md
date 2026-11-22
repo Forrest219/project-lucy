@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v2.09 / 2026-11-22 |
+| 版本 / 日期 | v2.14 / 2026-11-22 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**；**P2-2 对标对象已修正、D17 首页形态已裁决、D19／D20 已纳入、D21 MD 标配已登记（2026-11-19，见 v1.54／v1.56／v1.57 行）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码  **P1-57两处功能阻塞已修复；委托人已延期G6正式完整导出，本轮客户功能测试排除此项，可按限定范围进行。原完整范围FAIL证据保留。** |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,8 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v2.14 | 2026-11-22 | **P1-28／REQ-030-049 测试台 PASS**：解耦口径下复跑 [decouple-retest](../qa/uat/suites/row-policy-finance-scenario/runs/2026-11-22-cursor-row-policy-decouple-retest.md)；计入必做全绿；ROW-07 单列 FAIL 归 P1-29。关闭 GAP-UAT-P1-28。≠ 可上线。 |
+| v2.13 | 2026-11-22 | **出包前收口（剔出 P1-58／59；不出包）**：干净候选 `prepack-8e3e3f24`／`8e3e3f24`；CAV-01／02 定向 PASS WITH GAP；P1-60 smoke；P1-64 模块等价；须知＋[就绪评审](../reviews/2026-11-22-prepack-readiness-review.md)；编排 [Plan](lucy-20261122-prepack-closure-multi-agent-plan.md)。闭合 11-20「修复未进候选」定向阻断；完整矩阵／出包未做。≠ 可上线；≠ 出包授权。 |
 | v2.09 | 2026-11-22 | **P1-71／REQ-030-092 明确不开发并留池作下一期目标**：委托人「本 Spec 不开发，明确移入需求池，作为下一期开发的目标」。状态改为 0.30 不开发；准备材料保留；终稿未确权；未获开发授权；测试台仍 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 |
 | v2.08 | 2026-11-22 | P1-68／REQ-030-089：委托人批准 commit→平滑 demo:upgrade→UAT-SUITE-OPS-STEP R0／01–08 全真跑次。跑次 PASS WITH GAP（gitSha=88b2e9ea；见测试台跑次）；重度 Linux／16MiB／UID、age_limit 1h、51／52 表、双连接 catalog 仍为设计值 GAP；≠ 功能合同完全收口；≠ 可上线；不 push／不发布。 |
 | P1-72完成 | 2026-11-20 | 取消人工证明门槛，统一主路径／内部载体；286＋97自动化与39项真库验证通过，Codex CLI终审收口；扩展回归20项及全仓8条API登记既有缺口单列；未发布。 |
@@ -390,8 +392,8 @@
 | P1-23 | P1 | UI/UX 标准收敛并与 DEVELOPMENT 绑定（设计系统 `webui/docs/design-system/` 清账、补缺章、DEVELOPMENT 总入口表） | REQ-030-044 | 文档治理 | 否 | **入池（2026-11-14）**。委托人批准：只读核对（已出报告）＋登记＋清理 `99-governance.md` 临时决策。**范围仅文档**；补缺章、改 DEVELOPMENT 总入口、新增 lint 门禁须各自另获委托人确认；不含运行代码。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [核对报告](../../inbox/20261114-0130-uiux-standard-audit.md)（临时文件，定稿后迁入 `docs/reviews/`） |
 | P1-24 | P1 | WebUI 存量 UI/UX 整改（逐页；UXR-01–09，批次 B1–B4） | REQ-030-045 | WebUI 整改 | 否 | **入池／立项（2026-11-14），Spec／Plan v0.2-draft（已含浏览器盘点）待委托人确认范围、批次与 D-1–D-4**。**不含开发授权，本阶段只做优化方案**：各批改运行代码须各自入子 Plan、终稿确权、委托人另发开发授权。UAT not_registered。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [Spec](../specs/lucy-20261114-webui-uiux-remediation-spec.md) |
 | P1-25 | P1 | 行权限能力评审（100 用户／30–40 人行级受限目标） | REQ-030-046 | 评审／正确性辅线 | 否 | **评审报告 v1.0 已出（2026-11-14），待委托人裁决**。结论：安全内核实测成立；默认部署不可用（proven 全局开关）、BY-01／BY-18 回归为红、取值无校验、受限用户工具面缩水，提出 P0 四项建议。**仅评审，不含开发授权**；不改 P1-2／P1-7 及已收口 Spec 状态。场景验收见 **P1-28**。**不入核心分母**；**不挡**原 P0；≠ 可上线 | [评审报告](../reviews/2026-11-14-row-policy-capability-assessment.md) |
-| P1-28 | P1 | 行级隔离场景（十几人 × 一批表 × 不同行范围） | REQ-030-049 | 正确性／核心分母 | 是 | **方向已入主线（2026-11-15）**。无独立 Spec，未授权实现，不改既有行权限 Spec 状态。测试台已挂，判定以 INDEX 为准。≠ 可上线 | **测试台** [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md)（INDEX） |
-| P1-29 | P1 | 行级取值存在性校验 | REQ-030-050 | 正确性缺口 | 否 | **缺口登记（2026-11-15）**。无实现 Spec，未授权实现。由同一套件 UAT-ROW-07 承接，判定以 INDEX 为准。≠ 可上线 | **测试台** [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md)（INDEX） |
+| P1-28 | P1 | 行级隔离场景（十几人 × 一批表 × 不同行范围） | REQ-030-049 | 正确性／核心分母 | 是 | **测试台 PASS（2026-11-22）**；合同解耦 ROW-07；无独立 Spec。ROW-07 单列归 P1-29。≠ 可上线 | **测试台** [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md)（INDEX＝PASS） |
+| P1-29 | P1 | 行级取值存在性校验 | REQ-030-050 | 正确性缺口 | 否 | **缺口仍开（2026-11-22 复跑确认）**。无实现 Spec，未授权实现。UAT-ROW-07 单列 FAIL；**不挡** P1-28 套件 PASS。≠ 可上线 | **测试台** [`UAT-SUITE-ROW-POLICY`](../qa/uat/suites/row-policy-finance-scenario/suite.md)（ROW-07） |
 | P2-1 | P2 辅线 | 发布工作台分文件勾选发布 | REQ-030-001 | UX 辅线 | 否 | 草案齐；批次 R1 已修订；**终稿未确权**；**不定义 0.30 成败** | [Spec](../specs/lucy-20261107-publish-workbench-per-file-selection-spec.md) · [Plan](lucy-20261107-publish-workbench-per-file-selection-plan.md) |
 | P2-2 | P2 辅线 | 帮助中心体验 | REQ-030-002 | UX 辅线 | 否 | **Deferred；2026-11-16 委托人选方案 B**——保持 P2；开线时门户／快速入门必须深链手册「直连 vs Lucy」+「语义配置杠杆」（D15／SC-21）。**2026-11-19 委托人修正对标对象**为 `https://www.kimi.com/code/docs/`（＋第二参考站 KTX Quickstart）；新增 D16／D18 与 SC-22／SC-23；旧对标 `https://www.kimi.com/help` 降为历史记录。**同日委托人裁决 D17**＝帮助首页采用概览内容页形态（门户网格与封面图退出本条），并明示**纳入 D19 错误参考章 ＋ D20 未覆盖位置逃逸出口**（SC-24／SC-25）。**再同日明示 MD 标配**（D21：复制 Markdown 成为标准动作、解除 D6 整本限制；SC-26，出口扩到 SC-01–SC-26）。Spec／Plan **v0.5-draft**；**终稿未确权；未授权实现**；**不入核心分母**；≠ 可上线 | [Spec](../specs/lucy-20261031-help-center-experience-spec.md) · [Plan](lucy-20261031-help-center-experience-plan.md) |
 | P2-3 | P2 辅线 | 运维控制面 W-B（语义发布） | REQ-030-004 | 运维辅线 | 否 | Deferred；阻塞条件见既有 Spec | 既有 Spec |
