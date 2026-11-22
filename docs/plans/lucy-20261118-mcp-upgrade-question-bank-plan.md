@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | 实施计划（Plan） |
 | 版本 / 日期 | **v1.0** / 2026-11-19 |
-| 状态 | **v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0）。测试台共享 NOT RUN。≠ UAT PASS；≠ 可上线** |
+| 状态 | S3｜**v1.0。终稿确权（委托人 2026-11-19 批准对抗复审修订并定稿）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0）。测试台共享 NOT RUN。≠ UAT PASS；≠ 可上线** |
 | 主 Spec | [`docs/specs/lucy-20261118-mcp-upgrade-question-bank-spec.md`](../specs/lucy-20261118-mcp-upgrade-question-bank-spec.md) **v1.0** |
 | 父门禁 | [P1-53 v1.1](../specs/lucy-20261118-mcp-upgrade-compatibility-spec.md)（加载／digest／判定／D27；**不**创建题库内容） |
 | 总账 | **P1-54**／REQ-030-075；P0 底线题库＋配置合同；不入核心分母 |

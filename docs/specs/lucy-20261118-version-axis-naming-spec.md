@@ -6,7 +6,7 @@
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-51**／REQ-030-072（发版治理；不入核心分母） |
 | 台账号 | REQ-030-072 |
-| 状态 | **v0.3-draft。仅方案落盘：不含运行代码、镜像与 CI 改动；未获开发授权；待 Codex 交叉审阅与委托人终稿确权。测试台 not_registered；不入核心分母；≠ 可上线** |
+| 状态 | S1｜**v0.3-draft。仅方案落盘：不含运行代码、镜像与 CI 改动；未获开发授权；待 Codex 交叉审阅与委托人终稿确权。测试台 not_registered；不入核心分母；≠ 可上线**（≠ S2：终稿未确权） |
 | 决策来源 | 委托人 2026-11-18：大／小版本分工方案；批准评审升版；同日确认采纳「`rc.N`＋交付主键、不把候选写成 `0.31`／正式 `X.Y.Z`」；追加诉求——**开发态候选号不得人工定义，每次出镜像自动分配，并支持后期追溯与客户私有化分叉精确定位**。**仍不进入开发** |
 | 评审依据 | 2026-11-18 对话评审；现场证据 [`docs/lessons/2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md`](../lessons/2026-11-17-k8s-upgrade-event-loop-readiness-timeout.md)；交付仓 [Forrest219/lucy-customer-delivery](https://github.com/Forrest219/lucy-customer-delivery) Releases（含 `lucy-k8s-integration-20261117-r1`） |
 | 适用范围 | 产品线分支命名、合并前候选镜像标签、定稿发布标签、构建修订、**客户交付仓发布后追溯**、**私有化部署分叉定位**、相关台账与门禁口径 |

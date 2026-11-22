@@ -6,7 +6,7 @@
 | 日期 / 目标版本 | 2026-11-18／产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-53**／REQ-030-074。编号在 P1 序列；**升级放行优先级＝P0 底线**（挡「可升级／可出包」宣称）。**不入** 0.30 核心分母，**不挡**「0.30 核心升级完成」宣称 |
 | 台账号 | 无。挂现行 `0.30` 执行总账；编号避让 P1-52／REQ-030-073 |
-| 状态 | **v1.1。终稿补丁确权（委托人 2026-11-18 批准：收编 P1-54 题库正本／Ops 分母／Lucy 配置资产包前置；闭合评审 B1）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0 授权登记）。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。≠ UAT PASS；≠ 可上线** |
+| 状态 | S3｜**v1.1。终稿补丁确权（委托人 2026-11-18 批准：收编 P1-54 题库正本／Ops 分母／Lucy 配置资产包前置；闭合评审 B1）。开发已授权（委托人 2026-11-22「开工，落地执行」；每 Wave 后 code review）。实现进行中（Wave 0 授权登记）。测试台 `UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`＝NOT RUN。≠ UAT PASS；≠ 可上线**（闭口层级＝发布取证；正式「阶段」行迁移时归 X_REL） |
 | 决策来源 | 2026-11-16 客户 WorkBuddy「会员收入」被 `source_ambiguity_gate` 高频阻断；委托人要求每次升级不得破坏既有 MCP 问数能力；2026-11-18 目标对齐与 T1–T10 定稿；同日批准收编独立题库 Spec（P1-54）并确认全真须配合 Lucy 配置资产包 |
 | 错题与证据 | [表级歧义门闩死路](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md)；[主路径可用性优先](../governance/DEVELOPMENT.md)；技术问题 brief `inbox/20261118-mcp-upgrade-compatibility-technical-questions-for-cursor.md`（可删） |
 | 实施主体 | `scripts/e2e/` 全真 Agent／MCP 执行器与版本化题库、`scripts/upgrade/` 与 `scripts/gates/` 升级接线、发布证据校验器、测试台。不得修改 KTX 源码 |
