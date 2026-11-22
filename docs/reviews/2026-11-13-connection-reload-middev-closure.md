@@ -5,7 +5,7 @@
 | 日期 | 2026-11-13 |
 | 对象 | [连接创建后执行层热重载 Plan](../plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md) |
 | 依据 | W2 书面收口；[B 轨 Plan](../plans/lucy-20261113-connection-reload-live-e2e-uat-plan.md) |
-| 性质 | **B 轨已关闭 E2E／UAT-01 已知债**。**≠ 可上线**（整包发布仍按 DEVELOPMENT 取证） |
+| 性质 | **B 轨已关闭 E2E／UAT-01 已知债**。**2026-11-22**：总账 P1-15／REQ-030-036 → **S5｜功能合同已收口（漏斗镜像·文档收口）**；收口范围不含可选 UAT-CONN-RELOAD-02。**≠ 可上线**（整包发布仍按 DEVELOPMENT 取证） |
 
 ## 结论
 

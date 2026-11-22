@@ -6,7 +6,9 @@
 
 **Architecture:** Docker／K8s 入口里 KTX daemon 由 `supervise_ktx` 独占 `7878`；唯一合法热重载通道是 Spec 191 的 `ktx-reload.request` → supervisor `stop child → wait port → start → receipt`。历史缺陷：`reloadKtxMcpAfterConfigWrite` 曾直接调 `ktx mcp stop/start`，与 supervisor 抢端口并失败（`Port 7878 is already in use`）。**2026-11-13 审计：** 主机代码已走 `reloadThroughSupervisor` → `reloadExecutionRuntime`（capability 有效时）；无 capability 才 CLI 回退。修复口径：配置写路径统一走 supervisor 协议；创建／编辑成功面诚实报告三段事实；补齐单测 + 容器进程级 + live E2E 门禁。
 
-**Progress (2026-11-13 · B 轨 live E2E／UAT 收口):** 进程级写路径／单测／**VERIFY-191-C01 25/25** 已收口；**E2E-CON-07**／**E2E-MCP-02**／**UAT-CONN-RELOAD-01** 已由 [B 轨 Plan](lucy-20261113-connection-reload-live-e2e-uat-plan.md) 关闭（`npm run e2e:live:connection-reload` **2/2 PASSED**；本机 demo `:55176`）。Edit／UAT-02 仍 OPEN。详见 [middev 收口](../reviews/2026-11-13-connection-reload-middev-closure.md)。
+**状态：** S5｜功能合同已收口（2026-11-22，漏斗镜像·文档收口；总账 P1-15／REQ-030-036）。收口范围不含可选 UAT-CONN-RELOAD-02。≠ 可上线。
+
+**Progress (2026-11-13 · B 轨 live E2E／UAT 收口；2026-11-22 漏斗镜像 S5):** 进程级写路径／单测／**VERIFY-191-C01 25/25** 已收口；**E2E-CON-07**／**E2E-MCP-02**／**UAT-CONN-RELOAD-01** 已由 [B 轨 Plan](lucy-20261113-connection-reload-live-e2e-uat-plan.md) 关闭（`npm run e2e:live:connection-reload` **2/2 PASSED**；本机 demo `:55176`）；Edit 成功面三段事实 CLOSED。可选 UAT-02 仍 OPEN（不在本条出口）。详见 [middev 收口](../reviews/2026-11-13-connection-reload-middev-closure.md)。
 
 **Tech Stack:** WebUI Node（`webui/server/ktx-mcp-reload.ts`、`admin/mcp-runtime-reload.ts`）、`scripts/runtime/docker-entrypoint.sh` supervisor、Vitest、Playwright live-e2e、`scripts/verify/verify-ktx-reload-lifecycle.sh --container`
 

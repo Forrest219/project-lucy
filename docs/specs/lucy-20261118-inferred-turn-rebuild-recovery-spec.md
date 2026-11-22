@@ -20,6 +20,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v0.2＋P1-50 并入 | 2026-11-22：总账 **P1-50／REQ-030-071 → X_SUP｜被取代（并入本条）**；水位合同仍以本 Spec §3.1 为唯一落点；不另开独立 Spec／UAT。≠ 可上线 |
 | v0.2＋P1-50 注 | 2026-11-18 FDE R01／P1-50：完成水位改为读快照 `ceilingId`（十进制字符串），`covered()` 按 id 比较；重建中插入且 `id>ceiling` 的行不得被 ts 水位误判已覆盖。不另开 Spec 升版出口 |
 | v0.2 | 2026-11-18 委托人「授权定稿」：终稿确权＋开发授权；OQ-1＝允许 `inferred_rebuild_state`；进入多 agent 并行实现。同日 Wave1 Agent-45 落地：表＋in_progress/complete watermark＋`covered()`；vitest 20/20；UAT 未跑 |
 | v0.1-draft | 初稿。依据前方报告 P0-02 硬复现事实起草。终稿未确权；开发未授权 |

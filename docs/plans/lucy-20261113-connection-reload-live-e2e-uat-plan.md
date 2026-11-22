@@ -6,7 +6,9 @@
 
 **Architecture:** 对运行中本机 demo（`compose-lucy-1`，默认 WebUI `http://127.0.0.1:55176`）跑 Playwright `live-e2e`：真实登录、真实 `POST /api/connections`／抽屉创建、真实 supervisor `ktx-reload` 通道。无 `page.route` 状态桩。进程级门禁 `VERIFY-191-C01` 已绿，本轨补浏览器与经 WebUI 的取证。
 
-**Progress (2026-11-13 · 已收口):** `npm run e2e:live:connection-reload` **2/2 PASSED**（E2E-MCP-02 2.9s；E2E-CON-07 9.7s）。UAT-CONN-RELOAD-01：本机 demo `http://127.0.0.1:55176`，经 UI／POST create（`acknowledgeSeparateConnection`）→ `executionRuntimeAck=true`，`activation=current`，`verification=verified`，全程无 `docker restart`。未做 `--fresh` upgrade（运行中镜像已含 supervisor 写路径）。
+**状态：** S5｜功能合同已收口（2026-11-22，漏斗镜像·文档收口；总账 P1-15／REQ-030-036）。收口范围不含可选 UAT-CONN-RELOAD-02。≠ 可上线。
+
+**Progress (2026-11-13 · 已收口；2026-11-22 漏斗镜像 S5):** `npm run e2e:live:connection-reload` **2/2 PASSED**（E2E-MCP-02 2.9s；E2E-CON-07 9.7s）。UAT-CONN-RELOAD-01：本机 demo `http://127.0.0.1:55176`，经 UI／POST create（`acknowledgeSeparateConnection`）→ `executionRuntimeAck=true`，`activation=current`，`verification=verified`，全程无 `docker restart`。未做 `--fresh` upgrade（运行中镜像已含 supervisor 写路径）。
 
 **Tech Stack:** Playwright live-demo config、外部凭据文件（`config-for-agents`）、demo-db MySQL、Spec 191 supervisor
 

@@ -12,7 +12,10 @@
 | 排查记录 | `inbox/2026-10-26-ktx-config-restart-only-investigation.md`（过程性材料，未入版本库） |
 | 实施计划 | `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` |
 | 决策 | 只重载 KTX daemon；**写路径自动尝试重载**（失败或跳过时仍可由用户点确认重试）；失败**不回滚** ktx.yaml；不推进上游 KTX reload 能力 |
-| 实施状态 | **已实现，本机验收通过**（2026-10-27 实现；2026-11-10 写路径自动重载；**2026-11-13** VERIFY-191-C01 **25/25 PASSED**）。浏览器 live `E2E-CON-07`／`E2E-MCP-02`／UAT-CONN-RELOAD-01 **仍 OPEN**（已知债，见 [`docs/reviews/2026-11-13-connection-reload-middev-closure.md`](../../docs/reviews/2026-11-13-connection-reload-middev-closure.md)）。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8／§8.6 |
+| 阶段 | S5 |
+| 状态 | S5｜功能合同已收口（2026-11-22，漏斗镜像·文档收口；总账 P1-15／REQ-030-036）。create＋C01＋live E2E／UAT-01；Edit 成功面三段事实 CLOSED；测试台 `UAT-SUITE-CONN-RELOAD`＝PASS。收口范围不含可选 UAT-CONN-RELOAD-02。不入核心分母。≠ 可上线 |
+| 收口范围 | 本条出口＝create／Edit 成功面诚实 ack＋supervisor 写路径重载＋C01＋live E2E／UAT-01；**不含**可选 UAT-CONN-RELOAD-02（失败可观测） |
+| 实施状态 | S5｜**功能合同已收口（2026-11-22，漏斗镜像）**。已实现，本机验收通过（2026-10-27 实现；2026-11-10 写路径自动重载；**2026-11-13** VERIFY-191-C01 **25/25 PASSED**；B 轨关闭 E2E-CON-07／E2E-MCP-02／UAT-CONN-RELOAD-01）。见 [`docs/reviews/2026-11-13-connection-reload-middev-closure.md`](../../docs/reviews/2026-11-13-connection-reload-middev-closure.md)。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8／§8.6 |
 
 ## v0.2 修订摘要
 
