@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v2.14 / 2026-11-22 |
+| 版本 / 日期 | v2.19 / 2026-11-22 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**；**P2-2 对标对象已修正、D17 首页形态已裁决、D19／D20 已纳入、D21 MD 标配已登记（2026-11-19，见 v1.54／v1.56／v1.57 行）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码  **P1-57两处功能阻塞已修复；委托人已延期G6正式完整导出，本轮客户功能测试排除此项，可按限定范围进行。原完整范围FAIL证据保留。** |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,10 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v2.19 | 2026-11-22 | **P1-73 开发授权落地（仅文档；范围限 Spec §8 白名单）**：委托人授予 P1-73／REQ-030-094 开发授权；伞级阶段 **S2→S3**，实现进行中（Wave A `status-vocab` → grandfather → Wave B `status-funnel` → PR CI）。仍 ≠ 功能合同收口；≠ 可上线；阶段全仓迁移另授权。 |
+| v2.17 | 2026-11-22 | **P1-73 终稿确权（仅文档）**：委托人批准伞评审反馈并定稿。Spec／Plan／建议书 → **v1.0**；阶段 **S2**；闭合 strip`*`／D4 短语表／D5 否定式／摘 B2 缺状态行／Wave B 必接 PR CI／SC-14＝§8。**未获开发授权；未授权改 lint**；测试台 not_registered；不入核心分母；≠ 可上线。 |
+| v2.16 | 2026-11-22 | **P1-73 伞扩展**：委托人确认漏斗与 [状态词中文建议书](lucy-20261122-spec-status-vocabulary-chinese-plan.md) 互补一并审阅；双规则 `status-funnel`＋`status-vocab`；建议书不另开行。Spec／Plan → v0.2-draft；建议书 → v0.4-draft。仍未确权、未授权改 lint。 |
+| v2.15 | 2026-11-22 | **入池 P1-73／REQ-030-094（Spec 开发台状态漏斗门禁；仅文档）**：委托人授权按仓库规范设计 Spec／Plan；阶段字典 S1–S5＋X_*；强制面 `lint:spec-docs` 规则草案 `status-funnel`；单 Spec 终态＝合同收口；≠ 系统可上线。[Spec](../specs/lucy-20261122-spec-status-funnel-gate-spec.md)／[Plan](lucy-20261122-spec-status-funnel-gate-plan.md) v0.1-draft。**终稿未确权；未获开发授权；未授权不改 lint；测试台 not_registered；不入核心分母**。 |
 | v2.14 | 2026-11-22 | **P1-28／REQ-030-049 测试台 PASS**：解耦口径下复跑 [decouple-retest](../qa/uat/suites/row-policy-finance-scenario/runs/2026-11-22-cursor-row-policy-decouple-retest.md)；计入必做全绿；ROW-07 单列 FAIL 归 P1-29。关闭 GAP-UAT-P1-28。≠ 可上线。 |
 | v2.13 | 2026-11-22 | **出包前收口（剔出 P1-58／59；不出包）**：干净候选 `prepack-8e3e3f24`／`8e3e3f24`；CAV-01／02 定向 PASS WITH GAP；P1-60 smoke；P1-64 模块等价；须知＋[就绪评审](../reviews/2026-11-22-prepack-readiness-review.md)；编排 [Plan](lucy-20261122-prepack-closure-multi-agent-plan.md)。闭合 11-20「修复未进候选」定向阻断；完整矩阵／出包未做。≠ 可上线；≠ 出包授权。 |
 | v2.09 | 2026-11-22 | **P1-71／REQ-030-092 明确不开发并留池作下一期目标**：委托人「本 Spec 不开发，明确移入需求池，作为下一期开发的目标」。状态改为 0.30 不开发；准备材料保留；终稿未确权；未获开发授权；测试台仍 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 |
@@ -314,6 +318,7 @@
 
 | 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 核心分母 | 跟进状态 | Spec／Plan |
 |---|---|---|---|---|---|---|---|
+| P1-73 | P1 | Spec 开发台状态治理（漏斗阶段＋状态词中文） | REQ-030-094 | 文档治理／评审门禁 | 否 | S3｜v1.0。开发授权已获得（委托人 2026-11-22 授予 P1-73／REQ-030-094）；实现进行中。伞级事实源＝漏斗 Spec；姊妹建议书为 Wave A 子句、不构成独立总账镜像。测试台 not_registered；不入核心分母。仍 ≠ 功能合同收口；≠ 可上线 | [Spec](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) · [Plan](lucy-20261122-spec-status-funnel-gate-plan.md) · [状态词建议书](lucy-20261122-spec-status-vocabulary-chinese-plan.md) · [交互合同](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md) · [状态机合同](../specs/lucy-20261118-multi-step-state-machine-contract-gate-spec.md) |
 | P1-72 | P1 | 行权限自动强制执行，取消运维人工证明开关 | REQ-030-093 | 行权限可用性修复 | 否 | v1.0。终稿已确权；开发授权已获得；实现与 Codex CLI 代码终审完成；功能合同已收口（定向回归286项、脚本合同97项、隔离Docker39项）；测试台 UAT-SUITE-ROW-POLICY-AUTO PASS；扩展回归与全仓门禁既有缺口单列，远端CI未执行；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md) · [Plan](lucy-20261120-row-policy-automatic-enforcement-plan.md) · [测试台](../qa/uat/suites/row-policy-automatic-enforcement/suite.md) |
 | P1-71 | P1（Deferred；下一期） | SQLite 风险防范与 PostgreSQL 迁移准备 | REQ-030-092 | 存储可靠性／可迁移性 | 否 | v0.1-draft。0.30 不开发；准备材料保留在需求池作下一期开发目标。源码盘点、风险差集与 Spec／Plan／UAT 设计已落盘；终稿未确权；未获开发授权；不升级、不迁移、不操作客户实例；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 | [Spec](../specs/lucy-20261120-storage-readiness-spec.md) · [Plan](lucy-20261120-storage-readiness-plan.md) · [UAT](../qa/uat/suites/storage-readiness/suite.md) |
 | P1-69 | P1（可用性差集） | MCP执行层热重载在途保护与统一截止 | REQ-030-090 | 热重载生命周期／Spec191增量 | 否 | v0.1。Codex CLI终稿确权通过；开发授权已获得；实现已落地，组件与真实shell回归通过；候选6本机Docker排空／拒绝／恢复及直接CLI定向已验证，完整F69矩阵仍有缺口；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 | [Spec](../specs/lucy-20261120-runtime-reload-drain-spec.md) · [Plan](lucy-20261120-runtime-reload-drain-plan.md) · [UAT](../qa/uat/suites/core-availability/suite.md) |
@@ -637,6 +642,13 @@
 - **事实**：未显式状态机时出现布尔冒充终态、非终态不落库、两套规则并行、无逃生死路、组级「一败一成」等模式（证据见 Spec §1 指针）。
 - **关系**：治理门禁，形态对齐交互合同门禁；业务路径整改须另立行。**不入核心分母**。
 - **跟进**：Spec／Plan v0.1-draft；测试台 not_registered；**终稿未确权；未授权开发（含未授权改 lint）**。
+
+### P1-73｜Spec 开发台状态治理（REQ-030-094）
+
+- **出口**：双规则——（1）`status-funnel`：缺合法阶段码／与状态矛盾／Plan 镜像不一致 → 失败（SC-01–SC-15；grandfather；Wave B 必接 PR CI）；（2）`status-vocab`：状态行英文禁用词／`Status` 表头 → 失败（建议书 §6.2；零本规则基线豁免；**不**报缺状态行）。落地 diff ⊆ Spec §8；阶段迁移附录 ≠ 已迁完。
+- **事实**：自由长文不可机读漏斗；英文／中文两套状态词并行；PR CI 缺 `lint:spec-docs`（见建议书 §4.3）。
+- **关系**：治理伞；Wave A＝vocab、Wave B＝funnel；单 Spec 终态＝合同收口；系统上线不在本字典。**不入核心分母**。
+- **跟进**：Spec／Plan／建议书 **v1.0**（阶段 **S3**）；测试台 not_registered；**开发授权已获得（2026-11-22）；实现进行中**；仍 ≠ 功能合同收口；≠ 可上线。
 
 ### P1-52｜客户镜像升级可靠性分层门禁（REQ-030-073）
 

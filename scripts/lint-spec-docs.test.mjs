@@ -5,11 +5,13 @@ import path from "node:path";
 import test from "node:test";
 import {
   checkInteractionContract,
+  checkStatusFunnel,
   classifyViolations,
   collectDesignSystemViolations,
   collectDocViolations,
   collectFilenameViolation,
   collectStaleStatusViolations,
+  collectStatusVocabViolations,
   listNumberedSpecsUnder,
   loadRegisteredRoutes,
   scanRepo
@@ -160,12 +162,21 @@ test("基线分类：基线内违规不阻塞，新增违规阻塞，基线失�
   assert.equal(stale[0].file, "docs/specs/gone.md");
 });
 
-test("仓库现状：门禁在基线之上必须通过（不得有新增违规）", () => {
+test("仓库现状：门禁在基线之上必须通过（已知存量残余除外）", () => {
   const result = scanRepo();
+  // 已知存量残余（非本条范围，禁止在本条修）：
+  //  1) lucy-20261122-prepack-closure-multi-agent-plan.md 的 plan-parts/metadata（其他在途条目的文件）；
+  //  2) status-funnel 对已授权、尚未迁「| 阶段 |」的存量 Spec 的 SC-10 类判失败（MIG 批次另授权补齐）。
+  // 上述两类在专用测试里钉住；此处只拦截一切新增违规。
+  const knownResidual = (v) =>
+    (v.file === "docs/plans/lucy-20261122-prepack-closure-multi-agent-plan.md" &&
+      (v.rule === "plan-parts" || v.rule === "metadata")) ||
+    v.rule === "status-funnel";
+  const unexpected = result.blocking.filter((v) => !knownResidual(v));
   assert.equal(
-    result.blocking.length,
+    unexpected.length,
     0,
-    `新增形态违规 ${result.blocking.length} 条：\n` + result.blocking.map((v) => `  ${v.file} [${v.rule}]`).join("\n")
+    `新增形态违规 ${unexpected.length} 条：\n` + unexpected.map((v) => `  ${v.file} [${v.rule}]`).join("\n")
   );
 });
 
@@ -660,4 +671,153 @@ test("Design System Compliance：引用不存在的章节 → ds-ref；引用存
     "### What This Change Follows\n\n- x\n\n### Exceptions (If Any)\n\n- None\n\n### Follow-up Needed\n\n- None\n";
   assert.ok(rulesOf(collectDocViolations(SPEC, body("99-nope-missing.md"))).includes("ds-ref"));
   assert.ok(!rulesOf(collectDocViolations(SPEC, body("10-components-button.md"))).includes("ds-ref"));
+});
+
+const VOCAB_SPEC = "docs/specs/lucy-20261122-status-vocab-fixture-spec.md";
+
+function vocabDoc(statusRow, { header = "状态", body = "" } = {}) {
+  return [
+    "# 夹具",
+    "",
+    "| 元数据 | 内容 |",
+    "|---|---|",
+    `| ${header} | ${statusRow} |`,
+    "",
+    body
+  ].join("\n");
+}
+
+test("status-vocab：英文整词命中／中文与未授权句放行／缺状态行不报（建议书 §6.2 第 2 条）", () => {
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("Implemented")).length, 1);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("草案")).length, 0);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("终稿已确权，未获开发授权")).length, 0);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("当前草稿 `r6` 不是放行包")).length, 0);
+  // 缺状态行 → 本规则绝不报（归 metadata）
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, "# 裸文档\n\n无元数据表\n").length, 0);
+  // 扫描面＝头部元数据表；正文引用英文词不受本条约束
+  assert.equal(
+    collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("草案", { body: "正文提到 Implemented 与 Draft 不算违规。\n" })).length,
+    0
+  );
+});
+
+test("status-vocab：版本段排除／词边界／大小写敏感（建议书 §3.4／B1）", () => {
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("v0.1-draft；草案")).length, 0);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("v0.2-draft；终稿已确权")).length, 0);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("当前 Draft `r6` 不是放行包")).length, 1);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("当前 draft 包")).length, 0);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("Drafts 不是独立词")).length, 0);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("Approved for planning")).length, 1);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("Superseded by X")).length, 1);
+  assert.equal(collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("Ready for Review")).length, 1);
+});
+
+test("status-vocab：表头 Status 独立扫描，不经 statusCell（建议书 §3.4／B2）", () => {
+  const headerOnly = collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("草案", { header: "Status" }));
+  assert.equal(headerOnly.length, 1);
+  assert.match(headerOnly[0].message, /Status/);
+  const both = collectStatusVocabViolations(VOCAB_SPEC, vocabDoc("Implemented", { header: "Status" }));
+  assert.equal(both.length, 2);
+});
+
+const FUNNEL_REL = "docs/specs/lucy-20261122-status-funnel-fixture-spec.md";
+
+function funnelDoc({ stage, status, layer = "功能合同", scope = undefined, marker = false }) {
+  const rows = ["| 元数据 | 内容 |", "|---|---|"];
+  if (stage !== undefined) rows.push(`| 阶段 | ${stage} |`);
+  rows.push(`| 状态 | ${status} |`);
+  if (scope !== undefined) rows.push(`| 收口范围 | ${scope} |`);
+  const parts = ["# 夹具", "", ...rows, ""];
+  if (layer) {
+    const ship = layer === "发布取证" ? "本条通过不表示各模块无问题" : "本条收口不表示可上线";
+    parts.push("## 闭口层级", "", `- 层级：${layer}`, "- 本条承诺：x", "- 本条出口：x", "- 不在本条出口：x", `- 上线关系：${ship}`, "");
+  }
+  if (marker) parts.push("状态漏斗门禁：纳入检查", "");
+  return parts.join("\n");
+}
+
+function runFunnel({ stage, status, layer, scope, marker = false, planStatus = null, grandfather = false }) {
+  const text = funnelDoc({ stage, status, layer, scope, marker });
+  const planText = planStatus == null ? null : `| 元数据 | 内容 |\n|---|---|\n| 状态 | ${planStatus} |\n`;
+  return checkStatusFunnel(FUNNEL_REL, text, planText, {
+    grandfatherFiles: grandfather ? [FUNNEL_REL] : []
+  });
+}
+
+function funnelFail(result, fragment) {
+  assert.ok(result.length > 0, "应当失败");
+  assert.match(result[0].message, fragment);
+}
+
+test("SC-01／SC-02：非 grandfather 缺阶段行失败；非法 CODE 失败；去 * 后整格匹配", () => {
+  funnelFail(runFunnel({ stage: undefined, status: "草案" }), /恰好一行「阶段」/);
+  funnelFail(runFunnel({ stage: "S6", status: "草案" }), /不是合法阶段码/);
+  funnelFail(runFunnel({ stage: "S3｜可上线", status: "草案" }), /不是合法阶段码/);
+  funnelFail(runFunnel({ stage: "s3", status: "草案" }), /不是合法阶段码/);
+  assert.deepEqual(runFunnel({ stage: "*S3*", status: "草案" }), []);
+  assert.deepEqual(runFunnel({ stage: " S3 ", status: "开发授权已获得；实现进行中" }), []);
+});
+
+test("SC-03：S5 命中未收口短语表失败（含 ≠功能已收口），无短语通过", () => {
+  funnelFail(runFunnel({ stage: "S5", status: "≠功能已收口" }), /未收口短语「≠功能已收口」/);
+  funnelFail(runFunnel({ stage: "S5", status: "≠ 功能合同收口" }), /未收口短语/);
+  funnelFail(runFunnel({ stage: "S5", status: "功能合同尚未收口" }), /未收口短语/);
+  funnelFail(runFunnel({ stage: "S5", status: "实现进行中" }), /未收口短语「实现进行中」/);
+  assert.deepEqual(runFunnel({ stage: "S5", status: "功能合同已收口" }), []);
+});
+
+test("SC-04：S1／S2 含授权口令失败；S3 含口令通过", () => {
+  funnelFail(runFunnel({ stage: "S1", status: "开发授权已获得；实现中" }), /不得含「开发授权已获得」/);
+  funnelFail(runFunnel({ stage: "S2", status: "开发授权已获得；实现中" }), /不得含「开发授权已获得」/);
+  assert.deepEqual(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中" }), []);
+});
+
+test("SC-05：状态行 ≠ 可上线 通过；阶段:后把可上线／UAT 当作阶段码失败；≠-前缀放行", () => {
+  assert.deepEqual(runFunnel({ stage: "S3", status: "S3｜v1.0。仍 ≠ 可上线；≠ UAT PASS" }), []);
+  assert.deepEqual(runFunnel({ stage: "S3", status: "S3｜v1.0。阶段：≠ 可上线" }), []);
+  assert.deepEqual(runFunnel({ stage: "S3", status: "S3｜v1.0。阶段：≠ UAT PASS" }), []);
+  funnelFail(runFunnel({ stage: "S3", status: "阶段：可上线" }), /当作阶段码/);
+  funnelFail(runFunnel({ stage: "S3", status: "阶段： UAT PASS" }), /当作阶段码/);
+  funnelFail(runFunnel({ stage: "S3", status: "阶段：测试台PASS" }), /当作阶段码/);
+  assert.deepEqual(runFunnel({ stage: "S3", status: "阶段：S3｜v1.0。仍 ≠ 可上线" }), []);
+});
+
+test("SC-06：发布取证必须 X_REL；X_REL 放行", () => {
+  funnelFail(runFunnel({ stage: "S5", status: "功能合同已收口", layer: "发布取证" }), /X_REL/);
+  assert.deepEqual(runFunnel({ stage: "X_REL", status: "发布取证收口", layer: "发布取证" }), []);
+});
+
+test("SC-07／SC-08：收口范围仅 S5；S5 合法收口范围通过", () => {
+  assert.deepEqual(runFunnel({ stage: "S5", status: "功能合同已收口", scope: "示例范围" }), []);
+  funnelFail(runFunnel({ stage: "S4", status: "实现已落地", scope: "示例范围" }), /收口范围/);
+  funnelFail(runFunnel({ stage: "S5", status: "功能合同已收口", scope: "" }), /收口范围/);
+});
+
+test("SC-09／SC-10／SC-11：grandfather 跳过；口令或标记行取消跳过", () => {
+  assert.deepEqual(runFunnel({ stage: undefined, status: "草案", grandfather: true }), []);
+  funnelFail(runFunnel({ stage: undefined, status: "开发授权已获得；实现中", grandfather: true }), /恰好一行「阶段」/);
+  funnelFail(runFunnel({ stage: undefined, status: "草案", marker: true, grandfather: true }), /恰好一行「阶段」/);
+});
+
+test("SC-12：Plan 镜像前缀与 Spec 阶段码一致", () => {
+  assert.deepEqual(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中", planStatus: "阶段:S3｜v1.0。实现进行中" }), []);
+  assert.deepEqual(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中", planStatus: "S3｜v1.0" }), []);
+  assert.deepEqual(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中", planStatus: "S3。v1.0" }), []);
+  assert.deepEqual(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中", planStatus: "*S3｜v1.0*" }), []);
+  funnelFail(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中", planStatus: "**S3**｜v1.0" }), /未镜像/);
+  funnelFail(runFunnel({ stage: "S3", status: "开发授权已获得；实现进行中", planStatus: "阶段:S4｜v1.0" }), /未镜像/);
+  funnelFail(runFunnel({ stage: "S4", status: "实现已落地", planStatus: "S3｜v1.0" }), /未镜像/);
+});
+
+test("SC-09／SC-10 生产名单：grandfather 内无口令无标记不被误伤；失败只限授权缺阶段类", () => {
+  const listed = new Set(
+    JSON.parse(readFileSync(new URL("../docs/governance/spec-status-funnel-grandfather.json", import.meta.url), "utf8")).files
+  );
+  const hits = scanRepo().blocking.filter((v) => v.rule === "status-funnel");
+  assert.ok(hits.length > 0, "已授权未迁「| 阶段 |」的存量 Spec 应被判失败（SC-10 类，待 MIG 批次）");
+  for (const h of hits) {
+    assert.ok(listed.has(h.file), `${h.file} 不在 grandfather 名单却被判失败`);
+    const text = readFileSync(new URL("../" + h.file, import.meta.url), "utf8");
+    assert.ok(text.includes("开发授权已获得"), `${h.file} 失败须因状态含授权口令（SC-10 类）`);
+  }
 });

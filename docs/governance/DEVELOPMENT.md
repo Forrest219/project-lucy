@@ -158,6 +158,56 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 
 独占维护某几处登记，不能成为少写一处的理由。发现镜像过期，就在这次改动里改正。改之前先读 Spec 头部，不要用另一份文档的旧状态行当事实源。
 
+#### 状态措辞用中文
+
+Spec 与 Plan 头部「状态」行禁止使用下列**英文状态词**。匹配须同时满足：
+（1）大小写敏感；（2）词边界（匹配处左右两侧皆非 `[A-Za-z]`）；（3）**显式版本段排除**——
+版本号豁免不得只靠（1）或（2）。表头写「状态」，不写 `Status`。扫描面是头部元数据表（前 60 行）；
+正文引用英文词不受本条约束。缺「状态」行不归本条，归 `lint:spec-docs` 的 `metadata` 规则。
+
+禁用状态词（硬门禁；`lint:spec-docs` 规则 `status-vocab`；PR CI 独立入口 `npm run lint:status-vocab`，
+与全量门禁同一实现、同一份词表）：
+`Implemented`、`Approved for planning`、`Superseded`、`Draft`、`Ready for Review`。
+
+推荐状态词（软约束；lint 不强制；近义中文不改写存量）。阶段码对照官方表见
+[`docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md)
+§3.1（S4／X_DEF 一对多；X_REL 无推荐原子）：
+
+| 状态词 | 阶段码（软） | 含义 |
+|---|---|---|
+| 草案 | S1 | 设计未定稿，终稿未确权，未获开发授权 |
+| 终稿已确权 | S2 | 文档级闸门通过，设计冻结 |
+| 开发授权已获得 | S3 | 允许改运行代码（与 lint 授权口令同句） |
+| 实现已落地 | S4 | 代码已合入工作树或已提交 |
+| 待验收 | S4 | 实现完成，验收条目未关闭 |
+| 功能合同已收口 | S5 | SC 全部关闭且有收口记录 |
+| 被取代 | X_SUP | 被后继 Spec 取代 |
+| 延期 | X_DEF | 委托人裁定延至后续产品线 |
+| 结案不做 | X_DEF | 委托人裁定不做 |
+
+说明：「已实现」「功能合同收口」（缺「已」）「未授权实现」等近义为存量常见写法；本条不拦、
+不强制迁移。状态行授权口令近义统一（须含「开发授权已获得」）属独立工作，不在本条出口。
+
+匹配规则（硬门禁实现约束；唯一实现为 `scripts/lint-spec-docs.mjs`，禁止第二份词表拷贝）：
+版本段 `/[vV]?\d[\w.]*-draft\b/` 命中的子串先从单元格剔除、不参与禁用词扫描；`Approved for planning`、
+`Ready for Review` 按整短语匹配；表头 `Status` 由规则独立扫描前 60 行表格行判定，不经 `statusCell()`。
+
+#### 开发台漏斗阶段码
+
+Spec 头部须恰好一行「阶段」元数据；单元格去掉空白与全部 `*` 后整格等于阶段码（大小写敏感）：
+`S1` `S2` `S3` `S4` `S5` `X_DEF` `X_SUP` `X_REL`。字典与全部裁定（D1–D18、文法、伪代码）以
+[`docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md)
+为准；阶段码 ↔ 推荐中文的一对多映射以该 Spec §3.1 为准，本条不另拷词表。UAT／可上线不是阶段；
+发布取证层级闭口的「阶段」必须是 `X_REL`；「收口范围」行仅 S5 可写。
+
+机器门禁＝`lint:spec-docs` 规则 `status-funnel`（PR CI 独立入口 `npm run lint:status-funnel`，同一实现）。
+grandfather＝`docs/governance/spec-status-funnel-grandfather.json`：名单内 Spec 的状态行不含
+「开发授权已获得」、且正文无标记行「状态漏斗门禁：纳入检查」时本规则直接通过；口令或标记行取消跳过。
+Plan「状态」行去首尾空白与前导 `*` 后，须以 `阶段:<CODE>`／`<CODE>｜`／`<CODE>。` 开头镜像 Spec 阶段码。
+S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口`、`实现进行中` 等，见 Spec D4）；S1／S2 的状态行
+不得含「开发授权已获得」；状态行首个「阶段:」之后不得把 `可上线`／`UAT PASS`／`测试台PASS` 当作阶段码，
+「≠」-前缀否定式（DEVELOPMENT 标准写法）放行。
+
 ### 产品线执行总账（SOT）
 
 每条**已开线**的产品线必须有一份**执行总账表**。它是该产品线上「有哪些新功能、对旧功能的修复／事故修复、尚未开发／冻结／结案不做」的**唯一跟进 SOT**。对话纪要、中间态盘点、`user-facing` 草稿、发布说明**都不是**这份全集的替代品；它们只能引用总账行，或触发下面的差集补录。
@@ -336,6 +386,8 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 | 16 | **主路径可用性优先**：新功能／门禁不得把最终用户主路径变成无逃生不可用；Spec／UAT 须同时覆盖「约束生效」与「合法用户仍可用」（含纯 MCP 部署实况）。只验「拦住」不得收口 | 本文件「第一性原理：主路径可用性优先」 | 无（评审／出门人工；错题举一反三） |
 | 17 | **新功能 Spec 必含「受影响画像」小节**：4 画像（问数方／治理方／运维方／管理层）逐行判定 `↑`／`＝`／`↓`，写明变更前后体验与**可核对依据**；判 `↓` 必须写补偿路径并挂验收编号，否则不得收口。事实源与模板见 [`user-personas.md`](user-personas.md) | 本文件「Review 要求」＋ [`user-personas.md`](user-personas.md) §4／§5 | 无（评审／出门人工；`lint:spec-docs` 的 `persona-impact` 规则属第二阶段，**未实现**） |
 | 18 | **WebUI 验证强制浏览器＋计时**：触及 WebUI 用户可见面时，开发验证与测试台不得只验后端 HTTP；须真实前台浏览器＋导航／primaryReady（或等价）计时，并与 API 耗时分列。仅 API smoke 不得记 WebUI PASS／收口 | 本文件「验证策略：浏览器测试约束」＋ [`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md) | 无（评审／UAT 出门人工） |
+| 19 | **Spec／Plan「状态」行禁止英文状态词，表头写「状态」不写 `Status`**（匹配规则见「状态措辞用中文」） | [`lucy-20261122-spec-status-vocabulary-chinese-plan.md`](../plans/lucy-20261122-spec-status-vocabulary-chinese-plan.md) | `lint:spec-docs`（规则 `status-vocab`）＋ `lint:status-vocab`（PR CI） |
+| 20 | **Spec 头部须恰好一行可解析「阶段」；「状态」不得与阶段机器可判矛盾；Plan「状态」行须镜像阶段码前缀**（口径见「开发台漏斗阶段码」） | [`lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) | `lint:spec-docs`（规则 `status-funnel`）＋ `lint:status-funnel`（PR CI） |
 
 ### 交互合同
 

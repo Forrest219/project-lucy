@@ -77,6 +77,61 @@ const DS_TEMPLATE_PARTS = [
 ];
 
 /**
+ * 状态行英文状态词门禁（DEVELOPMENT.md「状态措辞用中文」；建议书 §3.4）。
+ * 词表唯一出处是 DEVELOPMENT.md 该节；本数组与其保持一致，lint:status-vocab 复用本实现。
+ * 匹配：先剔除版本段 /[vV]?\d[\w.]*-draft\b/，再大小写敏感＋词边界（两侧非 [A-Za-z]）。
+ */
+const STATUS_VOCAB_DENY = ["Implemented", "Approved for planning", "Superseded", "Draft", "Ready for Review"];
+const VERSION_DRAFT_SEGMENT = /[vV]?\d[\w.]*-draft\b/g;
+
+/** 解析前 60 行内的表格行，返回去空白后的单元格数组列表；非表格行跳过。 */
+function headerTableRows(text) {
+  const rows = [];
+  for (const line of text.split("\n").slice(0, 60)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("|")) continue;
+    const parts = trimmed.split("|");
+    if (parts[0].trim() === "") parts.shift();
+    if (parts.length && parts[parts.length - 1].trim() === "") parts.pop();
+    rows.push(parts.map((cell) => cell.trim()));
+  }
+  return rows;
+}
+
+export function collectStatusVocabViolations(relPath, text) {
+  const violations = [];
+  let statusValue = null;
+  for (const cells of headerTableRows(text)) {
+    const head = (cells[0] ?? "").replace(/\*/g, "").trim();
+    if (head === "Status") {
+      violations.push({
+        file: relPath,
+        rule: "status-vocab",
+        message: "头部元数据表头须写「状态」，不写 `Status`（见 DEVELOPMENT.md「状态措辞用中文」）"
+      });
+      if (statusValue === null && cells.length > 1) statusValue = cells[1];
+    } else if (head === "状态" && statusValue === null) {
+      statusValue = cells[1] ?? "";
+    }
+  }
+  // 找不到「状态」行 → 跳过本规则，交给 metadata；绝不报缺状态行。
+  if (statusValue === null) return violations;
+  const scrubbed = statusValue.replace(VERSION_DRAFT_SEGMENT, "");
+  for (const term of STATUS_VOCAB_DENY) {
+    const re = new RegExp(`(?<![A-Za-z])${term.replace(/ /g, "\\s+")}(?![A-Za-z])`);
+    const match = re.exec(scrubbed);
+    if (match) {
+      violations.push({
+        file: relPath,
+        rule: "status-vocab",
+        message: `「状态」行含英文状态禁用词「${match[0]}」；改用中文状态词（见 DEVELOPMENT.md「状态措辞用中文」）`
+      });
+    }
+  }
+  return violations;
+}
+
+/**
  * Plan 必备小节。**按语义匹配，不规定确切措辞**——存量 Plan 的标题写法差异很大
  * （「实施步骤」「回滚方案」「交付判定」…），只要覆盖到该语义即算满足。
  */
@@ -388,6 +443,7 @@ export function collectDocViolations(relPath, text) {
   }
 
   violations.push(...collectStaleStatusViolations(relPath, text));
+  violations.push(...collectStatusVocabViolations(relPath, text));
 
   if (hs.some((h) => /Terminology Compliance/i.test(h.title))) {
     if (!/This feature follows/.test(text)) {
@@ -504,6 +560,7 @@ export function scanRepo() {
 
   const violations = [];
   const grandfatherFiles = loadGrandfatherFiles();
+  const funnelGrandfatherFiles = loadFunnelGrandfatherFiles();
   const registeredRoutes = loadRegisteredRoutes();
   for (const relPath of webuiNumbered) {
     const filenameViolation = collectFilenameViolation(relPath);
@@ -525,6 +582,7 @@ export function scanRepo() {
       const planRel = path.posix.join(PLAN_DIR, path.posix.basename(relPath).replace(/-spec\.md$/, "-plan.md"));
       const planText = existsSync(path.join(repoRoot, planRel)) ? read(planRel) : null;
       violations.push(...checkInteractionContract(relPath, text, planText, { grandfatherFiles, registeredRoutes }));
+      violations.push(...checkStatusFunnel(relPath, text, planText, { grandfatherFiles: funnelGrandfatherFiles }));
     }
   }
   violations.push(...collectDesignSystemViolations());
@@ -682,6 +740,138 @@ function loadGrandfatherFiles() {
     throw new Error(`${GRANDFATHER_FILE} 缺少 files 数组`);
   }
   return parsed.files;
+}
+
+const FUNNEL_CODES = new Set(["S1", "S2", "S3", "S4", "S5", "X_DEF", "X_SUP", "X_REL"]);
+const FUNNEL_MARKER_LINE = "状态漏斗门禁：纳入检查";
+const FUNNEL_UNCLOSED_PHRASES = [
+  "≠功能合同收口",
+  "≠完整功能合同",
+  "≠功能已收口",
+  "功能合同尚未收口",
+  "功能合同待终稿复核",
+  "未收口",
+  "尚未收口",
+  "实现进行中"
+];
+const FUNNEL_SHIP_ALIAS = /可上线|UAT[ 　]+PASS|测试台PASS/g;
+const FUNNEL_STAGE_COLON = /阶段[:：]/;
+const FUNNEL_GRANDFATHER_FILE = "docs/governance/spec-status-funnel-grandfather.json";
+
+function loadFunnelGrandfatherFiles() {
+  if (!existsSync(path.join(repoRoot, FUNNEL_GRANDFATHER_FILE))) return [];
+  const parsed = JSON.parse(read(FUNNEL_GRANDFATHER_FILE));
+  if (!Array.isArray(parsed.files)) {
+    throw new Error(`${FUNNEL_GRANDFATHER_FILE} 缺少 files 数组`);
+  }
+  return parsed.files;
+}
+
+/** 单元格去空白与全部 `*`（Spec §4 文法）。 */
+function funnelStripCell(value) {
+  return (value ?? "").replace(/[\s*]/g, "");
+}
+
+/** 前 60 行元数据表中某字段名（去 `*`）的全部行；返回单元格数组列表。 */
+function funnelFieldRows(text, field) {
+  return headerTableRows(text).filter((cells) => (cells[0] ?? "").replace(/\*/g, "").trim() === field);
+}
+
+/** 「闭口层级」小节的「层级：」值（解析不出返回 ""）。 */
+function funnelCloseLayer(text) {
+  const body = sectionBody(text, /闭口层级$/) ?? "";
+  for (const line of body.split("\n")) {
+    const parsed = parseCloseLayerField(line);
+    if (parsed && parsed.name === "层级" && parsed.value !== "") return parsed.value;
+  }
+  return "";
+}
+
+/**
+ * D5(2)：状态行取首个「阶段:」/「阶段：」之后的连续 token，命中 {可上线, UAT PASS, 测试台PASS} → true；
+ * 命中处为「≠」-前缀（否定式，中间可夹空白）→ 放行。无「阶段:」→ false。
+ */
+function funnelStatusClaimsAlias(status) {
+  const colon = FUNNEL_STAGE_COLON.exec(status);
+  if (!colon) return false;
+  const rest = status.slice(colon.index + colon[0].length);
+  FUNNEL_SHIP_ALIAS.lastIndex = 0;
+  for (const match of rest.matchAll(FUNNEL_SHIP_ALIAS)) {
+    let before = match.index - 1;
+    while (before >= 0 && /[\s　]/.test(rest[before])) before -= 1;
+    if (before >= 0 && rest[before] === "≠") continue;
+    return true;
+  }
+  return false;
+}
+
+/** D7：Plan「状态」去首尾空白与前导 `*` 后，须以 阶段:<CODE>／<CODE>｜／<CODE>。 开头。 */
+function funnelPlanMirrors(planStatusCell, code) {
+  const stripped = (planStatusCell ?? "").trim().replace(/^\*+/, "");
+  const colonRe = new RegExp(`^阶段[:：]${code}(?=[｜|。\\s]|$)`);
+  const barRe = new RegExp(`^${code}[｜|。]`);
+  return colonRe.test(stripped) || barRe.test(stripped);
+}
+
+/**
+ * 开发台状态漏斗门禁。文法与伪代码见 docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md §4／§5。
+ * grandfather 跳过第一支：名单内、无授权口令、无标记行 → 直接通过。
+ */
+export function checkStatusFunnel(specRel, specText, planText, options = {}) {
+  const grandfathered = (options.grandfatherFiles ?? []).includes(specRel);
+  const status = statusCell(specText);
+  const marked = stripFences(specText).split("\n").some((line) => line.trim() === FUNNEL_MARKER_LINE);
+  const authorized = status.includes(AUTH_PHRASE);
+  if (grandfathered && !marked && !authorized) return [];
+  const fail = (message) => [{ file: specRel, rule: "status-funnel", message }];
+
+  // D3：恰好一行「阶段」；单元格去空白与全部 `*` 后整格等于 CODE（D5(1) 散文／空格／可上线冒充由此必失败）。
+  const stageRows = funnelFieldRows(specText, "阶段");
+  if (stageRows.length !== 1) {
+    return fail("Spec 须恰好一行「阶段」元数据（去空白与 `*` 后整格等于阶段码；见 DEVELOPMENT.md「开发台漏斗阶段码」）");
+  }
+  const code = funnelStripCell(stageRows[0][1]);
+  if (!FUNNEL_CODES.has(code)) {
+    return fail(`「阶段」单元格「${funnelStripCell(stageRows[0][1]) || "（空）"}」不是合法阶段码；须整格等于 S1／S2／S3／S4／S5／X_DEF／X_SUP／X_REL`);
+  }
+
+  // D8：闭口层级「发布取证」→ 必须 X_REL。
+  if (funnelCloseLayer(specText) === "发布取证" && code !== "X_REL") {
+    return fail("「闭口层级」为发布取证时，「阶段」必须是 X_REL（D8）");
+  }
+
+  // D4：S5 与「未收口」显式短语表矛盾。
+  if (code === "S5") {
+    const squashed = status.replace(/\s+/g, "");
+    const hit = FUNNEL_UNCLOSED_PHRASES.find((phrase) => squashed.includes(phrase));
+    if (hit) return fail(`阶段＝S5 时「状态」行不得含未收口短语「${hit}」（D4）`);
+  }
+
+  // D4：S1／S2 不得含授权口令。
+  if ((code === "S1" || code === "S2") && authorized) {
+    return fail(`阶段＝${code} 时「状态」行不得含「${AUTH_PHRASE}」（D4）`);
+  }
+
+  // D5(2)：状态行首个「阶段:」后连续 token 不得把 可上线／UAT PASS／测试台PASS 当作阶段码；≠-前缀放行。
+  if (funnelStatusClaimsAlias(status)) {
+    return fail("「状态」行首个「阶段:」之后不得把 可上线／UAT PASS／测试台PASS 当作阶段码；可写「≠ 可上线」否定式（D5）");
+  }
+
+  // D6：「收口范围」仅 S5。
+  const scopeRows = funnelFieldRows(specText, "收口范围");
+  if (scopeRows.length > 0 && code !== "S5") {
+    return fail("「收口范围」行仅允许阶段＝S5 时出现（D6）");
+  }
+  if (code === "S5" && scopeRows.some((cells) => cells.length !== 2 || cells[1].trim() === "")) {
+    return fail("「收口范围」标签须非空、单行、无 `|`（§4.2）");
+  }
+
+  // D7：配对 Plan 状态行镜像前缀。
+  if (planText != null && !funnelPlanMirrors(statusCell(planText), code)) {
+    return fail(`配对 Plan「状态」行未镜像 Spec 阶段码 ${code}；须以 阶段:<CODE>／<CODE>｜／<CODE>。 开头（D7）`);
+  }
+
+  return [];
 }
 
 function locate(rel, options) {
@@ -934,7 +1124,17 @@ export function checkInteractionContract(specRel, specText, planText, options = 
 }
 
 function main() {
+  const ruleArg = process.argv.find((arg) => arg.startsWith("--rule="));
   const result = scanRepo();
+  if (ruleArg) {
+    // 导出入口（如 lint:status-vocab / lint:status-funnel）：只裁决单条规则，
+    // 与全量 lint:spec-docs 共用同一 scanRepo 实现，禁止第二份词表／判定拷贝。
+    const rule = ruleArg.slice("--rule=".length);
+    const blocking = result.blocking.filter((v) => v.rule === rule);
+    const warnings = result.warnings.filter((v) => v.rule === rule);
+    console.log(formatReport({ ...result, blocking, warnings }));
+    process.exit(blocking.length ? 1 : 0);
+  }
   console.log(formatReport(result));
   process.exit(result.blocking.length ? 1 : 0);
 }
