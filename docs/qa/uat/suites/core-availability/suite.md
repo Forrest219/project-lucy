@@ -7,7 +7,7 @@
 | 功能合同 | [轻探针](../../../../specs/lucy-20261119-memory-probe-diagnostics-isolation-spec.md) · [重任务容量](../../../../specs/lucy-20261119-heavy-work-capacity-control-spec.md) · [关停排空](../../../../specs/lucy-20261119-process-drain-lifecycle-spec.md) |
 | Plan | [P1-61](../../../../plans/lucy-20261119-memory-probe-diagnostics-isolation-plan.md) · [P1-62](../../../../plans/lucy-20261119-heavy-work-capacity-control-plan.md) · [P1-63](../../../../plans/lucy-20261119-process-drain-lifecycle-plan.md) |
 | 用例 / 夹具 / 跑次 | [cases](cases.md) · [fixtures](fixtures.md) · [最新组合跑次](runs/2026-11-20-codex-followup-r6-1800.md) · [历史修复](runs/2026-11-20-codex-readyz-diagnostic-repair.md) · [首轮反例](runs/2026-11-20-codex-readyz-diagnostic-repro.md) |
-| 当前判定 | 最新r6组合独立严格FAIL／证据VALID（在线审计进度1超时＋2漏采）；业务、性能、32原身份恢复和完整审计闭包通过。旧F61／F63目标缺口、F62导出局部PASS WITH GAP保留；完整矩阵／R-CAV／发布未签 |
+| 当前判定 | 整套仍以 r6 独立严格 FAIL／证据 VALID 为准。2026-11-22 出包前定向（`prepack-8e3e3f24`）CAV-01／02＝PASS WITH GAP，见 [prepack 跑次](runs/2026-11-22-cursor-prepack-cav-directed.md)；≠ 整套 PASS。旧 F61／F63 缺口、F62 导出局部、完整矩阵／R-CAV／发布未签 |
 
 ## 真实性与授权
 
