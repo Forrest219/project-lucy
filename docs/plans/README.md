@@ -4,8 +4,8 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
-| [lucy-20261122-prepack-closure-multi-agent-plan.md](lucy-20261122-prepack-closure-multi-agent-plan.md) | 出包前收口多 Agent（剔出 P1-58／59；不出包）。候选 `prepack-8e3e3f24`／`8e3e3f24`；CAV 定向 PASS WITH GAP；须知＋就绪评审已落盘。≠ 可上线；≠ 出包授权。 |
 | [lucy-20261122-spec-status-vocabulary-chinese-plan.md](lucy-20261122-spec-status-vocabulary-chinese-plan.md) | P1-73／REQ-030-094／Wave A；阶段:S3｜v1.0（伞下 Wave A 子句）。开发授权已获得；实现进行中。伞级事实源＝漏斗 Spec；本文件状态不构成独立总账镜像。仍 ≠ 功能合同收口；≠ 可上线 |
+| [lucy-20261122-prepack-closure-multi-agent-plan.md](lucy-20261122-prepack-closure-multi-agent-plan.md) | 出包前收口多 Agent（剔出 P1-58／59；不出包）。候选 `prepack-8e3e3f24`／`8e3e3f24`；CAV 定向 PASS WITH GAP；须知＋就绪评审已落盘。≠ 可上线；≠ 出包授权。 |
 | [lucy-20261120-row-policy-automatic-enforcement-plan.md](lucy-20261120-row-policy-automatic-enforcement-plan.md) | P1-72／REQ-030-093；v1.0。终稿已确权；开发授权已获得；实现与 Codex CLI 代码终审完成；功能合同已收口（定向回归286项、脚本合同97项、隔离Docker39项）；测试台 UAT-SUITE-ROW-POLICY-AUTO PASS；扩展回归与全仓门禁既有缺口单列，远端CI未执行；不入核心分母；≠ 可上线。 |
 | [lucy-20261120-storage-readiness-plan.md](lucy-20261120-storage-readiness-plan.md) | P1-71／REQ-030-092；v0.1-draft。0.30 不开发；准备材料保留在需求池作下一期开发目标。源码盘点、风险差集与 Spec／Plan／UAT 设计已落盘；终稿未确权；未获开发授权；不升级、不迁移、不操作客户实例；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 配对 [Spec](../specs/lucy-20261120-storage-readiness-spec.md)。 |
 | [lucy-20261120-page-dom-scale-assessment-plan.md](lucy-20261120-page-dom-scale-assessment-plan.md) | PDS 横向评估已执行（Batch 1–3 PASS WITH GAP）：T1 六页 4 PASS／2 BLOCKED，T2 冒烟全过线；套件与探针已登记测试台。 |
