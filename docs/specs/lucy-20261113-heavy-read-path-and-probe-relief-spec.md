@@ -6,7 +6,7 @@
 | 日期 / 目标版本 | 2026-11-13／产品线 `0.30.0`（是否回补 `lucy-v0.25` 见 O2） |
 | 功能编号 / 优先级 | **P1-21**／REQ-030-042／**P1**（事故修复，建议优先排期）。**不入 0.30 核心分母** |
 | 阶段 | S5 |
-| 状态 | **S5｜功能合同已收口（2026-11-13）**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做 R0／01–04；可选 LOOP-05 BLOCKED——客户 0.25 无 livez）。≠ 可上线 |
+| 状态 | **S5｜功能合同已收口（2026-11-13）**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（R0／01–04）。≠ 可上线 |
 | 决策来源 | 2026-11-13 客户 K8s 现场：Pod 被 liveness 连续误杀（退出码 143，8 次重启）；系统概览「系统状态／待处理事项加载失败：页面数据暂时无法完成刷新」。同日委托人选择「根治」并要求先写 Spec／Plan |
 | 需求来源 | 客户 IT 日志与截图；2026-11-13 对客户实例 `10.69.95.109:8276`（`0.25.0`）的逐个单次只读实测；仓库代码路径核对 |
 | 实施主体 | WebUI 服务端（`webui/server/admin/audit.ts`、`proxy/audit.ts`、`security/projector.ts`、`index.ts`、`ktx-runtime.ts`、`admin/mcp-runtime.ts`、`publish-*`）；Helm Chart（`deploy/k8s/helm/lucy/`）与 `deploy/k8s/K8S_CONTRACT.md` |
@@ -272,4 +272,4 @@ GET /api/health -> 同改前字段，依赖状态取缓存 + eventLoop
 
 ---
 
-**下一步：** 功能合同已收口。测试台必做已 PASS（[`2026-11-13-cursor-demo-event-loop`](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md)）；客户 LOOP-05 仍 BLOCKED。持续看守按套件节奏。本条收口不表示可上线。
+**下一步：** 功能合同已收口。测试台必做已 PASS（[`2026-11-13-cursor-demo-event-loop`](../qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md)）。持续看守按套件节奏；LOOP-05 仅在明确要求发布取证或客户交付时执行。本条收口不表示可上线。

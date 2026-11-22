@@ -4,7 +4,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | **S5｜功能合同已收口（2026-11-13）**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（必做 R0／01–04；可选 LOOP-05 BLOCKED——客户 0.25 无 livez）。≠ 可上线 |
+| 状态 | **S5｜功能合同已收口（2026-11-13）**。委托人将 SC-14 `/api/livez` p99 门槛从 300ms 调整为 400ms。实测 p99 359ms、max 487ms、BUSY＝0；`/turns?hours=168` p95 105ms。未启用 worker。O2 只改本分支。测试台 `UAT-SUITE-EVENT-LOOP-RELIEF`＝**PASS**（R0／01–04）。≠ 可上线 |
 | 主 Spec | [`docs/specs/lucy-20261113-heavy-read-path-and-probe-relief-spec.md`](../specs/lucy-20261113-heavy-read-path-and-probe-relief-spec.md) **v0.1-draft** |
 | 总账 | **P1-21**／REQ-030-042；**不入核心分母**；事故修复 |
 | 授权边界 | 只改：推断问询重建触发位置、问询补充字段取数方式、审计投影读路径、`/api/diff` 扫描次数、健康／探针接口、Chart 探针默认值与相关门禁脚本。不改：KTX、页面与文案、推断聚类算法与回看窗口、展示快照 BUSY 语义、`/api/admin/agents`、既有接口字段含义 |

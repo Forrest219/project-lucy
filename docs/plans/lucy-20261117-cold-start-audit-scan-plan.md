@@ -2,7 +2,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | S5｜v0.3；功能合同已收口（2026-11-22，漏斗底端分批收口·批次 1）。与 Spec 同句：终稿已确权、开发已授权（不含 schema 变更、不含线上升级）；代码已实现，vitest 守卫通过；出口 SC-01–SC-17 通过（测试台最新跑次 2026-11-18，候选镜像 `p145-p147`：R0／01–05 全 PASS；02 按 OQ-2 放宽门槛 PASS；03／04 先前 FAIL 已转 PASS）；06 客户侧证据仍 BLOCKED（归发布取证，不在本条出口）；不入核心分母；≠ 可上线 |
+| 状态 | S5｜v0.3；功能合同已收口（2026-11-22，漏斗底端分批收口·批次 1）。终稿已确权、开发已授权（不含 schema 变更、不含线上升级）；启动补算与稳态轮询已改为有界读取，审计库打开与迁移在 app.listen 前完成；vitest 守卫及 SC-01–SC-17 出口通过。不入核心分母。≠ 可上线 |
 | 主 Spec | [`docs/specs/lucy-20261117-cold-start-audit-scan-spec.md`](../specs/lucy-20261117-cold-start-audit-scan-spec.md) |
 | 总账 | **P1-39**／REQ-030-060；**不入核心分母**；事故修复 |
 | 授权边界 | **当前不得改运行代码。** 获得终稿确权（Codex CLI 终审，或无 Codex 时委托人明示确权）与委托人明确的开发授权之后，只改：`webui/server/admin/inferred-turn-maintainer.ts`、`webui/server/index.ts` 的启动顺序、`webui/server/proxy/audit.ts` 与 `webui/server/admin/audit.ts` 的预热入口，以及对应 vitest。不改 Helm 探针、`synchronous`、索引与表结构、P1-38 补算切片。扩大改动面须另获授权 |
@@ -19,7 +19,7 @@
 - **开发授权**：已取得（同上）。范围＝本 Plan 授权边界内的文件；**不含**新增持久化表等 schema 变更，**不含**线上升级。
 - 测试台基建不属于运行代码，已先行：`scripts/uat/cold-start-slow-disk.mjs`、`scripts/uat/cold-start-slow-disk-seed.cjs`、套件 `docs/qa/uat/suites/cold-start-slow-disk/`。
 - 环境：本机 Docker Desktop（arm64）。慢盘用 blkio 限速，冷缓存用 `drop_caches`。不涉及客户拓扑。
-- 客户侧证据（不阻塞本条，用于校准）：容器内 `dd if=/dev/zero of=/data/lucy/.fsync-probe bs=4k count=200 oflag=dsync`、`audit.sqlite*` 三文件大小、故障 Pod 启动五分钟日志。
+- 产品侧验收按 [DEVELOPMENT.md「产品侧修复收口」](../governance/DEVELOPMENT.md#产品侧修复收口) 执行。UAT-COLD-06 属发布取证的现场校准，仅在明确要求该项时执行。
 
 ## 步骤
 
@@ -58,4 +58,4 @@ Spec、本 Plan、总账、需求池、`docs/README.md`、`docs/plans/README.md`
 | 监听前迁移超过 150 秒预算 | 本条不收口；另立条目做迁移分块或后台化。不得回退为监听后同步 |
 | 演练库子表（`access_log_sources` 等）比客户库小，`foreign_key_check` 被低估 | 种子脚本先只灌 `access_log`。若 UAT-COLD-02 的 `foreign_key_check` 耗时占比显著，扩种子到子表后复跑，并在 `runs/` 单列 |
 | 本机限速不等于客户盘 | 环境变量可调；客户侧 `dd` 数据回来后校准 |
-| 客户现场症状与本机机制不同 | Spec §1.6。保持在总账 |
+| 客户现场症状与本机机制不同 | Spec §1.6；现场同因性归发布取证 UAT-COLD-06 |

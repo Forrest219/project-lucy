@@ -9,7 +9,7 @@
 | UAT-COLD-04 | 稳态下页缓存被冲掉（后台轮询冷读） | 运行时 | `cold04 --new-image IMG` | 就绪 20 秒后清页缓存；之后 60 秒门槛同 02 |
 | UAT-COLD-05 | 冷启动后合法用户主路径可用 | 运行时＋API | `cold05 --new-image IMG` | 首次升级路径就绪后：管理员认领、`GET /api/project`、建角色／Agent／token、MCP `initialize`、`tools/list`，每步成功且 ≤ 5 秒 |
 | UAT-COLD-D1 | 诊断：重建单页冷读耗时 | 脚本（诊断，**不判 PASS/FAIL**） | `pagecost --new-image IMG` | 同一条重建 SQL（LIMIT 400）在限速冷盘／限速热缓存／不限速冷盘下 4 页各自毫秒。改前基线 2695–5902／1–2／21–29。用于解释 02／04 的结果，不是门禁 |
-| UAT-COLD-06 | 客户侧只读证据 | 可选，客户配合 | 客户执行并回传 | fsync 延迟、`audit.sqlite*` 三文件大小、故障启动日志。不回传则 BLOCKED。不得由我方对客户实例执行写操作 |
+| UAT-COLD-06 | 现场校准 | 发布取证／客户交付 | 客户授权后提供 | fsync 延迟、`audit.sqlite*` 三文件大小、故障启动日志 |
 | UAT-COLD-07 | 暂停版首次升级 | 运行时 | `cold02 --new-image IMG --env LUCY_INFERRED_MAINTAINER=off` | 同 02 门槛（放宽首次升级）；MCP 回复通过；**暂停缓解，≠ P1-47 默认 PASS** |
 | UAT-COLD-08 | 暂停版重启 | 运行时 | `cold03 --new-image IMG --env LUCY_INFERRED_MAINTAINER=off` | livez max ≤1000ms、p99 ≤400ms；readyz p99 ≤1500ms |
 
@@ -179,11 +179,11 @@ UAT-COLD-02 的启动路径（旧库、限速、冷缓存）。
 
 ---
 
-## UAT-COLD-06 — 客户侧只读证据（可选）
+## UAT-COLD-06 — 现场校准（发布取证）
 
 ### 前置
 
-客户配合。**我方不对客户实例执行写操作**，也不在业务高峰操作。
+任务明确要求该项发布取证或客户交付，且已取得现场授权。**我方不对客户实例执行写操作**，也不在业务高峰操作。
 
 ### 步骤
 
@@ -194,7 +194,7 @@ UAT-COLD-02 的启动路径（旧库、限速、冷缓存）。
 ### 期望
 
 - 回传后据此校准 `UAT_COLD_*` 限速值与种子库规模，再跑 02。
-- 不回传则记 BLOCKED，不影响 02–05 的结论，但 Spec §1.6 的「未证实」保持。
+- 明确要求现场校准的任务若缺所需资料，将该项记 `BLOCKED` 并注明具体缺口。产品侧结论依据 R0／01–05。
 
 ### 清理
 

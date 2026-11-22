@@ -4,7 +4,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | S1｜主体 v0.2 及 §8 v0.4 已确权并实现；本轮真实 Doris→Hive 字段读取及 F02／F03 预算回归通过，指定慢语法拒绝按已授权 D5 受控降级并单列边界。客户生产 SelectDB 未验；不改本条探针合同。原完整范围 FDE 实测 FAIL 保留；委托人已将 G6 正式完整导出延期，本次客户功能测试排除此项，可按限定范围进行；D5边界保留；≠ 可上线。 |
+| 状态 | S1｜主体 v0.2 及 §8 v0.4 已确权并实现；本轮真实 Doris→Hive 字段读取及 F02／F03 预算回归通过，指定慢语法拒绝按已授权 D5 受控降级并单列边界。原完整范围 FDE 实测 FAIL 保留；委托人已将 G6 正式完整导出延期，本次客户功能测试排除此项，可按限定范围进行；D5边界保留；≠ 可上线。 |
 | 主 Spec | [`docs/specs/lucy-20261113-external-catalog-column-read-spec.md`](../specs/lucy-20261113-external-catalog-column-read-spec.md) **v0.2** |
 | 总账 | **P1-20**／REQ-030-041；**不入核心分母**；事故续作（P1-16 Follow-up） |
 | 授权边界 | 只改外部目录**单表字段**直连读法与直连白名单。不改 KTX、不问数、不改无点号 MySQL 字段 SQL、不改页面组件、不做浏览器测试 |
@@ -46,9 +46,9 @@
 - [x] **Task 2 白名单：** `catalog-show.ts` 正则扩展，仅三段名
 - [x] **Task 3 接线：** `readCatalogTableColumns` 按序探针；终止类失败不回退；失败探针写日志
 - [x] **Task 4 文档镜像：** Spec／Plan／总账／需求池／P1-16 Follow-up 指针同步
-- [x] **Task 5a 测试台用例（2026-11-13）：** `UAT-SUITE-CATALOG-SCAN` 已增 SIM 修订（EC→用例名对照）＋`KTX-GUARD`＋EXT-03…05；无点号 MySQL 回归并入 `MYSQL-02` 步骤 3；`scripts/uat/verify-ktx-readonly-guard.sh` 已落地并在本机容器 18/18 PASS（KTX 0.16.0，容器仍是修复前代码，不影响该检查）。无 live 时 P1-20 记 NOT VERIFIED，不得写成 EXT PASS
+- [x] **Task 5a 测试台用例（2026-11-13）：** `UAT-SUITE-CATALOG-SCAN` 已增 SIM 修订（EC→用例名对照）＋`KTX-GUARD`＋EXT-03…05；无点号 MySQL 回归并入 `MYSQL-02` 步骤 3；`scripts/uat/verify-ktx-readonly-guard.sh` 已落地并在本机容器 18/18 PASS（KTX 0.16.0，容器仍是修复前代码，不影响该检查）。SIM 与 KTX-GUARD 证明替身有效；EXT live 由实际运行单独判定
 - [x] **Task 5b-1 本机复跑（2026-11-13）：** Gate A 已跑，见 [`runs/2026-11-13-cursor-p120-uat.md`](../qa/uat/suites/catalog-scan-read-path/runs/2026-11-13-cursor-p120-uat.md)：SIM 76/76＋KTX-GUARD PASS＝替身有效；EXT-03…05 BLOCKED（无外部目录库密码）→ 现场 NOT VERIFIED
-- [ ] **Task 5b-2 现场复跑（待凭据）：** 有真实 `catalog.database` 连接后跑 EXT-03／04／05，取缺表报错原文；无凭据时由委托人对 P1-20 另行决定降级
+- **产品侧场景 UAT：** 本机 Doris／Hive 双目录 lab 跑 EXT-03-DUAL 和 EXT-05，按实记录可选 EXT-04。跑次见 [测试台 INDEX](../qa/uat/INDEX.md)。指定客户环境复跑归明确要求的发布取证或客户交付。
 - [ ] **Task 5c 收口证据（可选）：** `docs/reviews/` 增 EC 证据审计
 
 ## 4. 验收
@@ -74,7 +74,7 @@ cd webui && npx vitest run \
 
 - 功能合同：EC-01–EC-13 全绿，且 `runSql` 在外部目录字段路径零调用。
 - 文档：Spec 头部、本 Plan、总账 P1-20、需求池 REQ-030-041 同句。
-- **不含：** 客户 live、UAT PASS、可上线。完成定义达成仅代表**功能合同收口**。
+- 产品侧修复收口还须通过模拟用户场景 UAT，按 [DEVELOPMENT.md「产品侧修复收口」](../governance/DEVELOPMENT.md#产品侧修复收口) 登记。
 
 ## 6. 风险与回滚
 
@@ -84,4 +84,4 @@ cd webui && npx vitest run \
 
 ## 7. 非本 Plan
 
-客户 SelectDB live 必测、浏览器 UAT、整库批量超时产品策略、Hive HS2 直连晋级、Hive 字段注释读取。
+客户生产 SelectDB 的发布取证、浏览器 UAT、整库批量超时产品策略、Hive HS2 直连晋级、Hive 字段注释读取。

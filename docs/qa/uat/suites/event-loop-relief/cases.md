@@ -7,7 +7,7 @@
 | UAT-LOOP-02 | demo 上同时打开 7 天访问日志和系统概览 | 浏览器＋API | WebUI `/overview`、访问日志 7 天 | 不出现「页面数据暂时无法完成刷新」；同期 livez 单次 ≤ 1s |
 | UAT-LOOP-03 | 探针拆分仍在 | API | `/api/livez`、`/api/readyz`、`/api/health` | livez 连续 30 次都是 `{ok:true}`；readyz 预热后 200；health 20 次都不挂起 |
 | UAT-LOOP-04 | 负载期间不被存活探针杀掉 | 运行时 | 容器或 Pod 重启次数 | 用例窗口内重启次数增量＝0 |
-| UAT-LOOP-05 | 已升级实例的维护窗复测 | 可选，维护窗 | 同 LOOP-01 的门槛，打在含 `/api/livez` 的实例上 | 门槛同 LOOP-01；0.25 无该路由时 BLOCKED |
+| UAT-LOOP-05 | 已升级实例的维护窗复测 | 发布取证，维护窗 | 同 LOOP-01 的门槛，打在含 `/api/livez` 的实例上 | 门槛同 LOOP-01；0.25 无该路由时 BLOCKED |
 
 事故对照：2026-11-13 客户实例上，`/turns?hours=168` 超过 90 秒未返回，同期 `/api/health` 连续超时，Pod 退出码 143 被 liveness 杀掉，系统概览报「页面数据暂时无法完成刷新」。`/api/diff` 约 27 秒。
 
@@ -139,7 +139,7 @@ UAT-R0 确认目标有 `/api/livez`。
 
 ### 前置
 
-目标镜像已经提供 `/api/livez`。选维护窗。凭据只使用 fixtures 中的文件路径。不要在业务高峰执行。
+任务明确要求发布取证或客户交付，并已取得指定实例的执行授权。目标镜像已经提供 `/api/livez`。选维护窗。凭据只使用 fixtures 中的文件路径。不要在业务高峰执行。
 
 ### 步骤
 

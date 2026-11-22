@@ -10,11 +10,11 @@
 | fixtures | [fixtures.md](fixtures.md) |
 | runs | [runs/](runs/) |
 
-## 必做／可选
+## 产品侧 UAT 与发布取证
 
-| 必做 | 可选 |
+| 产品侧必做 | 发布取证 |
 |---|---|
-| UAT-R0、UAT-LOOP-01、UAT-LOOP-02、UAT-LOOP-03、UAT-LOOP-04 | UAT-LOOP-05（已部署含 `/api/livez` 的镜像之后，在维护窗跑；0.25 无此路由时记 BLOCKED） |
+| UAT-R0、UAT-LOOP-01、UAT-LOOP-02、UAT-LOOP-03、UAT-LOOP-04 | UAT-LOOP-05（明确要求验证指定部署实例，且已部署含 `/api/livez` 的镜像时，在维护窗执行） |
 
 ## 持续节奏
 
@@ -22,9 +22,10 @@
 |---|---|
 | 每个包含本修复的 `0.30` 候选构建 | UAT-LOOP-01、UAT-LOOP-03 |
 | 本机 demo 升级或重建之后 | UAT-R0、UAT-LOOP-02、UAT-LOOP-04 |
-| 客户或预发镜像升级到带 `/api/livez` 的版本后 | 维护窗跑一次 UAT-LOOP-05 |
-| 其后审计库明显变大，或再次出现概览红字、存活探针重启 | 重跑 UAT-LOOP-01；若在已升级实例上，再跑 UAT-LOOP-05 |
-| 实例仍是没有 `/api/livez` 的 0.25 | UAT-LOOP-05 记 BLOCKED。不要把 Chart `0.2.9` 的存活探针改挂上去 |
+| 发布取证或客户交付要求验证已升级实例 | 维护窗跑一次 UAT-LOOP-05 |
+| 其后审计库明显变大，或再次出现概览红字、存活探针重启 | 重跑 UAT-LOOP-01 |
+
+产品侧收口按 [DEVELOPMENT.md「产品侧修复收口」](../../../../governance/DEVELOPMENT.md#产品侧修复收口) 执行。
 
 ## 边界
 

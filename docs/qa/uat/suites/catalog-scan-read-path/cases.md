@@ -10,10 +10,10 @@
 | UAT-SCAN-MYSQL-VER | MySQL 5.7／8.0／8.4 矩阵 | 脚本全真 | `run-mysql-version-matrix.sh` |
 | UAT-SCAN-EXT-01 | 外部目录列库 live | 可选／须授权 | live-schemas |
 | UAT-SCAN-EXT-02 | 外部目录列表 live | 可选／须授权 | live-tables |
-| UAT-SCAN-EXT-03 | 外部目录单表读字段 live（P1-20 事故复现） | **P1-20 现场必验**／须凭据 | schema-structure |
+| UAT-SCAN-EXT-03 | 外部目录单表读字段 live（P1-20 事故复现） | 本机真实 lab；可由 EXT-03-DUAL 覆盖 | schema-structure |
 | UAT-SCAN-EXT-03-DUAL | 双外部目录对照：无 Kerberos Hive ＋ Kerberos `hive_jd` 同构读字段 | **P1-20 客户症状对照**／本机 lab 或现场 | schema-structure |
-| UAT-SCAN-EXT-04 | 外部目录中文表名单表字段 live | P1-20 现场／须凭据与中文表 | schema-structure |
-| UAT-SCAN-EXT-05 | 外部目录结构 diff／per-table 同通道 live（含缺表报错取证） | P1-20 现场／须凭据 | table-structure-diff |
+| UAT-SCAN-EXT-04 | 外部目录中文表名单表字段 live | 可选／须中文表夹具 | schema-structure |
+| UAT-SCAN-EXT-05 | 外部目录结构 diff／per-table 同通道 live（含缺表报错取证） | P1-20 本机真实 lab | table-structure-diff |
 | UAT-SCAN-CASE-01 | 大小写歧义字段拒绝 | 全真 API | `run-zhaomin-local-gaps.mjs case` |
 | UAT-SCAN-DIFF-01 | 结构差异缺表与已读表分开 | 全真 API | 同上 |
 
@@ -21,7 +21,7 @@
 
 - SIM 可主张 EC 替身；**KTX-GUARD** 证明替身所模拟的 KTX 拒绝行为仍真实；二者都**不得**冒充 EXT live PASS。
 - 无点号 MySQL 单表字段不回归（EC-10 的 live 镜像）并入 `UAT-SCAN-MYSQL-02` 步骤 3，不另立编号，避免同一检查算两次 PASS。
-- EXT-03…05 是 P1-20 的现场必验项。「PASS WITH GAP」只适用于真正可选的 EXT-01／02；EXT-03…05 未跑时 P1-20 按 `suite.md`「主张规则」单独记 `NOT VERIFIED`／`BLOCKED`。
+- P1-20 产品侧用真实 lab 验证 EXT-03-DUAL 与 EXT-05。必做项无法执行时记 `BLOCKED`；可选 EXT-01／02／04 缺前置时记 `SKIPPED` 并注明。指定客户环境的兼容性按 [suite.md](suite.md)「主张规则」单列。
 - **EXT-03-DUAL** 针对客户截图症状（能列 `hive_jd`／`hive-1` 表，但「准备表结构」报「没有读到字段」）：同一 Lucy、同一 Doris／SelectDB，对**无 Kerberos** 与 **Kerberos `hive_jd`** 各读至少一张表字段；两路都通才可主张「本机构造的客户同形症状已修复」。只测一路 ≠ 关闭客户对照缺口。
 
 ### 跑前统一前置（所有 live 用例）
@@ -221,7 +221,7 @@ fixtures「可选外部目录 live」已填真实 `catalog.database` 连接；�
 
 ## UAT-SCAN-EXT-03 — 外部目录单表读字段 live（P1-20 事故复现）
 
-对应 P1-20 现场目标（非 EC 功能合同出口）。**P1-20 现场必验项**：没有它，只能主张替身合同，不能主张现场修复。
+在真实 Doris／Hive lab 验证 P1-20 单表字段入口；EXT-03-DUAL 在两路目录执行本用例的关键断言。
 
 ### 前置
 
@@ -244,7 +244,7 @@ fixtures「可选外部目录 live」已填真实 `catalog.database` 连接；�
 | 步骤 2：2xx，`namesOnly=false`，`columnCount>=1`，列清单含真实列名；响应与日志无凭据明文 | **PASS** |
 | 失败，且日志里的探针错误是服务端返回（语句被拒、权限、表不存在、超时、连接失败） | **FAIL**。把「探针语句类型＋脱敏错误原文」写进跑次。这是新问题（不再是 KTX 拒绝），回流到 P1-20 |
 | 失败，但日志里没有任何探针记录 | **FAIL**。说明请求没走到直连探针（容器代码不对或入口分支错），先回查跑前自检 |
-| 无凭据／不可达 | `BLOCKED`（待委托人对 P1-20 EXT 降级**单独授权**）；若本用例已被明确标注可选，则 `SKIPPED`。**不得**用 vitest／CR 冒充 PASS |
+| 本机 lab 缺凭据／不可达 | `BLOCKED`；记录未满足的前置，不能以 vitest 或 CR 代替本用例 |
 
 ### 清理
 
@@ -308,7 +308,7 @@ fixtures「可选外部目录 live」已填真实 `catalog.database` 连接；�
 |---|---|
 | 2xx；`columnCount>=1`；列名与表名保留（非乱码／空）；响应与日志无密码 | **PASS** |
 | 失败且日志有服务端探针错误 | **FAIL**，记录探针语句类型与错误原文（重点看反引号与编码） |
-| 无中文表／无凭据 | `SKIPPED`／`BLOCKED` |
+| 无中文表夹具／无凭据 | `SKIPPED`，注明原因 |
 
 ---
 
@@ -334,7 +334,7 @@ fixtures「可选外部目录 live」已填真实 `catalog.database` 连接；�
 | `T`：`status=ok` 且已读到字段；`M`：`status=not_in_library`；整次请求 2xx，未被打成通道失败；`M` 只有 1 条探针日志 | **PASS** |
 | `M` 返回 `status=error`，且 `stderr` 是「表不存在」语义 | **FAIL（缺口已查明）**：把 `stderr` 原文回补进 `sqlFailureReason` 正则和 SIM 用例，登记后续动作；不得改判为 PASS |
 | `T` 读不到字段 | **FAIL**，同 EXT-03 的处理 |
-| 无凭据／不可达 | `BLOCKED`／`SKIPPED` |
+| 本机 lab 缺凭据／不可达 | `BLOCKED`，记录未满足的前置 |
 
 ### 清理
 

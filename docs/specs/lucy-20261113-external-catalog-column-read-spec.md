@@ -6,7 +6,7 @@
 | 日期 / 目标版本 | 2026-11-13／不绑定产品版本号 |
 | 功能编号 / 优先级 | **P1-20**／REQ-030-041／**P1**（事故续作）。**不入 0.30 核心分母** |
 | 阶段 | S1 |
-| 状态 | S1｜主体 v0.2 及 §8 v0.4 已确权并实现；本轮真实 Doris→Hive 字段读取及 F02／F03 预算回归通过，指定慢语法拒绝按已授权 D5 受控降级并单列边界。客户生产 SelectDB 未验；不改本条探针合同。原完整范围 FDE 实测 FAIL 保留；委托人已将 G6 正式完整导出延期，本次客户功能测试排除此项，可按限定范围进行；D5边界保留；≠ 可上线。 |
+| 状态 | S1｜主体 v0.2 及 §8 v0.4 已确权并实现；本轮真实 Doris→Hive 字段读取及 F02／F03 预算回归通过，指定慢语法拒绝按已授权 D5 受控降级并单列边界。原完整范围 FDE 实测 FAIL 保留；委托人已将 G6 正式完整导出延期，本次客户功能测试排除此项，可按限定范围进行；D5边界保留；≠ 可上线。 |
 | 决策来源 | 2026-11-13 现场／测试反馈：`hive-1`＋Schema `dim` 在「准备表结构」侧边栏能列出全部表；选中 `dim_bidding_block_ad_id_2025` 提示「表「…」没有读到字段。」表侧确认有字段。服务端应用日志暂不可取；根因由 KTX 0.16.0 只读校验复现确认（§1.2） |
 | 需求来源 | P1-16 收口后遗留：外部目录字段仍走 `ktx sql`＋`DESC`；与列名直连 `SHOW` 通道不一致 |
 | 实施主体 | WebUI 服务端：`catalog-show`（直连适配器白名单）、`schema-structure.readCatalogTableColumns`／`previewSchemaStructure` |
@@ -14,7 +14,7 @@
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」与「功能闭口与发布取证」 |
 | 与既有 Spec 的关系 | **续作／修订** [库内扫表读法 Spec](lucy-20261111-catalog-scan-read-path-spec.md) 的 Follow-up 与 **SC-10**（原合同：外部目录字段 `DESC`＋`ktx sql`）。本条生效后，外部目录**单表字段读**以本 Spec 为准；P1-16 的列库／列表合同不变 |
 | 实施计划 | [`docs/plans/lucy-20261113-external-catalog-column-read-plan.md`](../plans/lucy-20261113-external-catalog-column-read-plan.md) |
-| §8 修订（已确权） | 主体 v0.2 及 §8 v0.4 已确权并实现；本轮真实 Doris→Hive 字段读取及 F02／F03 预算回归通过，指定慢语法拒绝按已授权 D5 受控降级并单列边界。客户生产 SelectDB 未验；不改本条探针合同。原完整范围 FDE 实测 FAIL 保留；委托人已将 G6 正式完整导出延期，本次客户功能测试排除此项，可按限定范围进行；D5边界保留；≠ 可上线。 |
+| §8 修订（已确权） | 主体 v0.2 及 §8 v0.4 已确权并实现；本轮真实 Doris→Hive 字段读取及 F02／F03 预算回归通过，指定慢语法拒绝按已授权 D5 受控降级并单列边界。原完整范围 FDE 实测 FAIL 保留；委托人已将 G6 正式完整导出延期，本次客户功能测试排除此项，可按限定范围进行；D5边界保留；≠ 可上线。 |
 
 ### Changelog
 
@@ -31,7 +31,8 @@
 - 层级：功能合同
 - 本条承诺：对 `database` 形如 `catalog.database` 的 MySQL／Doris／SelectDB 连接，在「准备表结构」**选中一张已存在的表**读取字段时，能返回该表非空字段列表（在直连探针任一成功且可映射的前提下）；失败时仍为现有「表「…」没有读到字段。」类文案（或既有 permission／timeout／too_large 专用句），且**不得**把 `SHOW`／`DESC`／`SHOW COLUMNS`／`DESCRIBE` 交给 `ktx sql`。
 - 本条出口：EC-01–EC-17（本机 vitest 替身即可）。EC-14–EC-17 为 §8（2026-11-19）新增；EC-15 为读取层断言，preview 披露与真实客户端行为归 P1-34 LS-22；EC-16 为应绿对照。
-- 不在本条出口：问数／MCP／KTX 语义层；客户环境 live 必过；整库逐表批量准备在网关时限内完成；Hive Metastore Kerberos／HDFS；浏览器测试；普通 MySQL（无点号）读字段路径；页面文案改版；Hive 字段注释。
+- 产品侧修复 UAT：本机真实 Doris／Hive lab 验证单表字段与缺表分支，套件见 [UAT-SUITE-CATALOG-SCAN](../qa/uat/suites/catalog-scan-read-path/suite.md)，按 [DEVELOPMENT.md「产品侧修复收口」](../governance/DEVELOPMENT.md#产品侧修复收口) 判定。
+- 不在本条出口：问数／MCP／KTX 语义层；客户生产 SelectDB 兼容验收（归发布取证）；整库逐表批量准备在网关时限内完成；Hive Metastore Kerberos／HDFS；浏览器测试；普通 MySQL（无点号）读字段路径；页面文案改版；Hive 字段注释。
 - 上线关系：本条收口不表示可上线；不等于客户 SelectDB live 已验。
 
 ## Terminology Compliance
@@ -120,7 +121,7 @@ New terms: None.
 | 外部目录 Schema 宽一次读全库字段 | 无可用 `information_schema`；整库逐表仍另计 |
 | 改问数、语义、MCP、页面布局 | 事故面只在准备表结构单表字段 |
 | 读取 Hive 字段注释 | `DESC`／`SHOW COLUMNS` 不含注释，见 Follow-up Needed |
-| 客户 live 必过作为本条出口 | 功能合同以替身为准；live 归 UAT／发布取证 |
+| 客户生产 SelectDB 兼容验收 | 归发布取证；产品侧用真实 lab 验证 |
 | 承诺整库勾选数百表一次点完不超时 | 仍逐表请求；本条只保证**单表**通道正确 |
 
 ## 4. 设计
@@ -202,7 +203,7 @@ readCatalogTableColumns(conn, catalog, schema, table):
 | 直连 `DESC` 在部分 SelectDB 版本或某些 Hive 表仍失败 | 多探针回退；失败保持诚实文案；EC-13 日志留下真实原因 |
 | 扩大白名单被误用发任意 SQL | 严格正则；EC-06 打假 |
 | 与 P1-16 SC-10 文档漂移 | 本 Spec 显式废止字段侧 SC-10；清单互指 |
-| 客户 live 仍 BLOCKED | 出口不依赖 live；授权后可选补 EXT 字段用例 |
+| 需要确认指定客户生产 SelectDB 兼容性 | 在明确的发布取证或客户交付任务下另验 |
 | 逐表新建连接，整库批量耗时线性 | 本条只保证单表；已入 Follow-up Needed |
 | 测试替身再次与真实 KTX 漂移 | EC-11 固化真实拒绝形态 |
 
@@ -270,7 +271,7 @@ readCatalogTableColumns(...):
 | EC-16 | **应绿的对照（候选基线已绿，不要求先红）**：探针返回明确超时信号且 `timeoutMs = PER_TABLE_TIMEOUT_MS`：只发 **1** 条，`reason=timeout`（回归 EC-05，不得因 C1 放宽而回退） | vitest；用真实超时文本，不用语法错误冒充 |
 | EC-17 | 分类边界：非超时失败的耗时取 `timeout−1501`、`timeout−1500`、`timeout−1`、`timeout`，均**不**判 timeout，均继续回退；**每个边界值之后接一条成功探针，断言最终读到字段**（证明继续回退，而不只是断言分类值） | vitest 参数化 |
 
-证据等级：本机 vitest；真实 Hive／Doris 的慢拒绝由测试台在**延迟注入通道**下补用例（整改 Plan Task 6），**vitest 绿不得写成 UAT PASS**。客户生产 SelectDB 的耗时分布未验。
+证据等级：本机 vitest；真实 Hive／Doris 的慢拒绝由测试台在**延迟注入通道**下补用例（整改 Plan Task 6），**vitest 绿不得写成 UAT PASS**。指定实例的耗时分布归现场取证。
 
 ### 8.5 受影响画像
 
@@ -294,4 +295,4 @@ readCatalogTableColumns(...):
 
 ---
 
-**下一步：** 本机 `npm run demo:upgrade` 让容器内代码生效（由委托人决定是否执行）；客户环境复测归测试台。
+**下一步：** 本机 `npm run demo:upgrade` 让容器内代码生效（由委托人决定是否执行）；指定客户实例的复测归发布取证。

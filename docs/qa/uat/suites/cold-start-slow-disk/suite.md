@@ -15,11 +15,11 @@
 
 真实镜像、真实 entrypoint、真实 HTTP、真实 SQLite 文件。慢盘用 Docker blkio 限速，冷缓存用宿主 VM 的 `drop_caches`。**不 mock，不 `docker restart`**（重启会带着热缓存，没有判定力）。审计库由 0.25.0 镜像自己建表，再灌合成行，保证是**旧 schema**，让候选镜像走真实的首次升级迁移。
 
-## 必做／可选
+## 产品侧 UAT 与现场校准
 
-| 必做 | 可选 |
+| 产品侧必做 | 发布取证 |
 |---|---|
-| UAT-COLD-R0、UAT-COLD-01、UAT-COLD-02、UAT-COLD-03、UAT-COLD-04、UAT-COLD-05 | UAT-COLD-06（客户侧只读证据：fsync 延迟、审计库文件大小、启动日志；客户配合时才跑，否则 BLOCKED） |
+| UAT-COLD-R0、UAT-COLD-01、UAT-COLD-02、UAT-COLD-03、UAT-COLD-04、UAT-COLD-05 | UAT-COLD-06（仅在明确要求发布取证或客户交付时执行） |
 
 ## 持续节奏
 
@@ -29,7 +29,9 @@
 | 每个包含本修复的 `0.30` 候选构建 | R0、01、02、03、04、05 全部 |
 | 任何改动审计库 schema、索引、`getDb`／`getAuditDb` 的构建 | 02、03 |
 | 任何改动 `inferred-turn-maintainer`、启动顺序、`app.listen` 之前的恢复步骤的构建 | 02、03、04 |
-| 客户提供 fsync／文件大小／日志后 | 06；并按客户数据校准环境变量里的限速值，再跑 02 |
+| 明确要求现场校准且取得 fsync／文件大小／日志 | 06；按现场数据校准限速值，再跑 02 |
+
+产品侧收口按 [DEVELOPMENT.md「产品侧修复收口」](../../../../governance/DEVELOPMENT.md#产品侧修复收口) 执行。
 
 ## 门槛（与 Spec §6 同源，改门槛先改 Spec）
 

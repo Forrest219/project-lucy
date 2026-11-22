@@ -2,6 +2,8 @@
 
 本仓库的开发治理规则只以 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 为正文。本文件不复述第二套口径。功能闭口、发布取证、状态登记、**产品线执行总账（SOT）**、**端到端三台账**和新 Spec 的文件名，都见该文件「功能闭口与发布取证」。
 
+日常修复的验收、收口汇报及客户侧证据的适用范围，见 [DEVELOPMENT.md「产品侧修复收口」](docs/governance/DEVELOPMENT.md#产品侧修复收口)。
+
 **第一性原理（强制）**：**主路径可用性优先**——迭代／新功能可以加约束，但不得把最终用户既有主路径变成无逃生的不可用；验收须同时覆盖「约束生效」与「合法用户仍可用」（含纯 MCP）。正文只在 DEVELOPMENT「第一性原理：主路径可用性优先」，本文件不另写第二套。
 
 **用户画像（强制）**：评审任何新功能 Spec 前，先看 [`docs/governance/user-personas.md`](docs/governance/user-personas.md)——4 画像（问数方／治理方／运维方／管理层）＋ `↑／＝／↓` 体验判定。新功能 Spec 必含「受影响画像」小节；判为 `↓` 必须写补偿路径并挂验收编号，否则不得收口。

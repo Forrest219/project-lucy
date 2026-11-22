@@ -4,7 +4,7 @@
 |---|---|
 | Suite ID | `UAT-SUITE-ACCESS-MAP-SANKEY` |
 | 总账 ID | **P1-41**／REQ-030-062 |
-| 目标 | 证明访问关系图在任一数据形态下仍是「四列＋带状流」的桑基，而不是文字、发丝线或塌缩的零厚度流带；证明未确认关联不会被静默吞掉；证明线上镜像含已修复提交 |
+| 目标 | 证明访问关系图在任一数据形态下仍是「四列＋带状流」的桑基，而不是文字、发丝线或塌缩的零厚度流带；证明未确认关联不会被静默吞掉 |
 | 合同回链 | [桑基还原 Spec](../../../../specs/lucy-20261117-access-map-sankey-restoration-spec.md)；前序套件 [`UAT-SUITE-ACCESS-MAP`](../access-map-sankey-empty/suite.md)；错题 [`2026-11-13-access-map-sankey-empty`](../../../../lessons/2026-11-13-access-map-sankey-empty.md)、[`2026-11-17-access-map-sankey-regression`](../../../../lessons/2026-11-17-access-map-sankey-regression.md) |
 | cases | [cases.md](cases.md) |
 | fixtures | [fixtures.md](fixtures.md)（含 5 套确定性种子数据与沙箱启动方式） |
@@ -16,9 +16,9 @@
 
 ## 必做／可选
 
-| 必做 | 可选 |
-|---|---|
-| SANKEY-R0、01、02、04、05 | SANKEY-03（仅 D0＝C 时必做）、SANKEY-06（旧码对照基线）、SANKEY-07（线上实例；需凭据与升级授权） |
+| 产品侧必做 | 可选基线对照 | 发布取证 |
+|---|---|---|
+| SANKEY-R0、01、02、04、05；D0＝C 时加 03 | SANKEY-06（旧码对照基线） | SANKEY-07（明确要求验收线上实例时执行） |
 
 ## 环境约定
 

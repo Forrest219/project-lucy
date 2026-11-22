@@ -14,9 +14,9 @@
 | 适用范围 | 首次把测试台 INDEX 从 NOT RUN 推进到有 `runs/` 的判定 |
 | 输出位置 | `docs/plans/lucy-20261113-event-loop-relief-uat-execution-plan.md` |
 
-**Goal:** 按套件必做项跑通 UAT-R0／LOOP-01…04，把证据写入 `runs/`，再更新 INDEX 与 e2e-ledger；可选 LOOP-05 仅维护窗、且仅含 `/api/livez` 的镜像。
+**Goal:** 按套件必做项跑通 UAT-R0／LOOP-01…04，把证据写入 `runs/`，再更新 INDEX 与 e2e-ledger；LOOP-05 归发布取证。
 
-**Architecture:** 两轨串行。Track A＝仓内规模脚本（合成 115k 夹具，不连客户库、不依赖 demo）。Track B＝本机 demo Docker（概览／探针／重启计数）。客户 LOOP-05 默认本波 **SKIP／BLOCKED**（现场仍是 0.25、无 livez）。INDEX 只认本套件 `runs/`，开发机旧 JSON／功能合同收口都不是 PASS。
+**Architecture:** 两轨串行。Track A＝仓内规模脚本（合成 115k 夹具，不连客户库、不依赖 demo）。Track B＝本机 demo Docker（概览／探针／重启计数）。本机产品侧范围为 R0／01–04。INDEX 只认本套件 `runs/`，开发机旧 JSON／功能合同收口都不是 PASS。
 
 **Tech Stack:** `npm --prefix webui run perf:event-loop-relief`；demo compose `http://127.0.0.1:55176`；curl／浏览器；跑次模板同 [`roles-agent-page-perf` run](../qa/uat/suites/roles-agent-page-perf/runs/2026-11-13-cursor-docker-page-perf.md)。
 
@@ -28,7 +28,7 @@
 - **禁止**业务高峰对客户打 `GET /api/admin/audit/turns?hours=168`。
 - **禁止**对无 `/api/livez` 的 0.25 镜像套 Chart `0.2.9` 存活探针。
 - demo 升级只用平滑 `BUILDPLATFORM=linux/arm64 npm run demo:upgrade`（**不** `--fresh`），保留账号／ACL／audit volume。
-- 本波默认**不执行** LOOP-05；记 SKIPPED 或 BLOCKED，并写明原因。
+- 本机收口按 [DEVELOPMENT.md「产品侧修复收口」](../governance/DEVELOPMENT.md#产品侧修复收口) 判定；LOOP-05 归明确要求的发布取证或客户交付。
 
 ---
 
@@ -44,11 +44,11 @@
 | 旧规模 JSON | `inbox/event-loop-relief-perf.json`：`sc13.pass=true`（p95 105）、`sc14.pass=false`（p99 359，当时门槛 300） | 脚本现门槛已是 400；**必须重跑** LOOP-01，不得抄旧 `sc14.pass` |
 | 客户实例 | fixtures 指向 `http://10.69.95.109:8276`（0.25）；无 livez 时应 BLOCKED | 本波不跑 LOOP-05 |
 
-**必做／可选（套件原文）**
+**现行执行范围（见套件）**
 
-| 必做 | 可选 |
+| 产品侧必做 | 发布取证 |
 |---|---|
-| UAT-R0、UAT-LOOP-01、UAT-LOOP-02、UAT-LOOP-03、UAT-LOOP-04 | UAT-LOOP-05（维护窗；0.25 → BLOCKED） |
+| UAT-R0、UAT-LOOP-01、UAT-LOOP-02、UAT-LOOP-03、UAT-LOOP-04 | UAT-LOOP-05（具名发布取证／交付任务） |
 
 ---
 
@@ -260,14 +260,9 @@ Expected: 相对 Task 3 Step 1 增量 **＝0**；窗口内无因 liveness 杀进
 
 ---
 
-### Task 5: UAT-LOOP-05 — 本波默认不跑
+### Task 5: UAT-LOOP-05 — 发布取证
 
-- [ ] **Step 1: 记录判定**
-
-客户 `http://10.69.95.109:8276` 若仍为 **0.25** 且无 `/api/livez` → 跑次写 **BLOCKED**（不是 FAIL）。  
-若已升级含 livez：仅维护窗、非高峰；未授权勿打 `hours=168`；可抽样 livez／概览／重启 → **PASS WITH GAP** 并写明未跑 7 天访问日志。
-
-本波默认：**SKIPPED／BLOCKED**，原因写入跑次。
+发布取证或客户交付明确要求验证指定实例时，按 [套件用例](../qa/uat/suites/event-loop-relief/cases.md) 执行。
 
 ---
 
@@ -277,7 +272,7 @@ Expected: 相对 Task 3 Step 1 增量 **＝0**；窗口内无因 liveness 杀进
 
 - Create: `docs/qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md`
 - Modify: `docs/qa/uat/INDEX.md`（该行最近跑次／结果）
-- Modify: `docs/governance/e2e-ledger.md`（P1-21 结果；GAP-UAT-P1-21 收束或降级）
+- Modify: `docs/governance/e2e-ledger.md`（P1-21 的跑次指针）
 - 可选同句镜像：总账 P1-21「测试台」句、Spec 头部测试台句（**不**改功能合同收口）
 
 - [ ] **Step 1: 写跑次**（结构对齐既有 run）
@@ -300,14 +295,13 @@ Expected: 相对 Task 3 Step 1 增量 **＝0**；窗口内无因 liveness 杀进
 | UAT-LOOP-02 | … | 无红字；turns 墙钟；livez |
 | UAT-LOOP-03 | … | livez×30；readyz；health×20 |
 | UAT-LOOP-04 | … | RestartCount 增量 |
-| UAT-LOOP-05 | SKIPPED/BLOCKED | 原因 |
 ```
 
 - [ ] **Step 2: 改 INDEX**
 
 结果句示例（按实测改）：
 
-- 全必做绿且 LOOP-05 BLOCKED／SKIPPED → **PASS WITH GAP**（或套件约定下必做全绿写 **PASS**，并注明可选未跑）
+- R0／01–04 全部通过 → **PASS**
 - 任一必做 FAIL → **FAIL**，INDEX 不得写 PASS
 
 - [ ] **Step 3: 勾连检查**
@@ -318,7 +312,7 @@ npm run lint:e2e-ledger
 
 Expected: 退出 0；或按脚本规则修齐指针后再跑。
 
-**通过标准:** INDEX ≠ NOT RUN；有可点开的 `runs/`；GAP-UAT-P1-21 不再是「尚未执行」。
+**通过标准:** INDEX ≠ NOT RUN；有可点开的 `runs/`。
 
 ---
 
@@ -326,11 +320,9 @@ Expected: 退出 0；或按脚本规则修齐指针后再跑。
 
 | 条件 | INDEX 结果 |
 |---|---|
-| R0＋01＋02＋03＋04 全 PASS；05 SKIPPED／BLOCKED | **PASS**（备注可选未跑）或 **PASS WITH GAP**（若团队把 05 视为交付缺口——本套件原文 05 为可选，优先 **PASS**＋备注） |
+| R0＋01＋02＋03＋04 全 PASS | **PASS** |
 | 01 越门槛或 02 出现红字／turns＞30s 或 04 重启增量＞0 | **FAIL** |
 | demo 升级后仍无 livez，无法跑 02／03／04 | **BLOCKED**（实现未进镜像）；INDEX 可写 BLOCKED，不得写 PASS |
-
-建议本波口径：**必做全绿 → PASS**；LOOP-05 在备注写 BLOCKED／SKIPPED。
 
 ---
 
