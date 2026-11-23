@@ -4,7 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
-| [YAML 产物禁 alias 治理 Plan](lucy-20261123-yaml-alias-free-artifacts-plan.md) | P1-76／REQ-030-097。S3｜v0.1。终稿已确权（委托人 2026-11-23 明示）；开发授权已获得（2026-11-23）；实现进行中。 |
+| [YAML 产物禁 alias 治理 Plan](lucy-20261123-yaml-alias-free-artifacts-plan.md) | P1-76／REQ-030-097。S4｜v0.1。终稿已确权（委托人 2026-11-23 明示）；开发授权已获得；实现已落地（统一写出口＋15 处调用点替换＋静态门禁）；SC-01–SC-04 已验证、SC-05 随本次登记闭环；待委托人验收，未做功能合同收口。 |
 | [MCP 握手与 Agent 名册长尾复现 Plan](lucy-20261123-interactive-read-resilience-plan.md) | P1-75／REQ-030-096。S2｜v1.1 合同修订已获批准，待开发授权。并行任务 A1–A3，G1／G2 通过后封存候选 A。 |
 | [数据问答默认采用业务上下文实施 Plan](lucy-20261123-default-business-context-adoption-plan.md) | P1-77／REQ-030-098。S2｜v1.1 合同修订已获批准，待开发授权。并行任务 B1–B2，按候选 A 做性能与同窗复验。 |
 | [lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md](lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md) | P1-54→S5 严口径多 Agent。**执行完成（2026-11-22）**：选项 2＋ENV＋复跑 PASS → **P1-54 S5**。INDEX 仍 NOT RUN。≠ UAT PASS；≠ 可上线。 |

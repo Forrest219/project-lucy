@@ -1575,5 +1575,5 @@ v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得�
 
 - **来源**：2026-11-23 另一 Agent 合成 catalog manifest 复用列定义对象引用，`yaml.stringify` 序列化为大量 anchor／alias；KTX 以 `yaml` 解析器默认 `maxAliasCount: 100` 读取，报 `Excessive alias count indicates a resource exhaustion attack` 拒读。本仓容器内已复现实证。
 - **期望**：写入侧统一防别名出口替换全部 `stringify` 写盘点；静态门禁拦截新增违规；规范明确「YAML 产物禁 anchor／alias、复用须 inline」。不改 KTX 上游、不放宽读取侧。验收 SC-01–SC-05。
-- **状态**：S3｜v0.1。终稿已确权（委托人 2026-11-23 明示）；开发授权已获得（2026-11-23）；实现进行中。
+- **状态**：S4｜v0.1。终稿已确权（委托人 2026-11-23 明示）；开发授权已获得；实现已落地（统一写出口＋15 处调用点替换＋静态门禁）；SC-01–SC-04 已验证、SC-05 随本次登记闭环；待委托人验收，未做功能合同收口。
 - **挂接**：[总账 P1-76](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261123-yaml-alias-free-artifacts-spec.md) · [Plan](lucy-20261123-yaml-alias-free-artifacts-plan.md)。
