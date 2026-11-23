@@ -2,12 +2,12 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 发布取证 Spec / **v0.3-draft** |
+| 文档类型 / 版本 | 发布取证 Spec / **v0.4-draft** |
 | 日期 / 目标版本 | 2026-11-23 / 产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-78／REQ-030-099**；**P0（核心体验／发布底线）**；独立出包／升级门禁，不改变 0.30 既有核心分母 |
 | 台账号 | 无 |
 | 阶段 | S1 |
-| 状态 | S1｜v0.3-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。 |
+| 状态 | S1｜v0.4-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。 |
 | 授权边界 | 仅新建 Spec／Plan／UAT 设计并登记台账。不得新增或修改 runner、workflow、CI job、测试命令、产品运行代码、配置或依赖；不得执行性能跑次、Docker 重建、出包或现场升级。后续终稿确权、测试基建开发和跑次执行分别另授。 |
 | 需求 / 总账 | [REQ-030-099](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-099mcp-问询端到端性能基准与持续门禁) · [P1-78](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) |
 | 计划 / 测试台 | [Plan](../plans/lucy-20261123-mcp-inquiry-performance-baseline-plan.md) · [`UAT-SUITE-MCP-INQUIRY-PERF`](../qa/uat/suites/mcp-inquiry-performance/suite.md)（设计已登记，NOT RUN） |
@@ -82,6 +82,7 @@
 | D17 | 只消费既有 owner，不自制 | 题目、oracle、身份、凭据、Wiki／Skill／审计行和表夹具一律来自 P1-54（语义）、P1-79（长链题组）与全局规模基线／P1-34（数据）。本条新增的自然语言文本、造数脚本和规模数字一律禁止；需要新题或新 profile 时，先在 owner 侧登记并取得独立授权，本条以缺失即 BLOCKED 处理。 |
 | D18 | 持续压力与长追问独立成场景 | `SOAK`＝≥1800 秒有效窗口、50 个独立 Agent 身份与真实宿主会话、截断正态到达模型；`LONG_FOLLOW`＝同一宿主进程与会话、≥20 轮后续追问、占场景实例 ≥10%。两者与 20／50 路突发并发分开判定，不得互相替代。 |
 | D19 | 依赖缺失失败关闭 | 题库缺长链、基线未登记压测 profile、宿主不支持多轮或真实宿主不可用时，相关用例记 BLOCKED；不得由本条私造题目、降级为直连脚本或删减比例凑绿。 |
+| D20 | 长链证据复用与跑次隔离 | `LONG_FOLLOW` 复用 `SOAK` 同一 `runId` 内已产生的长链证据（链 ID、逐轮 oracle、`processId／hostSessionId／turnIndex` 一一对应），**不得为同一批链再发起第二轮 ≥20 轮追问**。需要独立考察长链（专项跑次、升级 POST）时另起独立 `runId`，其链不与 `SOAK` 样本混算，链比例按各自场景实例数分别计算。复用仅在同一候选、同一题组 `packDigest`、同一客户端／模型／环境指纹下成立，任一指纹不同即视为独立跑次。 |
 
 ## 4. 场景、计时与数据模型
 
@@ -203,7 +204,7 @@ candidateFingerprint, environmentFingerprint, clientFingerprint,
 modelFingerprint, evidenceBodyDigest, acceptedBy, acceptedAt
 ```
 
-持续压力与长追问场景另记：`windowIndex／windowSeconds／offeredCount／dispatchedCount／arrivalModel{seed,mu,sigma,clipMin,clipMax}／firstWindowStats／lastWindowStats`，以及链级 `chainCount／minTurns／medianTurns／firstFiveMedianMs／lastFiveMedianMs／chainVerdict`。缺少任一必需字段时该场景基线不可用，比较记 BLOCKED。
+持续压力与长追问场景另记：`windowIndex／windowSeconds／offeredCount／dispatchedCount／arrivalModel{seed,mu,sigma,clipMin,clipMax}／firstWindowStats／lastWindowStats`，以及链级 `chainCount／minTurns／medianTurns／firstFiveMedianMs／lastFiveMedianMs／chainVerdict`。长链证据带 `runId／chainId／packDigest`，供 `LONG_FOLLOW` 复用核验；跨 `runId` 不混算。缺少任一必需字段时该场景基线不可用，比较记 BLOCKED。
 
 `p50Ms／p95Ms／medianMs／sampleCount` 是正式相对比较必填数值；`p99Ms` 仅在 N≥100 时为数值。不得保存 `p95Ms:null` 后继续参与相对判定。基线只由原始尝试重算生成，不能手工填写一个无原始证据的数。
 
@@ -277,6 +278,8 @@ runMcpInquiryPerformance(trigger, candidate, baselinePointer):
 | 每日 | 全性能场景、冷／热、20 路并发、`SOAK` 持续压力、`LONG_FOLLOW` 长追问、完整正式样本 | 趋势、基线候选和回退告警；同一候选可累计到 P99 所需样本 |
 | 出包 | 全性能场景、20／50 路、`SOAK`、`LONG_FOLLOW`、正式样本、绑定候选 digest | 必需 PASS；SEED_ONLY／FAIL／BLOCKED／NOT RUN 均不得放行 |
 | 升级 | 同实例／同身份／同题／同环境／同客户端模型 PRE／POST，含 `SOAK` 与 `LONG_FOLLOW` | 必需 PASS；缺 PRE 基线＝BLOCKED；回滚后另验基线恢复 |
+
+触发档到用例的执行顺序与样本映射见 [`UAT-MIP-R0／01–15`](../qa/uat/suites/mcp-inquiry-performance/cases.md#执行顺序与触发档映射)。`LONG_FOLLOW` 复用 `SOAK` 同跑次的长链证据（D20），不重复发起第二轮长链。
 | 优化 A/B | 同夹具、同候选族、单变量改前／改后 | 优化 Spec 的必要证据；不得由优化者单独信顶层自报 PASS |
 
 新增命令与 CI job 实现时必须登记 `docs/governance/test-layers-and-release-gates.md` 的 Current Commands 与 CI Mapping。每日任务至少连续两次无人值守产生有效记录，第二次能引用第一次已接受基线，才能声称“持续运行”。
@@ -353,6 +356,7 @@ New terms: 「MCP 问询端到端性能」「首条正确查询结果」「正�
 
 ## 修订记录
 
+- 2026-11-23 v0.4-draft：委托人批准补齐执行顺序的可执行性——新增 **D20 长链证据复用与跑次隔离**（`LONG_FOLLOW` 复用 `SOAK` 同 `runId` 的链证据，不重复发起第二轮 ≥20 轮追问；独立考察另起 `runId` 且不混算），并在 §7 指向 UAT 的“触发档 → 用例执行顺序”映射表；链级基线字段补 `runId／chainId／packDigest`。
 - 2026-11-23 v0.3-draft：依赖补登完成——长链题目由新立项的 [P1-79 长追问题组](lucy-20261123-long-followup-question-pack-spec.md) 承载（独立题组包与独立 digest，不动 P1-54 与 P1-53 已收口证据）；初始化数据的 50 路压测身份与持续压力下限登记进[全局规模基线 §1.1 MCP-PERF profile](../qa/uat/scale-baseline.md)。两项实现证据到位前，相关用例仍记 BLOCKED。
 - 2026-11-23 v0.2-draft：按委托人要求改为只消费既有 owner——自然问题与 oracle 取自 P1-54 题库 Spec，初始化数据取自全局规模基线（含三个 seed 入口）与 P1-34 表夹具，本条不自制题目、造数脚本或第二套规模数字。新增 `SOAK` 持续压力与 `LONG_FOLLOW` 长追问场景及 SC-14／SC-15；依赖缺失一律 BLOCKED。
 - 2026-11-23 v0.1-draft：独立新建，承接 P1-67 的 MCP 范围；只拥有性能测量、基线、判定、证据与持续门禁，优化由其他 Spec 执行。

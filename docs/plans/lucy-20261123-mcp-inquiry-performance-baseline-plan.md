@@ -2,9 +2,9 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 实施计划 / **v0.3-draft** |
+| 文档类型 / 版本 | 实施计划 / **v0.4-draft** |
 | 日期 / 功能编号 | 2026-11-23 / **P1-78／REQ-030-099** |
-| 状态 | S1｜v0.3-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。 |
+| 状态 | S1｜v0.4-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。 |
 | 授权边界 | 当前仅允许文档设计与登记。Task 1–4／8 的实现须终稿确权及测试基建开发授权；Task 5／7 另须隔离 Docker 与真实 Agent 跑次授权；Task 6 另须 CI／发布接线授权。题目与初始化数据的补充分别由 P1-54 与全局规模基线另行授权，不在本 Plan。任何任务都不得修改 Lucy／KTX 产品运行路径或实施性能优化。 |
 | 验收 | [Spec SC-01–SC-15](../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md#10-验收) 全过；`UAT-MIP-R0／01–15` 全部必做并有真实跑次；连续两次无人值守每日跑次形成可比证据链。 |
 | 关联 | [Spec](../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md) · [UAT](../qa/uat/suites/mcp-inquiry-performance/suite.md) · [总账 P1-78](lucy-20261107-lucy-0-30-feature-inventory-pool.md) |
@@ -212,7 +212,7 @@ npm run test:ci-workflow-contracts
 1. 执行 `UAT-MIP-R0／01–15`，保留改前、候选、负控和恢复证据；任何必做失败按实际 INDEX 记 FAIL，不以功能兼容 PASS 代替。
 2. 完成 20／50 路真实并发和角色公平性；核对实际在途，不以同步发送日志代替在途证明。
 3. 执行 `SOAK`：50 身份、真实宿主会话、≥1800 秒有效窗口、截断正态到达、计划到达与终态一一对应；保留窗口分位、正确性、首尾窗口比较与未派发记录。
-4. 执行 `LONG_FOLLOW`：≥10% 场景实例为单进程同会话长链，每链 ≥20 次后续追问、逐轮 oracle 成立；保留链级与逐轮轨迹、进程与会话证据。
+4. 执行 `LONG_FOLLOW`：**复用 `SOAK` 同一 `runId` 已产生的长链证据**（`chainId／packDigest／processId／hostSessionId／turnIndex` 一一对应），不重复发起第二轮 ≥20 轮追问；链比例按该跑次场景实例数计算。专项或升级 POST 需要独立考察时另起 `runId`，其链不与 `SOAK` 样本混算。
 5. 连续两次由调度器无人值守完成每日跑次，第二次引用第一次已接受基线；补齐 PR、出包和升级 PRE／POST 负控。
 6. 用一个独立测试优化变量演示 A/B 交接，只验证测程能判改前／改后，不在本条实施产品优化。若没有已获授权的优化候选，使用隔离测程自身的已知延迟开关，明确标为测程负控。
 7. SC-01–SC-15 逐条挂证据，完成实现 CR、泄露扫描、清理和三台账回写；发布取证终态才允许申报 X_REL。
@@ -243,10 +243,10 @@ npm run lint:ia-boundary
 
 1. 到达模型：固定 seed 的截断正态思考时间，记录 μ、σ、截断上下界与实际分布；实现“计划到达不因系统变慢被静默合并或丢弃”，未派发与未终结单独计数并判失败。
 2. 持续压力：50 个独立 Agent 身份与真实宿主会话，有效窗口 ≥1800 秒、12 个 150 秒窗口；每窗口输出分位、正确率、超时、角色分组与公平性，并比较相邻窗口与首尾窗口。
-3. 长追问编排：从 P1-79 长追题组读取长链 `questionRef`、逐轮 oracle 与 `packDigest`，按 `turnIndex` 顺序在同一宿主进程与会话内执行；记录 `chainId／processId／hostSessionId`。链内比例按场景实例数计算 `ceil(0.1×N)`。题组缺失或 digest 不符记 BLOCKED。
+3. 长追问编排：从 P1-79 长追题组读取长链 `questionRef`、逐轮 oracle 与 `packDigest`，按 `turnIndex` 顺序在同一宿主进程与会话内执行；记录 `runId／chainId／processId／hostSessionId`。**链只执行一次**：`LONG_FOLLOW` 复用 `SOAK` 同跑次证据，不重复发起第二轮长链；链内比例按场景实例数计算 `ceil(0.1×N)`。题组缺失或 digest 不符记 BLOCKED。
 4. 判定器：链内任一轮错误即整链 FAIL；进程或会话变化、轮次缺失或重号即该链无效；前 5 轮与后 5 轮中位数差适用 D8 双阈值。
 5. 依赖守卫：P1-79 题组缺失或 digest 不符、全局规模基线 MCP-PERF profile 断言未生效、宿主不支持多轮时返回 BLOCKED；不得回退到自制题目、直连脚本或降低比例。
-6. 负控：把有效窗口缩短、把到达改为均匀、把长链比例降到 10% 以下、把链拆成独立问题，均必须被判定器拒绝。
+6. 负控：把有效窗口缩短、把到达改为均匀、把长链比例降到 10% 以下、把链拆成独立问题、**把同一批链二次执行**，均必须被判定器拒绝。
 
 **验证：**
 
@@ -261,7 +261,7 @@ node --test scripts/e2e/__tests__/mcp-inquiry-performance-soak.test.mjs
 - Task 1–4：所有新增单元／合同测试通过，历史假绿夹具逐项转红为可检出；真实执行不得由 dry-run 冒充。
 - Task 5：baseline-seed 与预算冻结证据齐，必填基线值不再是 `null`；SEED_ONLY 未被当成发布 PASS。
 - Task 6：PR／每日／出包／升级真实接线，P1-53 功能分母不变，P1-67 无并行 MCP runner，命令与 CI Mapping 已登记。
-- Task 7：UAT 全部必做执行（含 `UAT-MIP-14／15`），SC-01–SC-15 和实现 CR 关闭；连续两次调度证据成立；INDEX 与 Spec 按各自 SOT 更新。
+- Task 7：UAT 全部必做执行（含 `UAT-MIP-14／15`），SC-01–SC-15 和实现 CR 关闭；连续两次调度证据成立；INDEX 与 Spec 按各自 SOT 更新。长链在同一 `runId` 内只执行一次，15 复用 14 的链证据。
 - Task 8：`SOAK` 与 `LONG_FOLLOW` 的判定器负控全绿，真实跑次证明 ≥1800 秒有效窗口、50 身份、≥10% 长链与逐轮 oracle 成立。
 - 全程没有自制题目、自造造数脚本、Lucy／KTX 产品优化代码、阈值自动抬线、样本缩减或失败样本删除。
 
