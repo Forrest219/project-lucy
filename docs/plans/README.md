@@ -4,6 +4,8 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [YAML 产物禁 alias 治理 Plan](lucy-20261123-yaml-alias-free-artifacts-plan.md) | P1-76／REQ-030-097。S1｜v0.1 草案。已登记，终稿未确权，开发未授权；待评审。 |
+| [MCP 握手与 Agent 名册长尾复现 Plan](lucy-20261123-interactive-read-resilience-plan.md) | P1-75／REQ-030-096。S1｜v0.1 草案。已登记，终稿未确权，开发未授权；待现场日志齐备后进行 Docker 基线模拟和定稿评审。 |
 | [lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md](lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md) | P1-54→S5 严口径多 Agent。**执行完成（2026-11-22）**：选项 2＋ENV＋复跑 PASS → **P1-54 S5**。INDEX 仍 NOT RUN。≠ UAT PASS；≠ 可上线。 |
 | [lucy-20261122-s4-to-s5-parallel-wave-plan.md](lucy-20261122-s4-to-s5-parallel-wave-plan.md) | S4→S5 并行波次（默认 1a／2a／3a／4c／5b／6a／7a）。Lane A／C scoped 收口；Lane B 缺口清单；36／37 裁定包待勾选。≠ 可上线；不 push。 |
 | [lucy-20261122-spec-status-vocabulary-chinese-plan.md](lucy-20261122-spec-status-vocabulary-chinese-plan.md) | P1-73／REQ-030-094／Wave A；阶段:S5｜v1.0（伞下 Wave A 子句）。功能合同已收口（2026-11-22，随伞 P1-73）。本条收口不表示可上线 |

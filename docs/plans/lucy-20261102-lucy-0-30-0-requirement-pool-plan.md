@@ -11,7 +11,8 @@
 | P1-66 本轮变更 | v0.123（2026-11-20）：新增 REQ-030-087／P1-66，授权优化方案、Spec／Plan、保留现场权限展开规模的 Docker 浏览器验证设计；不授权实现或执行。 |
 | P1-73 本轮变更 | v0.140（2026-11-22）：P1-73＋P1-35 → **S5 功能合同已收口**（编排 Plan 执行完成）。v0.139：P1-73 开发授权；S2→S3。v0.137：终稿确权 S2。v0.136：伞含 `status-vocab`。v0.135：入池 REQ-030-094。 |
 | P1-74 本轮变更 | v0.141（2026-11-22）：Spec／Plan v1.1 终审闭环修订，D1–D9 不变；UAT 设计 v1.0，BESC-R0／01–12 全必做；开发未授权，仍 NOT RUN。v0.140：终稿确权；v0.139：挂测试台；v0.138：入池。 |
-| 版本 / 日期 | v0.147 / 2026-11-22 |
+| 版本 / 日期 | v0.148 / 2026-11-23 |
+| P1-75 本轮变更 | v0.148（2026-11-23）：新增 REQ-030-096，先起草优化 Spec 与 UAT；镜像总账 v2.38。 |
 | P1-29 下一期 | v0.147（2026-11-22）：REQ-030-050／P1-29 委托人明示「放在需求池，下一次迭代在优化」→ `X_DEF｜Deferred；下一期`；0.30 不开发；ROW-07／GAP 仍开；不挡 P1-28。镜像总账 v2.37。 |
 | P1-58／59／42／44 S5 | v0.146（2026-11-22）：REQ-030-079／080／063／065 → **S5｜功能合同已收口（scoped）**；A1／B1 已勾选；42／44 lite Spec／Plan 已立；镜像总账 v2.32／[收口记录](../reviews/2026-11-22-p158-p159-p142-p144-s5-closure-record.md)。**收口 ≠ 可上线**。 |
 | P1-36／37 S5 | v0.145（2026-11-22）：REQ-030-057／058 → **S5｜功能合同已收口（scoped）**；裁定包推荐默认已勾选；镜像总账 v2.31／[收口记录](../reviews/2026-11-22-p136-p137-s5-closure-record.md)。**收口 ≠ 可上线**。 |
@@ -67,6 +68,7 @@
 
 | REQ | 需求 | 来源 | 优先级 | 跟进状态 |
 |---|---|---|---|---|
+| REQ-030-096 | MCP 握手与 Agent 名册读取长尾治理 | 2026-11-23 现场名册 `DISPLAY_SNAPSHOT_BUSY` 复现与 MCP 握手审计；阶段归因待验证 | P1（清单 P1-75，拟；不入核心分母） | S1｜v0.1 草案。已登记，终稿未确权，开发未授权；待现场日志齐备后进行 Docker 基线模拟和定稿评审。 |
 | REQ-030-082 | 存活／就绪探针纯内存响应与诊断隔离 | 同构建 503 排查及探针读盘调用链核对；不预判现场根因 | P1（清单 P1-61；建议第一批） | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-01真实停止／自动恢复局部复测PASS WITH GAP；完整F61矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
 | REQ-030-083 | 重任务跨模块容量控制与许可生命周期 | 已有局部队列不能证明不同重任务并行时的总容量有界 | P1（清单 P1-62；建议第二批） | v0.1-draft。终稿已确权（委托人 2026-11-20 明示本提示词确权）；开发授权已获得；实现已落地（本机单元与组件测试通过）；本机 Docker 局部 UAT PASS WITH GAP（仅真实导出入口；完整 F62 未完成）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。  |
 | REQ-030-084 | 进程关停准入关闭与在途请求排空 | 已有清理先停 KTX，尚无全进程在途排空承诺；修订须与 Spec 191 同次评审 | P2（清单 P1-63；建议第三批） | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-02 MCP在途登记／实际Node PID等待局部复测PASS WITH GAP；完整F63矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
@@ -1521,6 +1523,13 @@ v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得�
 
 [总账 P1-72](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md) · [Plan](lucy-20261120-row-policy-automatic-enforcement-plan.md) · [UAT](../qa/uat/suites/row-policy-automatic-enforcement/suite.md)。不改 P1-25 历史评估或 P1-28 既有 FAIL。
 
+## REQ-030-096：MCP 握手与 Agent 名册读取长尾治理
+
+- **来源**：2026-11-23 客户现场 Lucy `322438a2`。Agent 完整名册复现 3 次 `DISPLAY_SNAPSHOT_BUSY`。MCP 原故障窗口有 16 条 `initialize`，其中 5 条超过 30 秒。四条已取阶段的握手主要耗在 Lucy 的指引构建，目录与 Skill 为已量出的两个主要阶段。名册快照的具体失败原因及两者的共同根因待验证。
+- **期望**：用同版本的 Docker 基线还原关键现场条件，定位主要等待阶段；降低握手和名册的请求内重读与冷态读取成本，同时保住权限新鲜性、撤权和合法纯 MCP 问数主路径。用浏览器、MCP 客户端及探针的同窗结果检验组合表现。
+- **状态**：S1｜v0.1 草案。已登记，终稿未确权，开发未授权；待现场日志齐备后进行 Docker 基线模拟和定稿评审。
+- **挂接**：[总账 P1-75](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261123-interactive-read-resilience-spec.md) · [复现 Plan](lucy-20261123-interactive-read-resilience-plan.md) · [UAT](../qa/uat/suites/interactive-read-resilience/suite.md)。
+
 ## REQ-030-095：问询预算主路径逃生（触顶后可达 fallback）
 
 - **来源**：2026-11-22 委托人裁定——合法用户额度用尽后必须有 fallback；不得因 runaway 拦截误伤正常长问询。证据：Wave D PM 报告、错题本 `2026-11-22-question-budget-exhausted-recurring`；根合同 Spec 162／窗口 Spec／P1-60／P1-12。对抗审阅后退回；同日批准 1A–6A 定稿。
@@ -1536,3 +1545,10 @@ v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得�
 - 文档：[Spec](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) · [Plan](lucy-20261122-spec-status-funnel-gate-plan.md) · [状态词建议书](lucy-20261122-spec-status-vocabulary-chinese-plan.md) · `inbox/20261122-1123-spec-funnel.md` · [伞评审](../reviews/2026-11-22-p1-73-status-governance-umbrella-review.md)。
 - 状态：**S5｜v1.0。功能合同已收口（2026-11-22）。SC-01–SC-15＋实现 CR PASS；全仓 MIG 另授权。本条收口不表示可上线。**
 - 授权边界：开发授权已获得（2026-11-22）；落地范围限伞 Spec §8 白名单；阶段全仓迁移（MIG）另授权。
+
+## REQ-030-097：YAML 产物禁 alias 治理
+
+- **来源**：2026-11-23 另一 Agent 合成 catalog manifest 复用列定义对象引用，`yaml.stringify` 序列化为大量 anchor／alias；KTX 以 `yaml` 解析器默认 `maxAliasCount: 100` 读取，报 `Excessive alias count indicates a resource exhaustion attack` 拒读。本仓容器内已复现实证。
+- **期望**：写入侧统一防别名出口替换全部 `stringify` 写盘点；静态门禁拦截新增违规；规范明确「YAML 产物禁 anchor／alias、复用须 inline」。不改 KTX 上游、不放宽读取侧。验收 SC-01–SC-05。
+- **状态**：S1｜v0.1 草案。已登记，终稿未确权，开发未授权；待评审。
+- **挂接**：[总账 P1-76](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261123-yaml-alias-free-artifacts-spec.md) · [Plan](lucy-20261123-yaml-alias-free-artifacts-plan.md)。
