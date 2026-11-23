@@ -7,8 +7,8 @@ This directory stores repository-level implementation plans that are not scoped 
 | [长追问题组（性能专用）Plan](lucy-20261123-long-followup-question-pack-plan.md) | P1-79／REQ-030-100。S1｜v0.1-draft。委托人2026-11-23授权补充长追问题组并登记；终稿未确权；开发未授权；仅设计与登记；≠ 功能合同收口；≠ 可上线。 |
 | [MCP 问询端到端性能基准与持续门禁 Plan](lucy-20261123-mcp-inquiry-performance-baseline-plan.md) | P1-78／REQ-030-099。S1｜v0.3-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。题目语义取自 P1-54、长链取自 P1-79、数据取自全局规模基线（含 §1.1 MCP-PERF）／P1-34。 |
 | [YAML 产物禁 alias 治理 Plan](lucy-20261123-yaml-alias-free-artifacts-plan.md) | P1-76／REQ-030-097。S4｜v0.1。终稿已确权（委托人 2026-11-23 明示）；开发授权已获得；实现已落地（统一写出口＋15 处调用点替换＋静态门禁）；SC-01–SC-04 已验证、SC-05 随本次登记闭环；待委托人验收，未做功能合同收口。 |
-| [MCP 握手与 Agent 名册长尾复现 Plan](lucy-20261123-interactive-read-resilience-plan.md) | P1-75／REQ-030-096。S2｜v1.1 合同修订已获批准，待开发授权。并行任务 A1–A3，G1／G2 通过后封存候选 A。 |
-| [数据问答默认采用业务上下文实施 Plan](lucy-20261123-default-business-context-adoption-plan.md) | P1-77／REQ-030-098。S2｜v1.1 合同修订已获批准，待开发授权。并行任务 B1–B2，按候选 A 做性能与同窗复验。 |
+| [MCP 握手与 Agent 名册长尾复现 Plan](lucy-20261123-interactive-read-resilience-plan.md) | P1-75／REQ-030-096。S3｜实现进行中（A1／A2 单元＋复审 PASS；A3 判定器 24/24；demo 镜像已含改动）。正式 G1 R0–07／G2 与多页面必做回归尚未封存跑次；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。并行任务 A1–A3，G1／G2 通过后封存候选 A。 |
+| [数据问答默认采用业务上下文实施 Plan](lucy-20261123-default-business-context-adoption-plan.md) | P1-77／REQ-030-098。S3｜实现进行中（B1 同源 C1–C4/C6 已入完整／基础指引；B2 判定器 27/27）。双宿主 live／PERF／MIX 缺证，按合同默认行为仍维持候选 A；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。并行任务 B1–B2，按候选 A 做性能与同窗复验。 |
 | [lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md](lucy-20261122-p154-s5-strict-no-new-deny-multi-agent-plan.md) | P1-54→S5 严口径多 Agent。**执行完成（2026-11-22）**：选项 2＋ENV＋复跑 PASS → **P1-54 S5**。INDEX 仍 NOT RUN。≠ UAT PASS；≠ 可上线。 |
 | [lucy-20261122-s4-to-s5-parallel-wave-plan.md](lucy-20261122-s4-to-s5-parallel-wave-plan.md) | S4→S5 并行波次（默认 1a／2a／3a／4c／5b／6a／7a）。Lane A／C scoped 收口；Lane B 缺口清单；36／37 裁定包待勾选。≠ 可上线；不 push。 |
 | [lucy-20261122-spec-status-vocabulary-chinese-plan.md](lucy-20261122-spec-status-vocabulary-chinese-plan.md) | P1-73／REQ-030-094／Wave A；阶段:S5｜v1.0（伞下 Wave A 子句）。功能合同已收口（2026-11-22，随伞 P1-73）。本条收口不表示可上线 |

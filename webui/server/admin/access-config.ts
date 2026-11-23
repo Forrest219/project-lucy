@@ -343,6 +343,11 @@ export async function writeAccessConfigFileWithAuditClosure(
     kind?: PublishEntryKind;
     expectedVersion?: string;
     onCommitted?: (previousRaw: string | undefined) => Promise<void>;
+    /**
+     * P1-75 — synchronous hook run on any failure BEFORE the rollback / recovery
+     * gate touches disk or runtime, so read eligibility is withdrawn first.
+     */
+    onFailureBeforeRollback?: () => void;
   }
 ): Promise<AccessConfigWriteResult> {
   // ── shared publish window (L25-11 D4 / L25-14 D6) ────────────────────────
@@ -367,6 +372,7 @@ async function writeAccessConfigFileWithAuditClosureInner(
     kind?: PublishEntryKind;
     expectedVersion?: string;
     onCommitted?: (previousRaw: string | undefined) => Promise<void>;
+    onFailureBeforeRollback?: () => void;
   }
 ): Promise<AccessConfigWriteResult> {
   // Lucy v0.25 (L25-14 §5.3) — an unresolved recovery blocks every further write.
@@ -542,6 +548,8 @@ async function writeAccessConfigFileWithAuditClosureInner(
     originalFailure: unknown
   ): Promise<AccessConfigWriteResult> => {
     const originalReason = originalFailure instanceof Error ? originalFailure.message : String(originalFailure);
+    // P1-75 — withdraw read eligibility first, then the existing rollback / recovery gate.
+    options.onFailureBeforeRollback?.();
     try {
       if (recoveryPoint.raw !== undefined) {
         await safeWriteAtomic(paths, projectRoot, relPath, recoveryPoint.raw);

@@ -346,4 +346,31 @@ describe("P1-66 explicit roster summary projection", () => {
     const res=await request(app.server).get(`/api/admin/agents?${query}`).expect(400);
     expect(res.body.error.code).toBe("BAD_REQUEST"); await app.close();
   });
+  it("P1-75 publishes the verified post-save view before the ack: first read sees the new note without a cold build", async () => {
+    const app = buildServer(); await app.ready(); agentRosterProjectionDiagnostics.reset();
+    const url = "/api/admin/agents?view=roster&projection=summary";
+    const before = await request(app.server).get(url).expect(200);
+    expect(before.body.data.agents[0].note).toBeUndefined();
+    expect(agentRosterProjectionDiagnostics.read().builds).toBe(1);
+    const saved = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "新备注" } }).expect(200);
+    const afterAck = agentRosterProjectionDiagnostics.read().builds;
+    const first = await request(app.server).get(url).expect(200);
+    expect(first.body.data.agents[0].note).toBe("新备注");
+    expect(first.body.data.version).toBe(saved.body.data.after.version);
+    // The post-save view was already built and published before the ack; the read only hits it.
+    expect(agentRosterProjectionDiagnostics.read().builds).toBe(afterAck);
+    expect(first.body.data.meta.runtimeConsistency).toBe("matched");
+    await app.close();
+  });
+  it("P1-75 keeps statistics and the roster on the same snapshot after a note-only save", async () => {
+    const app = buildServer(); await app.ready();
+    const url = "/api/admin/agents?view=roster&projection=summary";
+    await request(app.server).get(url).expect(200);
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "统计一致" } }).expect(200);
+    const roster = await request(app.server).get(url).expect(200);
+    const stats = await request(app.server).get("/api/admin/agents/statistics?range=7d").expect(200);
+    expect(stats.body.data.meta.snapshotVersion).toBe(roster.body.data.meta.snapshotVersion);
+    expect(stats.body.data.meta.configVersion).toBe(roster.body.data.version);
+    await app.close();
+  });
 });

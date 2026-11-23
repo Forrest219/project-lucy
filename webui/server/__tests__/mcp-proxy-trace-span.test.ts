@@ -282,6 +282,9 @@ describe("P1-36 真实代理链路 span", () => {
       const local = spans.find((s) => s.stage === "local_handler");
       expect(JSON.parse(local?.attrs_json ?? "{}")).toEqual({ handler: "initialize_fallback" });
       expect(row.primary_status).toBe("succeeded");
+      // P1-75 §2.2：本地协议回退只下发基础指引，账面分开记录。
+      const build = spans.find((s) => s.stage === "instructions_build");
+      expect(JSON.parse(build?.attrs_json ?? "{}")).toMatchObject({ decision: "basic", fallback_reason: "protocol_fallback" });
     } finally {
       await proxy.close();
     }
@@ -309,6 +312,10 @@ describe("P1-36 真实代理链路 span", () => {
       expect(list.spans.some((s) => s.stage === "upstream_call" && s.status === "ok")).toBe(true);
       expect(init.row.trace_id).not.toBe(list.row.trace_id);
       expect(init.row.primary_status).toBe("succeeded");
+      // P1-75 §2.2：完整指引账面标 full，且描述增强不在握手阶段内。
+      const build = init.spans.find((s) => s.stage === "instructions_build");
+      expect(build).toMatchObject({ status: "ok", reason_code: "allowed" });
+      expect(JSON.parse(build?.attrs_json ?? "{}")).toMatchObject({ decision: "full" });
     } finally {
       await proxy.close();
     }

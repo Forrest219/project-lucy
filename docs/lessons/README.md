@@ -45,6 +45,7 @@
 
 | 日期 | 一句话错题 | 标签 | 文件 |
 |---|---|---|---|
+| 2026-11-23 | 热读与兼容验收漏掉写入同窗：名册 503 已复现，MCP 并发 P50 超线，现场握手长尾仍待细分归因 | `gate-gap` `ux-regression` `contract-stack` `sev-high` | [2026-11-23-roster-busy-and-mcp-latency.md](2026-11-23-roster-busy-and-mcp-latency.md) |
 | 2026-11-22 | 问询预算跨跑次粘连：合法 allow 的 lucy_query 变 question_budget_exhausted，门禁记成 new deny，UAT／开发反复空耗 | `ux-regression` `gate-gap` `contract-stack` `sev-high` | [2026-11-22-question-budget-exhausted-recurring.md](2026-11-22-question-budget-exhausted-recurring.md) |
 | 2026-11-20 | Agent 摘要缩至原 roster 的 0.43%，热读变轻，完整冷编译和预热仍超预算；不得以热态收益冒充整项 PASS | `gate-gap` `ux-regression` `contract-stack` `sev-med` | [2026-11-20-agent-summary-cold-compile-cost.md](2026-11-20-agent-summary-cold-compile-cost.md) |
 | 2026-11-20 | 诊断截止未停止读取、MCP未登记及npm PID先退出导致假排空；后续目标修复本机Docker局部通过，完整矩阵仍GAP，客户根因未确认 | `gate-gap` `contract-stack` `ux-regression` `sev-high` | [2026-11-20-readyz-timeout-and-mcp-drain-gap.md](2026-11-20-readyz-timeout-and-mcp-drain-gap.md) |

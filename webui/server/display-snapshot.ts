@@ -17,10 +17,12 @@
  * health is tracked per dependency scope, so a broken overlay cannot take the
  * Agent permission display down with it.
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { getAccessRecoveryStateSync } from "./access-recovery";
 import { countEntryPerf, markDisplayBuild, markDisplayCache } from "./entry-performance-timing";
 import {
   bumpDisplayGeneration,
@@ -28,11 +30,14 @@ import {
   currentScopeContext,
   DISPLAY_SCOPES,
   generationKey,
+  displayGenerations,
   hasPendingDisplayWrite,
   isIgnoredSemanticPath,
+  onDisplayGenerationChange,
   scopesForPath,
   waitForDisplayWritesSettled,
   type DisplayScope,
+  type DisplayWriteToken,
   type ScopeContext
 } from "./display-generation";
 import {
@@ -613,18 +618,164 @@ function verifiedFor(context: ScopeContext, scopes: readonly DisplayScope[]): bo
   return displayCacheVerified(scopes) && reconciler !== null && sameContext(reconciler.context, context);
 }
 
+// ─── committed view served during a note-only write (P1-75 §2.1) ────────────
+
+/**
+ * A verified, complete committed view that independent readers may keep using
+ * while ONE write barrier is pending. `companion` carries the inputs the
+ * reader needs to stay on that same committed revision (e.g. the raw access
+ * text the slot was built from), so a reader never stitches live mid-write
+ * content with the committed slot.
+ *
+ * Eligibility is deliberately narrow and short-lived: it is opened as the very
+ * first synchronous action inside the write's own barrier. The write's OWN
+ * nested file barriers (same async chain, see `runWithCommittedViewServe`) do
+ * not count as change; any other generation movement — another writer, an
+ * external change seen by the reconciler, the end of this write — withdraws it
+ * synchronously, before that mutation can touch the disk.
+ */
+export type CommittedDisplayView<T = unknown> = {
+  readonly name: string;
+  readonly scopes: readonly DisplayScope[];
+  readonly companion: T;
+  /** @internal */ readonly slot: Slot;
+  /** @internal */ readonly context: ScopeContext;
+  /** @internal generations observed when the view was captured (no write pending) */
+  readonly capturedGenerations: Readonly<Record<DisplayScope, number>>;
+  /** @internal true while readers may be served */
+  open: boolean;
+};
+
+const serveLeases = new Map<string, CommittedDisplayView<unknown>>();
+const ownWrite = new AsyncLocalStorage<CommittedDisplayView>();
+let leaseListenerInstalled = false;
+
+/** A generation bump that does not come from the owning write withdraws its view at once. */
+function installLeaseListener(): void {
+  if (leaseListenerInstalled) return;
+  leaseListenerInstalled = true;
+  onDisplayGenerationChange((changed) => {
+    const own = ownWrite.getStore();
+    for (const view of [...serveLeases.values()]) {
+      if (view !== own && changed.some((scope) => view.scopes.includes(scope))) withdrawCommittedViewServe(view);
+    }
+  });
+}
+
+/** Run the write so its own nested barrier bumps are recognised as this view's own. */
+export function runWithCommittedViewServe<R>(view: CommittedDisplayView | null, fn: () => Promise<R>): Promise<R> {
+  return view ? ownWrite.run(view, fn) : fn();
+}
+
+/**
+ * Capture the current verified committed view (async part, BEFORE the barrier
+ * begins). Returns null unless the entry's current slot is exactly the
+ * `extraKey` revision at the current generation, nothing is pending and the
+ * reconciler verifies these scopes for this context.
+ */
+export async function captureCommittedDisplayView<T>(
+  name: string,
+  scopes: readonly DisplayScope[],
+  extraKey: string,
+  companion: T
+): Promise<CommittedDisplayView<T> | null> {
+  const capturedGenerations = displayGenerations();
+  const context = await currentScopeContext();
+  if (hasPendingDisplayWrite(scopes) || !verifiedFor(context, scopes)) return null;
+  const current = entries.get(name)?.current;
+  if (!current || current.key !== keyFor(name, scopes, context, extraKey)) return null;
+  // A barrier that began and ended while we awaited would have moved a generation.
+  const now = displayGenerations();
+  if (scopes.some((scope) => now[scope] !== capturedGenerations[scope])) return null;
+  return { name, scopes: [...scopes], companion, slot: current, context, capturedGenerations, open: false };
+}
+
+/**
+ * Open the view for readers. MUST be the first synchronous action inside the
+ * write barrier callback: the only generation movement since capture may be
+ * this write's own begin (+1 on exactly its scopes).
+ */
+export function openCommittedViewServe(view: CommittedDisplayView, token: DisplayWriteToken): boolean {
+  if (token.ended || !hasPendingDisplayWrite(view.scopes)) return false;
+  const now = displayGenerations();
+  const exact = view.scopes.every(
+    (scope) => now[scope] === view.capturedGenerations[scope] + (token.scopes.includes(scope) ? 1 : 0)
+  );
+  if (!exact || !token.scopes.some((scope) => view.scopes.includes(scope))) return false;
+  installLeaseListener();
+  view.open = true;
+  serveLeases.set(view.name, view);
+  return true;
+}
+
+/** Withdraw eligibility. Safe to call repeatedly or for a view that never opened. */
+export function withdrawCommittedViewServe(viewOrName: CommittedDisplayView | string): void {
+  const name = typeof viewOrName === "string" ? viewOrName : viewOrName.name;
+  const open = serveLeases.get(name);
+  if (!open || (typeof viewOrName !== "string" && open !== viewOrName)) return;
+  open.open = false;
+  serveLeases.delete(name);
+}
+
+/** The view is still open, its write still pending, its slot current and the scopes verified right now. */
+export function committedViewServeValid(view: CommittedDisplayView): boolean {
+  if (!view.open || serveLeases.get(view.name) !== view) return false;
+  // Recovery state is part of the equivalence: a closed recovery latch refuses (and withdraws) the view.
+  if (getAccessRecoveryStateSync().required) {
+    withdrawCommittedViewServe(view);
+    return false;
+  }
+  if (!hasPendingDisplayWrite(view.scopes) || entries.get(view.name)?.current !== view.slot) return false;
+  return displayCacheVerified(view.scopes) && reconciler !== null && sameContext(reconciler.context, view.context);
+}
+
+/** The open committed view for `name` that independent readers may use now, if any. */
+export function activeCommittedView<T = unknown>(name: string): CommittedDisplayView<T> | null {
+  const view = serveLeases.get(name);
+  return view && committedViewServeValid(view) ? (view as CommittedDisplayView<T>) : null;
+}
+
+function serveCommittedView(
+  name: string,
+  scopes: readonly DisplayScope[],
+  view: CommittedDisplayView,
+  budget: DisplayRequestBudget
+): DisplaySnapshotResult {
+  // A served attempt is an attempt: the route's retry loop shares this budget.
+  const hadAttempt = budget.attemptsLeft > 0;
+  if (hadAttempt) budget.attemptsLeft -= 1;
+  const sameScopes = view.name === name && view.scopes.length === scopes.length && scopes.every((scope) => view.scopes.includes(scope));
+  if (hadAttempt && sameScopes && committedViewServeValid(view)) {
+    lastRequest = { name, scopes: [...scopes], attempts: 1 };
+    stats.hits += 1;
+    countEntryPerf("displayHits");
+    markDisplayCache("hit");
+    const slot = view.slot;
+    return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "hit", incarnation: slot.incarnation };
+  }
+  stats.busy += 1;
+  busyByReason.set("generation_changed", (busyByReason.get("generation_changed") ?? 0) + 1);
+  lastRequest = { name, scopes: [...scopes], attempts: 1, reason: "generation_changed" };
+  throw new DisplaySnapshotBusyError("generation_changed");
+}
+
 /**
  * getSnapshot(keyScope) from Spec 174 §7. Auth already ran in the onRequest
  * hook for this request (cache hit, miss and in-flight attach alike).
+ *
+ * `committedView` (P1-75): serve this already-committed view while its single
+ * note-only write is pending; if the view is no longer valid the call fails
+ * with a retryable busy error and never builds from its (stale) companion.
  */
 export async function getDisplaySnapshot(
   name: string,
   scopes: readonly DisplayScope[],
   build: DisplayBuild,
-  options: { extraKey?: string; budget?: DisplayRequestBudget } = {}
+  options: { extraKey?: string; budget?: DisplayRequestBudget; committedView?: CommittedDisplayView } = {}
 ): Promise<DisplaySnapshotResult> {
   const extraKey = options.extraKey ?? "";
   const budget = options.budget ?? createDisplayRequestBudget();
+  if (options.committedView) return serveCommittedView(name, scopes, options.committedView, budget);
   let reason: DisplayBusyReason = "metadata_overdue";
   let attempts = 0;
   for (let attempt = 1; attempt <= MAX_DISPLAY_ATTEMPTS; attempt += 1) {
@@ -825,6 +976,7 @@ export async function startDisplayReconciler(options: { metadataIntervalMs?: num
   }
   // Nothing that happened while unverified was observed: no earlier snapshot or build may be served.
   entries.clear();
+  serveLeases.clear();
   bumpDisplayGeneration(["D", "P", "C"]);
   installWatchers(state);
   const metaTimer = setInterval(() => void reconcileMetadata(state), options.metadataIntervalMs ?? METADATA_INTERVAL_MS);
@@ -880,6 +1032,7 @@ export async function prewarmDisplaySnapshots(): Promise<void> {
 /** Test / fixture IPC hook: drop every snapshot, failure and in-flight reference. */
 export function resetDisplaySnapshotsForTests(): void {
   entries.clear();
+  serveLeases.clear();
   stats = { builds: 0, hits: 0, misses: 0, busy: 0 };
   busyByReason.clear();
   resetRevisionLedger();

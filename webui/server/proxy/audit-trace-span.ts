@@ -93,7 +93,8 @@ export const ATTR_WHITELIST: Readonly<Record<TraceStage, readonly string[]>> = {
   budget: [],
   catalog_resolve: [],
   skills_load: ["skill_count", "cache_hit"],
-  instructions_build: ["cache_hit", "role_count", "bytes"],
+  // P1-75 2.2: decision = full or basic; fallback_reason = deadline, capacity_full, build_failed, stale_proof or protocol_fallback;
+  instructions_build: ["cache_hit", "role_count", "bytes", "decision", "fallback_reason"],
   upstream_handshake: ["upstream_status", "retry_count"],
   upstream_call: ["upstream_status", "retry_count"],
   session_recover: ["recovered", "reason"],

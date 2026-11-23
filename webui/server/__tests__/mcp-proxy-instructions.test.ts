@@ -582,3 +582,619 @@ defaults:
     }
   });
 });
+
+// ─── P1-75 §2.2：握手指引决策（1 秒截止／容量 20／基础指引降级）─────────────
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+async function pollUntil(check: () => boolean, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error("pollUntil timed out");
+    await sleep(10);
+  }
+}
+
+function okUpstream(id: string) {
+  return async (req: IncomingMessage, res: import("node:http").ServerResponse) => {
+    await readRequestBody(req);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({
+      jsonrpc: "2.0",
+      id,
+      result: { protocolVersion: "2024-11-05", serverInfo: { name: "ktx", version: "0.12.0" }, capabilities: { tools: {} } }
+    }));
+  };
+}
+
+function postInitialize(port: number, id: string, signal?: AbortSignal): Promise<Response> {
+  return fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: initializeRequest(id),
+    signal
+  });
+}
+
+async function instructionsOf(res: Response): Promise<string> {
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { result: { instructions: string } }).result.instructions;
+}
+
+const SOURCE_LINE = "mysql-aliyun.dataforai.superstore_orders";
+
+describe("P1-75 §2.2 握手指引：描述增强移出应答路径", () => {
+  it("握手不跑描述增强；独立 lucy_catalog 仍返回描述与 grain", async () => {
+    await writeFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), [
+      "tables:",
+      "  superstore_orders:",
+      "    table: dataforai.superstore_orders",
+      "    descriptions:",
+      "      db: 订单明细 ODS 描述标记"
+    ].join("\n") + "\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"),
+      "name: superstore_orders\ntable: dataforai.superstore_orders\ngrain:\n  - order_id_grain_marker\n",
+      "utf8"
+    );
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p175-desc"));
+    try {
+      const descriptions = await import("../proxy/source-descriptions");
+      descriptions.resetDescriptionIndexCacheForTests();
+
+      const instructions = await instructionsOf(await postInitialize(proxyPort, "p175-desc"));
+      expect(instructions).toContain(SOURCE_LINE);
+      expect(instructions).not.toContain("订单明细 ODS 描述标记");
+      const afterHandshake = descriptions.descriptionIndexCacheStats();
+      expect(afterHandshake.hits + afterHandshake.misses + afterHandshake.uncacheable).toBe(0);
+
+      const catalogRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}`, "mcp-session-id": "s-desc" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "p175-catalog", method: "tools/call", params: { name: "lucy_catalog", arguments: {} } })
+      });
+      const catalogText = await catalogRes.text();
+      expect(catalogText).toContain("订单明细 ODS 描述标记");
+      expect(catalogText).toContain("order_id_grain_marker");
+      const afterCatalog = descriptions.descriptionIndexCacheStats();
+      expect(afterCatalog.hits + afterCatalog.misses + afterCatalog.uncacheable).toBeGreaterThan(0);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+});
+
+describe("P1-75 §2.2 握手指引：截止、容量、取消与撤权", () => {
+  it("到点只发一次基础指引（共用核心规则、无角色名单、迟到工作不发布）；工作真实终结才释放容量", async () => {
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p175-deadline"));
+    try {
+      const mcp = await import("../proxy/mcp-proxy");
+      mcp.instructionsDecisionTestHooks.deadlineMs = 200;
+      let releaseWork!: () => void;
+      const workGate = new Promise<void>((resolve) => { releaseWork = resolve; });
+      mcp.instructionsDecisionTestHooks.beforeBuild = () => workGate; // 忽略取消：模拟取消不了的底层读取
+
+      const startedAt = Date.now();
+      const basic = await instructionsOf(await postInitialize(proxyPort, "p175-deadline"));
+      expect(Date.now() - startedAt).toBeLessThan(1500);
+      expect(basic).toContain("Tool Discovery");
+      expect(basic).toContain("answerability dependency matrix");
+      expect(basic).toContain(`${QUESTION_BUDGET_MAX_CALLS} data-tool calls`);
+      expect(basic).not.toContain(SOURCE_LINE);
+      expect(basic).not.toContain("## Visible Scope");
+      expect(basic).not.toContain("## Governed Domain Skills");
+      expect(basic).not.toContain("lucy_begin_question");
+
+      // 响应已发出，但工作未真实终结：容量仍被占用。
+      expect(mcp.instructionsWorkActiveCount()).toBe(1);
+      releaseWork();
+      await pollUntil(() => mcp.instructionsWorkActiveCount() === 0);
+
+      const audit = await waitForAuditRow("p175-deadline");
+      expect(audit.outcome).toBe("ok");
+      expect(audit.error_detail).toBe("instructions_basic:deadline");
+
+      // 迟到工作没有发布任何东西：下一次握手重新构建并得到完整指引。
+      mcp.instructionsDecisionTestHooks.beforeBuild = undefined;
+      mcp.instructionsDecisionTestHooks.deadlineMs = undefined;
+      const full = await instructionsOf(await postInitialize(proxyPort, "p175-deadline-2"));
+      expect(full).toContain(SOURCE_LINE);
+      // 同源核心规则：基础指引的每条核心规则行都原样出现在完整指引里。
+      const basicLines = basic.split("\n");
+      const coreLines = basicLines
+        .slice(0, basicLines.indexOf("## Tool Discovery"))
+        .filter((line) => line.trim() !== "" && !line.includes("the catalog tool listed in `tools/list`") && !line.startsWith("# "));
+      expect(coreLines.length).toBeGreaterThan(20);
+      for (const line of coreLines) expect(full).toContain(line);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("策略／口径读取卡死：到点与容量满的基础指引仍在截止点附近返回（预装载，不等读取）", async () => {
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p175-hang"));
+    const mcp = await import("../proxy/mcp-proxy");
+    let policyReadCalls = 0;
+    let releaseReads: () => void = () => undefined;
+    try {
+      mcp.instructionsDecisionTestHooks.deadlineMs = 200;
+      mcp.instructionsDecisionTestHooks.capacity = 1;
+      // 测试期间不返回、且忽略取消：模拟 shouldHideBeginQuestion / allowedToolNames 的慢读取（结束时放行，避免泄漏许可）。
+      const hang = new Promise<void>((resolve) => { releaseReads = resolve; });
+      mcp.instructionsDecisionTestHooks.policyReads = () => {
+        policyReadCalls += 1;
+        return hang;
+      };
+
+      // 到点路径：完整构建卡在策略读取，1s 决策线（此处 200ms）后基础指引立即返回。
+      const startedAt = Date.now();
+      const deadlineBasic = await instructionsOf(await postInitialize(proxyPort, "p175-hang-deadline"));
+      const elapsed = Date.now() - startedAt;
+      expect(elapsed).toBeLessThan(1000);
+      expect(deadlineBasic).toBe(mcp.buildBasicInstructions());
+      expect((await waitForAuditRow("p175-hang-deadline")).error_detail).toBe("instructions_basic:deadline");
+      const callsAfterDeadline = policyReadCalls;
+      expect(callsAfterDeadline).toBeGreaterThan(0); // 完整路径确实触达了卡死的读取
+
+      // 容量满路径（上一条卡死工作仍占用唯一许可）：立即基础指引，且不再触发任何策略读取。
+      expect(mcp.instructionsWorkActiveCount()).toBe(1);
+      const capStartedAt = Date.now();
+      const capacityBasic = await instructionsOf(await postInitialize(proxyPort, "p175-hang-cap"));
+      expect(Date.now() - capStartedAt).toBeLessThan(800);
+      expect(capacityBasic).toBe(mcp.buildBasicInstructions());
+      expect((await waitForAuditRow("p175-hang-cap")).error_detail).toBe("instructions_basic:capacity_full");
+      expect(policyReadCalls).toBe(callsAfterDeadline);
+    } finally {
+      releaseReads();
+      mcp.instructionsDecisionTestHooks.policyReads = undefined;
+      mcp.instructionsDecisionTestHooks.capacity = undefined;
+      mcp.instructionsDecisionTestHooks.deadlineMs = undefined;
+      await pollUntil(() => mcp.instructionsWorkActiveCount() === 0);
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("容量已满：不排队，直接基础指引；占用工作结束后恢复完整指引", async () => {
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p175-cap"));
+    try {
+      const mcp = await import("../proxy/mcp-proxy");
+      expect(mcp.INSTRUCTIONS_WORK_MAX_CONCURRENT).toBe(20);
+      expect(mcp.INSTRUCTIONS_DYNAMIC_DEADLINE_MS).toBe(1000);
+      mcp.instructionsDecisionTestHooks.capacity = 2;
+      let releaseWork!: () => void;
+      const workGate = new Promise<void>((resolve) => { releaseWork = resolve; });
+      mcp.instructionsDecisionTestHooks.beforeBuild = () => workGate;
+
+      const heldA = postInitialize(proxyPort, "p175-cap-a");
+      const heldB = postInitialize(proxyPort, "p175-cap-b");
+      await pollUntil(() => mcp.instructionsWorkActiveCount() === 2);
+
+      const startedAt = Date.now();
+      const overflow = await instructionsOf(await postInitialize(proxyPort, "p175-cap-c"));
+      expect(Date.now() - startedAt).toBeLessThan(800);
+      expect(overflow).toContain("Tool Discovery");
+      expect(overflow).not.toContain(SOURCE_LINE);
+      expect(mcp.instructionsWorkActiveCount()).toBe(2);
+      expect((await waitForAuditRow("p175-cap-c")).error_detail).toBe("instructions_basic:capacity_full");
+
+      releaseWork();
+      for (const held of [heldA, heldB]) expect(await instructionsOf(await held)).toContain(SOURCE_LINE);
+      await pollUntil(() => mcp.instructionsWorkActiveCount() === 0);
+      mcp.instructionsDecisionTestHooks.beforeBuild = undefined;
+      expect(await instructionsOf(await postInitialize(proxyPort, "p175-cap-d"))).toContain(SOURCE_LINE);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("客户端断开：取消可取消工作、不写响应，容量到工作真实终结才释放", async () => {
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p175-disc"));
+    try {
+      const mcp = await import("../proxy/mcp-proxy");
+      let activeAtAbort = -1;
+      let abortSeen = false;
+      mcp.instructionsDecisionTestHooks.beforeBuild = async (signal) => {
+        await new Promise<void>((resolve) => signal.addEventListener("abort", () => {
+          abortSeen = true;
+          activeAtAbort = mcp.instructionsWorkActiveCount();
+          resolve();
+        }, { once: true }));
+        await sleep(120); // 取消后底层仍在收尾
+      };
+      const client = new AbortController();
+      const pending = postInitialize(proxyPort, "p175-disc", client.signal).catch((err: unknown) => err);
+      await pollUntil(() => mcp.instructionsWorkActiveCount() === 1);
+      client.abort();
+      await pending;
+
+      await pollUntil(() => abortSeen);
+      expect(activeAtAbort).toBe(1);
+      await pollUntil(() => mcp.instructionsWorkActiveCount() === 0);
+
+      const audit = await waitForAuditRow("p175-disc");
+      expect(audit.outcome).toBe("error");
+      expect(audit.error_detail).toBe("client_disconnected");
+      expect(Number(audit.response_bytes)).toBe(0);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("构建期间被撤权：不发任何指引（沿用屏障的 403 authorization_revoked），后续合法握手不受影响", async () => {
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p175-revoke"));
+    try {
+      const mcp = await import("../proxy/mcp-proxy");
+      const barrier = await import("../proxy/authorization-barrier");
+      mcp.instructionsDecisionTestHooks.beforeBuild = async () => {
+        await barrier.narrowAuthorization({ kind: "subjects", agentIds: ["instructions_agent"], tokenHashes: [] });
+      };
+      const res = await postInitialize(proxyPort, "p175-revoke");
+      const text = await res.text();
+      expect(res.status).toBe(403);
+      expect(text).toContain("authorization_revoked");
+      expect(text).not.toContain("Lucy Data QA Runtime Instructions");
+      expect(text).not.toContain(SOURCE_LINE);
+      await pollUntil(() => mcp.instructionsWorkActiveCount() === 0);
+
+      mcp.instructionsDecisionTestHooks.beforeBuild = undefined;
+      expect(await instructionsOf(await postInitialize(proxyPort, "p175-revoke-2"))).toContain(SOURCE_LINE);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("构建期间授权代次变化：完整指引不通过核验，改发基础指引（不含旧名单）", async () => {
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p175-stale"));
+    try {
+      const mcp = await import("../proxy/mcp-proxy");
+      const acl = await import("../proxy/acl");
+      mcp.instructionsDecisionTestHooks.afterBuild = async () => {
+        await writeFile(
+          path.join(projectRoot, "webui", "config", "access.yaml"),
+          ACCESS_YAML.replace("        - dataforai.superstore_orders\n", "        - dataforai.superstore_orders\n        - dataforai.superstore_returns\n"),
+          "utf8"
+        );
+        await acl.commitEffectivePolicy();
+      };
+      const instructions = await instructionsOf(await postInitialize(proxyPort, "p175-stale"));
+      expect(instructions).toContain("Tool Discovery");
+      expect(instructions).not.toContain(SOURCE_LINE);
+      expect((await waitForAuditRow("p175-stale")).error_detail).toBe("instructions_basic:stale_proof");
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("本地协议回退（上游握手不可用）走同一决策：只发基础指引", async () => {
+    const dead = createServer();
+    await new Promise<void>((resolve) => dead.listen(0, "127.0.0.1", resolve));
+    const deadPort = (dead.address() as AddressInfo).port;
+    await new Promise<void>((resolve) => dead.close(() => resolve()));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(deadPort);
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const res = await postInitialize(port, "p175-local");
+      expect(res.status).toBe(200);
+      const body = await res.json() as { result: { instructions: string; serverInfo: { version: string } } };
+      expect(body.result.serverInfo.version).toBe("local-fallback");
+      expect(body.result.instructions).toContain("Tool Discovery");
+      expect(body.result.instructions).toContain("answerability dependency matrix");
+      expect(body.result.instructions).not.toContain(SOURCE_LINE);
+      expect(String((await waitForAuditRow("p175-local")).error_detail)).toContain("upstream_unavailable");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("基础指引无身份时保守：不点名 begin，保留 continue 逃生；md 事实源含工具发现方法", async () => {
+    const mcp = await import("../proxy/mcp-proxy");
+    const basic = mcp.buildBasicInstructions();
+    expect(typeof basic).toBe("string"); // 预装载：同步取值，非 Promise
+    expect(mcp.buildBasicInstructions()).toBe(basic); // 进程内同一份驻留文本
+    expect(basic).not.toContain("lucy_begin_question");
+    expect(basic).toContain("lucy_continue_question");
+    expect(basic).toContain("## Tool Discovery");
+    const { readFile } = await import("node:fs/promises");
+    const md = await readFile(new URL("../../config/data-qa-instructions.md", import.meta.url), "utf8");
+    expect(md).toContain("## 工具发现");
+    expect(md).toContain("lucy_skill_search");
+    expect(md).toContain("question_budget_exhausted");
+    expect(md).toContain("tools/list");
+  });
+});
+
+// ─── P1-77 B1：C1–C4／C6 同源注入（SC-08）──────────────────────────────────────
+//
+// 对每个指引分支（完整动态、全空目录回退、动态截止、容量满、构建失败、本地协议回退）
+// 断言**实际 initialize 响应**含 C1–C4／C6，且握手内无 Wiki／Skill 正文读取。
+
+const CONTEXT_MARKERS = ["[C1a]", "[C1b]", "[C1c]", "[C2]", "[C3]", "[C4]", "[C6]"] as const;
+
+/** 代码侧（完整＋基础指引）的英文关键片段。 */
+const CONTEXT_PHRASES_EN = [
+  "## Business Context Adoption",
+  "Governed definitions first",
+  "never take the first hit",
+  "No channel, no downgrade",
+  "perform zero write operations",
+  "not found / not permitted / read failed / definition conflict",
+  "Main path protection",
+  "at most one lookup and one body read"
+];
+
+/** md 事实源（全空目录回退直接发 md）的中文关键片段。 */
+const CONTEXT_PHRASES_ZH = [
+  "## 业务上下文默认采用",
+  "已治理口径优先",
+  "不得直接取首个命中",
+  "无通道不降级",
+  "全程零写操作",
+  "未命中／无权限／读取失败／口径冲突",
+  "主路径保护",
+  "最多一次查找、一次正文读取"
+];
+
+const skillBodyReads = { byUri: 0, byName: 0, listed: 0 };
+
+async function installRealInstructionsMd(): Promise<void> {
+  const { readFile } = await import("node:fs/promises");
+  const md = await readFile(new URL("../../config/data-qa-instructions.md", import.meta.url), "utf8");
+  await writeFile(path.join(projectRoot, "webui", "config", "data-qa-instructions.md"), md, "utf8");
+}
+
+/** 与 startProxy 相同，但记录上游收到的 JSON-RPC 方法，并对 Skill 正文读取计数。 */
+async function startB1Proxy(): Promise<{
+  upstream: Server;
+  server: Server;
+  proxyPort: number;
+  upstreamMethods: string[];
+}> {
+  skillBodyReads.byUri = 0;
+  skillBodyReads.byName = 0;
+  skillBodyReads.listed = 0;
+  vi.doMock("../skills/loader.js", async () => {
+    const actual = await vi.importActual<typeof import("../skills/loader.js")>("../skills/loader.js");
+    return {
+      ...actual,
+      loadAllSkillsFresh: async () => { skillBodyReads.listed += 1; return actual.loadAllSkillsFresh(); },
+      getSkillByUri: (...args: Parameters<typeof actual.getSkillByUri>) => { skillBodyReads.byUri += 1; return actual.getSkillByUri(...args); },
+      getSkillByName: (...args: Parameters<typeof actual.getSkillByName>) => { skillBodyReads.byName += 1; return actual.getSkillByName(...args); }
+    };
+  });
+  const upstreamMethods: string[] = [];
+  const started = await startProxy(async (req, res) => {
+    const body = await readRequestBody(req);
+    try { upstreamMethods.push(String((JSON.parse(body) as { method?: string }).method)); } catch { upstreamMethods.push("(unparsed)"); }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({
+      jsonrpc: "2.0",
+      id: "b1",
+      result: { protocolVersion: "2024-11-05", serverInfo: { name: "ktx", version: "0.12.0" }, capabilities: { tools: {} } }
+    }));
+  });
+  return { ...started, upstreamMethods };
+}
+
+function expectContextAdoptionEn(text: string, contextRules: readonly string[]): void {
+  for (const marker of CONTEXT_MARKERS) expect(text).toContain(marker);
+  for (const phrase of CONTEXT_PHRASES_EN) expect(text).toContain(phrase);
+  // 同源：整段规则原样出现（不是各自改写）。
+  expect(text).toContain(contextRules.join("\n"));
+}
+
+function expectContextAdoptionZh(text: string): void {
+  for (const marker of CONTEXT_MARKERS) expect(text).toContain(marker);
+  for (const phrase of CONTEXT_PHRASES_ZH) expect(text).toContain(phrase);
+}
+
+/** 握手内不得有 Wiki／Skill 检索或正文读取：上游只见 initialize；审计只有 initialize；Skill 正文读取为 0。 */
+async function expectNoHandshakeContextReads(
+  requestId: string,
+  upstreamMethods: readonly string[]
+): Promise<void> {
+  expect(upstreamMethods.every((method) => method === "initialize")).toBe(true);
+  expect(skillBodyReads.byUri + skillBodyReads.byName).toBe(0);
+  const row = await waitForAuditRow(requestId);
+  expect(row.tool).toBe("initialize");
+  const db = new Database(auditDbPath, { readonly: true });
+  try {
+    const wikiOrSkill = db.prepare(
+      "SELECT COUNT(*) AS n FROM access_log WHERE tool LIKE 'wiki_%' OR tool LIKE 'lucy_skill_%'"
+    ).get() as { n: number };
+    expect(wikiOrSkill.n).toBe(0);
+  } finally {
+    db.close();
+  }
+}
+
+/** 脱敏快照：只落指引文本，不含令牌。设置 LUCY_B1_SNAPSHOT_DIR 时写出。 */
+async function saveB1Snapshot(name: string, text: string): Promise<void> {
+  expect(text).not.toContain(TOKEN);
+  expect(text).not.toContain(INTERNAL_TOKEN);
+  const dir = process.env.LUCY_B1_SNAPSHOT_DIR;
+  if (!dir) return;
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, `${name}.txt`), `${text}\n`, "utf8");
+}
+
+describe("P1-77 B1 / SC-08：C1–C4／C6 同源注入到各指引分支", () => {
+  beforeEach(async () => {
+    await installRealInstructionsMd();
+  });
+  afterEach(() => {
+    vi.doUnmock("../skills/loader.js");
+  });
+
+  it("完整动态指引：含 C1–C4／C6、保留角色化名单与问询上报/预算逃生，无握手检索", async () => {
+    const { upstream, server, proxyPort, upstreamMethods } = await startB1Proxy();
+    try {
+      const mcp = await import("../proxy/mcp-proxy");
+      const text = await instructionsOf(await postInitialize(proxyPort, "b1-full"));
+      expect(text).toContain("## Visible Scope");
+      expect(text).toContain(SOURCE_LINE);
+      expectContextAdoptionEn(text, mcp.CONTEXT_ADOPTION_RULE_LINES);
+      // 保留既有：预算逃生、ASK_FIRST、可核对块。
+      expect(text).toContain("question_budget_exhausted");
+      expect(text).toContain("source_ambiguity_gate");
+      expect(text).toContain("answer_verifiability");
+      expect(skillBodyReads.listed).toBeGreaterThan(0); // 既有角色化 Skill 名单只列目录
+      await expectNoHandshakeContextReads("b1-full", upstreamMethods);
+      await saveB1Snapshot("full-dynamic", text);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("全空目录回退：发 md 事实源，含 C1–C4／C6，无握手检索", async () => {
+    await writeFile(
+      path.join(projectRoot, "webui", "config", "access.yaml"),
+      ACCESS_YAML.replace("dataforai.superstore_orders", "dataforai.no_such_table"),
+      "utf8"
+    );
+    const { upstream, server, proxyPort, upstreamMethods } = await startB1Proxy();
+    try {
+      const text = await instructionsOf(await postInitialize(proxyPort, "b1-empty"));
+      expect(text).toContain("Lucy 数据问答基础指导");
+      expect(text).not.toContain("## Visible Scope");
+      expect(text).not.toContain(SOURCE_LINE);
+      expectContextAdoptionZh(text);
+      await expectNoHandshakeContextReads("b1-empty", upstreamMethods);
+      await saveB1Snapshot("basic-empty-catalog-md-fallback", text);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("动态截止：基础指引含 C1–C4／C6，且与完整指引同源", async () => {
+    const { upstream, server, proxyPort, upstreamMethods } = await startB1Proxy();
+    const mcp = await import("../proxy/mcp-proxy");
+    try {
+      mcp.instructionsDecisionTestHooks.deadlineMs = 200;
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      mcp.instructionsDecisionTestHooks.beforeBuild = () => gate;
+      const text = await instructionsOf(await postInitialize(proxyPort, "b1-deadline"));
+      expect(text).toBe(mcp.buildBasicInstructions());
+      expect(text).toContain("## Tool Discovery");
+      expect(text).not.toContain(SOURCE_LINE);
+      expect(text).not.toContain("## Governed Domain Skills");
+      expectContextAdoptionEn(text, mcp.CONTEXT_ADOPTION_RULE_LINES);
+      expect((await waitForAuditRow("b1-deadline")).error_detail).toBe("instructions_basic:deadline");
+      release();
+      await pollUntil(() => mcp.instructionsWorkActiveCount() === 0);
+      await expectNoHandshakeContextReads("b1-deadline", upstreamMethods);
+      await saveB1Snapshot("basic-deadline", text);
+    } finally {
+      mcp.instructionsDecisionTestHooks.beforeBuild = undefined;
+      mcp.instructionsDecisionTestHooks.deadlineMs = undefined;
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("容量满：基础指引含 C1–C4／C6；合法主路径（lucy_catalog）仍成交，隐藏工具不泄露", async () => {
+    const { upstream, server, proxyPort, upstreamMethods } = await startB1Proxy();
+    const mcp = await import("../proxy/mcp-proxy");
+    try {
+      mcp.instructionsDecisionTestHooks.capacity = 0;
+      const text = await instructionsOf(await postInitialize(proxyPort, "b1-cap"));
+      expect(text).toBe(mcp.buildBasicInstructions());
+      expect(text).not.toContain(SOURCE_LINE);
+      expectContextAdoptionEn(text, mcp.CONTEXT_ADOPTION_RULE_LINES);
+      expect((await waitForAuditRow("b1-cap")).error_detail).toBe("instructions_basic:capacity_full");
+      // 访问策略未授权 wiki／Skill 工具：基础指引只讲方法，不带任何角色化名单。
+      expect(text).not.toContain("Governed Domain Skills");
+      expect(text).not.toContain("lucy-skill://");
+
+      // 合法用户的既有主路径继续可用（C4）：降级握手之后 lucy_catalog 照常返回。
+      const catalogRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}`, "mcp-session-id": "b1-cap-session" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "b1-cap-catalog", method: "tools/call", params: { name: "lucy_catalog", arguments: {} } })
+      });
+      expect(catalogRes.status).toBe(200);
+      expect(await catalogRes.text()).toContain("superstore_orders");
+
+      await saveB1Snapshot("basic-capacity-full", text);
+      // 握手本身：上游只见 initialize（catalog 调用是后续独立请求，不计入握手）。
+      expect(upstreamMethods[0]).toBe("initialize");
+      expect(skillBodyReads.byUri + skillBodyReads.byName).toBe(0);
+    } finally {
+      mcp.instructionsDecisionTestHooks.capacity = undefined;
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("构建失败：基础指引含 C1–C4／C6，无握手检索", async () => {
+    const { upstream, server, proxyPort, upstreamMethods } = await startB1Proxy();
+    const mcp = await import("../proxy/mcp-proxy");
+    try {
+      mcp.instructionsDecisionTestHooks.beforeBuild = async () => { throw new Error("b1-build-failure"); };
+      const text = await instructionsOf(await postInitialize(proxyPort, "b1-fail"));
+      expect(text).toBe(mcp.buildBasicInstructions());
+      expect(text).not.toContain(SOURCE_LINE);
+      expectContextAdoptionEn(text, mcp.CONTEXT_ADOPTION_RULE_LINES);
+      expect((await waitForAuditRow("b1-fail")).error_detail).toBe("instructions_basic:build_failed");
+      await pollUntil(() => mcp.instructionsWorkActiveCount() === 0);
+      await expectNoHandshakeContextReads("b1-fail", upstreamMethods);
+      await saveB1Snapshot("basic-build-failed", text);
+    } finally {
+      mcp.instructionsDecisionTestHooks.beforeBuild = undefined;
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("本地协议回退（上游握手不可用）：基础指引含 C1–C4／C6，无握手检索", async () => {
+    skillBodyReads.byUri = 0;
+    skillBodyReads.byName = 0;
+    vi.doMock("../skills/loader.js", async () => {
+      const actual = await vi.importActual<typeof import("../skills/loader.js")>("../skills/loader.js");
+      return {
+        ...actual,
+        getSkillByUri: (...args: Parameters<typeof actual.getSkillByUri>) => { skillBodyReads.byUri += 1; return actual.getSkillByUri(...args); },
+        getSkillByName: (...args: Parameters<typeof actual.getSkillByName>) => { skillBodyReads.byName += 1; return actual.getSkillByName(...args); }
+      };
+    });
+    const dead = createServer();
+    await new Promise<void>((resolve) => dead.listen(0, "127.0.0.1", resolve));
+    const deadPort = (dead.address() as AddressInfo).port;
+    await new Promise<void>((resolve) => dead.close(() => resolve()));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(deadPort);
+    const mcp = await import("../proxy/mcp-proxy");
+    const { server, host } = mcp.buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const res = await postInitialize(port, "b1-local");
+      expect(res.status).toBe(200);
+      const body = await res.json() as { result: { instructions: string; serverInfo: { version: string } } };
+      expect(body.result.serverInfo.version).toBe("local-fallback");
+      const text = body.result.instructions;
+      expect(text).toBe(mcp.buildBasicInstructions());
+      expect(text).not.toContain(SOURCE_LINE);
+      expectContextAdoptionEn(text, mcp.CONTEXT_ADOPTION_RULE_LINES);
+      expect(String((await waitForAuditRow("b1-local")).error_detail)).toContain("upstream_unavailable");
+      await expectNoHandshakeContextReads("b1-local", ["initialize"]);
+      await saveB1Snapshot("basic-local-protocol-fallback", text);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("md 事实源与代码镜像使用同一组 C 标记；规则文本不含握手内读取指令", async () => {
+    const mcp = await import("../proxy/mcp-proxy");
+    const { readFile } = await import("node:fs/promises");
+    const md = await readFile(new URL("../../config/data-qa-instructions.md", import.meta.url), "utf8");
+    const code = mcp.CONTEXT_ADOPTION_RULE_LINES.join("\n");
+    for (const marker of CONTEXT_MARKERS) {
+      expect(md).toContain(marker);
+      expect(code).toContain(marker);
+    }
+    // C5：不得出现把 Wiki／Skill 读取绑进握手的措辞。
+    expect(code).not.toMatch(/at initialize|during initialize|during the handshake/i);
+  });
+});

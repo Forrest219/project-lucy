@@ -2,7 +2,10 @@
 
 > Lucy MCP Proxy 正常会在 `initialize` 时按当前 token 的 effective permissions
 > 动态生成 role-aware instructions：只列出当前 token 可见的连接、source 和示例。
-> 本文件仅作为动态生成失败时的中性 fallback，不承载任何跨域表路由正文。
+> 动态生成在 1 秒决策线（自 ingress 起）内未完成、失败、本地容量已满或走本地协议回退时，
+> 代理改发进程内预装载的**基础指引**：与完整指引共用同一份静态核心问数规则（本文件为事实源，
+> 代码镜像为 `staticCoreRuleLines`），另加下方「工具发现」方法，不含任何角色化连接／source／Skill 名单。
+> 本文件不承载任何跨域表路由正文。
 > 真正的权限裁决始终在 Lucy MCP Proxy 的 `acl.check()`。
 
 ## 基础规则
@@ -13,6 +16,13 @@
 - 如果 `lucy_query` / `lucy_read_source` 没有成功返回事实数据，不要用 wiki-only context 编造数值。
 - 对日期字段按可见 source / wiki 的业务时区说明解释；POC 日期通常是 `Asia/Shanghai` 业务自然日。
 - Fallback instructions 不自动加载 Skill；如需复用已发布业务 Skill，必须由客户端经主面 `/mcp` 显式调用可见的 `lucy_skill_search` / `lucy_skill_read`（或等价 Resource 读）。不要配置已关闭的 `/mcp/skills` passthrough。
+
+## 工具发现
+
+- 基础指引不带连接、source 或 Skill 名单；一律以 `tools/list` 实际列出的工具为准发现可用范围。
+- 用其中的 catalog 工具（可见时为 `lucy_catalog`）确认可查询的连接和 source；用 `lucy_read_source` 查看 grain、字段和 measures 后再查询。
+- 若 `lucy_skill_search` / `lucy_skill_read` 可见，按问题所属业务域按需检索并读取已发布 Skill；`wiki_search` / `wiki_read` 可见时用于业务口径。
+- 授权随时可能变化：重新发现，不要依赖记忆里的连接、source 或工具名。
 
 ## 可选问询上报（锦上添花）
 
@@ -28,6 +38,16 @@
 4. 仅在已授权且需要业务口径时使用 `wiki_search` / `wiki_read`。
 
 简单事实查询应走最短可验证路径：catalog / source 确认后直接 `lucy_query`，拿到目标实体、目标期间、目标指标的事实行后立即作答。`entity_details` 用于实体画像、维度详情或元数据核对；`lucy_explain_query` 用于查询被拒绝、需要解释权限/guardrail 时的诊断，不作为常规取数前置 dry-run。
+
+## 业务上下文默认采用
+
+- [C1a] 已治理口径优先：作答前先检查当前授权来源是否已提供适用口径（可见 source 的 measure／维度描述、生效的 Question Type Binding／口径绑定）。已提供则直接按治理口径查数并披露口径来源，不强制 Wiki 检索。
+- [C1b] 仅缺定义才补充检索：授权来源未覆盖的业务定义，才 `wiki_search` → `wiki_read`（可见时）。多个口径冲突时核对适用范围／版本或向用户确认，不得直接取首个命中。
+- [C1c] 无通道不降级：无 Wiki 通道或无命中时，已治理口径下的可答问题照常交付；仅当必需的业务定义确实缺失时，该子结论按 [C3] 标不可得。
+- [C2] 规程引导：题目确需规程时，已知授权目标可直接读取正文；否则先用可见的 Skill 查找工具（`lucy_skill_search`）确认目标再读取正文（`lucy_skill_read`）。按规程作答，阈值动作与分派只作为建议，全程零写操作。
+- [C3] 诚实兜底：任何检索／读取失败不得使整题失败。区分四态——未命中／无权限／读取失败／口径冲突——只将受影响的子结论标 `unavailable` 并说明影响，其余子结论照常交付；禁止自定义口径、禁止编造规程结论。
+- [C4] 主路径保护：纯语义事实题保持最短路径（catalog → source → `lucy_query` → 作答），不强制上下文查找；已治理口径直通（[C1a]）不得被这些步骤拦截。
+- [C6] 按题限量：同题同一业务依赖最多一次查找、一次正文读取（Resource／Prompt 读取合并计数），并复用已取得且仍获授权的正文。达到上限或工具明确超时时，结束该依赖的额外调用，按 [C3] 交付已验证结果，其余依赖照常推进。代理数据工具预算继续生效。
 
 ## 数据回答质量规范
 

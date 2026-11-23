@@ -3,6 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as configAuditWrite from "../admin/config-audit-write.js";
+import * as accessRecovery from "../access-recovery.js";
+import * as fsSafe from "../fs-safe.js";
+import { activeCommittedView, startDisplayReconciler, stopDisplayReconciler } from "../display-snapshot.js";
 import { agentCommitTestHooks, agentStatisticsDisplayTestState } from "../admin/agents.js";
 import { buildServer } from "../index";
 import { isMcpProtocolMethod } from "../proxy/usage-classification.js";
@@ -1537,5 +1541,280 @@ describe("admin agent discoverability writes", () => {
     expect(JSON.stringify(failed.body)).not.toContain('"after"');
     expect(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8")).toBe(before);
     await app.close();
+  });
+});
+
+describe("P1-75 roster stays readable during a note-only save", () => {
+  // The busy path waits on a real recovery timer; fake timers would never fire it.
+  beforeEach(() => { vi.useRealTimers(); });
+  const ROSTER = "/api/admin/agents?view=roster&projection=summary";
+  const noteOf = (body: { data: { agents: Array<{ id: string; note?: string }> } }, id = "zhangsan") =>
+    body.data.agents.find((agent) => agent.id === id)?.note;
+  const duringWrite = (app: ReturnType<typeof buildServer>, into: Array<{ status: number; body: any }>, url = ROSTER) => async () => {
+    const res = await request(app.server).get(url);
+    into.push({ status: res.status, body: res.body });
+  };
+  async function seedNote(app: ReturnType<typeof buildServer>, note: string) {
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note } }).expect(200);
+  }
+
+  it.each([ROSTER, "/api/admin/agents?view=roster"])("serves the committed old note with 200 during the write and the new note right after (%s)", async (url) => {
+    const app = buildServer();
+    await app.ready();
+    await seedNote(app, "旧备注");
+    expect(noteOf((await request(app.server).get(url).expect(200)).body)).toBe("旧备注");
+    const seen: Array<{ status: number; body: any }> = [];
+    agentCommitTestHooks.afterCapture = duringWrite(app, seen, url);
+    const saved = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "新备注" } }).expect(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].status).toBe(200);
+    expect(noteOf(seen[0].body)).toBe("旧备注");
+    const after = await request(app.server).get(url).expect(200);
+    expect(noteOf(after.body)).toBe("新备注");
+    expect(after.body.data.version).toBe(saved.body.data.after.version);
+    expect(saved.body.data.after.agent.note).toBe("新备注");
+    await app.close();
+  });
+
+  it("keeps the committed version, permission summary and note bound to one revision while the write is pending", async () => {
+    const app = buildServer();
+    await app.ready();
+    await seedNote(app, "旧备注");
+    const before = (await request(app.server).get(ROSTER).expect(200)).body;
+    const seen: Array<{ status: number; body: any }> = [];
+    agentCommitTestHooks.afterCapture = duringWrite(app, seen);
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "新备注" } }).expect(200);
+    expect(seen[0].body.data.version).toBe(before.data.version);
+    // The runtime may already serve the new digest, so only consistency (not the revision) may differ.
+    expect(seen[0].body.data.meta.permissionsState).toBe(before.data.meta.permissionsState);
+    expect(["matched", "unconfirmed"]).toContain(seen[0].body.data.meta.runtimeConsistency);
+    expect(seen[0].body.data.agents.map((agent: { permissionSummary: unknown }) => agent.permissionSummary))
+      .toEqual(before.data.agents.map((agent: { permissionSummary: unknown }) => agent.permissionSummary));
+    expect(noteOf(seen[0].body)).toBe("旧备注");
+    await app.close();
+  });
+
+  it.each([
+    ["mixed note + name PATCH", { note: "混合", name: "改名" }],
+    ["real authority change (disable)", { enabled: false }]
+  ])("%s keeps the existing verified path (503 while pending)", async (_label, patch) => {
+    const app = buildServer();
+    await app.ready();
+    await request(app.server).get(ROSTER).expect(200);
+    const seen: Array<{ status: number; body: any }> = [];
+    agentCommitTestHooks.afterCapture = duringWrite(app, seen);
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch }).expect(200);
+    expect(seen[0].status).toBe(503);
+    expect(seen[0].body.error.code).toBe("DISPLAY_SNAPSHOT_BUSY");
+    await request(app.server).get(ROSTER).expect(200);
+    await app.close();
+  });
+
+  it("does not open the write-time read path without a verified committed roster", async () => {
+    const app = buildServer();
+    await app.ready();
+    // No roster has ever been built, so there is no committed view to serve.
+    const seen: Array<{ status: number; body: any }> = [];
+    agentCommitTestHooks.afterCapture = duringWrite(app, seen);
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "冷启动" } }).expect(200);
+    expect(seen[0].status).toBe(503);
+    expect(noteOf((await request(app.server).get(ROSTER).expect(200)).body)).toBe("冷启动");
+    await app.close();
+  });
+
+  it("withdraws the committed view when the write is rolled back and restores normal reads", async () => {
+    const app = buildServer();
+    await app.ready();
+    await seedNote(app, "旧备注");
+    await request(app.server).get(ROSTER).expect(200);
+    const acl = await import("../proxy/acl.js");
+    vi.spyOn(acl, "evaluateRuntimeAck").mockReturnValueOnce(false);
+    const failed = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "失败备注" } });
+    expect(failed.status).toBe(500);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).not.toContain("失败备注");
+    expect(activeCommittedView("agent-permissions")).toBeNull();
+    expect(noteOf((await request(app.server).get(ROSTER).expect(200)).body)).toBe("旧备注");
+    await app.close();
+  });
+
+  it("a concurrent second save is rejected by the publish window and the first stays consistent", async () => {
+    const app = buildServer();
+    await app.ready();
+    await seedNote(app, "旧备注");
+    await request(app.server).get(ROSTER).expect(200);
+    let second: Promise<unknown> | undefined;
+    agentCommitTestHooks.afterCapture = async () => {
+      agentCommitTestHooks.afterCapture = null;
+      second = new Promise((resolve) => {
+        request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "第二次" } }).end((_err, res) => resolve(res));
+      });
+      await second;
+    };
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "第一次" } }).expect(200);
+    const secondRes = (await second) as { status: number; body: { error: { code: string } } };
+    expect(secondRes.status).toBe(503);
+    expect(secondRes.body.error.code).toBe("PUBLISH_COORDINATOR_BUSY");
+    expect(noteOf((await request(app.server).get(ROSTER).expect(200)).body)).toBe("第一次");
+    expect(activeCommittedView("agent-permissions")).toBeNull();
+    await app.close();
+  });
+
+  // ── failure paths: eligibility is withdrawn BEFORE rollback / recovery runs ──
+  describe("failure paths", () => {
+    type Probe = { status: number; note?: string };
+    /** Record whether the committed view is still eligible at every rollback-capable disk write. */
+    async function watchDiskWrites() {
+        const eligibleAtWrite: boolean[] = [];
+      const realWrite = fsSafe.safeWriteAtomic;
+      const spy = vi.spyOn(fsSafe, "safeWriteAtomic").mockImplementation(async (...args: Parameters<typeof realWrite>) => {
+        eligibleAtWrite.push(activeCommittedView("agent-permissions") !== null);
+        return realWrite(...args);
+      });
+      return { eligibleAtWrite, spy };
+    }
+    async function warmRoster(app: ReturnType<typeof buildServer>) {
+      await app.ready();
+      await seedNote(app, "旧备注");
+      await request(app.server).get(ROSTER).expect(200);
+    }
+    const probe = async (app: ReturnType<typeof buildServer>): Promise<Probe> => {
+      const res = await request(app.server).get(ROSTER);
+      return { status: res.status, note: res.status === 200 ? noteOf(res.body) : undefined };
+    };
+    const accessYaml = () => readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+
+    it("persist failure: served while pending, then withdrawn before the rollback write, then normal reads", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+      const { eligibleAtWrite, spy } = await watchDiskWrites();
+      const pending: Probe[] = [];
+      let eligibleWhilePending = false;
+      const persist = vi.spyOn(configAuditWrite, "auditedWriteFile").mockImplementationOnce(async () => {
+        eligibleWhilePending = activeCommittedView("agent-permissions") !== null;
+        pending.push(await probe(app));
+        throw new Error("disk_full");
+      });
+      try {
+        const failed = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "失败备注" } });
+        expect(failed.status).toBe(500);
+        expect(failed.body.ok).toBe(false);
+      } finally {
+        persist.mockRestore();
+        spy.mockRestore();
+      }
+      expect(eligibleWhilePending).toBe(true);
+      expect(pending).toEqual([{ status: 200, note: "旧备注" }]);
+      // The only disk write after the failure is the rollback, and eligibility was gone before it.
+      expect(eligibleAtWrite).toEqual([false]);
+      expect(await accessYaml()).not.toContain("失败备注");
+      expect(activeCommittedView("agent-permissions")).toBeNull();
+      expect(await probe(app)).toEqual({ status: 200, note: "旧备注" });
+      await app.close();
+    });
+
+    it("terminal audit failure: rolls back, withdraws first, never serves the rolled-back note", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+      const { eligibleAtWrite, spy } = await watchDiskWrites();
+      const terminal = vi.spyOn(configAuditWrite, "completeConfigAuditTerminal").mockRejectedValueOnce(new Error("audit_terminal_down"));
+      try {
+        const failed = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "审计失败备注" } });
+        expect(failed.status).toBe(500);
+        expect(failed.body.ok).toBe(false);
+        expect(failed.body.written).toBe(false);
+      } finally {
+        terminal.mockRestore();
+        spy.mockRestore();
+      }
+      // [0] = the candidate persist inside the open window, last = the rollback write after withdrawal.
+      expect(eligibleAtWrite.length).toBeGreaterThanOrEqual(1);
+      expect(eligibleAtWrite.at(-1)).toBe(false);
+      expect(await accessYaml()).not.toContain("审计失败备注");
+      expect(activeCommittedView("agent-permissions")).toBeNull();
+      expect(await probe(app)).toEqual({ status: 200, note: "旧备注" });
+      await app.close();
+    });
+
+    it("recovery latch closing mid-write refuses the committed view at read time; reads recover once it clears", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+      const seen: Probe[] = [];
+      const persist = vi.spyOn(configAuditWrite, "auditedWriteFile").mockImplementationOnce(async () => {
+        seen.push(await probe(app));
+        accessRecovery.setInMemoryRecoveryRequiredSync({ reason: "test_latch" });
+        seen.push(await probe(app));
+        throw new Error("disk_full");
+      });
+      try {
+        await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "闩锁备注" } });
+      } finally {
+        persist.mockRestore();
+        // Isolation: never leave the process-wide recovery latch closed for the rest of the suite.
+        accessRecovery.clearInMemoryRecoveryRequiredSync();
+        await (await import("../proxy/acl.js")).commitEffectivePolicy();
+      }
+      expect(seen[0]).toEqual({ status: 200, note: "旧备注" });
+      expect(seen[1].status).toBe(503);
+      expect(await accessYaml()).not.toContain("闩锁备注");
+      expect(await probe(app)).toEqual({ status: 200, note: "旧备注" });
+      await app.close();
+    });
+
+    it("unverifiable snapshot during the write: bounded 503 (no stale 200), then the same process recovers", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+      const seen: Array<Probe & { ms: number }> = [];
+      agentCommitTestHooks.afterCapture = async () => {
+        // The view can no longer be verified: refuse within the request budget, never guess.
+        stopDisplayReconciler();
+        const started = Date.now();
+        seen.push({ ...(await probe(app)), ms: Date.now() - started });
+        // Verification conditions hold again inside the same process.
+        await startDisplayReconciler();
+      };
+      try {
+        await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "恢复备注" } }).expect(200);
+      } finally {
+        await startDisplayReconciler();
+      }
+      expect(seen[0].status).toBe(503);
+      expect(seen[0].ms).toBeLessThan(3000);
+      const started = Date.now();
+      expect(await probe(app)).toEqual({ status: 200, note: "恢复备注" });
+      expect(Date.now() - started).toBeLessThan(3000);
+      await app.close();
+    });
+
+    // Keep this LAST in the file: a closed gate re-syncs process-wide policy state that a later test would inherit.
+    it("unverifiable rollback closes the gate: eligibility is withdrawn before the rollback attempt and reads recover after restore", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+        let eligibleAtRollback: boolean | undefined;
+      const persist = vi.spyOn(configAuditWrite, "auditedWriteFile").mockImplementationOnce(async () => { throw new Error("disk_full"); });
+      const rollback = vi.spyOn(fsSafe, "safeWriteAtomic").mockImplementationOnce(async () => {
+        eligibleAtRollback = activeCommittedView("agent-permissions") !== null;
+        throw new Error("rollback_disk_down");
+      });
+      try {
+        const failed = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "不可回滚备注" } });
+        expect(failed.status).toBe(503);
+        expect(failed.body.ok).toBe(false);
+        expect(failed.body.error.code).toBe("ACCESS_RECOVERY_REQUIRED");
+        expect(eligibleAtRollback).toBe(false);
+        expect(activeCommittedView("agent-permissions")).toBeNull();
+        expect(accessRecovery.getAccessRecoveryStateSync().required).toBe(true);
+      } finally {
+        persist.mockRestore();
+        rollback.mockRestore();
+        // Clears the durable marker too: a marker left behind would re-latch the process on the next read.
+        await accessRecovery.clearAccessRecoveryRequired(projectRoot);
+        await (await import("../proxy/acl.js")).commitEffectivePolicy();
+      }
+      const started = Date.now();
+      expect(await probe(app)).toEqual({ status: 200, note: "旧备注" });
+      expect(Date.now() - started).toBeLessThan(3000);
+      await app.close();
+    });
   });
 });

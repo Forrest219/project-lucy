@@ -7,6 +7,7 @@ import { prepareRolesAgentMutation, rolesAgentResponseAfterPublish, runRolesAgen
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { parse } from "yaml";
 import { stringifySafe } from "../yaml-safe";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -93,15 +94,23 @@ import { countEntryPerf, markDisplayCache, timeAsync, withRequestTiming } from "
 import { readAccessSnapshot, resolvePermissionBatch, type PermissionBatch } from "./permission-display.js";
 import { generationKey, hasPendingDisplayWrite } from "../display-generation.js";
 import {
+  activeCommittedView,
   AGENT_PERMISSION_SCOPES,
+  captureCommittedDisplayView,
+  committedViewServeValid,
   createDisplayRequestBudget,
   DisplaySnapshotBusyError,
   getDisplaySnapshot,
   evictDisplaySnapshotSlot,
+  openCommittedViewServe,
+  runWithCommittedViewServe,
   registerDisplayPrewarmer,
+  withdrawCommittedViewServe,
+  type CommittedDisplayView,
   type DisplayRequestBudget
 } from "../display-snapshot.js";
 import { withDisplayWriteBarrier } from "../display-generation.js";
+import { getAccessRecoveryStateSync } from "../access-recovery.js";
 
 /** Spec 129: Agent write paths must not materialize reference templates into access.yaml. */
 
@@ -301,7 +310,98 @@ async function writeAccessYaml(
   },
   committedAgent?: YamlUser
 ): Promise<AgentAccessWriteResult> {
-  return withDisplayWriteBarrier(["P"], () => writeAccessYamlInBarrier(projectRoot, config, audit, committedAgent));
+  // P1-75 §2.1 — classify against the PERSISTED file before the barrier begins.
+  // Only a verified note-only delta may keep the committed roster readable
+  // while this write is pending. Any other save never opens a view, and its
+  // barrier begin withdraws a view another write has open (display listener).
+  const view = await captureNoteOnlyRosterView(projectRoot, config);
+  try {
+    const result = await withDisplayWriteBarrier(["P"], async (token) => {
+      // First synchronous action in the barrier: no gap between pending and eligible.
+      const open = view ? openCommittedViewServe(view, token) : false;
+      let committed = false;
+      try {
+        const written = await runWithCommittedViewServe(open ? view : null, () =>
+          writeAccessYamlInBarrier(projectRoot, config, audit, committedAgent, view && open ? () => withdrawCommittedViewServe(view) : undefined)
+        );
+        committed = written.status === "committed";
+        return written;
+      } finally {
+        // Failure (or any throw): withdraw BEFORE the rollback / recovery gate outcome is visible.
+        if (view && open && !committed) withdrawCommittedViewServe(view);
+      }
+    });
+    if (view && result.status === "committed") await publishNoteOnlyRosterView(projectRoot);
+    return result;
+  } finally {
+    if (view) withdrawCommittedViewServe(view);
+  }
+}
+
+const AGENT_PERMISSIONS_SNAPSHOT = "agent-permissions";
+/** The raw access text a committed roster slot was built from — the reader parses its own copy. */
+type RosterCommittedInputs = { raw: string; version: string };
+
+/** Persisted semantic content with the note and derived `last_used` removed: every other input must match. */
+function withoutNotes(config: unknown): unknown {
+  const copy = JSON.parse(JSON.stringify(config ?? {})) as { users?: Array<Record<string, unknown>> };
+  for (const user of copy.users ?? []) {
+    delete user.note;
+    for (const token of (user.tokens as Array<Record<string, unknown>> | undefined) ?? []) delete token.last_used;
+  }
+  return copy;
+}
+
+/** True only when the candidate differs from the persisted access config in user notes alone. */
+function isNoteOnlyDelta(priorRaw: string, candidate: YamlAccessConfig): boolean {
+  try {
+    const prior = parse(priorRaw) as YamlAccessConfig;
+    const next = parse(stringifySafe(candidate, { lineWidth: 0 })) as YamlAccessConfig;
+    return narrowingScopeForWrite(priorRaw, next) === null && isDeepStrictEqual(withoutNotes(prior), withoutNotes(next));
+  } catch {
+    return false;
+  }
+}
+
+async function captureNoteOnlyRosterView(
+  projectRoot: string,
+  candidate: YamlAccessConfig
+): Promise<CommittedDisplayView<RosterCommittedInputs> | null> {
+  try {
+    if (getAccessRecoveryStateSync().required) return null;
+    const prior = await readAccessYaml(projectRoot);
+    if (!isNoteOnlyDelta(prior.raw, candidate)) return null;
+    return await captureCommittedDisplayView<RosterCommittedInputs>(
+      AGENT_PERMISSIONS_SNAPSHOT,
+      AGENT_PERMISSION_SCOPES,
+      prior.version,
+      { raw: prior.raw, version: prior.version }
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Publish the verified post-write roster view before the save is acknowledged,
+ * so the first read after the ack finds the new note without a cold build.
+ * Best effort and bounded: a busy or failed publish only means the first read
+ * builds it through the normal verified path.
+ */
+async function publishNoteOnlyRosterView(projectRoot: string): Promise<void> {
+  try {
+    const { config, raw, version } = await readAccessYaml(projectRoot);
+    await readAgentPermissionSlot(projectRoot, config.users, raw, version, createDisplayRequestBudget(1, 500));
+  } catch {
+    // Nothing to roll back: the committed write stands and readers use the normal path.
+  }
+}
+
+/** Parse the committed inputs into a fresh config, so no reader shares a mutable object. */
+function committedRosterConfig(inputs: RosterCommittedInputs): YamlAccessConfig {
+  const config = parse(inputs.raw) as YamlAccessConfig;
+  if (!config.users) config.users = [];
+  return config;
 }
 
 async function writeAccessYamlInBarrier(
@@ -323,7 +423,8 @@ async function writeAccessYamlInBarrier(
     expectedVersion?: string;
     idempotencyKey?: string;
   },
-  committedAgent?: YamlUser
+  committedAgent?: YamlUser,
+  onFailureBeforeRollback?: () => void
 ): Promise<AgentAccessWriteResult> {
   // Strip derived last_used before writing
   const toWrite: YamlAccessConfig = {
@@ -343,6 +444,7 @@ async function writeAccessYamlInBarrier(
     source: audit?.source ?? "admin_agents_api",
     kind: "agent_save",
     expectedVersion: audit?.expectedVersion,
+    onFailureBeforeRollback,
     onCommitted: async (previousRaw) => {
       // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
       // cancel in-flight work and clear caches before this write reports success.
@@ -1002,8 +1104,8 @@ function permissionSummaryFromBatch(batch: PermissionBatch, userId: string): Age
     toolCount: p.tools.length, capabilityCount: p.capabilities.length, snapshotHash: p.snapshotHash, sourceMapVersion: p.sourceMapVersion },
     permissionWarnings: [] };
 }
-async function readAgentPermissionSlot(projectRoot: string, users: YamlUser[], raw: string, version: string, budget?: DisplayRequestBudget) {
-  return getDisplaySnapshot("agent-permissions", AGENT_PERMISSION_SCOPES, async () => {
+async function readAgentPermissionSlot(projectRoot: string, users: YamlUser[], raw: string, version: string, budget?: DisplayRequestBudget, committedView?: CommittedDisplayView) {
+  return getDisplaySnapshot(AGENT_PERMISSIONS_SNAPSHOT, AGENT_PERMISSION_SCOPES, async () => {
     const accessSnapshot = await readAccessSnapshot(projectRoot, raw, version);
     const userIds = users.map((user) => user.id);
     const batch = await resolvePermissionBatch(accessSnapshot, userIds);
@@ -1017,16 +1119,16 @@ async function readAgentPermissionSlot(projectRoot: string, users: YamlUser[], r
     };
     projectionCounters.builds += 1;
     return { payload: JSON.stringify(section), sidecar: JSON.stringify(sidecar) };
-  }, { extraKey: version, budget });
+  }, { extraKey: version, budget, committedView });
 }
-async function agentPermissionSection(projectRoot: string, users: YamlUser[], raw: string, version: string, budget?: DisplayRequestBudget): Promise<AgentPermissionSection> {
-  const slot = await readAgentPermissionSlot(projectRoot, users, raw, version, budget);
+async function agentPermissionSection(projectRoot: string, users: YamlUser[], raw: string, version: string, budget?: DisplayRequestBudget, committedView?: CommittedDisplayView): Promise<AgentPermissionSection> {
+  const slot = await readAgentPermissionSlot(projectRoot, users, raw, version, budget, committedView);
   projectionCounters.fullParses += 1;
   return { ...JSON.parse(slot.payload) as CachedAgentPermissionSection, snapshotVersion: slot.version };
 }
-async function agentPermissionSummarySection(projectRoot: string, users: YamlUser[], raw: string, version: string, budget?: DisplayRequestBudget) {
+async function agentPermissionSummarySection(projectRoot: string, users: YamlUser[], raw: string, version: string, budget?: DisplayRequestBudget, committedView?: CommittedDisplayView) {
   for (let attempt = 0; attempt < 2; attempt++) {
-    const slot = await readAgentPermissionSlot(projectRoot, users, raw, version, budget);
+    const slot = await readAgentPermissionSlot(projectRoot, users, raw, version, budget, committedView);
     try {
       projectionCounters.sidecarParses += 1;
       const small = JSON.parse(slot.sidecar ?? "null") as AgentPermissionSidecar | null;
@@ -1312,10 +1414,20 @@ function agentListSnapshotVersion(permissionSection: Pick<AgentPermissionSection
   return createHash("sha256").update(`${permissionSection.snapshotVersion}:${runtimeConsistency}`).digest("hex").slice(0, 16);
 }
 
-async function buildAgentRoster(projectRoot: string, budget?: DisplayRequestBudget) {
-  const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
+/**
+ * One committed revision for the whole response: during an eligible note-only
+ * write the access text comes from the committed view, never from the live file.
+ */
+async function readRosterAccess(projectRoot: string, committed?: CommittedDisplayView<RosterCommittedInputs>) {
+  if (!committed) return readAccessYaml(projectRoot);
+  const { raw, version } = committed.companion;
+  return { config: committedRosterConfig(committed.companion), raw, version };
+}
+
+async function buildAgentRoster(projectRoot: string, budget?: DisplayRequestBudget, committed?: CommittedDisplayView<RosterCommittedInputs>) {
+  const { config, raw, version } = await timeAsync("access", () => readRosterAccess(projectRoot, committed));
   const userIds = config.users.map((user) => user.id);
-  const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version, budget));
+  const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version, budget, committed));
   const timelineMap = await timeAsync("permissions", () => getAgentConfigTimelineMap(userIds));
   const agents = config.users.map((user) =>
     userToAgentWithBatchPermissions(
@@ -1342,9 +1454,9 @@ async function buildAgentRoster(projectRoot: string, budget?: DisplayRequestBudg
   };
 }
 
-async function buildAgentRosterSummary(projectRoot: string, budget?: DisplayRequestBudget) {
-  const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
-  const section = await timeAsync("permissions", () => agentPermissionSummarySection(projectRoot, config.users, raw, version, budget));
+async function buildAgentRosterSummary(projectRoot: string, budget?: DisplayRequestBudget, committed?: CommittedDisplayView<RosterCommittedInputs>) {
+  const { config, raw, version } = await timeAsync("access", () => readRosterAccess(projectRoot, committed));
+  const section = await timeAsync("permissions", () => agentPermissionSummarySection(projectRoot, config.users, raw, version, budget, committed));
   const timelines = await getAgentConfigTimelineMap(config.users.map((u) => u.id));
   const now = Date.now();
   const agents = config.users.map((user) => ({
@@ -1478,9 +1590,19 @@ export function registerAgentRoutes(app: FastifyInstance) {
       const budget = createDisplayRequestBudget();
       for (;;) {
         const accessGeneration = generationKey(["P", "C"]);
-        const listing = request.query.projection === "summary"
-          ? await buildAgentRosterSummary(projectRoot, budget) : await buildAgentRoster(projectRoot, budget);
-        if (generationKey(["P", "C"]) === accessGeneration && !hasPendingDisplayWrite(["P", "C"])) return listing;
+        // P1-75 — during a verified note-only write, bind the response to that ONE committed view.
+        const committed = activeCommittedView<RosterCommittedInputs>(AGENT_PERMISSIONS_SNAPSHOT) ?? undefined;
+        let listing;
+        try {
+          listing = request.query.projection === "summary"
+            ? await buildAgentRosterSummary(projectRoot, budget, committed) : await buildAgentRoster(projectRoot, budget, committed);
+        } catch (error) {
+          // The committed view stopped being valid mid-read: retry on the normal path.
+          if (committed && error instanceof DisplaySnapshotBusyError && budget.attemptsLeft > 0) continue;
+          throw error;
+        }
+        if (committed ? committedViewServeValid(committed)
+          : generationKey(["P", "C"]) === accessGeneration && !hasPendingDisplayWrite(["P", "C"])) return listing;
         if (budget.attemptsLeft <= 0) break;
       }
       throw new DisplaySnapshotBusyError("generation_changed");

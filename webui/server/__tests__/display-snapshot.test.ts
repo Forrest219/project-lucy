@@ -29,6 +29,9 @@ import {
   withDisplayWriteBarrier
 } from "../display-generation";
 import {
+  activeCommittedView,
+  captureCommittedDisplayView,
+  committedViewServeValid,
   createDisplayRequestBudget,
   displayCacheVerified,
   displaySnapshotDiagnostics,
@@ -41,7 +44,10 @@ import {
   resetDisplaySnapshotsForTests,
   startDisplayReconciler,
   stopDisplayReconciler,
-  MAX_CONCURRENT_DISPLAY_BUILDS
+  MAX_CONCURRENT_DISPLAY_BUILDS,
+  openCommittedViewServe,
+  runWithCommittedViewServe,
+  withdrawCommittedViewServe
 } from "../display-snapshot";
 import { invalidateContentPathsCache } from "../paths";
 
@@ -611,5 +617,167 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
     // No absolute path, file content or credential may appear in diagnostics.
     expect(JSON.stringify(diagnostics)).not.toContain(projectRoot);
     expect(JSON.stringify(diagnostics)).not.toContain("ktx.yaml");
+  });
+});
+
+describe("P1-75 committed view served during a single note-only write", () => {
+  const SCOPES = ["P", "C"] as const;
+  const quick = () => createDisplayRequestBudget(3, 30);
+  async function warm(payload = "old") {
+    await getDisplaySnapshot("roster", SCOPES, async () => payload, { extraKey: "v1" });
+    return captureCommittedDisplayView("roster", SCOPES, "v1", { raw: "old-raw", version: "v1" });
+  }
+
+  it("captures only a verified, current, complete committed slot", async () => {
+    expect(await captureCommittedDisplayView("roster", SCOPES, "v1", null)).toBeNull();
+    expect(await warm()).not.toBeNull();
+    expect(await captureCommittedDisplayView("roster", SCOPES, "other-version", null)).toBeNull();
+    const token = beginDisplayWrite(["P"]);
+    expect(await captureCommittedDisplayView("roster", SCOPES, "v1", null)).toBeNull();
+    endDisplayWrite(token);
+  });
+
+  it("serves the committed payload inside its own write barrier while the normal path stays busy", async () => {
+    const view = await warm("old");
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      expect(openCommittedViewServe(view!, token)).toBe(true);
+      expect(activeCommittedView("roster")).toBe(view);
+      const served = await getDisplaySnapshot("roster", SCOPES, async () => "live-mid-write", { extraKey: "v2", budget: quick(), committedView: view! });
+      expect(served.payload).toBe("old");
+      expect(served.cache).toBe("hit");
+      await expect(getDisplaySnapshot("roster", SCOPES, async () => "live", { extraKey: "v2", budget: quick() }))
+        .rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", reason: "write_pending" });
+    });
+    // The write ended: the view is gone and a stale companion is never built from.
+    expect(committedViewServeValid(view!)).toBe(false);
+    expect(activeCommittedView("roster")).toBeNull();
+    await expect(getDisplaySnapshot("roster", SCOPES, async () => "never", { extraKey: "v1", budget: quick(), committedView: view! }))
+      .rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", reason: "generation_changed" });
+  });
+
+  it("counts a served attempt against the shared request budget", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      const budget = createDisplayRequestBudget(2, 30);
+      await getDisplaySnapshot("roster", SCOPES, async () => "x", { budget, committedView: view! });
+      await getDisplaySnapshot("roster", SCOPES, async () => "x", { budget, committedView: view! });
+      expect(budget.attemptsLeft).toBe(0);
+      await expect(getDisplaySnapshot("roster", SCOPES, async () => "x", { budget, committedView: view! }))
+        .rejects.toMatchObject({ reason: "generation_changed" });
+    });
+  });
+
+  it("tolerates the write's own nested barriers but withdraws on any other generation movement", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      expect(openCommittedViewServe(view!, token)).toBe(true);
+      await runWithCommittedViewServe(view!, () => withDisplayWriteBarrier(["P"], async () => undefined));
+      expect(committedViewServeValid(view!)).toBe(true);
+      // A foreign writer (different async chain) begins: eligibility goes away synchronously.
+      const foreign = beginDisplayWrite(["P"]);
+      expect(committedViewServeValid(view!)).toBe(false);
+      expect(activeCommittedView("roster")).toBeNull();
+      endDisplayWrite(foreign);
+    });
+  });
+
+  it("withdraws on an external change to the scopes and on slot eviction", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      expect(committedViewServeValid(view!)).toBe(true);
+      const served = await getDisplaySnapshot("roster", SCOPES, async () => "x", { budget: quick(), committedView: view! });
+      expect(evictDisplaySnapshotSlot("roster", served.incarnation)).toBe(true);
+      expect(committedViewServeValid(view!)).toBe(false);
+    });
+  });
+
+  it("refuses to open when another generation moved between capture and the barrier", async () => {
+    const view = await warm();
+    const other = beginDisplayWrite(["C"]);
+    endDisplayWrite(other);
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      expect(openCommittedViewServe(view!, token)).toBe(false);
+      expect(activeCommittedView("roster")).toBeNull();
+    });
+  });
+
+  it("refuses a view whose barrier does not cover its scopes and an ended barrier", async () => {
+    const view = await warm();
+    const unrelated = beginDisplayWrite(["D"]);
+    expect(openCommittedViewServe(view!, unrelated)).toBe(false);
+    endDisplayWrite(unrelated);
+    const token = beginDisplayWrite(["P"]);
+    endDisplayWrite(token);
+    expect(openCommittedViewServe(view!, token)).toBe(false);
+  });
+
+  it("an explicit withdraw makes the readers fall back to the normal verified path", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      withdrawCommittedViewServe(view!);
+      withdrawCommittedViewServe("roster");
+      await expect(getDisplaySnapshot("roster", SCOPES, async () => "x", { budget: quick(), committedView: view! }))
+        .rejects.toMatchObject({ reason: "generation_changed" });
+    });
+  });
+
+  it("stops serving when the reconciler can no longer verify the scopes", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      stopDisplayReconciler();
+      expect(committedViewServeValid(view!)).toBe(false);
+    });
+  });
+
+  it("refuses and withdraws the view when the access recovery latch is closed, then serves normally once it clears", async () => {
+    const recovery = await import("../access-recovery");
+    const view = await warm("old");
+    try {
+      await withDisplayWriteBarrier(["P"], async (token) => {
+        expect(openCommittedViewServe(view!, token)).toBe(true);
+        expect(committedViewServeValid(view!)).toBe(true);
+        recovery.setInMemoryRecoveryRequiredSync({ reason: "test_latch" });
+        expect(committedViewServeValid(view!)).toBe(false);
+        expect(activeCommittedView("roster")).toBeNull();
+        await expect(getDisplaySnapshot("roster", SCOPES, async () => "x", { budget: quick(), committedView: view! }))
+          .rejects.toMatchObject({ reason: "generation_changed" });
+        // Clearing the latch does not resurrect a withdrawn view.
+        recovery.clearInMemoryRecoveryRequiredSync();
+        expect(committedViewServeValid(view!)).toBe(false);
+      });
+    } finally {
+      recovery.clearInMemoryRecoveryRequiredSync();
+    }
+    const after = await getDisplaySnapshot("roster", SCOPES, async () => "fresh", { extraKey: "v1" });
+    expect(["old", "fresh"]).toContain(after.payload);
+  });
+
+  it("bounded recovery: an unverifiable reconciler refuses, and the same process serves again once restored", async () => {
+    const view = await warm("old");
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      stopDisplayReconciler();
+      expect(committedViewServeValid(view!)).toBe(false);
+    });
+    const started = Date.now();
+    await expect(getDisplaySnapshot("roster", SCOPES, async () => "x", { extraKey: "v1", budget: quick() }))
+      .rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", reason: "reconcile_failed" });
+    expect(Date.now() - started).toBeLessThan(DISPLAY_RECOVERY_WAIT_BUDGET_MS + 1500);
+    await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
+    const recovered = await getDisplaySnapshot("roster", SCOPES, async () => "recovered", { extraKey: "v1" });
+    expect(["old", "recovered"]).toContain(recovered.payload);
+  });
+
+  it("rejects a view requested under another snapshot name or scope set", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      await expect(getDisplaySnapshot("other", SCOPES, async () => "x", { budget: quick(), committedView: view! })).rejects.toMatchObject({ reason: "generation_changed" });
+      await expect(getDisplaySnapshot("roster", ["P"], async () => "x", { budget: quick(), committedView: view! })).rejects.toMatchObject({ reason: "generation_changed" });
+    });
   });
 });

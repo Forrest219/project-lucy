@@ -2173,17 +2173,30 @@ export async function loadSourceMapSnapshot(options: { fresh?: boolean } = {}): 
   return loadSourceMap(options);
 }
 
-export async function lucyCatalog(identity: Identity): Promise<{
+export interface LucyCatalogOptions {
+  /**
+   * P1-75 §2.2 — 默认 true。握手只消费四元组与示例，不消费描述／grain，
+   * 传 false 则不扫描 Manifest／Overlay（描述全部 missing）。独立 `lucy_catalog` 不传此项。
+   */
+  enrichDescriptions?: boolean;
+  /** P1-75 §2.2 — 取消信号：在各异步阶段之间检查，已取消则抛出 AbortError。 */
+  signal?: AbortSignal;
+}
+
+export async function lucyCatalog(identity: Identity, options: LucyCatalogOptions = {}): Promise<{
   connections: string[];
   sources: CatalogSourceEntry[];
   examples: string[];
 }> {
+  const signal = options.signal;
   // Spec 98 §8.2 / §8.5 — committed policy only; under global degrade Meta catalog is empty.
   const runtime = await ensurePolicyRuntime();
+  signal?.throwIfAborted();
   if (runtime.degradedGlobal) {
     return { connections: [], sources: [], examples: [] };
   }
   const resolved = await effectivePermissions(identity);
+  signal?.throwIfAborted();
   if (!resolved.ok) {
     return { connections: [], sources: [], examples: [] };
   }
@@ -2191,6 +2204,7 @@ export async function lucyCatalog(identity: Identity): Promise<{
   const opsEvidenceHidden = resolved.permissions.connections.some((id) => isOpsEvidenceConnection(id))
     ? (await opsEvidenceReadinessDenial()) !== undefined
     : false;
+  signal?.throwIfAborted();
   const connections = opsEvidenceHidden
     ? resolved.permissions.connections.filter((id) => !isOpsEvidenceConnection(id))
     : resolved.permissions.connections;
@@ -2210,20 +2224,22 @@ export async function lucyCatalog(identity: Identity): Promise<{
     description: null,
     descriptionState: "missing" as const
   }));
-  try {
-    const paths = await loadContentPaths();
-    // D4a：索引扫盘范围 ⊆ 最终可见连接。legacy allow.tables 可能 connections=[]
-    // 但仍有 sources——此时以 finalSources 的 connectionId 为准，避免空 scope 漏装描述。
-    const connectionScope = uniqueSorted([
-      ...connections,
-      ...finalSources.map((source) => source.connectionId)
-    ]);
-    sources = await enrichCatalogSources(finalSources, {
-      semanticLayerRoot: paths.semanticLayer,
-      connectionScope
-    });
-  } catch {
-    // 整根装载失败：目录本体仍返回，描述全部 missing（SC-09）
+  if (options.enrichDescriptions !== false) {
+    try {
+      const paths = await loadContentPaths();
+      // D4a：索引扫盘范围 ⊆ 最终可见连接。legacy allow.tables 可能 connections=[]
+      // 但仍有 sources——此时以 finalSources 的 connectionId 为准，避免空 scope 漏装描述。
+      const connectionScope = uniqueSorted([
+        ...connections,
+        ...finalSources.map((source) => source.connectionId)
+      ]);
+      sources = await enrichCatalogSources(finalSources, {
+        semanticLayerRoot: paths.semanticLayer,
+        connectionScope
+      });
+    } catch {
+      // 整根装载失败：目录本体仍返回，描述全部 missing（SC-09）
+    }
   }
 
   const hasPocAdRevenue = sources.some((source) => source.connectionId === "poc-mysql-aliyun" && source.sourceName === "poc_ad_revenue_daily");
@@ -2245,6 +2261,7 @@ export async function lucyCatalog(identity: Identity): Promise<{
   // REQ-030-012 / SC-21 — examples／initialize 同源裁剪未暴露列名。
   const { rewriteCatalogExamplesForExposure } = await import("./field-exposure-discovery.js");
   const examples = await rewriteCatalogExamplesForExposure(rawExamples);
+  signal?.throwIfAborted();
 
   return {
     connections,

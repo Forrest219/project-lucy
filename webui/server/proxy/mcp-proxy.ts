@@ -7,6 +7,7 @@ import path from "node:path";
 import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
 import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
 import {
+  AUTHORIZATION_REVOKED_DETAIL,
   AuthorizationRevokedError,
   beginGuardedRequest,
   currentAuthorizationSequence,
@@ -2106,47 +2107,342 @@ export function formatVisibleScopeSourceLine(source: {
   return `- ${source.connectionId}.${source.schema}.${source.sourceName} -> ${source.table}`;
 }
 
-async function buildRoleAwareInstructions(identity: Identity, sessionId?: string | null): Promise<string | undefined> {
-  // P1-37 U1 取证：握手阶段计时（P1-36 的 instructions_build 及其下 catalog_resolve / skills_load）。
-  const buildSpan = currentTrace()?.start("instructions_build");
-  try {
-    const text = await buildRoleAwareInstructionsUntimed(identity, buildSpan, sessionId);
-    buildSpan?.end({ status: "ok", reasonCode: "allowed", attrs: { cache_hit: false, bytes: text ? Buffer.byteLength(text) : 0 } });
-    return text;
-  } catch (err) {
-    buildSpan?.end({ status: "error", reasonCode: "upstream_error" });
-    throw err;
-  }
+// ─── P1-75 §2.2：握手指引决策（1 秒截止／容量 20／基础指引降级）──────────────
+
+/** 动态指引决策截止：自 Lucy 接受该 `initialize`（ingress，单调时钟）起算。 */
+export const INSTRUCTIONS_DYNAMIC_DEADLINE_MS = 1000;
+/** 每实例同时运行的动态指引工作上限；无等待队列，满则直接走基础指引。 */
+export const INSTRUCTIONS_WORK_MAX_CONCURRENT = 20;
+
+/** 仅供单测：缩短截止／容量，或在工作内部注入慢点（可忽略取消，用于验证「真实终结才释放」）。 */
+export const instructionsDecisionTestHooks: {
+  deadlineMs?: number;
+  capacity?: number;
+  beforeBuild?: (signal: AbortSignal) => Promise<void>;
+  /** 构建完成后、复核授权代次前触发：用于模拟「构建期间授权／输入已变」。 */
+  afterBuild?: () => Promise<void>;
+  /** 可见性／口径策略读取（`resolveInstructionsVisibility`）入口：用于模拟策略读取变慢或卡死；基础指引路径不得触达。 */
+  policyReads?: () => Promise<void>;
+} = {};
+
+let instructionsWorkActive = 0;
+
+/** 当前占用中的动态指引工作数（只读；供测试与取证）。 */
+export function instructionsWorkActiveCount(): number {
+  return instructionsWorkActive;
 }
 
-async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: SpanHandle | undefined, sessionId?: string | null): Promise<string | undefined> {
+type InstructionsFallbackReason = "deadline" | "capacity_full" | "build_failed" | "stale_proof" | "protocol_fallback";
+
+type InstructionsDecision =
+  | { kind: "full"; text: string }
+  | { kind: "basic"; text: string; reason: InstructionsFallbackReason }
+  | { kind: "disconnected" }
+  | { kind: "revoked" };
+
+type InstructionsWork = { signal: AbortSignal; openSpans: SpanHandle[] };
+
+function throwIfInstructionsWorkAborted(work: InstructionsWork | undefined): void {
+  work?.signal.throwIfAborted();
+}
+
+async function resolveInstructionsVisibility(
+  identity: Identity,
+  sessionId: string | null | undefined
+): Promise<{ hideBegin: boolean; visibleTools: Set<string> }> {
+  await instructionsDecisionTestHooks.policyReads?.();
   const hideBegin = await shouldHideBeginQuestion(identity, sessionId);
+  const visibleTools = new Set(await allowedToolNames(identity));
+  // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
+  if (hideBegin) visibleTools.delete("lucy_begin_question");
+  // P1-74 / D7：计费问数身份必须可达逃生工具（不新增数据权限）。
+  if (budgetEscapeToolReachable(visibleTools)) visibleTools.add("lucy_continue_question");
+  return { hideBegin, visibleTools };
+}
+
+function questionReportingLinesFor(visibleTools: ReadonlySet<string>): string[] {
+  return visibleTools.has("lucy_begin_question")
+    ? [
+        "- Recommended: at the start of each new user business question, call `lucy_begin_question` once. Prefer the user's original wording in `question` when available; always provide `intentSummary`. Skipping begin does not bypass the source ambiguity gate when a query asserts a source. Do not call it for protocol checks or tool discovery only.",
+        ""
+      ]
+    : [];
+}
+
+// P1-74 / D5：与 md「问询预算」同一处置口径 —— 预算终止不是权限拒绝；
+// 按 continuable／next_step 分支：续查多档（无 begin 时默认至多 5 档），
+// 硬停后按 next_step 重试。inactive 模式不得点名 begin（P1-60 工具隐藏合同）。
+function budgetExhaustedLineFor(visibleTools: ReadonlySet<string>, hideBegin: boolean): string {
+  if (!visibleTools.has("lucy_continue_question")) {
+    return "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial; deliver the verified partial results, state the gaps, and do not retry.";
+  }
+  return hideBegin
+    ? "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, call `lucy_continue_question` with `mode=new_question` and the `continueToken` to reopen the budget for a new question on the same token, then retry the data tool. Deliver verified partial results only when no such path is available."
+    : "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, follow the structured `next_step`: `lucy_begin_question` starts a new question where begin is available; `lucy_continue_question` with `mode=new_question` and the `continueToken` reopens the budget with the same token where begin is not available, then retry the data tool. Deliver verified partial results only when no such path is available.";
+}
+
+/**
+ * P1-77 C1–C4／C6：默认主动采用业务上下文的静态规则（事实源 `data-qa-instructions.md`「业务上下文默认采用」一节的代码镜像）。
+ * 纯静态文本：握手内不做任何 Wiki／Skill 检索或正文读取。`[C1a]` 等行首标记用于 SC-08 的实际注入断言与归因。
+ */
+export const CONTEXT_ADOPTION_RULE_LINES: readonly string[] = [
+  "## Business Context Adoption",
+  "",
+  "- [C1a] Governed definitions first: before answering, check whether the visible sources already supply the applicable definition (measure / dimension descriptions, an active Question Type Binding / caliber binding). If so, query directly with that governed definition and disclose where it came from; do not force a Wiki search.",
+  "- [C1b] Supplement only when missing: only for a business definition the authorized sources do not cover, call `wiki_search` then `wiki_read` (where visible). When several definitions conflict, check their scope / version or ask the user; never take the first hit.",
+  "- [C1c] No channel, no downgrade: if there is no Wiki channel or no hit, questions answerable from governed definitions are still delivered as usual; only a required business definition that is truly missing makes that sub-conclusion unavailable (see [C3]).",
+  "- [C2] Procedures: when the question needs a governed procedure, read it directly if the authorized target is already known; otherwise confirm the target with the visible Skill search tool (`lucy_skill_search`) and then read the body (`lucy_skill_read`). Follow the procedure; threshold actions and dispatching are suggestions only; perform zero write operations.",
+  "- [C3] Honest fallback: a lookup or read failure must never fail the whole question. Distinguish four states: not found / not permitted / read failed / definition conflict. Mark only the affected sub-conclusion `unavailable` and state the impact, deliver the other sub-conclusions normally, and never invent a definition or a procedure conclusion.",
+  "- [C4] Main path protection: pure semantic fact questions keep the shortest path (catalog -> source -> `lucy_query` -> answer) with no mandatory context lookup; governed definitions ([C1a]) go straight through and are never blocked by these steps.",
+  "- [C6] Per-question limits: for the same business dependency in one question, make at most one lookup and one body read (a Resource / Prompt read counts as the same read) and reuse a body already obtained and still authorized. At the limit or on an explicit tool timeout, stop extra calls for that dependency, deliver the verified results per [C3], and keep the other dependencies moving. The proxy data-tool budget still applies.",
+  ""
+];
+
+/**
+ * 静态核心问数规则：完整指引与基础指引**共用同一份**（事实源 `data-qa-instructions.md` 的同口径代码镜像）。
+ * 只含规则行，不含任何角色化连接／Source／Skill 名单。
+ */
+export function staticCoreRuleLines(options: {
+  catalogTool: string;
+  questionReportingLines: string[];
+  budgetExhaustedLine: string;
+}): string[] {
+  const { catalogTool, questionReportingLines, budgetExhaustedLine } = options;
+  return [
+    "- Use the Lucy MCP Proxy tool surface only; do not invent data when a data tool fails.",
+    `- Call ${catalogTool} before choosing a connection or source unless the route is already explicit in the user request.`,
+    "- Only use connections and sources listed in this session's visible scope.",
+    "- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.",
+    "- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.",
+    "- A successful `lucy_query` that returns zero fact rows carries a structured `next_step` inside the result JSON (and in `_meta.lucy.next_step`). Read it before retrying: it names the source, the filters you used, and the controlled next calls (`lucy_read_source`, `lucy_freshness`) to verify grain, period and filters. Do not substitute an approximation for the empty result.",
+    ...ANSWER_VERIFIABILITY_INSTRUCTION_LINES,
+    ...CONTEXT_ADOPTION_RULE_LINES,
+    ...questionReportingLines,
+    // D13：与 md 事实源同一 ASK_FIRST 片段（有可见 catalog 时也必须出现）
+    ASK_FIRST_SECTION.trimEnd(),
+    "",
+    "- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.",
+    "- For multi-metric, multi-period, or multi-scenario questions, build an answerability dependency matrix before querying: numerator, denominator, period/grain, batch/version, actual/forecast/budget scenario, source/measure, and governed business definition. Mark a subquestion unavailable when a required dependency is missing; do not substitute an approximation.",
+    "- Budget requires an independent budget measure, source, or governed formula. Never substitute forecast, target, or prior actual for budget. If budget evidence is missing, deliver the answerable parts and state that budget variance is currently unavailable.",
+    "- Calculate and label actual, forecast, and budget separately. Any cross-scenario composition must be labeled hybrid with the covered periods for each component; do not assume the current quarter is complete actual without evidence.",
+    "- revenue/quantity or revenue/bandwidth is realized unit price and includes mix effects. Do not claim pure price, volume, or mix contribution without a governed decomposition formula and the required grain.",
+    "- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.",
+    "- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.",
+    "- Fingerprint failures by tool, source, normalized reason, and relevant argument shape. Retry the same fingerprint at most once and only with an information-gaining correction; cycling among eq, =, and in is not a correction.",
+    // Spec lucy-20261111 SC-T4：数字取自代理实际执行的预算常量，避免与 md／运行时分叉。
+    `- Per question, use at most ${QUESTION_BUDGET_MAX_CALLS} data-tool calls or ${QUESTION_BUDGET_MAX_BUSY_MS / 1000} seconds of settled data-processing time (thinking time excluded), whichever comes first. Repeat the same input at most once, do not re-read a successful source, and retry only transient errors once. Protocol methods (question declaration and continuation) do not count toward this budget.`,
+    budgetExhaustedLine,
+    "- Partial evidence still requires a final response. Give each subquestion an ok, no_data, unavailable, or partial status, plus period, batch/version, scenario, failure impact, and provenance.",
+    "- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.",
+    "- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.",
+    "- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.",
+    "- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.",
+    "- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.",
+    "- Some clients may serialize the whole `filters` value as JSON text; Lucy strictly restores that compatibility shape. Do not generate it deliberately. `orderBy` is accepted only as an alias for canonical `order_by`; conflicting aliases fail closed.",
+    "- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so."
+  ];
+}
+
+/** 基础指引的工具发现方法：只讲方法，不列任何连接／Source／Skill 名称。 */
+export const BASIC_INSTRUCTIONS_DISCOVERY_LINES: readonly string[] = [
+  "## Tool Discovery",
+  "",
+  "- This handshake carries no connection, source or skill lists. Discover what you may use through the tools actually listed by `tools/list`.",
+  "- Use the catalog tool listed there (`lucy_catalog` where visible) to see the connections and sources you may query, and `lucy_read_source` to inspect a source's grain, fields and measures before querying.",
+  "- Where `lucy_skill_search` / `lucy_skill_read` are listed, search and read governed domain SOPs on demand for the business domain of the question; where `wiki_search` / `wiki_read` are listed, use them for business definitions.",
+  "- Authorization can change at any time. Re-run discovery instead of relying on remembered connection, source or tool names."
+];
+
+/**
+ * 进程内基础指引：核心问数规则 ＋ 工具发现方法，无角色化名单。
+ * Spec「进程预装载」：与身份／会话无关，不做任何策略／口径读取（那些读取不受截止约束，
+ * 会拖住降级响应并绕过容量上限）。保守默认：不点名 begin，保留 continue 逃生
+ * （P1-74 D7，不可达时模型只会交付部分结果）。首次调用同步构建一次并驻留进程；
+ * 握手路径在模块加载后即预热，降级时只是同步取值。
+ */
+let prebuiltBasicInstructions: string | undefined;
+export function buildBasicInstructions(): string {
+  prebuiltBasicInstructions ??= [
+    "# Lucy Data QA Runtime Instructions",
+    "",
+    ...staticCoreRuleLines({
+      catalogTool: "the catalog tool listed in `tools/list` (`lucy_catalog` where visible)",
+      questionReportingLines: questionReportingLinesFor(new Set(["lucy_continue_question"])),
+      budgetExhaustedLine: budgetExhaustedLineFor(new Set(["lucy_continue_question"]), true)
+    }),
+    "",
+    ...BASIC_INSTRUCTIONS_DISCOVERY_LINES
+  ].join("\n");
+  return prebuiltBasicInstructions;
+}
+
+/** 授权／输入代次证明：构建前后一致才可下发完整指引。取不到证明＝不可信（返回 null）。 */
+async function instructionsProof(identity: Identity): Promise<string | null> {
+  const resolved = await effectivePermissions(identity);
+  if (!resolved.ok) return null;
+  return `${getPolicyRuntimeStatus().policyVersion}|${resolved.permissions.snapshotHash}|${resolved.permissions.sourceMapVersion}`;
+}
+
+type InstructionsWorkResult = { text: string | undefined; current: boolean };
+
+async function runDynamicInstructionsWork(
+  identity: Identity,
+  sessionId: string | null | undefined,
+  buildSpan: SpanHandle | undefined,
+  work: InstructionsWork
+): Promise<InstructionsWorkResult> {
+  await instructionsDecisionTestHooks.beforeBuild?.(work.signal);
+  throwIfInstructionsWorkAborted(work);
+  const before = await instructionsProof(identity);
+  throwIfInstructionsWorkAborted(work);
+  const text = await buildRoleAwareInstructionsUntimed(identity, buildSpan, sessionId, work);
+  throwIfInstructionsWorkAborted(work);
+  await instructionsDecisionTestHooks.afterBuild?.();
+  const after = await instructionsProof(identity);
+  return { text, current: before !== null && before === after };
+}
+
+type InstructionsRaceOutcome =
+  | { t: "done"; value: InstructionsWorkResult }
+  | { t: "failed" }
+  | { t: "deadline" }
+  | { t: "disconnect" };
+
+function awaitInstructionsWork(
+  workPromise: Promise<InstructionsWorkResult>,
+  remainingMs: number,
+  clientSignal: AbortSignal
+): Promise<InstructionsRaceOutcome> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ t: "deadline" }), Math.max(0, remainingMs));
+    const onAbort = () => resolve({ t: "disconnect" });
+    clientSignal.addEventListener("abort", onAbort, { once: true });
+    const settle = (outcome: InstructionsRaceOutcome) => {
+      clearTimeout(timer);
+      clientSignal.removeEventListener("abort", onAbort);
+      resolve(outcome);
+    };
+    workPromise.then((value) => settle({ t: "done", value }), () => settle({ t: "failed" }));
+  });
+}
+
+const FALLBACK_REASON_CODE: Record<InstructionsFallbackReason, "timeout" | "execution_unavailable" | "internal_error" | "upstream_error"> = {
+  deadline: "timeout",
+  capacity_full: "execution_unavailable",
+  build_failed: "internal_error",
+  stale_proof: "internal_error",
+  protocol_fallback: "upstream_error"
+};
+
+/**
+ * 握手指引决策。成功响应前只会得到四种结局之一；完整或基础指引至多下发一次。
+ * 迟到工作只做结算：它拿不到响应，也不写入任何跨请求缓存，因此无法发布旧指引。
+ */
+async function decideInitializeInstructions(
+  identity: Identity,
+  sessionId: string | null | undefined,
+  ctx: { ingressMonoMs: number; clientSignal: AbortSignal; protocolFallback?: boolean }
+): Promise<InstructionsDecision> {
+  const buildSpan = currentTrace()?.start("instructions_build");
+  const openSpans: SpanHandle[] = [];
+  const closeOpenChildren = (reasonCode: "timeout" | "cancelled") => {
+    for (const span of openSpans) span.end({ status: "error", reasonCode });
+  };
+  const deadlineMonoMs = ctx.ingressMonoMs + (instructionsDecisionTestHooks.deadlineMs ?? INSTRUCTIONS_DYNAMIC_DEADLINE_MS);
+  const barrier = currentBarrierHandle();
+
+  const conclude = (decision: InstructionsDecision): InstructionsDecision => {
+    let final = decision;
+    if (final.kind === "full" || final.kind === "basic") {
+      // 发送前重验：撤权不出旧指引；客户端已断开不写响应。
+      if (barrier && !barrier.isCurrent()) final = { kind: "revoked" };
+      else if (ctx.clientSignal.aborted) final = { kind: "disconnected" };
+    }
+    if (final.kind === "full") {
+      buildSpan?.end({ status: "ok", reasonCode: "allowed", attrs: { cache_hit: false, decision: "full", bytes: Buffer.byteLength(final.text) } });
+    } else if (final.kind === "basic") {
+      buildSpan?.end({
+        status: "error", reasonCode: FALLBACK_REASON_CODE[final.reason],
+        attrs: { decision: "basic", fallback_reason: final.reason, bytes: Buffer.byteLength(final.text) }
+      });
+    } else {
+      buildSpan?.end({ status: "error", reasonCode: final.kind === "revoked" ? "acl_denied" : "cancelled" });
+    }
+    return final;
+  };
+  const basic = (reason: InstructionsFallbackReason): InstructionsDecision => (
+    conclude({ kind: "basic", text: buildBasicInstructions(), reason })
+  );
+
+  if (ctx.clientSignal.aborted) return conclude({ kind: "disconnected" });
+  // 既有本地协议回退（上游握手不可用）走同一决策：不起动态工作，直接基础指引。
+  if (ctx.protocolFallback) return basic("protocol_fallback");
+  const remainingMs = deadlineMonoMs - questionBudget.monoNow();
+  if (remainingMs <= 0) return basic("deadline");
+  if (instructionsWorkActive >= (instructionsDecisionTestHooks.capacity ?? INSTRUCTIONS_WORK_MAX_CONCURRENT)) {
+    return basic("capacity_full");
+  }
+
+  // 容量只在工作**真实终结**时释放（含取消后仍在跑的底层读取）。
+  instructionsWorkActive += 1;
+  const controller = new AbortController();
+  const workPromise = runDynamicInstructionsWork(identity, sessionId, buildSpan, { signal: controller.signal, openSpans })
+    .finally(() => { instructionsWorkActive -= 1; });
+  workPromise.catch(() => undefined);
+
+  const outcome = await awaitInstructionsWork(workPromise, remainingMs, ctx.clientSignal);
+  if (outcome.t === "disconnect") {
+    controller.abort();
+    closeOpenChildren("cancelled");
+    return conclude({ kind: "disconnected" });
+  }
+  if (outcome.t === "deadline" || questionBudget.monoNow() > deadlineMonoMs) {
+    controller.abort();
+    closeOpenChildren("timeout");
+    return basic("deadline");
+  }
+  if (outcome.t === "failed" || !outcome.value.text) return basic("build_failed");
+  if (!outcome.value.current) return basic("stale_proof");
+  return conclude({ kind: "full", text: outcome.value.text });
+}
+
+async function buildRoleAwareInstructionsUntimed(
+  identity: Identity,
+  buildSpan: SpanHandle | undefined,
+  sessionId?: string | null,
+  work?: InstructionsWork
+): Promise<string | undefined> {
+  const hideBegin = await shouldHideBeginQuestion(identity, sessionId);
+  throwIfInstructionsWorkAborted(work);
   const rawFallback = await loadDataQaInstructions();
+  throwIfInstructionsWorkAborted(work);
   const fallback = hideBegin && rawFallback
     ? rawFallback.replace(/## 可选问询上报[^\n]*\n[\s\S]*?(?=\n## |$)/u, "")
       .replaceAll("lucy_begin_question", "问询声明")
     : rawFallback;
   try {
     const catalogSpan = currentTrace()?.start("catalog_resolve", buildSpan);
-    const catalog = await lucyCatalog(identity);
+    if (catalogSpan) work?.openSpans.push(catalogSpan);
+    // §2.2：握手只消费四元组与示例；描述／grain 增强移出应答路径（独立 lucy_catalog 仍走完整合同）。
+    const catalog = await lucyCatalog(identity, { enrichDescriptions: false, signal: work?.signal });
     catalogSpan?.end({ status: "ok", reasonCode: "allowed" });
     let accessibleSkills: Awaited<ReturnType<typeof filterAccessibleSkills>> = [];
     const skillsSpan = currentTrace()?.start("skills_load", buildSpan);
+    if (skillsSpan) work?.openSpans.push(skillsSpan);
     try {
       const allSkills = await loadAllSkillsFresh();
+      throwIfInstructionsWorkAborted(work);
       accessibleSkills = await filterAccessibleSkills(identity, allSkills, "discover");
       skillsSpan?.end({ status: "ok", reasonCode: "allowed", attrs: { skill_count: allSkills.length, cache_hit: false } });
     } catch {
       // Best-effort loading of skills for instructions
       skillsSpan?.end({ status: "error", reasonCode: "upstream_error" });
     }
+    throwIfInstructionsWorkAborted(work);
 
     if (catalog.connections.length === 0 && catalog.sources.length === 0 && accessibleSkills.length === 0) return fallback;
-    const visibleTools = new Set(await allowedToolNames(identity));
-    // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
-    if (hideBegin) visibleTools.delete("lucy_begin_question");
-    // P1-74 / D7：计费问数身份必须可达逃生工具（不新增数据权限）。
-    if (budgetEscapeToolReachable(visibleTools)) visibleTools.add("lucy_continue_question");
+    const { visibleTools } = await resolveInstructionsVisibility(identity, sessionId);
+    throwIfInstructionsWorkAborted(work);
     const catalogTool = visibleTools.has("lucy_catalog")
       ? "`lucy_catalog`"
       : visibleTools.has("kx_catalog")
@@ -2166,53 +2462,14 @@ async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: 
           ...skillLines
         ]
       : [];
-    const questionReportingLines = visibleTools.has("lucy_begin_question")
-      ? [
-          "- Recommended: at the start of each new user business question, call `lucy_begin_question` once. Prefer the user's original wording in `question` when available; always provide `intentSummary`. Skipping begin does not bypass the source ambiguity gate when a query asserts a source. Do not call it for protocol checks or tool discovery only.",
-          ""
-        ]
-      : [];
-    // P1-74 / D5：与 md「问询预算」同一处置口径 —— 预算终止不是权限拒绝；
-    // 按 continuable／next_step 分支：续查多档（无 begin 时默认至多 5 档），
-    // 硬停后按 next_step 重试。inactive 模式不得点名 begin（P1-60 工具隐藏合同）。
-    const budgetExhaustedLine = visibleTools.has("lucy_continue_question")
-      ? (hideBegin
-          ? "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, call `lucy_continue_question` with `mode=new_question` and the `continueToken` to reopen the budget for a new question on the same token, then retry the data tool. Deliver verified partial results only when no such path is available."
-          : "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, follow the structured `next_step`: `lucy_begin_question` starts a new question where begin is available; `lucy_continue_question` with `mode=new_question` and the `continueToken` reopens the budget with the same token where begin is not available, then retry the data tool. Deliver verified partial results only when no such path is available.")
-      : "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial; deliver the verified partial results, state the gaps, and do not retry.";
     return [
       "# Lucy Data QA Runtime Instructions",
       "",
-      "- Use the Lucy MCP Proxy tool surface only; do not invent data when a data tool fails.",
-      `- Call ${catalogTool} before choosing a connection or source unless the route is already explicit in the user request.`,
-      "- Only use connections and sources listed in this session's visible scope.",
-      "- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.",
-      "- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.",
-      "- A successful `lucy_query` that returns zero fact rows carries a structured `next_step` inside the result JSON (and in `_meta.lucy.next_step`). Read it before retrying: it names the source, the filters you used, and the controlled next calls (`lucy_read_source`, `lucy_freshness`) to verify grain, period and filters. Do not substitute an approximation for the empty result.",
-      ...ANSWER_VERIFIABILITY_INSTRUCTION_LINES,
-      ...questionReportingLines,
-      // D13：与 md 事实源同一 ASK_FIRST 片段（有可见 catalog 时也必须出现）
-      ASK_FIRST_SECTION.trimEnd(),
-      "",
-      "- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.",
-      "- For multi-metric, multi-period, or multi-scenario questions, build an answerability dependency matrix before querying: numerator, denominator, period/grain, batch/version, actual/forecast/budget scenario, source/measure, and governed business definition. Mark a subquestion unavailable when a required dependency is missing; do not substitute an approximation.",
-      "- Budget requires an independent budget measure, source, or governed formula. Never substitute forecast, target, or prior actual for budget. If budget evidence is missing, deliver the answerable parts and state that budget variance is currently unavailable.",
-      "- Calculate and label actual, forecast, and budget separately. Any cross-scenario composition must be labeled hybrid with the covered periods for each component; do not assume the current quarter is complete actual without evidence.",
-      "- revenue/quantity or revenue/bandwidth is realized unit price and includes mix effects. Do not claim pure price, volume, or mix contribution without a governed decomposition formula and the required grain.",
-      "- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.",
-      "- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.",
-      "- Fingerprint failures by tool, source, normalized reason, and relevant argument shape. Retry the same fingerprint at most once and only with an information-gaining correction; cycling among eq, =, and in is not a correction.",
-      // Spec lucy-20261111 SC-T4：数字取自代理实际执行的预算常量，避免与 md／运行时分叉。
-      `- Per question, use at most ${QUESTION_BUDGET_MAX_CALLS} data-tool calls or ${QUESTION_BUDGET_MAX_BUSY_MS / 1000} seconds of settled data-processing time (thinking time excluded), whichever comes first. Repeat the same input at most once, do not re-read a successful source, and retry only transient errors once. Protocol methods (question declaration and continuation) do not count toward this budget.`,
-      budgetExhaustedLine,
-      "- Partial evidence still requires a final response. Give each subquestion an ok, no_data, unavailable, or partial status, plus period, batch/version, scenario, failure impact, and provenance.",
-      "- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.",
-      "- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.",
-      "- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.",
-      "- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.",
-      "- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.",
-      "- Some clients may serialize the whole `filters` value as JSON text; Lucy strictly restores that compatibility shape. Do not generate it deliberately. `orderBy` is accepted only as an alias for canonical `order_by`; conflicting aliases fail closed.",
-      "- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.",
+      ...staticCoreRuleLines({
+        catalogTool,
+        questionReportingLines: questionReportingLinesFor(visibleTools),
+        budgetExhaustedLine: budgetExhaustedLineFor(visibleTools, hideBegin)
+      }),
       `- Visible Scope below is captured at MCP initialize; call ${catalogTool} before routing if sources may have changed since this session started.`,
       ...skillSection,
       "",
@@ -2227,7 +2484,9 @@ async function buildRoleAwareInstructionsUntimed(identity: Identity, buildSpan: 
       "",
       ...(exampleLines.length > 0 ? exampleLines : ["- Use the visible catalog and `lucy_read_source` to inspect the source before querying."])
     ].join("\n");
-  } catch {
+  } catch (err) {
+    // 已取消的工作不得悄悄回落成 md 文本再被当作成功结果。
+    if (work?.signal.aborted) throw err;
     return fallback;
   }
 }
@@ -4338,20 +4597,18 @@ function rememberToolsListNames(identity: Identity, servedBody: string): void {
 
 // Rewrites the upstream `initialize` response so `result.instructions` is the
 // proxy's data-QA guidance text. On ANY failure (parse error, missing result,
-// unsupported content-type, instructions text not loaded) we pass the original
+// unsupported content-type) we pass the original
 // upstream body through unchanged. This is deliberately fail-open: a buggy
 // rewriter must not block MCP session establishment for every client.
 async function writeInitializeResponse(
-  identity: Identity,
   upstream: IncomingMessage,
   upstreamBody: string,
   res: ServerResponse,
   requestId: string | number,
-  sessionId?: string | null
+  instructions: string
 ): Promise<{ injectionFailed: boolean; errorDetail?: string; responseBytes: number }> {
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
-  const instructions = await buildRoleAwareInstructions(identity, sessionId);
   const isSse = contentType.includes("text/event-stream");
 
   let body = originalBody;
@@ -4359,35 +4616,30 @@ async function writeInitializeResponse(
   let errorDetail: string | undefined;
   let forceJson = false;
 
-  if (!instructions) {
-    injectionFailed = true;
-    errorDetail = "instructions_text_unavailable";
-  } else {
-    try {
-      if (isSse) {
-        const payload = decodeSseMessage(originalBody, requestId);
-        if (!payload) throw new Error("missing SSE data frame");
-        const record = payload as Record<string, unknown>;
-        const result = record.result as Record<string, unknown> | undefined;
-        if (!result || typeof result !== "object") throw new Error("missing result object");
-        const rewritten = ensureJsonRpcEnvelope({ ...record, result: { ...result, instructions } }, requestId);
-        body = JSON.stringify(rewritten);
-        forceJson = true;
-      } else if (contentType.includes("application/json")) {
-        const parsed = JSON.parse(originalBody) as Record<string, unknown>;
-        const result = parsed.result as Record<string, unknown> | undefined;
-        if (!result || typeof result !== "object") throw new Error("missing result object");
-        const rewritten = ensureJsonRpcEnvelope({ ...parsed, result: { ...result, instructions } }, requestId);
-        body = JSON.stringify(rewritten);
-        forceJson = true;
-      } else {
-        throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
-      }
-    } catch (err) {
-      injectionFailed = true;
-      errorDetail = `instructions_injection_failed:${err instanceof Error ? err.message : String(err)}`;
-      body = originalBody;
+  try {
+    if (isSse) {
+      const payload = decodeSseMessage(originalBody, requestId);
+      if (!payload) throw new Error("missing SSE data frame");
+      const record = payload as Record<string, unknown>;
+      const result = record.result as Record<string, unknown> | undefined;
+      if (!result || typeof result !== "object") throw new Error("missing result object");
+      const rewritten = ensureJsonRpcEnvelope({ ...record, result: { ...result, instructions } }, requestId);
+      body = JSON.stringify(rewritten);
+      forceJson = true;
+    } else if (contentType.includes("application/json")) {
+      const parsed = JSON.parse(originalBody) as Record<string, unknown>;
+      const result = parsed.result as Record<string, unknown> | undefined;
+      if (!result || typeof result !== "object") throw new Error("missing result object");
+      const rewritten = ensureJsonRpcEnvelope({ ...parsed, result: { ...result, instructions } }, requestId);
+      body = JSON.stringify(rewritten);
+      forceJson = true;
+    } else {
+      throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
     }
+  } catch (err) {
+    injectionFailed = true;
+    errorDetail = `instructions_injection_failed:${err instanceof Error ? err.message : String(err)}`;
+    body = originalBody;
   }
 
   const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
@@ -4396,6 +4648,24 @@ async function writeInitializeResponse(
   res.writeHead(upstream.statusCode ?? 200, headers);
   res.end(body);
   return { injectionFailed, errorDetail, responseBytes };
+}
+
+/**
+ * P1-75 §2.2：握手无成功应答的两种结局。
+ * - 客户端已断开：不写任何响应，只结算取消。
+ * - 授权已撤：沿用授权屏障对 `res` 发送点的既有拒绝（403 authorization_revoked），不出任何指引。
+ */
+function settleInitializeWithoutInstructions(
+  decision: { kind: "disconnected" | "revoked" },
+  res: ServerResponse
+): { outcome: "error" | "denied"; errorDetail: string } {
+  if (decision.kind === "revoked") {
+    res.writeHead(200, {});
+    res.end();
+    return { outcome: "denied", errorDetail: AUTHORIZATION_REVOKED_DETAIL };
+  }
+  if (!res.destroyed && !res.writableEnded) res.destroy();
+  return { outcome: "error", errorDetail: "client_disconnected" };
 }
 
 async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest, readWait: SemanticReadWaitContext): Promise<void> {
@@ -7470,7 +7740,32 @@ async function buildDenialRepairPayload(
       // The client gets a 200 but KTX holds no session, so anything cached for
       // this Token is stale; drop it and let the next data call re-handshake.
       clearUpstreamSession(upstreamSessionOwner(identity));
-      const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity, requestMeta.lucySessionId) : undefined;
+      // P1-75 §2.2：本地协议回退走同一指引决策，只下发基础指引。
+      let instructions: string | undefined;
+      if (instructionsInjectionEnabled()) {
+        const decision = await decideInitializeInstructions(identity, requestMeta.lucySessionId, {
+          ingressMonoMs: readWait.ingressMonoMs, clientSignal: readWait.signal, protocolFallback: true
+        });
+        if (decision.kind === "disconnected" || decision.kind === "revoked") {
+          const settled = settleInitializeWithoutInstructions(decision, res);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: rpcMethod,
+            outcome: settled.outcome,
+            errorDetail: settled.errorDetail,
+            durationMs: Date.now() - start,
+            responseBytes: 0,
+            requestId,
+            ...requestMeta,
+            ...(await auditMeta(identity, settled.errorDetail)),
+            skillAction: "discover"
+          });
+          return;
+        }
+        instructions = decision.text;
+      }
       currentTrace()?.mark("local_handler", { status: "ok", attrs: { handler: "initialize_fallback" } });
       const payload = localInitializePayload(requestId, instructions);
       const responseBody = JSON.stringify(payload);
@@ -7625,7 +7920,29 @@ async function buildDenialRepairPayload(
   }
 
   if (rpcMethod === "initialize" && instructionsInjectionEnabled()) {
-    const initResult = await writeInitializeResponse(identity, upstream, upstreamBody, res, requestId, requestMeta.lucySessionId);
+    // P1-75 §2.2：上游握手按既有协议完成后，动态指引在 1 秒（自 ingress）内决策；到点／失败／容量满走基础指引。
+    const decision = await decideInitializeInstructions(identity, requestMeta.lucySessionId, {
+      ingressMonoMs: readWait.ingressMonoMs, clientSignal: readWait.signal
+    });
+    if (decision.kind === "disconnected" || decision.kind === "revoked") {
+      const settled = settleInitializeWithoutInstructions(decision, res);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: settled.outcome,
+        errorDetail: settled.errorDetail,
+        durationMs: Date.now() - start,
+        responseBytes: 0,
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, settled.errorDetail)),
+        skillAction: "discover"
+      });
+      return;
+    }
+    const initResult = await writeInitializeResponse(upstream, upstreamBody, res, requestId, decision.text);
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -7638,7 +7955,9 @@ async function buildDenialRepairPayload(
         executed: true,
         authorizationAllowed: true
       }),
-      errorDetail: initResult.injectionFailed ? initResult.errorDetail : undefined,
+      errorDetail: initResult.injectionFailed
+        ? initResult.errorDetail
+        : decision.kind === "basic" ? `instructions_basic:${decision.reason}` : undefined,
       durationMs: Date.now() - start,
       responseBytes: initResult.responseBytes,
       requestId,
@@ -8297,6 +8616,7 @@ async function handleSourceAmbiguityHostConfirm(
 
 export function buildProxy(options: BuildProxyOptions = {}) {
   assertSkillsPassthroughPolicy();
+  buildBasicInstructions(); // 预热进程级基础指引：降级路径只同步取值。
   const ledger = options.ledger ?? new ReleaseLedger();
   const skillsPassthroughEnabled = skillsPassthroughRequested();
   const port = Number(process.env.LUCY_PROXY_PORT ?? 7879);
