@@ -6,10 +6,10 @@
  * 禁止仅复读 manifest 表值盖戳。
  */
 
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { glob } from "node:fs/promises";
 import path from "node:path";
-import { parse } from "yaml";
+import { readCatalogYaml } from "../catalog-yaml-cache.js";
 
 /** O3 闭合值：新增 description 字段 UTF-16 code unit 总预算。 */
 export const MAX_TOTAL_DESCRIPTION_CHARS = 8192;
@@ -358,8 +358,7 @@ export async function loadDescriptionIndexesUncached(
 
     for (const schemaFile of schemaFiles) {
       try {
-        const content = await readFile(schemaFile, "utf-8");
-        const yaml = parse(content) as SchemaYaml;
+        const yaml = await readCatalogYaml(schemaFile) as SchemaYaml;
         if (!yaml?.tables || typeof yaml.tables !== "object") continue;
         const schemaFileName = path.basename(schemaFile, ".yaml");
         const schema = normalizeCatalogRef(schemaFileName);
@@ -398,8 +397,7 @@ export async function loadDescriptionIndexesUncached(
 
     for (const overlayFile of overlayFiles) {
       try {
-        const content = await readFile(overlayFile, "utf-8");
-        const yaml = parse(content) as OverlayYaml;
+        const yaml = await readCatalogYaml(overlayFile) as OverlayYaml;
         const sourceNameRaw =
           typeof yaml?.name === "string" && yaml.name.trim()
             ? yaml.name

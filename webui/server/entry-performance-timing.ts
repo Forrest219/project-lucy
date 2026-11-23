@@ -33,6 +33,9 @@ export type RequestTiming = {
 export type EntryPerfCounters = {
   manifestParses: number;
   overlayReads: number;
+  catalogYamlParses: number;
+  catalogYamlHits: number;
+  catalogYamlJoins: number;
   sourceMapBuilds: number;
   accessReads: number;
   enabledTableReads: number;
@@ -45,6 +48,9 @@ function emptyCounters(): EntryPerfCounters {
   return {
     manifestParses: 0,
     overlayReads: 0,
+    catalogYamlParses: 0,
+    catalogYamlHits: 0,
+    catalogYamlJoins: 0,
     sourceMapBuilds: 0,
     accessReads: 0,
     enabledTableReads: 0,

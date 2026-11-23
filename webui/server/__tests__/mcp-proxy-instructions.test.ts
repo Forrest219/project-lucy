@@ -250,6 +250,30 @@ defaults:
 `;
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), withBeginYaml, "utf8");
 
+    const bindingsDir = path.join(projectRoot, "caliber-bindings");
+    await mkdir(bindingsDir, { recursive: true });
+    await writeFile(path.join(bindingsDir, "orders_count.yaml"), `bindingId: orders_count
+title: Order count
+status: published
+triggers: [Order count]
+connectionId: mysql-aliyun
+source: superstore_orders
+caliber:
+  measures: [superstore_orders.order_count]
+  dimensions: []
+  segments: []
+  filterFields: []
+  requireMeasures: [superstore_orders.order_count]
+`, "utf8");
+    const registry = await import("../proxy/caliber-binding-registry.js");
+    const candidate = await registry.loadCaliberBindingCandidate();
+    if (!candidate.ok) throw new Error(`Binding fixture could not compile: ${candidate.reason}`);
+    expect(await registry.commitCaliberBindingRegistry(candidate, {
+      releaseId: "instructions-begin-fixture",
+      attemptId: "instructions-begin-fixture"
+    })).toMatchObject({ ok: true });
+    expect(await registry.classifyCaliberParticipation()).toBe("active");
+
     const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
       await readRequestBody(req);
       res.writeHead(200, { "content-type": "application/json" });
@@ -658,6 +682,21 @@ describe("P1-75 §2.2 握手指引：描述增强移出应答路径", () => {
       expect(catalogText).toContain("order_id_grain_marker");
       const afterCatalog = descriptions.descriptionIndexCacheStats();
       expect(afterCatalog.hits + afterCatalog.misses + afterCatalog.uncacheable).toBeGreaterThan(0);
+      await waitForAuditRow("p175-catalog");
+      const db = new Database(auditDbPath, { readonly: true });
+      try {
+        const spans = db.prepare(`
+          SELECT span.stage, span.seq, span.attrs_json AS attrs
+          FROM access_trace_span span JOIN access_log log ON span.access_log_id = log.id
+          WHERE log.request_id = ? ORDER BY span.seq
+        `).all("p175-catalog") as { stage: string; seq: number; attrs: string | null }[];
+        const handlers = spans.filter((span) => span.stage === "local_handler");
+        expect(handlers).toHaveLength(1);
+        expect(JSON.parse(handlers[0].attrs ?? "{}")).toMatchObject({ handler: "catalog" });
+        expect(handlers[0].seq).toBeLessThan(spans.find((span) => span.stage === "response_serialize")?.seq ?? -1);
+      } finally {
+        db.close();
+      }
     } finally {
       await closeAll(upstream, server);
     }
@@ -865,6 +904,66 @@ describe("P1-75 §2.2 握手指引：截止、容量、取消与撤权", () => {
     }
   });
 
+  it("Skill 对象撤权发生在构建后时丢弃旧指引，下一次握手仍返回合法目录", async () => {
+    const accessPath = path.join(projectRoot, "webui", "config", "access.yaml");
+    const access = `users:
+  - id: instructions_agent
+    enabled: true
+    roles: [analyst]
+    tokens:
+      - hash: "${tokenHash(TOKEN)}"
+        label: test
+        created: 2026-06-23
+roles:
+  analyst:
+    permission_model_version: 2
+    allow:
+      connections: [mysql-aliyun]
+      source_scope: catalog_bound
+      tools: [lucy_catalog, lucy_query, lucy_skill_search]
+`;
+    await writeFile(accessPath, access);
+    await writeFile(path.join(projectRoot, "ktx.yaml"), `connections:
+  mysql-aliyun:
+    driver: mysql
+    database: dataforai
+    enabled_tables: [dataforai.superstore_orders]
+`);
+    const skillsDir = path.join(projectRoot, "skills", "operations");
+    await mkdir(skillsDir, { recursive: true });
+    const file = path.join(skillsDir, "scoped.md");
+    const skill = (role: string) => `---\nname: scoped\nstatus: published\nroles_allowed: [${role}]\n---\nprivate body\n`;
+    await writeFile(file, skill("analyst"));
+    const uri = "lucy-skill://operations/scoped";
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p175-skill-proof"));
+    const mcp = await import("../proxy/mcp-proxy");
+    try {
+      const warm = await instructionsOf(await postInitialize(proxyPort, "p175-skill-proof-warm"));
+      expect(warm).toContain(uri);
+      expect(warm).not.toContain("private body");
+      mcp.instructionsDecisionTestHooks.afterBuild = async () => { await writeFile(file, skill("other")); };
+      const during = await instructionsOf(await postInitialize(proxyPort, "p175-skill-proof-changed"));
+      expect(during).toContain("Tool Discovery");
+      expect(during).not.toContain(uri);
+      expect((await waitForAuditRow("p175-skill-proof-changed")).error_detail).toBe("instructions_basic:stale_proof");
+      mcp.instructionsDecisionTestHooks.afterBuild = undefined;
+      const next = await instructionsOf(await postInitialize(proxyPort, "p175-skill-proof-next"));
+      expect(next).toContain(SOURCE_LINE);
+      expect(next).not.toContain(uri);
+      await writeFile(file, skill("analyst"));
+      expect(await instructionsOf(await postInitialize(proxyPort, "p175-skill-proof-restored"))).toContain(uri);
+      await writeFile(accessPath, access.replace(", lucy_skill_search", ""));
+      const acl = await import("../proxy/acl");
+      await acl.commitEffectivePolicy();
+      const narrowed = await instructionsOf(await postInitialize(proxyPort, "p175-skill-proof-role"));
+      expect(narrowed).toContain(SOURCE_LINE);
+      expect(narrowed).not.toContain(uri);
+    } finally {
+      mcp.instructionsDecisionTestHooks.afterBuild = undefined;
+      await closeAll(upstream, server);
+    }
+  });
+
   it("本地协议回退（上游握手不可用）走同一决策：只发基础指引", async () => {
     const dead = createServer();
     await new Promise<void>((resolve) => dead.listen(0, "127.0.0.1", resolve));
@@ -960,9 +1059,18 @@ async function startB1Proxy(): Promise<{
     const actual = await vi.importActual<typeof import("../skills/loader.js")>("../skills/loader.js");
     return {
       ...actual,
-      loadAllSkillsFresh: async () => { skillBodyReads.listed += 1; return actual.loadAllSkillsFresh(); },
       getSkillByUri: (...args: Parameters<typeof actual.getSkillByUri>) => { skillBodyReads.byUri += 1; return actual.getSkillByUri(...args); },
       getSkillByName: (...args: Parameters<typeof actual.getSkillByName>) => { skillBodyReads.byName += 1; return actual.getSkillByName(...args); }
+    };
+  });
+  vi.doMock("../skills/discovery.js", async () => {
+    const actual = await vi.importActual<typeof import("../skills/discovery.js")>("../skills/discovery.js");
+    return {
+      ...actual,
+      readSkillDiscovery: (...args: Parameters<typeof actual.readSkillDiscovery>) => {
+        skillBodyReads.listed += 1;
+        return actual.readSkillDiscovery(...args);
+      }
     };
   });
   const upstreamMethods: string[] = [];
@@ -1027,6 +1135,7 @@ describe("P1-77 B1 / SC-08：C1–C4／C6 同源注入到各指引分支", () =>
   });
   afterEach(() => {
     vi.doUnmock("../skills/loader.js");
+    vi.doUnmock("../skills/discovery.js");
   });
 
   it("完整动态指引：含 C1–C4／C6、保留角色化名单与问询上报/预算逃生，无握手检索", async () => {

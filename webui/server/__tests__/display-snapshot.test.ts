@@ -123,6 +123,55 @@ describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
     expect(builds).toBe(1);
   });
 
+  it("times out readers without releasing the shared build, then serves its verified result", async () => {
+    const gate = deferred<string>();
+    const entered = deferred();
+    const build = vi.fn(() => {
+      entered.resolve();
+      return gate.promise;
+    });
+    const read = () => getDisplaySnapshot("slow", ["D"], build, { budget: createDisplayRequestBudget(3, 1500, 60) });
+    const owner = read();
+    await entered.promise;
+    const attached = read();
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const timedOut = Promise.allSettled([owner, attached]);
+      const results = await Promise.race([timedOut, new Promise<never>((_, reject) => {
+        watchdog = setTimeout(() => reject(new Error("readers remained attached")), 500);
+      })]);
+      expect(results).toEqual(Array.from({ length: 2 }, () => ({
+        status: "rejected",
+        reason: expect.objectContaining({ code: "DISPLAY_SNAPSHOT_BUSY", statusCode: 503, retryAfterSeconds: 1, reason: "build_wait_timeout" })
+      })));
+      expect(displaySnapshotDiagnostics()).toMatchObject({ inflightBuilds: 1, busyByReason: { build_wait_timeout: 2 } });
+      expect(build).toHaveBeenCalledTimes(1);
+    } finally {
+      clearTimeout(watchdog);
+      gate.resolve("ready");
+      await Promise.allSettled([owner, attached]);
+    }
+    await vi.waitFor(() => expect(displaySnapshotDiagnostics().inflightBuilds).toBe(0));
+    await expect(read()).resolves.toMatchObject({ payload: "ready", cache: "hit" });
+    expect(build).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards a detached build if a scoped write changes its generation before it finishes", async () => {
+    const gate = deferred<string>();
+    const build = vi.fn(() => gate.promise);
+    const old = getDisplaySnapshot("changed", ["D"], build, { budget: createDisplayRequestBudget(3, 1500, 60) });
+    try {
+      await expect(old).rejects.toMatchObject({ reason: "build_wait_timeout" });
+      const token = beginDisplayWrite(["D"]);
+      endDisplayWrite(token);
+    } finally {
+      gate.resolve("old");
+    }
+    await vi.waitFor(() => expect(displaySnapshotDiagnostics().inflightBuilds).toBe(0));
+    expect(displaySnapshotDiagnostics().entries.find(({ name }) => name === "changed")).toMatchObject({ hasCurrent: false, inflight: 0 });
+    await expect(getDisplaySnapshot("changed", ["D"], async () => "new")).resolves.toMatchObject({ payload: "new", cache: "miss" });
+  });
+
   it("does not cache failures, backs off for 1 s, then rebuilds", async () => {
     let builds = 0;
     let fail = true;

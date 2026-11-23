@@ -5,6 +5,7 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot, readConnections } from "../project.js";
 import { loadContentPaths } from "../paths.js";
+import { readCatalogYaml } from "../catalog-yaml-cache.js";
 import { normalizeSourceRef } from "../source-name-registry.js";
 import {
   enrichCatalogSources,
@@ -389,8 +390,7 @@ async function buildSourceMapFromDisk(now: number): Promise<SourceMapState | nul
 
   for (const schemaFile of schemaFiles) {
     try {
-      const content = await readFile(schemaFile, "utf-8");
-      const yaml = parse(content) as SchemaYaml;
+      const yaml = await readCatalogYaml(schemaFile) as SchemaYaml;
       if (!yaml?.tables) continue;
       const rel = path.relative(semanticLayerDir, schemaFile);
       const parts = rel.split(path.sep);

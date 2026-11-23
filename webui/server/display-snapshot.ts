@@ -66,6 +66,8 @@ export const DISPLAY_BUILD_FAILURE_BACKOFF_MS = 1000;
 export const MAX_DISPLAY_ATTEMPTS = 3;
 /** Spec 195 §6 — the total recovery wait of one request (shared, never reset). */
 export const DISPLAY_RECOVERY_WAIT_BUDGET_MS = 1500;
+/** P1-75 SC-08 — leave time for the browser to receive a retryable response. */
+const DISPLAY_BUILD_WAIT_BUDGET_MS = 4000;
 /** Spec 195 §6 — file I/O starts with two concurrent workers. */
 export const DISPLAY_FILE_IO_CONCURRENCY = 2;
 
@@ -85,6 +87,7 @@ export type DisplayBusyReason =
   | "reconcile_failed"
   | "write_pending"
   | "build_capacity"
+  | "build_wait_timeout"
   | "generation_changed"
   | "context_mismatch";
 
@@ -102,7 +105,9 @@ export class DisplaySnapshotBusyError extends Error {
 }
 
 type Slot = { key: string; payload: string; sidecar?: string; version: string; builtAt: number; incarnation: symbol };
-type Entry = { current?: Slot; inflight: Map<string, Promise<Slot>>; failure?: { key: string; until: number; error: unknown } };
+type BuildOutcome = { slot: Slot; context: ScopeContext } | { reason: DisplayBusyReason } | { error: unknown };
+type BuildTask = { readers: Set<(outcome: BuildOutcome) => void> };
+type Entry = { current?: Slot; inflight: Map<string, BuildTask>; failure?: { key: string; until: number; error: unknown } };
 
 const entries = new Map<string, Entry>();
 let inflightBuilds = 0;
@@ -136,13 +141,15 @@ export function evictDisplaySnapshotSlot(name: string, incarnation: symbol): boo
 export type DisplayRequestBudget = {
   attemptsLeft: number;
   deadline: number;
+  buildDeadline: number;
 };
 
 export function createDisplayRequestBudget(
   attempts: number = MAX_DISPLAY_ATTEMPTS,
-  waitBudgetMs: number = DISPLAY_RECOVERY_WAIT_BUDGET_MS
+  waitBudgetMs: number = DISPLAY_RECOVERY_WAIT_BUDGET_MS,
+  buildWaitBudgetMs: number = DISPLAY_BUILD_WAIT_BUDGET_MS
 ): DisplayRequestBudget {
-  return { attemptsLeft: attempts, deadline: Date.now() + waitBudgetMs };
+  return { attemptsLeft: attempts, deadline: Date.now() + waitBudgetMs, buildDeadline: performance.now() + buildWaitBudgetMs };
 }
 
 function entryFor(name: string): Entry {
@@ -163,20 +170,15 @@ function versionOf(key: string): string {
 }
 
 async function buildSlot(key: string, build: DisplayBuild): Promise<Slot> {
-  inflightBuilds += 1;
   stats.builds += 1;
   countEntryPerf("displayBuilds");
   markDisplayBuild();
-  try {
-    const version = versionOf(key);
-    const built = await build(version);
-    const incarnation = Symbol("display-slot");
-    return typeof built === "string"
-      ? { key, payload: built, version, builtAt: Date.now(), incarnation }
-      : { key, payload: built.payload, sidecar: built.sidecar, version, builtAt: Date.now(), incarnation };
-  } finally {
-    inflightBuilds -= 1;
-  }
+  const version = versionOf(key);
+  const built = await build(version);
+  const incarnation = Symbol("display-slot");
+  return typeof built === "string"
+    ? { key, payload: built, version, builtAt: Date.now(), incarnation }
+    : { key, payload: built.payload, sidecar: built.sidecar, version, builtAt: Date.now(), incarnation };
 }
 
 function sameContext(a: ScopeContext, b: ScopeContext): boolean {
@@ -618,6 +620,61 @@ function verifiedFor(context: ScopeContext, scopes: readonly DisplayScope[]): bo
   return displayCacheVerified(scopes) && reconciler !== null && sameContext(reconciler.context, context);
 }
 
+function invalidBuildReason(name: string, entry: Entry, scopes: readonly DisplayScope[], context: ScopeContext, slot: Slot, extraKey: string): DisplayBusyReason | undefined {
+  if (!verifiedFor(context, scopes)) {
+    return reconciler && !sameContext(reconciler.context, context) ? "context_mismatch" : busyReasonFor(scopes);
+  }
+  if (entries.get(name) !== entry || hasPendingDisplayWrite(scopes) || keyFor(name, scopes, context, extraKey) !== slot.key) {
+    return "generation_changed";
+  }
+}
+
+/** Shared work owns validation and publication even after all readers have timed out. */
+function startDisplayBuild(name: string, entry: Entry, key: string, scopes: readonly DisplayScope[], extraKey: string, build: DisplayBuild): BuildTask {
+  const task: BuildTask = { readers: new Set() };
+  entry.inflight.set(key, task);
+  inflightBuilds += 1;
+  const finish = (outcome: BuildOutcome) => {
+    entry.inflight.delete(key);
+    inflightBuilds -= 1;
+    for (const notify of task.readers) notify(outcome);
+  };
+  const publish = async (): Promise<BuildOutcome> => {
+    let slot: Slot;
+    try {
+      slot = await buildSlot(key, build);
+    } catch (error) {
+      entry.failure = { key, until: Date.now() + DISPLAY_BUILD_FAILURE_BACKOFF_MS, error };
+      return { error };
+    }
+    const context = await currentScopeContext();
+    const reason = invalidBuildReason(name, entry, scopes, context, slot, extraKey);
+    if (reason) return { reason };
+    entry.current = slot;
+    entry.failure = undefined;
+    return { slot, context };
+  };
+  void publish().then(finish, (error: unknown) => finish({ error }));
+  return task;
+}
+
+function waitForDisplayBuild(task: BuildTask, deadline: number): Promise<BuildOutcome> {
+  return new Promise((resolve) => {
+    const unsubscribe = () => task.readers.delete(onComplete);
+    const timedOut: BuildOutcome = { reason: "build_wait_timeout" };
+    const timer = setTimeout(() => {
+      unsubscribe();
+      resolve(timedOut);
+    }, Math.max(0, Math.ceil(deadline - performance.now())));
+    const onComplete = (outcome: BuildOutcome) => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(performance.now() < deadline ? outcome : timedOut);
+    };
+    task.readers.add(onComplete);
+  });
+}
+
 // ─── committed view served during a note-only write (P1-75 §2.1) ────────────
 
 /**
@@ -814,52 +871,37 @@ export async function getDisplaySnapshot(
     if (entry.failure && entry.failure.key === key && Date.now() < entry.failure.until) {
       throw entry.failure.error;
     }
-    let promise = entry.inflight.get(key);
-    const owner = !promise;
-    if (!promise) {
+    if (performance.now() >= budget.buildDeadline) {
+      reason = "build_wait_timeout";
+      break;
+    }
+    let task = entry.inflight.get(key);
+    if (!task) {
       if (inflightBuilds >= MAX_CONCURRENT_DISPLAY_BUILDS) {
         reason = "build_capacity";
         break;
       }
-      promise = buildSlot(key, build);
-      entry.inflight.set(key, promise);
+      task = startDisplayBuild(name, entry, key, scopes, extraKey, build);
     }
-    const started = promise;
-    // The owner keeps the in-flight entry until its publish decision, so
-    // late arrivals attach instead of starting a duplicate build.
-    const release = () => {
-      if (owner && entry.inflight.get(key) === started) entry.inflight.delete(key);
-    };
-    let slot: Slot;
-    try {
-      slot = await started;
-    } catch (error) {
-      if (owner) entry.failure = { key, until: Date.now() + DISPLAY_BUILD_FAILURE_BACKOFF_MS, error };
-      release();
-      throw error;
-    }
-    // Publish / return only if still verified and nothing changed while building;
-    // otherwise retry with the new key (or end busy).
-    let nowContext: ScopeContext;
-    try {
-      nowContext = await currentScopeContext();
-    } finally {
-      release();
-    }
-    if (!verifiedFor(nowContext, scopes)) {
-      reason = reconciler && !sameContext(reconciler.context, nowContext) ? "context_mismatch" : busyReasonFor(scopes);
+    const outcome = await waitForDisplayBuild(task, budget.buildDeadline);
+    if ("error" in outcome) throw outcome.error;
+    if ("reason" in outcome) {
+      reason = outcome.reason;
+      if (reason === "generation_changed") continue;
       break;
     }
-    if (!hasPendingDisplayWrite(scopes) && keyFor(name, scopes, nowContext, extraKey) === slot.key) {
-      if (entry.current?.key !== slot.key) entry.current = slot;
-      entry.failure = undefined;
-      lastRequest = { name, scopes: [...scopes], attempts };
-      stats.misses += 1;
-      countEntryPerf("displayMisses");
-      markDisplayCache("miss");
-      return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "miss", incarnation: slot.incarnation };
+    const { slot, context: publishedContext } = outcome;
+    const invalid = invalidBuildReason(name, entry, scopes, publishedContext, slot, extraKey);
+    if (invalid) {
+      reason = invalid;
+      if (reason === "generation_changed") continue;
+      break;
     }
-    reason = "generation_changed";
+    lastRequest = { name, scopes: [...scopes], attempts };
+    stats.misses += 1;
+    countEntryPerf("displayMisses");
+    markDisplayCache("miss");
+    return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "miss", incarnation: slot.incarnation };
   }
   stats.busy += 1;
   busyByReason.set(reason, (busyByReason.get(reason) ?? 0) + 1);

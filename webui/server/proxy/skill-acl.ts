@@ -17,6 +17,10 @@ export interface SkillAclDecision {
 
 export type SkillAclAction = "discover" | "read";
 
+type SkillAuthorizationFacts = Readonly<Pick<SkillAsset, "uri" | "status" | "roles_allowed_invalid">> & {
+  readonly roles_allowed: readonly string[];
+};
+
 export interface RoleSkillAccessSummary {
   discoverEnabled: boolean;
   readEnabled: boolean;
@@ -27,7 +31,7 @@ export interface RoleSkillAccessSummary {
 }
 
 /** Spec §4.1 — Skill `roles_allowed` as the canonical object ACL. */
-export function skillToContextAsset(skill: SkillAsset): ContextAsset {
+export function skillToContextAsset(skill: SkillAuthorizationFacts): ContextAsset {
   const acl = skill.roles_allowed_invalid
     ? ({ state: "corrupt", detail: "invalid_roles_allowed" } as const)
     : parseObjectAcl(skill.roles_allowed, true);
@@ -78,7 +82,7 @@ function toSkillDecision(
  */
 export async function canAccessSkill(
   identity: Identity,
-  skill: SkillAsset,
+  skill: SkillAuthorizationFacts,
   action: SkillAclAction = "read",
   snapshot?: ContextSnapshot
 ): Promise<SkillAclDecision> {
@@ -86,13 +90,15 @@ export async function canAccessSkill(
   return toSkillDecision(authorizeContext(identity, skillToContextAsset(skill), action, resolved));
 }
 
-export async function filterAccessibleSkills(
+export function filterAccessibleSkills(identity: Identity, skills: readonly SkillAsset[], action?: SkillAclAction): Promise<SkillAsset[]>;
+export function filterAccessibleSkills<T extends SkillAuthorizationFacts>(identity: Identity, skills: readonly T[], action?: SkillAclAction): Promise<T[]>;
+export async function filterAccessibleSkills<T extends SkillAuthorizationFacts>(
   identity: Identity,
-  skills: SkillAsset[],
+  skills: readonly T[],
   action: SkillAclAction = "discover"
-): Promise<SkillAsset[]> {
+): Promise<T[]> {
   const snapshot = await resolveContextSnapshot(identity);
-  const accessible: SkillAsset[] = [];
+  const accessible: T[] = [];
   for (const skill of skills) {
     const decision = await canAccessSkill(identity, skill, action, snapshot);
     if (decision.allowed) {

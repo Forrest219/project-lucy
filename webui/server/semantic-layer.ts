@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { Document, isMap, parseDocument, Scalar, YAMLMap, YAMLSeq, type ParsedNode } from "yaml";
+import { Document, isMap, parseDocument, Scalar, YAMLMap, YAMLParseError as YamlSyntaxError, YAMLSeq, type ParsedNode } from "yaml";
+import { readCatalogYaml } from "./catalog-yaml-cache";
 import { computeCompletion } from "./completion";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeWrite } from "./fs-safe";
@@ -282,6 +283,16 @@ async function readYamlDocument(projectRoot: string, relPath: string): Promise<{
   return { doc: parseYaml(text, relPath), text };
 }
 
+async function readCatalogRecord(projectRoot: string, relPath: string): Promise<Record<string, unknown>> {
+  const absPath = await assertReadable(await loadContentPaths(), projectRoot, relPath);
+  try {
+    return valueAsRecord(await readCatalogYaml(absPath, { json: true }));
+  } catch (error) {
+    if (error instanceof YamlSyntaxError) throw new YamlParseError(`Failed to parse ${relPath}: ${error.message}`);
+    throw error;
+  }
+}
+
 async function listSchemaFiles(projectRoot: string): Promise<SchemaFile[]> {
   const base = (await loadContentPaths()).semanticLayer;
   const connections = await readdir(base, { withFileTypes: true }).catch(() => []);
@@ -320,8 +331,8 @@ async function listSchemaFiles(projectRoot: string): Promise<SchemaFile[]> {
 async function readOverlay(projectRoot: string, conn: string, table: string): Promise<Record<string, unknown>> {
   const relPath = path.posix.join("semantic-layer", conn, `${table}.yaml`);
   try {
-    const { doc } = await readYamlDocument(projectRoot, relPath);
-    return valueAsRecord(doc.toJSON());
+    countEntryPerf("overlayReads");
+    return await readCatalogRecord(projectRoot, relPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return {};
@@ -407,14 +418,13 @@ function modelFromTable(
   };
 }
 
-type ParsedSchemaFile = { file: SchemaFile; doc: Document; tables: Record<string, unknown> };
+type ParsedSchemaFile = { file: SchemaFile; tables: Record<string, unknown> };
 
 async function readSchemaFiles(projectRoot: string): Promise<ParsedSchemaFile[]> {
   const parsed: ParsedSchemaFile[] = [];
   for (const file of await listSchemaFiles(projectRoot)) {
-    const { doc } = await readYamlDocument(projectRoot, file.relPath);
-    const root = valueAsRecord(doc.toJSON());
-    parsed.push({ file, doc, tables: valueAsRecord(root.tables) });
+    const root = await readCatalogRecord(projectRoot, file.relPath);
+    parsed.push({ file, tables: valueAsRecord(root.tables) });
   }
   return parsed;
 }
@@ -455,7 +465,6 @@ export async function listSourcesWithManifests(
     file: SchemaFile;
     table: string;
     tableValue: unknown;
-    tableNode: ParsedNode | null;
     overlay: Record<string, unknown>;
     overlayMtime: Date | null;
   };
@@ -479,7 +488,7 @@ export async function listSourcesWithManifests(
 
   const schemaFiles = await timeAsync("manifest", () => readSchemaFiles(projectRoot));
   await timeAsync("overlay", async () => {
-    for (const { file, doc, tables } of schemaFiles) {
+    for (const { file, tables } of schemaFiles) {
       for (const [table, tableValue] of Object.entries(tables)) {
         const overlayMtime = await statOverlay(projectRoot, file.conn, table);
         const overlay = overlayMtime ? await readOverlay(projectRoot, file.conn, table) : {};
@@ -487,7 +496,6 @@ export async function listSourcesWithManifests(
           file,
           table,
           tableValue,
-          tableNode: tableNodeFromDocument(doc, table),
           overlay,
           overlayMtime
         });
@@ -514,7 +522,7 @@ export async function listSourcesWithManifests(
       entry.table,
       entry.file.relPath,
       entry.tableValue,
-      entry.tableNode,
+      null,
       entry.overlay
     );
 
@@ -619,8 +627,7 @@ async function readYamlRecordIfPresent(
   relPath: string
 ): Promise<Record<string, unknown> | null> {
   try {
-    const { doc } = await readYamlDocument(projectRoot, relPath);
-    return valueAsRecord(doc.toJSON());
+    return await readCatalogRecord(projectRoot, relPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;

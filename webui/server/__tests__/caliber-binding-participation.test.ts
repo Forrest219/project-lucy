@@ -440,6 +440,29 @@ describe("不传 scopeKey 时仅依据全局注册表状态", () => {
   });
 });
 
+it("shares queued authoring evidence while classifying each BindingSession independently", async () => {
+  await setupGlobalInactive();
+  const scope = makeScope();
+  await commitBindingSession(scope, {
+    turnId: "batch-bound", registryGeneration: 1, bindingId: "asset_count",
+    boundKey: FAKE_BOUND_KEY, caliberSnapshot: FAKE_CALIBER
+  });
+  const first = { checks: 0, joins: 0, batches: 0 };
+  const joined = { checks: 0, joins: 0, batches: 0 };
+  const dir = path.join(projectRoot, "caliber-bindings");
+  expect(await Promise.all([
+    classifyCaliberParticipation({ proof: { dir, metrics: first } }),
+    classifyCaliberParticipation({ scopeKey: scope, proof: { dir, metrics: joined } })
+  ])).toEqual(["inactive", "active"]);
+  expect(first.batches + joined.batches).toBe(1);
+  expect(first.joins + joined.joins).toBe(1);
+  expect(first.checks + joined.checks).toBe(2);
+  await writeContent("caliber-bindings/asset_count.yaml", PUBLISHED_BINDING_YAML);
+  const afterEdit = { checks: 0, joins: 0, batches: 0 };
+  expect(await classifyCaliberParticipation({ proof: { dir, metrics: afterEdit } })).toBe("unknown");
+  expect(afterEdit).toEqual({ checks: 3, joins: 0, batches: 1 });
+});
+
 
 describe("P1-60 final-review zero-state regressions", () => {
   it("R-01 proven optional preparing does not reject the query gate", async () => {

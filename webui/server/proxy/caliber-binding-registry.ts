@@ -238,11 +238,16 @@ interface ParticipationProof {
   digest?: string;
 }
 
+export type ParticipationProofMetrics = { checks: number; joins: number; batches: number };
+
 /** Read authoring status and existing commit evidence without compiling any source map. */
-async function readParticipationProof(): Promise<ParticipationProof> {
+async function readParticipationProof(dir?: string, metrics?: ParticipationProofMetrics): Promise<ParticipationProof> {
   let credential: RegistryCredential | null = null;
+  const check = () => { if (metrics) metrics.checks += 1; };
   try {
-    const parsed = JSON.parse(await readFile(await credentialPath(), "utf8")) as RegistryCredential;
+    const file = dir ? path.join(dir, ".caliber-binding", CREDENTIAL_FILE) : await credentialPath();
+    check();
+    const parsed = JSON.parse(await readFile(file, "utf8")) as RegistryCredential;
     const valid = parsed && (parsed.phase === "committed" || parsed.phase === "prepared")
       && Number.isSafeInteger(parsed.generation) && parsed.generation >= 0
       && Number.isSafeInteger(parsed.fileCount) && parsed.fileCount >= 0
@@ -264,8 +269,11 @@ async function readParticipationProof(): Promise<ParticipationProof> {
   }
   if (credential?.phase === "prepared") return { kind: "unknown", credential };
   let entries: string[];
-  const dir = await caliberBindingsDir();
-  try { entries = (await readdir(dir)).filter((name) => /\.ya?ml$/i.test(name)).sort(); }
+  dir ??= await caliberBindingsDir();
+  try {
+    check();
+    entries = (await readdir(dir)).filter((name) => /\.ya?ml$/i.test(name)).sort();
+  }
   catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") return { kind: "unknown", credential };
     entries = [];
@@ -275,6 +283,7 @@ async function readParticipationProof(): Promise<ParticipationProof> {
   let published = false;
   for (const name of entries) {
     try {
+      check();
       const raw = await readFile(path.join(dir, name), "utf8");
       const parsed = parse(raw) as Record<string, unknown>;
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)
@@ -292,6 +301,36 @@ async function readParticipationProof(): Promise<ParticipationProof> {
     credential.digest === createHash("sha256").update(empty).digest("hex"));
   const committedDrafts = credential.fileCount === entries.length && credential.digest === digest;
   return { kind: legacyEmpty || committedDrafts ? "inactive" : "unknown", credential, digest };
+}
+
+type ParticipationBatches = { active?: Promise<ParticipationProof>; queued?: Promise<ParticipationProof> };
+const participationBatches = new Map<string, ParticipationBatches>();
+
+function batchParticipationProof(dir: string, metrics: ParticipationProofMetrics): Promise<ParticipationProof> {
+  let slot = participationBatches.get(dir);
+  if (!slot) {
+    slot = {};
+    participationBatches.set(dir, slot);
+  }
+  if (slot.queued) {
+    metrics.joins += 1;
+    return slot.queued;
+  }
+  const batch = slot;
+  batch.queued = new Promise<void>((resolve) => setImmediate(resolve)).then(async () => {
+    // Only waiters present before disk work starts share the proof.
+    await batch.active?.catch(() => undefined);
+    batch.queued = undefined;
+    metrics.batches += 1;
+    batch.active = readParticipationProof(dir, metrics);
+    try {
+      return await batch.active;
+    } finally {
+      batch.active = undefined;
+      if (!batch.queued) participationBatches.delete(dir);
+    }
+  });
+  return batch.queued;
 }
 
 async function writeCredential(credential: RegistryCredential): Promise<void> {
@@ -803,8 +842,10 @@ export type CaliberParticipation = "inactive" | "active" | "unknown";
  */
 export async function classifyCaliberParticipation(options?: {
   scopeKey?: string;
+  proof?: { dir: string; metrics: ParticipationProofMetrics };
 }): Promise<CaliberParticipation> {
-  const proof = await readParticipationProof();
+  const shared = options?.proof;
+  const proof = shared ? await batchParticipationProof(shared.dir, shared.metrics) : await readParticipationProof();
   if (proof.kind === "inactive") return classifyL0L1(options?.scopeKey);
   if (proof.kind === "unknown") return "unknown";
   const credential = proof.credential;

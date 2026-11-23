@@ -51,6 +51,7 @@ import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { CONTEXT_NOT_AVAILABLE, CONTEXT_ROLE_REQUIRED } from "./context-acl.js";
 import { loadAllSkillsFresh, getSkillByUri, getSkillByName } from "../skills/loader.js";
+import { readSkillDiscovery, skillDiscoveryMetrics, verifySkillDiscovery, type SkillDiscoveryAsset, type SkillDiscoveryMetrics, type SkillDiscoverySnapshot } from "../skills/discovery.js";
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
@@ -61,7 +62,7 @@ import { matchedActivePublishWriteStages } from "../publish-coordinator.js";
 import { isControlPlaneTool } from "../ops/control-plane.js";
 import { invokeOpsTool, opsToolDescriptors } from "../ops/ops-tools.js";
 import { listSources } from "../semantic-layer.js";
-import { loadContentPaths } from "../paths.js";
+import { caliberBindingsPath, loadContentPaths } from "../paths.js";
 import {
   firstConnectionIdFromArgs,
   resolveAndMaybeServeHiveTool
@@ -174,6 +175,7 @@ import {
   currentCaliberBindingRegistry,
   registrySyncPending,
   verifyCurrentBindingContentAndDependencies,
+  type ParticipationProofMetrics,
 } from "./caliber-binding-registry.js";
 // P0-4 答复可核对块（REQ-030-022／Spec v0.4-draft）。
 import {
@@ -1462,14 +1464,22 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
  * P1-60 (Spec §3 D1–D2): inactive / unknown 下从 visibleTools 移除 lucy_begin_question。
  * 分类读取失败按 unknown 隐藏 begin；其余工具与 continue 保持。
  */
-async function shouldHideBeginQuestion(identity: Identity, sessionId: string | null | undefined): Promise<boolean> {
+async function shouldHideBeginQuestion(
+  identity: Identity,
+  sessionId: string | null | undefined,
+  work?: InstructionsWork
+): Promise<boolean> {
+  const started = performance.now();
   try {
     const identityKey = budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? "");
     const scopeKey = sessionId ? bindingScopeKey(identityKey, sessionId) : undefined;
-    const participation = await classifyCaliberParticipation({ scopeKey });
+    const proof = work ? { dir: caliberBindingsPath(await loadContentPaths()), metrics: work.participationProof } : undefined;
+    const participation = await classifyCaliberParticipation({ scopeKey, proof });
     return participation !== "active";
   } catch {
     return true;
+  } finally {
+    if (work) work.timings.begin_visibility = performance.now() - started;
   }
 }
 
@@ -2140,7 +2150,15 @@ type InstructionsDecision =
   | { kind: "disconnected" }
   | { kind: "revoked" };
 
-type InstructionsWork = { signal: AbortSignal; openSpans: SpanHandle[] };
+type InstructionsWork = {
+  signal: AbortSignal;
+  openSpans: SpanHandle[];
+  participationProof: ParticipationProofMetrics;
+  skillVerification: SkillDiscoveryMetrics;
+  timings: Partial<Record<"begin_visibility" | "tool_visibility" | "skill_verify", number>>;
+  skillDiscovery?: { root: string; snapshot: SkillDiscoverySnapshot };
+  skillDiscoveryFailed?: boolean;
+};
 
 function throwIfInstructionsWorkAborted(work: InstructionsWork | undefined): void {
   work?.signal.throwIfAborted();
@@ -2148,15 +2166,18 @@ function throwIfInstructionsWorkAborted(work: InstructionsWork | undefined): voi
 
 async function resolveInstructionsVisibility(
   identity: Identity,
-  sessionId: string | null | undefined
+  sessionId: string | null | undefined,
+  work?: InstructionsWork
 ): Promise<{ hideBegin: boolean; visibleTools: Set<string> }> {
+  const started = performance.now();
   await instructionsDecisionTestHooks.policyReads?.();
-  const hideBegin = await shouldHideBeginQuestion(identity, sessionId);
+  const hideBegin = await shouldHideBeginQuestion(identity, sessionId, work);
   const visibleTools = new Set(await allowedToolNames(identity));
   // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
   if (hideBegin) visibleTools.delete("lucy_begin_question");
   // P1-74 / D7：计费问数身份必须可达逃生工具（不新增数据权限）。
   if (budgetEscapeToolReachable(visibleTools)) visibleTools.add("lucy_continue_question");
+  if (work) work.timings.tool_visibility = performance.now() - started;
   return { hideBegin, visibleTools };
 }
 
@@ -2299,7 +2320,14 @@ async function runDynamicInstructionsWork(
   throwIfInstructionsWorkAborted(work);
   await instructionsDecisionTestHooks.afterBuild?.();
   const after = await instructionsProof(identity);
-  return { text, current: before !== null && before === after };
+  throwIfInstructionsWorkAborted(work);
+  if (before === null || before !== after || work.skillDiscoveryFailed) return { text, current: false };
+  const skills = work.skillDiscovery;
+  if (!skills) return { text, current: true };
+  const verifyStarted = performance.now();
+  const current = await verifySkillDiscovery(skills.root, skills.snapshot, work.skillVerification);
+  work.timings.skill_verify = performance.now() - verifyStarted;
+  return { text, current };
 }
 
 type InstructionsRaceOutcome =
@@ -2345,6 +2373,12 @@ async function decideInitializeInstructions(
 ): Promise<InstructionsDecision> {
   const buildSpan = currentTrace()?.start("instructions_build");
   const openSpans: SpanHandle[] = [];
+  const controller = new AbortController();
+  const work: InstructionsWork = {
+    signal: controller.signal, openSpans, timings: {},
+    participationProof: { checks: 0, joins: 0, batches: 0 },
+    skillVerification: skillDiscoveryMetrics()
+  };
   const closeOpenChildren = (reasonCode: "timeout" | "cancelled") => {
     for (const span of openSpans) span.end({ status: "error", reasonCode });
   };
@@ -2359,7 +2393,16 @@ async function decideInitializeInstructions(
       else if (ctx.clientSignal.aborted) final = { kind: "disconnected" };
     }
     if (final.kind === "full") {
-      buildSpan?.end({ status: "ok", reasonCode: "allowed", attrs: { cache_hit: false, decision: "full", bytes: Buffer.byteLength(final.text) } });
+      buildSpan?.end({ status: "ok", reasonCode: "allowed", attrs: {
+        cache_hit: false, decision: "full", bytes: Buffer.byteLength(final.text), ...work.timings,
+        skill_verify_checks: work.skillVerification.checks,
+        skill_verify_joins: work.skillVerification.joins,
+        skill_verify_batches: work.skillVerification.batches,
+        skill_verify_io: work.skillVerification.scan_read,
+        binding_proof_checks: work.participationProof.checks,
+        binding_proof_joins: work.participationProof.joins,
+        binding_proof_batches: work.participationProof.batches
+      } });
     } else if (final.kind === "basic") {
       buildSpan?.end({
         status: "error", reasonCode: FALLBACK_REASON_CODE[final.reason],
@@ -2385,8 +2428,7 @@ async function decideInitializeInstructions(
 
   // 容量只在工作**真实终结**时释放（含取消后仍在跑的底层读取）。
   instructionsWorkActive += 1;
-  const controller = new AbortController();
-  const workPromise = runDynamicInstructionsWork(identity, sessionId, buildSpan, { signal: controller.signal, openSpans })
+  const workPromise = runDynamicInstructionsWork(identity, sessionId, buildSpan, work)
     .finally(() => { instructionsWorkActive -= 1; });
   workPromise.catch(() => undefined);
 
@@ -2412,36 +2454,46 @@ async function buildRoleAwareInstructionsUntimed(
   sessionId?: string | null,
   work?: InstructionsWork
 ): Promise<string | undefined> {
-  const hideBegin = await shouldHideBeginQuestion(identity, sessionId);
-  throwIfInstructionsWorkAborted(work);
-  const rawFallback = await loadDataQaInstructions();
-  throwIfInstructionsWorkAborted(work);
-  const fallback = hideBegin && rawFallback
-    ? rawFallback.replace(/## 可选问询上报[^\n]*\n[\s\S]*?(?=\n## |$)/u, "")
-      .replaceAll("lucy_begin_question", "问询声明")
-    : rawFallback;
+  async function fallback(): Promise<string | undefined> {
+    const hideBegin = await shouldHideBeginQuestion(identity, sessionId, work);
+    throwIfInstructionsWorkAborted(work);
+    const md = await loadDataQaInstructions();
+    throwIfInstructionsWorkAborted(work);
+    return hideBegin && md
+      ? md.replace(/## 可选问询上报[^\n]*\n[\s\S]*?(?=\n## |$)/u, "").replaceAll("lucy_begin_question", "问询声明")
+      : md;
+  }
   try {
     const catalogSpan = currentTrace()?.start("catalog_resolve", buildSpan);
     if (catalogSpan) work?.openSpans.push(catalogSpan);
     // §2.2：握手只消费四元组与示例；描述／grain 增强移出应答路径（独立 lucy_catalog 仍走完整合同）。
     const catalog = await lucyCatalog(identity, { enrichDescriptions: false, signal: work?.signal });
     catalogSpan?.end({ status: "ok", reasonCode: "allowed" });
-    let accessibleSkills: Awaited<ReturnType<typeof filterAccessibleSkills>> = [];
+    let accessibleSkills: SkillDiscoveryAsset[] = [];
     const skillsSpan = currentTrace()?.start("skills_load", buildSpan);
     if (skillsSpan) work?.openSpans.push(skillsSpan);
+    const skillMetrics = skillDiscoveryMetrics();
     try {
-      const allSkills = await loadAllSkillsFresh();
+      const root = (await loadContentPaths()).skills;
+      const snapshot = await readSkillDiscovery(root, skillMetrics);
       throwIfInstructionsWorkAborted(work);
-      accessibleSkills = await filterAccessibleSkills(identity, allSkills, "discover");
-      skillsSpan?.end({ status: "ok", reasonCode: "allowed", attrs: { skill_count: allSkills.length, cache_hit: false } });
+      const aclStart = performance.now();
+      accessibleSkills = await filterAccessibleSkills(identity, snapshot.skills, "discover");
+      if (work) work.skillDiscovery = { root, snapshot };
+      skillsSpan?.end({ status: "ok", reasonCode: "allowed", attrs: {
+        skill_count: snapshot.skills.length,
+        cache_hit: skillMetrics.directories === 0 && skillMetrics.joins === 0,
+        ...skillMetrics,
+        acl_filter: performance.now() - aclStart
+      } });
     } catch {
-      // Best-effort loading of skills for instructions
-      skillsSpan?.end({ status: "error", reasonCode: "upstream_error" });
+      if (work) work.skillDiscoveryFailed = true;
+      skillsSpan?.end({ status: "error", reasonCode: "upstream_error", attrs: skillMetrics });
     }
     throwIfInstructionsWorkAborted(work);
 
-    if (catalog.connections.length === 0 && catalog.sources.length === 0 && accessibleSkills.length === 0) return fallback;
-    const { visibleTools } = await resolveInstructionsVisibility(identity, sessionId);
+    if (catalog.connections.length === 0 && catalog.sources.length === 0 && accessibleSkills.length === 0) return fallback();
+    const { hideBegin, visibleTools } = await resolveInstructionsVisibility(identity, sessionId, work);
     throwIfInstructionsWorkAborted(work);
     const catalogTool = visibleTools.has("lucy_catalog")
       ? "`lucy_catalog`"
@@ -2487,7 +2539,7 @@ async function buildRoleAwareInstructionsUntimed(
   } catch (err) {
     // 已取消的工作不得悄悄回落成 md 文本再被当作成功结果。
     if (work?.signal.aborted) throw err;
-    return fallback;
+    return fallback();
   }
 }
 
@@ -6291,11 +6343,17 @@ async function buildDenialRepairPayload(
     }
 
     if (toolName === "connection_list" || toolName === "lucy_catalog" || toolName === "kx_catalog") {
-      const data = toolName === "connection_list"
-        ? await connectionList(identity)
+      const handler = trace.start("local_handler");
+      const catalogCall = toolName === "connection_list"
+        ? connectionList(identity)
         : toolName === "lucy_catalog"
-          ? await lucyCatalog(identity)
-          : await kxCatalog(identity);
+          ? lucyCatalog(identity)
+          : kxCatalog(identity);
+      const data = await catalogCall.catch((error: unknown) => {
+        handler.end({ status: "error", reasonCode: "internal_error", attrs: { handler: "catalog" } });
+        throw error;
+      });
+      handler.end({ status: "ok", reasonCode: "allowed", attrs: { handler: "catalog" } });
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
