@@ -21,6 +21,7 @@ docs/qa/uat/
   README.md                 ← 你在这里（唯一入口说明）
   INDEX.md                  ← 套件总表与最近跑次（判定 SOT）
   CONVENTIONS.md            ← 编号、判定、交叉验证约定
+  scale-baseline.md         ← 全局 UAT 模拟数据规模基线（下限不得降低）
   templates/                ← suite / cases / fixtures / run-record
   suites/<suite>/
     suite.md
