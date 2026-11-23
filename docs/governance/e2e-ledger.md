@@ -29,6 +29,8 @@
 
 | 清单 ID | REQ | 开发台 Spec | 测试台 Suite | 最近 UAT | 备注 |
 |---|---|---|---|---|---|
+| P1-79 | REQ-030-100 | [长追问题组 Spec](../specs/lucy-20261123-long-followup-question-pack-spec.md) · [Plan](../plans/lucy-20261123-long-followup-question-pack-plan.md) | 复用 [`UAT-SUITE-MCP-INQUIRY-PERF`](../qa/uat/suites/mcp-inquiry-performance/suite.md)（题组由消费方用例验证） | **NOT RUN** | S1 设计；独立题组包与独立 `packDigest`，语义继承 P1-54，不改 P1-54 题库与 P1-53 已收口证据。SC-01–06 由题组自检＋消费方 `UAT-MIP-15`／`13` 覆盖。缺口 GAP-UAT-P1-79。 |
+| P1-78 | REQ-030-099 | [MCP 问询端到端性能基准 Spec](../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md) · [Plan](../plans/lucy-20261123-mcp-inquiry-performance-baseline-plan.md) | [`UAT-SUITE-MCP-INQUIRY-PERF`](../qa/uat/suites/mcp-inquiry-performance/suite.md) | **NOT RUN** | S1 设计；P0 核心体验／独立发布门禁，不改变既有核心分母。只做测量与判定，优化由其他 Spec 消费；题目语义取自 P1-54、长链取自 P1-79、数据取自全局规模基线（含 §1.1 MCP-PERF）／P1-34。SC-01–15 挂 R0／01–15；GAP-UAT-P1-78。 |
 | P1-74 | REQ-030-095 | [问询预算主路径逃生 Spec](../specs/lucy-20261122-question-budget-mainpath-escape-spec.md) · [Plan](../plans/lucy-20261122-question-budget-mainpath-escape-plan.md) | [`UAT-SUITE-BUDGET-ESCAPE`](../qa/uat/suites/budget-escape/suite.md) | [PASS WITH GAPS](../qa/uat/suites/budget-escape/runs/2026-11-22-kimi-p174-budget-escape.md) | 开发台 S5 scoped（2026-11-22）；实现 `72d47cb0`＋CR APPROVE；UAT 功能轴 PASS WITH GAPS；BESC-07／10A／Wave D 全量入收口范围另案。≠ 完整 UAT PASS；≠ 可上线。 |
 | P1-72 | REQ-030-093 | [Spec](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md) · [Plan](../plans/lucy-20261120-row-policy-automatic-enforcement-plan.md) | [UAT-SUITE-ROW-POLICY-AUTO](../qa/uat/suites/row-policy-automatic-enforcement/suite.md) | [PASS](../qa/uat/suites/row-policy-automatic-enforcement/runs/2026-11-20-codex-default-row-policy.md) | v1.0。终稿已确权；开发授权已获得；实现与 Codex CLI 代码终审完成；功能合同已收口（定向回归286项、脚本合同97项、隔离Docker39项）；测试台 UAT-SUITE-ROW-POLICY-AUTO PASS；扩展回归与全仓门禁既有缺口单列，远端CI未执行；不入核心分母；≠ 可上线。 |
 | P1-71 | REQ-030-092 | [Spec](../specs/lucy-20261120-storage-readiness-spec.md) · [Plan](../plans/lucy-20261120-storage-readiness-plan.md) | [UAT-SUITE-STORAGE-READINESS](../qa/uat/suites/storage-readiness/suite.md) | **NOT RUN** | v0.1-draft。0.30 不开发；准备材料保留在需求池作下一期开发目标。源码盘点、风险差集与 Spec／Plan／UAT 设计已落盘；终稿未确权；未获开发授权；不升级、不迁移、不操作客户实例；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 |
@@ -116,6 +118,8 @@ R-CAV由同候选测试执行者在组合主张前消费，挂P1-13；P1-52客�
 
 | ID | 缺口 | 建议动作 | 优先级 |
 |---|---|---|---|
+| GAP-UAT-P1-79 | P1-79 长追题组已挂台账，当前 NOT RUN；题组正文、校验器与自检证据均未产出 | 关闭条件：题组包 ≥3 条链、每链 ≥21 轮、逐轮 oracle 独立可机检、`packDigest` 可重算，且消费方 `UAT-MIP-15` 不再因缺题 BLOCKED | P1 |
+| GAP-UAT-P1-78 | P1-78 独立性能套件已挂，当前 NOT RUN；测试基建、真实基线、持续压力与长追问均未落地；P1-79 题组与 MCP-PERF profile 机器断言未落地 | 关闭条件：R0／01–15 必做有真实跑次且 INDEX 为 PASS；基线数值可复算、全部负控有效，连续两次无人值守每日跑次形成可比链；`SOAK` ≥1800 秒／50 身份与 `LONG_FOLLOW` ≥10% 链比例成立。SEED_ONLY 或单次手工跑次不能关闭 | P0 |
 | GAP-UAT-P1-66 | P1-66 batch A BA-01-07 CLOSED; original F66 cold/first-navigation failures retained; full scale/WIDTH/write-fault matrix deferred | Next batch requires user restart, compiler design review and unchanged-budget evidence; not a blocker of accepted batch A | P1 |
 | GAP-UAT-P1-64 | **已关闭**：SC-09类型0错误；本轮与P1-60同一冻结候选完整短名及前台浏览器复验通过 | [合并最终跑次](../qa/uat/suites/source-shortname-conflict/runs/2026-11-20-codex-combined-final.md)；782项Vitest＋29项概念模块回归；整包独立评审 | P1 |
 | GAP-UAT-P1-65 | **本轮整改关闭**（2026-11-20）：前台浏览器／遗漏子例、严格 MCP、夹具清理及状态一致性均通过；[新跑次](../qa/uat/suites/wiki-upload-acl-adoption/runs/2026-11-20-codex-closure-recheck.md) | 最终零残留，51 个独立验收 ID PASS；不替代发布取证／可上线 | — |

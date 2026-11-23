@@ -25,6 +25,27 @@
 | 审计调用行（全历史） | **1,000,000** | 含窗口外历史（31–365 天） | RACS 向量 B |
 | 业务种子数据 | superstore_orders **≥1000**、returns **≥60**、people **≥4** | `gen-demo-data.mjs` seed=42 生成基线（`_baseline.json` 为准） | 既有 demo 种子，主可答数据集 |
 
+### 1.1 MCP 问询性能 profile（MCP-PERF）
+
+> 登记于 2026-11-23（委托人授权补充）。本 profile 是 [P1-78](../../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) 持续压力与长追问的**专项下限**，不放宽、不替代 §1 全局下限；全局下限仍对所有套件生效。
+
+| 维度 | 本 profile 下限 | 计数口径与核验方式 |
+|---|---:|---|
+| 压测 Agent 身份 | **50** 个可发起真实 Public MCP 问询的独立身份 | 自有 Token、具名 Agent ID、运行时可核对角色绑定；至少 2 个绑定正式 `lucy_admin`，其余按受限角色分组。**不得**由单个直连脚本轮换同一 Token 冒充 50 个身份 |
+| 审计调用行（全历史） | **≥1,000,507** | 视图／独立 SQL 实测；seed 造数后复核 |
+| 审计调用行（30 天窗内） | **≥200,498** | 同上；含边界行余量以吸收切边漂移 |
+| 30 天活跃 Agent | **≥499** | `ops_calls` 视图 distinct `agent_id`（默认用量∧自追问排除口径） |
+| 最热单 Agent（窗内） | **≥40,100**（窗内约 20%） | 按 `agent_id` 聚合窗内行数 |
+| 集中与边界形态 | 80/20 集中、窗边界前后各一条、同毫秒不同 id、无历史 Agent、仅 90 天前活跃 Agent **全部落齐** | 逐项以视图或独立 SQL 核对存在且归属正确 |
+| Wiki | **≥300** 页，且 KTX 索引覆盖 | 另须 `wiki_search` 真实命中合成标记；仅数文件或索引行不算 |
+| Skill | **≥100** 个（loader 同口径） | 另须 `lucy_skill_read` 真实读到指定 Skill |
+| 正式角色 | **≥200**，含 `lucy_admin` 全局角色与受限角色 | 运行时生效绑定、全局 Source 集合与跨连接正确查询须核对 |
+| 表 | 沿用 §2 跨夹具 **≥2000**（含宽表） | 口径仍由 P1-34 拥有 |
+
+- **造数与断言**：沿用 §4 三件套（`uat:scale-baseline:seed:access｜wiki-skills｜audit`）与 `npm run uat:scale-baseline`；本 profile 的精确向量与 50 身份断言需扩展 `scripts/uat/check-uat-scale-baseline.mjs`，属测试基建改动，需独立开发授权后落地。
+- **未达标时**：P1-78 的 `SOAK`／`LONG_FOLLOW` 记 BLOCKED，不得缩规模、换身份或用直连脚本替代开跑。
+- **备份与还原**：①② 改配置／Wiki 前自动备份，改动前卷内留副本；demo 基座的无关角色、Agent、凭据与业务数据不得被覆盖。
+
 ## 2. 表分布口径（合计 ≥2000）
 
 | 夹具库 | 下限 | 结构 |
@@ -67,7 +88,7 @@ node scripts/uat/seed-scale-audit-rows.mjs    # ③ 审计行：窗内 20 万＋
 
 1. **不得降低**任一下限；发现达标成本过高时，走委托人变更确认后改本文件。
 2. 造数脚本必须幂等、固定 seed，产物可重生成；夹具口令仅限本机实验（同 [`large-schema-ingestion/fixtures.md`](suites/large-schema-ingestion/fixtures.md) 约定）。
-3. 新增规模维度（如连接数、到达率）先登记进本表再进套件 fixtures。
+3. 新增规模维度（如连接数、到达率）或专项 profile（如 §1.1 MCP-PERF）先登记进本表再进套件 fixtures；套件只引用，不复制第二套数字。
 4. 密钥与凭据只写文件路径，禁止把 token／密码写入本树、inbox、截图说明或回复。
 
 ## 6. 受影响画像

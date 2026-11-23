@@ -4,6 +4,8 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [长追问题组（性能专用）Plan](lucy-20261123-long-followup-question-pack-plan.md) | P1-79／REQ-030-100。S1｜v0.1-draft。委托人2026-11-23授权补充长追问题组并登记；终稿未确权；开发未授权；仅设计与登记；≠ 功能合同收口；≠ 可上线。 |
+| [MCP 问询端到端性能基准与持续门禁 Plan](lucy-20261123-mcp-inquiry-performance-baseline-plan.md) | P1-78／REQ-030-099。S1｜v0.3-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。题目语义取自 P1-54、长链取自 P1-79、数据取自全局规模基线（含 §1.1 MCP-PERF）／P1-34。 |
 | [YAML 产物禁 alias 治理 Plan](lucy-20261123-yaml-alias-free-artifacts-plan.md) | P1-76／REQ-030-097。S4｜v0.1。终稿已确权（委托人 2026-11-23 明示）；开发授权已获得；实现已落地（统一写出口＋15 处调用点替换＋静态门禁）；SC-01–SC-04 已验证、SC-05 随本次登记闭环；待委托人验收，未做功能合同收口。 |
 | [MCP 握手与 Agent 名册长尾复现 Plan](lucy-20261123-interactive-read-resilience-plan.md) | P1-75／REQ-030-096。S2｜v1.1 合同修订已获批准，待开发授权。并行任务 A1–A3，G1／G2 通过后封存候选 A。 |
 | [数据问答默认采用业务上下文实施 Plan](lucy-20261123-default-business-context-adoption-plan.md) | P1-77／REQ-030-098。S2｜v1.1 合同修订已获批准，待开发授权。并行任务 B1–B2，按候选 A 做性能与同窗复验。 |
@@ -16,7 +18,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | [lucy-20261120-storage-readiness-plan.md](lucy-20261120-storage-readiness-plan.md) | P1-71／REQ-030-092；v0.1-draft。0.30 不开发；准备材料保留在需求池作下一期开发目标。源码盘点、风险差集与 Spec／Plan／UAT 设计已落盘；终稿未确权；未获开发授权；不升级、不迁移、不操作客户实例；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线。 配对 [Spec](../specs/lucy-20261120-storage-readiness-spec.md)。 |
 | [lucy-20261120-page-dom-scale-assessment-plan.md](lucy-20261120-page-dom-scale-assessment-plan.md) | PDS 横向评估已执行（Batch 1–3 PASS WITH GAP）：T1 六页 4 PASS／2 BLOCKED，T2 冒烟全过线；套件与探针已登记测试台。 |
 | [lucy-20261120-ops-step-journal-plan.md](lucy-20261120-ops-step-journal-plan.md) | P1-68／REQ-030-089 · S5｜v1.0；功能合同已收口（2026-11-22，S4→S5 并行波次·scoped）。终稿已确权；开发授权已获得；实现与独立代码评审完成；本机 demo Docker 平滑升级后 UAT-SUITE-OPS-STEP R0／01–08 全真 PASS（gitSha=88b2e9ea；跑次 [2026-11-22-cursor-ops-step](../qa/uat/suites/ops-step/runs/2026-11-22-cursor-ops-step.md)）；设计值重度项写入收口范围。不入核心分母；≠ 可上线。 · [Spec](../specs/lucy-20261120-ops-step-journal-spec.md) |
-| [lucy-20261120-user-journey-performance-gate-plan.md](lucy-20261120-user-journey-performance-gate-plan.md) | P1-67／REQ-030-088；v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan 设计；终稿未确权；开发未授权；测试台未建；不入核心分母；≠ 功能收口；≠ 可上线。 配对 [Spec](../specs/lucy-20261120-user-journey-performance-gate-spec.md)。 |
+| [lucy-20261120-user-journey-performance-gate-plan.md](lucy-20261120-user-journey-performance-gate-plan.md) | P1-67／REQ-030-088；v0.1-draft。委托人2026-11-20授权登记与 Spec／Plan 设计；终稿未确权；开发未授权；测试台未建；不入核心分母；≠ 功能收口；≠ 可上线。仅保留 API／WebUI／部署对账，MCP 已移交 P1-78。配对 [Spec](../specs/lucy-20261120-user-journey-performance-gate-spec.md)。 |
 | [lucy-20261120-agent-roster-summary-projection-plan.md](lucy-20261120-agent-roster-summary-projection-plan.md) | P1-66／REQ-030-087；v0.3。委托人2026-11-20批准分批收敛及本进程commit；批次A功能合同已收口；本机Docker最小验收PASS WITH GAP；批次B暂停，原v0.2完整矩阵FAIL保留；本批增量提交；未推送／发布；不入核心分母；本批收口不表示可上线。 |
 | [lucy-20261120-core-availability-followup-plan.md](lucy-20261120-core-availability-followup-plan.md) | v0.3本轮执行及失败跑次交接完成：P170局部功能收口，P169矩阵仍有GAP；正式30分钟组合独立严格FAIL保留。 |
 | [lucy-20261120-readyz-diagnostic-repro-uat-plan.md](lucy-20261120-readyz-diagnostic-repro-uat-plan.md) | P1-61／63缺口修复及本机Docker全真复测完成；真实停止／两轮自动恢复、三轮TERM／原卷恢复局部PASS WITH GAP；完整矩阵未完成；客户未改，未提交／发布。 |

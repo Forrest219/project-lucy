@@ -6,6 +6,7 @@
 
 | Suite | 总账 ID | 路径 | 必做环境 | 最近跑次 | 结果 |
 |---|---|---|---|---|---|
+| `UAT-SUITE-MCP-INQUIRY-PERF` | **P1-78／REQ-030-099**（题组来源 P1-79／REQ-030-100） | [suites/mcp-inquiry-performance](suites/mcp-inquiry-performance/suite.md) | 本机隔离 Docker＋真实 KTX／数据库＋Public MCP＋≥1 真实 Agent；正式全局档先过规模基线 §1.1 MCP-PERF profile（语义取自 P1-54，长链取自 P1-79，数据取自全局规模基线／P1-34） | 尚无（[设计](suites/mcp-inquiry-performance/suite.md)已落盘） | **NOT RUN**（v0.3-draft；R0／01–15 全部必做，含 `SOAK` 持续压力与 `LONG_FOLLOW` 长追问。终稿未确权、测试基建开发与跑次未授权；SEED_ONLY／FAIL／BLOCKED／NOT RUN 均不得作为出包／升级性能 PASS） |
 | `UAT-SUITE-ROW-POLICY-AUTO` | P1-72／REQ-030-093 | [suites/row-policy-automatic-enforcement](suites/row-policy-automatic-enforcement/suite.md) | 隔离本机 Docker＋真实 MCP／KTX／MySQL | [2026-11-20-codex-default-row-policy](suites/row-policy-automatic-enforcement/runs/2026-11-20-codex-default-row-policy.md) | **PASS**（39 项真库；286＋97 自动化；既有扩展回归／全仓门禁缺口单列；不是 P1-28 全套 PASS；≠ 可上线） |
 | `UAT-SUITE-STORAGE-READINESS` | P1-71／REQ-030-092 | [suites/storage-readiness](suites/storage-readiness/suite.md) | 下一期另行授权后的隔离 Docker＋合成数据＋真实 SQLite／PostgreSQL；0.30 不执行 | 尚无 | **NOT RUN**（仅用例设计；0.30 不开发；材料在需求池作下一期目标；终稿未确权；未获开发授权；不升级、不操作客户实例） |
 | `UAT-SUITE-OPS-STEP` | P1-68／REQ-030-089 | [suites/ops-step](suites/ops-step/suite.md) | 独立本机 Docker，前台 Chrome 1920×1080，真实 MySQL／Doris → Hive | [前台复测](suites/ops-step/runs/2026-11-22-codex-ops-step-foreground.md)；[历史跑次](suites/ops-step/runs/2026-11-22-cursor-ops-step.md) | **FAIL（前台补跑，`8fe7cebc`）**。双入口及 51／52 表对号、503 后同卷历史查询通过；SC-11／E4 单次读失败未显示错误提示；行数上限下晚到终态在文件可读、管理页查不到。其余原矩阵缺口见跑次。 |

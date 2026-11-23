@@ -1,5 +1,7 @@
 # Lucy 0.30 — 用户旅程性能门禁 Plan
 
+> **范围注记（2026-11-23）**：MCP 问询端到端性能已移交 [P1-78](../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md)。原 W3 不再属于本 Plan，后续不得新增 `mcp-query-latency` 或其他并行 MCP runner；本 Plan 只保留 API／WebUI 交互与部署对账。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 / 版本 | 实施计划 / v0.1-draft（随 Spec v0.1-draft；**未确权、未授权，不落地**） |
@@ -13,13 +15,13 @@
 
 ## 目标
 
-把用户视角三维度性能（API／WebUI 交互／MCP 问询）变成**每次提交与每次发版的自动门禁**，并补上版本漂移对账；复用既有 `perf:entry`／`perf:release-baseline` 与 PDS 探针方法学，不新造轮子（Spec D1）。
+把用户视角两维度性能（API／WebUI 交互）变成**每次提交与每次发版的自动门禁**，并补上版本漂移对账；复用既有 `perf:entry`／`perf:release-baseline` 与 PDS 探针方法学，不新造轮子（Spec D1）。MCP 问询性能归 P1-78，不在本 Plan 重复建设。
 
 ## 阶段（各自独立授权）
 
 ### W1 文档与预算冻结（纯文档，可在确权后进行）
 
-1. 建 `docs/qa/uat/suites/user-journey-perf/`（suite/cases/fixtures，编号 `UAT-UJP-*`）；fixtures 写入三维度预算线与 payload 字节预算，数值标注设计值并挂"待实测冻结"。
+1. 建 `docs/qa/uat/suites/user-journey-perf/`（suite/cases/fixtures，编号 `UAT-UJP-*`）；fixtures 写入 API／WebUI 两维度预算线与 payload 字节预算，数值标注设计值并挂"待实测冻结"。
 2. runbook 增补：版本性能特性对照表（0.25.0／3a9f0711／1fb73f72）＋ KSC 症状速查（Spec D6）。
 3. INDEX／CONVENTIONS／e2e-ledger 登记新套件（横线 `UAT-UJP-*`）。
 
@@ -30,11 +32,9 @@
 3. runner 现状核查：确认两 runner 在 HEAD 上可无人值守跑通（本阶段只修"跑不通/会挂死"，不改测量逻辑）。
 4. 负控演练：临时注入 2× 延迟提交，验证门禁变红（SC-01 证据）。
 
-### W3 MCP 问询维度补齐（**需开发授权**：新 runner 或扩展）
+### W3 MCP 问询维度补齐（已移交 P1-78，本 Plan 不再执行）
 
-1. 新脚本 `scripts/uat/mcp-query-latency.mjs`：真实 MCP Proxy＋fixture token＋只读小表问题，begin→query 全链路分位统计；夹具数据分档（空/小/中）。
-2. 预算：端到端 p95 设计值写入 fixtures；网关/冷启动窗口单列。
-3. 负控：仅 initialize 无 query 的记录被判无效（SC-03）。
+MCP 测程、预算、基线、负控与 `UAT-MIP-*` 统一归 [P1-78 Spec](../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md) 及其 [Plan](lucy-20261123-mcp-inquiry-performance-baseline-plan.md)。此处不再新增 `scripts/uat/mcp-query-latency.mjs`，也不以仅 initialize 的记录冒充问询性能。
 
 ### W4 部署对账（**需开发授权**：脚本 + 可选调度）
 
@@ -43,8 +43,8 @@
 
 ### W5 UAT 跑次与收口
 
-1. 按 `UAT-UJP-*` cases 执行首跑（三维度 + 交互深度），证据进 runs/；预算设计值 → 实测冻结值走具名评审（Spec D2）。
-2. SC-01–SC-08 全过 → Spec 收口申报；≠ 可上线。
+1. 按 `UAT-UJP-*` cases 执行首跑（API／WebUI 两维度 + 交互深度），证据进 runs/；预算设计值 → 实测冻结值走具名评审（Spec D2）。
+2. 按范围注记排除已移交 P1-78 的 MCP 项后，剩余 SC 全过 → Spec 收口申报；≠ 可上线。
 
 ## 不做（边界）
 
@@ -59,14 +59,14 @@
 
 ## 开工前置
 
-- 委托人批准 Spec 定稿并逐项明示授权（W1 文档 / W2 CI 接入 / W3 MCP runner / W4 对账脚本各自独立）；
+- 委托人批准 Spec 定稿并逐项明示授权（W1 文档 / W2 CI 接入 / W4 对账脚本各自独立）；MCP 不再属于本 Plan；
 - `perf:entry`／`perf:release-baseline` 在 HEAD 无人值守跑通；demo Docker 与本机 Chrome 可用；
 - UJP 套件目录建立并登记 INDEX／CONVENTIONS／e2e-ledger。
 
 ## 验收
 
-- 每阶段交付物：W1 套件文档＋对照表；W2 接入门禁的 CI 绿链＋负控红链证据；W3 MCP 分位报告＋负控；W4 告警演示；
-- 最终：Spec SC-01–SC-08 全过，预算线完成实测冻结。
+- 每阶段交付物：W1 套件文档＋对照表；W2 接入门禁的 CI 绿链＋负控红链证据；W4 告警演示；MCP 分位报告归 P1-78；
+- 最终：按范围注记排除 MCP 项后的 Spec SC 全过，预算线完成实测冻结。
 
 ## 完成定义
 

@@ -1,5 +1,7 @@
 # 用户旅程性能门禁 Spec（API／WebUI 交互／MCP 问询）
 
+> **范围注记（2026-11-23）**：MCP 问询端到端性能已由 [P1-78／REQ-030-099](lucy-20261123-mcp-inquiry-performance-baseline-spec.md) 独立承接。本文 §1 第 3 项、D3、§3.3、SC-03、E5 及伪代码中的 `mcp_query` 仅保留为历史设计输入，**不属于本条现行出口，不得据此新建并行 MCP runner**。本条后续只覆盖 API／WebUI 交互与部署对账；MCP 样本、预算、基线和 UAT 均以 P1-78 为准。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 / 版本 | 功能 Spec / v0.1-draft |
