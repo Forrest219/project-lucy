@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v2.38 / 2026-11-23 |
+| 版本 / 日期 | v2.46 / 2026-11-23 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**；**P2-2 对标对象已修正、D17 首页形态已裁决、D19／D20 已纳入、D21 MD 标配已登记（2026-11-19，见 v1.54／v1.56／v1.57 行）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码  **P1-57两处功能阻塞已修复；委托人已延期G6正式完整导出，本轮客户功能测试排除此项，可按限定范围进行。原完整范围FAIL证据保留。** |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,14 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v2.46 | 2026-11-23 | **入池 P1-78／REQ-030-099**：新建独立「MCP 问询端到端性能基准与持续门禁」，只做测量、基线、判定、证据和持续门禁，不做产品优化。委托人授权按仓库规范新建 Spec／Plan／UAT 设计；定位 P0 核心体验／发布底线，独立出包／升级门禁，不改变 0.30 既有核心分母。P1-67 的 MCP 部分改由本条承接，P1-53 的已发现性能取证缺口作为设计输入。终稿未确权，开发未授权，不执行性能跑次。 |
+| v2.45 | 2026-11-23 | 委托人批准 P1-75／P1-77 合同修订及并行任务落盘。两份 Spec／Plan 升 v1.1，先完成 P1-75 G1／G2，再以通过候选验证 P1-77 的按需指引、整题速度和真实并发上下文负载。见 [并行任务批次](lucy-20261123-interactive-read-resilience-plan.md#并行任务批次)。开发待授权。 |
+| v2.44 | 2026-11-23 | **P1-75／REQ-030-096 终稿确权。** 委托人授权优化并进入定稿，Spec／Plan／UAT 设计升 v1.0，阶段 S2。明确纯备注写中的已提交视图、MCP 动态指引降级与合法查数，以及 50 路同窗必做出口。见 [定稿复核](../reviews/2026-11-23-p1-75-interactive-read-resilience-codex-review.md#v10-定稿处理)。开发待授权。 |
+| v2.43 | 2026-11-23 | **P1-77／REQ-030-098 终稿确权**：委托人明示「批准定稿 spec」→ Spec **v1.0、阶段 S2**（无 Codex CLI 在场，按委托人明示确权先例）；评审 R1 五项必改＋一项澄清已于 v0.2 处理。**开发未授权**；建议首批开发范围＝SC-01 归因对照实验＋判定器取证重写。 |
+| v2.42 | 2026-11-23 | **P1-77／REQ-030-098 Spec → v0.2 草案**：评审 R1（认同方向、五项必改＋一项澄清）逐条处理——根因改「候选根因假设」并新增归因对照实验（同宿主同模型同 MCP 接入、动态与 fallback 分别断言）；C1 改两阶段（已治理口径优先／仅补缺失／冲突不取首个／无通道不降级）；伪代码改按子结论依赖推进＋四态兜底；取证通则（请求／响应／答复关联，检索全文不算读正文）；SC-07 预算与耗时可判定；合同边界收敛为「只承诺 Lucy 下发的指导文本」。评审记录 [R1](../reviews/2026-11-23-p177-spec-review-round1.md)。终稿未确权，开发未授权。 |
+| v2.41 | 2026-11-23 | **入池 P1-77／REQ-030-098**：数据问答默认主动采用业务上下文（口径前置核对＋规程引导＋诚实兜底）。实证：用户反馈「默认取语义，不取 skill/wiki，除非提示词要求」＋2026-11-23 双宿主跑次分裂（kscc 复现／kimi 未复现）。委托人指示落盘 Spec 与 UAT；验收挂 `UAT-SUITE-CONTEXT-CONTENT` 默认使用业务上下文组（改前基线已跑：kscc 侧 02/03/04 自然问句 FAIL）。仅登记与起草，不入核心分母。 |
+| v2.40 | 2026-11-23 | P1-75／REQ-030-096 草案 v0.2，按全局规模 Docker 已见反例收窄首轮。优先处理备注保存同窗的名册 503，补齐 MCP 分段并按既有并发预算复验。现场规模复跑另按补采进度执行。 |
+| v2.40 | 2026-11-23 | **P1-76／REQ-030-097 终稿确权（委托人明示）**：Spec／Plan → S2｜v0.1。终稿已确权（委托人 2026-11-23 明示）；开发未授权；待开发授权后按 Plan 实施。设计冻结，范围不变（统一写出口＋调用点替换＋静态门禁；不改 KTX、不放宽读取侧）。 |
 | v2.39 | 2026-11-23 | **入池 P1-76／REQ-030-097**：合成 manifest 复用列定义经 `yaml.stringify` 产生 >100 别名，KTX（`yaml` 默认 `maxAliasCount=100`）拒读。委托人授权起草 Spec／Plan 待评审。范围＝统一写出口＋调用点替换＋静态门禁；不改 KTX、不放宽读取侧。仅登记与起草，不入核心分母。 |
 | v2.38 | 2026-11-23 | **入池 P1-75／REQ-030-096**：现场复现 Agent 名册 `DISPLAY_SNAPSHOT_BUSY`，MCP 握手出现跨客户端长尾。委托人要求先起草 Spec 和 UAT，再在日志齐备后做 Docker 基线模拟和定稿。仅登记与起草，不入核心分母。 |
 | v2.37 | 2026-11-22 | **P1-29／REQ-030-050 明确 0.30 不开发、留池作下一期优化**：委托人「放在需求池，下一次迭代在优化」。状态 → `X_DEF｜Deferred；下一期`；缺口与 UAT-ROW-07 预期 FAIL／`GAP-UAT-P1-28-VALUE` 仍开；**不挡** P1-28；无实现 Spec；未授权实现。≠ 可上线。 |
@@ -348,8 +356,10 @@
 
 | 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 核心分母 | 跟进状态 | Spec／Plan |
 |---|---|---|---|---|---|---|---|
-| P1-76 | P1 | YAML 产物禁 alias 治理（统一写出口＋静态门禁） | [REQ-030-097](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-097yaml-产物禁-alias-治理) | 约束／缺陷修复级加固 | 否 | S1｜v0.1 草案。已登记，终稿未确权，开发未授权；待评审。 | [Spec](../specs/lucy-20261123-yaml-alias-free-artifacts-spec.md) · [Plan](lucy-20261123-yaml-alias-free-artifacts-plan.md) |
-| P1-75 | P1（主路径可用性，拟） | MCP 握手与 Agent 名册读取长尾治理 | [REQ-030-096](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-096mcp-握手与-agent-名册读取长尾治理) | 事故修复／功能合同，复用 P1-37、P1-66、FUP-03 的边界和门槛 | 否 | S1｜v0.1 草案。已登记，终稿未确权，开发未授权；待现场日志齐备后进行 Docker 基线模拟和定稿评审。 | [Spec](../specs/lucy-20261123-interactive-read-resilience-spec.md) · [Plan](lucy-20261123-interactive-read-resilience-plan.md) · [UAT](../qa/uat/suites/interactive-read-resilience/suite.md) |
+| P1-78 | P0（核心体验／发布底线） | MCP 问询端到端性能基准与持续门禁（仅测量与判定） | [REQ-030-099](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-099mcp-问询端到端性能基准与持续门禁) | 发布取证／真实 Agent／Public MCP／性能基线／持续门禁 | 否（独立发布门禁） | S1｜v0.1-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。 | [Spec](../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md) · [Plan](lucy-20261123-mcp-inquiry-performance-baseline-plan.md) · [UAT](../qa/uat/suites/mcp-inquiry-performance/suite.md) |
+| P1-77 | P1 | 数据问答默认主动采用业务上下文（口径前置核对＋规程引导） | [REQ-030-098](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-098数据问答默认主动采用业务上下文) | 体验／缺陷修复级（运行时指导） | 否 | S2｜v1.1 合同修订已获批准，待开发授权。 | [Spec](../specs/lucy-20261123-default-business-context-adoption-spec.md) · [Plan](lucy-20261123-default-business-context-adoption-plan.md) · [UAT](../qa/uat/suites/context-content/suite.md#默认使用业务上下文) |
+| P1-76 | P1 | YAML 产物禁 alias 治理（统一写出口＋静态门禁） | [REQ-030-097](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-097yaml-产物禁-alias-治理) | 约束／缺陷修复级加固 | 否 | S2｜v0.1。终稿已确权（委托人 2026-11-23 明示）；开发未授权；待开发授权后按 Plan 实施。 | [Spec](../specs/lucy-20261123-yaml-alias-free-artifacts-spec.md) · [Plan](lucy-20261123-yaml-alias-free-artifacts-plan.md) |
+| P1-75 | P1（主路径可用性，拟） | MCP 握手与 Agent 名册读取长尾治理 | [REQ-030-096](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-096mcp-握手与-agent-名册读取长尾治理) | 事故修复／功能合同，复用 P1-37、P1-66、FUP-03 的边界和门槛 | 否 | S2｜v1.1 合同修订已获批准，待开发授权。 | [Spec](../specs/lucy-20261123-interactive-read-resilience-spec.md) · [Plan](lucy-20261123-interactive-read-resilience-plan.md) · [UAT](../qa/uat/suites/interactive-read-resilience/suite.md) |
 | P1-74 | P1（主路径可用性） | 问询预算主路径逃生（触顶后可达 fallback） | REQ-030-095 | Spec 162／窗口 Spec 逃生修订；互补 P1-60／P1-12 | 否 | S5｜v1.1；功能合同已收口（2026-11-22，S4→S5 并行波次·scoped）。实现已提交（`72d47cb0`）；CR APPROVE；UAT 功能轴 PASS WITH GAPS；收口范围不含 BESC-07／10A／Wave D 全量。不入核心分母；≠ 可上线 | [Spec](../specs/lucy-20261122-question-budget-mainpath-escape-spec.md) · [Plan](lucy-20261122-question-budget-mainpath-escape-plan.md) · [UAT](../qa/uat/suites/budget-escape/suite.md) · [错题](../lessons/2026-11-22-question-budget-exhausted-recurring.md) · [PM 报告](../../inbox/2026-11-22-question-budget-pm-scenario-report.md) |
 | P1-73 | P1 | Spec 开发台状态治理（漏斗阶段＋状态词中文） | REQ-030-094 | 文档治理／评审门禁 | 否 | S5｜v1.2。功能合同已收口（2026-11-22，P1-73／P1-35 S5 收口批）。Wave A／B 已落地；v1.1 MIG＋`inventory-stage`；**v1.2 降熵 A＋B＋C**（一条主漏斗＋分叉终态；D8／D8b）。SC-01–SC-15＋实现 CR PASS。伞级事实源＝漏斗 Spec。测试台 not_registered；不入核心分母。本条收口不表示可上线 | [Spec](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) · [Plan](lucy-20261122-spec-status-funnel-gate-plan.md) · [状态词建议书](lucy-20261122-spec-status-vocabulary-chinese-plan.md) · [SC 审计](../reviews/2026-11-22-p1-73-sc-evidence-audit.md) · [实现 CR](../reviews/2026-11-22-p1-73-status-funnel-implementation-cr.md) |
 | P1-72 | P1 | 行权限自动强制执行，取消运维人工证明开关 | REQ-030-093 | 行权限可用性修复 | 否 | S5｜v1.0。终稿已确权；开发授权已获得；实现与 Codex CLI 代码终审完成；功能合同已收口（定向回归286项、脚本合同97项、隔离Docker39项）；测试台 UAT-SUITE-ROW-POLICY-AUTO PASS；扩展回归与全仓门禁既有缺口单列，远端CI未执行；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md) · [Plan](lucy-20261120-row-policy-automatic-enforcement-plan.md) · [测试台](../qa/uat/suites/row-policy-automatic-enforcement/suite.md) |
@@ -682,12 +692,19 @@
 - **关系**：治理门禁，形态对齐交互合同门禁；业务路径整改须另立行。**不入核心分母**。
 - **跟进**：Spec／Plan v0.1-draft；测试台 not_registered；**终稿未确权；未授权开发（含未授权改 lint）**。
 
+### P1-77｜数据问答默认主动采用业务上下文（REQ-030-098）
+
+- **出口**：按 Spec SC-01–08 验证双指引、按需读取、部分作答，以及整题速度和 50 路同窗可用性。验收挂 [`UAT-SUITE-CONTEXT-CONTENT`](../qa/uat/suites/context-content/suite.md#默认使用业务上下文)。
+- **事实**：用户反馈默认只取语义。2026-11-23 KSCC 自然题复现「需提示才可用」，Kimi 跑次为诊断对照。指导措辞、宿主和工具接入分别留待归因。
+- **关系**：以 P1-75 单独通过的候选为性能 A；动态和基础指引共用静态规则，检索按题触发。**不入核心分母**。
+- **跟进**：S2｜v1.1 合同修订已获批准，待开发授权。见 [配对 Plan](lucy-20261123-default-business-context-adoption-plan.md)。
+
 ### P1-76｜YAML 产物禁 alias 治理（REQ-030-097）
 
 - **出口**：仓库内一切 YAML 产物无 anchor／alias；统一写出口默认 `aliasDuplicateObjects: false`；静态门禁拦新增。验收 SC-01–SC-05（单测＋门禁跑次＋一次真实 KTX 对照验证）。
 - **事实**：2026-11-23 另一 Agent 合成 manifest 复用列定义 → `yaml.stringify` 出 149 别名 → KTX（`yaml` 默认 `maxAliasCount=100`）拒读，容器内已实证。Lucy 服务端约 10 处 `stringify` 写盘点无防护，靠约定性安全。
 - **关系**：工程约束／缺陷修复级加固；不改 KTX 源码、不放宽读取侧；造数三件套（字符串模板）无风险不在范围。**不入核心分母**。
-- **跟进**：Spec／Plan **v0.1 草案（S1）**；已登记，终稿未确权，开发未授权；待评审。
+- **跟进**：Spec／Plan **v0.1（S2）**；终稿已确权（委托人 2026-11-23 明示）；开发未授权；待开发授权后按 Plan 实施。
 
 ### P1-73｜Spec 开发台状态治理（REQ-030-094）
 
