@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { parse, stringify } from "yaml";
+import { parse } from "yaml";
+import { stringifySafe } from "../yaml-safe";
 import { beginConfigAuditIntent, auditedWriteFile, completeConfigAuditTerminal } from "./config-audit-write.js";
 import {
   registerInFlightAccessConfigIntent,
@@ -304,7 +305,7 @@ async function writeAccessYamlInBarrier(
       tokens: u.tokens.map(({ ...t }) => t)
     }))
   };
-  const content = stringify(toWrite, { lineWidth: 0 });
+  const content = stringifySafe(toWrite, { lineWidth: 0 });
   return writeAccessConfigFileWithAuditClosure(projectRoot, ACCESS_YAML_REL, content, audit, {
     source: audit?.source ?? "admin_access_config_api",
     expectedVersion: audit?.expectedVersion,

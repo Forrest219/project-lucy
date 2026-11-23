@@ -26,7 +26,7 @@ import { computeCandidateConfigDigest } from "./access-object-version.js";
 import { trustedActorFromRequest, type TrustedActor } from "../security/request-actor.js";
 import { buildAdminPermissionContext, roleCompileInputClosureForAdmin, resolveRoleIds } from "../proxy/acl.js";
 import { parseAccessConfigText } from "../proxy/identity.js";
-import { stringify } from "yaml";
+import { stringifySafe } from "../yaml-safe";
 import { requireWebuiAuthHook } from "../auth/guard.js";
 import { readAccessRecoveryState } from "../access-recovery.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -186,7 +186,7 @@ export async function readRolesAgentCompileInputsDigest(
   kind: "role" | "agent", objectId: string, config: YamlAccessConfig,
   before?: { role?: YamlRole; user?: YamlUser }
 ): Promise<string> {
-  const context = await buildAdminPermissionContext(parseAccessConfigText(stringify(config)));
+  const context = await buildAdminPermissionContext(parseAccessConfigText(stringifySafe(config)));
   const subject = config.users.find((user) => user.id === objectId);
   const resolved = subject ? resolveRoleIds(subject) : undefined;
   const previousRoles = before?.user ? resolveRoleIds(before.user) : undefined;
@@ -198,7 +198,7 @@ export async function readRolesAgentCompileInputsDigest(
   })));
   const previousRole = kind === "role" && before?.role
     ? await roleCompileInputClosureForAdmin(objectId, { ...context,
-        config: parseAccessConfigText(stringify({ ...config, roles: { ...config.roles, [objectId]: before.role } })) })
+        config: parseAccessConfigText(stringifySafe({ ...config, roles: { ...config.roles, [objectId]: before.role } })) })
     : undefined;
   return sha256Hex(stableJson({ roles, previousRole,
     // Legacy inline grants cannot prove a narrower compiler closure.

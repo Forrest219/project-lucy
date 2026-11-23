@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml } from "yaml";
+import { stringifySafe } from "./yaml-safe";
 import { safeWrite } from "./fs-safe";
 import { loadContentPaths } from "./paths";
 import { bumpDisplayGeneration } from "./display-generation";
@@ -436,7 +437,7 @@ async function reloadCatalogUnnotified(
 
 // Re-export so routes can import the YAML serializer without pulling yaml
 // directly. Not part of the public surface.
-export { stringifyYaml as _stringifyYaml };
+export { stringifySafe as _stringifyYaml };
 
 // Sanity check helper used by tests: returns the project root's mtime for the
 // ktx.yaml file, or null if missing. This is a pure FS probe and is never

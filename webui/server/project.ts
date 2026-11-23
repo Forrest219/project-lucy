@@ -1,7 +1,8 @@
 import { access, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { isMap, isScalar, isSeq, parse, parseDocument, Scalar, stringify, type Document, type Node, YAMLMap, YAMLSeq } from "yaml";
+import { isMap, isScalar, isSeq, parse, parseDocument, Scalar, type Document, type Node, YAMLMap, YAMLSeq } from "yaml";
+import { stringifySafe } from "./yaml-safe";
 import { execFile } from "node:child_process";
 import { KtxCliError, testConnection } from "./ktx";
 import { formatConnectionErrorMessage } from "./connection-errors";
@@ -2568,7 +2569,7 @@ export async function probeConnection(
 
     await writeFile(
       path.join(tmpRoot, "ktx.yaml"),
-      stringify({ connections: { [PROBE_CONNECTION_ID]: conn } }),
+      stringifySafe({ connections: { [PROBE_CONNECTION_ID]: conn } }),
       "utf8"
     );
 
@@ -3308,7 +3309,7 @@ export async function planConnectionIdChange(
       const tempConfig = parse(tempAccessText) as Record<string, unknown> | null;
       if (tempConfig && typeof tempConfig === "object") {
         rewriteAccessConfigConnIds(tempConfig, fromId, toId);
-        await writeFile(tempAccessPath, stringify(tempConfig, { lineWidth: 0 }), "utf8");
+        await writeFile(tempAccessPath, stringifySafe(tempConfig, { lineWidth: 0 }), "utf8");
       }
     }
     await renameSemanticLayerDir(path.join(tempConfigDir, SEMANTIC_LAYER_DIR_REL), fromId, toId);
@@ -3486,7 +3487,7 @@ export async function applyConnectionIdChange(
     // 1. access.yaml
     if (accessOldText !== null && accessOldConfig !== null) {
       rewriteAccessConfigConnIds(accessOldConfig, fromId, toId);
-      const newAccessText = stringify(accessOldConfig, { lineWidth: 0 });
+      const newAccessText = stringifySafe(accessOldConfig, { lineWidth: 0 });
       await writeFile(accessPath, newAccessText, "utf8");
       accessWritten = true;
     }

@@ -1,6 +1,7 @@
 import { prepareRolesAgentMutation, runRolesAgentMutationRequest, runRolesAgentPublishWindow, readRolesAgentCompileInputsDigest, recheckRolesAgentWriteAccess, replayRecordedRolesAgentWrite, rolesAgentRequestDigest } from "./access-roles-agent-concurrent-edit.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { randomUUID } from "node:crypto";
+import { stringifySafe } from "../yaml-safe.js";
 import { timeAsync, withRequestTiming } from "../entry-performance-timing.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
@@ -1251,7 +1252,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       });
     }
     // re-stringify via the same stringify used by write
-    const proposedYaml = await import("yaml").then(({ stringify }) => stringify(newConfig, { lineWidth: 0 }));
+    const proposedYaml = stringifySafe(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
     // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
@@ -1354,7 +1355,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         ...freshConfig,
         roles: { ...(freshConfig.roles ?? {}), [roleId]: validated.value }
       };
-      const freshDiff = makeDiff(fresh.raw, (await import("yaml")).stringify(freshConfigWithRole, { lineWidth: 0 }));
+      const freshDiff = makeDiff(fresh.raw, stringifySafe(freshConfigWithRole, { lineWidth: 0 }));
       const freshAttribution = buildRowPolicyAuditAttribution(
         roleId,
         undefined,
@@ -1570,7 +1571,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         error: { code: templateDiagnostics.blocking.code, message: templateDiagnostics.blocking.message }
       });
     }
-    const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
+    const proposedYaml = stringifySafe(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
     // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
@@ -1779,7 +1780,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
           throw error;
         }
       }
-      const freshDiff = makeDiff(fresh.raw, (await import("yaml")).stringify(freshConfigWithRole, { lineWidth: 0 }));
+      const freshDiff = makeDiff(fresh.raw, stringifySafe(freshConfigWithRole, { lineWidth: 0 }));
       const freshAttribution = buildRowPolicyAuditAttribution(
         request.params.roleId,
         freshExisting,
@@ -2018,7 +2019,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
           Object.entries(config.roles ?? {}).filter(([id]) => id !== request.params.roleId)
         )
       };
-      const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
+      const proposedYaml = stringifySafe(newConfig, { lineWidth: 0 });
       const diff = makeDiff(raw, proposedYaml);
 
       // Access Governance Gate — Role deletion: an empty `allow` placeholder
@@ -2173,7 +2174,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         error: { code: templateDiagnostics.blocking.code, message: templateDiagnostics.blocking.message }
       });
     }
-    const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
+    const proposedYaml = stringifySafe(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
     // Access Governance Gate — copy is treated as a Role create with the
@@ -2268,7 +2269,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         ...freshConfig,
         roles: { ...(freshConfig.roles ?? {}), [newRoleId]: validated.value }
       };
-      const freshDiff = makeDiff(fresh.raw, (await import("yaml")).stringify(freshConfigWithRole, { lineWidth: 0 }));
+      const freshDiff = makeDiff(fresh.raw, stringifySafe(freshConfigWithRole, { lineWidth: 0 }));
 
       const freshGuard = await guardRoleIdForCreate(newRoleId, request.body?.acknowledgeContextReferences === true);
       if (freshGuard) return reply.status(freshGuard.status).send({ ok: false, error: freshGuard });

@@ -15,6 +15,7 @@
     "eval:list": "node scripts/eval/eval-runner.mjs --list-cases",
     "lint:spec": "node scripts/lint-spec.mjs",
     "lint:spec-docs": "node scripts/lint-spec-docs.mjs",
+    "lint:yaml-alias": "node scripts/lint/yaml-alias-gate.mjs",
     "lint:status-vocab": "node scripts/lint-spec-docs.mjs --rule=status-vocab",
     "lint:status-funnel": "node scripts/lint-spec-docs.mjs --rule=status-funnel",
     "lint:inventory-stage": "node scripts/lint-spec-docs.mjs --rule=inventory-stage",

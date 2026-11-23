@@ -7,7 +7,8 @@ import { prepareRolesAgentMutation, rolesAgentResponseAfterPublish, runRolesAgen
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { stringify, parse } from "yaml";
+import { parse } from "yaml";
+import { stringifySafe } from "../yaml-safe";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   accessWriteResponseBody,
@@ -332,7 +333,7 @@ async function writeAccessYamlInBarrier(
       tokens: u.tokens.map(({ ...t }) => t)
     }))
   };
-  const content = stringify(toWrite, { lineWidth: 0 });
+  const content = stringifySafe(toWrite, { lineWidth: 0 });
   // Bound inside the publish window, before it is released. Do not re-read
   // the file after the window to pair a newer version with this agent.
   let capturedAfter: AgentAccessWriteResult["after"];
@@ -1229,7 +1230,7 @@ function redactAccessYamlSecrets(text: string): string {
 }
 
 function agentWritePreview(raw: string, newConfig: YamlAccessConfig): { diff: string; proposedYaml: string } {
-  const proposedYamlRaw = stringify(newConfig, { lineWidth: 0 });
+  const proposedYamlRaw = stringifySafe(newConfig, { lineWidth: 0 });
   const safeOld = redactAccessYamlSecrets(raw);
   const safeNew = redactAccessYamlSecrets(proposedYamlRaw);
   return {
