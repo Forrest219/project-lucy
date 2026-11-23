@@ -307,11 +307,20 @@ export function TableWhitelist() {
     return map;
   }, [sourcesQuery.data]);
 
-  // Build all connection rows (before filters)
+  // Build all connection rows (before filters).
+  // P1-80: only treat tables as scanned when the connection tables query succeeded;
+  // pending／error must not fall back to [] and invent「无效启用／缺少 Manifest」.
   const connectionRows = useMemo(() => {
     return connections.map((conn, idx) => {
-      const tablesData = tablesQueries[idx]?.data;
-      const tables = tablesData?.tables ?? [];
+      const query = tablesQueries[idx];
+      if (!query || query.isError) {
+        return { conn, rows: [] as WhitelistTableRow[], tablesLoadState: "error" as const };
+      }
+      if (query.isPending || query.data === undefined) {
+        return { conn, rows: [] as WhitelistTableRow[], tablesLoadState: "loading" as const };
+      }
+      const tablesData = query.data;
+      const tables = tablesData.tables ?? [];
       const scannedSet = new Set(tables);
       const persisted = conn.enabledTables;
       const draft = draftByConnection[conn.id] ?? persisted;
@@ -356,7 +365,7 @@ export function TableWhitelist() {
           invalidEnabled: true
         });
       }
-      return { conn, rows };
+      return { conn, rows, tablesLoadState: "ready" as const };
     });
   }, [connections, tablesQueries, sourceByKey, draftByConnection]);
 
@@ -478,7 +487,9 @@ export function TableWhitelist() {
 
   const configuredSchemasWithoutTables = useMemo(() => {
     if (search.trim()) return [];
-    return connectionFilteredRows.flatMap(({ conn, rows }) => {
+    return connectionFilteredRows.flatMap(({ conn, rows, tablesLoadState }) => {
+      // P1-80 C2: only success／ready connections contribute to「缺少 Manifest」.
+      if (tablesLoadState !== "ready") return [];
       const scannedSchemas = new Set(
         rows.filter((row) => !row.invalidEnabled).map((row) => row.schema).filter(Boolean)
       );
@@ -488,6 +499,11 @@ export function TableWhitelist() {
         .map((schema) => ({ conn, schema }));
     });
   }, [connectionFilteredRows, search, schemaFilter]);
+
+  const tablesListNotReady = useMemo(
+    () => connectionFilteredRows.some(({ tablesLoadState }) => tablesLoadState !== "ready"),
+    [connectionFilteredRows]
+  );
 
   const showFocusedMissingManifest =
     schemaFilter !== "all" && configuredSchemasWithoutTables.length === 1;
@@ -961,8 +977,14 @@ export function TableWhitelist() {
                   type="button"
                   className="pl-btn pl-btn--secondary"
                   onClick={removeInvalidEnabled}
+                  disabled={tablesListNotReady}
                   data-testid="whitelist-remove-invalid-enabled"
                   translate="no"
+                  title={
+                    tablesListNotReady
+                      ? "表清单未就绪，请待读取完成后再移出无效启用"
+                      : undefined
+                  }
                 >
                   移出无效启用
                 </button>
@@ -992,6 +1014,46 @@ export function TableWhitelist() {
             </div>
           </div>
         )}
+
+      {connectionFilteredRows
+        .filter(({ tablesLoadState }) => tablesLoadState === "loading" || tablesLoadState === "error")
+        .map(({ conn, tablesLoadState }) => {
+          const connIdx = connections.findIndex((c) => c.id === conn.id);
+          const isError = tablesLoadState === "error";
+          return (
+            <div
+              key={`${conn.id}-tables-${tablesLoadState}`}
+              className={`pl-validation-banner mt-4 notranslate ${
+                isError ? "pl-validation-banner--danger" : ""
+              }`}
+              translate="no"
+              role="status"
+              data-testid={
+                isError
+                  ? `whitelist-tables-error-${conn.id}`
+                  : `whitelist-tables-loading-${conn.id}`
+              }
+            >
+              <span className="notranslate" translate="no">
+                {isError
+                  ? `连接 ${conn.id}：表清单读取失败，请重试。`
+                  : `连接 ${conn.id}：正在读取表清单…`}
+              </span>
+              {isError && connIdx >= 0 ? (
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost pl-btn--sm"
+                  onClick={() => {
+                    void tablesQueries[connIdx]?.refetch();
+                  }}
+                  data-testid={`whitelist-tables-retry-${conn.id}`}
+                >
+                  重试
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
 
       {configuredSchemasWithoutTables.length > 0 && !showFocusedMissingManifest ? (
         <div
@@ -1338,7 +1400,8 @@ export function TableWhitelist() {
       {connections.length > 0 &&
         visibleGroups.length === 0 &&
         visibleInvalidGroups.length === 0 &&
-        configuredSchemasWithoutTables.length === 0 && (
+        configuredSchemasWithoutTables.length === 0 &&
+        !tablesListNotReady && (
         <div className="pl-empty-state mt-4">
           当前筛选条件下没有可启用的表。
         </div>

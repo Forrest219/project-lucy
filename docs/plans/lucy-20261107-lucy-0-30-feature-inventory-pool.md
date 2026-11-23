@@ -3,7 +3,7 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | **`0.30.0`／`lucy-v0.30` 产品线执行总账（SOT）**。完整跟踪本产品线新功能、旧功能修复、尚未开发／冻结／结案。不是功能 Spec；**单条仍不构成开发授权** |
-| 版本 / 日期 | v2.51 / 2026-11-23 |
+| 版本 / 日期 | v2.53 / 2026-11-23 |
 | 状态 | **生效跟进**。产品线 `lucy-v0.30` / `0.30.0`。**中间态已出口（2026-11-13）**见 [盘点](../reviews/2026-11-13-025-to-030-midstate-inventory.md)／[执行 Plan](lucy-20261113-midstate-exit-closure-plan.md)。**P0-1…5／A 已收口**；半成品四项 CLOSED；**P0-6／7／B 仍冻结**；**P1-15…18 差集补录**；**端到端三台账**已立（测试台挂 P0-1／2／3／4／5／A＋P1-15／16／13／17）。**可信证据两类拆分已批准**（[split](lucy-20261115-trust-evidence-capability-split.md)）：设计口径吸收进 P0-4／B／5；未开工项进 [post-0.30 TE 池](lucy-20261115-post-030-trust-evidence-requirement-pool.md)，**不入本总账新行**。**财务／销售收入双口径选择**仅为概念，挂 [post-0.30 CAL 概念池](lucy-20261116-post-030-dual-caliber-selection-concept-pool.md)，**不入本总账、不在 0.30 升级**。**P2-2 方案 B／D15 已登记（2026-11-16）**；**P2-2 对标对象已修正、D17 首页形态已裁决、D19／D20 已纳入、D21 MD 标配已登记（2026-11-19，见 v1.54／v1.56／v1.57 行）**。**≠ 可上线；≠ 核心升级完成**。未授权条目禁止改运行代码  **P1-57两处功能阻塞已修复；委托人已延期G6正式完整导出，本轮客户功能测试排除此项，可按限定范围进行。原完整范围FAIL证据保留。** |
 | 受众 | 本仓库所有在 `lucy-v0.30` / `0.30` 上工作的人与 agent |
 | 授权边界 | **立项 ≠ 改代码**；**写 Spec ≠ 可实现**；**过程对抗 ≠ 终稿确权**；**终稿确权 ≠ 开发授权**；**入池 ≠ 立项**。改代码须：终稿确权 → 委托人 **另发开发授权**。本池不代替 Spec／Plan |
@@ -14,6 +14,8 @@
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v2.53 | 2026-11-23 | **P1-80／REQ-030-101 → S4**：终稿确权＋开发授权后实现三态分流；单测 SC-01–SC-05 PASS；测试台 [`UAT-SUITE-ENABLED-TABLES-LOAD-STATE`](../qa/uat/suites/enabled-tables-load-state/suite.md) PASS（[跑次](../qa/uat/suites/enabled-tables-load-state/runs/2026-11-23-cursor-p180-load-state.md)）；待委托人验收／功能合同收口；不入核心分母；≠ 可上线。 |
+| v2.52 | 2026-11-23 | **入池 P1-80／REQ-030-101**：启用表范围表清单三态诚实展示。本机 demo 已核实 `/tables` pending／error 与成功空表同文误报「缺少 Manifest／无效启用」；委托人授权起草 Spec／Plan。终稿未确权；开发未授权；测试台 not_registered；不入核心分母；≠ 可上线。 |
 | v2.51 | 2026-11-23 | **入池 P1-79／REQ-030-100＋P1-78 升 v0.3-draft（依赖补登）**：委托人授权补充并登记。新立 P1-79「长追问题组（性能专用）」——独立题组包与独立 `packDigest`，语义继承 P1-54，不改 P1-54 题库与 P1-53 已收口证据；P1-78 的 `LONG_FOLLOW` 改为消费 P1-79。50 路压测身份与持续压力下限登记进[全局规模基线 §1.1 MCP-PERF profile](../qa/uat/scale-baseline.md)（精确向量、Wiki／Skill 实读、`lucy_admin` 运行时绑定），机器断言扩展待测试基建授权。两项实现证据到位前相关用例仍 BLOCKED。终稿未确权，开发未授权，不执行性能跑次。 |
 | v2.50 | 2026-11-23 | **P1-75／REQ-030-096 纳入必做多页面回归。** 委托人确认后将 FDE 观察到的概览、语义资产、Agent 名册和角色权限异常纳入 Spec／Plan／UAT v1.2。SC-08 逐页验证无写冷读、共享核验及构建变慢、恢复和同窗合法纯 MCP。通过后方可封存 P1-77 的基线。 |
 | v2.47 | 2026-11-23 | **P1-78 升 v0.2-draft（来源收敛）**：按委托人要求改为只消费既有 owner——自然问题与 oracle 取自 P1-54 题库 Spec，初始化数据取自全局规模基线（含 `uat:scale-baseline:seed:*`）与 P1-34 表夹具，本条不自制题目、造数脚本或第二套规模数字。新增 `SOAK` 持续压力（50 身份／≥1800 秒／截断正态到达）与 `LONG_FOLLOW` 长追问（≥10% 场景实例／单进程 ≥20 轮）场景及 SC-14／SC-15；依赖缺失一律 BLOCKED。终稿未确权，开发未授权，不执行性能跑次。 |
@@ -361,6 +363,7 @@
 
 | 清单 ID | 优先级 | 标题 | REQ | 闸 / 轨 | 核心分母 | 跟进状态 | Spec／Plan |
 |---|---|---|---|---|---|---|---|
+| P1-80 | P1（事故修复） | 启用表范围表清单三态诚实展示（pending／error ≠ 缺 Manifest） | [REQ-030-101](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-101启用表范围表清单三态诚实展示) | 事故修复／WebUI 启用表范围 | 否 | S4｜v1.0。终稿已确权；开发授权已获得；实现已落地；SC-01–SC-07 通过；测试台 PASS；待委托人验收／功能合同收口；不入核心分母；≠ 可上线。 | [Spec](../specs/lucy-20261123-enabled-tables-load-state-honesty-spec.md) · [Plan](lucy-20261123-enabled-tables-load-state-honesty-plan.md) · [UAT](../qa/uat/suites/enabled-tables-load-state/suite.md) |
 | P1-79 | P1（测试内容；P1-78 依赖） | 长追问题组（性能专用，≥20 轮单进程长链） | [REQ-030-100](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-100长追问题组性能专用) | 测试内容／逐轮 oracle／独立 packDigest | 否 | S1｜v0.1-draft。委托人2026-11-23授权补充长追问题组并登记；终稿未确权；开发未授权；仅设计与登记；≠ 功能合同收口；≠ 可上线。 | [Spec](../specs/lucy-20261123-long-followup-question-pack-spec.md) · [Plan](lucy-20261123-long-followup-question-pack-plan.md) |
 | P1-78 | P0（核心体验／发布底线） | MCP 问询端到端性能基准与持续门禁（仅测量与判定） | [REQ-030-099](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-099mcp-问询端到端性能基准与持续门禁) | 发布取证／真实 Agent／Public MCP／性能基线／持续门禁 | 否（独立发布门禁） | S1｜v0.3-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。 | [Spec](../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md) · [Plan](lucy-20261123-mcp-inquiry-performance-baseline-plan.md) · [UAT](../qa/uat/suites/mcp-inquiry-performance/suite.md) |
 | P1-77 | P1 | 数据问答默认主动采用业务上下文（口径前置核对＋规程引导） | [REQ-030-098](lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-098数据问答默认主动采用业务上下文) | 体验／缺陷修复级（运行时指导） | 否 | S3｜实现进行中（B1 同源 C1–C4/C6 已入完整／基础指引；B2 判定器 27/27）。双宿主 live／PERF／MIX 缺证，按合同默认行为仍维持候选 A；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 | [Spec](../specs/lucy-20261123-default-business-context-adoption-spec.md) · [Plan](lucy-20261123-default-business-context-adoption-plan.md) · [UAT](../qa/uat/suites/context-content/suite.md#默认使用业务上下文) |
@@ -697,6 +700,13 @@
 - **事实**：未显式状态机时出现布尔冒充终态、非终态不落库、两套规则并行、无逃生死路、组级「一败一成」等模式（证据见 Spec §1 指针）。
 - **关系**：治理门禁，形态对齐交互合同门禁；业务路径整改须另立行。**不入核心分母**。
 - **跟进**：Spec／Plan v0.1-draft；测试台 not_registered；**终稿未确权；未授权开发（含未授权改 lint）**。
+
+### P1-80｜启用表范围表清单三态诚实展示（REQ-030-101）
+
+- **出口**：启用表范围页对 `/api/connections/:id/tables` 的 loading／error／success-empty 三态文案可区分；loading／error 不得渲染「缺少 Manifest／无效启用」；成功空表保留既有缺 Manifest 语义；「移出无效启用」在未就绪时不可达。验收 SC-01–SC-07（组件单测＋demo 前台浏览器）。
+- **事实**：2026-11-23 本机 demo 注入复现——`TableWhitelist` 将 `tablesData?.tables ?? []` 用于 pending／error，与成功空表同文误报；健康基线同实例 Manifest 正常（已选 15/15）。调查目录三态证据（仓库外）摘要见 Spec §1。
+- **关系**：收窄 Spec 116「无效启用」触发前提为 tables success；与 P1-75 BUSY／超时正交。**不入核心分母**。
+- **跟进**：S4｜v1.0。终稿已确权；开发授权已获得；实现已落地；SC-01–SC-07 通过；测试台 PASS；待委托人验收／功能合同收口；不入核心分母；≠ 可上线。
 
 ### P1-79｜长追问题组（性能专用）（REQ-030-100）
 
