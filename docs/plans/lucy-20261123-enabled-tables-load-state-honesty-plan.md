@@ -4,9 +4,10 @@
 |---|---|
 | 文档类型 / 版本 | 实施计划／**v1.0** |
 | 日期 / 功能编号 | 2026-11-23／P1-80／REQ-030-101 |
-| 阶段 | S4 |
-| 状态 | S4｜v1.0。终稿已确权；开发授权已获得（委托人 2026-11-23 明示「授权修复，并完成 uat」）；实现已落地；SC-01–SC-07 通过（单测＋Docker 前台浏览器）；测试台 PASS；待委托人验收／功能合同收口；≠ 可上线 |
-| 授权边界 | 终稿已确权；开发授权已获得。阶段 0–3 已完成 |
+| 阶段 | S5 |
+| 收口范围 | SC-01–SC-07；单测 SC-01–SC-05；测试台 R0／01–05 PASS；浏览器 E1–E9。不含干净发布镜像封存冒烟、手动重试点击演练、前台混合态单独演练 |
+| 状态 | S5｜v1.0；功能合同已收口（2026-11-23）。证据＝[收口记录](../reviews/2026-11-23-p180-s5-closure-record.md)＋[浏览器证据](../reviews/2026-11-23-p180-enabled-tables-browser-evidence.md)＋测试台 PASS。委托人批复可收口、不返工；≠ 可上线 |
+| 授权边界 | 终稿已确权；开发授权已获得。阶段 0–3 已完成；功能合同已收口 |
 | 验收 | [Spec](../specs/lucy-20261123-enabled-tables-load-state-honesty-spec.md) SC-01–SC-07 |
 | 关联 | [Spec](../specs/lucy-20261123-enabled-tables-load-state-honesty-spec.md) · [总账 P1-80](lucy-20261107-lucy-0-30-feature-inventory-pool.md) |
 
@@ -63,9 +64,9 @@
 - 路由：/connections/enabled-tables
 - 视口：1920×1080
 - 状态：E1、E2、E3、E4、E5、E6、E7、E8、E9
-- 证据：[2026-11-23-cursor-p180-load-state](../qa/uat/suites/enabled-tables-load-state/runs/2026-11-23-cursor-p180-load-state.md)（R0／01–05 PASS；未点「移出无效启用」）
+- 证据：docs/reviews/2026-11-23-p180-enabled-tables-browser-evidence.md
 
 ## 完成定义
 
 - SC-01–SC-07 通过；无假阳性 loading／error。
-- 功能合同收口另按产品侧修复收口条件；本条收口 ≠ 可上线。
+- **已达成**：功能合同已收口（2026-11-23）；本条收口 ≠ 可上线。

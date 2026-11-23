@@ -43,7 +43,7 @@
 
 | 文档 | 用途 |
 |---|---|
-| [启用表范围表清单三态诚实展示 Spec](specs/lucy-20261123-enabled-tables-load-state-honesty-spec.md) | P1-80／REQ-030-101。S4｜v1.0。终稿已确权；开发授权已获得；实现已落地；SC-01–SC-07 通过；测试台 PASS；待委托人验收／功能合同收口；不入核心分母；≠ 可上线。配对 [Plan](plans/lucy-20261123-enabled-tables-load-state-honesty-plan.md) · [UAT](qa/uat/suites/enabled-tables-load-state/suite.md)。 |
+| [启用表范围表清单三态诚实展示 Spec](specs/lucy-20261123-enabled-tables-load-state-honesty-spec.md) | P1-80／REQ-030-101。S5｜v1.0；功能合同已收口（2026-11-23）。测试台 PASS；[收口记录](reviews/2026-11-23-p180-s5-closure-record.md)。不入核心分母；≠ 可上线。配对 [Plan](plans/lucy-20261123-enabled-tables-load-state-honesty-plan.md) · [UAT](qa/uat/suites/enabled-tables-load-state/suite.md)。 |
 | [长追问题组（性能专用）Spec](specs/lucy-20261123-long-followup-question-pack-spec.md) | P1-79／REQ-030-100。S1｜v0.1-draft。委托人2026-11-23授权补充长追问题组并登记；终稿未确权；开发未授权；仅设计与登记；≠ 功能合同收口；≠ 可上线。独立题组包与独立 `packDigest`，供 P1-78 消费。 |
 | [MCP 问询端到端性能基准与持续门禁 Spec](specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md) | P1-78／REQ-030-099。S1｜v0.3-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。题目语义取自 P1-54、长链取自 P1-79、数据取自全局规模基线（含 §1.1 MCP-PERF）／P1-34。见 [UAT 设计](qa/uat/suites/mcp-inquiry-performance/suite.md)。 |
 | [MCP 握手与 Agent 名册读取长尾治理 Spec](specs/lucy-20261123-interactive-read-resilience-spec.md) | P1-75／REQ-030-096。S3｜实现进行中（A1／A2 单元＋复审 PASS；A3 判定器 24/24；demo 镜像已含改动）。正式 G1 R0–07／G2 与多页面必做回归尚未封存跑次；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。见 [UAT 设计](qa/uat/suites/interactive-read-resilience/suite.md)。 |

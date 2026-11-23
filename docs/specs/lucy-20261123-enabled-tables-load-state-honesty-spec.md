@@ -7,9 +7,10 @@
 | 日期 / 目标版本 | 2026-11-23／产品线 `0.30.0`（`lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-80**／REQ-030-101／**P1（事故修复）**。**不入核心分母** |
 | 台账号 | 无 |
-| 阶段 | S4 |
-| 状态 | S4｜v1.0。终稿已确权（委托人 2026-11-23 明示「授权修复」）；开发授权已获得；实现已落地（`TableWhitelist` 三态分流＋移出门禁）；SC-01–SC-05 单测 PASS；SC-06／SC-07 本机 demo 前台浏览器 UAT PASS（[跑次](../qa/uat/suites/enabled-tables-load-state/runs/2026-11-23-cursor-p180-load-state.md)）；测试台 PASS；待委托人验收／功能合同收口；≠ 可上线 |
-| 授权边界 | 终稿已确权；开发授权已获得（委托人 2026-11-23 明示「授权修复，并完成 uat」）。SC-01–SC-07 已按 Plan 完成 |
+| 阶段 | S5 |
+| 收口范围 | SC-01–SC-07；单测 SC-01–SC-05；测试台 R0／01–05 PASS；浏览器 E1–E9。不含干净发布镜像（`gitDirty=false`）封存冒烟、手动重试点击演练、前台混合态单独演练 |
+| 状态 | S5｜v1.0；功能合同已收口（2026-11-23）。终稿已确权；开发授权已获得；实现已落地；测试台 PASS；[收口记录](../reviews/2026-11-23-p180-s5-closure-record.md)。委托人批复可收口、不返工。不入核心分母。≠ 可上线 |
+| 授权边界 | 终稿已确权；开发授权已获得；功能合同已收口。SC-01–SC-07 已按 Plan 完成 |
 | 需求 / 验收 | [总账 P1-80](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [REQ-030-101](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-101启用表范围表清单三态诚实展示) · 验收 SC-01–SC-07 |
 | 配对计划 | [Plan](../plans/lucy-20261123-enabled-tables-load-state-honesty-plan.md) |
 | 证据 | 2026-11-23 本机 demo 三态复现（调查目录 `…/20261123-lucyadm-timeout-investigation/enabled-tables-tri-state/`，仓库外）；仓库内以本 Spec §1 摘要为准 |
