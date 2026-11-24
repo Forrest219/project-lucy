@@ -2137,6 +2137,15 @@ export const instructionsDecisionTestHooks: {
 
 let instructionsWorkActive = 0;
 
+/** P0-2：独立 `lucy_catalog` 每实例同时运行上限；无等待队列，满则返回可重试的忙碌结果。 */
+export const CATALOG_WORK_MAX_CONCURRENT = 20;
+let catalogWorkActive = 0;
+/** 仅供单测：缩小容量，或在目录读取前注入可取消的慢点。 */
+export const catalogWorkTestHooks: { capacity?: number; beforeCatalog?: (signal: AbortSignal) => Promise<void> } = {};
+export function catalogWorkActiveCount(): number {
+  return catalogWorkActive;
+}
+
 /** 当前占用中的动态指引工作数（只读；供测试与取证）。 */
 export function instructionsWorkActiveCount(): number {
   return instructionsWorkActive;
@@ -6344,15 +6353,79 @@ async function buildDenialRepairPayload(
 
     if (toolName === "connection_list" || toolName === "lucy_catalog" || toolName === "kx_catalog") {
       const handler = trace.start("local_handler");
-      const catalogCall = toolName === "connection_list"
-        ? connectionList(identity)
-        : toolName === "lucy_catalog"
-          ? lucyCatalog(identity)
-          : kxCatalog(identity);
-      const data = await catalogCall.catch((error: unknown) => {
+      // P0-2：独立目录读取有并发上限与客户端取消；结局不得记成功（见 settleCatalogWithoutResult）。
+      const bounded = toolName === "lucy_catalog";
+      const settleCatalogWithoutResult = async (errorDetail: string, reasonCode: "cancelled" | "execution_unavailable") => {
+        handler.end({ status: "error", reasonCode, attrs: { handler: "catalog", detail: errorDetail } });
+        if (errorDetail === "client_disconnected") {
+          if (!res.destroyed && !res.writableEnded) res.destroy();
+        } else {
+          const busyBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            result: { isError: true, content: [{ type: "text", text: "目录读取繁忙，请稍后重试。" }] }
+          });
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(busyBody);
+        }
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          ...queryMeta,
+          outcome: "error",
+          errorDetail,
+          executionEvidence: executionEvidenceFromObservation({ notExecuted: true, authorizationAllowed: true }),
+          durationMs: Date.now() - start,
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, "allowed")),
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "error",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: true,
+          reason: "allowed",
+          matchedRule: decision.reason
+        });
+      };
+      if (bounded && catalogWorkActive >= (catalogWorkTestHooks.capacity ?? CATALOG_WORK_MAX_CONCURRENT)) {
+        await settleCatalogWithoutResult("catalog_capacity_full", "execution_unavailable");
+        return;
+      }
+      if (bounded) catalogWorkActive += 1;
+      let data: Awaited<ReturnType<typeof lucyCatalog>> | Awaited<ReturnType<typeof kxCatalog>> | Awaited<ReturnType<typeof connectionList>>;
+      try {
+        if (bounded) await catalogWorkTestHooks.beforeCatalog?.(readWait.signal);
+        data = await (toolName === "connection_list"
+          ? connectionList(identity)
+          : bounded
+            ? lucyCatalog(identity, { signal: readWait.signal })
+            : kxCatalog(identity));
+      } catch (error) {
+        if (bounded && (readWait.signal.aborted || res.destroyed)) {
+          await settleCatalogWithoutResult("client_disconnected", "cancelled");
+          return;
+        }
         handler.end({ status: "error", reasonCode: "internal_error", attrs: { handler: "catalog" } });
         throw error;
-      });
+      } finally {
+        if (bounded) catalogWorkActive -= 1;
+      }
+      // 构建完成时客户端若已离开，不得记成功（P0-2）。
+      if (bounded && (readWait.signal.aborted || res.destroyed)) {
+        await settleCatalogWithoutResult("client_disconnected", "cancelled");
+        return;
+      }
       handler.end({ status: "ok", reasonCode: "allowed", attrs: { handler: "catalog" } });
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",

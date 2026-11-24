@@ -76,6 +76,9 @@ const FULL_DIGEST_INTERVAL_MS = 30_000;
 /** Metadata older than this, or a full digest older than 31 s, means "not verified". */
 const METADATA_FRESH_MS = 3000;
 const FULL_DIGEST_FRESH_MS = 31_000;
+/** P0-1 — bounded degraded read: serve the committed slot while only the freshness window has lapsed. */
+const METADATA_GRACE_MS = 120_000;
+const FULL_DIGEST_GRACE_MS = 180_000;
 
 /** Scopes a display snapshot may depend on. `sources` needs D+P+C, Agent permissions need P+C. */
 export const SOURCES_SCOPES: readonly DisplayScope[] = ["D", "P", "C"];
@@ -111,7 +114,7 @@ type Entry = { current?: Slot; inflight: Map<string, BuildTask>; failure?: { key
 
 const entries = new Map<string, Entry>();
 let inflightBuilds = 0;
-let stats = { builds: 0, hits: 0, misses: 0, busy: 0 };
+let stats = { builds: 0, hits: 0, misses: 0, busy: 0, graceServes: 0 };
 const busyByReason = new Map<DisplayBusyReason, number>();
 /** Spec 195 §7 — request correlation for the diagnostics (no payload, no secrets). */
 let lastRequest: { name: string; scopes: DisplayScope[]; attempts: number; reason?: DisplayBusyReason } | null = null;
@@ -259,6 +262,14 @@ async function runBounded<T, R>(
   await Promise.all(runners);
   return results;
 }
+
+/** P0-1 measurement — one structured line per notable event; no payloads, no secrets. */
+function probeLog(event: string, fields: Record<string, unknown>): void {
+  console.warn(`[display-probe] ${JSON.stringify({ event, t: Date.now(), ...fields })}`);
+}
+let lastGraceRefusal = "none";
+/** Only passes slower than this are logged. */
+const PROBE_SLOW_PASS_MS = 1000;
 
 function isEnoent(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
@@ -450,7 +461,10 @@ async function runMetadataPass(state: ReconcilerState): Promise<void> {
   }
 
   const commit = ledger.commit(candidates);
-  if (commit.changedScopes.length > 0) bumpDisplayGeneration(commit.changedScopes);
+  if (commit.changedScopes.length > 0) {
+    probeLog("generation_bump", { pass: "metadata", scopes: commit.changedScopes, candidates: candidates.length });
+    bumpDisplayGeneration(commit.changedScopes);
+  }
   state.error = undefined;
   // A scope whose digest coverage failed only recovers through a full digest
   // pass — run one now instead of waiting for the 30 s fallback.
@@ -508,18 +522,23 @@ async function runFullDigestPass(state: ReconcilerState): Promise<void> {
   }
 
   const commit = ledger.commit(candidates);
-  if (commit.changedScopes.length > 0) bumpDisplayGeneration(commit.changedScopes);
+  if (commit.changedScopes.length > 0) {
+    probeLog("generation_bump", { pass: "digest", scopes: commit.changedScopes, candidates: candidates.length });
+    bumpDisplayGeneration(commit.changedScopes);
+  }
   state.error = undefined;
 }
 
 /** One shared metadata pass — concurrent readers attach to the same task. */
 function sharedMetadataPass(state: ReconcilerState): Promise<void> {
   if (!state.metadataTask) {
+    const startedAt = Date.now();
     const task = runMetadataPass(state)
       .catch((error) => {
         state.error = errorMessage(error);
       })
       .finally(() => {
+        if (Date.now() - startedAt >= PROBE_SLOW_PASS_MS) probeLog("pass", { pass: "metadata", ms: Date.now() - startedAt, files: state.ledger.size, error: state.error ? true : false });
         if (state.metadataTask === task) state.metadataTask = undefined;
       });
     state.metadataTask = task;
@@ -530,11 +549,13 @@ function sharedMetadataPass(state: ReconcilerState): Promise<void> {
 /** One shared full digest pass — concurrent readers attach to the same task. */
 function sharedFullDigestPass(state: ReconcilerState): Promise<void> {
   if (!state.fullTask) {
+    const startedAt = Date.now();
     const task = runFullDigestPass(state)
       .catch((error) => {
         state.error = errorMessage(error);
       })
       .finally(() => {
+        if (Date.now() - startedAt >= PROBE_SLOW_PASS_MS) probeLog("pass", { pass: "digest", ms: Date.now() - startedAt, files: state.ledger.size, error: state.error ? true : false });
         if (state.fullTask === task) state.fullTask = undefined;
       });
     state.fullTask = task;
@@ -581,15 +602,8 @@ function busyReasonFor(scopes: readonly DisplayScope[]): DisplayBusyReason {
   return "metadata_overdue";
 }
 
-/**
- * Spec 195 §6 — share the verification task and wait for recovery inside the
- * request's own budget. The task outlives the HTTP subscriber: a cancelled
- * request never releases the work early.
- */
-async function ensureVerified(scopes: readonly DisplayScope[], budget: DisplayRequestBudget): Promise<boolean> {
-  if (displayCacheVerified(scopes)) return true;
-  const state = reconciler;
-  if (!state) return false;
+/** Start (or attach to) the shared passes the scopes need; does not wait. */
+function startVerificationTasks(state: ReconcilerState, scopes: readonly DisplayScope[]): Promise<void>[] {
   const health = scopeHealthSnapshot();
   const tasks: Promise<void>[] = [];
   const needsMetadata = scopes.some((scope) => {
@@ -602,6 +616,65 @@ async function ensureVerified(scopes: readonly DisplayScope[], budget: DisplayRe
   });
   if (needsMetadata) tasks.push(sharedMetadataPass(state));
   if (needsDigest) tasks.push(sharedFullDigestPass(state));
+  return tasks;
+}
+
+/**
+ * P0-1 — verification is only *aged* (no error, no pending write, same context
+ * and generation): the scopes were verified recently enough for a bounded
+ * degraded read. Any recorded error or an age beyond the grace limits fails.
+ */
+function displayCacheWithinGrace(scopes: readonly DisplayScope[], now: number = Date.now()): boolean {
+  if (!reconciler || reconciler.error) return false;
+  const health = scopeHealthSnapshot();
+  for (const scope of scopes) {
+    const entry = health[scope];
+    if (!entry || entry.metadataError || entry.digestError) return false;
+    if (now - entry.metadataCompletedAt >= METADATA_GRACE_MS) return false;
+    if (now - entry.digestCompletedAt >= FULL_DIGEST_GRACE_MS) return false;
+  }
+  return true;
+}
+
+/**
+ * P0-1 — instead of failing the page with 503 when only the freshness window has
+ * lapsed (typically a starved event loop delaying the background pass), serve the
+ * already-committed slot for the same key and re-verify in the background. Never
+ * builds, never serves across a context or generation change or a pending write.
+ */
+async function serveWithinGrace(name: string, scopes: readonly DisplayScope[], extraKey: string): Promise<DisplaySnapshotResult | undefined> {
+  const state = reconciler;
+  const refuse = (cause: string): undefined => { lastGraceRefusal = cause; return undefined; };
+  if (!state) return refuse("no_reconciler");
+  if (state.error) return refuse("reconciler_error");
+  if (!displayCacheWithinGrace(scopes)) return refuse("outside_grace_or_scope_error");
+  if (hasPendingDisplayWrite(scopes)) return refuse("write_pending");
+  const context = await currentScopeContext();
+  if (!displayCacheWithinGrace(scopes)) return refuse("outside_grace_after_context");
+  if (hasPendingDisplayWrite(scopes)) return refuse("write_pending_after_context");
+  if (!sameContext(state.context, context)) return refuse("context_mismatch");
+  const entry = entries.get(name);
+  const slot = entry?.current;
+  if (!slot) return refuse("no_committed_slot");
+  if (slot.key !== keyFor(name, scopes, context, extraKey)) return refuse("slot_key_changed");
+  void Promise.all(startVerificationTasks(state, scopes));
+  stats.hits += 1;
+  stats.graceServes += 1;
+  countEntryPerf("displayHits");
+  markDisplayCache("hit");
+  return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "hit", incarnation: slot.incarnation };
+}
+
+/**
+ * Spec 195 §6 — share the verification task and wait for recovery inside the
+ * request's own budget. The task outlives the HTTP subscriber: a cancelled
+ * request never releases the work early.
+ */
+async function ensureVerified(scopes: readonly DisplayScope[], budget: DisplayRequestBudget): Promise<boolean> {
+  if (displayCacheVerified(scopes)) return true;
+  const state = reconciler;
+  if (!state) return false;
+  const tasks = startVerificationTasks(state, scopes);
   if (tasks.length === 0) return false;
   const remaining = budget.deadline - Date.now();
   if (remaining <= 0) return displayCacheVerified(scopes);
@@ -839,6 +912,13 @@ export async function getDisplaySnapshot(
     if (budget.attemptsLeft <= 0) break;
     budget.attemptsLeft -= 1;
     attempts += 1;
+    if (!displayCacheVerified(scopes)) {
+      const grace = await serveWithinGrace(name, scopes, extraKey);
+      if (grace) {
+        lastRequest = { name, scopes: [...scopes], attempts };
+        return grace;
+      }
+    }
     if (!(await ensureVerified(scopes, budget))) {
       reason = busyReasonFor(scopes);
       break;
@@ -856,6 +936,12 @@ export async function getDisplaySnapshot(
     }
     const context = await currentScopeContext();
     if (!verifiedFor(context, scopes)) {
+      // P0-1：等待上下文期间新鲜窗可能刚好过期（事件循环被占）；仍在宽限内则服务已提交快照。
+      const grace = await serveWithinGrace(name, scopes, extraKey);
+      if (grace) {
+        lastRequest = { name, scopes: [...scopes], attempts };
+        return grace;
+      }
       reason = reconciler && !sameContext(reconciler.context, context) ? "context_mismatch" : busyReasonFor(scopes);
       break;
     }
@@ -905,6 +991,11 @@ export async function getDisplaySnapshot(
   }
   stats.busy += 1;
   busyByReason.set(reason, (busyByReason.get(reason) ?? 0) + 1);
+  {
+    const now = Date.now();
+    const ages = Object.fromEntries(Object.entries(scopeHealthSnapshot()).map(([scope, e]) => [scope, { m: now - e.metadataCompletedAt, d: now - e.digestCompletedAt, me: Boolean(e.metadataError), de: Boolean(e.digestError) }]));
+    probeLog("busy", { name, reason, graceRefusal: lastGraceRefusal, attempts, ages, metaTask: Boolean(reconciler?.metadataTask), fullTask: Boolean(reconciler?.fullTask) });
+  }
   lastRequest = { name, scopes: [...scopes], attempts, reason };
   throw new DisplaySnapshotBusyError(reason);
 }
@@ -1075,7 +1166,7 @@ export async function prewarmDisplaySnapshots(): Promise<void> {
 export function resetDisplaySnapshotsForTests(): void {
   entries.clear();
   serveLeases.clear();
-  stats = { builds: 0, hits: 0, misses: 0, busy: 0 };
+  stats = { builds: 0, hits: 0, misses: 0, busy: 0, graceServes: 0 };
   busyByReason.clear();
   resetRevisionLedger();
 }

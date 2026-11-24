@@ -573,7 +573,7 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
   /** Push the clock past the freshness windows so the scope is overdue. */
   function makeOverdue(): () => void {
     const realNow = Date.now();
-    const spy = vi.spyOn(Date, "now").mockReturnValue(realNow + 60_000);
+    const spy = vi.spyOn(Date, "now").mockReturnValue(realNow + 200_000);
     return () => spy.mockRestore();
   }
 
@@ -593,6 +593,38 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
     await reconcileFullDigest();
     const recovered = await getDisplaySnapshot("overdue", ["D"], async () => "payload");
     expect(recovered.payload).toBe("payload");
+  });
+
+  it("P0-1 an aged-but-error-free verification serves the committed slot at once and re-verifies in the background", async () => {
+    const first = await getDisplaySnapshot("grace", ["D"], async () => "payload");
+    expect(first.cache).toBe("miss");
+    const hold = deferred();
+    fsGate.hold = hold.promise;
+    const realNow = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValue(realNow + 5_000);
+    const started = performance.now();
+    const served = await getDisplaySnapshot("grace", ["D"], async () => { throw new Error("must not build"); });
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(served).toMatchObject({ payload: "payload", cache: "hit", version: first.version });
+    expect(displaySnapshotDiagnostics()).toMatchObject({ graceServes: 1 });
+    hold.resolve();
+    fsGate.hold = null;
+    spy.mockRestore();
+    await reconcileMetadata();
+  });
+
+  it("P0-1 beyond the grace limit the committed slot is not served", async () => {
+    await getDisplaySnapshot("grace-limit", ["D"], async () => "payload");
+    const hold = deferred();
+    fsGate.hold = hold.promise;
+    const restoreClock = makeOverdue();
+    await expect(getDisplaySnapshot("grace-limit", ["D"], async () => "payload")).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    expect(displaySnapshotDiagnostics().graceServes).toBe(0);
+    hold.resolve();
+    fsGate.hold = null;
+    restoreClock();
+    await reconcileMetadata();
+    await reconcileFullDigest();
   });
 
   it("SI-09 a request that gives up does not stop the shared verification task", async () => {

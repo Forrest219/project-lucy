@@ -1085,6 +1085,9 @@ export function buildServer() {
     }
     const retryAfter = (error as { retryAfterSeconds?: unknown }).retryAfterSeconds;
     if (typeof retryAfter === "number") reply.header("Retry-After", String(retryAfter));
+    // P0-1：忙碌原因（固定枚举，无敏感信息）随响应头返回，供现场与 UAT 归因。
+    const busyReason = (error as { reason?: unknown }).reason;
+    if (code === "DISPLAY_SNAPSHOT_BUSY" && typeof busyReason === "string") reply.header("X-Lucy-Busy-Reason", busyReason);
 
     reply.status(statusCode).send(payload);
   });

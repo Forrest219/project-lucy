@@ -859,6 +859,62 @@ describe("P1-75 §2.2 握手指引：截止、容量、取消与撤权", () => {
     }
   });
 
+  const callCatalog = (port: number, id: string, signal?: AbortSignal) => fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    signal,
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}`, "mcp-session-id": `${id}-session` },
+    body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "lucy_catalog", arguments: {} } })
+  });
+
+  it("P0-2 独立 lucy_catalog 容量满：返回可重试忙碌、记错误审计，容量释放后恢复", async () => {
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p02-cap"));
+    try {
+      const mcp = await import("../proxy/mcp-proxy");
+      expect(mcp.CATALOG_WORK_MAX_CONCURRENT).toBe(20);
+      mcp.catalogWorkTestHooks.capacity = 0;
+      const busy = await (await callCatalog(proxyPort, "p02-cap")).text();
+      expect(busy).toContain("目录读取繁忙");
+      const audit = await waitForAuditRow("p02-cap");
+      expect(audit.outcome).toBe("error");
+      expect(audit.error_detail).toBe("catalog_capacity_full");
+      mcp.catalogWorkTestHooks.capacity = undefined;
+      expect(await (await callCatalog(proxyPort, "p02-cap-ok")).text()).toContain("superstore_orders");
+      expect(mcp.catalogWorkActiveCount()).toBe(0);
+    } finally {
+      const mcp = await import("../proxy/mcp-proxy");
+      mcp.catalogWorkTestHooks.capacity = undefined;
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("P0-2 独立 lucy_catalog 客户端断开：取消、不记成功，容量真实终结后释放，后续调用正常", async () => {
+    const { upstream, server, proxyPort } = await startProxy(okUpstream("p02-disc"));
+    try {
+      const mcp = await import("../proxy/mcp-proxy");
+      let abortSeen = false;
+      mcp.catalogWorkTestHooks.beforeCatalog = async (signal) => {
+        await new Promise<void>((resolve) => signal.addEventListener("abort", () => { abortSeen = true; resolve(); }, { once: true }));
+      };
+      const client = new AbortController();
+      const pending = callCatalog(proxyPort, "p02-disc", client.signal).catch((err: unknown) => err);
+      await pollUntil(() => mcp.catalogWorkActiveCount() === 1);
+      client.abort();
+      await pending;
+      await pollUntil(() => abortSeen);
+      await pollUntil(() => mcp.catalogWorkActiveCount() === 0);
+      const audit = await waitForAuditRow("p02-disc");
+      expect(audit.outcome).toBe("error");
+      expect(audit.error_detail).toBe("client_disconnected");
+      expect(Number(audit.response_bytes ?? 0)).toBe(0);
+      mcp.catalogWorkTestHooks.beforeCatalog = undefined;
+      expect(await (await callCatalog(proxyPort, "p02-after")).text()).toContain("superstore_orders");
+    } finally {
+      const mcp = await import("../proxy/mcp-proxy");
+      mcp.catalogWorkTestHooks.beforeCatalog = undefined;
+      await closeAll(upstream, server);
+    }
+  });
+
   it("构建期间被撤权：不发任何指引（沿用屏障的 403 authorization_revoked），后续合法握手不受影响", async () => {
     const { upstream, server, proxyPort } = await startProxy(okUpstream("p175-revoke"));
     try {
