@@ -9,7 +9,8 @@
 import { stat } from "node:fs/promises";
 import { glob } from "node:fs/promises";
 import path from "node:path";
-import { readCatalogYaml } from "../catalog-yaml-cache.js";
+import { catalogYamlParseMsTotal, readCatalogYaml } from "../catalog-yaml-cache.js";
+import { readEntryPerfCounters } from "../entry-performance-timing.js";
 
 /** O3 闭合值：新增 description 字段 UTF-16 code unit 总预算。 */
 export const MAX_TOTAL_DESCRIPTION_CHARS = 8192;
@@ -264,6 +265,8 @@ export function resetDescriptionIndexCacheForTests(): void {
   indexCacheStats.uncacheable = 0;
 }
 
+const FINGERPRINT_STAT_BATCH = 64;
+
 async function descriptionScopeFingerprint(semanticLayerRoot: string, scope: string[]): Promise<string | null> {
   const parts: string[] = [];
   try {
@@ -277,9 +280,15 @@ async function descriptionScopeFingerprint(semanticLayerRoot: string, scope: str
       }
       files.sort();
       parts.push(`@${connectionId}`);
-      for (const file of files) {
-        const info = await stat(file);
-        parts.push(`${file}|${info.mtimeMs}|${info.ctimeMs}|${info.size}|${info.ino}`);
+      // 分批并行 stat：串行 stat 占指纹扫描约 85%。按排序后的顺序拼接，指纹字符串与串行版逐字节一致；
+      // 分批上限避免文件数很大时同时打开过多句柄。任一 stat 失败仍整体判为不可缓存（外层 catch）。
+      for (let offset = 0; offset < files.length; offset += FINGERPRINT_STAT_BATCH) {
+        const batch = files.slice(offset, offset + FINGERPRINT_STAT_BATCH);
+        const infos = await Promise.all(batch.map((file) => stat(file)));
+        batch.forEach((file, index) => {
+          const info = infos[index];
+          parts.push(`${file}|${info.mtimeMs}|${info.ctimeMs}|${info.size}|${info.ino}`);
+        });
       }
     }
   } catch {
@@ -296,18 +305,26 @@ const cloneIndexes = (value: DescriptionIndexes): DescriptionIndexes => ({
   failedSourceKeys: new Set(value.failedSourceKeys)
 });
 
+/** 观测用：把 enrich 内部分段写入调用方给的记录（毫秒或计数），不影响返回值。 */
+export type EnrichTimings = Record<string, number>;
+const roundMs = (value: number): number => Math.round(value * 10) / 10;
+
 export async function loadDescriptionIndexes(
   semanticLayerRoot: string,
-  connectionScope: string[]
+  connectionScope: string[],
+  timings?: EnrichTimings
 ): Promise<DescriptionIndexes> {
   const scope = [...new Set(connectionScope.map(normalizeCatalogRef).filter(Boolean))].sort();
+  const fingerprintStart = performance.now();
   const fingerprint = await descriptionScopeFingerprint(semanticLayerRoot, scope);
+  if (timings) timings.enrich_fingerprint_ms = roundMs(performance.now() - fingerprintStart);
   if (fingerprint === null) {
     indexCacheStats.uncacheable += 1;
     return loadDescriptionIndexesUncached(semanticLayerRoot, connectionScope);
   }
   const key = `${semanticLayerRoot}\u0000${scope.join(",")}`;
   const cached = indexCache.get(key);
+  if (timings) timings.enrich_cache_hit = cached && cached.fingerprint === fingerprint ? 1 : 0;
   if (cached && cached.fingerprint === fingerprint) {
     indexCacheStats.hits += 1;
     indexCache.delete(key);
@@ -315,7 +332,15 @@ export async function loadDescriptionIndexes(
     return cloneIndexes(cached.value);
   }
   indexCacheStats.misses += 1;
+  const buildStart = performance.now();
+  const parseBefore = catalogYamlParseMsTotal();
+  const parsesBefore = readEntryPerfCounters().catalogYamlParses;
   const value = await loadDescriptionIndexesUncached(semanticLayerRoot, connectionScope);
+  if (timings) {
+    timings.enrich_build_ms = roundMs(performance.now() - buildStart);
+    timings.enrich_parse_ms = roundMs(catalogYamlParseMsTotal() - parseBefore);
+    timings.enrich_parses = readEntryPerfCounters().catalogYamlParses - parsesBefore;
+  }
   // 构建期间文件又变了：不缓存这份结果（下次调用重建），避免把新旧混合的索引当成新指纹下的值。
   const after = await descriptionScopeFingerprint(semanticLayerRoot, scope);
   if (after === fingerprint) {
@@ -476,12 +501,13 @@ export async function enrichCatalogSources(
     semanticLayerRoot: string;
     connectionScope: string[];
     limits?: DescriptionLimits;
+    timings?: EnrichTimings;
   }
 ): Promise<CatalogSourceEntry[]> {
   const limits = options.limits ?? { maxTotalDescriptionChars: MAX_TOTAL_DESCRIPTION_CHARS };
   let indexes: DescriptionIndexes;
   try {
-    indexes = await loadDescriptionIndexes(options.semanticLayerRoot, options.connectionScope);
+    indexes = await loadDescriptionIndexes(options.semanticLayerRoot, options.connectionScope, options.timings);
   } catch {
     indexes = {
       manifestIndex: new Map(),
@@ -491,10 +517,13 @@ export async function enrichCatalogSources(
       failedSourceKeys: new Set()
     };
   }
-  return assembleCatalogSources(
+  const assembleStart = performance.now();
+  const assembled = assembleCatalogSources(
     finalSources,
     indexes.manifestIndex,
     indexes.overlayIndex,
     limits
   );
+  if (options.timings) options.timings.enrich_assemble_ms = roundMs(performance.now() - assembleStart);
+  return assembled;
 }
