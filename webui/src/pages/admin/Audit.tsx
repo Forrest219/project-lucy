@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { apiGet } from "../../lib/apiClient";
+import { adminAgentsIdentityQueryOptions } from "../../lib/displayQueryOptions";
 import { copyTextWithToast } from "../../lib/clipboard";
 import { formatConfigAuditTs } from "../../lib/configAuditLabels";
 import { mergeObjectDetailSearch } from "../../lib/objectDetail";
@@ -639,7 +640,7 @@ function formatAgentLabel(agentId: string, nameById: Map<string, string>): strin
 }
 
 /** Resolve filter text to a single agent id when name/id uniquely matches. */
-function resolveAgentFilterParam(input: string, agents: Agent[]): string {
+function resolveAgentFilterParam(input: string, agents: Array<Pick<Agent, "id" | "name">>): string {
   const needle = input.trim().toLowerCase();
   if (!needle) return "";
   const exactId = agents.find((agent) => agent.id.toLowerCase() === needle);
@@ -2058,8 +2059,7 @@ export function Audit() {
   }
 
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents", "names"],
-    queryFn: () => apiGet<{ agents: Agent[] }>("/api/admin/agents"),
+    ...adminAgentsIdentityQueryOptions(),
     staleTime: 60_000
   });
 

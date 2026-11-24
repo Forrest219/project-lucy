@@ -397,7 +397,7 @@ describe("SetupAssistantModal Component", () => {
           return new Response(JSON.stringify({ ok: true, data: { ok: true } }));
         }
 
-        if (url === "/api/admin/agents" && method === "GET") {
+        if ((url === "/api/admin/agents" || url === "/api/admin/agents?view=roster&projection=summary") && method === "GET") {
           return new Response(
             JSON.stringify({
               ok: true,

@@ -177,6 +177,23 @@ export function adminAgentsSummaryQueryOptions(range: AgentStatsRange, deadline?
     queryFn:async ({signal}:QueryFunctionContext)=>normalizeAgentRoster(
       await boundedRosterRead<unknown>(`/api/admin/agents?view=roster&projection=summary&range=${range}`,signal,deadline?.()),range),...displayRetry};
 }
+/**
+ * P1-75 增量 F：只需 Agent 身份（id／名称／启用／Role）的页面（下拉、过滤、引导）用摘要投影，
+ * 不再拉含 tokens／约束／完整权限的整份名册。
+ */
+export type AgentIdentity = Pick<Agent, "id" | "name" | "enabled" | "role" | "roles"> & { legacyWildcard: boolean };
+export function adminAgentsIdentityQueryOptions() {
+  return {queryKey:[...queryKeys.adminAgents,"roster","summary","v1","identity"] as const,
+    queryFn:async ({signal}:QueryFunctionContext)=>{
+      const raw=await boundedRosterRead<{agents?:Array<Agent&{legacyWildcard?:boolean}>}>("/api/admin/agents?view=roster&projection=summary",signal);
+      // 只取身份字段：即使旧服务忽略 projection 返回整份，也不把 tokens／约束带进缓存。
+      const agents: AgentIdentity[]=(Array.isArray(raw?.agents)?raw.agents:[]).map(a=>({
+        id:a.id,name:a.name,enabled:a.enabled,role:a.role,roles:a.roles,
+        legacyWildcard:typeof a.legacyWildcard==="boolean"?a.legacyWildcard:Boolean(a.allow?.tables?.includes("*")||a.allow?.tools?.includes("*"))
+      }));
+      return {agents};
+    },...displayRetry};
+}
 export function adminAgentDrawerQueryOptions(id:string) {
   const validate=(data:{agent:Agent;version:string})=>{
     if(!data || data.agent?.id!==id || !Array.isArray(data.agent.tokens) || typeof data.version!=="string")

@@ -8,7 +8,7 @@ import { queryKeys } from "../../lib/queryKeys";
 import type { Agent, CreateTokenResponse, McpEndpointInfo } from "../../lib/types";
 import { buildCodexMcpToml, buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
-import { adminAgentsQueryOptions, projectQueryOptions } from "../../lib/displayQueryOptions";
+import { adminAgentsIdentityQueryOptions, projectQueryOptions } from "../../lib/displayQueryOptions";
 
 type ClientId = "hermes" | "claude-code" | "codex" | "generic";
 
@@ -123,7 +123,7 @@ export function NewToken() {
   const targetUserId = routeUserId || selectedUserId;
 
   const agentsQuery = useQuery({
-    ...adminAgentsQueryOptions<{ agents: Agent[] }>(),
+    ...adminAgentsIdentityQueryOptions(),
     enabled: !routeUserId
   });
   const agents = agentsQuery.data?.agents ?? [];

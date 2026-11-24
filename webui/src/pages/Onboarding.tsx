@@ -21,7 +21,7 @@ import {
   type ServiceHealthSummary,
   severityLabelBySeverity
 } from "../lib/opsDashboard";
-import { adminAgentsQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
+import { adminAgentsIdentityQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[] };
 
@@ -305,7 +305,7 @@ export function Onboarding() {
     refetchOnMount: "always"
   });
   const agentsQuery = useQuery({
-    ...adminAgentsQueryOptions<AgentsResponse>(),
+    ...adminAgentsIdentityQueryOptions(),
     refetchOnMount: "always"
   });
   // Spec 128 Task 4: query bounded 30-day eval summary; never use limit=1 count.

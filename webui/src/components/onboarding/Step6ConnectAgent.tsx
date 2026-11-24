@@ -18,7 +18,7 @@ import type {
   CreateTokenResponse,
   McpRuntimeStatus
 } from "../../lib/types";
-import { adminAgentsQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../../lib/displayQueryOptions";
+import { adminAgentsIdentityQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../../lib/displayQueryOptions";
 
 export type Step6ConnectAgentProps = {
   connectionId: string;
@@ -65,7 +65,7 @@ export function Step6ConnectAgent({
   });
 
   const agentsQuery = useQuery({
-    ...adminAgentsQueryOptions<{ agents: Agent[] }>()
+    ...adminAgentsIdentityQueryOptions()
   });
 
   const agents = agentsQuery.data?.agents ?? [];
@@ -84,8 +84,7 @@ export function Step6ConnectAgent({
     activeAgent &&
       (activeAgent.role?.toLowerCase() === "admin" ||
         activeAgent.id.toLowerCase().includes("admin") ||
-        activeAgent.allow?.tables?.includes("*") ||
-        activeAgent.allow?.tools?.includes("*"))
+        activeAgent.legacyWildcard)
   );
 
   const tokenMutation = useMutation({

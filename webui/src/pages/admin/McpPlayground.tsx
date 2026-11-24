@@ -13,7 +13,7 @@ import type {
 } from "../../lib/types";
 import { queryKeys } from "../../lib/queryKeys";
 import { useAuthOptional } from "../../lib/auth";
-import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
+import { adminAgentsIdentityQueryOptions } from "../../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[] };
 type Task = "connect" | "table" | "";
@@ -124,7 +124,7 @@ export function McpPlayground() {
   const [confirmLive, setConfirmLive] = useState(false);
 
   const agentsQuery = useQuery({
-    ...adminAgentsQueryOptions<AgentsResponse>()
+    ...adminAgentsIdentityQueryOptions()
   });
   const runtimeQuery = useQuery({
     queryKey: queryKeys.mcpRuntime,
@@ -616,7 +616,7 @@ function IdList({ ids }: { ids: string[] }) {
   );
 }
 
-function AgentName({ agent }: { agent: Agent }) {
+function AgentName({ agent }: { agent: Pick<Agent, "id" | "name"> }) {
   const name = agent.name?.trim() || agent.id;
   if (name === agent.id) return <Identifier>{agent.id}</Identifier>;
   return (
