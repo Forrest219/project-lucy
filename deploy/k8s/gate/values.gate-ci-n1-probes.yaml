@@ -1,0 +1,22 @@
+# N-1 probe overlay for H3 kind gate.
+#
+# N-1 baseline (see n1-baseline.txt) predates /api/livez and /api/readyz.
+# values.gate-ci.yaml correctly targets those paths for HEAD (N), but helm
+# install of N-1 with the same probe paths never becomes Ready.
+# Apply this overlay only on the N-1 install; the N upgrade keeps gate-ci.
+
+startupProbe:
+  httpGet:
+    path: /api/health
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
