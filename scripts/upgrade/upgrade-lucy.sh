@@ -10,6 +10,7 @@ cd "$ROOT"
 
 COMPOSE_FILES=("deploy/compose/docker-compose.demo.yml")
 FRESH=0
+SCALE=0
 NO_CACHE=0
 BACKUP_DIR=""
 SKIP_HEALTH=0
@@ -26,6 +27,8 @@ Preserves WebUI admins, MCP ACL, audit logs, secrets, and project config when th
 Options:
   -f, --compose-file FILE   Compose file (repeatable; default: deploy/compose/docker-compose.demo.yml)
       --fresh               Wipe Lucy data volume and reseed from template
+      --scale               After health, ensure UAT scale baseline (docs/qa/uat/scale-baseline.md)
+                            Idempotent: skips when already at baseline; lean template stays default
       --no-cache            Build image without Docker layer cache
       --backup-dir DIR      Tar backup of /data/lucy before upgrade (named volume only)
       --skip-health         Skip post-upgrade /api/health wait
@@ -40,8 +43,10 @@ MCP compatibility (P1-53, optional; default off):
 
 Examples:
   npm run demo:upgrade
+  npm run demo:upgrade:scale
   bash scripts/upgrade/upgrade-lucy.sh -f docker-compose.yml --backup-dir inbox/backups
   bash scripts/upgrade/upgrade-lucy.sh --fresh
+  bash scripts/upgrade/upgrade-lucy.sh --fresh --scale
   LUCY_MCP_COMPAT=1 LUCY_MCP_URL=http://127.0.0.1:57881/mcp npm run demo:upgrade
 EOF
 }
@@ -57,6 +62,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --fresh)
       FRESH=1
+      shift
+      ;;
+    --scale)
+      SCALE=1
       shift
       ;;
     --no-cache)
@@ -128,7 +137,7 @@ VOLUME_LOGICAL="${VOLUME_INFO[1]:-}"
 VOLUME_FULL="${VOLUME_INFO[2]:-}"
 VOLUME_BIND="${VOLUME_INFO[3]:-}"
 
-echo "[lucy-upgrade] compose=${COMPOSE_FILES[*]} mode=$([[ "${FRESH}" -eq 1 ]] && echo fresh || echo preserve) volume_kind=${VOLUME_KIND}"
+echo "[lucy-upgrade] compose=${COMPOSE_FILES[*]} mode=$([[ "${FRESH}" -eq 1 ]] && echo fresh || echo preserve) scale=$([[ "${SCALE}" -eq 1 ]] && echo on || echo off) volume_kind=${VOLUME_KIND}"
 
 snapshot_preserve_state() {
   if [[ "${VOLUME_KIND}" != "named" ]]; then
@@ -355,6 +364,7 @@ maybe_run_mcp_compat_candidate() {
 
 maybe_run_mcp_compat_candidate
 
+# Preserve check must run before --scale seeding (scale intentionally mutates the volume).
 if [[ "${FRESH}" -eq 0 && "${SKIP_PRESERVE_CHECK}" -eq 0 && "${VOLUME_KIND}" == "named" && -n "${BEFORE_SNAPSHOT}" ]]; then
   AFTER_SNAPSHOT="$(snapshot_preserve_state || true)"
   node "${ROOT}/scripts/upgrade/upgrade-lucy-cli.mjs" verify-snapshot \
@@ -362,8 +372,40 @@ if [[ "${FRESH}" -eq 0 && "${SKIP_PRESERVE_CHECK}" -eq 0 && "${VOLUME_KIND}" == 
     --after "${AFTER_SNAPSHOT}"
 fi
 
+# Optional UAT scale baseline (docs/qa/uat/scale-baseline.md). Default off —
+# lean demo template stays the default seed. Idempotent via ensure script.
+maybe_ensure_scale_baseline() {
+  if [[ "${SCALE}" -ne 1 ]]; then
+    return 0
+  fi
+  if [[ "${SKIP_HEALTH}" -eq 1 ]]; then
+    echo "[lucy-upgrade] scale: skipped (--skip-health; ensure needs a healthy stack)" >&2
+    return 0
+  fi
+  local lucy_container db_container
+  lucy_container="$("${COMPOSE[@]}" ps -q "${SERVICE}" 2>/dev/null | head -n 1 || true)"
+  if [[ -n "${lucy_container}" ]]; then
+    lucy_container="$(docker inspect -f '{{.Name}}' "${lucy_container}" 2>/dev/null | sed 's#^/##')"
+  fi
+  lucy_container="${UAT_LUCY_CONTAINER:-${lucy_container:-compose-lucy-1}}"
+  db_container="${UAT_DEMO_DB_CONTAINER:-}"
+  if [[ -z "${db_container}" ]]; then
+    db_container="$("${COMPOSE[@]}" ps -q demo-db 2>/dev/null | head -n 1 || true)"
+    if [[ -n "${db_container}" ]]; then
+      db_container="$(docker inspect -f '{{.Name}}' "${db_container}" 2>/dev/null | sed 's#^/##')"
+    fi
+  fi
+  db_container="${db_container:-compose-demo-db-1}"
+  echo "[lucy-upgrade] scale: ensuring baseline (lucy=${lucy_container} db=${db_container})"
+  UAT_LUCY_CONTAINER="${lucy_container}" \
+    UAT_DEMO_DB_CONTAINER="${db_container}" \
+    node "${ROOT}/scripts/uat/ensure-scale-baseline.mjs"
+}
+
+maybe_ensure_scale_baseline
+
 if [[ "${VOLUME_KIND}" == "named" ]]; then
-  echo "[lucy-upgrade] ok volume=${VOLUME_FULL} preserved=$([[ "${FRESH}" -eq 1 ]] && echo false || echo true)"
+  echo "[lucy-upgrade] ok volume=${VOLUME_FULL} preserved=$([[ "${FRESH}" -eq 1 ]] && echo false || echo true) scale=$([[ "${SCALE}" -eq 1 ]] && echo on || echo off)"
 else
-  echo "[lucy-upgrade] ok bind_mount=${VOLUME_BIND} preserved=$([[ "${FRESH}" -eq 1 ]] && echo false || echo true)"
+  echo "[lucy-upgrade] ok bind_mount=${VOLUME_BIND} preserved=$([[ "${FRESH}" -eq 1 ]] && echo false || echo true) scale=$([[ "${SCALE}" -eq 1 ]] && echo on || echo off)"
 fi

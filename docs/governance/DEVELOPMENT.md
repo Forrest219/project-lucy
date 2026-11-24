@@ -593,8 +593,9 @@ WebUI 的 UI/UX 约束分散在下表几处；**各自只有一份正文**，本
 
 本机 demo 重建必须走 **host-native** 路径，禁止误用客户打包用的 `lucy-amd64` builder（ARM 上会变成 QEMU，经常 >10 分钟像卡住）。
 
-- **平滑升级（默认，保留账号与 audit 日志）**：`npm run demo:upgrade`（或 `npm run demo:rebuild`；支持 `--no-cache`、`--backup-dir inbox/backups`）。重建镜像并 `--force-recreate` 容器，**不**删除 `lucy-demo-data` volume。
-- **从零 reseed（仅 dev 验收干净模板）**：`npm run demo:upgrade -- --fresh`（等价于删除 `lucy-demo-data` 后重新 seed）。
+- **平滑升级（默认，保留账号与 audit 日志）**：`npm run demo:upgrade`（或 `npm run demo:rebuild`；支持 `--no-cache`、`--backup-dir inbox/backups`）。重建镜像并 `--force-recreate` 容器，**不**删除 `lucy-demo-data` volume。默认仍是 lean demo 模板，**不**自动灌 UAT 规模水位。
+- **规模水位档（UAT／压测共享栈）**：`npm run demo:upgrade:scale`（或 `demo:upgrade -- --scale`）。健康检查后幂等执行 `uat:scale-baseline:ensure`（MySQL 大 Schema＋access／Wiki／Skill／审计造数）；已达标则跳过。卷内 marker＝`/data/lucy/.lucy-scale-seed`。后续只要不用 `--fresh`，平滑升级会保留水位。Hive 默认跳过；需要时设 `UAT_SCALE_INCLUDE_HIVE=1`。口径见 [`docs/qa/uat/scale-baseline.md`](../qa/uat/scale-baseline.md)。
+- **从零 reseed（仅 dev 验收干净模板）**：`npm run demo:upgrade -- --fresh`（等价于删除 `lucy-demo-data` 后重新 seed）。若还要回到规模档：`npm run demo:upgrade -- --fresh --scale`。
 - **Compose project name** 来自 `docker compose -f <compose file> config`（`--format json` 的 `name`）。Demo 文件在 `deploy/compose/`，project name 是该目录名（`compose`），named volume 是 `compose_lucy-demo-data`。读不到 compose config 时才回退到当前工作目录名。已设置的 `COMPOSE_PROJECT_NAME` 优先。
 - **空目标卷是失败，不是 `preserved=true`**：解析出的目标 named volume 已存在且挂载点下文件数为 0，同时有运行中的容器挂载了另一个同逻辑卷名（例如 `lucy-demo-data`）且其中有文件时，升级失败，不会把 preserve check 报成 ok。
 - 等价手写：`BUILDX_BUILDER=default bash scripts/upgrade/upgrade-lucy.sh -f deploy/compose/docker-compose.demo.yml`。

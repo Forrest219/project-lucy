@@ -8,6 +8,7 @@
 | 非定位 | 不替代功能 Spec 收口（开发台）；不替代产品线总账（需求台）；不替代发布取证整包；绿灯 ≠ 可上线 |
 | 三台规则 | [`docs/governance/DEVELOPMENT.md`](../../governance/DEVELOPMENT.md)「端到端三台账」；勾连 [`e2e-ledger.md`](../../governance/e2e-ledger.md) |
 | 约定 | [`CONVENTIONS.md`](CONVENTIONS.md) |
+| 环境档位 | **lean**（默认烟测）／**scale**（全局 UAT 水位）；选型见 [`scale-baseline.md` §0](scale-baseline.md#0-环境档位选型leanscale) |
 | 独立复测交接 | [通用复测标准](retest-standard.md) · [核心可用性样板](suites/core-availability/retest.md) |
 | 页面性能复测 | [WebUI 性能复测指南](webui-performance-retest.md)（前台浏览器、冷热层、跑次交接） |
 | 辅助脚本 | 仓库 `scripts/uat/`（种子／矩阵／ledger lint；**不是**判定 SOT） |
@@ -21,7 +22,7 @@ docs/qa/uat/
   README.md                 ← 你在这里（唯一入口说明）
   INDEX.md                  ← 套件总表与最近跑次（判定 SOT）
   CONVENTIONS.md            ← 编号、判定、交叉验证约定
-  scale-baseline.md         ← 全局 UAT 模拟数据规模基线（下限不得降低）
+  scale-baseline.md         ← 环境档位选型（§0 lean／scale）＋全局规模基线（下限不得降低）
   templates/                ← suite / cases / fixtures / run-record
   suites/<suite>/
     suite.md

@@ -32,6 +32,18 @@ npm run demo:upgrade
 
 可选升级前备份：`npm run demo:upgrade -- --backup-dir inbox/backups`
 
+## 规模水位档（UAT／压测；默认不启用）
+
+用户明确要求「规模档／压力水位／scale baseline」时：
+
+```bash
+npm run demo:upgrade:scale
+# 或：npm run demo:upgrade -- --scale
+# 仅灌水位（栈已 healthy）：npm run uat:scale-baseline:ensure
+```
+
+lean demo 模板仍是默认 seed；`--scale` 在健康检查后幂等 ensure（已达标跳过）。后续无 `--fresh` 的平滑升级会保留水位。口径见 `docs/qa/uat/scale-baseline.md`。
+
 ## 从零 reseed（仅当用户明确要求清空运行时配置）
 
 当用户要求「用缓存重建 docker 里的 lucy / 让最新代码生效」且**需要**从零测试、或明确要求清空 WebUI/ACL 状态时：

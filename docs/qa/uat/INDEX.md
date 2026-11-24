@@ -2,6 +2,8 @@
 
 > 规则：[`docs/governance/DEVELOPMENT.md`](../../governance/DEVELOPMENT.md)「端到端三台账」。勾连总账：[`docs/governance/e2e-ledger.md`](../../governance/e2e-ledger.md)。本文件是 **UAT 结果唯一真实来源**；不改写 Spec 合同状态。约定见 [`CONVENTIONS.md`](CONVENTIONS.md)。
 
+> **环境档位（开跑前选型）**：本机 demo **一栈两档**——**lean**（默认 `npm run demo:upgrade`，烟测／无规模前置）／**scale**（`npm run demo:upgrade:scale`，全局 UAT 水位）。选型表＝[`scale-baseline.md` §0](scale-baseline.md#0-环境档位选型leanscale)；规则＝[`CONVENTIONS.md`](CONVENTIONS.md)「环境档位选型」。跑次须写明档位；规模用例不得在 lean 上主张 PASS。
+
 > **P0 问数六套件（2026-11-14 升级后复跑）**：本机 Mac mini／demo 已 `demo:upgrade`（容器 `gitSha=9d59337d`；≠ 上午 Wave A 的 `3aa402c9`）；新增必做 `UAT-R0-UPGRADE`；Plan [`lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md`](../../plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md)。上午 Wave A 跑次仍保留作对照。**≠ 可上线**。
 
 | Suite | 总账 ID | 路径 | 必做环境 | 最近跑次 | 结果 |
@@ -64,6 +66,13 @@
 ## 一键入口（本机）
 
 ```bash
+# —— 环境档位（先选一档；详 scale-baseline.md §0）——
+# lean（默认烟测）：  npm run demo:upgrade
+# scale（全局水位）： npm run demo:upgrade:scale
+# 仅复核／灌水位：   npm run uat:scale-baseline          # 只读断言
+#                    npm run uat:scale-baseline:ensure   # 幂等造数
+# WebUI http://127.0.0.1:55176  ·  MCP http://127.0.0.1:57881/mcp
+
 # P0 问数六套件（方案 B）：MCP 全真；Bearer 只从本机 token 文件读入进程
 # 最近复跑 Plan：docs/plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md（升级后；gitSha=9d59337d）
 # 证据示例：inbox/uat-p0-post-upgrade-2026-11-14/（上午 Wave A：uat-p0-macmini-2026-11-14／3aa402c9）

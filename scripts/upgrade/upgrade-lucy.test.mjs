@@ -320,3 +320,13 @@ test("upgrade-lucy.sh applies demo mirror defaults and reports ktx layer", () =>
   assert.match(text, /ktx install layer/);
   assert.match(text, /BUILDKIT_PROGRESS=plain/);
 });
+
+test("upgrade-lucy.sh documents --scale after preserve check", () => {
+  const text = readFileSync(path.join(repoRoot, "scripts/upgrade/upgrade-lucy.sh"), "utf8");
+  assert.match(text, /--scale\)/);
+  assert.match(text, /maybe_ensure_scale_baseline/);
+  assert.match(text, /ensure-scale-baseline\.mjs/);
+  const preserveIdx = text.indexOf("verify-snapshot");
+  const scaleIdx = text.indexOf("maybe_ensure_scale_baseline");
+  assert.ok(preserveIdx > 0 && scaleIdx > preserveIdx, "preserve check must run before scale seed");
+});

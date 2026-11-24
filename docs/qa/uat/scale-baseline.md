@@ -8,6 +8,26 @@
 | 判定属性 | 基线是「开跑前置＋造数目标」，不是 UAT 结果；结果判定仍以各套件 `cases.md` 与 INDEX 为准 |
 | 自动化断言 | 仓库 `scripts/uat/check-uat-scale-baseline.mjs`（只读 COUNT，退出码 0＝达标） |
 | 既有标定 | 与 [`suites/roles-agent-concurrency-scale/fixtures.md`](suites/roles-agent-concurrency-scale/fixtures.md) 冻结向量、[`suites/large-schema-ingestion/fixtures.md`](suites/large-schema-ingestion/fixtures.md) 规模下限**同口径对齐**，不另立第二套 |
+| 环境档位 | 本机 Docker 有 **两档**（lean／scale），开跑前按套件选型；见 §0 |
+
+## 0. 环境档位选型（lean／scale）
+
+本机默认 compose **同一套** `deploy/compose/docker-compose.demo.yml`，按 seed 深度分成两档。**不是**两套独立产品环境；是同一栈上的两种水位。开跑前按套件 `fixtures.md`／INDEX「必做环境」选一档并写进跑次。
+
+| 档位 | 入口 | 规模（约） | 适用 | 不适用 |
+|---|---|---|---|---|
+| **lean**（默认） | `npm run demo:upgrade` | 模板：约 3 角色／数个 Agent／1 Wiki／少量 Skill／superstore 业务表；**无**百万审计、**无** 2000 表夹具 | 功能烟测、P0 问数六套件多数、连接重载、按钮／复制、页面打开等**不依赖规模前置**的套件 | 凡 `fixtures`／CONVENTIONS 要求全局规模基线的用例 |
+| **scale**（全局 UAT 水位） | `npm run demo:upgrade:scale` 或 `npm run uat:scale-baseline:ensure` | §1 下限：500 Agent／200 角色／2000 表／300 Wiki／100 Skill／窗内 20 万·全历史 100 万审计 | 规模／并发／大 Schema／读韧性／自愈／MCP-PERF 等**开跑前置**须 `uat:scale-baseline`＝0 的套件 | 想保持可读小 ACL、快速 `--fresh` 烟测时 |
+
+选型规则：
+
+1. 套件未写规模前置 → 默认 **lean**；写了「全局规模基线／`uat:scale-baseline`」→ 必须 **scale**，未达标记 `BLOCKED`，不得缩夹具凑绿。
+2. 两档可共卷演进：先 lean 日常开发，需要时一次 `demo:upgrade:scale`；之后无 `--fresh` 的平滑升级**保留** scale 水位（marker＝`/data/lucy/.lucy-scale-seed`）。
+3. `--fresh` 回到 lean 模板；要再上 scale 须带 `--scale` 或重跑 ensure。
+4. **MCP-PERF**（§1.1）是 scale 之上的专项 profile，不单独成第三默认档；未装断言前相关用例 `BLOCKED`。
+5. 隔离栈（如 `lucy-uat-p18182`）可自选档位，但主张「全局规模已过」时仍须对本卷跑通 `uat:scale-baseline`。
+
+默认端口（两档相同）：WebUI `http://127.0.0.1:${LUCY_DEMO_WEBUI_HOST_PORT:-55176}`；MCP Proxy `http://127.0.0.1:${LUCY_DEMO_PROXY_HOST_PORT:-57881}`。
 
 ## 1. 基线总表（下限，不得降低）
 
@@ -71,7 +91,19 @@ npm run uat:scale-baseline            # 只读 COUNT，逐项 EXPECTED/ACTUAL
 node scripts/uat/check-uat-scale-baseline.mjs --strict   # SKIPPED（如 Hive 未起）也判非零退出
 ```
 
-造数三件套（幂等；固定 seed=20261123；凭据均为一次性实验口令，仅限本机）：
+**推荐入口（幂等，避免每次手工初始化）**：
+
+```bash
+npm run demo:upgrade:scale            # 平滑升级镜像后 ensure 水位；已达标则跳过
+npm run uat:scale-baseline:ensure     # 仅 ensure（栈须已 healthy）；--force 强制重灌
+```
+
+- 默认 **lean demo 模板不变**；规模档是显式 opt-in（`--scale`／`demo:upgrade:scale`），不是默认 seed。
+- ensure 顺序：MySQL 大 Schema → access → Wiki／Skill → 审计行 → 只读复核 → 写 marker `/data/lucy/.lucy-scale-seed`。
+- 后续 `npm run demo:upgrade`（无 `--fresh`）保留卷内水位；`--fresh` 清掉 lucy 数据卷后需再带 `--scale` 或再跑 ensure。
+- Hive 默认不灌（基线允许 SKIPPED）；设 `UAT_SCALE_INCLUDE_HIVE=1` 才灌。
+
+造数三件套（幂等；固定 seed=20261123；凭据均为一次性实验口令，仅限本机；一般由 ensure 编排，不必手敲）：
 
 ```bash
 node scripts/uat/seed-scale-access.mjs        # ① access.yaml：200 角色／500 Agent×3 凭据（停→备份→写→启）

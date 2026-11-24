@@ -12,10 +12,22 @@
 4. **对抗性 ≠ 找茬文案。** 对抗指：另造连接 id／宽表／重载时序／端点闸路径，尝试证伪既有 PASS；仍须全真执行。  
 5. **WebUI：浏览器＋计时强制（严重）。** 套件／选择器若覆盖 WebUI 用户可见面（页面加载、列表／表单、名册、统计展示、按钮反馈等），除后端／API 断言外，**必须**在真实**前台**浏览器执行并记录即时计时（导航→关键内容可见，或合同 `primaryReady`／等价里程碑），与 API 耗时**分列**。仅 HTTP smoke、脚本压测、vitest 或 CR **不得**主张该 WebUI 面已通过。必做用例缺前台浏览器验证或有效计时时，记 `BLOCKED` 并写明缺口。开发规范同位见 [`docs/governance/DEVELOPMENT.md`](../../governance/DEVELOPMENT.md)「验证策略：浏览器测试约束」。
 
-## 全局规模基线（强制）
+## 环境档位选型（lean／scale）
+
+本机 demo compose **一栈两档**。选型表与命令以 [`scale-baseline.md` §0](scale-baseline.md#0-环境档位选型leanscale) 为唯一展开；此处只定强制规则：
+
+| 档位 | 入口 | 何时选 |
+|---|---|---|
+| **lean**（默认） | `npm run demo:upgrade` | 套件未要求全局规模前置：功能烟测、多数 P0 问数、热重载、按钮／复制等 |
+| **scale**（全局 UAT 水位） | `npm run demo:upgrade:scale` 或 `uat:scale-baseline:ensure` | 套件／fixtures 写明须过全局规模基线；开跑前 `uat:scale-baseline` 须退出 0 |
+
+- 跑次须写明当次档位（`lean`／`scale`）；主张规模已过却跑在 lean 上 → 该规模用例 `BLOCKED` 或作废。
+- lean → scale 可共卷一次 ensure；`--fresh` 回到 lean。不得把 lean 结果回填为「全局规模 PASS」。
+
+## 全局规模基线（强制；scale 档）
 
 1. 全局 UAT 模拟数据规模下限以 [`scale-baseline.md`](scale-baseline.md) 为**唯一 SOT**：500 配置 Agent（每 Agent ≥3 凭据，30 天活跃 ≥100）／**200 正式角色**／2000 表（含 1000 列级宽表）／300 Wiki／100 Skill／审计调用行 30 天 ≥20 万·全历史 ≥100 万／superstore 种子 1000·60·4。**任何维度不得降低**。
-2. **开跑前置**：套件跑次涉及上述维度夹具时，先执行 `npm run uat:scale-baseline`（只读断言，退出码 0＝达标）；未达标维度对应的规模用例记 `BLOCKED`（环境前置不满足），不得降夹具规模开跑，不得用空库／缩量夹具冒充通过。审计行量两项为 WARN 例外（权威判定归 `UAT-SUITE-ROLES-AGENT-CONCURRENCY-SCALE`）。
+2. **开跑前置**：套件跑次涉及上述维度夹具时，先确保处于 **scale** 档，再执行 `npm run uat:scale-baseline`（只读断言，退出码 0＝达标）；未达标维度对应的规模用例记 `BLOCKED`（环境前置不满足），不得降夹具规模开跑，不得用空库／缩量夹具冒充通过。审计行量两项为 WARN 例外（权威判定归 `UAT-SUITE-ROLES-AGENT-CONCURRENCY-SCALE`）。
 3. **计数口径**以 `scale-baseline.md` §1 为准（如 Skill 按 loader 同口径递归 frontmatter 计数，正式角色模板另算）；套件 `fixtures.md` 只引用、不复制数字，防止第二套口径。
 4. **提高或新增维度**：先改 `scale-baseline.md` 并在当次跑次注明，保持单一出处。
 
