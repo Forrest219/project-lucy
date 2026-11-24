@@ -6,6 +6,7 @@ import {
   createRequestTiming,
   formatServerTiming,
   markDisplayCache,
+  markDisplayDegraded,
   readEntryPerfCounters,
   registerEntryPerformanceTiming,
   resetEntryPerfCounters,
@@ -23,6 +24,13 @@ describe("Spec 174 entry-performance timing", () => {
     const header = formatServerTiming(timing, 20);
     expect(header).toBe("manifest;dur=12.3, permissions;dur=3.0, total;dur=20.0, cache;desc=hit, builds;desc=0");
     expect(header).not.toContain("nope");
+  });
+
+  it("exposes a degraded grace read without changing the cache descriptor", () => {
+    const timing = createRequestTiming(0);
+    markDisplayCache("hit", timing);
+    markDisplayDegraded("grace", timing);
+    expect(formatServerTiming(timing, 5)).toBe("total;dur=5.0, cache;desc=hit, degraded;desc=grace, builds;desc=0");
   });
 
   it("counts structural reads and resets", () => {

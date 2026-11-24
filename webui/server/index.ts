@@ -14,6 +14,7 @@ import { parseProbePurpose, ProbeScheduler, type ProbeTiming } from "./backgroun
 import {
   createDisplayRequestBudget,
   getDisplaySnapshot,
+  displayBusySummary,
   prewarmDisplaySnapshots,
   registerDisplayPrewarmer,
   ensureDisplayReconciler,
@@ -1113,7 +1114,7 @@ export function buildServer() {
     const { data, diagnostics } = probeDataFromMemory(processIdentity, diagnosticSnapshot);
     return {
       ok: true,
-      data: { ...data, eventLoop: eventLoopDelaySnapshot() },
+      data: { ...data, eventLoop: eventLoopDelaySnapshot(), displayBusy: displayBusySummary() },
       diagnostics
     };
   });

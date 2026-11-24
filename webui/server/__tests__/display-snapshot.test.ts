@@ -34,6 +34,7 @@ import {
   committedViewServeValid,
   createDisplayRequestBudget,
   displayCacheVerified,
+  displayBusySummary,
   displaySnapshotDiagnostics,
   DISPLAY_RECOVERY_WAIT_BUDGET_MS,
   DisplaySnapshotBusyError,
@@ -145,6 +146,12 @@ describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
         reason: expect.objectContaining({ code: "DISPLAY_SNAPSHOT_BUSY", statusCode: 503, retryAfterSeconds: 1, reason: "build_wait_timeout" })
       })));
       expect(displaySnapshotDiagnostics()).toMatchObject({ inflightBuilds: 1, busyByReason: { build_wait_timeout: 2 } });
+      const summary = displayBusySummary();
+      expect(summary).toMatchObject({ busy: 2, byReason: { build_wait_timeout: 2 } });
+      expect(summary.recent).toHaveLength(2);
+      expect(summary.recent[0]).toMatchObject({ name: "slow", reason: "build_wait_timeout", attempts: 1 });
+      expect(summary.recent[0]).toEqual(expect.objectContaining({ at: expect.any(String), uptimeS: expect.any(Number), eventLoopMaxMs: expect.any(Number), ages: expect.any(Object) }));
+      expect(JSON.stringify(summary)).not.toMatch(/\/Users\/|token/i);
       expect(build).toHaveBeenCalledTimes(1);
     } finally {
       clearTimeout(watchdog);

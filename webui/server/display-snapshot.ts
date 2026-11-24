@@ -23,7 +23,8 @@ import { watch, type FSWatcher } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { getAccessRecoveryStateSync } from "./access-recovery";
-import { countEntryPerf, markDisplayBuild, markDisplayCache } from "./entry-performance-timing";
+import { countEntryPerf, markDisplayBuild, markDisplayCache, markDisplayDegraded } from "./entry-performance-timing";
+import { eventLoopDelaySnapshot } from "./runtime/event-loop-delay";
 import {
   bumpDisplayGeneration,
   canonicalFileId,
@@ -118,6 +119,38 @@ let stats = { builds: 0, hits: 0, misses: 0, busy: 0, graceServes: 0 };
 const busyByReason = new Map<DisplayBusyReason, number>();
 /** Spec 195 §7 — request correlation for the diagnostics (no payload, no secrets). */
 let lastRequest: { name: string; scopes: DisplayScope[]; attempts: number; reason?: DisplayBusyReason } | null = null;
+
+/**
+ * 现场取证：最近 N 次忙碌（503）事件的内存记录，随 `/api/health` 一并导出，
+ * 不依赖容器日志是否保留。只含页面名、原因码、时间、核对年龄和运行态读数，无 payload、路径或密钥。
+ */
+const BUSY_EVENT_LIMIT = 30;
+const busyEvents: Array<Record<string, unknown>> = [];
+function recordBusyEvent(fields: Record<string, unknown>): void {
+  busyEvents.push({
+    at: new Date().toISOString(),
+    uptimeS: Math.round(process.uptime()),
+    inflightBuilds,
+    eventLoopMaxMs: eventLoopDelaySnapshot().maxMs,
+    ...fields
+  });
+  if (busyEvents.length > BUSY_EVENT_LIMIT) busyEvents.shift();
+}
+
+/** `/api/health` 用：忙碌累计、按原因分布、宽限服务次数与最近事件。 */
+export function displayBusySummary(): {
+  busy: number;
+  graceServes: number;
+  byReason: Record<string, number>;
+  recent: Array<Record<string, unknown>>;
+} {
+  return {
+    busy: stats.busy,
+    graceServes: stats.graceServes,
+    byReason: Object.fromEntries(busyByReason),
+    recent: busyEvents.map((event) => ({ ...event }))
+  };
+}
 
 export type DisplaySnapshotResult = { payload: string; sidecar?: string; version: string; cache: "hit" | "miss"; incarnation: symbol };
 /**
@@ -662,6 +695,7 @@ async function serveWithinGrace(name: string, scopes: readonly DisplayScope[], e
   stats.graceServes += 1;
   countEntryPerf("displayHits");
   markDisplayCache("hit");
+  markDisplayDegraded("grace");
   return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "hit", incarnation: slot.incarnation };
 }
 
@@ -885,6 +919,7 @@ function serveCommittedView(
   }
   stats.busy += 1;
   busyByReason.set("generation_changed", (busyByReason.get("generation_changed") ?? 0) + 1);
+  recordBusyEvent({ name, reason: "generation_changed", attempts: 1, committedView: true });
   lastRequest = { name, scopes: [...scopes], attempts: 1, reason: "generation_changed" };
   throw new DisplaySnapshotBusyError("generation_changed");
 }
@@ -994,7 +1029,10 @@ export async function getDisplaySnapshot(
   {
     const now = Date.now();
     const ages = Object.fromEntries(Object.entries(scopeHealthSnapshot()).map(([scope, e]) => [scope, { m: now - e.metadataCompletedAt, d: now - e.digestCompletedAt, me: Boolean(e.metadataError), de: Boolean(e.digestError) }]));
-    probeLog("busy", { name, reason, graceRefusal: lastGraceRefusal, attempts, ages, metaTask: Boolean(reconciler?.metadataTask), fullTask: Boolean(reconciler?.fullTask) });
+    const metaTask = Boolean(reconciler?.metadataTask);
+    const fullTask = Boolean(reconciler?.fullTask);
+    probeLog("busy", { name, reason, graceRefusal: lastGraceRefusal, attempts, ages, metaTask, fullTask });
+    recordBusyEvent({ name, reason, lastGraceRefusal, attempts, ages, metaTask, fullTask });
   }
   lastRequest = { name, scopes: [...scopes], attempts, reason };
   throw new DisplaySnapshotBusyError(reason);
@@ -1168,6 +1206,7 @@ export function resetDisplaySnapshotsForTests(): void {
   serveLeases.clear();
   stats = { builds: 0, hits: 0, misses: 0, busy: 0, graceServes: 0 };
   busyByReason.clear();
+  busyEvents.length = 0;
   resetRevisionLedger();
 }
 
