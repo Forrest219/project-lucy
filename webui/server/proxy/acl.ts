@@ -2181,6 +2181,8 @@ export interface LucyCatalogOptions {
   enrichDescriptions?: boolean;
   /** P1-75 §2.2 — 取消信号：在各异步阶段之间检查，已取消则抛出 AbortError。 */
   signal?: AbortSignal;
+  /** P1-75 增量 B — 只加观测：调用方传入则写入各阶段毫秒数（permission_ms／enrich_ms／examples_ms）。 */
+  timings?: Record<string, number>;
 }
 
 export async function lucyCatalog(identity: Identity, options: LucyCatalogOptions = {}): Promise<{
@@ -2189,6 +2191,13 @@ export async function lucyCatalog(identity: Identity, options: LucyCatalogOption
   examples: string[];
 }> {
   const signal = options.signal;
+  const timings = options.timings;
+  let stageStart = performance.now();
+  const markStage = (name: string): void => {
+    const now = performance.now();
+    if (timings) timings[name] = Math.round((now - stageStart) * 10) / 10;
+    stageStart = now;
+  };
   // Spec 98 §8.2 / §8.5 — committed policy only; under global degrade Meta catalog is empty.
   const runtime = await ensurePolicyRuntime();
   signal?.throwIfAborted();
@@ -2219,6 +2228,7 @@ export async function lucyCatalog(identity: Identity, options: LucyCatalogOption
     }))
     .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
 
+  markStage("permission_ms");
   let sources: CatalogSourceEntry[] = finalSources.map((source) => ({
     ...source,
     description: null,
@@ -2235,13 +2245,15 @@ export async function lucyCatalog(identity: Identity, options: LucyCatalogOption
       ]);
       sources = await enrichCatalogSources(finalSources, {
         semanticLayerRoot: paths.semanticLayer,
-        connectionScope
+        connectionScope,
+        timings
       });
     } catch {
       // 整根装载失败：目录本体仍返回，描述全部 missing（SC-09）
     }
   }
 
+  markStage("enrich_ms");
   const hasPocAdRevenue = sources.some((source) => source.connectionId === "poc-mysql-aliyun" && source.sourceName === "poc_ad_revenue_daily");
   const hasKxSources = sources.some((source) => source.sourceName.startsWith("kx_") || source.table.includes(".kx_"));
 
@@ -2262,6 +2274,7 @@ export async function lucyCatalog(identity: Identity, options: LucyCatalogOption
   const { rewriteCatalogExamplesForExposure } = await import("./field-exposure-discovery.js");
   const examples = await rewriteCatalogExamplesForExposure(rawExamples);
   signal?.throwIfAborted();
+  markStage("examples_ms");
 
   return {
     connections,

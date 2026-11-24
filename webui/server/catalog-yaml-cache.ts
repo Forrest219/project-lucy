@@ -41,13 +41,24 @@ function remember(file: string, entry: ParsedFile): void {
   }
 }
 
+// 只读观测：累计 YAML 解析墙钟（P1-75 增量 B 拆分 enrich_ms 用）；并发请求的差值会互相混入，仅作定位参考。
+let parseMsTotal = 0;
+export function catalogYamlParseMsTotal(): number {
+  return parseMsTotal;
+}
+
 function parseFile(file: string, text: string, json = false): unknown {
-  countEntryPerf("catalogYamlParses");
-  if (file.includes("/_schema/")) countEntryPerf("manifestParses");
-  if (!json) return parse(text);
-  const document = parseDocument(text, { prettyErrors: true });
-  if (document.errors.length > 0) throw document.errors[0];
-  return document.toJSON();
+  const started = performance.now();
+  try {
+    countEntryPerf("catalogYamlParses");
+    if (file.includes("/_schema/")) countEntryPerf("manifestParses");
+    if (!json) return parse(text);
+    const document = parseDocument(text, { prettyErrors: true });
+    if (document.errors.length > 0) throw document.errors[0];
+    return document.toJSON();
+  } finally {
+    parseMsTotal += performance.now() - started;
+  }
 }
 
 async function parseStableFile(file: string, meta: string): Promise<FileRead | null> {

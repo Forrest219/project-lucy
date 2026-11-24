@@ -6403,13 +6403,14 @@ async function buildDenialRepairPayload(
         return;
       }
       if (bounded) catalogWorkActive += 1;
+      const catalogTimings: Record<string, number> = {};
       let data: Awaited<ReturnType<typeof lucyCatalog>> | Awaited<ReturnType<typeof kxCatalog>> | Awaited<ReturnType<typeof connectionList>>;
       try {
         if (bounded) await catalogWorkTestHooks.beforeCatalog?.(readWait.signal);
         data = await (toolName === "connection_list"
           ? connectionList(identity)
           : bounded
-            ? lucyCatalog(identity, { signal: readWait.signal })
+            ? lucyCatalog(identity, { signal: readWait.signal, timings: catalogTimings })
             : kxCatalog(identity));
       } catch (error) {
         if (bounded && (readWait.signal.aborted || res.destroyed)) {
@@ -6426,13 +6427,18 @@ async function buildDenialRepairPayload(
         await settleCatalogWithoutResult("client_disconnected", "cancelled");
         return;
       }
-      handler.end({ status: "ok", reasonCode: "allowed", attrs: { handler: "catalog" } });
+      const serializeStart = performance.now();
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
         result: {
           content: [{ type: "text", text: JSON.stringify(data, null, 2) }]
         }
+      });
+      handler.end({
+        status: "ok",
+        reasonCode: "allowed",
+        attrs: { handler: "catalog", ...catalogTimings, serialize_ms: Math.round((performance.now() - serializeStart) * 10) / 10 }
       });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(responseBody);

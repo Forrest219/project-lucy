@@ -692,7 +692,11 @@ describe("P1-75 §2.2 握手指引：描述增强移出应答路径", () => {
         `).all("p175-catalog") as { stage: string; seq: number; attrs: string | null }[];
         const handlers = spans.filter((span) => span.stage === "local_handler");
         expect(handlers).toHaveLength(1);
-        expect(JSON.parse(handlers[0].attrs ?? "{}")).toMatchObject({ handler: "catalog" });
+        const handlerAttrs = JSON.parse(handlers[0].attrs ?? "{}");
+        expect(handlerAttrs).toMatchObject({ handler: "catalog" });
+        for (const key of ["permission_ms", "enrich_ms", "examples_ms", "serialize_ms"]) {
+          expect(typeof handlerAttrs[key]).toBe("number");
+        }
         expect(handlers[0].seq).toBeLessThan(spans.find((span) => span.stage === "response_serialize")?.seq ?? -1);
       } finally {
         db.close();

@@ -103,7 +103,8 @@ export const ATTR_WHITELIST: Readonly<Record<TraceStage, readonly string[]>> = {
   upstream_handshake: ["upstream_status", "retry_count"],
   upstream_call: ["upstream_status", "retry_count"],
   session_recover: ["recovered", "reason"],
-  local_handler: ["handler"],
+  local_handler: ["handler", "permission_ms", "enrich_ms", "examples_ms", "serialize_ms",
+    "enrich_fingerprint_ms", "enrich_cache_hit", "enrich_build_ms", "enrich_parse_ms", "enrich_parses", "enrich_assemble_ms"],
   response_serialize: []
 };
 /** 对所有阶段都允许的键（truncated 合并时使用）。 */
