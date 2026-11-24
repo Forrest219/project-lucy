@@ -388,7 +388,7 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 
 #### 调用监控（/ops/calls）
 
-入口：`/ops/calls`。运行状态分组下，与 `/overview`（系统概览）和 `/admin/usage`（使用概况）并列；侧栏位置见 [1.5 WebUI 入口速查](#webui-entry-map)。
+入口：`/ops/calls`。运行状态分组下，与 `/overview`（系统概览）、`/admin/usage`（使用概况）和 `/admin/ops-steps`（运维步骤）并列；侧栏位置见 [1.5 WebUI 入口速查](#webui-entry-map)。
 
 调用监控回答「MCP 工具调用现在是否健康、是否变慢、是否被拒绝」：六张 KPI 卡片（调用量（24h）、成功率、错误率、拒绝率、P95 耗时、慢请求数（>30s）），加工具调用排行（Top 10）与最近失败与拒绝短表。**只读观测页**：不修改 ACL、不写日志、不调 KTX、不接告警通道。
 
@@ -478,6 +478,12 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 2. 排行榜百分比的分母是**该榜自身合计**，不是全量调用量。
 3. 界面使用视图里的「页面访问」是 `WebUI` 打开次数，与 `Agent` 的业务问询是两套数。
 4. 少数日志时间无法解析时会被跳过，并在表下提示「有 N 条时间无法解析，未计入」。
+
+#### 运维步骤（/admin/ops-steps）
+
+入口：`/admin/ops-steps`。运行状态分组下，与 `/overview`、`/ops/calls`、`/admin/usage` 并列；侧栏位置见 [1.5 WebUI 入口速查](#webui-entry-map)。
+
+运维步骤页按操作号（`opId`）只读查看进行中与已结束的运维步骤，以及写入降级信号（stdout／文件丢行等）。用于排查长操作卡在哪一步，不代替访问日志取证，也不修改配置。
 
 ### 3.2 数据接入 · 连接 / Schema / 表范围
 
