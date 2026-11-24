@@ -8,6 +8,7 @@
 | 运行环境 | 隔离 Docker compose 单实例＋真实 KTX 和合成数据源＋真实桌面前台浏览器。原生纯 MCP 使用 Agent Token，WebUI 使用独立登录会话。 |
 | 剧本 | [用例](cases.md) · [夹具](fixtures.md) · [跑次槽](runs/README.md) |
 | 判定 | [INDEX](../../INDEX.md) 为判定事实源。已有改前定向诊断，完整功能合同尚未执行。 |
+| 应急缩窗 | [`emergency-smoke`](emergency-smoke.md)：最新干净镜像症状门禁＋客户清单回填；**≠** SC-01–08／G2 功能合同 PASS，不得单独回写 INDEX 为套件收口。 |
 
 以 [KSCC 全局规模跑次](runs/2026-11-23-kscc-global-baseline.md)保留历史反例，按 [夹具和固定预算](cases.md#冻结的分母与计时)为正式身份另建可比基线。先比纯备注写入、授权写入、无写入三组，再验证同一最终候选。基线未命中症状时按原始分母、写入重叠证据和条件差异登记。
 

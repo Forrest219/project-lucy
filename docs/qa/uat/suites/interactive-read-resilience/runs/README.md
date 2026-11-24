@@ -2,6 +2,8 @@
 
 实际跑次按 `YYYY-MM-DD-<agent>-<short>.md` 命名，分别标记改前定向诊断、改前基线、改后功能复验或既有发布取证入口接纳的组合跑次。
 
+应急交付缩窗选择器见 [`../emergency-smoke.md`](../emergency-smoke.md)；对应证据包落在仓库 `inbox/emergency-release-<gitSha>/`。该选择器 PASS **不得**代替本套件 INDEX 功能合同判定。
+
 - [2026-11-23 KSCC Docker 全局规模定向基线](2026-11-23-kscc-global-baseline.md)。规模断言通过，配置写入同窗复现名册 503，握手未复现现场长尾。
 - [2026-11-23 KSCC 扩容与历史负载定向复跑](2026-11-23-kscc-scale-recheck.md)。复现名册 503，完整功能合同判定见 INDEX。
 - [2026-11-23 KSCC 改前定向诊断](2026-11-23-kscc-directed-baseline.md)。本轮实测握手和名册摘要，完整功能合同判定见 INDEX。
