@@ -29,6 +29,7 @@
 
 | 清单 ID | REQ | 开发台 Spec | 测试台 Suite | 最近 UAT | 备注 |
 |---|---|---|---|---|---|
+| P1-82 | REQ-030-103 | [MCP 数据面执行舱壁与跨 Agent 故障隔离 Spec](../specs/lucy-20261124-mcp-data-plane-isolation-ha-spec.md) · [Plan](../plans/lucy-20261124-mcp-data-plane-isolation-ha-plan.md) | [`UAT-SUITE-MCP-DATA-PLANE-HA`](../qa/uat/suites/mcp-data-plane-ha/suite.md) | **NOT RUN** | S1 设计；事故修复／可用性，不入核心分母。四层容量、跨 Token／Session、同连接与全局隔离、真实释放、内存背压、WebUI 局部 503 与混压恢复。SC-01–08 挂 R0／01–08；终稿未确权、开发未授权。缺口 GAP-UAT-P1-82。 |
 | P1-79 | REQ-030-100 | [长追问题组 Spec](../specs/lucy-20261123-long-followup-question-pack-spec.md) · [Plan](../plans/lucy-20261123-long-followup-question-pack-plan.md) | 复用 [`UAT-SUITE-MCP-INQUIRY-PERF`](../qa/uat/suites/mcp-inquiry-performance/suite.md)（题组由消费方用例验证） | **NOT RUN** | S1 设计；独立题组包与独立 `packDigest`，语义继承 P1-54，不改 P1-54 题库与 P1-53 已收口证据。SC-01–06 由题组自检＋消费方 `UAT-MIP-15`／`13` 覆盖。缺口 GAP-UAT-P1-79。 |
 | P1-78 | REQ-030-099 | [MCP 问询端到端性能基准 Spec](../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md) · [Plan](../plans/lucy-20261123-mcp-inquiry-performance-baseline-plan.md) | [`UAT-SUITE-MCP-INQUIRY-PERF`](../qa/uat/suites/mcp-inquiry-performance/suite.md) | **NOT RUN** | S1 设计；P0 核心体验／独立发布门禁，不改变既有核心分母。只做测量与判定，优化由其他 Spec 消费；题目语义取自 P1-54、长链取自 P1-79、数据取自全局规模基线（含 §1.1 MCP-PERF）／P1-34。SC-01–15 挂 R0／01–15；GAP-UAT-P1-78。 |
 | P1-75 | REQ-030-096 | [Spec](../specs/lucy-20261123-interactive-read-resilience-spec.md) · [复现 Plan](../plans/lucy-20261123-interactive-read-resilience-plan.md) | [`UAT-SUITE-INTERACTIVE-READ-RESILIENCE`](../qa/uat/suites/interactive-read-resilience/suite.md) | [KSCC 全局规模基线](../qa/uat/suites/interactive-read-resilience/runs/2026-11-23-kscc-global-baseline.md)，正式判定见 [INDEX](../qa/uat/INDEX.md) | SC-01–08 挂 R0／01–08。07 为同窗功能验收，08 为必做四页回归，长时组合另走 P1-13／R-CAV。 |
@@ -120,6 +121,7 @@ R-CAV由同候选测试执行者在组合主张前消费，挂P1-13；P1-52客�
 
 | ID | 缺口 | 建议动作 | 优先级 |
 |---|---|---|---|
+| GAP-UAT-P1-82 | P1-82 执行舱壁与跨 Agent 隔离套件已挂，当前 NOT RUN；容量实现、测程和改前／改后真实证据均未产出 | 关闭条件：同一最终候选完成 R0／01–08 必做且 INDEX 为 PASS；跨 Token／Session、同连接与全局容量、WebUI 局部 503、真实释放、内存背压、权限审计和混压恢复均可复算；进程拆分／多副本不在本条，不得据此外推 HA | P1 |
 | GAP-UAT-P1-79 | P1-79 长追题组已挂台账，当前 NOT RUN；题组正文、校验器与自检证据均未产出 | 关闭条件：题组包 ≥3 条链、每链 ≥21 轮、逐轮 oracle 独立可机检、`packDigest` 可重算，且消费方 `UAT-MIP-15` 不再因缺题 BLOCKED | P1 |
 | GAP-UAT-P1-78 | P1-78 独立性能套件已挂，当前 NOT RUN；测试基建、真实基线、持续压力与长追问均未落地；P1-79 题组与 MCP-PERF profile 机器断言未落地 | 关闭条件：R0／01–15 必做有真实跑次且 INDEX 为 PASS；基线数值可复算、全部负控有效，连续两次无人值守每日跑次形成可比链；`SOAK` ≥1800 秒／50 身份与 `LONG_FOLLOW` ≥10% 链比例成立。SEED_ONLY 或单次手工跑次不能关闭 | P0 |
 | GAP-UAT-P1-66 | P1-66 batch A BA-01-07 CLOSED; original F66 cold/first-navigation failures retained; full scale/WIDTH/write-fault matrix deferred | Next batch requires user restart, compiler design review and unchanged-budget evidence; not a blocker of accepted batch A | P1 |

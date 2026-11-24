@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [MCP 数据面执行舱壁与跨 Agent 故障隔离 Plan](lucy-20261124-mcp-data-plane-isolation-ha-plan.md) | P1-82／REQ-030-103。S1｜v0.1-draft；终稿未确权；开发未授权；仅设计与登记，测试台 NOT RUN。≠ 可上线。配对 [Spec](../specs/lucy-20261124-mcp-data-plane-isolation-ha-spec.md) · [UAT](../qa/uat/suites/mcp-data-plane-ha/suite.md)。 |
 | [启用表范围表清单三态诚实展示 Plan](lucy-20261123-enabled-tables-load-state-honesty-plan.md) | P1-80／REQ-030-101。S5｜v1.0；功能合同已收口（2026-11-23）。测试台 PASS；[收口记录](../reviews/2026-11-23-p180-s5-closure-record.md)。≠ 可上线。配对 [Spec](../specs/lucy-20261123-enabled-tables-load-state-honesty-spec.md) · [UAT](../qa/uat/suites/enabled-tables-load-state/suite.md)。 |
 | [长追问题组（性能专用）Plan](lucy-20261123-long-followup-question-pack-plan.md) | P1-79／REQ-030-100。S1｜v0.1-draft。委托人2026-11-23授权补充长追问题组并登记；终稿未确权；开发未授权；仅设计与登记；≠ 功能合同收口；≠ 可上线。 |
 | [MCP 问询端到端性能基准与持续门禁 Plan](lucy-20261123-mcp-inquiry-performance-baseline-plan.md) | P1-78／REQ-030-099。S1｜v0.3-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。题目语义取自 P1-54、长链取自 P1-79、数据取自全局规模基线（含 §1.1 MCP-PERF）／P1-34。 |
