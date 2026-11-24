@@ -1,14 +1,14 @@
 # Changelog
 
-All notable user-visible changes to Lucy ship here. Versions follow `<major>.<minor>.<patch>`; the current development line is `0.30.0` (`lucy-v0.30`).
+All notable user-visible changes to Lucy ship here. Versions follow `<major>.<minor>.<patch>`; the tagged release line tip is `0.30.0` (`v0.30.0`); subsequent product-line work continues on `lucy-v0.35`.
 
 > Conventions: `**Breaking**` = action required on upgrade; `**Deprecated**` = still works, will be removed; `**Added**` / `**Changed**` / `**Fixed**` are self-describing.
 
 ---
 
-## Unreleased — 0.30.0
+## 0.30.0
 
-产品线 `lucy-v0.30`／`VERSION=0.30.0` 开发中捕捉（**中间态已出口**，见 `docs/reviews/2026-11-13-025-to-030-midstate-inventory.md`）。对外叙事定稿见 `docs/releases/v0.30.0-user-facing.md`；草稿捕捉层见 `docs/releases/drafts/0.30.0-user.md`。**未**开 `v0.30.0` 发版台账／tag；合入 ≠ 可上线。对齐 tip `eb38eee5140c`（以 `git rev-parse HEAD` 为准）。
+Scoped Git release（tag `v0.30.0` @ `fd2074fd`，PR #66）。对外叙事见 `docs/releases/v0.30.0-user-facing.md`；台账见 `docs/releases/v0.30.0.json`。**无**客户交付包；**≠** 可上线；**≠** 核心升级完成。
 
 ### Added
 - **P0-1／REQ-030-027 问题类型口径绑定**：运维可发布「问题类型 → 唯一 source + 固定口径」绑定；命中后 `lucy_query`／`lucy_explain_query` 偏离由 Proxy 本机拒绝且零上游执行。
