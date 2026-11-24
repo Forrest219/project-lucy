@@ -1,0 +1,57 @@
+{
+  "productVersion": "0.35.0",
+  "releaseTag": "v0.35.0",
+  "commit": "PENDING",
+  "releasedAt": "2026-11-24",
+  "deliveryPackage": null,
+  "noDeliveryReason": "0.35.0 product line opened on branch lucy-v0.35 after scoped Git release of v0.30.0. No formal tag yet; no customer amd64 image／Helm delivery package. This entry only satisfies VERSION-traceable source-side ledger placeholder requirements; does not claim productionReady; ≠ 可上线.",
+  "gates": [
+    {
+      "name": "Required main checks",
+      "status": "notExecuted",
+      "required": true,
+      "reason": "No formal release commit yet (commit=PENDING). Re-record after the lock candidate is tagged."
+    },
+    {
+      "name": "Required tag checks",
+      "status": "notExecuted",
+      "required": true,
+      "reason": "v0.35.0 tag not cut; tag-run gates not executed."
+    },
+    {
+      "name": "customer-amd64-native",
+      "status": "notExecuted",
+      "required": false,
+      "reason": "制品后填：amd64 native build／G1–G8 not run for a locked 0.35.0 release commit."
+    },
+    {
+      "name": "real-e2e",
+      "status": "notExecuted",
+      "required": false,
+      "reason": "制品后填：blocked until a candidate digest exists."
+    },
+    {
+      "name": "customer-release-readiness",
+      "status": "notExecuted",
+      "required": false,
+      "reason": "制品后填：no delivery package identity yet."
+    },
+    {
+      "name": "release-package",
+      "status": "notExecuted",
+      "required": false,
+      "reason": "制品后填：no GitHub release-package chain for 0.35.0."
+    },
+    {
+      "name": "customer delivery gates",
+      "status": "notExecuted",
+      "required": false,
+      "reason": "制品后填：customer delivery package SHA／digest not produced."
+    }
+  ],
+  "notes": [
+    "Pre-tag ledger placeholder for VERSION=0.35.0 on branch lucy-v0.35 after v0.30.0 scoped Git release. commit remains PENDING until a release lock commit is chosen.",
+    "Does not claim productionReady. Does not substitute for C01–C20 or native upgrade acceptance.",
+    "Hotfixes for the prior tagged line branch from tag v0.30.0, not from this product-line tip."
+  ]
+}

@@ -27,12 +27,15 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.8` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Optional SMTP notification wiring, off by default. Product version was still `0.20.0` when this chart package was cut |
 | `0.2.8` | `0.25.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.25`. Chart package version was not bumped. Superseded as current product line by `0.30.0` |
 | `0.2.8` | `0.30.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.30`. Chart package version was not bumped. Superseded as the current chart by `0.2.9` |
-| `0.2.9` | `0.30.0` | `0.16.0` | startup and readiness use `/api/readyz`; liveness uses `/api/livez` | **Current**. Probe split only. Product version stays `0.30.0`. A 0.25 image does not serve `/api/livez`; keep the previous liveness values until that image includes the route |
+| `0.2.9` | `0.30.0` | `0.16.0` | startup and readiness use `/api/readyz`; liveness uses `/api/livez` | Probe split only. Product version was still `0.30.0`. Superseded as current product line by `0.35.0` |
+| `0.2.10` | `0.30.0` | `0.16.0` | same probe contract as 0.2.9; optional `LUCY_INFERRED_MAINTAINER` | Chart package for tagged `v0.30.0`. Superseded as current product line by `0.35.0` |
+| `0.2.8` | `0.35.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.35`. Chart package version was not bumped for the product cut. Present for lint:version matrix shape; superseded as current chart by `0.2.10` |
+| `0.2.10` | `0.35.0` | `0.16.0` | same probe contract as 0.2.9/0.2.10 | **Current**. Product version aligned to branch `lucy-v0.35`. Chart package version was not bumped for the product cut |
 
 Image tags must be **immutable**. Recommended form:
 
 ```text
-project-lucy:customer-amd64-0.30.0-YYYYMMDD-<gitShortSha>
+project-lucy:customer-amd64-0.35.0-YYYYMMDD-<gitShortSha>
 ```
 
 Record the digest in `image/image-digest.txt` and pin via Helm `image.digest` when possible.
@@ -147,7 +150,7 @@ Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod start
 |---|---|---|
 | `KTX_PROJECT_ROOT` | yes | `/data/lucy` |
 | `POSTHOG_DISABLED` | yes | `"1"` |
-| `LUCY_VERSION` | yes | Lucy product version; current baseline `0.30.0`. This is not the source commit. Commit identity is the image file `/app/BUILD_REVISION` (`gitSha` on `/api/health`). Do not add `LUCY_GIT_SHA` to the chart or Pod env. |
+| `LUCY_VERSION` | yes | Lucy product version; current baseline `0.35.0`. This is not the source commit. Commit identity is the image file `/app/BUILD_REVISION` (`gitSha` on `/api/health`). Do not add `LUCY_GIT_SHA` to the chart or Pod env. |
 | `LUCY_BUNDLED_KTX_VERSION` | yes | Bundled KTX identity; current baseline `0.16.0` |
 | `LUCY_PUBLIC_MCP_URL` | yes (non-local) | Externally reachable MCP URL; chart fails render if empty for customer registry |
 | `LUCY_ALLOW_PLACEHOLDER_KTX` | prod: empty | `"1"` only for demo seed |

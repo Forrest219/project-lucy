@@ -4,7 +4,7 @@ services:
       context: .
       args:
         KTX_VERSION: "${KTX_VERSION:-0.16.0}"
-        LUCY_VERSION: "${LUCY_VERSION:-0.30.0}"
+        LUCY_VERSION: "${LUCY_VERSION:-0.35.0}"
         # Source commit for /app/BUILD_REVISION. Not a product version and not a
         # runtime env. Empty fails the image build — export via upgrade-lucy.sh
         # or pass a full 40-hex sha explicitly.

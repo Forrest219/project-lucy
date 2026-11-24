@@ -3,7 +3,7 @@
  * Injected at Vite build time from repo-root VERSION / LUCY_VERSION env.
  * Independent of bundled KTX (`LUCY_BUNDLED_KTX_VERSION`).
  */
-const FALLBACK = "0.30.0";
+const FALLBACK = "0.35.0";
 const PRODUCT_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 export function normalizeLucyProductVersion(version: string): string | undefined {
