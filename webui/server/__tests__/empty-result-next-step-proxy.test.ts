@@ -272,6 +272,16 @@ async function withProxyCall(input: {
   } else {
     vi.doUnmock("../proxy/answer-verifiability.js");
   }
+  // P1-60：无 caliber 注册表时 begin 会 begin_not_available；本夹具需要 begin 过歧义门闩。
+  vi.doMock("../proxy/caliber-binding-registry.js", async () => {
+    const actual = await vi.importActual<typeof import("../proxy/caliber-binding-registry.js")>(
+      "../proxy/caliber-binding-registry.js"
+    );
+    return {
+      ...actual,
+      classifyCaliberParticipation: async () => "active" as const
+    };
+  });
   const acl = await import("../proxy/acl.js");
   if (input.spyAllowedTools) {
     const original = acl.allowedToolNames;

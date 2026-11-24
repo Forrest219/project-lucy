@@ -30,12 +30,16 @@ describe("data QA fallback instructions contract", () => {
 
     expect(text).toContain("若 `continuable` 为 true，调用 `lucy_continue_question`");
     expect(text).toContain("传入返回的 `continueToken`");
-    expect(text).toContain("若 `continuable` 为 false，直接交付已验证的部分结果并说明缺口，不要重试");
-    expect(text).toContain("同一问询只能继续一次");
+    // P1-74：continuable=false 时按 next_step（begin／new_question／hard_budget_stop）处置，
+    // 不再写「直接交付部分结果」的旧口径。
+    expect(text).toContain("若 `continuable` 为 false（续查档数用尽），按返回的结构化 `next_step` 执行");
+    expect(text).toContain("只有 `next_step` 为 `hard_budget_stop` 时，才交付已验证的部分结果并说明缺口");
     // 协议工具不占数据额度：声明与续查本身不计次数。
     expect(text).toContain("`lucy_begin_question` 与 `lucy_continue_question`）不占这个预算");
     // 指导不得宽于代理预算：不得出现比代理更宽松的上限表述。
     expect(text).not.toContain("墙钟 120 秒");
+    // 续查档数已扩到 5（非「只能继续一次」）。
+    expect(text).toContain("默认可继续至多 5 次");
   });
 
   // Spec 162 修订 / SC-41 —— 术语标准的三条**既有**词条按新口径修订

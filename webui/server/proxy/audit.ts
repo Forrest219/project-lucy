@@ -296,6 +296,11 @@ export const AUDIT_DB_SCHEMA_VERSION = 4;
  * 历史行**不重解释**（Spec §4.6）。
  */
 export const ACCESS_LOG_COLUMNS = [
+  // Present in CREATE TABLE baselines; keep additive for fixtures that omit them
+  // (e.g. N26 / audit-trust minimal access_log) before covering indexes reference the columns.
+  ["outcome", "TEXT"],
+  ["tables", "TEXT"],
+  ["args_summary", "TEXT"],
   ["role_ids", "TEXT"],
   ["permission_snapshot_hash", "TEXT"],
   ["effective_tables_count", "INTEGER"],
