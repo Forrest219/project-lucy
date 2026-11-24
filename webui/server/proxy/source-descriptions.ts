@@ -11,6 +11,7 @@ import { glob } from "node:fs/promises";
 import path from "node:path";
 import { catalogYamlParseMsTotal, readCatalogYaml } from "../catalog-yaml-cache.js";
 import { readEntryPerfCounters } from "../entry-performance-timing.js";
+import { createLatestCoalescer } from "../runtime/latest-coalescer.js";
 
 /** O3 闭合值：新增 description 字段 UTF-16 code unit 总预算。 */
 export const MAX_TOTAL_DESCRIPTION_CHARS = 8192;
@@ -267,7 +268,7 @@ export function resetDescriptionIndexCacheForTests(): void {
 
 const FINGERPRINT_STAT_BATCH = 64;
 
-async function descriptionScopeFingerprint(semanticLayerRoot: string, scope: string[]): Promise<string | null> {
+async function computeDescriptionScopeFingerprint(semanticLayerRoot: string, scope: string[]): Promise<string | null> {
   const parts: string[] = [];
   try {
     for (const connectionId of scope) {
@@ -297,6 +298,22 @@ async function descriptionScopeFingerprint(semanticLayerRoot: string, scope: str
   return parts.join("\n");
 }
 
+/**
+ * P1-82 — concurrent callers share one trailing scan instead of each running ~1,400 stats
+ * on the libuv pool (f5e4b14d: 20 simultaneous invalidations caused 20 rebuilds). Every caller
+ * still gets a scan that started after its own call, so there is no stale window.
+ */
+const descriptionScopeFingerprint = createLatestCoalescer(
+  (input: { semanticLayerRoot: string; scope: string[] }) => computeDescriptionScopeFingerprint(input.semanticLayerRoot, input.scope),
+  (input) => `${input.semanticLayerRoot}\u0000${input.scope.join(",")}`
+);
+
+/** Concurrent cache misses share one trailing rebuild; callers clone the shared result. */
+const descriptionIndexBuild = createLatestCoalescer(
+  (input: { semanticLayerRoot: string; connectionScope: string[] }) => loadDescriptionIndexesUncached(input.semanticLayerRoot, input.connectionScope),
+  (input) => `${input.semanticLayerRoot}\u0000${[...new Set(input.connectionScope.map(normalizeCatalogRef).filter(Boolean))].sort().join(",")}`
+);
+
 const cloneIndexes = (value: DescriptionIndexes): DescriptionIndexes => ({
   manifestIndex: new Map(value.manifestIndex),
   overlayIndex: new Map(value.overlayIndex),
@@ -316,7 +333,7 @@ export async function loadDescriptionIndexes(
 ): Promise<DescriptionIndexes> {
   const scope = [...new Set(connectionScope.map(normalizeCatalogRef).filter(Boolean))].sort();
   const fingerprintStart = performance.now();
-  const fingerprint = await descriptionScopeFingerprint(semanticLayerRoot, scope);
+  const fingerprint = await descriptionScopeFingerprint({ semanticLayerRoot, scope });
   if (timings) timings.enrich_fingerprint_ms = roundMs(performance.now() - fingerprintStart);
   if (fingerprint === null) {
     indexCacheStats.uncacheable += 1;
@@ -335,14 +352,14 @@ export async function loadDescriptionIndexes(
   const buildStart = performance.now();
   const parseBefore = catalogYamlParseMsTotal();
   const parsesBefore = readEntryPerfCounters().catalogYamlParses;
-  const value = await loadDescriptionIndexesUncached(semanticLayerRoot, connectionScope);
+  const value = await descriptionIndexBuild({ semanticLayerRoot, connectionScope });
   if (timings) {
     timings.enrich_build_ms = roundMs(performance.now() - buildStart);
     timings.enrich_parse_ms = roundMs(catalogYamlParseMsTotal() - parseBefore);
     timings.enrich_parses = readEntryPerfCounters().catalogYamlParses - parsesBefore;
   }
   // 构建期间文件又变了：不缓存这份结果（下次调用重建），避免把新旧混合的索引当成新指纹下的值。
-  const after = await descriptionScopeFingerprint(semanticLayerRoot, scope);
+  const after = await descriptionScopeFingerprint({ semanticLayerRoot, scope });
   if (after === fingerprint) {
     indexCache.delete(key);
     indexCache.set(key, { fingerprint, value });
@@ -353,7 +370,7 @@ export async function loadDescriptionIndexes(
     }
     return cloneIndexes(value);
   }
-  return value;
+  return cloneIndexes(value);
 }
 
 export async function loadDescriptionIndexesUncached(

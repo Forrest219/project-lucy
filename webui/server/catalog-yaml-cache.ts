@@ -2,11 +2,17 @@ import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { parse, parseDocument } from "yaml";
 import { currentRevisionLedger, metaSignature } from "./display-revisions";
+import { createLatestCoalescer } from "./runtime/latest-coalescer";
 import { countEntryPerf } from "./entry-performance-timing";
 
 // Keep the formal catalog's per-table overlays resident within the byte cap.
 const MAX_FILES = 4096;
 const MAX_SOURCE_BYTES = 16 * 1024 * 1024;
+
+// P1-82：同一文件的并发 realpath／stat 共享一次尾随执行（调用后才开始，无陈旧窗口），
+// 避免 N 个并发问数各自对同一批 YAML 排队占用 libuv 线程池。
+const coalescedRealpath = createLatestCoalescer((file: string) => realpath(file));
+const coalescedStat = createLatestCoalescer((file: string) => stat(file));
 
 type ParsedFile = { meta: string; digest: string; bytes: number; value: unknown };
 type FileRead = { value: unknown } | { unsharedText: string };
@@ -76,11 +82,11 @@ async function parseStableFile(file: string, meta: string): Promise<FileRead | n
 
 /** Reuse file facts only. Callers own path admission, validation and authorization. */
 export async function readCatalogYaml(filePath: string, options: { json?: boolean } = {}): Promise<unknown> {
-  const file = await realpath(filePath);
+  const file = await coalescedRealpath(filePath);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     let meta: string;
     try {
-      meta = metaSignature(await stat(file));
+      meta = metaSignature(await coalescedStat(file));
     } catch (error) {
       forget(file);
       throw error;

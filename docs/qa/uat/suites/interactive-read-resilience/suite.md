@@ -2,7 +2,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| Suite ID / 版本 | UAT-SUITE-INTERACTIVE-READ-RESILIENCE / v1.2 |
+| Suite ID / 版本 | UAT-SUITE-INTERACTIVE-READ-RESILIENCE / v1.3（对应 Spec v1.4；新增 09／10 及 08-B 判定口径变更，均 NOT RUN） |
 | 日期 | 2026-11-23 |
 | 总账 / 合同 | P1-75／REQ-030-096 · [Spec](../../../../specs/lucy-20261123-interactive-read-resilience-spec.md) |
 | 运行环境 | 隔离 Docker compose 单实例＋真实 KTX 和合成数据源＋真实桌面前台浏览器。原生纯 MCP 使用 Agent Token，WebUI 使用独立登录会话。 |
@@ -18,6 +18,7 @@
 | 功能合同 | 同一最终候选上 G1 的 `UAT-READ-RES-R0`／`01`–`06`／`08` 和 G2 的 `07` 全部必做。`R0`、`02` 及四档目录对照须有正式 `lucy_admin` 回执。触及 WebUI 的用例在真实前台浏览器运行，独立记录页面与 API 耗时。必做失败或缺证阻塞功能合同收口，由 INDEX 按实际结果登记。 |
 | 同窗运维场景 | [UAT-READ-RES-07](cases.md#uat-read-res-07--多角色问数与同账号并发维护必做同窗运维场景) 对应 SC-07。在 G2 按 8 连接与大 Manifest 构造局部负载。50 个独立 Agent 分别达到 50 路并发握手和 50 路业务查询，正式 `lucy_admin` 与受限角色均覆盖。真实前台由同一管理账号的独立会话维护并读取名册，两版分别记录。 |
 | 多页面回归 | [UAT-READ-RES-08](cases.md#uat-read-res-08) 对应 SC-08。概览、语义资产、Agent 名册和角色权限逐页验无写冷读及局部共享故障，同窗验证探针、合法纯 MCP 和限时恢复。 |
+| 全页面无 503（v1.3） | [UAT-READ-RES-09](cases.md#uat-read-res-09) 对应 SC-09：按冻结的「页面 × 二级 tab」矩阵，在无压冷读、局部故障、混压、停压恢复和写后首读下，A 类 503 与登记表外 503 须为 `0/N`，含关闭降级的对照臂（09-F）。[UAT-READ-RES-10](cases.md#uat-read-res-10) 对应 SC-10：降级边界安全，同窗验证 C 类仍 fail-closed 与纯 MCP 合法用户可用。两者已列入 Spec v1.4 出口，均 NOT RUN。08-B 旧跑次（503 为合格）只作历史，须按新口径重跑。 |
 | P1-77 叠加复验 | 本套件通过的 P1-75 候选作为后续 A。上下文检索的并发叠加判定登记在 [P1-77 默认业务上下文组](../context-content/cases.md#uat-ctx-default-mix)。 |
 | 组合发布取证候选 | `UAT-READ-RES-R01` 由现有 [P1-13／R-CAV](../core-availability/suite.md) 的入口评审、接纳及独立判定。 |
 

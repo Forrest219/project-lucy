@@ -4,11 +4,11 @@
 |---|---|
 | Suite ID / 版本 | `UAT-SUITE-MCP-DATA-PLANE-HA` / v0.1-draft |
 | 日期 | 2026-11-24 |
-| 总账 / 合同 | **P1-82**／REQ-030-103 · [Spec](../../../../specs/lucy-20261124-mcp-data-plane-isolation-ha-spec.md) SC-01–SC-08 |
+| 总账 / 合同 | **P1-82**／REQ-030-103 · [Spec](../../../../specs/lucy-20261124-mcp-data-plane-isolation-ha-spec.md) SC-01–05／SC-07／SC-08（**SC-06 经委托人 2026-11-24 裁定移出本期出口，授权下期实现**） |
 | 目标 | 证明单 Agent 跨 Token／Session 不会耗尽全部问数资源；全局与分连接过载有界；WebUI 局部 503 与 MCP 故障不互相伪装；真实工作结束后容量可恢复 |
 | 运行环境 | 本机隔离 Docker＋真实 KTX／两个独立只读合成数据连接＋多 Agent 纯 MCP 客户端＋真实前台浏览器（仅 WebUI 可见面） |
 | 剧本 | [用例](cases.md) · [夹具](fixtures.md) · [跑次槽](runs/README.md) |
-| 判定 | [INDEX](../../INDEX.md) 为唯一结果事实源。当前 **NOT RUN**，仅设计 |
+| 判定 | [INDEX](../../INDEX.md) 为唯一结果事实源。当前 **NOT RUN**（实现已落地待验收，尚无套件正式跑次；本机 Docker 候选验证见 `inbox/p181-p182-docker-verify/`，不替代 UAT） |
 
 ## 来源与定位
 
@@ -36,7 +36,9 @@
 
 | 必做 | 可选 |
 |---|---|
-| UAT-MCPHA-R0、01、02、03、04、05、06、07、08 | UAT-MCPHA-09（持续公平性与恢复观察） |
+| UAT-MCPHA-R0、01、02、03、04、06、07、08 | UAT-MCPHA-05（随 SC-06 移下期，本期不列入通过判定）、UAT-MCPHA-09（持续公平性与恢复观察） |
+
+注：UAT-MCPHA-05／SC-06（流式体积上限／全局内存背压）经委托人 2026-11-24 裁定**移出本期出口、授权下期实现**；跑法原文保留，供下期 SC-06 验收使用。
 
 R0 无法证明夹具、独立 SQL、真实在途和故障注入有效时，依赖该事实的用例记 `BLOCKED`，不得判 PASS 或以单元测试替代。
 

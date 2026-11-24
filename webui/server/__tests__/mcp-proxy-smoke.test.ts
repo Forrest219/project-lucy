@@ -336,6 +336,9 @@ afterEach(async () => {
   else process.env.LUCY_QUERY_MAX_INFLIGHT = previousQueryMaxInflight;
   delete process.env.LUCY_FILTER_PUSHDOWN_GUARD;
   delete process.env.LUCY_QUESTION_BUDGET;
+  delete process.env.LUCY_MCP_AGENT_MAX_INFLIGHT;
+  delete process.env.LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS;
+  delete process.env.LUCY_MCP_CANCEL_HOLD_MS;
   await rm(projectRoot, { recursive: true, force: true });
 });
 
@@ -1544,6 +1547,203 @@ describe("MCP proxy smoke", () => {
       expect(firstRes.status).toBe(200);
       const firstBody = await firstRes.json() as { result: { _meta?: { lucy?: { guardrails?: { maxConcurrentQueries?: number } } } } };
       expect(firstBody.result._meta?.lucy?.guardrails?.maxConcurrentQueries).toBe(1);
+    } finally {
+      releaseFirst?.();
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("P1-82: the per-Token cap also covers lucy_read_source (no bypass of the Token slots)", async () => {
+    process.env.LUCY_QUERY_MAX_INFLIGHT = "1";
+    const upstreamSeen: string[] = [];
+    let releaseFirst: (() => void) | undefined;
+    const firstCanFinish = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
+      upstreamSeen.push(String(body.id));
+      await firstCanFinish;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "ok" }] } }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    const call = (id: string, name: string, args: Record<string, unknown>) => fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
+    });
+    const readSource = { connectionId: "mysql-aliyun", sourceName: "superstore_orders" };
+    try {
+      const first = call("tok-first", "lucy_read_source", readSource);
+      const deadline = Date.now() + 2000;
+      while (upstreamSeen.length === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(upstreamSeen).toHaveLength(1);
+      const second = await call("tok-second", "lucy_read_source", readSource);
+      const secondBody = await second.json() as { result: { isError?: boolean; _meta?: { lucy?: { capacityScope?: string } } } };
+      expect(secondBody.result.isError).toBe(true);
+      expect(secondBody.result._meta?.lucy?.capacityScope).toBe("token");
+      expect(upstreamSeen).toHaveLength(1);
+    } finally {
+      releaseFirst?.();
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("P1-82: a client that disconnects mid-query does not free its slot early; the slot returns after the hold", async () => {
+    process.env.LUCY_MCP_AGENT_MAX_INFLIGHT = "1";
+    process.env.LUCY_MCP_CANCEL_HOLD_MS = "600";
+    const upstreamSeen: string[] = [];
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
+      upstreamSeen.push(String(body.id));
+      if (upstreamSeen.length === 1) { await new Promise((resolve) => setTimeout(resolve, 600)); }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "ok" }] } }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { getMcpExecutionCapacity } = await import("../runtime/mcp-execution-capacity");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    const call = (id: string, signal?: AbortSignal) => fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+      method: "POST",
+      signal,
+      headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "lucy_read_source", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } } })
+    });
+    try {
+      const abort = new AbortController();
+      const first = call("hold-first", abort.signal).then((r) => r.text()).catch(() => "aborted");
+      const deadline = Date.now() + 2000;
+      while (upstreamSeen.length === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+      abort.abort();
+      expect(await first).toBe("aborted");
+      // Even after the upstream socket is gone the slot stays held: an immediate retry is refused.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const early = await call("hold-early").then((r) => r.json()) as { result: { isError?: boolean; _meta?: { lucy?: { capacityScope?: string } } } };
+      expect(early.result.isError).toBe(true);
+      expect(early.result._meta?.lucy?.capacityScope).toBe("agent");
+      // Real end (upstream finished) plus the hold: the slot comes back and the retry succeeds.
+      const until = Date.now() + 5000;
+      while (getMcpExecutionCapacity().snapshot().global.active > 0 && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(getMcpExecutionCapacity().snapshot().global.active).toBe(0);
+      const later = await call("hold-later").then((r) => r.json()) as { result: { isError?: boolean } };
+      expect(later.result.isError).not.toBe(true);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("P1-82: an upstream that keeps dripping bytes is cut at the hard deadline and the lease is freed", async () => {
+    process.env.LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS = "400";
+    let dripping = true;
+    const upstream = createServer(async (req, res) => {
+      await readRequestBody(req);
+      res.writeHead(200, { "content-type": "application/json" });
+      const timer = setInterval(() => { if (dripping) res.write(" "); }, 50);
+      res.on("close", () => clearInterval(timer));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { getMcpExecutionCapacity } = await import("../runtime/mcp-execution-capacity");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    try {
+      const startedAt = performance.now();
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        signal: AbortSignal.timeout(10_000),
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "drip", method: "tools/call", params: { name: "lucy_read_source", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } } })
+      }).then((r) => r.text()).catch(() => "aborted");
+      void res;
+      expect(performance.now() - startedAt).toBeLessThan(5000);
+      const settleDeadline = Date.now() + 3000;
+      while (getMcpExecutionCapacity().snapshot().global.active > 0 && Date.now() < settleDeadline) await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(getMcpExecutionCapacity().snapshot().global.active).toBe(0);
+    } finally {
+      dripping = false;
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("P1-82: lucy_read_source shares the Agent budget, refuses fast without upstream work, and the lease returns after the upstream finishes", async () => {
+    process.env.LUCY_QUERY_MAX_INFLIGHT = "4";
+    process.env.LUCY_MCP_AGENT_MAX_INFLIGHT = "1";
+    const upstreamSeen: string[] = [];
+    let releaseFirst: (() => void) | undefined;
+    const firstCanFinish = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
+      upstreamSeen.push(String(body.id));
+      if (upstreamSeen.length === 1) await firstCanFinish;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "ok" }] } }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { getMcpExecutionCapacity } = await import("../runtime/mcp-execution-capacity");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    const call = (id: string) => fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        method: "tools/call",
+        params: { name: "lucy_read_source", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } }
+      })
+    });
+
+    try {
+      const first = call("cap-first");
+      const deadline = Date.now() + 2000;
+      while (upstreamSeen.length === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(upstreamSeen).toHaveLength(1);
+      expect(getMcpExecutionCapacity().snapshot().global.active).toBe(1);
+
+      const startedAt = performance.now();
+      const denied = await call("cap-denied");
+      const deniedMs = performance.now() - startedAt;
+      const deniedBody = await denied.json() as { result: { isError?: boolean; content?: Array<{ text: string }>; _meta?: { lucy?: { capacityScope?: string; retryAfterMs?: number } } } };
+      expect(deniedBody.result.isError).toBe(true);
+      expect(deniedBody.result.content?.[0]?.text).toContain("query_concurrency_exceeded");
+      expect(deniedBody.result._meta?.lucy).toMatchObject({ capacityScope: "agent", retryAfterMs: 1000 });
+      expect(deniedMs).toBeLessThan(1000);
+      expect(upstreamSeen).toHaveLength(1); // refused before any upstream work
+      const deniedAudit = await waitForAuditRow("cap-denied");
+      expect(deniedAudit.outcome).toBe("denied");
+      expect(String(deniedAudit.error_detail)).toContain("scope=agent");
+
+      releaseFirst?.();
+      expect((await first).status).toBe(200);
+      const settleDeadline = Date.now() + 2000;
+      while (getMcpExecutionCapacity().snapshot().global.active > 0 && Date.now() < settleDeadline) await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(getMcpExecutionCapacity().snapshot()).toMatchObject({ global: { active: 0 }, activeByAgent: {}, acquired: 1, released: 1 });
+
+      const third = await call("cap-after-release");
+      expect(third.status).toBe(200);
+      expect(((await third.json()) as { result: { isError?: boolean } }).result.isError).not.toBe(true);
     } finally {
       releaseFirst?.();
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));

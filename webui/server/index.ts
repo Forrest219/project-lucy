@@ -243,6 +243,8 @@ import { bindInferredTurnMaintainer, createInferredTurnMaintainer, isInferredMai
 import { INFERRED_TURN_REBUILD_LOOKBACK_HOURS, rebuildInferredTurns } from "./proxy/audit.js";
 import { eventLoopDelaySnapshot } from "./runtime/event-loop-delay.js";
 import { isWebuiReady, markWebuiWarmupComplete } from "./runtime/readiness.js";
+import { getMcpExecutionCapacity } from "./runtime/mcp-execution-capacity.js";
+import { isSelfHealNotReady, selfHealSnapshot, startSelfHeal, stopSelfHeal } from "./runtime/self-heal.js";
 import {
   configureProcessDrainIpc,
   drainIpcPathsForProject,
@@ -1009,6 +1011,7 @@ export function buildServer() {
     stopDiscoveryWorker();
   });
   app.addHook("onClose", async () => {
+    stopSelfHeal();
     closeSecurityStore();
     stopOwnReconciler();
     stopProbeInvalidation();
@@ -1107,6 +1110,11 @@ export function buildServer() {
         phase === "DRAINING" || phase === "STOPPING" || phase === "STOPPED" ? "draining" : "warming_up";
       return { ok: false, reason, data, diagnostics };
     }
+    // P1-81 SC-03 — an instance that declared itself stuck must not keep reporting ready.
+    if (isSelfHealNotReady()) {
+      reply.code(503);
+      return { ok: false, reason: "stuck", data: { ...data, selfHeal: selfHealSnapshot() }, diagnostics };
+    }
     return { ok: true, data, diagnostics };
   });
 
@@ -1114,7 +1122,7 @@ export function buildServer() {
     const { data, diagnostics } = probeDataFromMemory(processIdentity, diagnosticSnapshot);
     return {
       ok: true,
-      data: { ...data, eventLoop: eventLoopDelaySnapshot(), displayBusy: displayBusySummary() },
+      data: { ...data, eventLoop: eventLoopDelaySnapshot(), displayBusy: displayBusySummary(), selfHeal: selfHealSnapshot(), mcpCapacity: getMcpExecutionCapacity().publicSummary() },
       diagnostics
     };
   });
@@ -3706,6 +3714,14 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   // bound.  Moving this call here closes the startup window where readyz could
   // return 200 while the MCP port was still not yet listening.
   markWebuiWarmupComplete();
+  // P1-81 — start the stuck-state watchdog only once the instance is serving.
+  if (process.env.VITEST !== "true") {
+    try {
+      startSelfHeal(await resolveProjectRoot());
+    } catch (error) {
+      console.warn("[self-heal] watchdog not started:", error instanceof Error ? error.message : error);
+    }
+  }
 
   // P1-63 — whole-instance drain IPC + signals (parent entrypoint owns shutdown).
   try {

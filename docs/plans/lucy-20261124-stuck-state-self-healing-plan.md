@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 状态 | S1｜v0.1-draft。与 Spec 同句：终稿未确权；开发未授权；仅设计与登记，不执行跑次，不改运行代码；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ 可上线 |
+| 状态 | S4｜v0.2。与 Spec 同句：终稿已确权（委托人 2026-11-24 明示）；开发授权已获得（2026-11-24）；实现已落地（进程内看门狗＋有序排空退出 75＋探针转红＋compose `restart: on-failure`），单测与本机 Docker 故障注入已验证；待验收；测试台 NOT RUN（无正式 UAT 跑次）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
 | 主 Spec | [`docs/specs/lucy-20261124-stuck-state-self-healing-spec.md`](../specs/lucy-20261124-stuck-state-self-healing-spec.md) |
 | 总账 | **P1-81**／REQ-030-102；**不入核心分母** |
-| 授权边界 | **开发未授权。** 本 Plan 只含文档与测试台设计。实现机制待委托人裁定 Spec OQ-1，裁定且终稿确权后另发开发授权，才能改探针、`readiness`、健康检查脚本或 compose 配置 |
+| 授权边界 | 终稿已确权、开发授权已获得（委托人 2026-11-24）。OQ-1–4 已按 Spec 裁定实现。范围限于进程内看门狗、`readyz`／`/api/health`、健康检查脚本与 demo compose；客户编排不在内。正式 UAT 跑次未执行 |
 | 验收 | Spec SC-01–SC-07；测试台 `UAT-SUITE-SELF-HEAL` R0／01–04 |
 
 ## 目标
@@ -49,3 +49,7 @@ Spec SC 加测试台 `runs/`；不以重启后恢复或手工重启关单；自�
 | 压力下重启抖动 | UAT-HEAL-06 记录；OQ-2 补最小重启间隔 |
 | 假活难以稳定复现 | R0 不过则 BLOCKED，不得降级为 PASS；可在 N 与 C 两种触发间切换 |
 | 自愈掩盖根因 | 事件留痕；不改写 P1-75 压力跑次的 FAIL 判定 |
+
+## 实施注记（r2，2026-11-24）
+
+MCP/KTX 探针可独立触发（先原位重启 KTX，T_A 后退出 75）；`readyz` 转 503；compose 不加 `on-failure:N`（Docker 计数不复位）。Docker 故障注入证据 `inbox/p181-p182-docker-verify/p181-single-path-ktx-heal.json`。UAT 仍 NOT RUN。

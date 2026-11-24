@@ -8,9 +8,8 @@
  * 既有字段级 `ambiguousFieldHint`（source-ambiguity.ts）保留；本模块是 source 级。
  */
 
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { parse } from "yaml";
+import { readCatalogYaml } from "../catalog-yaml-cache.js";
 import { loadContentPaths } from "../paths.js";
 import {
   canonicalSourceKeyEquals,
@@ -526,6 +525,17 @@ function effectiveSourceToMatchable(
   };
 }
 
+const OVERLAY_NAME_BATCH = 32;
+
+/** 有界并行：每批最多 `size` 个并发，保持输入顺序。 */
+async function mapInBatches<T, R>(items: readonly T[], size: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = [];
+  for (let offset = 0; offset < items.length; offset += size) {
+    out.push(...await Promise.all(items.slice(offset, offset + size).map(fn)));
+  }
+  return out;
+}
+
 type OverlayNameBag = {
   measureNames: string[];
   dimensionNames: string[];
@@ -541,19 +551,15 @@ async function loadOverlayNamesForSource(
     source.connectionId,
     `${source.sourceName}.yaml`
   );
-  let content: string;
+  // P1-82：走带校验的解析缓存。此前每次问数都对全部可见 Source 串行读盘并同步解析 YAML，
+  // 并发问数时线程池排队、解析占用事件循环（f5e4b14d 复盘：ACL 后到上游发送前最长等待 512 秒）。
+  let yaml: unknown;
   try {
-    content = await readFile(overlayPath, "utf8");
+    yaml = await readCatalogYaml(overlayPath);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return { measureNames: [], dimensionNames: [], readPartial: false };
     }
-    return { measureNames: [], dimensionNames: [], readPartial: true };
-  }
-  let yaml: unknown;
-  try {
-    yaml = parse(content);
-  } catch {
     return { measureNames: [], dimensionNames: [], readPartial: true };
   }
   if (!yaml || typeof yaml !== "object" || Array.isArray(yaml)) {
@@ -639,11 +645,12 @@ export async function buildMatchableSourcesForGate(
     ])
   );
 
+  const namesBySource = await mapInBatches(sources, OVERLAY_NAME_BATCH, (source) => loadOverlayNamesForSource(semanticLayerRoot, source));
   const matchableSources: MatchableSource[] = [];
-  for (const source of sources) {
+  for (const [index, source] of sources.entries()) {
     const key = descriptionIndexKey(source.connectionId, source.schema, source.sourceName);
     const entry = byKey.get(key);
-    const names = await loadOverlayNamesForSource(semanticLayerRoot, source);
+    const names = namesBySource[index]!;
     const connectionNorm = source.connectionId.trim().replace(/[`"']/g, "").toLowerCase();
     let descriptionHealth: DescriptionReadHealth = { status: "ok" };
     if (indexUnreliable) {

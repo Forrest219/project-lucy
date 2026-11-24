@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type ServerResponse } from "node:http";
-import { admitMcpProcessWork, mcpReloadAdmissionError, trackMcpResponseCommit, trackMcpUpstreamWork } from "../runtime/mcp-process-work.js";
+import { admitMcpProcessWork, mcpReloadAdmissionError, onMcpWorkSettled, trackMcpResponseCommit, trackMcpUpstreamWork } from "../runtime/mcp-process-work.js";
+import { getMcpExecutionCapacity, resolveCapacityLimits } from "../runtime/mcp-execution-capacity.js";
+import { markUpstreamToolCallResponded } from "../runtime/upstream-liveness.js";
 import { getProcessLifecyclePhase, SERVICE_DRAINING, SERVICE_DRAINING_MESSAGE } from "../runtime/process-drain.js";
 import path from "node:path";
 import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
@@ -230,6 +232,21 @@ const LUCY_SKILLS_PORT = Number(process.env.LUCY_PROXY_LUCY_SKILLS_PORT ?? 7881)
 // (`LUCY_DEPLOYMENT_MODE=development`); customer mode refuses to start with it on.
 const MAX_BODY_BYTES = Number(process.env.LUCY_PROXY_MAX_BODY_BYTES ?? 1_048_576);
 const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ?? 30_000);
+/**
+ * P1-82：单次上游调用的总时长硬上限。`UPSTREAM_TIMEOUT_MS` 只是 socket 空闲超时，上游持续滴水或事件循环被占时
+ * 可能远超它；容量名额要等上游真实结束才释放，没有这条硬上限，几条死查询就能占满连接／全局名额。
+ * 默认 90 秒，低于问数预算的绝对执行时限（120 秒），后者保留为预算记账边界。
+ */
+/** P1-82：客户端中途离开后，名额在上游 close 之后额外保留的时长（取消未获数据库确认）。0 = 不保留。 */
+const CANCEL_UNCONFIRMED_HOLD_MS = (() => {
+  const raw = process.env.LUCY_MCP_CANCEL_HOLD_MS;
+  const parsed = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 30_000;
+})();
+const UPSTREAM_HARD_DEADLINE_MS = (() => {
+  const parsed = Number(process.env.LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 90_000;
+})();
 const QUERY_KEY_RE = /^(?:sql|query)$/i;
 const LUCY_QUERY_DEFAULT_LIMIT = Number(process.env.LUCY_QUERY_DEFAULT_LIMIT ?? 100);
 const LUCY_QUERY_MAX_LIMIT = Number(process.env.LUCY_QUERY_MAX_LIMIT ?? 1000);
@@ -241,42 +258,15 @@ function getInternalToken(): string {
   return process.env.KTX_INTERNAL_TOKEN ?? "";
 }
 
-const lucyQueryInflight = new Map<string, number>();
-
 function reportedTurnWindowMs(): number {
   return Number(process.env.LUCY_REPORTED_TURN_ATTACH_WINDOW_MS ?? 600_000);
 }
 
 const reportedTurns = new TurnCorrelationRegistry(reportedTurnWindowMs);
 
-function queryConcurrencyKey(identity: Identity): string {
-  return `${identity.userId}:${identity.tokenHashPrefix}`;
-}
-
 function queryConcurrencyLimit(): number {
   if (!Number.isFinite(LUCY_QUERY_MAX_INFLIGHT)) return 4;
   return Math.max(1, Math.floor(LUCY_QUERY_MAX_INFLIGHT));
-}
-
-function acquireLucyQuerySlot(identity: Identity): { allowed: true; release: () => void; active: number; max: number } | { allowed: false; active: number; max: number } {
-  const key = queryConcurrencyKey(identity);
-  const active = lucyQueryInflight.get(key) ?? 0;
-  const max = queryConcurrencyLimit();
-  if (active >= max) return { allowed: false, active, max };
-  lucyQueryInflight.set(key, active + 1);
-  let released = false;
-  return {
-    allowed: true,
-    active: active + 1,
-    max,
-    release: () => {
-      if (released) return;
-      released = true;
-      const current = lucyQueryInflight.get(key) ?? 0;
-      if (current <= 1) lucyQueryInflight.delete(key);
-      else lucyQueryInflight.set(key, current - 1);
-    }
-  };
 }
 
 function releaseOnResponseEnd(res: ServerResponse, release: () => void): void {
@@ -393,9 +383,14 @@ function forwardToUpstream(
     if (internalToken) headers["authorization"] = `Bearer ${internalToken}`;
     if (body) headers["content-length"] = String(body.byteLength);
 
+    const isToolCall = method === "POST" && body !== undefined && body.includes('"tools/call"');
     const upstream = httpRequest(
       { hostname: target.host, port: target.port, path: url, method, headers },
-      resolve
+      (response) => {
+        // Any non-5xx answer to a tool call proves KTX is processing work (see upstream-liveness.ts).
+        if (isToolCall && (response.statusCode ?? 500) < 500) markUpstreamToolCallResponded();
+        resolve(response);
+      }
     );
     trackMcpUpstreamWork(upstream);
     // Spec 162 §6.2 / SC-13：把在途请求句柄交给调用方，客户端断开时可以取消上游。
@@ -404,6 +399,14 @@ function forwardToUpstream(
       upstream.destroy(new Error(`${label} upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`));
     });
     upstream.on("error", reject);
+    if (method === "POST") {
+      // 只限请求—响应式调用；GET 事件流本就长连接。
+      const hardDeadline = setTimeout(() => {
+        upstream.destroy(new Error(`${label} upstream hard deadline after ${UPSTREAM_HARD_DEADLINE_MS}ms`));
+      }, UPSTREAM_HARD_DEADLINE_MS);
+      hardDeadline.unref();
+      upstream.once("close", () => clearTimeout(hardDeadline));
+    }
     barrier?.trackUpstream(upstream);
     if (body) upstream.end(body);
     else upstream.end();
@@ -7724,10 +7727,18 @@ async function buildDenialRepairPayload(
     }
   }
 
-  if (rpcMethod === "tools/call" && toolName === "lucy_query") {
-    const slot = acquireLucyQuerySlot(identity);
+  // P1-82：所有上游语义执行工具共用一套 Agent／Token／连接／全局容量；超额立即繁忙，不启动上游工作。
+  if (rpcMethod === "tools/call" && typeof toolName === "string" && requestWouldHitUpstreamSemanticExecution(toolName)) {
+    const argsRecord = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs) ? toolArgs as Record<string, unknown> : {};
+    const slot = getMcpExecutionCapacity().tryAcquire({
+      agentId: identity.userId,
+      tokenKey: identity.tokenHashPrefix,
+      connectionId: typeof argsRecord.connectionId === "string" ? argsRecord.connectionId.trim() : "",
+      enforceToken: true
+    });
     if (!slot.allowed) {
       const reason = "query_concurrency_exceeded";
+      const capacityDetail = `scope=${slot.scope}; retry_after_ms=${slot.retryAfterMs}`;
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
@@ -7735,8 +7746,9 @@ async function buildDenialRepairPayload(
           isError: true,
           content: [{
             type: "text",
-            text: `Access denied: ${reason}; active=${slot.active}; max=${slot.max}`
-          }]
+            text: `Access denied: ${reason}; active=${slot.active}; max=${slot.max}; ${capacityDetail}`
+          }],
+          _meta: { lucy: { capacityScope: slot.scope, retryAfterMs: slot.retryAfterMs } }
         }
       });
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -7758,7 +7770,7 @@ async function buildDenialRepairPayload(
         argsSummary,
         ...queryMeta,
         outcome: "denied",
-        errorDetail: `${reason}:active=${slot.active};max=${slot.max}`,
+        errorDetail: `${reason}:active=${slot.active};max=${slot.max};scope=${slot.scope}`,
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
@@ -7781,7 +7793,19 @@ async function buildDenialRepairPayload(
       });
       return;
     }
-    releaseOnResponseEnd(res, slot.release);
+    // 租约在真实上游工作结束、响应提交完成后才归还；下游连接提前关闭不会提前腾出容量（Spec D6）。
+    // 客户端在拿到回答前离开时，Lucy 会取消上游 socket，但 KTX 不会取消已发出的数据库语句（Docker 实测：断连后
+    // 语句仍运行约 8 秒）。上游 close 因此不是「真实结束」；名额再保留一段有限时间，防止「发起—断开—再发起」绕过容量。
+    const releaseLease = slot.lease.release;
+    const settleLease = (info: { upstreamStarted: boolean }) => {
+      if (info.upstreamStarted && !res.writableFinished && CANCEL_UNCONFIRMED_HOLD_MS > 0) {
+        const timer = setTimeout(releaseLease, CANCEL_UNCONFIRMED_HOLD_MS);
+        timer.unref?.();
+        return;
+      }
+      releaseLease();
+    };
+    if (!onMcpWorkSettled(settleLease)) releaseOnResponseEnd(res, releaseLease);
   }
 
   if (
@@ -8753,6 +8777,8 @@ async function handleSourceAmbiguityHostConfirm(
 
 export function buildProxy(options: BuildProxyOptions = {}) {
   assertSkillsPassthroughPolicy();
+  // P1-82：容量上限按本次启动的环境装配（计数保留）；顺序非法时修正并告警，不让进程起不来。
+  getMcpExecutionCapacity().configure(resolveCapacityLimits().limits);
   buildBasicInstructions(); // 预热进程级基础指引：降级路径只同步取值。
   const ledger = options.ledger ?? new ReleaseLedger();
   const skillsPassthroughEnabled = skillsPassthroughRequested();

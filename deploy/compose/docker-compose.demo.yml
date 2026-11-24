@@ -72,6 +72,13 @@ services:
     image: project-lucy:demo
     # P1-63 — whole-instance drain budget ≤40s; grace must be ≥45s.
     stop_grace_period: 45s
+    # P1-81 — Docker never restarts an unhealthy container by itself. When the stuck-state watchdog
+    # cannot recover in place it drains and exits 75; this policy is what brings a fresh process up.
+    # Deliberately NOT `on-failure:N`: Docker never resets the retry counter while the container stays
+    # defined (verified 2026-11-24, runs >10s did not reset it), so a cap would permanently disable
+    # self-heal after N restarts over the container's lifetime. Boot crash loops are bounded by Docker's
+    # exponential restart backoff (≤1 min) and by the watchdog's own 3-per-30-min circuit breaker.
+    restart: on-failure
     environment:
       KTX_PROJECT_ROOT: /data/lucy
       LUCY_TEMPLATE_ROOT: /app/examples/docker-demo/project-template

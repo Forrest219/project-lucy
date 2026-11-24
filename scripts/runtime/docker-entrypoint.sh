@@ -1085,6 +1085,10 @@ if ! wait_for_ktx_ready; then
 fi
 
 cd "${WEBUI_ROOT}"
+# P1-81/82: libuv defaults to 4 threads. Catalog/gate scans and display reconciliation all stat
+# hundreds of files, so one burst starved every other file operation (f5e4b14d). Operators can
+# override; this only affects the Node process, not KTX.
+export UV_THREADPOOL_SIZE="${UV_THREADPOOL_SIZE:-16}"
 # Own the actual server PID. npm/tsx launchers may exit on TERM while their
 # Node child is still draining, which would stop KTX before its RPC settles.
 node --import tsx server/index.ts &

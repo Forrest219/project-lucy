@@ -92,6 +92,27 @@ export function awaitReloadDeadline<T>(pending: Promise<T>, deadlineAt: number):
 /** Real upstream handles belong to the accepted RPC, not the client socket. */
 const activeWork = new AsyncLocalStorage<Set<Promise<void>>>();
 
+/**
+ * P1-82 — hooks that must run only once the accepted RPC has really settled: every tracked upstream
+ * request closed and the (possibly asynchronous) response gate finished. Used to release execution
+ * capacity on real completion instead of on the downstream socket close.
+ */
+const settleHooks = new WeakMap<Set<Promise<void>>, Array<(info: McpSettleInfo) => void>>();
+/** Whether the RPC ever started a real upstream request (a pre-forward abort has nothing left running). */
+const upstreamStartedWork = new WeakSet<Set<Promise<void>>>();
+
+export type McpSettleInfo = { upstreamStarted: boolean };
+
+/** Returns false outside an accepted RPC; the caller must then fall back to its own release path. */
+export function onMcpWorkSettled(hook: (info: McpSettleInfo) => void): boolean {
+  const work = activeWork.getStore();
+  if (!work) return false;
+  const hooks = settleHooks.get(work) ?? [];
+  hooks.push(hook);
+  settleHooks.set(work, hooks);
+  return true;
+}
+
 /** Actual async response-commit work, independent of response finish/close. */
 export function trackMcpResponseCommit(settled: Promise<void>): void {
   const work = activeWork.getStore();
@@ -103,6 +124,7 @@ export function trackMcpResponseCommit(settled: Promise<void>): void {
 export function trackMcpUpstreamWork(request: ClientRequest): void {
   const work = activeWork.getStore();
   if (!work) return; // An idle GET/SSE is not a business RPC.
+  upstreamStartedWork.add(work);
   const closed = new Promise<void>((resolve) => request.once("close", resolve));
   work.add(closed);
   void closed.then(() => work.delete(closed));
@@ -137,6 +159,11 @@ export function admitMcpProcessWork(res: ServerResponse) {
         // A post-start exception / client close cannot retire accepted upstream work.
         while (work.size > 0) await Promise.all([...work]);
         await responseSettled; // Includes the asynchronous durable response gate.
+        const info: McpSettleInfo = { upstreamStarted: upstreamStartedWork.has(work) };
+        for (const hook of settleHooks.get(work) ?? []) {
+          try { hook(info); } catch { /* a failing hook must not keep the RPC unsettled */ }
+        }
+        settleHooks.delete(work);
         finish();
         rpcSettles.delete(settled);
         await admitted.ticket.retireWhenSettled();

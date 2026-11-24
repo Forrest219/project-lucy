@@ -24,6 +24,7 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { getAccessRecoveryStateSync } from "./access-recovery";
 import { countEntryPerf, markDisplayBuild, markDisplayCache, markDisplayDegraded } from "./entry-performance-timing";
+import { createSharedPriorityScheduler } from "./runtime/shared-priority-scheduler";
 import { eventLoopDelaySnapshot } from "./runtime/event-loop-delay";
 import {
   bumpDisplayGeneration,
@@ -244,35 +245,19 @@ let reconciler: ReconcilerState | null = null;
  * file-I/O scheduler. It starts with two concurrent workers; the metadata scan
  * and the known changed paths have priority over the digest fallback.
  */
-let fileIoInFlight = 0;
-let fileIoPeak = 0;
-let fileIoActive = 0;
-const fileIoHighPriority: Array<() => void> = [];
-const fileIoNormalPriority: Array<() => void> = [];
-
-function drainFileIo(): void {
-  while (fileIoActive < DISPLAY_FILE_IO_CONCURRENCY) {
-    const job = fileIoHighPriority.shift() ?? fileIoNormalPriority.shift();
-    if (!job) return;
-    fileIoActive += 1;
-    job();
-  }
-}
+/**
+ * P1-81 — metadata keeps priority, but at most this many metadata jobs run back-to-back while the
+ * digest pass is waiting. Without it the digest watermark never advanced (f5e4b14d) and display
+ * reads stayed 503 until restart.
+ */
+export const DISPLAY_FILE_IO_MAX_CONSECUTIVE_HIGH = 2;
+const fileIoScheduler = createSharedPriorityScheduler({
+  concurrency: DISPLAY_FILE_IO_CONCURRENCY,
+  maxConsecutiveHigh: DISPLAY_FILE_IO_MAX_CONSECUTIVE_HIGH
+});
 
 function withFileIoSlot<T>(fn: () => Promise<T>, priority: "high" | "normal"): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const job = () => {
-      fileIoInFlight += 1;
-      if (fileIoInFlight > fileIoPeak) fileIoPeak = fileIoInFlight;
-      void fn().then(resolve, reject).finally(() => {
-        fileIoInFlight -= 1;
-        fileIoActive -= 1;
-        drainFileIo();
-      });
-    };
-    (priority === "high" ? fileIoHighPriority : fileIoNormalPriority).push(job);
-    drainFileIo();
-  });
+  return fileIoScheduler.run(fn, priority);
 }
 
 /** Bounded executor over the shared file-I/O scheduler. */
@@ -633,6 +618,18 @@ function busyReasonFor(scopes: readonly DisplayScope[]): DisplayBusyReason {
     if (Date.now() - entry.digestCompletedAt >= FULL_DIGEST_FRESH_MS) return "digest_overdue";
   }
   return "metadata_overdue";
+}
+
+/**
+ * P1-81 — would a display read of the default scopes be served right now (verified or within the
+ * bounded grace)? Used by the stuck-state watchdog as the "display read" business probe; it never
+ * builds, waits or touches the disk.
+ */
+export function displayReadServable(): { ok: boolean; reason?: string } {
+  if (!reconciler) return { ok: false, reason: "no_reconciler" };
+  if (reconciler.error) return { ok: false, reason: "reconciler_error" };
+  if (displayCacheWithinGrace(SOURCES_SCOPES)) return { ok: true };
+  return { ok: false, reason: busyReasonFor(SOURCES_SCOPES) };
 }
 
 /** Start (or attach to) the shared passes the scopes need; does not wait. */
@@ -1229,8 +1226,9 @@ export function displaySnapshotDiagnostics() {
     reconcilerRunning: reconciler !== null,
     reconcilerError: reconciler?.error ? sanitizeDiagnosticMessage(reconciler.error) : null,
     inflightBuilds,
-    fileIoInFlight,
-    fileIoPeak,
+    fileIoInFlight: fileIoScheduler.stats().active,
+    fileIoPeak: fileIoScheduler.stats().peak,
+    fileIoNormalShareDispatches: fileIoScheduler.stats().normalShareDispatches,
     entries: [...entries.entries()].map(([name, entry]) => ({
       name,
       hasCurrent: Boolean(entry.current),
