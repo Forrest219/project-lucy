@@ -8,7 +8,7 @@
 | 目标 | 看守「进程活、探针绿、用户问数与管理页持续失败，且不会自动恢复」。分别验证 A 同实例恢复与 B 探针联动重启，并防误杀 |
 | 运行环境 | 本机隔离 Docker（对齐 Docker，不谈客户拓扑）＋真实 KTX／合成数据源＋纯 MCP 客户端＋真实前台浏览器（管理页读） |
 | 剧本 | [用例](cases.md) · [夹具](fixtures.md) · [跑次槽](runs/README.md) |
-| 判定 | [INDEX](../../INDEX.md) 为判定事实源。当前 **NOT RUN**（实现已落地待验收，尚无套件正式跑次；本机 Docker 候选验证见 `inbox/p181-p182-docker-verify/`，不替代 UAT） |
+| 判定 | [INDEX](../../INDEX.md) 为判定事实源。当前 **PASS**（[formal](runs/2026-11-24-cursor-p181-formal.md)＋[gap-close](runs/2026-11-24-cursor-p181-gap-close.md)；R0／01–04 齐） |
 
 ## 来源与定位
 
@@ -55,4 +55,4 @@ R0 不能构造出假活时，01–03 一律 **BLOCKED**，不得判 PASS 或 SK
 - 只证明本机 Docker 单实例结果，不外推 K8s、多副本或客户拓扑。
 - 样本不证明所有故障类型都能自愈；只覆盖已复现的「事件循环或展示快照长期不恢复」型假活。
 - 不替代 P1-75 对压力跑次的 FAIL 判定。自愈成功不改写压力下合法问数超时的结论。
-- INDEX：**NOT RUN**。
+- INDEX：**PASS WITH GAP**（见正式跑次）。

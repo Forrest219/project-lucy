@@ -8,7 +8,7 @@
 | 目标 | 证明单 Agent 跨 Token／Session 不会耗尽全部问数资源；全局与分连接过载有界；WebUI 局部 503 与 MCP 故障不互相伪装；真实工作结束后容量可恢复 |
 | 运行环境 | 本机隔离 Docker＋真实 KTX／两个独立只读合成数据连接＋多 Agent 纯 MCP 客户端＋真实前台浏览器（仅 WebUI 可见面） |
 | 剧本 | [用例](cases.md) · [夹具](fixtures.md) · [跑次槽](runs/README.md) |
-| 判定 | [INDEX](../../INDEX.md) 为唯一结果事实源。当前 **NOT RUN**（实现已落地待验收，尚无套件正式跑次；本机 Docker 候选验证见 `inbox/p181-p182-docker-verify/`，不替代 UAT） |
+| 判定 | [INDEX](../../INDEX.md) 为唯一结果事实源。当前 **PASS WITH GAP**（[formal](runs/2026-11-24-cursor-p182-formal.md)＋[gap-close](runs/2026-11-24-cursor-p182-gap-close.md)；02 PASS；03 同窗残余；05 SKIPPED） |
 
 ## 来源与定位
 
@@ -56,4 +56,4 @@ R0 无法证明夹具、独立 SQL、真实在途和故障注入有效时，依�
 - 只证明 Docker 单实例、单副本内的执行容量与跨 Agent 隔离，不证明 WebUI 进程退出时 MCP 仍存活。
 - 不覆盖审计进程拆分、KTX worker 池、零停机重载、多副本、外置存储或客户拓扑。
 - 同一数据库自身故障只能超时、熔断和隔离，不得承诺该连接继续成功；其他 connectionId 必须继续。
-- INDEX：**NOT RUN**。
+- INDEX：**PASS WITH GAP**（见正式跑次）。
